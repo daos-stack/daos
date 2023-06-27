@@ -4862,6 +4862,9 @@ class AllocFailTestRun():
         self.dir_handle = None
         self.stdout = None
         self.returncode = None
+
+        # Set this to disable memory leak checking if the command outputs a DER_BUSY message.  This
+        # is to allow tests to leak memory if there are errors during shutdown.
         self.ignore_busy = False
 
         # The subprocess handle and other private data.
@@ -4979,6 +4982,8 @@ class AllocFailTestRun():
 
             self._aft.wf.explain(self._fi_loc, short_log_file, fi_signal)
             self._aft.conf.wf.explain(self._fi_loc, short_log_file, fi_signal)
+        # Put in a new-line.
+        print()
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
         self._stderr = self._sp.stderr.read()
@@ -5174,7 +5179,7 @@ class AllocFailTest():
         print(f'Maximum number of spawned tests will be {max_child}')
 
         active = []
-        fid = 1600
+        fid = 2
         max_count = 0
         finished = False
 
@@ -5351,6 +5356,10 @@ def test_alloc_fail_copy(server, conf, wf):
     return test_cmd.launch()
 
 
+# Hack for test_alloc_fail_copy_trunc.  Variable scoping means that the get_cmd() function can read
+# but not modify variables in enclosing scope so keeping a counter has to be global.  As python
+# expects global variables to be constants pylint then checks this is upper case so disable that
+# warning.
 aftc_idx = 0  # pylint: disable=invalid-name
 
 
@@ -5362,7 +5371,9 @@ def test_alloc_fail_copy_trunc(server, conf, wf):
     Create an initial container to modify, pre-populate it with a number of files of known length
     then have each iteration of the test truncate one file.
     """
-    files_needed = 2000
+    # The number of files to pre-create.  This just needs to be bigger than the iteration count
+    # however too many will consume extra resources.
+    files_needed = 4000
 
     def get_cmd(_):
         global aftc_idx
