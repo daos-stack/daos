@@ -81,8 +81,8 @@ struct migrate_pool_tls {
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
 
-	/* The current inflight iod, mainly used for controlling
-	 * rebuild inflight rate to avoid the DMA buffer overflow.
+	/* The current in-flight iod, mainly used for controlling
+	 * rebuild in-flight rate to avoid the DMA buffer overflow.
 	 */
 	uint64_t		mpt_inflight_size;
 	uint64_t		mpt_inflight_max_size;
