@@ -27,14 +27,14 @@ class HarnessUnitTest(TestWithoutServers):
             expected (list): expected list of ResultData objects
             timeout (bool): expected command timeout state
             homogeneous (bool): expected homogeneous command output state
-            passed_hosts (NodeSet): 
+            passed_hosts (NodeSet): expected set of hosts on which the command passed
             failed_hosts (NodeSet): expected set of hosts on which the command failed
             all_stdout (dict): expected stdout str per host key
             all_stderr (dict): expected stderr str per host key
         """
-        self.assertEqual(passed, result.passed, 'Command failed; expected to pass')
+        self.assertEqual(passed, result.passed, 'Incorrect RemoteCommandResult.passed')
         self.assertEqual(
-            len(expected), len(result.output), 'Incorrect number of unique command outputs')
+            len(expected), len(result.output), 'Incorrect RemoteCommandResult.output count')
         for index, expect in enumerate(expected):
             actual = result.output[index]
             for key in ('command', 'returncode', 'hosts', 'stdout', 'stderr', 'timeout'):
