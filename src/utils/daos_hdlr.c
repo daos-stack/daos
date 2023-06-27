@@ -49,12 +49,18 @@ struct file_dfs {
 };
 
 /* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+#define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
+		fflush((AP)->errstream);                                                           \
+	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+#define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
+		fflush((AP)->errstream);                                                           \
+	} while (0)
 
 static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap);
