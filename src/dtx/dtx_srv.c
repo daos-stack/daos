@@ -27,6 +27,13 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 	if (tls == NULL)
 		return NULL;
 
+	rc = d_tm_add_metric(&tls->dt_forward, D_TM_STATS_GAUGE,
+			     "total number of forward operation",
+			     "entries", "io/dtx/forward/xs_%u", xs_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX forward metric: " DF_RC"\n",
+		       DP_RC(rc));
+
 	/** Skip sensor setup on system xstreams */
 	if (tgt_id < 0)
 		return tls;
