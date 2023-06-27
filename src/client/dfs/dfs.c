@@ -1246,14 +1246,8 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
-			int rc2;
-
 			/** just try fetching entry to open the file */
-			rc2 = daos_array_close(file->oh, NULL);
-			if (rc2 == -DER_NOMEM)
-				rc2 = daos_array_close(file->oh, NULL);
-			if (rc2)
-				return daos_der2errno(rc2);
+			daos_array_close(file->oh, NULL);
 		} else if (rc) {
 			int rc2;
 

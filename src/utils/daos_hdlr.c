@@ -1678,9 +1678,7 @@ dm_disconnect(struct cmd_args_s *ap,
 		rc = daos_cont_close(ca->src_coh, NULL);
 		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-		D_INFO("Calling pool disconnect %d\n", rc);
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
-		D_INFO("pool disconnect returned %d\n", rc);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
 			if (rc == -DER_NOMEM) {
@@ -1701,9 +1699,7 @@ dm_disconnect(struct cmd_args_s *ap,
 		rc = daos_cont_close(ca->dst_coh, NULL);
 		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-		D_INFO("Calling pool disconnect %d\n", rc);
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
-		D_INFO("pool disconnect returned %d\n", rc);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
 			if (rc == -DER_NOMEM) {
