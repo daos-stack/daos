@@ -395,6 +395,8 @@
    Memcheck:Value8
    ...
    fun:*golang.org/*
+   fun:racecall
+   fun:racecallatomic
 }
 {
    <insert_a_suppression_name_here>
@@ -425,6 +427,8 @@
    <insert_a_suppression_name_here>
    Memcheck:Cond
    fun:racecalladdr
+   fun:racecall
+   fun:racecallatomic
 }
 {
    <insert_a_suppression_name_here>
