@@ -556,7 +556,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.3.108-2
+* Tue Jun 27 2023 Wang Shilong <shilong.wang@intel.com> 2.3.108-2
 - Remove lmdb-devel for MD on SSD
 
 * Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.108-1
