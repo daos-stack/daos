@@ -8,10 +8,9 @@
  *
  * common/tse.c
  *
- * DAOS client will use scheduler/task to manage the asynchronous tasks.
- * Tasks will be attached to one scheduler, when scheduler is executed,
- * it will walk through the task list of the scheduler and pick up those
- * ready tasks to executed.
+ * DAOS client will use scheduler/task to manage the asynchronous tasks. Tasks will be attached to
+ * one scheduler, when scheduler is executed, it will walk through the task list of the scheduler
+ * and pick up those ready tasks to executed.
  */
 #define D_LOGFAC	DD_FAC(client)
 
@@ -46,9 +45,8 @@ struct tse_task_private {
 	/* daos complete task callback list */
 	d_list_t                  dtp_comp_cb_list;
 
-	uint32_t /* task has been completed, no chance to
-		  * be re-initialized.
-		  */
+	uint32_t
+	    /* task has been completed, no chance to be re-initialized. */
 	    dtp_completed    : 1,
 	    /* task is in running state */
 	    dtp_running      : 1,
@@ -63,25 +61,20 @@ struct tse_task_private {
 #else
 	uint32_t dtp_refcnt;
 #endif
-	/**
-	 * task parameter pointer, it can be assigned while creating task,
-	 * or explicitly call API tse_task_priv_set. User can just use
-	 * \a dtp_buf instead of this if parameter structure is enough to
-	 * fit in.
+	/*
+	 * task parameter pointer, it can be assigned while creating task, or explicitly call API
+	 * tse_task_priv_set. User can just use \a dtp_buf instead of this if parameter structure is
+	 * enough to fit in.
 	 */
 	void           *dtp_priv;
-	/**
-	 * DAOS internal task parameter pointer.
-	 */
+	/*  DAOS internal task parameter pointer. */
 	void           *dtp_priv_internal;
-	/**
-	 * reserved buffer for user to assign embedded parameters, it also can
-	 * be used as task stack space that can push/pop parameters to
-	 * facilitate I/O handling. The embedded parameter uses buffer from the
-	 * bottom, and the stack space grows down from top.
+	/*
+	 * reserved buffer for user to assign embedded parameters, it also can be used as task stack
+	 * space that can push/pop parameters to facilitate I/O handling. The embedded parameter
+	 * uses buffer from the bottom, and the stack space grows down from top.
 	 *
-	 * The sum of dtp_stack_top and dtp_embed_top should not exceed
-	 * TSE_TASK_ARG_LEN.
+	 * The sum of dtp_stack_top and dtp_embed_top should not exceed TSE_TASK_ARG_LEN.
 	 */
 	uint16_t        dtp_stack_top;
 	uint16_t        dtp_embed_top;
@@ -101,20 +94,15 @@ struct tse_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
 
-	/* The task will be added to init list when it is initially
-	 * added to scheduler without any delay. A task with a delay
-	 * will be added to dsp_sleeping_list.
+	/* The task will be added to init list when it is initially added to scheduler without any
+	 * delay. A task with a delay will be added to dsp_sleeping_list.
 	 */
 	d_list_t        dsp_init_list;
 
-	/* The task will be moved to complete list after the
-	 * complete callback is being executed
-	 **/
+	/* The task will be moved to complete list after the complete callback is being executed */
 	d_list_t        dsp_complete_list;
 
-	/**
-	 * The task running list.
-	 **/
+	/* The task running list. */
 	d_list_t        dsp_running_list;
 
 	/* list of sleeping tasks sorted by dtp_wakeup_time */
