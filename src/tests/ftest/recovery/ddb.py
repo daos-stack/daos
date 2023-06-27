@@ -31,7 +31,6 @@ class DdbTest(TestWithServers):
         self.random_dkey = get_random_string(10)
         self.random_akey = get_random_string(10)
         self.random_data = get_random_string(10)
-        self.standalone = False  # enables running test in a "stand alone" mode
 
     def get_vos_file_path(self):
         """Get the VOS file path.
@@ -78,9 +77,8 @@ class DdbTest(TestWithServers):
         :avocado: tags=ddb_cmd,test_recovery_ddb_ls
         """
         # Create a pool and a container.
-        if not self.standalone:
-            self.add_pool()
-            self.add_container(pool=self.pool)
+        self.add_pool()
+        self.add_container(pool=self.pool)
 
         # Find the vos file name. e.g., /mnt/daos0/<pool_uuid>/vos-0.
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
@@ -95,14 +93,13 @@ class DdbTest(TestWithServers):
         dkey_count = self.dkey_count
         akey_count = self.akey_count
         # Insert objects with API.
-        if not self.standalone:
-            insert_objects(
-                context=self.context, container=self.container, object_count=object_count,
-                dkey_count=dkey_count, akey_count=akey_count, base_dkey=self.random_dkey,
-                base_akey=self.random_akey, base_data=self.random_data)
+        insert_objects(
+            context=self.context, container=self.container, object_count=object_count,
+            dkey_count=dkey_count, akey_count=akey_count, base_dkey=self.random_dkey,
+            base_akey=self.random_akey, base_data=self.random_data)
 
-            # Need to stop the server to use ddb.
-            self.get_dmg_command().system_stop()
+        # Need to stop the server to use ddb.
+        self.get_dmg_command().system_stop()
 
         # 1. Verify container UUID.
         cmd_result = ddb_command.list_component()
@@ -209,16 +206,15 @@ class DdbTest(TestWithServers):
                 expected_dkey_count, akey_count)
             errors.append(msg)
 
-        if not self.standalone:
-            # 5. Restart the server for the cleanup.
-            self.get_dmg_command().system_start()
+        # 5. Restart the server for the cleanup.
+        self.get_dmg_command().system_start()
 
-            # 6. Reset the container and the pool to prepare for the cleanup.
-            self.container.close()
-            self.pool.disconnect()
-            self.pool.connect()
-            self.container.open()
-            self.get_dmg_command().system_start()
+        # 6. Reset the container and the pool to prepare for the cleanup.
+        self.container.close()
+        self.pool.disconnect()
+        self.pool.connect()
+        self.container.open()
+        self.get_dmg_command().system_start()
 
         self.log.info("##### Errors #####")
         report_errors(test=self, errors=errors)
