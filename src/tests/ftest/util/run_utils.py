@@ -15,39 +15,40 @@ class RunException(Exception):
     """Base exception for this module."""
 
 
+class ResultData():
+    # pylint: disable=too-few-public-methods
+    """Command result data for the set of hosts."""
+
+    def __init__(self, command, returncode, hosts, stdout, stderr, timeout):
+        """Initialize a ResultData object.
+
+        Args:
+            command (str): the executed command
+            returncode (int): the return code of the executed command
+            hosts (NodeSet): the host(s) on which the executed command yielded this result
+            stdout (list): the result of the executed command split by newlines
+            timeout (bool): indicator for a command timeout
+        """
+        self.command = command
+        self.returncode = returncode
+        self.hosts = hosts
+        self.stdout = stdout
+        self.stderr = stderr
+        self.timeout = timeout
+
+    @property
+    def passed(self):
+        """Did the command pass.
+
+        Returns:
+            bool: if the command was successful
+
+        """
+        return self.returncode == 0
+
+
 class RemoteCommandResult():
     """Stores the command result from a Task object."""
-
-    class ResultData():
-        # pylint: disable=too-few-public-methods
-        """Command result data for the set of hosts."""
-
-        def __init__(self, command, returncode, hosts, stdout, stderr, timeout):
-            """Initialize a ResultData object.
-
-            Args:
-                command (str): the executed command
-                returncode (int): the return code of the executed command
-                hosts (NodeSet): the host(s) on which the executed command yielded this result
-                stdout (list): the result of the executed command split by newlines
-                timeout (bool): indicator for a command timeout
-            """
-            self.command = command
-            self.returncode = returncode
-            self.hosts = hosts
-            self.stdout = stdout
-            self.stderr = stderr
-            self.timeout = timeout
-
-        @property
-        def passed(self):
-            """Did the command pass.
-
-            Returns:
-                bool: if the command was successful
-
-            """
-            return self.returncode == 0
 
     def __init__(self, command, task):
         """Create a RemoteCommandResult object.
@@ -163,11 +164,11 @@ class RemoteCommandResult():
                 for stderr_raw, stderr_hosts in stderr_data:
                     stderr = self._msg_tree_elem_to_list(stderr_raw)
                     self.output.append(
-                        self.ResultData(
+                        ResultData(
                             command, code, NodeSet.fromlist(stderr_hosts), stdout, stderr, False))
         if timed_out:
             self.output.append(
-                self.ResultData(command, 124, NodeSet.fromlist(timed_out), None, None, True))
+                ResultData(command, 124, NodeSet.fromlist(timed_out), None, None, True))
 
     @staticmethod
     def _sanitize_iter_data(hosts, data, default_entry):
@@ -232,14 +233,22 @@ def log_result_data(log, data):
         data (ResultData): command result common to a set of hosts
     """
     info = " timed out" if data.timeout else ""
-    if not data.stdout:
+    if not data.stdout and not data.stderr:
         log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
-    elif len(data.stdout) == 1:
+    elif data.stdout and len(data.stdout) == 1 and not data.stderr:
         log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
     else:
         log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
+        indent = 4
+        if data.stderr:
+            log.debug("    <stdout>:")
+            indent += 2
         for line in data.stdout:
-            log.debug("    %s", line)
+            log.debug("%s%s", " " * indent, line)
+        if data.stderr:
+            log.debug("    <stderr>:")
+            for line in data.stderr:
+                log.debug("%s%s", " " * indent, line)
 
 
 def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
