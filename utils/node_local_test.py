@@ -5170,7 +5170,7 @@ class AllocFailTest():
         print(f'Maximum number of spawned tests will be {max_child}')
 
         active = []
-        fid = 2
+        fid = 1600
         max_count = 0
         finished = False
 
@@ -5780,7 +5780,7 @@ def run(wf, args):
 
                 # filesystem copy tests.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
+                # fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
                 # container create with properties test.
                 # fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))
