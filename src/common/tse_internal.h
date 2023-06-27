@@ -53,9 +53,7 @@ struct tse_task_private {
 					 dtp_no_propagate:1,
 					 dtp_dep_cnt:28;
 	/* refcount of the task */
-	uint16_t                         dtp_refcnt;
-
-	uint16_t                         dtp_magic;
+	uint32_t			 dtp_refcnt;
 	/**
 	 * task parameter pointer, it can be assigned while creating task,
 	 * or explicitly call API tse_task_priv_set. User can just use
@@ -130,6 +128,13 @@ struct tse_sched_comp {
 	tse_sched_comp_cb_t	dsc_comp_cb;
 	void			*dsc_arg;
 };
+
+
+static inline struct tse_task_private *
+tse_task2priv(tse_task_t *task)
+{
+	return (struct tse_task_private *)&task->dt_private;
+}
 
 static inline tse_task_t *
 tse_priv2task(struct tse_task_private *priv)
