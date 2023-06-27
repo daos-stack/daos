@@ -256,6 +256,7 @@ class HarnessUnitTest(TestWithoutServers):
             all_stdout={hosts[0]: 'GNU/Linux'},
             all_stderr={hosts[0]: ''}
         )
+        self.log_step('Unit Test Passed')
 
     def test_harness_unit_run_remote_homogeneous(self):
         """Verify run_remote() with homogeneous output.
@@ -279,6 +280,7 @@ class HarnessUnitTest(TestWithoutServers):
             all_stdout={str(hosts): 'GNU/Linux'},
             all_stderr={str(hosts): ''}
         )
+        self.log_step('Unit Test Passed')
 
     def test_harness_unit_run_remote_heterogeneous(self):
         """Verify run_remote() with heterogeneous output.
@@ -311,6 +313,7 @@ class HarnessUnitTest(TestWithoutServers):
                 hosts[1]: ''
             },
         )
+        self.log_step('Unit Test Passed')
 
     def test_harness_unit_run_remote_combined(self):
         """Verify run_remote() with combined stdout and stderr.
