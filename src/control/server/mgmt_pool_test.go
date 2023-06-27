@@ -150,7 +150,6 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 
 			poolUUID := test.MockPoolUUID(1)
 			lock, ctx := getPoolLockCtx(t, nil, svc.sysdb, poolUUID)
-			defer lock.Release()
 			if err := svc.sysdb.AddPoolService(ctx, &system.PoolService{
 				PoolUUID: poolUUID,
 				State:    tc.state,
@@ -162,6 +161,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
+			lock.Release()
 
 			req := &mgmtpb.PoolCreateReq{
 				Sys:        build.DefaultSystemName,

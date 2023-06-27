@@ -90,14 +90,14 @@ class DmgCommand(DmgCommandBase):
         #         "HostFabric": {
         #           "Interfaces": [
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib1",
         #               "NumaNode": 1,
         #               "Priority": 0,
         #               "NetDevClass": 32
         #             },
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib0",
         #               "NumaNode": 0,
         #               "Priority": 1,
@@ -119,7 +119,6 @@ class DmgCommand(DmgCommandBase):
         #             }
         #           ],
         #           "Providers": [
-        #             "ofi+psm2",
         #             "ofi+verbs;ofi_rxm",
         #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
@@ -423,9 +422,16 @@ class DmgCommand(DmgCommandBase):
         #                   "rank": 0,
         #                   "total_bytes": 398358216704,
         #                   "avail_bytes": 0,
+        #                   "usable_bytes": 0
         #                   "cluster_size": 1073741824,
+        #                   "meta_size": 0,
+        #                   "meta_wal_size": 0,
+        #                   "rdb_size": 134217728,
+        #                   "rdb_wal_size": 268435456,
         #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0"
+        #                   "tr_addr": "0000:05:00.0",
+        #                   "roles": "data",
+        #                   "has_sys_xs": false
         #                 }
         #               ]
         #             }
@@ -445,6 +451,7 @@ class DmgCommand(DmgCommandBase):
         #                 "path": "/mnt/daos",
         #                 "total_bytes": 17179869184,
         #                 "avail_bytes": 0
+        #                 "usable_bytes": 0
         #               }
         #             }
         #           ],
@@ -492,6 +499,33 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(("server", "set-logmasks"),
                                      raise_exception=raise_exception, masks=masks, streams=streams,
                                      subsystems=subsystems)
+
+    def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
+                            extra_logs_dir=None, target_host=None):
+        """Collect logs for debug purpose.
+
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            target-host (str, optional): R sync all the logs to target system
+        Raises:
+            CommandFailure: if the dmg support collect-log command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        kwargs = {
+            "stop_on_error": stop_on_error,
+            "target_folder": target_folder,
+            "archive": archive,
+            "extra_logs_dir": extra_logs_dir,
+            "target_host": target_host,
+        }
+
+        return self._get_json_result(("support", "collect-log"), **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -1022,8 +1056,8 @@ class DmgCommand(DmgCommandBase):
         # Example JSON output:
         # {
         #   "response": {
-        #     "CurrentLeader": "127.0.0.1:10001",
-        #     "Replicas": [
+        #     "current_leader": "127.0.0.1:10001",
+        #     "replicas": [
         #       "127.0.0.1:10001"
         #     ]
         #   },
@@ -1131,7 +1165,7 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+                i.e. "ofi+tcp;ofi_rxm" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
             control_metadata_path (str): External directory provided to store control

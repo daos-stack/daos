@@ -90,36 +90,6 @@ typedef struct crt_init_options {
 	char		*cio_auth_key;
 } crt_init_options_t;
 
-/**
- * Enumeration specifying providers supported by the library
- */
-typedef enum {
-	CRT_PROV_SM		= 0,
-	CRT_PROV_OFI_SOCKETS,
-	CRT_PROV_OFI_VERBS_RXM,
-	CRT_PROV_OFI_GNI,
-	CRT_PROV_OFI_PSM2,
-	CRT_PROV_OFI_TCP_RXM,
-	CRT_PROV_OFI_CXI,
-	CRT_PROV_OFI_OPX,
-	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
-	CRT_PROV_UCX_RC,
-	CRT_PROV_UCX_UD,
-	CRT_PROV_UCX_RC_UD,
-	CRT_PROV_UCX_RC_O,
-	CRT_PROV_UCX_UD_O,
-	CRT_PROV_UCX_RC_UD_O,
-	CRT_PROV_UCX_RC_X,
-	CRT_PROV_UCX_UD_X,
-	CRT_PROV_UCX_RC_UD_X,
-	CRT_PROV_UCX_DC_X,
-	CRT_PROV_UCX_TCP,
-	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
-	/* Note: This entry should be the last valid one in enum */
-	CRT_PROV_COUNT,
-	CRT_PROV_UNKNOWN = -1,
-} crt_provider_t;
-
 
 typedef int		crt_status_t;
 /**

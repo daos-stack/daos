@@ -623,7 +623,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 	} else {
 		int	flags = O_RDWR;
 
-		while (!(flags & O_CREAT)) {
+		while (1) {
 			fd = open(path, flags, 0600);
 			if (fd >= 0)
 				break;
@@ -2184,8 +2184,7 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	if (rc == -DER_ENOENT ||	/* no arena, no group */
 	    rc == -DER_NOSPACE) {	/* no space in this arena */
 		grp_at = 0;
-		grp = NULL;
-		rc = 0;
+		grp    = NULL;
 		/* fall through */
 	} else if (rc != 0) {
 		D_ERROR("Failed to find group, arena=%d, size=%d, rc=%d\n",

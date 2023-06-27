@@ -20,6 +20,7 @@
 #include <daos_obj.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include "cli_csum.h"
 
 /**
  * Open an object shard (shard object), cache the open handle.
@@ -154,10 +155,12 @@ obj_decref(struct dc_object *obj)
 		daos_hhash_link_putref(&obj->cob_hlink);
 }
 
-void
+struct dc_object *
 obj_addref(struct dc_object *obj)
 {
-	daos_hhash_link_getref(&obj->cob_hlink);
+	if (obj != NULL)
+		daos_hhash_link_getref(&obj->cob_hlink);
+	return obj;
 }
 
 struct dc_object *
@@ -207,6 +210,20 @@ dc_obj_hdl2cont_hdl(daos_handle_t oh)
 	daos_hhash_link_key(&obj->cob_co->dc_hlink, &hdl.cookie);
 	obj_decref(obj);
 	return hdl;
+}
+
+uint32_t
+dc_obj_hdl2layout_ver(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	uint32_t ver;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	ver = obj->cob_layout_version;
+	obj_decref(obj);
+	return ver;
+
 }
 
 static int
@@ -1310,8 +1327,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 
 	arg.oqa_pool = pool;
 	pool = NULL;
-	obj_addref(obj);
-	arg.oqa_obj = obj;
+	arg.oqa_obj = obj_addref(obj);
 
 	rc = tse_task_register_comp_cb(task, obj_pool_query_cb, &arg,
 				       sizeof(arg));
@@ -4741,12 +4757,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
-				 (task->dt_result == 0 ||
-				  task->dt_result == -DER_NONEXIST)) {
-				obj_addref(obj);
+			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, false);
-			}
+				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, 0, false);
 			break;
 		}
 		case DAOS_OBJ_RPC_PUNCH:
@@ -4760,13 +4773,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		case DAOS_OBJ_RPC_KEY2ANCHOR:
 			if (daos_handle_is_valid(obj_auxi->th) &&
-			    (task->dt_result == 0 ||
-			     task->dt_result == -DER_NONEXIST)) {
-				D_ASSERT(obj != NULL);
-				obj_addref(obj);
+			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, false);
-			}
+				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, 0, false);
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
 			/* XXX: For list dkey recursively, that is mainly used
@@ -4940,139 +4949,24 @@ obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 }
 
 static int
-obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
-		struct obj_auxi_args *obj_auxi)
+obj_csum_update(struct dc_object *obj, daos_obj_update_t *args, struct obj_auxi_args *obj_auxi)
 {
-	struct daos_csummer	*csummer = obj->cob_co->dc_csummer;
-	struct daos_csummer	*csummer_copy = NULL;
-	struct cont_props	 cont_props = obj->cob_co->dc_props;
-	struct dcs_csum_info	*dkey_csum = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	int			 rc;
-
-	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
-			 "csum_type: %d, csum_enabled: %s\n",
-		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
-		csummer, cont_props.dcp_csum_type,
-		DP_BOOL(cont_props.dcp_csum_enabled));
-
-	if (!daos_csummer_initialized(csummer)) /** Not configured */
+	if (!obj_csum_dedup_candidate(&obj->cob_co->dc_props, args->iods, args->nr))
 		return 0;
 
-	if (!obj_csum_dedup_candidate(&cont_props, args->iods, args->nr))
-		return 0;
-
-	if (obj_auxi->rw_args.dkey_csum != NULL) {
-		/** already calculated - don't need to do it again */
-		return 0;
-	}
-
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
-
-	/** Calc 'd' key checksum */
-	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
-	if (rc != 0) {
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	/** Calc 'a' key checksum and value checksum */
-	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
-				    args->nr, false,
-				    obj_auxi->reasb_req.orr_singv_los,
-				    -1, &iod_csums);
-	if (rc != 0) {
-		daos_csummer_free_ci(csummer_copy, &dkey_csum);
-		daos_csummer_destroy(&csummer_copy);
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
-	daos_csummer_destroy(&csummer_copy);
-
-	/** fault injection - corrupt data and/or keys after calculating
-	 * checksum - simulates corruption over network
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_DKEY))
-		((char *)args->dkey->iov_buf)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE_AKEY))
-		((char *)iod_csums[0].ic_akey.cs_csum)[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE))
-		dcf_corrupt(args->sgls, args->nr);
-
-	obj_auxi->rw_args.iod_csums = iod_csums;
-	obj_auxi->rw_args.dkey_csum = dkey_csum;
-
-	return 0;
+	return dc_obj_csum_update(obj->cob_co->dc_csummer, obj->cob_co->dc_props,
+				  obj->cob_md.omd_id, args->dkey, args->iods, args->sgls, args->nr,
+				  obj_auxi->reasb_req.orr_singv_los, &obj_auxi->rw_args.dkey_csum,
+				  &obj_auxi->rw_args.iod_csums);
 }
 
 static int
 obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 	       struct obj_auxi_args *obj_auxi)
 {
-	struct daos_csummer	*csummer = obj->cob_co->dc_csummer;
-	struct daos_csummer	*csummer_copy;
-	struct dcs_csum_info	*dkey_csum = NULL;
-	struct dcs_iod_csums	*iod_csums = NULL;
-	int			 rc;
-
-	if (!daos_csummer_initialized(csummer) ||
-	    csummer->dcs_skip_data_verify)
-		/** csummer might be initialized by dedup, but checksum
-		 * feature is turned off ...
-		 */
-		return 0;
-
-	if (obj_auxi->rw_args.dkey_csum != NULL) {
-		/** already calculated - don't need to do it again */
-		return 0;
-	}
-
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
-
-	/** dkey */
-	rc = daos_csummer_calc_key(csummer_copy, args->dkey, &dkey_csum);
-	if (rc != 0) {
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	/** akeys (1 for each iod) */
-	rc = daos_csummer_calc_iods(csummer_copy, args->sgls, args->iods, NULL,
-				    args->nr,
-				    true, obj_auxi->reasb_req.orr_singv_los,
-				    -1, &iod_csums);
-	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
-		daos_csummer_free_ci(csummer_copy, &dkey_csum);
-		daos_csummer_destroy(&csummer_copy);
-		return rc;
-	}
-
-	daos_csummer_destroy(&csummer_copy);
-
-	/**
-	 * fault injection - corrupt keys after calculating checksum -
-	 * simulates corruption over network
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
-		dkey_csum->cs_csum[0]++;
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY))
-		iod_csums[0].ic_akey.cs_csum[0]++;
-
-	obj_auxi->rw_args.iod_csums = iod_csums;
-	obj_auxi->rw_args.dkey_csum = dkey_csum;
-
-	return 0;
+	return dc_obj_csum_fetch(obj->cob_co->dc_csummer, args->dkey, args->iods, args->sgls,
+				 args->nr, obj_auxi->reasb_req.orr_singv_los,
+				 &obj_auxi->rw_args.dkey_csum, &obj_auxi->rw_args.iod_csums);
 }
 
 static inline char *
@@ -5780,7 +5674,7 @@ dc_obj_update_task(tse_task_t *task)
 
 	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, true);
+		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, 0, true);
 
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
@@ -6660,7 +6554,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 
 	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		return dc_tx_attach(args->th, obj, opc, task, true);
+		return dc_tx_attach(args->th, obj, opc, task, 0, true);
 
 	/* submit the punch */
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
@@ -6825,6 +6719,10 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
+
+	/** for EC need to zero out user recx if passed */
+	if (api_args->recx)
+		memset(api_args->recx, 0, sizeof(*api_args->recx));
 
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch, &map_ver, &obj);
 	if (rc)
@@ -7170,6 +7068,7 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	uint32_t		nr_grp;
 	struct cont_props	props;
 	int			rc;
+	uint32_t		 rf;
 	struct dc_cont		*dc;
 
 	if (!daos_otype_t_is_valid(type))
@@ -7195,18 +7094,17 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	rc = pl_map_query(pool->dp_pool, &attr);
 	D_ASSERT(rc == 0);
 	dc_pool_put(pool);
+	rf = dc->dc_props.dcp_redun_fac;
 
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
-		attr.pa_domain_nr, attr.pa_target_nr);
+	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d rf:%u\n", attr.pa_domain_nr,
+		attr.pa_target_nr, rf);
 
 	if (cid == OC_UNKNOWN) {
-		uint32_t rf;
-
-		rf = dc->dc_props.dcp_redun_fac;
 		rc = dc_set_oclass(rf, attr.pa_domain_nr, attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	} else {
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
+					 rf);
 	}
 	dc_cont_put(dc);
 
@@ -7259,8 +7157,8 @@ daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
 				   attr.pa_target_nr, type, hints, &ord,
 				   &nr_grp);
 	else
-		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
-					 attr.pa_target_nr, &ord, &nr_grp);
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr, &ord, &nr_grp,
+					 rf_factor);
 	if (rc)
 		return rc;
 
@@ -7312,5 +7210,20 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints
 		return rc;
 
 	*cid = (ord << OC_REDUN_SHIFT) | nr_grp;
+	return 0;
+}
+
+int
+dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md)
+{
+	struct dc_object *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+	{
+		return -DER_NO_HDL;
+	}
+	*md = obj->cob_md;
+	obj_decref(obj);
 	return 0;
 }
