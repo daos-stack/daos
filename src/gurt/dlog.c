@@ -520,7 +520,7 @@ d_log_sync(void)
 	int rc = 0;
 
 	clog_lock();
-	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
+	if (mst.log_buf_nob > 0) /* write back the in-flight buffer */
 		rc = d_log_write(NULL, 0, true);
 
 	/* Skip flush if there was a problem on write */

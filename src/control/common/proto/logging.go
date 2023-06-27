@@ -145,7 +145,7 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint)
 	case *mgmtpb.LeaderQueryResp:
-		fmt.Fprintf(&bld, "%T leader:%s reps:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","))
+		fmt.Fprintf(&bld, "%T leader:%s Replica Set:%s Down Replicas:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","), strings.Join(m.DownReplicas, ","))
 	case *sharedpb.ClusterEventReq:
 		fmt.Fprintf(&bld, "%T seq:%d", m, m.Sequence)
 		if m.Event == nil {
