@@ -830,11 +830,10 @@ class DaosCommand(DaosCommandBase):
         """Call daos version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: JSON output
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the daos version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))

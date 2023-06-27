@@ -22,7 +22,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *par
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;

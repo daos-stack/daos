@@ -29,7 +29,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
@@ -56,5 +56,5 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	return;
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 }
