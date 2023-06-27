@@ -62,9 +62,9 @@ class CsumContainerValidation(TestWithServers):
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
         :avocado: tags=all,daily_regression
-        :avocado: vm
+        :avocado: tags=vm
         :avocado: tags=checksum
-        :avocado: tags=basic_checksum_object,test_single_object_with_checksum
+        :avocado: tags=CsumContainerValidation,test_single_object_with_checksum
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
