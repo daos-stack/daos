@@ -440,17 +440,17 @@ static struct daos_rpc_handler dtx_handlers[] = {
 
 #undef X
 
-struct dss_module dtx_module =  {
-	.sm_name	= "dtx",
-	.sm_mod_id	= DAOS_DTX_MODULE,
-	.sm_ver		= DAOS_DTX_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= dtx_init,
-	.sm_fini	= dtx_fini,
-	.sm_setup	= dtx_setup,
-	.sm_proto_fmt	= &dtx_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= dtx_handlers,
-	.sm_key		= &dtx_module_key,
-	.sm_metrics	= &dtx_metrics,
+struct dss_module dtx_module = {
+    .sm_name        = "dtx",
+    .sm_mod_id      = DAOS_DTX_MODULE,
+    .sm_ver         = DAOS_DTX_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = dtx_init,
+    .sm_fini        = dtx_fini,
+    .sm_setup       = dtx_setup,
+    .sm_proto_fmt   = {&dtx_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {dtx_handlers},
+    .sm_key         = &dtx_module_key,
+    .sm_metrics     = &dtx_metrics,
 };

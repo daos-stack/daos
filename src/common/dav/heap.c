@@ -1371,13 +1371,16 @@ heap_get_arena_buckets(struct palloc_heap *heap, unsigned arena_id)
 int
 heap_get_arena_auto(struct palloc_heap *heap, unsigned arena_id)
 {
+	int value;
+
 	util_mutex_lock(&heap->rt->arenas.lock);
 
 	struct arena *a = heap_get_arena_by_id(heap, arena_id);
+	value           = a->automatic;
 
 	util_mutex_unlock(&heap->rt->arenas.lock);
 
-	return a->automatic;
+	return value;
 }
 
 /*

@@ -13,12 +13,13 @@ class CartRpcTwoNodeTest(CartTest):
     :avocado: recursive
     """
 
-    def test_cart_rpc(self):
+    def test_cart_rpc_two_node(self):
         """Test CaRT RPC.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,rpc,two_node,memcheck
-        :avocado: tags=test_cart_rpc
+        :avocado: tags=CartRpcTwoNodeTest,test_cart_rpc_two_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
         clicmd = self.build_cmd(self.env, "test_clients")

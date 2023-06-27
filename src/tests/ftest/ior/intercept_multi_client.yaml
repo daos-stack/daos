@@ -45,8 +45,6 @@ ior:
   transfersize: !mux
     512B:
       transfer_size: '512B'
-    1K:
-      transfer_size: '1K'
     4K:
       transfer_size: '4K'
     1M:

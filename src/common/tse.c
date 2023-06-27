@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -372,7 +372,7 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 		return;
 
 	/*
-	 * if completing a task that never started, we need to bump inflight tasks in scheduler
+	 * if completing a task that never started, we need to bump in-flight tasks in scheduler
 	 * before adding it to tail of completed list.
 	 */
 	if (!dtp->dtp_running) {
@@ -1018,15 +1018,17 @@ tse_task_insert_sleeping(struct tse_task_private *dtp,
 int
 tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 {
-	struct tse_task_private  *dtp = tse_task2priv(task);
-	struct tse_sched_private *dsp = dtp->dtp_sched;
-	int rc = 0;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	struct tse_sched_private	*dsp = dtp->dtp_sched;
+	bool				ready;
+	int				rc = 0;
 
 	D_ASSERT(!instant || (dtp->dtp_func && delay == 0));
 
 	/* Add task to scheduler */
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	if (dtp->dtp_func == NULL || instant) {
+	ready = (dtp->dtp_dep_cnt == 0 && d_list_empty(&dtp->dtp_prep_cb_list));
+	if ((dtp->dtp_func == NULL || instant) && ready) {
 		/** If task has no body function, mark it as running */
 		dsp->dsp_inflight++;
 		dtp->dtp_running = 1;
@@ -1049,10 +1051,8 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	tse_sched_priv_addref_locked(dsp);
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
-	/* if caller wants to run the task instantly, call the task body
-	 * function now.
-	 */
-	if (instant) {
+	/** if caller wants to run the task instantly, call the task body function now. */
+	if (instant && ready) {
 		dtp->dtp_func(task);
 
 		/** If task was completed return the task result */
@@ -1061,7 +1061,6 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 
 		tse_task_decref(task);
 	}
-
 	return rc;
 }
 

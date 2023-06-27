@@ -3548,7 +3548,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 2':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 2':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
@@ -3558,7 +3558,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # remount dfuse
@@ -3613,7 +3613,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 4':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 4':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
@@ -3623,7 +3623,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # remount dfuse
@@ -3842,15 +3842,18 @@ class PosixTests():
         file3 = join(path, 'file3')
         self.server.run_daos_client_cmd_pil4dfs(['touch', file3])
 
-        # cat a filename where a directory in the path is a file, should fail.  For now this does
-        # work but leaks memory.
-        # nop_file = join(file3, 'new_file which will not exist...')
-        # rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
-        # assert rc.returncode == 1, rc
+        # cat a filename where a directory in the path is a file, should fail.
+        nop_file = join(file3, 'new_file which will not exist...')
+        rc = self.server.run_daos_client_cmd_pil4dfs(['cat', nop_file], check=False)
+        assert rc.returncode == 1, rc
 
         # create a dir.
         dir1 = join(path, 'dir1')
         self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
+
+        # create multiple levels dirs
+        dirabcd = join(path, 'dira/dirb/dirc/dird')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', '-p', dirabcd])
 
         # find to list all files/dirs.
         self.server.run_daos_client_cmd_pil4dfs(['find', path])
@@ -5241,6 +5244,11 @@ class AllocFailTest():
             cmd = self.cmd(loc)
         else:
             cmd = self.cmd
+
+        # Disable logging to stderr from the daos tool, the two streams are both checked already
+        # but have different formats.
+        if os.path.basename(cmd[0]) == 'daos':
+            cmd_env['DD_STDERR'] = 'CRIT'
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:

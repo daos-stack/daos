@@ -185,12 +185,12 @@ func (ei *EngineInstance) logScmStorage() error {
 // ScanBdevTiers calls in to the private engine storage provider to scan bdev
 // tiers. Scan will avoid using any cached results if direct is set to true.
 func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
-	isStarted := ei.IsStarted()
+	isUp := ei.IsReady()
 	upDn := "down"
-	if isStarted {
+	if isUp {
 		upDn = "up"
 	}
 	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
 
-	return ei.storage.ScanBdevTiers(!isStarted)
+	return ei.storage.ScanBdevTiers(!isUp)
 }
