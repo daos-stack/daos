@@ -19,6 +19,7 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
         """Test CaRT RPC.
 
         :avocado: tags=all,pr
+        :avocado: tags=vm
         :avocado: tags=cart,rpc,one_node,swim_rank_eviction,memcheck
         :avocado: tags=CartRpcOneNodeSwimNotificationOnRankEvictionTest,test_cart_rpc
         """
