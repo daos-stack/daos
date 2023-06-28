@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -188,6 +188,7 @@ This is the package needed to run a DAOS client
 %package tests
 Summary: The entire DAOS test suite
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: golang >= 1.18
 BuildArch: noarch
 
 %description tests
@@ -553,6 +554,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.105-6
+- Install golang >= 1.18 as a daos-tests dependency
+
 * Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
 - Update raft to 0.10.1-1.408.g9524cdb
 
