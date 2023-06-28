@@ -500,6 +500,8 @@ class EngineYamlParameters(YamlParameters):
             "DAOS_MD_CAP=1024",
             "DAOS_SCHED_WATCHDOG_ALL=1",
             "DD_MASK=mgmt,io,md,epc,rebuild",
+            "RDB_USE_LEASES=0",
+            "RDB_LEASE_MAINTENANCE_GRACE=3600000"
         ]
         default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
         for name in self._provider.split(";"):
