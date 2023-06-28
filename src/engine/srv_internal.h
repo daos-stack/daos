@@ -217,10 +217,10 @@ sched_xstream_stopping(void)
 	int			 rc;
 
 	/* ULT creation from main thread which doesn't have dss_xstream */
-	if (dss_tls_get() == NULL)
+	dx = dss_current_xstream();
+	if (dx == NULL)
 		return false;
 
-	dx = dss_current_xstream();
 	rc = ABT_future_test(dx->dx_stopping, &state);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	return state == ABT_TRUE;
@@ -272,11 +272,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 #ifdef ULT_MMAP_STACK
-	bool			 tls_set = dss_tls_get() ? true : false;
-	struct dss_xstream	*cur_dx = NULL;
-
-	if (tls_set)
-		cur_dx = dss_current_xstream();
+	struct dss_xstream	*cur_dx = dss_current_xstream();
 
 	/* if possible,stack should be allocated from launching XStream pool */
 	if (cur_dx == NULL)

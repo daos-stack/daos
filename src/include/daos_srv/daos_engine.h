@@ -183,7 +183,8 @@ dss_get_module_info(void)
 static inline struct dss_xstream *
 dss_current_xstream(void)
 {
-	return dss_get_module_info()->dmi_xstream;
+	/* there is no xstream for main thread */
+	return dss_tls_get() ? dss_get_module_info()->dmi_xstream : NULL;
 }
 
 /**
