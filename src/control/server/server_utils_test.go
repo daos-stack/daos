@@ -1249,7 +1249,7 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 }
 
 func TestServer_processFabricProvider(t *testing.T) {
-	for name, tc := range map[string]struct{
+	for name, tc := range map[string]struct {
 		cfgFabric string
 		expFabric string
 	}{
@@ -1273,7 +1273,7 @@ func TestServer_processFabricProvider(t *testing.T) {
 			cfgFabric: "ucx+ud",
 			expFabric: "ucx+ud",
 		},
-	}{
+	} {
 		t.Run(name, func(t *testing.T) {
 			cfg := &config.Server{
 				Fabric: engine.FabricConfig{
