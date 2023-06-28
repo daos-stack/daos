@@ -229,6 +229,8 @@ def define_common(reqs):
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
 
+    reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
+
 
 def define_ompi(reqs):
     """OMPI and related components"""
