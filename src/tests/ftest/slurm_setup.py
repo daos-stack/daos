@@ -80,7 +80,7 @@ class SlurmSetup():
         self.log.info("Removing slurm packages")
         result = remove_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
-            raise SlurmSetupException("Error removing slurm packages on {result.failed_hosts}")
+            raise SlurmSetupException(f"Error removing slurm packages on {result.failed_hosts}")
 
     def install(self):
         """Install slurm packages on the nodes.
@@ -91,7 +91,7 @@ class SlurmSetup():
         self.log.info("Installing slurm packages")
         result = install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
-            raise SlurmSetupException("Error installing slurm packages on {result.failed_hosts}")
+            raise SlurmSetupException(f"Error installing slurm packages on {result.failed_hosts}")
 
     def update_config(self, slurm_user, partition):
         """Update the slurm config.
@@ -126,17 +126,23 @@ class SlurmSetup():
         """
         self.log.info("Starting munge")
 
+        # Create munge key only if it does not exist.
+        result = run_remote(
+            self.log, self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
+        if not result.passed:
+            # Create a munge key on the control host
+            self.log.debug('Creating a new munge key on %s', self.control)
+            result = run_remote(
+                self.log, self.control, command_as_user('create-munge-key', self.root))
+            if not result.passed:
+                # Try the other possible munge key creation command:
+                result = run_remote(
+                    self.log, self.control, command_as_user('mungekey -c', self.root))
+                if not result.passed:
+                    raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
+
         # Setup the munge dir file permissions on all hosts
         self._update_file(self.all_nodes, self.MUNGE_DIR, '777', user)
-
-        # Remove any munge key files on all hosts
-        self._remove_file(self.all_nodes, self.MUNGE_KEY)
-
-        # Create a munge key on the control host
-        self.log.debug('Creating a new munge key on %s', self.control)
-        result = run_remote(self.log, self.control, command_as_user('create-munge-key', self.root))
-        if not result.passed:
-            raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
         # Setup the munge key file permissions on the control host
         self._update_file(self.control, self.MUNGE_KEY, '777', user)
@@ -303,7 +309,7 @@ class SlurmSetup():
             SlurmSetupException: if there is a problem modifying slurm config file
 
         Returns:
-            NodSet: hosts on which the command succeeded
+            NodeSet: hosts on which the command succeeded
         """
         self.log.debug(
             'Updating the %s in the %s config file on %s', description, self.SLURM_CONF, hosts)
