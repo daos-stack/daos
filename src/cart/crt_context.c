@@ -464,7 +464,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 #define CRT_EPI_ABORT_FORCE	(0x1)
 #define CRT_EPI_ABORT_WAIT	(0x2)
 
-/* abort the RPCs in inflight queue and waitq in the epi. */
+/* abort the RPCs in in-flight queue and waitq in the epi. */
 static int
 crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 {
@@ -501,7 +501,7 @@ crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 	if (force == 0) {
 		D_ERROR("cannot abort endpoint (idx %d, rank %d, req_wait_num "
 			DF_U64", req_num "DF_U64", reply_num "DF_U64", "
-			"inflight "DF_U64", with force == 0.\n", ctx->cc_idx,
+			"in-flight "DF_U64", with force == 0.\n", ctx->cc_idx,
 			epi->epi_ep.ep_rank, epi->epi_req_wait_num,
 			epi->epi_req_num, epi->epi_reply_num,
 			epi->epi_req_num - epi->epi_reply_num);
@@ -527,7 +527,7 @@ crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 		}
 	}
 
-	/* take references to RPCs in inflight queue */
+	/* take references to RPCs in in-flight queue */
 	msg_logged = false;
 	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_q, crp_epi_link) {
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
@@ -535,7 +535,7 @@ crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 			D_DEBUG(DB_NET,
 				"destroy context (idx %d, rank %d, "
 				"epi_req_num "DF_U64", epi_reply_num "
-				""DF_U64", inflight "DF_U64").\n",
+				""DF_U64", in-flight "DF_U64").\n",
 				ctx->cc_idx, epi->epi_ep.ep_rank,
 				epi->epi_req_num, epi->epi_reply_num,
 				epi->epi_req_num - epi->epi_reply_num);
@@ -583,7 +583,7 @@ crt_ctx_epi_abort(struct crt_ep_inflight *epi, int flags)
 				D_ERROR("stop progress due to timed out.\n");
 				d_list_for_each_entry(rpc_priv, &epi->epi_req_q, crp_epi_link)
 					RPC_ERROR(rpc_priv,
-						  "inflight: still not aborted: state=%d\n",
+						  "in-flight: still not aborted: state=%d\n",
 						  rpc_priv->crp_state);
 				d_list_for_each_entry(rpc_priv, &epi->epi_req_waitq, crp_epi_link)
 					RPC_ERROR(rpc_priv,
@@ -1086,7 +1086,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 		/* At this point, RPC should always be completed by
 		 * Mercury
 		 */
-		RPC_ERROR(rpc_priv, "aborting inflight to group %s, rank %d, tgt_uri %s\n",
+		RPC_ERROR(rpc_priv, "aborting in-flight to group %s, rank %d, tgt_uri %s\n",
 			  grp_priv->gp_pub.cg_grpid, tgt_ep->ep_rank, rpc_priv->crp_tgt_uri);
 		rc = crt_hg_req_cancel(rpc_priv);
 		if (rc != 0) {
@@ -1315,7 +1315,7 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 		return;
 	}
 
-	/* remove from wait or inflight queue */
+	/* remove from wait or in-flight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
 	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
