@@ -212,7 +212,7 @@ alloc_class_new(int id, struct alloc_class_collection *ac,
 
 		if (id < 0 && alloc_class_find_first_free_slot(ac,
 				&slot) != 0)
-			goto error_class_alloc;
+			goto error_map_insert;
 		id = slot;
 
 		size_t map_idx = SIZE_TO_CLASS_MAP_INDEX(c->unit_size,
