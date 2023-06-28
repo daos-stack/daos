@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -48,7 +48,7 @@ obj_ec_metrics_process(daos_iod_t *iod, struct obj_io_desc *oiod, struct daos_oc
 	uint32_t		 i, j;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		if (iod->iod_size == DAOS_REC_ANY)
+		if (iod->iod_size == DAOS_REC_ANY) /* punch request */
 			return;
 		if (iod->iod_size <= OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca)))
 			d_tm_inc_counter(opm->opm_update_ec_partial, 1);
