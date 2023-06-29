@@ -211,7 +211,6 @@ extern "C" {
 
 /* clang-format on */
 
-
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
 	ACTION(GURT,	1000)		\
