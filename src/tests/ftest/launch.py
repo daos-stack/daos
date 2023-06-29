@@ -59,9 +59,9 @@ TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
         ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
+        ("verbs", "ofi+verbs;ofi_rxm"),
         ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp"),
+        ("tcp", "ofi+tcp;ofi_rxm"),
         ("opx", "ofi+opx"),
     ]
 )
