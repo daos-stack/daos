@@ -433,7 +433,9 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 type fsDfuseQueryCmd struct {
 	daosCmd
 
-	Path string `long:"path" description:"Path to evict from dfuse" required:"1"`
+	Args struct {
+		Path string `positional-arg-name:"path" description:"DFuse path to query" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
@@ -442,17 +444,16 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ap.path = C.CString(cmd.Path)
+	ap.path = C.CString(cmd.Args.Path)
 	defer freeString(ap.path)
 	defer deallocCmdArgs()
 
 	rc := C.dfuse_count_query(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to query %s", cmd.Path)
+		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
 	if cmd.jsonOutputEnabled() {
-
 		jsonAttrs := &struct {
 			NumInodes      uint64 `json:"inodes"`
 			NumFileHandles uint64 `json:"open_files"`

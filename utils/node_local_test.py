@@ -2563,11 +2563,10 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
-        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery', '--path', self.dfuse.dir])
+        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery', self.dfuse.dir])
         print(rc)
         assert rc.returncode == 0
-        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery',
-                          '--path', self.dfuse.dir], use_json=True)
+        rc = run_daos_cmd(self.conf, ['filesystem', 'memquery', self.dfuse.dir], use_json=True)
         print(rc)
         assert rc.returncode == 0
 
