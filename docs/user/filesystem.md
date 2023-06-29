@@ -747,15 +747,12 @@ root cause is a bug in fuse Linux kernel module. The virtual address of user-spa
 read buffer was converted to physical page address. Once the data is ready, they
 are copied into the saved physical page address. Under certain circumstances such as
 page migration, the associated physical pages of the virtual address of read buffer
-has been changed. Consequently, fuse writes expected data into a wrong place and
-the read buffer holds wrong data. We speculate that such issue might be triggered
-by bad memory fragmentation. The issue has been reproduced under various versions
-of kernels, ranging from 3.10.0 to 6.3.6. Older kernels are not tested. We have
-a working patch to fix this bug under Linux kernel 6.3.6. This patch pins physical
-pages to avoid page migration when extracting physical pages from the virtual
-address of read buffer. We are working with Linux kernel community to upstream
-the patch to the latest Linux kernel. It may take some time to backport this patch
-to older kernels.
+has been changed. Consequently, fuse writes expected data into a wrong place and the
+read buffer holds wrong data. We have a patch for Linux kernel 6.3.6 to fix this issue.
+It pins physical pages to avoid page migration when extracting physical pages from
+the virtual address of read buffer. We are working with Linux kernel community to
+upstream the patch to the latest Linux kernel. It may take some time to backport
+this patch to older kernels.
 
 ## Interception Library `libioil`
 
