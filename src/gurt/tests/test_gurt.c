@@ -129,9 +129,9 @@ test_d_errstr(void **state)
 
 	/* Check the end of the DAOS error numbers. */
 	value = d_errstr(-DER_CHKPT_BUSY);
-	assert_string_equal(value, "DER_CHKPT_BUSY");
-	value = d_errstr(-2046);
-	assert_string_equal(value, "DER_CHKPT_BUSY");
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
+	value = d_errstr(-2047);
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
 	value = d_errstr(-(DER_CHKPT_BUSY + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
