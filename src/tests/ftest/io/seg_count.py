@@ -5,7 +5,6 @@
 """
 from ior_test_base import IorTestBase
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class SegCount(IorTestBase):
@@ -14,7 +13,6 @@ class SegCount(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-7258")
     def test_segcount(self):
         """JIRA ID: DAOS-1782.
 

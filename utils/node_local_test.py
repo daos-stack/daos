@@ -3612,7 +3612,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 2':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 2':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
@@ -3622,7 +3622,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # remount dfuse
@@ -3677,7 +3677,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 4':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 4':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # run again to check nothing is detected
@@ -3687,7 +3687,7 @@ class PosixTests():
         assert rc.returncode == 0
         output = rc.stdout.decode('utf-8')
         line = output.splitlines()
-        if line[-1] != 'Number of Leaked OIDs in Namespace = 0':
+        if line[-1] != 'DFS checker: Number of leaked OIDs in namespace = 0':
             raise NLTestFail('Wrong number of Leaked OIDs')
 
         # remount dfuse
@@ -3914,6 +3914,10 @@ class PosixTests():
         # create a dir.
         dir1 = join(path, 'dir1')
         self.server.run_daos_client_cmd_pil4dfs(['mkdir', dir1])
+
+        # create multiple levels dirs
+        dirabcd = join(path, 'dira/dirb/dirc/dird')
+        self.server.run_daos_client_cmd_pil4dfs(['mkdir', '-p', dirabcd])
 
         # find to list all files/dirs.
         self.server.run_daos_client_cmd_pil4dfs(['find', path])

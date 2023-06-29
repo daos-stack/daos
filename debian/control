@@ -29,10 +29,9 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev (>= 22.01.2),
                libipmctl-dev,
-               libraft-dev (= 0.9.1-1401.gc18bcb8),
+               libraft-dev (= 0.10.1-1408.g9524cdb),
                python3-tabulate,
                liblz4-dev,
-               liblmdb-dev,
                libcapstone-dev
 Standards-Version: 4.1.2
 Homepage: https://docs.daos.io/

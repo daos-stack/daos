@@ -155,10 +155,12 @@ obj_decref(struct dc_object *obj)
 		daos_hhash_link_putref(&obj->cob_hlink);
 }
 
-void
+struct dc_object *
 obj_addref(struct dc_object *obj)
 {
-	daos_hhash_link_getref(&obj->cob_hlink);
+	if (obj != NULL)
+		daos_hhash_link_getref(&obj->cob_hlink);
+	return obj;
 }
 
 struct dc_object *
@@ -208,6 +210,20 @@ dc_obj_hdl2cont_hdl(daos_handle_t oh)
 	daos_hhash_link_key(&obj->cob_co->dc_hlink, &hdl.cookie);
 	obj_decref(obj);
 	return hdl;
+}
+
+uint32_t
+dc_obj_hdl2layout_ver(daos_handle_t oh)
+{
+	struct dc_object *obj;
+	uint32_t ver;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	ver = obj->cob_layout_version;
+	obj_decref(obj);
+	return ver;
+
 }
 
 static int
@@ -1311,8 +1327,7 @@ obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 
 	arg.oqa_pool = pool;
 	pool = NULL;
-	obj_addref(obj);
-	arg.oqa_obj = obj;
+	arg.oqa_obj = obj_addref(obj);
 
 	rc = tse_task_register_comp_cb(task, obj_pool_query_cb, &arg,
 				       sizeof(arg));
@@ -4742,12 +4757,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
-				 (task->dt_result == 0 ||
-				  task->dt_result == -DER_NONEXIST)) {
-				obj_addref(obj);
+			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, false);
-			}
+				dc_tx_attach(obj_auxi->th, obj, DAOS_OBJ_RPC_FETCH, task, 0, false);
 			break;
 		}
 		case DAOS_OBJ_RPC_PUNCH:
@@ -4761,13 +4773,9 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 		case DAOS_OBJ_RPC_KEY2ANCHOR:
 			if (daos_handle_is_valid(obj_auxi->th) &&
-			    (task->dt_result == 0 ||
-			     task->dt_result == -DER_NONEXIST)) {
-				D_ASSERT(obj != NULL);
-				obj_addref(obj);
+			    (task->dt_result == 0 || task->dt_result == -DER_NONEXIST))
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, false);
-			}
+				dc_tx_attach(obj_auxi->th, obj, obj_auxi->opc, task, 0, false);
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
 			/* XXX: For list dkey recursively, that is mainly used
@@ -5666,7 +5674,7 @@ dc_obj_update_task(tse_task_t *task)
 
 	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, true);
+		return dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task, 0, true);
 
 	/* submit the update */
 	return dc_obj_update(task, &epoch, map_ver, args, obj);
@@ -6546,7 +6554,7 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 
 	if (daos_handle_is_valid(args->th))
 		/* add the operation to DTX and complete immediately */
-		return dc_tx_attach(args->th, obj, opc, task, true);
+		return dc_tx_attach(args->th, obj, opc, task, 0, true);
 
 	/* submit the punch */
 	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
@@ -6711,6 +6719,10 @@ dc_obj_query_key(tse_task_t *api_task)
 
 	D_ASSERTF(api_args != NULL,
 		  "Task Argument OPC does not match DC OPC\n");
+
+	/** for EC need to zero out user recx if passed */
+	if (api_args->recx)
+		memset(api_args->recx, 0, sizeof(*api_args->recx));
 
 	rc = obj_req_valid(api_task, api_args, DAOS_OBJ_RPC_QUERY_KEY, &epoch, &map_ver, &obj);
 	if (rc)
@@ -7198,5 +7210,20 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints
 		return rc;
 
 	*cid = (ord << OC_REDUN_SHIFT) | nr_grp;
+	return 0;
+}
+
+int
+dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md)
+{
+	struct dc_object *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+	{
+		return -DER_NO_HDL;
+	}
+	*md = obj->cob_md;
+	obj_decref(obj);
 	return 0;
 }
