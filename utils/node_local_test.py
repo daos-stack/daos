@@ -5356,13 +5356,6 @@ def test_alloc_fail_copy(server, conf, wf):
     return test_cmd.launch()
 
 
-# Hack for test_alloc_fail_copy_trunc.  Variable scoping means that the get_cmd() function can read
-# but not modify variables in enclosing scope so keeping a counter has to be global.  As python
-# expects global variables to be constants pylint then checks this is upper case so disable that
-# warning.
-aftc_idx = 0  # pylint: disable=invalid-name
-
-
 def test_alloc_fail_copy_trunc(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -5376,12 +5369,13 @@ def test_alloc_fail_copy_trunc(server, conf, wf):
     files_needed = 4000
 
     def get_cmd(_):
-        global aftc_idx
         cmd = [join(conf['PREFIX'], 'bin', 'daos'), 'filesystem', 'copy', '--src', src_file.name,
-               '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{aftc_idx}']
-        aftc_idx += 1
-        assert aftc_idx <= files_needed
+               '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{get_cmd.idx}']
+        get_cmd.idx += 1
+        assert get_cmd.idx <= files_needed
         return cmd
+
+    get_cmd.idx = 0  # pylint: disable=invalid-name
 
     pool = server.get_test_pool_obj()
     with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
