@@ -1131,6 +1131,10 @@ class _Component():
         if self.targets_found:
             return False
 
+        if self.skip_arch:
+            self.targets_found = True
+            return False
+
         if self.__check_only:
             # Temporarily turn off dry-run.
             env.SetOption('no_exec', False)
