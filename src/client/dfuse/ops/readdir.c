@@ -539,9 +539,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+			hdl        = oh->doh_rd;
 			if (oh->doh_rd == NULL)
 				D_GOTO(out_reset, rc = ENOMEM);
-			hdl = oh->doh_rd;
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 		} else {
 			dfuse_readdir_reset(hdl);
@@ -647,9 +647,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 						    NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
+				D_FREE(drc);
 				continue;
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+				D_FREE(drc);
 				D_GOTO(reply, rc);
 			}
 
@@ -665,6 +667,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
 						  out, attr_len, &rlink);
 				if (rc != 0) {
+					dfs_release(obj);
+					D_FREE(drc);
 					D_GOTO(reply, rc);
 				}
 
@@ -769,7 +773,8 @@ reply:
 	return 0;
 
 out_reset:
-	dfuse_readdir_reset(hdl);
+	if (hdl)
+		dfuse_readdir_reset(hdl);
 	D_ASSERT(rc != 0);
 	return rc;
 }

@@ -2284,7 +2284,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 	daos_key_t		*dkey;
 	struct io_params	*params = NULL;
 	tse_task_t		*io_task;
-	bool			free_iod_recxs = true;
+	bool			free_params = true;
 	int			rc;
 
 	D_ALLOC_PTR(params);
@@ -2335,7 +2335,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props, d_l
 	rc = tse_task_register_comp_cb(io_task, free_io_params_cb, &params, sizeof(params));
 	if (rc)
 		D_GOTO(err_task, rc);
-	free_iod_recxs = false;
+	free_params = false;
 
 	rc = tse_task_register_deps(props->ptask, 1, &io_task);
 	if (rc)
@@ -2350,9 +2350,10 @@ err_task:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 err:
-	D_FREE(params);
-	if (free_iod_recxs)
+	if (free_params) {
 		D_FREE(iod->iod_recxs);
+		D_FREE(params);
+	}
 	return rc;
 }
 
@@ -2477,6 +2478,7 @@ dc_array_set_size(tse_task_t *task)
 	daos_obj_list_dkey_t	*enum_args;
 	struct set_size_props	*set_size_props = NULL;
 	tse_task_t		*enum_task;
+	bool			cleanup = true;
 	int			rc;
 
 	args = daos_task_get_args(task);
@@ -2536,8 +2538,14 @@ dc_array_set_size(tse_task_t *task)
 	enum_args->sgl		= &set_size_props->sgl;
 	enum_args->dkey_anchor	= &set_size_props->anchor;
 
-	rc = tse_task_register_cbs(enum_task, NULL, NULL, 0, adjust_array_size_cb, &set_size_props,
-				   sizeof(set_size_props));
+	rc = tse_task_register_comp_cb(task, free_set_size_cb, &set_size_props,
+				       sizeof(set_size_props));
+	if (rc)
+		D_GOTO(err_enum_task, rc);
+	cleanup = false;
+
+	rc = tse_task_register_comp_cb(enum_task, adjust_array_size_cb, &set_size_props,
+				       sizeof(set_size_props));
 	if (rc)
 		D_GOTO(err_enum_task, rc);
 
@@ -2545,22 +2553,19 @@ dc_array_set_size(tse_task_t *task)
 	if (rc)
 		D_GOTO(err_enum_task, rc);
 
-	rc = tse_task_register_comp_cb(task, free_set_size_cb, &set_size_props,
-				       sizeof(set_size_props));
-	if (rc)
-		D_GOTO(err_enum_task, rc);
-
 	rc = tse_task_schedule(enum_task, true);
 	if (rc)
-		D_GOTO(err_enum_task, rc);
+		D_GOTO(err_task, rc);
 
 	return 0;
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
-	D_FREE(set_size_props);
-	if (array)
-		array_decref(array);
 	tse_task_complete(task, rc);
+	if (cleanup) {
+		D_FREE(set_size_props);
+		if (array)
+			array_decref(array);
+	}
 	return rc;
 } /* end daos_array_set_size */
