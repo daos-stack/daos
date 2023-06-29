@@ -35,7 +35,7 @@
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
-/* Max inflight blob IOs per io channel */
+/* Max in-flight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
