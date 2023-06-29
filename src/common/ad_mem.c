@@ -2184,8 +2184,7 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 	if (rc == -DER_ENOENT ||	/* no arena, no group */
 	    rc == -DER_NOSPACE) {	/* no space in this arena */
 		grp_at = 0;
-		grp = NULL;
-		rc = 0;
+		grp    = NULL;
 		/* fall through */
 	} else if (rc != 0) {
 		D_ERROR("Failed to find group, arena=%d, size=%d, rc=%d\n",
