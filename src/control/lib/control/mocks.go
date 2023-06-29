@@ -125,10 +125,12 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	ur := mi.cfg.UnaryResponse
 	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
+		mi.log.Debugf("using configured UnaryResponseSet[%d]", mi.invokeCount)
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
 	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
+		mi.log.Debugf("using dummy UnaryResponse")
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
 		ur = &UnaryResponse{
@@ -140,6 +142,8 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 				},
 			},
 		}
+	} else {
+		mi.log.Debugf("using configured UnaryResponse")
 	}
 
 	var invokeCount int
@@ -148,6 +152,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	invokeCount = mi.invokeCount
 	mi.invokeCountMutex.Unlock()
 	go func(invokeCount int) {
+		mi.log.Debugf("returning mock responses, invokeCount=%d", invokeCount)
 		delayIdx := invokeCount - 1
 		for idx, hr := range ur.Responses {
 			var delay time.Duration
@@ -156,13 +161,16 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 				delay = mi.cfg.UnaryResponseDelays[delayIdx][idx]
 			}
 			if delay > 0 {
+				mi.log.Debugf("delaying mock response for %s", delay)
 				time.Sleep(delay)
 			}
 
 			select {
 			case <-ctx.Done():
+				mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
 				return
 			case responses <- hr:
+				mi.log.Debug("sending mock response")
 			}
 		}
 		close(responses)
