@@ -306,7 +306,7 @@
                   <exclude>org.javassist:javassist</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
+              <finalName>${project.artifactId}-${project.version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
         </executions>
@@ -325,7 +325,7 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
+                  <file>target/${project.artifactId}-${project.version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
                   <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
@@ -449,7 +449,7 @@
                 <configuration>
                   <artifacts>
                     <artifact>
-                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <file>target/${project.artifactId}-${project.version}-shaded.jar</file>
                       <type>jar</type>
                       <classifier>all-shaded</classifier>
                     </artifact>

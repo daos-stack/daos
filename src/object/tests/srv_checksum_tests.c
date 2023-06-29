@@ -288,9 +288,9 @@ fetch_csum_verify_bsgl_with_args(struct vos_fetch_test_context *ctx)
 #define ASSERT_CSUM(ctx, csum) \
 	assert_memory_equal(csum, ctx.iod_csum->ic_data->cs_csum, \
 		sizeof(csum) - 1)
-#define ASSERT_CSUM_EMPTY(ctx, idx) \
-	assert_string_equal("", ctx.iod_csum->ic_data->cs_csum + \
-	(idx * ctx.iod_csum->ic_data->cs_len))
+#define ASSERT_CSUM_EMPTY(ctx, idx)                                                                \
+	assert_int_equal(                                                                          \
+	    0, *(ctx.iod_csum->ic_data->cs_csum + (idx * ctx.iod_csum->ic_data->cs_len)))
 #define ASSERT_CSUM_IDX(ctx, csum, idx) \
 	assert_memory_equal(csum, ctx.iod_csum->ic_data->cs_csum + \
 	(idx * ctx.iod_csum->ic_data->cs_len), \
