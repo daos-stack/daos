@@ -132,7 +132,7 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_DIV_BY_ZERO");
 	value = d_errstr(-2047);
 	assert_string_equal(value, "DER_DIV_BY_ZERO");
-	value = d_errstr(-(DER_CHKPT_BUSY + 1));
+	value = d_errstr(-(DER_DIV_BY_ZERO + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 }
 
