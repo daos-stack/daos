@@ -36,6 +36,30 @@ class ResultData():
         self.stderr = stderr
         self.timeout = timeout
 
+    def __lt__(self, other):
+        """Determine if another ResultData object is less than this one.
+
+        Args:
+            other (NodeSet): the other NodSet to compare
+
+        Returns:
+            bool: True if this object is less than the other ResultData object; False otherwise
+        """
+        if not isinstance(other, ResultData):
+            raise NotImplementedError
+        return str(self.hosts) < str(other.hosts)
+
+    def __gt__(self, other):
+        """Determine if another ResultData object is greater than this one.
+
+        Args:
+            other (NodeSet): the other NodSet to compare
+
+        Returns:
+            bool: True if this object is greater than the other ResultData object; False otherwise
+        """
+        return not self.__lt__(other)
+
     @property
     def passed(self):
         """Did the command pass.
@@ -153,14 +177,14 @@ class RemoteCommandResult():
         # Populate the a list of unique output for each NodeSet
         for code in sorted(results):
             stdout_data = self._sanitize_iter_data(
-                results[code], list(task.iter_buffers(results[code])), "<NONE>")
+                results[code], list(task.iter_buffers(results[code])), '')
 
             for stdout_raw, stdout_hosts in stdout_data:
                 # In run_remote(), task.run() is executed with the stderr=False default.
                 # As a result task.iter_buffers() will return combined stdout and stderr.
                 stdout = self._msg_tree_elem_to_list(stdout_raw)
                 stderr_data = self._sanitize_iter_data(
-                    stdout_hosts, list(task.iter_errors(stdout_hosts)), "")
+                    stdout_hosts, list(task.iter_errors(stdout_hosts)), '')
                 for stderr_raw, stderr_hosts in stderr_data:
                     stderr = self._msg_tree_elem_to_list(stderr_raw)
                     self.output.append(
@@ -239,16 +263,15 @@ def log_result_data(log, data):
         log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
     else:
         log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
-        indent = 4
-        if data.stderr:
+        indent = 6 if data.stderr else 4
+        if data.stdout and data.stderr:
             log.debug("    <stdout>:")
-            indent += 2
         for line in data.stdout:
             log.debug("%s%s", " " * indent, line)
         if data.stderr:
             log.debug("    <stderr>:")
-            for line in data.stderr:
-                log.debug("%s%s", " " * indent, line)
+        for line in data.stderr:
+            log.debug("%s%s", " " * indent, line)
 
 
 def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):

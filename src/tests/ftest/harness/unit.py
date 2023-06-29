@@ -35,8 +35,9 @@ class HarnessUnitTest(TestWithoutServers):
         self.assertEqual(passed, result.passed, 'Incorrect RemoteCommandResult.passed')
         self.assertEqual(
             len(expected), len(result.output), 'Incorrect RemoteCommandResult.output count')
-        for index, expect in enumerate(expected):
-            actual = result.output[index]
+        sorted_output = sorted(result.output)
+        for index, expect in enumerate(sorted(expected)):
+            actual = sorted_output[index]
             for key in ('command', 'returncode', 'hosts', 'stdout', 'stderr', 'timeout'):
                 self.assertEqual(
                     getattr(expect, key), getattr(actual, key),
@@ -235,7 +236,7 @@ class HarnessUnitTest(TestWithoutServers):
         self.log_step('Unit Test Passed')
 
     def test_harness_unit_run_remote_single(self):
-        """Verify run_remote() with homogeneous output.
+        """Verify run_remote() with a single host.
 
         :avocado: tags=all
         :avocado: tags=vm
@@ -244,7 +245,7 @@ class HarnessUnitTest(TestWithoutServers):
         """
         hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
         command = 'uname -o'
-        self.log_step('Verify run_remote() w/ homogeneous output')
+        self.log_step('Verify run_remote() w/ single host')
         self._verify_remote_command_result(
             result=run_remote(self.log, NodeSet(hosts[0]), command),
             passed=True,
@@ -365,8 +366,8 @@ class HarnessUnitTest(TestWithoutServers):
             result=run_remote(self.log, hosts, command, stderr=True),
             passed=True,
             expected=[
-                ResultData(command, 0, NodeSet(hosts[1]), ['stdout'], ['stderr'], False),
                 ResultData(command, 0, NodeSet(hosts[0]), ['stdout'], [], False),
+                ResultData(command, 0, NodeSet(hosts[1]), ['stdout'], ['stderr'], False),
             ],
             timeout=False,
             homogeneous=False,
@@ -379,6 +380,73 @@ class HarnessUnitTest(TestWithoutServers):
             all_stderr={
                 hosts[0]: '',
                 hosts[1]: 'stderr'
+            }
+        )
+        self.log_step('Unit Test Passed')
+
+    def test_harness_unit_run_remote_no_stdout(self):
+        """Verify run_remote() with separated stdout and stderr.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,run_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        """
+        hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
+        command = 'if [ $(hostname -s) == \'{}\' ]; then echo stderr 1>&2; fi'.format(hosts[1])
+        self.log_step('Verify run_remote() w/ no stdout')
+        self._verify_remote_command_result(
+            result=run_remote(self.log, hosts, command, stderr=True),
+            passed=True,
+            expected=[
+                ResultData(command, 0, NodeSet(hosts[0]), [], [], False),
+                ResultData(command, 0, NodeSet(hosts[1]), [], ['stderr'], False),
+            ],
+            timeout=False,
+            homogeneous=False,
+            passed_hosts=hosts,
+            failed_hosts=NodeSet(),
+            all_stdout={
+                hosts[0]: '',
+                hosts[1]: ''
+            },
+            all_stderr={
+                hosts[0]: '',
+                hosts[1]: 'stderr'
+            }
+        )
+        self.log_step('Unit Test Passed')
+
+    def test_harness_unit_run_remote_failure(self):
+        """Verify run_remote() with separated stdout and stderr.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,run_utils
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        """
+        hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
+        command = 'if [ $(hostname -s) == \'{}\' ]; then echo fail; exit 1; fi; echo pass'.format(
+            hosts[1])
+        self.log_step('Verify run_remote() w/ a failure')
+        self._verify_remote_command_result(
+            result=run_remote(self.log, hosts, command, stderr=True),
+            passed=False,
+            expected=[
+                ResultData(command, 0, NodeSet(hosts[0]), ['pass'], [], False),
+                ResultData(command, 1, NodeSet(hosts[1]), ['fail'], [], False),
+            ],
+            timeout=False,
+            homogeneous=False,
+            passed_hosts=NodeSet(hosts[0]),
+            failed_hosts=NodeSet(hosts[1]),
+            all_stdout={
+                hosts[0]: 'pass',
+                hosts[1]: 'fail'
+            },
+            all_stderr={
+                hosts[0]: '',
+                hosts[1]: ''
             }
         )
         self.log_step('Unit Test Passed')
