@@ -600,7 +600,7 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevManageResp *resp)
 	rc = dss_ult_create(bio_faulty_state_set, (void *)&faulty_info,
 			    tgt2xs_type(tgt_id), tgt_id, 0, &thread);
 	if (rc != 0) {
-		D_ERROR("Unable to create a ULT on tgt_id:%d\n", tgt_id);
+		DL_ERROR(rc, "ULT did not complete faulty_state_set on tgt_id:%d", tgt_id);
 		goto out;
 	}
 
@@ -672,7 +672,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	if (resp->device->tr_addr == NULL)
 		return -DER_NOMEM;
 
-	if (strlen(req->ids) == 0) {
+	if (((req->ids) == NULL) || (strlen(req->ids) == 0)) {
 		D_ERROR("Transport address not provided in request\n");
 		return -DER_INVAL;
 	}
@@ -760,11 +760,13 @@ ds_mgmt_dev_replace(uuid_t old_dev_uuid, uuid_t new_dev_uuid, Ctl__DevManageResp
 	rc = dss_ult_execute(bio_storage_dev_replace, &replace_dev_info, NULL, NULL,
 			     init_xs_type(), 0, 0);
 	if (rc != 0) {
-		D_ERROR("Unable to create a ULT\n");
+		DL_ERROR(rc, "ULT did not complete storage_dev_replace");
+		/* BIO device state after unsuccessful reintegration */
+		resp->device->dev_state = CTL__NVME_DEV_STATE__EVICTED;
 		goto out;
 	}
 
-	/* BIO device state after reintegration */
+	/* BIO device state after successful reintegration */
 	resp->device->dev_state = CTL__NVME_DEV_STATE__NORMAL;
 out:
 	if (rc != 0) {
