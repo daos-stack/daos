@@ -753,8 +753,9 @@ get_target(struct pool_domain *root, uint32_t layout_ver, struct pool_target **t
 		 * if there are no spare targets left, it will stop assigning the target
 		 * to shard, which will leave some shards as -1.
 		 */
-		if (*spare_left == 0) {
-			*spare_avail = false;
+		if (spare_left && *spare_left == 0) {
+			if (spare_avail)
+				*spare_avail = false;
 			break;
 		}
 
