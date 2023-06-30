@@ -280,7 +280,7 @@ daos_key2str(daos_key_t *key)
 		for (i = 0 ; i < len ; i++) {
 			if (akey[i] == '\0')
 				break;
-			if (!isprint(akey[i])) {
+			if (!isprint(akey[i]) || akey[i] == '\'') {
 				can_print = false;
 				break;
 			}
@@ -303,3 +303,26 @@ daos_key2str(daos_key_t *key)
 }
 #endif
 
+/* Format a directory entry suitable for logging.
+ * Take a directory entry (filename) and return something suitable for printing, no not modify the
+ * input itself, either return the input as-is for printing or some metadata about it.
+ * TODO: Check boundary case.
+ */
+char *
+daos_de2str(const char *de)
+{
+	int i;
+
+	if (!de)
+		return "<NULL>";
+
+	for (i = 0; i < NAME_MAX; i++) {
+		if (de[i] == '\0')
+			return (char *)de;
+		if (de[i] == '/')
+			return "<contains slash>";
+		if (!isprint(de[i]) || de[i] == '\'')
+			return "<not printable>";
+	}
+	return "<entry too long>";
+}

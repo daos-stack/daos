@@ -79,57 +79,6 @@ struct daos_sgl_idx {
 	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
-#define DF_SGL_IDX "{idx: %d, offset: "DF_U64"}"
-#define DP_SGL_IDX(i) (i)->iov_idx, (i)->iov_offset
-
-/*
- * add bytes to the sgl index offset. If the new offset is greater than or
- * equal to the indexed iov len, move the index to the next iov in the sgl.
- */
-static inline void
-sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
-{
-	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes."
-			  "Idx: "DF_SGL_IDX"\n",
-		bytes, DP_SGL_IDX(sgl_idx));
-
-	/** move to next iov if necessary */
-	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
-		sgl_idx->iov_idx++;
-		sgl_idx->iov_offset = 0;
-		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
-	}
-	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
-}
-
-static inline void *
-sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
-{
-	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
-	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
-		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
-		return NULL;
-	}
-	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
-}
-
-/*
- * If the byte count will exceed the current indexed iov, then move to
- * the next.
- */
-static inline void
-sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
-{
-	D_DEBUG(DB_TRACE, "Before Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
-	if (sgl_idx->iov_offset + bytes >
-	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
-		sgl_idx->iov_idx++;
-		sgl_idx->iov_offset = 0;
-	}
-	D_DEBUG(DB_TRACE, "After Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
-}
-
 /*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.
@@ -149,15 +98,15 @@ char *DP_UUID(const void *uuid);
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 #ifdef DAOS_BUILD_RELEASE
-#define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)((key)->iov_len)
+#define DF_KEY      "[%d]"
+#define DP_KEY(key) (int)((key)->iov_len)
 #else
-char *daos_key2str(daos_key_t *key);
-#define DF_KEY_STR_SIZE		64
+char *
+daos_key2str(daos_key_t *key);
+#define DF_KEY_STR_SIZE 64
 
-#define DF_KEY			"[%d] '%s'"
-#define DP_KEY(key)		(int)(key)->iov_len,	\
-				daos_key2str(key)
+#define DF_KEY          "[%d] key'%s'"
+#define DP_KEY(key)     (int)(key)->iov_len, daos_key2str(key)
 #endif
 
 #define DF_RECX			"["DF_X64"-"DF_X64"]"
@@ -165,6 +114,14 @@ char *daos_key2str(daos_key_t *key);
 #define DF_IOM			"{nr: %d, lo: "DF_RECX", hi: "DF_RECX"}"
 #define DP_IOM(m)		(m)->iom_nr, DP_RECX((m)->iom_recx_lo), \
 				DP_RECX((m)->iom_recx_hi)
+
+#define DF_SGL_IDX    "{idx: %d, offset: " DF_U64 "}"
+#define DP_SGL_IDX(i) (i)->iov_idx, (i)->iov_offset
+
+#define DF_DE         "de'%s'"
+char *
+daos_de2str(const char *de);
+#define DP_DE(s) daos_de2str(s)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -352,66 +309,11 @@ daos_size_t daos_sgls_packed_size(d_sg_list_t *sgls, int nr,
 int
 daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 
-/** Move to next iov, it's caller's responsibility to ensure the idx boundary */
-#define daos_sgl_next_iov(iov_idx, iov_off)				\
-	do {								\
-		(iov_idx)++;						\
-		(iov_off) = 0;						\
-	} while (0)
-/** Get the leftover space in an iov of sgl */
-#define daos_iov_left(sgl, iov_idx, iov_off)				\
-	((sgl)->sg_iovs[iov_idx].iov_buf_len - (iov_off))
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
-#define daos_iov_remaining(iov) ((iov).iov_buf_len > (iov).iov_len ? \
-				(iov).iov_buf_len - (iov).iov_len : 0)
-/**
- * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
- * caller's responsibility to check the boundary.
- */
-#define daos_sgl_move(sgl, iov_idx, iov_off, move_dist)			       \
-	do {								       \
-		uint64_t moved = 0, step, iov_left;			       \
-		if ((move_dist) <= 0)					       \
-			break;						       \
-		while (moved < (move_dist)) {				       \
-			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
-			step = MIN(iov_left, (move_dist) - moved);	       \
-			(iov_off) += step;				       \
-			moved += step;					       \
-			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
-				daos_sgl_next_iov(iov_idx, iov_off);	       \
-		}							       \
-		D_ASSERT(moved == (move_dist));				       \
-	} while (0)
-
-/**
- * Consume buffer of length\a size for \a sgl with \a iov_idx and \a iov_off.
- * The consumed buffer location will be returned by \a iovs and \a iov_nr.
- */
-#define daos_sgl_consume(sgl, iov_idx, iov_off, size, iovs, iov_nr)	       \
-	do {								       \
-		uint64_t consumed = 0, step, iov_left;			       \
-		uint32_t consume_idx = 0;				       \
-		if ((size) <= 0)					       \
-			break;						       \
-		while (consumed < (size)) {				       \
-			iov_left = daos_iov_left(sgl, iov_idx, iov_off);       \
-			step = MIN(iov_left, (size) - consumed);	       \
-			iovs[consume_idx].iov_buf =			       \
-				(sgl)->sg_iovs[iov_idx].iov_buf + (iov_off);   \
-			iovs[consume_idx].iov_len = step;		       \
-			iovs[consume_idx].iov_buf_len = step;		       \
-			consume_idx++;					       \
-			(iov_off) += step;				       \
-			consumed += step;				       \
-			if (daos_iov_left(sgl, iov_idx, iov_off) == 0)	       \
-				daos_sgl_next_iov(iov_idx, iov_off);	       \
-		}							       \
-		(iov_nr) = consume_idx;					       \
-		D_ASSERT(consumed == (size));				       \
-	} while (0)
+#define daos_iov_remaining(iov)                                                                    \
+	((iov).iov_buf_len > (iov).iov_len ? (iov).iov_buf_len - (iov).iov_len : 0)
 
 #ifndef roundup
 #define roundup(x, y)		((((x) + ((y) - 1)) / (y)) * (y))
@@ -501,15 +403,6 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #ifndef max
 #define max(x, y) ((x) > (y) ? (x) : (y))
-#endif
-
-#ifndef min_t
-#define min_t(type, x, y) \
-	     ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
-#endif
-#ifndef max_t
-#define max_t(type, x, y) \
-	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
