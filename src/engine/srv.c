@@ -28,6 +28,7 @@
 #include <gurt/list.h>
 #include "drpc_internal.h"
 #include "srv_internal.h"
+#include <gurt/telemetry_producer.h>
 
 /**
  * DAOS server threading model:
@@ -754,6 +755,20 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int tag, int xs_id)
 		D_ERROR("ABT_thread_attr_set_stacksize fails %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));
 	}
+
+	rc = d_tm_add_metric(&dx->dx_16ult_cnt, D_TM_STATS_GAUGE, "16KB ult count", "count",
+			     "io/ult16/xs_%u", dx->dx_xs_id);
+	if (rc != 0)
+		D_GOTO(out_xstream, rc);
+
+	rc = d_tm_add_metric(&dx->dx_32ult_cnt, D_TM_STATS_GAUGE, "32KB ult count", "count",
+			     "io/ult32/xs_%u", dx->dx_xs_id);
+	if (rc != 0)
+		D_GOTO(out_xstream, rc);
+	rc = d_tm_add_metric(&dx->dx_64ult_cnt, D_TM_STATS_GAUGE, "64KB ult count", "count",
+			     "io/ult64/xs_%u", dx->dx_xs_id);
+	if (rc != 0)
+		D_GOTO(out_xstream, rc);
 
 	/** start progress ULT */
 	rc = daos_abt_thread_create(dx->dx_sp, dss_free_stack_cb, dx->dx_pools[DSS_POOL_NET_POLL],
