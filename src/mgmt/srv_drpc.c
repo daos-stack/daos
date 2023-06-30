@@ -2411,11 +2411,21 @@ void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+	int		rc;
 
 	D_INFO("Received request to setup engine\n");
 
-	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	rc = dss_module_setup_all();
+	if (rc != 0) {
+		D_ERROR("Module setup failed: %d\n", rc);
+		goto err;
+	}
 
+	D_INFO("Modules successfully set up\n");
+
+	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+err:
+	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
 }
 
