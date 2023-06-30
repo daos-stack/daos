@@ -438,7 +438,7 @@ class EngineYamlParameters(YamlParameters):
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
         "ofi+tcp;ofi_rxm": [],
-        "ofi+verbs;ofi_rxm": [
+        "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [
             "FI_OFI_RXM_USE_SRX=1",
