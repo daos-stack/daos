@@ -139,7 +139,6 @@ int dss_module_load(const char *modname);
 int dss_module_init_all(uint64_t *mod_fac);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
-int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
