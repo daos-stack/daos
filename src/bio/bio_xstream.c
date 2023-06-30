@@ -956,6 +956,7 @@ error:
 static int
 init_bio_bdevs(struct bio_xs_context *ctxt)
 {
+	struct bio_bdev  *d_bdev;
 	struct spdk_bdev *bdev;
 	int rc = 0;
 
@@ -972,9 +973,32 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), NULL);
 		if (rc)
-			break;
+			return rc;
 	}
-	return rc;
+
+	for (bdev = spdk_bdev_first(); bdev != NULL; bdev = spdk_bdev_next(bdev)) {
+		if (nvme_glb.bd_bdev_class != get_bdev_type(bdev))
+			continue;
+
+		d_bdev = lookup_dev_by_name(spdk_bdev_get_name(bdev));
+		if (d_bdev == NULL) {
+			D_ERROR("Device %s doesn't exist\n", spdk_bdev_get_name(bdev));
+			return -DER_EXIST;
+		}
+
+		D_INFO("Resetting LED on dev " DF_UUID " \n", DP_UUID(d_bdev->bb_uuid));
+		rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
+				    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
+		if (rc != 0) {
+			if (rc != -DER_NOSYS) {
+				D_ERROR("Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
+					DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				return rc;
+			}
+		}
+	}
+
+	return 0;
 }
 
 static void
@@ -1837,8 +1861,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 void
 bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
-	struct bio_bdev		*d_bdev;
-	unsigned int		 led_state;
+	struct bio_bdev         *d_bdev;
 	int			 rc;
 
 	/* Scan all devices present in bio_bdev list */
@@ -1849,10 +1872,12 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
-					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
+					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0)
-				D_ERROR("Reset LED identify state after timeout failed on device:"
-					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				/* DER_NOSYS indicates that VMD-LED control is not enabled */
+				D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
+					 "Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
+					 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
 }
