@@ -37,7 +37,7 @@ type fsCmd struct {
 	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
-	DfuseQuery     fsDfuseQueryCmd     `command:"memquery" description:"Query dfuse for memory usage"`
+	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 }
 
 type fsCopyCmd struct {
