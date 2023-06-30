@@ -168,7 +168,6 @@ daos_eq_free(struct d_hlink *hlink)
 crt_context_t
 daos_get_crt_ctx()
 {
-	D_ASSERT(eq_ref > 0);
 	return daos_eq_ctx;
 }
 
@@ -673,7 +672,7 @@ eq_progress_cb(void *arg)
 	d_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		D_ASSERT(eq->eq_n_comp > 0);
 
-		/** don't poll out a parent if it has inflight events */
+		/** don't poll out a parent if it has in-flight events */
 		if (evx->evx_nchild_running > 0)
 			continue;
 

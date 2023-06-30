@@ -1081,7 +1081,7 @@ again:
 		return EINVAL;
 	}
 
-	while (p_Offset_2Dots > 0) {
+	while (p_Offset_2Dots != NULL) {
 		pMax = p_Offset_2Dots + 4;
 		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
 			if (*p_Back == '/') {
@@ -1126,8 +1126,7 @@ remove_dot_and_cleanup(char path[], int len)
 	/* the length of path[] is already checked in the caller of this function. */
 
 	p_Offset_Dots = strstr(path, "/./");
-
-	while (p_Offset_Dots > 0) {
+	while ((p_Offset_Dots != NULL)) {
 		p_Offset_Dots[0] = 0;
 		p_Offset_Dots[1] = 0;
 		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
@@ -1137,7 +1136,7 @@ remove_dot_and_cleanup(char path[], int len)
 
 	/* replace "//" with "/" */
 	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash > 0) {
+	while (p_Offset_Slash != NULL) {
 		p_Offset_Slash[0] = 0;
 		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
 		if (p_Offset_Slash == NULL)
@@ -3796,6 +3795,7 @@ chdir(const char *path)
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path  = NULL;
+	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -3818,10 +3818,13 @@ chdir(const char *path)
 		return rc;
 	}
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0))
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		is_root = true;
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
-	else
+	} else {
+		is_root = false;
 		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
+	}
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!S_ISDIR(stat_buf.st_mode)) {
@@ -3829,7 +3832,10 @@ chdir(const char *path)
 			strerror(ENOTDIR));
 		D_GOTO(out_err, rc = ENOTDIR);
 	}
-	rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
+	if (is_root)
+		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
+	else
+		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
 	if (rc)
 		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
