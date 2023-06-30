@@ -2623,7 +2623,7 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
-        rc = self.dfuse.check_usage(inodes=2, open_files=1, containers=2, pools=1)
+        self.dfuse.check_usage(inodes=2, open_files=1, containers=2, pools=1)
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
         assert rc.returncode == 0
