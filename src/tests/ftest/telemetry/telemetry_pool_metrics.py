@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 
@@ -152,14 +151,12 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         metrics_init = self.get_metrics(metric_names)
 
         # Run ior command.
-        try:
-            self.update_ior_cmd_with_pool(False)
-            self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
-            self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
-            self.run_ior_with_pool(
-                timeout=200, create_pool=False, create_cont=False)
-        except TestFail:
-            self.log.info("#ior command failed!")
+        self.update_ior_cmd_with_pool(False)
+        self.ior_cmd.dfs_oclass.update(self.dfs_oclass)
+        self.ior_cmd.dfs_chunk.update(self.ior_cmd.transfer_size.value)
+        # NOTE DAOS-12946: Not catching ior failures is intended.  Indeed, to properly test the
+        # metrics we have to exactly know how much data have been transferred.
+        self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
 
         # collect second set of pool metric data after read/write
         metrics_end = self.get_metrics(metric_names)
