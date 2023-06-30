@@ -2570,22 +2570,24 @@ const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor =
   (ProtobufCMessageInit) ctl__smd_manage_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[4] =
+static const ProtobufCEnumValue ctl__nvme_dev_state__enum_values_by_number[5] =
 {
-  { "NORMAL", "CTL__NVME_DEV_STATE__NORMAL", 0 },
-  { "NEW", "CTL__NVME_DEV_STATE__NEW", 1 },
-  { "EVICTED", "CTL__NVME_DEV_STATE__EVICTED", 2 },
-  { "UNPLUGGED", "CTL__NVME_DEV_STATE__UNPLUGGED", 3 },
+  { "UNKNOWN", "CTL__NVME_DEV_STATE__UNKNOWN", 0 },
+  { "NORMAL", "CTL__NVME_DEV_STATE__NORMAL", 1 },
+  { "NEW", "CTL__NVME_DEV_STATE__NEW", 2 },
+  { "EVICTED", "CTL__NVME_DEV_STATE__EVICTED", 3 },
+  { "UNPLUGGED", "CTL__NVME_DEV_STATE__UNPLUGGED", 4 },
 };
 static const ProtobufCIntRange ctl__nvme_dev_state__value_ranges[] = {
-{0, 0},{0, 4}
+{0, 0},{0, 5}
 };
-static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[4] =
+static const ProtobufCEnumValueIndex ctl__nvme_dev_state__enum_values_by_name[5] =
 {
-  { "EVICTED", 2 },
-  { "NEW", 1 },
-  { "NORMAL", 0 },
-  { "UNPLUGGED", 3 },
+  { "EVICTED", 3 },
+  { "NEW", 2 },
+  { "NORMAL", 1 },
+  { "UNKNOWN", 0 },
+  { "UNPLUGGED", 4 },
 };
 const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
 {
@@ -2594,9 +2596,9 @@ const ProtobufCEnumDescriptor ctl__nvme_dev_state__descriptor =
   "NvmeDevState",
   "Ctl__NvmeDevState",
   "ctl",
-  4,
+  5,
   ctl__nvme_dev_state__enum_values_by_number,
-  4,
+  5,
   ctl__nvme_dev_state__enum_values_by_name,
   1,
   ctl__nvme_dev_state__value_ranges,
