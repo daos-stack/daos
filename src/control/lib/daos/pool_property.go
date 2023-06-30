@@ -46,24 +46,11 @@ func PoolProperties() PoolPropertyMap {
 			Property: PoolProperty{
 				Number:      PoolPropertySelfHealing,
 				Description: "Self-healing policy",
-				valueStringer: func(v *PoolPropertyValue) string {
-					n, err := v.GetNumber()
-					if err != nil {
-						return "not set"
-					}
-					switch {
-					case n&PoolSelfHealingAutoExclude > 0:
-						return "exclude"
-					case n&PoolSelfHealingAutoRebuild > 0:
-						return "rebuild"
-					default:
-						return "unknown"
-					}
-				},
 			},
 			values: map[string]uint64{
-				"exclude": PoolSelfHealingAutoExclude,
-				"rebuild": PoolSelfHealingAutoRebuild,
+				"exclude":         PoolSelfHealingAutoExclude,
+				"rebuild":         PoolSelfHealingAutoRebuild,
+				"exclude,rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 			},
 		},
 		"space_rb": {
