@@ -13,6 +13,9 @@ if [ "$(sudo sysctl -n vm.max_map_count)" -lt "1000000" ] ; then
     exit 1
 fi
 
+# shellcheck disable=SC2153
+mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
+
 if $TEST_RPMS; then
     rm -rf "$PWD"/install/tmp
     mkdir -p "$PWD"/install/tmp
@@ -154,23 +157,6 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
-export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
-
-# check if slurm needs to be configured for soak
-if [[ "${TEST_TAG_ARG}" =~ soak && "${STAGE_NAME}" =~ Hardware ]]; then
-    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
-        exit "${PIPESTATUS[0]}"
-    fi
-
-    if ! mkdir -p "${DAOS_APP_DIR}/soak/apps"; then
-        exit "${PIPESTATUS[0]}"
-    fi
-
-    if ! cp -r /scratch/soak/apps/* "${DAOS_APP_DIR}/soak/apps/"; then
-        exit "${PIPESTATUS[0]}"
-    fi
-fi
-
 # need to increase the number of oopen files (on EL8 at least)
 ulimit -n 4096
 
@@ -185,8 +171,10 @@ export WITH_VALGRIND
 export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
+export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/scratch/daos_test/apps"}
+export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
 
-node_args="-ts ${TEST_NODES}"
+launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     # Currently the 'Functional Hardware 24' uses a cluster that has 8 hosts configured to run
     # daos engines and the remaining hosts are configured to be clients. Use separate -ts and -tc
@@ -194,35 +182,14 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     IFS=" " read -r -a test_node_list <<< "${TEST_NODES//,/ }"
     server_nodes=$(IFS=','; echo "${test_node_list[*]:0:8}")
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
-    node_args="-ts ${server_nodes} -tc ${client_nodes}"
+    launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
 
-# Run launch.py multiple times if a sequence of tags (tags separated by a '+') is specified
-echo "TEST_TAG_ARG: ${TEST_TAG_ARG}"
-IFS="+" read -r -a TEST_TAG_SPLIT <<< "${TEST_TAG_ARG}"
-index=0
-rc=0
-# shellcheck disable=SC2086
-while [ "$index" -lt  "${#TEST_TAG_SPLIT[*]}" ]; do
-    echo "Running launch.py with tags: ${TEST_TAG_SPLIT[index]}"
-    IFS=" " read -r -a TAGS <<< "${TEST_TAG_SPLIT[index]}"
-    if [ "$index" -eq 0 ]; then
-        # First sequence of tags run with arguments provided by the user
-        name=${STAGE_NAME}
-    elif [ "$index" -eq 1 ]; then
-        # Additional sequences of tags are ALWAYS run with servers using MD on SSD mode
-        LAUNCH_OPT_ARGS="${LAUNCH_OPT_ARGS} --nvme=auto_md_on_ssd"
-        name="${STAGE_NAME} MD on SSD"
-    else
-        echo "More than two sequences of functional test tags not supported"
-        continue
-    fi
-
-    # shellcheck disable=SC2086,SC2090
-    if ! ./launch.py --mode ci --name "${name}" ${node_args} ${LAUNCH_OPT_ARGS} ${TAGS[*]}; then
-        rc=$((rc|${PIPESTATUS[0]}))
-    fi
-    (( index++ )) || true
-done
+# shellcheck disable=SC2086,SC2090
+if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
+    rc=${PIPESTATUS[0]}
+else
+    rc=0
+fi
 
 exit $rc
