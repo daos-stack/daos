@@ -38,7 +38,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from package_utils import find_packages                                       # noqa: E402
-from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
+from results_utils import Job, Results                                        # noqa: E402
 from run_utils import run_local, run_remote, find_command, RunException, \
     stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
@@ -631,93 +631,6 @@ class Launch():
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
 
-    def _start_test(self, class_name, test_name, log_file):
-        """Start a new test result.
-
-        Args:
-            class_name (str): the test class name
-            test_name (TestName): the test uid, name, and variant
-            log_file (str): the log file for a single test
-
-        Returns:
-            TestResult: the test result for this test
-
-        """
-        # Create a new TestResult for this test
-        self.result.tests.append(TestResult(class_name, test_name, log_file, self.logdir))
-
-        # Mark the start of the processing of this test
-        self.result.tests[-1].start()
-
-        return self.result.tests[-1]
-
-    def _end_test(self, test_result, message, fail_class=None, exc_info=None):
-        """Mark the end of the test result.
-
-        Args:
-            test_result (TestResult): the test result to complete
-            message (str): exit message or reason for failure
-            fail_class (str, optional): failure category.
-            exc_info (OptExcInfo, optional): return value from sys.exc_info().
-        """
-        if fail_class is None:
-            self._pass_test(test_result, message)
-        else:
-            self._fail_test(test_result, fail_class, message, exc_info)
-        if test_result:
-            test_result.end()
-
-    def _pass_test(self, test_result, message=None):
-        """Set the test result as passed.
-
-        Args:
-            test_result (TestResult): the test result to mark as passed
-            message (str, optional): explanation of test passing. Defaults to None.
-        """
-        if message is not None:
-            logger.debug(message)
-        self.__set_test_status(test_result, TestResult.PASS, None, None)
-
-    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
-        """Set the test result as warned.
-
-        Args:
-            test_result (TestResult): the test result to mark as warned
-            fail_class (str): failure category.
-            fail_reason (str): failure description.
-            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
-        """
-        logger.warning(fail_reason)
-        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
-
-    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
-        """Set the test result as failed.
-
-        Args:
-            test_result (TestResult): the test result to mark as failed
-            fail_class (str): failure category.
-            fail_reason (str): failure description.
-            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
-        """
-        logger.error(fail_reason)
-        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
-
-    @staticmethod
-    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
-        """Set the test result.
-
-        Args:
-            test_result (TestResult): the test result to mark as failed
-            status (str): TestResult status to set.
-            fail_class (str): failure category.
-            fail_reason (str): failure description.
-            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
-        """
-        if exc_info is not None:
-            logger.debug("Stacktrace", exc_info=True)
-        if test_result:
-            test_result.update(status, fail_class, fail_reason, exc_info)
-
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
 
@@ -733,37 +646,23 @@ class Launch():
             int: the exit status
 
         """
-        # Mark the end of the test result for any non-test execution steps
         if self.result and self.result.tests:
-            self._end_test(self.result.tests[0], message, fail_class, exc_info)
+            self.result.tests[0].finish_test(logger, message, fail_class, exc_info)
         else:
-            self._end_test(None, message, fail_class, exc_info)
+            # Log the status if a Results or TestResult object has not been defined
+            if message is not None and fail_class is None:
+                logger.debug(message)
+            elif message is not None:
+                logger.error(message)
+            if exc_info is not None:
+                logger.debug("Stacktrace", exc_info=True)
 
         # Write the details to a json file
         self._write_details_json()
 
         if self.job and self.result:
-            # Generate a results.xml for this run
-            results_xml_path = os.path.join(self.logdir, "results.xml")
-            try:
-                logger.debug("Creating results.xml: %s", results_xml_path)
-                create_xml(self.job, self.result)
-            except Exception as error:      # pylint: disable=broad-except
-                logger.error("Unable to create results.xml file: %s", str(error))
-            else:
-                if not os.path.exists(results_xml_path):
-                    logger.error("results.xml does not exist: %s", results_xml_path)
-
-            # Generate a results.html for this run
-            results_html_path = os.path.join(self.logdir, "results.html")
-            try:
-                logger.debug("Creating results.html: %s", results_html_path)
-                create_html(self.job, self.result)
-            except Exception as error:      # pylint: disable=broad-except
-                logger.error("Unable to create results.html file: %s", str(error))
-            else:
-                if not os.path.exists(results_html_path):
-                    logger.error("results.html does not exist: %s", results_html_path)
+            # Generate the results.xml and results.html for this run
+            self.job.generate_results(logger, self.result)
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -790,28 +689,22 @@ class Launch():
             int: exit status for the steps executed
 
         """
-        # Setup the avocado config files to ensure these files are read by avocado
-        try:
-            self.avocado.set_config(self.name, args.overwrite_config)
-        except LaunchException:
-            message = "Error creating avocado config files"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
         # Setup launch to log and run the requested action
         try:
-            self._configure()
+            self._configure(args.overwrite_config)
         except LaunchException:
             message = "Error configuring launch.py to start logging and track test results"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Add a test result to account for any non-test execution steps
-        setup_result = self._start_test(
+        setup_result = self.result.add_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
+        setup_result.start()
 
         # Set the number of times to repeat execution of each test
         if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
             message = "The requested number of test repetitions exceeds the CI limitation."
-            self._warn_test(setup_result, "Setup", message)
+            setup_result.warn_test(logger, "Setup", message)
             logger.debug(
                 "The number of test repetitions has been reduced from %s to %s.",
                 args.repeat, MAX_CI_REPETITIONS)
@@ -892,7 +785,7 @@ class Launch():
         except LaunchException:
             # Warn but don't fail
             message = "Issue detected setting up the fuse configuration"
-            self._warn_test(setup_result, "Setup", message, sys.exc_info())
+            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -944,13 +837,20 @@ class Launch():
         # execution steps complete
         return self.get_exit_status(status, "Executing tests complete")
 
-    def _configure(self):
+    def _configure(self, overwrite_config=False):
         """Configure launch to start logging and track test results.
+
+        Args:
+            overwrite (bool, optional): if true overwrite any existing avocado config files. If
+                false do not modify any existing avocado config files. Defaults to False.
 
         Raises:
             LaunchException: if there are any issues obtaining data from avocado commands
 
         """
+        # Setup the avocado config files to ensure these files are read by avocado
+        self.avocado.set_config(self.name, overwrite_config)
+
         # Configure the logfile
         self.avocado.set_version()
         self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
@@ -1686,14 +1586,14 @@ class Launch():
                 try:
                     group_gid[group] = self._query_create_group(clients, group, create)
                 except LaunchException as error:
-                    self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                    self.result.tests[-1].fail_test(logger, "Prepare", str(error), sys.exc_info())
                     return 128
 
             gid = group_gid.get(group, None)
             try:
                 self._query_create_user(clients, user, gid, create)
             except LaunchException as error:
-                self._fail_test(self.result.tests[-1], "Prepare", str(error), sys.exc_info())
+                self.result.tests[-1].fail_test(logger, "Prepare", str(error), sys.exc_info())
                 return 128
 
         return 0
@@ -1814,7 +1714,8 @@ class Launch():
                 logger.addHandler(test_file_handler)
 
                 # Create a new TestResult for this test
-                test_result = self._start_test(test.class_name, test.name.copy(), test_log_file)
+                test_result = self.result.add_test(test.class_name, test.name.copy(), test_log_file)
+                test_result.start()
 
                 # Prepare the hosts to run the tests
                 step_status = self._prepare(test, repeat, user_create)
@@ -1838,7 +1739,7 @@ class Launch():
 
                 # Mark the execution of the test as passed if nothing went wrong
                 if test_result.status is None:
-                    self._pass_test(test_result)
+                    test_result.pass_test(logger)
 
                 # Mark the end of the processing of this test
                 test_result.end()
@@ -1870,21 +1771,21 @@ class Launch():
             command = ["rm", "-fr", BULLSEYE_FILE]
             if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
                 message = "Error removing bullseye code coverage file on at least one host"
-                self._fail_test(self.result.tests[0], "Run", message, None)
+                self.result.tests[0].fail_test(logger, "Run", message, None)
                 return 128
 
             logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
             command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
             if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
                 message = "Error copying bullseye code coverage file on at least one host"
-                self._fail_test(self.result.tests[0], "Run", message, None)
+                self.result.tests[0].fail_test(logger, "Run", message, None)
                 return 128
 
             logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
             command = ["chmod", "777", BULLSEYE_FILE]
             if not run_remote(logger, self.bullseye_hosts, " ".join(command)).passed:
                 message = "Error updating bullseye code coverage file on at least one host"
-                self._fail_test(self.result.tests[0], "Run", message, None)
+                self.result.tests[0].fail_test(logger, "Run", message, None)
                 return 128
         return 0
 
@@ -1929,6 +1830,7 @@ class Launch():
             int: status code: 0 = success, 128 = failure
         """
         status = 0
+        logger.debug("-" * 80)
         logger.info("Setting up slurm partitions if required by tests")
         if not any(test.yaml_info["client_partition"] for test in self.tests):
             logger.debug("  No tests using client partitions detected - skipping slurm setup")
@@ -1941,6 +1843,7 @@ class Launch():
         status |= self.setup_application_directory()
 
         slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        logger.debug("-" * 80)
         try:
             if self.slurm_install:
                 slurm_setup.install()
@@ -1949,11 +1852,11 @@ class Launch():
             slurm_setup.start_slurm(self.user, True)
         except SlurmSetupException:
             message = "Error setting up slurm"
-            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
             status |= 128
         except Exception:       # pylint: disable=broad-except
             message = "Unknown error setting up slurm"
-            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
             status |= 128
 
         return status
@@ -1967,6 +1870,7 @@ class Launch():
         app_dir = os.environ.get('DAOS_TEST_APP_DIR')
         app_src = os.environ.get('DAOS_TEST_APP_SRC')
 
+        logger.debug("-" * 80)
         logger.debug("Setting up the '%s' application directory", app_dir)
         if not os.path.exists(app_dir):
             # Create the apps directory if it does not already exist
@@ -1975,7 +1879,7 @@ class Launch():
                 os.makedirs(app_dir)
             except OSError:
                 message = 'Error creating the application directory'
-                self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
                 return 128
         else:
             logger.debug('  Using the existing application directory')
@@ -1989,7 +1893,7 @@ class Launch():
                         logger, f"cp -r '{os.path.join(app_src, app)}' '{app_dir}'", check=True)
                 except RunException:
                     message = 'Error copying files to the application directory'
-                    self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                    self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
                     return 128
 
         logger.debug("  Applications in '%s':", app_dir)
@@ -2064,14 +1968,14 @@ class Launch():
             exists = show_partition(logger, self.slurm_control_node, partition).passed
             if not exists and not self.slurm_setup:
                 message = f"Error missing {partition} partition"
-                self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                self.result.tests[-1].fail_test(logger, "Prepare", message, None)
                 return 128
             if self.slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, self.slurm_control_node, partition).passed:
                     message = f"Error removing existing {partition} partition"
-                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    self.result.tests[-1].fail_test(logger, "Prepare", message, None)
                     return 128
             if self.slurm_setup:
                 hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
@@ -2080,12 +1984,12 @@ class Launch():
                     self.slurm_partition_hosts, test.yaml_info["test_servers"], hosts)
                 if not hosts:
                     message = "Error no partition hosts exist after removing the test servers"
-                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    self.result.tests[-1].fail_test(logger, "Prepare", message, None)
                     return 128
                 logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
                 if not create_partition(logger, self.slurm_control_node, partition, hosts).passed:
                     message = f"Error adding the {partition} partition"
-                    self._fail_test(self.result.tests[-1], "Prepare", message, None)
+                    self.result.tests[-1].fail_test(logger, "Prepare", message, None)
                     return 128
 
         # Define the hosts for this test
@@ -2093,7 +1997,7 @@ class Launch():
             test.set_host_info(self.slurm_control_node)
         except LaunchException:
             message = "Error setting up host information"
-            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
 
         # Log the test information
@@ -2136,7 +2040,7 @@ class Launch():
         for command in commands:
             if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
-                self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+                self.result.tests[-1].fail_test(logger, "Prepare", message, sys.exc_info())
                 return 128
         return 0
 
@@ -2159,7 +2063,7 @@ class Launch():
             run_local(logger, f"{command} {daos_test_log_dir}")
         except RunException:
             message = "Error generating certificates"
-            self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Prepare", message, sys.exc_info())
             return 128
         return 0
 
@@ -2193,7 +2097,7 @@ class Launch():
                 logger.debug("At least one avocado test variant failed")
             elif return_code & 4 == 4:
                 message = "Failed avocado commands detected"
-                self._fail_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].fail_test(logger, "Execute", message)
             elif return_code & 8 == 8:
                 logger.debug("At least one avocado test variant was interrupted")
             if return_code:
@@ -2201,7 +2105,7 @@ class Launch():
 
         except RunException:
             message = f"Error executing {test} on repeat {repeat}"
-            self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Execute", message, sys.exc_info())
             return_code = 1
 
         end_time = int(time.time())
@@ -2231,7 +2135,7 @@ class Launch():
                         run_local(logger, f"mv {crash_file} {latest_crash_dir}", check=True)
                 except RunException:
                     message = "Error collecting crash files"
-                    self._fail_test(self.result.tests[-1], "Execute", message, sys.exc_info())
+                    self.result.tests[-1].fail_test(logger, "Execute", message, sys.exc_info())
             else:
                 logger.debug("No avocado crash files found in %s", crash_dir)
 
@@ -2276,7 +2180,7 @@ class Launch():
         results_xml = os.path.join(test_logs_dir, "results.xml")
         if not os.path.exists(results_xml):
             message = f"Missing a '{results_xml}' file for {str(test)}"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return_code = 16
 
         # Optionally store all of the server and client config files and remote logs along with
@@ -2529,10 +2433,10 @@ class Launch():
         detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
         if running:
             message = f"Failed to kill processes on {running}"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
         elif detected:
             message = f"Running processes found on {detected}"
-            self._warn_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].warn_test(logger, "Process", message)
 
         logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
         # Use mount | grep instead of mount -t for better logging
@@ -2547,10 +2451,10 @@ class Launch():
             umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
             if umount_result.failed_hosts:
                 message = f"Failed to unmount on {umount_result.failed_hosts}"
-                self._fail_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].fail_test(logger, "Process", message)
             else:
                 message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
-                self._warn_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].warn_test(logger, "Process", message)
 
         return 4096 if any_found else 0
 
@@ -2638,7 +2542,7 @@ class Launch():
         result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error determining if {source_files} files exist on {hosts}"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             status = 16
         else:
             for data in result.output:
@@ -2656,7 +2560,7 @@ class Launch():
                         "Found a file matching the '%s' failure trigger on %s",
                         FAILURE_TRIGGER, data.hosts)
                     message = f"Error trigger failure file found in {source} (error handling test)"
-                    self._fail_test(self.result.tests[-1], "Process", message)
+                    self.result.tests[-1].fail_test(logger, "Process", message)
                     hosts_with_files.add(data.hosts)
                     status = 16
 
@@ -2685,14 +2589,14 @@ class Launch():
         result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 32
 
         # The command output will include the source path if the threshold has been exceeded
         for data in result.output:
             if source in "\n".join(data.stdout):
                 message = f"One or more {source_files} files exceeded the {threshold} threshold"
-                self._fail_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].fail_test(logger, "Process", message)
                 return 32
 
         logger.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
@@ -2721,7 +2625,7 @@ class Launch():
             logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 16
         return 0
 
@@ -2743,7 +2647,7 @@ class Launch():
         other = ["-empty", "-print", "-delete"]
         if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 16
         return 0
 
@@ -2767,7 +2671,7 @@ class Launch():
         result = run_remote(logger, hosts, find_command(source, pattern, depth, other))
         if not result.passed:
             message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 16
         return 0
 
@@ -2795,7 +2699,7 @@ class Launch():
             other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
             if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
                 message = f"Error changing {os.path.join(source, pattern)} file permissions"
-                self._fail_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].fail_test(logger, "Process", message)
                 return 16
 
         # Use the last directory in the destination path to create a temporary sub-directory on the
@@ -2817,14 +2721,14 @@ class Launch():
         command = f"mkdir -p '{tmp_copy_dir}'"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory '{tmp_copy_dir}'"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 16
 
         # Move all the source files matching the pattern into the temporary remote directory
         other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
         if not run_remote(logger, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error moving files to temporary remote copy directory '{tmp_copy_dir}'"
-            self._fail_test(self.result.tests[-1], "Process", message)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 16
 
         # Clush -rcopy the temporary remote directory to this host
@@ -2836,7 +2740,7 @@ class Launch():
 
         except RunException:
             message = f"Error copying remote files to {destination}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return_code = 16
 
         finally:
@@ -2844,7 +2748,7 @@ class Launch():
             command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
             if not run_remote(logger, hosts, command).passed:
                 message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
-                self._fail_test(self.result.tests[-1], "Process", message)
+                self.result.tests[-1].fail_test(logger, "Process", message)
                 return_code = 16
 
         return return_code
@@ -2867,12 +2771,12 @@ class Launch():
 
         except CoreFileException:
             message = "Errors detected processing test core files"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return 256
 
         except Exception:       # pylint: disable=broad-except
             message = "Unhandled error processing test core files"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return 256
 
         if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
@@ -2883,12 +2787,12 @@ class Launch():
 
         if core_files_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
-            self._fail_test(self.result.tests[-1], "Process", message, None)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 2048
 
         if core_files_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
-            self._fail_test(self.result.tests[-1], "Process", message, None)
+            self.result.tests[-1].fail_test(logger, "Process", message)
             return 256
 
         return 0
@@ -2924,7 +2828,7 @@ class Launch():
                 os.makedirs(new_test_logs_dir)
             except OSError:
                 message = f"Error creating {new_test_logs_dir}"
-                self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+                self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
                 return 1024
 
         # Rename the avocado job-results test directory and update the 'latest' symlink
@@ -2936,7 +2840,7 @@ class Launch():
             logger.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
         except OSError:
             message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return 1024
 
         # Update the results.xml file with the new functional test class name
@@ -2948,7 +2852,7 @@ class Launch():
             run_local(logger, f"rm -fr '{test_logs_lnk}'")
         except RunException:
             message = f"Error removing {test_logs_lnk}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return 1024
 
         return 0
@@ -2978,7 +2882,7 @@ class Launch():
             logger.debug("Test class from xml: %s", test_class)
         except IndexError:
             message = f"Error obtaining class name from {xml_file}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return False
 
         # Update the class name to include the functional test directory
@@ -3033,7 +2937,7 @@ class Launch():
                 return xml_buffer.read()
         except OSError:
             message = f"Error reading {xml_file}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return None
 
     def _update_xml(self, xml_file, pattern, replacement, xml_data):
@@ -3057,7 +2961,7 @@ class Launch():
                 xml_buffer.write(re.sub(pattern, replacement, xml_data))
         except OSError:
             message = f"Error writing {xml_file}"
-            self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
+            self.result.tests[-1].fail_test(logger, "Process", message, sys.exc_info())
             return False
         return True
 

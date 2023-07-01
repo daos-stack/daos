@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-import time
 from argparse import Namespace
+import os
+import time
 
 
 class TestName():
@@ -129,15 +129,69 @@ class TestResult():
         # Increase the elapsed time by the delta between the last start call and this end call
         self.time_elapsed += self.time_end - self._time_split
 
-    def update(self, status, fail_class, fail_reason, exc_info=None):
-        """Update the test result.
+    def finish_test(self, log, message, fail_class=None, exc_info=None):
+        """Mark the end of the test result with a status.
 
         Args:
+            log (logger): object configured to log messages
+            message (str): exit message or reason for failure
+            fail_class (str, optional): failure category.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info().
+        """
+        if fail_class is None:
+            self.pass_test(log, message)
+        else:
+            self.fail_test(log, fail_class, message, exc_info)
+        self.end()
+
+    def pass_test(self, log, message=None):
+        """Set the test result as passed.
+
+        Args:
+            log (logger): object configured to log messages
+            message (str, optional): explanation of test passing. Defaults to None.
+        """
+        if message is not None:
+            log.debug(message)
+        self.__set_test_status(log, TestResult.PASS, None, None)
+
+    def warn_test(self, log, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            log (logger): object configured to log messages
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        log.warning(fail_reason)
+        self.__set_test_status(log, TestResult.WARN, fail_class, fail_reason, exc_info)
+
+    def fail_test(self, log, fail_class, fail_reason, exc_info=None):
+        """Set the test result as failed.
+
+        Args:
+            log (logger): object configured to log messages
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        log.error(fail_reason)
+        self.__set_test_status(log, TestResult.ERROR, fail_class, fail_reason, exc_info)
+
+    def __set_test_status(self, log, status, fail_class, fail_reason, exc_info=None):
+        """Set the test result.
+
+        Args:
+            log (logger): object configured to log messages
             status (str): TestResult status to set.
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
+        if exc_info is not None:
+            log.debug("Stacktrace", exc_info=True)
+
         if status == TestResult.PASS:
             # Do not override a possible WARN status
             if self.status is None:
@@ -169,16 +223,15 @@ class TestResult():
 
 
 class Results():
-    # pylint: disable=too-few-public-methods
     """Provides the necessary result data to generate a xml/html results file."""
 
-    def __init__(self, log_file):
+    def __init__(self, log_dir):
         """Initialize a Results object.
 
         Args:
-            log_file (str): the log file location for all of the tests
+            log_dir (str): the log file location for all of the tests
         """
-        self.logfile = log_file
+        self.logfile = log_dir
         self.tests = []
 
     @property
@@ -306,6 +359,21 @@ class Results():
             return 0.0
         return 100 * (float(self.succeeded) / float(self.completed))
 
+    def add_test(self, class_name, test_name, log_file):
+        """Add a new test result.
+
+        Args:
+            class_name (str): the test class name
+            test_name (TestName): the test uid, name, and variant
+            log_file (str): the log file for a single test
+
+        Returns:
+            TestResult: the test result for this test
+
+        """
+        self.tests.append(TestResult(class_name, test_name, log_file, self.logfile))
+        return self.tests[-1]
+
 
 class Job():
     # pylint: disable=too-few-public-methods
@@ -356,6 +424,24 @@ class Job():
 
         # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"
+
+    def generate_results(self, log, results):
+        """Generate the results.xml and results.html for this job.
+
+        Args:
+            log (logger): object configured to log messages
+            results (_type_): _description_
+        """
+        for key, create_method in {"results.xml": create_xml, "results.html": create_html}.items():
+            output = os.path.join(self.logdir, key)
+            try:
+                log.debug("Creating %s: %s", key, output)
+                create_method(self, results)
+            except Exception as error:      # pylint: disable=broad-except
+                log.error("Unable to create %s file: %s", key, str(error))
+            else:
+                if not os.path.exists(output):
+                    log.error("The %s does not exist: %s", key, output)
 
 
 def sanitize_results(results):
