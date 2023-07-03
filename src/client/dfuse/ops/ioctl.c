@@ -319,7 +319,7 @@ handle_cont_qe_ioctl_helper(fuse_req_t req, const struct dfuse_mem_query *in_que
 	query.pool_count      = atomic_load_relaxed(&dfuse_info->di_pool_count);
 	query.container_count = atomic_load_relaxed(&dfuse_info->di_container_count);
 
-	DFUSE_REPLY_IOCTL_SIZE(dfuse_info, req, &query, sizeof(query));
+	DFUSE_REPLY_IOCTL(dfuse_info, req, query);
 }
 
 static void
