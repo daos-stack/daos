@@ -188,7 +188,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = *stbuf;
 
@@ -244,13 +244,13 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		dfuse_ie_close(ie);
+		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
 	}
 
 	*rlinkp = rlink;
 	if (rc != 0)
-		dfuse_ie_close(ie);
+		dfuse_ie_close(fs_handle, ie);
 out:
 	return rc;
 }
