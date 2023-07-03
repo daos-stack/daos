@@ -460,7 +460,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		if cmd.Ino == 0 {
 			jsonAttrs := &struct {
 				NumInodes      uint64 `json:"inodes"`
@@ -473,7 +473,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 				NumPools:       uint64(ap.dfuse_mem.pool_count),
 				NumContainers:  uint64(ap.dfuse_mem.container_count),
 			}
-			return cmd.outputJSON(jsonAttrs, nil)
+			return cmd.OutputJSON(jsonAttrs, nil)
 		} else {
 			jsonAttrs := &struct {
 				NumInodes      uint64 `json:"inodes"`
@@ -488,7 +488,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 				NumContainers:  uint64(ap.dfuse_mem.container_count),
 				Found:          bool(ap.dfuse_mem.found),
 			}
-			return cmd.outputJSON(jsonAttrs, nil)
+			return cmd.OutputJSON(jsonAttrs, nil)
 		}
 	}
 
@@ -531,7 +531,7 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to evict %s", cmd.Args.Path)
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		jsonAttrs := &struct {
 			NumInodes      uint64 `json:"inodes"`
 			NumFileHandles uint64 `json:"open_files"`
@@ -545,7 +545,7 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 			NumContainers:  uint64(ap.dfuse_mem.container_count),
 			Inode:          uint64(ap.dfuse_mem.ino),
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("DFuse descriptor usage.")
