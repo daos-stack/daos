@@ -31,7 +31,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(oh, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
@@ -111,14 +111,15 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	return;
 err:
 	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	D_FREE(oh);
+	dfuse_oh_free(fs_handle, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
 void
 dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	int                   rc;
 	uint32_t              il_calls;
 
@@ -192,5 +193,5 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(oh);
+	dfuse_oh_free(dfuse_info, oh);
 }

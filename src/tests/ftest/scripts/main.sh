@@ -157,23 +157,6 @@ if ${SETUP_ONLY:-false}; then
     exit 0
 fi
 
-export DAOS_APP_DIR=${DAOS_APP_DIR:-$DAOS_TEST_SHARED_DIR}
-
-# check if slurm needs to be configured for soak
-if [[ "${TEST_TAG_ARG}" =~ soak && "${STAGE_NAME}" =~ Hardware ]]; then
-    if ! ./slurm_setup.py -d -c "$FIRST_NODE" -n "${TEST_NODES}" -s -i; then
-        exit "${PIPESTATUS[0]}"
-    fi
-
-    if ! mkdir -p "${DAOS_APP_DIR}/soak/apps"; then
-        exit "${PIPESTATUS[0]}"
-    fi
-
-    if ! cp -r /scratch/soak/apps/* "${DAOS_APP_DIR}/soak/apps/"; then
-        exit "${PIPESTATUS[0]}"
-    fi
-fi
-
 # need to increase the number of oopen files (on EL8 at least)
 ulimit -n 4096
 
@@ -188,6 +171,8 @@ export WITH_VALGRIND
 export STAGE_NAME
 export TEST_RPMS
 export DAOS_BASE
+export DAOS_TEST_APP_SRC=${DAOS_TEST_APP_SRC:-"/scratch/daos_test/apps"}
+export DAOS_TEST_APP_DIR=${DAOS_TEST_APP_DIR:-"${DAOS_TEST_SHARED_DIR}/daos_test/apps"}
 
 launch_node_args="-ts ${TEST_NODES}"
 if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
@@ -199,6 +184,7 @@ if [ "${STAGE_NAME}" == "Functional Hardware 24" ]; then
     client_nodes=$(IFS=','; echo "${test_node_list[*]:8}")
     launch_node_args="-ts ${server_nodes} -tc ${client_nodes}"
 fi
+
 # shellcheck disable=SC2086,SC2090
 if ! ./launch.py --mode ci ${launch_node_args} ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}

@@ -802,11 +802,6 @@ server_init(int argc, char *argv[])
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
 
-	rc = dss_module_setup_all();
-	if (rc != 0)
-		goto exit_init_state;
-	D_INFO("Modules successfully set up\n");
-
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
 		D_GOTO(exit_init_state, rc);

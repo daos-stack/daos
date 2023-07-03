@@ -1429,6 +1429,27 @@ class DFuse():
         assert ret.returncode == 0, ret
         return ret
 
+    def check_usage(self, inodes=None, open_files=None, pools=None, containers=None):
+        """Query and verify the dfuse statistics.
+
+        Returns the raw numbers in a dict.
+        """
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir], use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        print(dir(rc.json))
+
+        if inodes:
+            assert rc.json['response']['inodes'] == inodes, rc
+        if open_files:
+            assert rc.json['response']['open_files'] == open_files, rc
+        if pools:
+            assert rc.json['response']['pools'] == pools, rc
+        if containers:
+            assert rc.json['response']['containers'] == containers, rc
+        return rc.json['response']
+
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
@@ -2627,6 +2648,12 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir], use_json=True)
+        print(rc)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_uns_link(self):
@@ -2660,8 +2687,11 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        self.dfuse.check_usage(inodes=2, open_files=1, containers=2, pools=1)
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
 
     @needs_dfuse
     def test_rename_clobber(self):
