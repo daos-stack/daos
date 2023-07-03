@@ -38,6 +38,7 @@ type cliOptions struct {
 	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
 	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
+	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -99,7 +100,7 @@ func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
 }
 
 func versionString() string {
-	return fmt.Sprintf("%s v%s", build.AgentName, build.DaosVersion)
+	return build.String(build.AgentName)
 }
 
 type versionCmd struct{}
@@ -112,6 +113,25 @@ func (cmd *versionCmd) Execute(_ []string) error {
 func exitWithError(log logging.Logger, err error) {
 	log.Errorf("%s: %v", path.Base(os.Args[0]), err)
 	os.Exit(1)
+}
+
+type (
+	supportAgentConfig interface {
+		setSupportConf(string)
+		getSupportConf() string
+	}
+
+	supportAgentConfigCmd struct {
+		supportCfgPath string
+	}
+)
+
+func (cmd *supportAgentConfigCmd) setSupportConf(cfgPath string) {
+	cmd.supportCfgPath = cfgPath
+}
+
+func (cmd *supportAgentConfigCmd) getSupportConf() string {
+	return cmd.supportCfgPath
 }
 
 func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
@@ -174,6 +194,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
 			}
 			log.Debugf("agent config loaded from %s", cfgPath)
+		}
+
+		if suppCmd, ok := cmd.(supportAgentConfig); ok {
+			suppCmd.setSupportConf(cfgPath)
 		}
 
 		if opts.RuntimeDir != "" {

@@ -162,10 +162,8 @@ struct vos_agg_param {
 	/* Boundary for aggregatable write filter */
 	daos_epoch_t		ap_filter_epoch;
 	uint32_t		ap_flags;
-	unsigned int		ap_discard:1,
-				ap_csum_err:1,
-				ap_nospc_err:1,
-				ap_discard_obj:1;
+	unsigned int ap_discard : 1, ap_csum_err : 1, ap_nospc_err : 1, ap_in_progress : 1,
+	    ap_discard_obj : 1;
 	struct umem_instance	*ap_umm;
 	int			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -317,10 +315,11 @@ need_aggregate(daos_handle_t ih, struct vos_agg_param *agg_param, vos_iter_desc_
 static inline bool
 vos_aggregate_yield(struct vos_agg_param *agg_param)
 {
-	int	rc;
+	int			 rc;
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
 	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get() == NULL);
+	D_ASSERT(vos_dth_get(cont->vc_pool->vp_sysdb) == NULL);
 
 	if (agg_param->ap_yield_func == NULL) {
 		bio_yield(agg_param->ap_umm);
@@ -2209,6 +2208,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct evt_extent	 phy_ext, lgc_ext;
 	int			 rc = 0;
 	int                      next_idx;
+	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
 	D_ASSERT(agg_param != NULL);
 	D_ASSERT(acts != NULL);
@@ -2249,7 +2249,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get() == NULL);
+	D_ASSERT(vos_dth_get(cont->vc_pool->vp_sysdb) == NULL);
 
 	/* Aggregation Yield for testing purpose */
 	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED))
@@ -2324,7 +2324,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 			*acts |= VOS_ITER_CB_ABORT;
 			if (rc == -DER_CSUM) {
-				agg_param->ap_csum_err = true;
+				agg_param->ap_csum_err = 1;
 				if (vam && vam->vam_csum_errs)
 					d_tm_inc_counter(vam->vam_csum_errs, 1);
 			} else if (rc == -DER_NOSPACE) {
@@ -2334,6 +2334,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				 *  this entry to avoid orphaned tree
 				 *  assertion
 				 */
+				agg_param->ap_in_progress = 1;
 				agg_param->ap_skip_akey = true;
 				agg_param->ap_skip_dkey = true;
 				agg_param->ap_skip_obj = true;
@@ -2437,6 +2438,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc == -DER_TX_BUSY) {
 			struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 
+			agg_param->ap_in_progress = 1;
 			rc = 0;
 			switch (type) {
 			default:
@@ -2689,6 +2691,15 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		rc = -DER_CSUM;	/* Inform caller the csum error */
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		/* HAE needs be updated for csum error case */
+	} else if (ad->ad_agg_param.ap_in_progress) {
+		/* Don't update HAE when there were in-progress entries. Otherwise,
+		 * we will never aggregate anything in those subtrees until there is
+		 * a new write.
+		 *
+		 * NB: We may be able to improve this by tracking the lowest epoch
+		 * of such  entries and updating the HAE to that value - 1.
+		 */
+		goto exit;
 	}
 
 update_hae:
@@ -2731,7 +2742,8 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 		return -DER_NOMEM;
 
 	if (oidp != NULL) {
-		rc = vos_obj_discard_hold(vos_obj_cache_current(), cont, *oidp, &obj);
+		rc = vos_obj_discard_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
+					  cont, *oidp, &obj);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
 				rc = 0;
@@ -2787,7 +2799,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 
 release_obj:
 	if (oidp != NULL)
-		vos_obj_discard_release(vos_obj_cache_current(), obj);
+		vos_obj_discard_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), obj);
 
 free_agg_data:
 	D_FREE(ad);

@@ -108,7 +108,7 @@ def scons():
                     daos_rebuild.c daos_rebuild_common.c daos_rebuild_ec.c
                     daos_rebuild_simple.c daos_test.c daos_verify_consistency.c
                     daos_aggregate_ec.c daos_degrade_ec.c
-                    daos_extend_simple.c daos_obj_ec.c daos_upgrade.c""")
+                    daos_extend_simple.c daos_obj_ec.c daos_upgrade.c daos_pipeline.c""")
 
     daostest = newenv.d_program('daos_test', c_files + daos_test_tgt,
                                 LIBS=['daos_common'] + libraries)

@@ -96,10 +96,6 @@ func (cmd *jsonOutputCmd) errorJSON(err error) error {
 
 var _ jsonOutputter = (*jsonOutputCmd)(nil)
 
-type cmdLogger interface {
-	setLog(*logging.LeveledLogger)
-}
-
 type cliOptions struct {
 	Debug      bool           `long:"debug" description:"enable debug output"`
 	Verbose    bool           `long:"verbose" description:"enable verbose output (when applicable)"`
@@ -116,7 +112,7 @@ type cliOptions struct {
 type versionCmd struct{}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("daos version %s, libdaos %s\n", build.DaosVersion, apiVersion())
+	fmt.Printf("%s, libdaos v%s\n", build.String(build.CLIUtilName), apiVersion())
 	os.Exit(0)
 	return nil
 }
@@ -213,6 +209,8 @@ or query/manage an object inside a container.`
 		if os.Getenv("DD_STDERR") == "" {
 			os.Setenv("DD_STDERR", "debug")
 		}
+	} else if os.Getenv("DD_STDERR") == "" {
+		os.Setenv("DD_STDERR", "err")
 	}
 
 	// Initialize the daos debug system first so that

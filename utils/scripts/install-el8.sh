@@ -10,7 +10,7 @@
 
 set -e
 
-arch=$(uname -i)
+arch=$(uname -m)
 
 dnf --nodocs install \
     boost-python3-devel \
@@ -45,7 +45,6 @@ dnf --nodocs install \
     libunwind-devel \
     libuuid-devel \
     libyaml-devel \
-    lmdb-devel \
     Lmod \
     lz4-devel \
     make \

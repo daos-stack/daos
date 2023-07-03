@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session,
 						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
 		if (rc == 0) {
@@ -297,6 +297,33 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+static void
+handle_cont_query_ioctl(fuse_req_t req, const void *in_buf, size_t in_bufsz)
+{
+	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_mem_query        query      = {};
+	const struct dfuse_mem_query *in_query   = in_buf;
+	int                           rc;
+
+	if (in_bufsz != sizeof(query))
+		D_GOTO(err, rc = EIO);
+
+	/* Not supported yet, future-proofing for DAOS-12751 */
+	if (in_query->ino != 0)
+		D_GOTO(err, rc = EIO);
+
+	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
+	query.fh_count        = atomic_load_relaxed(&dfuse_info->di_fh_count);
+	query.pool_count      = atomic_load_relaxed(&dfuse_info->di_pool_count);
+	query.container_count = atomic_load_relaxed(&dfuse_info->di_container_count);
+
+	DFUSE_REPLY_IOCTL_SIZE(dfuse_info, req, &query, sizeof(query));
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+}
+
 #ifdef FUSE_IOCTL_USE_INT
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
@@ -339,6 +366,10 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (cmd == DFUSE_IOCTL_DFUSE_EVICT) {
 		oh->doh_evict_on_close = true;
 		DFUSE_REPLY_IOCTL_SIZE(oh, req, NULL, 0);
+	}
+
+	if (cmd == DFUSE_IOCTL_COUNT_QUERY) {
+		handle_cont_query_ioctl(req, in_buf, in_bufsz);
 		return;
 	}
 

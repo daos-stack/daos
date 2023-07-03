@@ -37,6 +37,7 @@ type fsCmd struct {
 	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
+	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 }
 
@@ -430,10 +431,60 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	return nil
 }
 
+type fsDfuseQueryCmd struct {
+	daosCmd
+
+	Args struct {
+		Path string `positional-arg-name:"path" description:"DFuse path to query" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Args.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	rc := C.dfuse_count_query(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
+	}
+
+	if cmd.jsonOutputEnabled() {
+		jsonAttrs := &struct {
+			NumInodes      uint64 `json:"inodes"`
+			NumFileHandles uint64 `json:"open_files"`
+			NumPools       uint64 `json:"pools"`
+			NumContainers  uint64 `json:"containers"`
+		}{
+			NumInodes:      uint64(ap.dfuse_mem.inode_count),
+			NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+			NumPools:       uint64(ap.dfuse_mem.pool_count),
+			NumContainers:  uint64(ap.dfuse_mem.container_count),
+		}
+		return cmd.outputJSON(jsonAttrs, nil)
+	}
+
+	cmd.Infof("DFuse descriptor usage.")
+	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
+
+	return nil
+}
+
 type fsDfuseEvictCmd struct {
 	daosCmd
 
-	Path string `long:"path" description:"Path to evict from dfuse" required:"1"`
+	Args struct {
+		Path string `positional-arg-name:"path" description:"Path to evict from dfuse" required:"1"`
+	} `positional-args:"yes"`
+
 }
 
 func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
@@ -442,14 +493,13 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ap.path = C.CString(cmd.Path)
+	ap.path = C.CString(cmd.Args.Path)
 	defer freeString(ap.path)
 	defer deallocCmdArgs()
 
 	rc := C.dfuse_evict(ap)
 	if err := daosError(rc); err != nil {
-		return errors.Wrapf(err, "failed to evict %s", cmd.Path)
+		return errors.Wrapf(err, "failed to evict %s", cmd.Args.Path)
 	}
-
 	return nil
 }

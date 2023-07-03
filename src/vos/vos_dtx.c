@@ -199,8 +199,8 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		}
 
 		for (i = 0; i < count; i++)
-			vos_obj_evict_by_oid(vos_obj_cache_current(), cont,
-					     oids[i]);
+			vos_obj_evict_by_oid(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
+					     cont, oids[i]);
 	}
 
 	if (dae->dae_oids != NULL && dae->dae_oids != &dae->dae_oid_inline &&
@@ -825,8 +825,9 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = DAE_EPOCH(dae);
 	} else {
-		struct dtx_handle	*dth = vos_dth_get();
+		struct dtx_handle	*dth = vos_dth_get(false);
 
+		D_ASSERT(!cont->vc_pool->vp_sysdb);
 		D_ASSERT(dtx_is_valid_handle(dth));
 		D_ASSERT(dth->dth_solo);
 
@@ -1106,7 +1107,7 @@ int
 vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			   daos_epoch_t epoch, uint32_t intent, uint32_t type, bool retry)
 {
-	struct dtx_handle		*dth = vos_dth_get();
+	struct dtx_handle		*dth;
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae = NULL;
 	bool				 found;
@@ -1114,6 +1115,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	if (dth != NULL && dth->dth_for_migration)
 		intent = DAOS_INTENT_MIGRATION;
 
@@ -1347,9 +1349,9 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 }
 
 uint32_t
-vos_dtx_get(void)
+vos_dtx_get(bool standalone)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(standalone);
 
 	if (!dtx_is_valid_handle(dth))
 		return DTX_LID_COMMITTED;
@@ -1423,7 +1425,7 @@ int
 vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 			uint32_t type, uint32_t *tx_id)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(umm->umm_pool->up_store.store_standalone);
 	struct vos_dtx_act_ent	*dae;
 	int			 rc = 0;
 
@@ -2105,8 +2107,9 @@ vos_dtx_post_handle(struct vos_container *cont,
 	}
 
 	if (!abort && dces != NULL) {
-		struct vos_tls		*tls = vos_tls_get();
+		struct vos_tls		*tls = vos_tls_get(false);
 
+		D_ASSERT(cont->vc_pool->vp_sysdb == false);
 		for (i = 0; i < count; i++) {
 			if (dces[i] != NULL) {
 				cont->vc_dtx_committed_count++;
@@ -2397,7 +2400,7 @@ out:
 int
 vos_dtx_aggregate(daos_handle_t coh)
 {
-	struct vos_tls			*tls = vos_tls_get();
+	struct vos_tls			*tls = vos_tls_get(false);
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct umem_instance		*umm;
@@ -2421,6 +2424,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	if (dbd == NULL || dbd->dbd_count == 0)
 		return 0;
 
+	D_ASSERT(cont->vc_pool->vp_sysdb == false);
 	/* Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
 
@@ -2615,7 +2619,7 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	int	rc;
 
 	cont = vos_hdl2cont(coh);
-	occ = vos_obj_cache_current();
+	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
 	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
@@ -3173,7 +3177,8 @@ cmt:
 		}
 
 		cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
-		d_tm_dec_gauge(vos_tls_get()->vtl_committed, cont->vc_dtx_committed_count);
+		D_ASSERT(cont->vc_pool->vp_sysdb == false);
+		d_tm_dec_gauge(vos_tls_get(false)->vtl_committed, cont->vc_dtx_committed_count);
 
 		cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 		cont->vc_dtx_committed_count = 0;

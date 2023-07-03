@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -1672,42 +1673,56 @@ dm_disconnect(struct cmd_args_s *ap,
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
+				DH_PERROR_DER(ap, daos_errno2der(rc), "failed to unmount source");
+				rc = dfs_sys_umount(src_file_dfs->dfs_sys);
+				if (rc != 0)
+					DH_PERROR_DER(ap, daos_errno2der(rc),
+						      "failed to unmount source on retry");
 			}
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-			daos_cont_close(ca->src_coh, NULL);
+			rc = daos_cont_close(ca->src_coh, NULL);
+			if (rc != 0)
+				DH_PERROR_DER(ap, rc, "failed to close source container on retry");
 		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
-			daos_pool_disconnect(ca->src_poh, NULL);
+			rc = daos_pool_disconnect(ca->src_poh, NULL);
+			if (rc != 0)
+				DH_PERROR_DER(ap, rc, "failed to disconnect source pool on retry");
 		}
 	}
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
+				DH_PERROR_DER(ap, daos_errno2der(rc), "failed to unmount source");
+				rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
+				if (rc != 0)
+					DH_PERROR_DER(ap, daos_errno2der(rc),
+						      "failed to unmount source on retry");
 			}
 			dst_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->dst_coh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-			daos_cont_close(ca->dst_coh, NULL);
+			rc = daos_cont_close(ca->dst_coh, NULL);
+			if (rc != 0)
+				DH_PERROR_DER(ap, rc,
+					      "failed to close destination container on retry");
 		}
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
-			daos_pool_disconnect(ca->dst_poh, NULL);
+			rc = daos_pool_disconnect(ca->dst_poh, NULL);
+			if (rc != 0)
+				DH_PERROR_DER(ap, rc,
+					      "failed to disconnect destination pool on retry");
 		}
 	}
 	return rc;
@@ -2424,6 +2439,37 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
+	return rc;
+}
+
+int
+dfuse_count_query(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = daos_errno2der(errno);
+		DH_PERROR_DER(ap, rc, "ioctl failed");
+		goto close;
+	}
+
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+
+close:
+	close(fd);
 	return rc;
 }
 
