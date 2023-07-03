@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -24,9 +24,10 @@
 #define DFUSE_IOCTL_REPLY_SIZE   (DFUSE_IOCTL_REPLY_BASE + 6)
 #define DFUSE_IOCTL_REPLY_DSIZE  (DFUSE_IOCTL_REPLY_BASE + 7)
 #define DFUSE_IOCTL_REPLY_PFILE  (DFUSE_IOCTL_REPLY_BASE + 8)
+
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
-#define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 10)
 #define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 11)
+#define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)

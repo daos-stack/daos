@@ -24,7 +24,6 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -41,8 +40,6 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
-
-#include "dfuse_ioctl.h"
 
 struct file_dfs {
 	enum {POSIX, DAOS} type;
