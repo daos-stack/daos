@@ -484,7 +484,6 @@ type fsDfuseEvictCmd struct {
 	Args struct {
 		Path string `positional-arg-name:"path" description:"Path to evict from dfuse" required:"1"`
 	} `positional-args:"yes"`
-
 }
 
 func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {

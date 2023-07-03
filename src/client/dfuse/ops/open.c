@@ -155,8 +155,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 
 	if (oh->doh_evict_on_close) {
-		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
-						      oh->doh_ie->ie_parent, oh->doh_ie->ie_name,
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
+						      oh->doh_ie->ie_name,
 						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
 
 		if (rc != 0)

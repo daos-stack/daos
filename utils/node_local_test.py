@@ -2503,12 +2503,12 @@ class PosixTests():
         with open(new_file, 'w'):
             pass
 
-        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', '--path', new_file])
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', new_file])
         print(rc)
         assert rc.returncode == 0, rc
         time.sleep(5)
 
-        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', '--path', self.dfuse.dir])
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', self.dfuse.dir])
         print(rc)
         assert rc.returncode == 0, rc
         time.sleep(5)
