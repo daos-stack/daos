@@ -1495,8 +1495,8 @@ class DFuse():
         my_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
         my_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         my_env['D_IL_REPORT'] = '2'
-        if self.conf.client_debug:
-            my_env['D_LOG_MASK'] = self.conf.client_debug
+        if self.conf.args.client_debug:
+            my_env['D_LOG_MASK'] = self.conf.args.client_debug
         ret = subprocess.run(cmd, env=my_env, check=False)
         print(f'Logged il to {log_name}')
         print(ret)
