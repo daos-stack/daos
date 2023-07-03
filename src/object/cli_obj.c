@@ -6205,9 +6205,8 @@ obj_list_shards_get(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		grp_idx, *shard, *shard_cnt);
 
 out:
-	D_DEBUG(DB_IO, DF_OID" list on shard %u leader %s: "DF_RC"\n",
-		DP_OID(obj->cob_md.omd_id), *shard,
-		obj_auxi->to_leader ? "yes" : "no", DP_RC(rc));
+	D_DEBUG(DB_IO, DF_OID " list on shard %u leader %s: %d\n", DP_OID(obj->cob_md.omd_id),
+		*shard, obj_auxi->to_leader ? "yes" : "no", rc);
 	return rc;
 }
 
