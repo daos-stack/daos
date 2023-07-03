@@ -91,23 +91,32 @@ struct dfuse_inode_entry;
 
 /* Preread.
  *
- * If a file is opened when caching is on but the file is not cached and the size small enough
- * to fit in a single buffer then start a pre-read of the file on open, then when reads do occur
- * they can happen directly from the buffer.  For 'linear reads' of a file this means that the
- * read can be triggered sooner and performed as one dfs request.  Make use of the pre-read
- * code to only use this for trivial reads, if a file is not read linearly or it's written to
- * then back off to the regular behavior, which will likely use the kernel cache.
+ * DFuse can start a pre-read of the file on open, then when reads do occur they can happen directly
+ * from the buffer.  For 'linear reads' of a file this means that the read can be triggered sooner
+ * and performed as one dfs request.  Make use of the pre-read code to only use this for trivial
+ * reads, if a file is not read linearly or it's written to then back off to the regular behavior,
+ * which will likely use the kernel cache.
+ *
+ * Pre-read is enabled when:
+ *  Caching is enabled
+ *  The file is not cached
+ *  The file is small enough to fit in one buffer (1mb)
+ *  The previous file from the same directory was read linearly.
+ * Similar to the READDIR_PLUS_AUTO logic this feature is enabled bassed on the I/O pattern of the
+ * most recent access to the parent directory, general I/O workloads or interception library use are
+ * unlikely to trigger this code however something that is reading the entire contents of a
+ * directory tree should.
  *
  * This works by creating a new descriptor which is pointed to by the open handle, on open dfuse
  * decides if it will use pre-read and if so allocate a new descriptor, add it to the open handle
- * and then once it's replied to the open immediately issue a read.  The new descriptor includes
- * a lock which is locked by open before it replies to the kernel request and unlocked by the dfs
- * read callback.  Read requests then take the lock to ensure the dfs read is complete and reply
- * directly with the data in the buffer.
+ * and then once it's replied to the open immediately issue a read.  The new descriptor includes a
+ * lock which is locked by open before it replies to the kernel request and unlocked by the dfs read
+ * callback.  Read requests then take the lock to ensure the dfs read is complete and reply directly
+ * with the data in the buffer.
  *
  * This works up to the buffer size, the pre-read tries to read the expected file size is smaller
- * then dfuse will detect this and back off to regular read, however it will not detect if the
- * file has grown in size.
+ * then dfuse will detect this and back off to regular read, however it will not detect if the file
+ * has grown in size.
  *
  * A dfuse_event is hung off this new descriptor and these come from the same pool as regular reads,
  * this buffer is kept as long as it's needed but released as soon as possible, either on error or
@@ -836,6 +845,24 @@ struct dfuse_inode_entry {
 	 */
 	ATOMIC bool               ie_linear_read;
 };
+
+static inline struct dfuse_inode_entry *
+dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	d_list_t *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	if (!rlink)
+		return NULL;
+
+	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
+}
+
+static inline void
+dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+{
+	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
+}
 
 extern char *duns_xattr_name;
 

@@ -10,14 +10,13 @@
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *ie;
-	d_list_t                     *rlink;
-	d_list_t                     *plink;
-	struct dfuse_obj_hdl         *oh     = NULL;
-	struct fuse_file_info         fi_out = {0};
-	int                           rc;
-	bool                          prefetch = false;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+	struct dfuse_obj_hdl     *oh;
+	struct fuse_file_info     fi_out = {0};
+	int                       rc;
+	bool                      prefetch = false;
 
 	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -34,9 +33,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	dfuse_open_handle_init(dfuse_info, oh, ie);
 
-	plink = d_hash_rec_find(&dfuse_info->dpi_iet, &ie->ie_parent, sizeof(ie->ie_parent));
-	if (plink)
-		oh->doh_parent_dir = container_of(plink, struct dfuse_inode_entry, ie_htl);
+	oh->doh_parent_dir = dfuse_inode_lookup(dfuse_info, ie->ie_parent);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
@@ -98,14 +95,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	if (prefetch && oh->doh_parent_dir) {
-		bool use_linear_read = atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read);
-
-		prefetch = use_linear_read;
-	}
-
 	/* Enable this for files up to the max read size. */
-	if (prefetch && ie->ie_stat.st_size > 0 && ie->ie_stat.st_size <= DFUSE_MAX_READ) {
+	if (prefetch && oh->doh_parent_dir &&
+	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
+	    ie->ie_stat.st_size <= DFUSE_MAX_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
@@ -214,7 +207,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 		atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
 
-		d_hash_rec_decref(&dfuse_info->dpi_iet, &oh->doh_parent_dir->ie_htl);
+		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }
