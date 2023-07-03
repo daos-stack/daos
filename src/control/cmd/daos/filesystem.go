@@ -537,7 +537,7 @@ func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
 			NumFileHandles uint64 `json:"open_files"`
 			NumPools       uint64 `json:"pools"`
 			NumContainers  uint64 `json:"containers"`
-			Inode          uint64 `json:"inode"`
+			Inode          uint64 `json:"inode,omitempty"`
 		}{
 			NumInodes:      uint64(ap.dfuse_mem.inode_count),
 			NumFileHandles: uint64(ap.dfuse_mem.fh_count),

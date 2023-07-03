@@ -306,8 +306,6 @@ handle_cont_qe_ioctl_helper(fuse_req_t req, const struct dfuse_mem_query *in_que
 	if (in_query && in_query->ino) {
 		d_list_t *rlink;
 
-		DFUSE_TRA_ERROR(dfuse_info, "Checking for inode %#lx", in_query->ino);
-
 		rlink =
 		    d_hash_rec_find(&dfuse_info->dpi_iet, &in_query->ino, sizeof(in_query->ino));
 		if (rlink) {
