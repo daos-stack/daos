@@ -22,8 +22,8 @@
 #include <sys/xattr.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/ioctl.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -2494,8 +2494,6 @@ dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 	while ((ent = readdir(dir)) != NULL) {
 		int cfd;
 
-		printf("Processing %s\n", ent->d_name);
-
 		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
 		if (cfd < 0) {
 			rc = errno;
@@ -2519,9 +2517,9 @@ int
 dfuse_evict(struct cmd_args_s *ap)
 {
 	struct dfuse_mem_query query = {};
-	struct stat buf;
-	int         rc = -DER_SUCCESS;
-	int         fd;
+	struct stat            buf;
+	int                    rc = -DER_SUCCESS;
+	int                    fd;
 
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {

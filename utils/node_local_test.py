@@ -2029,7 +2029,7 @@ class PosixTests():
         # Now evict the new containers
 
         self.dfuse.evict_and_wait([child_path, child_path_cwd])
-        # Do not destroy the new containers at this point as dfuse will be holding references.
+        # Destroy the new containers at this point as dfuse will have dropped references.
         new_cont1.destroy()
         new_cont_cwd.destroy()
 
