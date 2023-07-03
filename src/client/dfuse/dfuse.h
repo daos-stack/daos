@@ -131,6 +131,8 @@ struct dfuse_obj_hdl {
 	/** the inode entry for the file */
 	struct dfuse_inode_entry *doh_ie;
 
+	struct dfuse_inode_entry *doh_parent_dir;
+
 	/** readdir handle. */
 	struct dfuse_readdir_hdl *doh_rd;
 
@@ -826,6 +828,13 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
+
+	/** Last file closed in this directory was read linearly.  Directories only.
+	 *
+	 * Set on close() of a file in the directory to the value of linear_read from the fh.
+	 * Checked on open of a file to determine if pre-caching is used.
+	 */
+	ATOMIC bool               ie_linear_read;
 };
 
 extern char *duns_xattr_name;

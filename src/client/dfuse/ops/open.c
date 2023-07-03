@@ -10,17 +10,18 @@
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry     *ie;
 	d_list_t                     *rlink;
+	d_list_t                     *plink;
 	struct dfuse_obj_hdl         *oh     = NULL;
 	struct fuse_file_info         fi_out = {0};
 	int                           rc;
 	bool                          prefetch = false;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOENT);
+		DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOENT);
 		return;
 	}
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -31,12 +32,16 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(fs_handle, oh, ie);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
+
+	plink = d_hash_rec_find(&dfuse_info->dpi_iet, &ie->ie_parent, sizeof(ie->ie_parent));
+	if (plink)
+		oh->doh_parent_dir = container_of(plink, struct dfuse_inode_entry, ie_htl);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (ie->ie_dfs->dfc_data_timeout != 0 && fs_handle->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_timeout != 0 && dfuse_info->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -93,6 +98,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
+	if (prefetch && oh->doh_parent_dir) {
+		bool use_linear_read = atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read);
+
+		prefetch = use_linear_read;
+	}
+
 	/* Enable this for files up to the max read size. */
 	if (prefetch && ie->ie_stat.st_size > 0 && ie->ie_stat.st_size <= DFUSE_MAX_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
@@ -102,16 +113,16 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	if (oh->doh_readahead)
-		dfuse_pre_read(fs_handle, oh);
+		dfuse_pre_read(dfuse_info, oh);
 
 	return;
 err:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	dfuse_oh_free(fs_handle, oh);
+	d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
+	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
@@ -193,5 +204,17 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		DFUSE_REPLY_ZERO(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	if (oh->doh_parent_dir) {
+		bool use_linear_read = false;
+
+		if (oh->doh_linear_read && oh->doh_linear_read_eof)
+			use_linear_read = true;
+
+		DFUSE_TRA_DEBUG(oh->doh_parent_dir, "Setting linear_read to %d", use_linear_read);
+
+		atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
+
+		d_hash_rec_decref(&dfuse_info->dpi_iet, &oh->doh_parent_dir->ie_htl);
+	}
 	dfuse_oh_free(dfuse_info, oh);
 }

@@ -111,6 +111,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
+	atomic_store_relaxed(&parent->ie_linear_read, false);
+
 	/* O_LARGEFILE should always be set on 64 bit systems, and in fact is
 	 * defined to 0 so IOF defines LARGEFILE to the value that O_LARGEFILE
 	 * would otherwise be using and check that is set.
