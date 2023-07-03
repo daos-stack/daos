@@ -93,7 +93,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->time_gran = 1;
 
-	if (fs_handle->dpi_info->di_wb_cache)
+	if (fs_handle->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);

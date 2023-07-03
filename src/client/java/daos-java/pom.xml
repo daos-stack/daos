@@ -93,17 +93,6 @@
         </executions>
       </plugin>
       <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <executions>
-          <execution>
-            <goals>
-              <goal>test-jar</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
         <artifactId>maven-antrun-plugin</artifactId>
         <version>1.8</version>
         <executions>
@@ -306,7 +295,7 @@
                   <exclude>org.javassist:javassist</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
+              <finalName>${project.artifactId}-${project.version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
         </executions>
@@ -325,7 +314,7 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
+                  <file>target/${project.artifactId}-${project.version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
                   <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
@@ -403,6 +392,52 @@
 
   <profiles>
     <profile>
+      <id>java-11</id>
+      <activation>
+        <jdk>11</jdk>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration combine.self="override">
+              <compilerArgs>
+                <arg>-h</arg>
+                <arg>${project.basedir}/src/main/native/include</arg>
+                <arg>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</arg>
+              </compilerArgs>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <configuration>
+              <failOnError>false</failOnError>
+              <additionalJOptions>
+                <additionalJOption>--add-exports=java.base/sun.nio.ch=ALL-UNNAMED</additionalJOption>
+                <additionalJOption>--add-exports=java.xml/jdk.xml.internal=ALL-UNNAMED</additionalJOption>
+              </additionalJOptions>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-surefire-plugin</artifactId>
+            <configuration>
+              <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <configuration>
+              <argLine>--add-exports java.xml/jdk.xml.internal=ALL-UNNAMED</argLine>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
       <id>shade-all</id>
       <build>
         <plugins>
@@ -449,7 +484,7 @@
                 <configuration>
                   <artifacts>
                     <artifact>
-                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <file>target/${project.artifactId}-${project.version}-shaded.jar</file>
                       <type>jar</type>
                       <classifier>all-shaded</classifier>
                     </artifact>

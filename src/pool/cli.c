@@ -87,10 +87,14 @@ pool_free(struct d_hlink *hlink)
 
 	pool = container_of(hlink, struct dc_pool, dp_hlink);
 	D_ASSERT(daos_hhash_link_empty(&pool->dp_hlink));
+
+	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
+	D_ASSERT(d_list_empty(&pool->dp_co_list));
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
 	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
-	D_ASSERT(d_list_empty(&pool->dp_co_list));
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
@@ -770,6 +774,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		 */
 		D_ERROR("failed to notify agent of pool disconnect: "DF_RC"\n",
 			DP_RC(rc));
+		rc = 0;
 	}
 
 	/* remove pool from hhash */
@@ -986,11 +991,12 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 		D_GOTO(out_client_buf, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
-			""DF_U64" required).\n", glob->iov_buf_len,
-			glob_buf_size);
+		rc = -DER_TRUNC;
+		D_ERROR("Larger glob buffer needed (" DF_U64 " bytes provided, " DF_U64
+			" required) " DF_RC "\n",
+			glob->iov_buf_len, glob_buf_size, DP_RC(rc));
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_client_buf, rc = -DER_TRUNC);
+		D_GOTO(out_client_buf, rc);
 	}
 	glob->iov_len = glob_buf_size;
 

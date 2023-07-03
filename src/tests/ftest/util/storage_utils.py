@@ -30,6 +30,38 @@ def find_pci_address(value):
     return re.findall(pattern, str(value))
 
 
+def get_tier_roles(tier, total_tiers):
+    """Get the roles for the specified bdev storage tier.
+
+    Args:
+        tier (int): the storage bdev tier number
+        total_tiers (int): total number of storage tiers
+
+    Raises:
+        ValueError: if the specified tier is not a bdev tier
+
+    Returns:
+        list: the roles for specified bdev tier
+
+    """
+    if tier == 0:
+        raise ValueError(f'Inappropriate bdev tier number: {tier}')
+    if tier == 1 and total_tiers == 2:
+        # A single bdev tier is assigned all roles
+        return ['wal', 'data', 'meta']
+    if tier == 1:
+        # The first of multiple bdev tiers in is assigned the wal role
+        return ['wal']
+    if tier == 2 and total_tiers == 3:
+        # The second of two bdev tiers in is assigned the data and meta role
+        return ['data', 'meta']
+    if tier == 2:
+        # The second of three or more bdev tiers in is assigned the meta
+        return ['meta']
+    # Any additional bdev tiers are assigned the data role
+    return ['data']
+
+
 class StorageException(Exception):
     """Exception for the StorageInfo class."""
 
@@ -495,17 +527,19 @@ class StorageInfo():
 
         return controllers
 
-    def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=100,
-                           scm_mount='/mnt/daos', max_nvme_tiers=1):
+    def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=0,
+                           scm_mount='/mnt/daos', max_nvme_tiers=1, control_metadata=None):
         """Generate a storage test yaml sub-section.
 
         Args:
             yaml_file (str): file in which to write the storage yaml entry
             engines (int): number of engines
             tier_0_type (str): storage tier 0 type: 'pmem' or 'ram'
-            scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 100.
+            scm_size (int, optional): scm_size to use with ram storage tiers. Defaults to 0 (auto).
             scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of nvme storage tiers. Defaults to 1.
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD. Defaults to None.
 
         Raises:
             StorageException: if an invalid storage type was specified
@@ -519,6 +553,8 @@ class StorageInfo():
             self._raise_error(f'Error: Invalid storage type \'{tier_0_type}\'')
 
         pmem_list = {}
+        bdev_list = {}
+
         if tier_0_type == self.TIER_0_TYPES[0] and self.pmem_devices:
             # Sort the detected devices and place then in lists by NUMA node
             numa_devices = self._get_numa_devices(self.pmem_devices)
@@ -554,7 +590,6 @@ class StorageInfo():
             self._log.debug('  NVMe/VMD tier_placement: %s', tier_placement)
             tiers += max(tier_placement)
 
-            bdev_list = {}
             for device_set in device_sets:
                 tier = tier_placement.pop(0)
                 for engine, device in enumerate(device_set):
@@ -565,7 +600,11 @@ class StorageInfo():
                     bdev_list[engine][tier].append(f'"{device}"')
             self._log.debug('  NVMe/VMD bdev_list:      %s', bdev_list)
 
-        lines = ['server_config:', '  engines:']
+        lines = ['server_config:']
+        if control_metadata and bdev_list:
+            lines.append('  control_metadata:')
+            lines.append(f'    path: {control_metadata}')
+        lines.append('  engines:')
         for engine in range(engines):
             lines.append(f'    {str(engine)}:')
             lines.append('      storage:')
@@ -582,6 +621,9 @@ class StorageInfo():
                 else:
                     lines.append('          class: nvme')
                     lines.append(f'          bdev_list: [{", ".join(bdev_list[engine][tier])}]')
+                    if control_metadata:
+                        lines.append(
+                            f'          bdev_roles: [{", ".join(get_tier_roles(tier, tiers))}]')
 
         self._log.debug('  Creating %s', yaml_file)
         for line in lines:

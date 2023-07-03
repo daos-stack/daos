@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -460,8 +460,8 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
 	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, it, sizeof(*it), POBJ_XADD_NO_SNAPSHOT);
-	pmemobj_memcpy_persist(umm->umm_pool, it, item, sizeof(*it));
+		umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	umem_atomic_copy(umm, it, item, sizeof(*it), UMEM_COMMIT_DEFER);
 
 	last = bag->bag_item_last + 1;
 	if (last == bin->bin_bag_size)
@@ -875,7 +875,7 @@ gc_check_cont(struct vos_container *cont)
 int
 gc_add_pool(struct vos_pool *pool)
 {
-	struct vos_tls	   *tls = vos_tls_get();
+	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
 
 	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
 		DP_UUID(pool->vp_id));
@@ -941,7 +941,7 @@ gc_log_pool(struct vos_pool *pool)
 static int
 vos_gc_run(int *credits)
 {
-	struct vos_tls	*tls	 = vos_tls_get();
+	struct vos_tls	*tls	 = vos_tls_get(true);
 	d_list_t	*pools	 = &tls->vtl_gc_pools;
 	int		 rc	 = 0;
 	int		 checked = 0;
@@ -1070,9 +1070,10 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 }
 
 struct vos_gc_param {
-	int		(*vgc_yield_func)(void *arg);
-	void		*vgc_yield_arg;
-	uint32_t	 vgc_credits;
+	struct umem_instance	*vgc_umm;
+	int			(*vgc_yield_func)(void *arg);
+	void			*vgc_yield_arg;
+	uint32_t		 vgc_credits;
 };
 
 static inline bool
@@ -1082,11 +1083,11 @@ vos_gc_yield(void *arg)
 	int			 rc;
 
 	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get() == NULL);
+	D_ASSERT(vos_dth_get(false) == NULL);
 
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;
-		bio_yield();
+		bio_yield(param->vgc_umm);
 		return false;
 	}
 
@@ -1106,15 +1107,17 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
 	struct vos_pool		*pool = vos_hdl2pool(poh);
-	struct vos_tls		*tls  = vos_tls_get();
+	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
 	struct vos_gc_param	 param;
 	uint32_t		 nr_flushed = 0;
 	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
+	D_ASSERT(pool->vp_sysdb == false);
 
 	vos_space_update_metrics(pool);
 
+	param.vgc_umm		= &pool->vp_umm;
 	param.vgc_yield_func	= yield_func;
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;

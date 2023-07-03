@@ -254,6 +254,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					sysp,
 					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+					nil,
 				)
 
 				idx := uint32(i)
@@ -536,10 +537,11 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
 				{
-					Started: atm.NewBool(true),
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
 				},
 			},
-			expErr: errInstanceNotReady,
+			expErr: errEngineNotReady,
 		},
 		"harness not started": {
 			mics:       []*MockInstanceConfig{},

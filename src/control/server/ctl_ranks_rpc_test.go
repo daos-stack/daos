@@ -874,6 +874,90 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	}
 }
 
+func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req           ctlpb.SetLogMasksReq
+		cfgMasks      string
+		cfgStreams    string
+		cfgSubsystems string
+		expMasks      string
+		expStreams    string
+		expSubsystems string
+		expErr        error
+	}{
+		"empty masks string in request; reset not set in request": {
+			expErr: errors.New("empty log masks in request"),
+		},
+		"empty masks string in request; no configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expErr: errors.New("empty log masks in config"),
+		},
+		"empty masks string in request; configured log mask": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				ResetMasks: true,
+			},
+			cfgMasks: "ERR",
+			expMasks: "ERR",
+		},
+		"masks specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks: "DEBUG",
+			},
+			cfgMasks: "ERR",
+			expMasks: "DBUG",
+		},
+		"all values specified in request": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:      "DEBUG",
+				Streams:    "MGMT",
+				Subsystems: "MISC",
+			},
+			expMasks:   "ERR,MISC=DBUG",
+			expStreams: "MGMT",
+		},
+		"all values specified in config": {
+			req: ctlpb.SetLogMasksReq{
+				Masks:           "DEBUG",
+				Streams:         "MGMT",
+				Subsystems:      "MISC",
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:      "ERR",
+			cfgStreams:    "md",
+			cfgSubsystems: "misc",
+			expMasks:      "ERR",
+			expStreams:    "md",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := engine.MockConfig().
+				WithLogMask(tc.cfgMasks).
+				WithLogStreams(tc.cfgStreams).
+				WithLogSubsystems(tc.cfgSubsystems)
+
+			gotErr := updateSetLogMasksReq(cfg, &tc.req)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expMasks, tc.req.Masks); diff != "" {
+				t.Fatalf("unexpected masks: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expStreams, tc.req.Streams); diff != "" {
+				t.Fatalf("unexpected streams: %s", diff)
+			}
+			if diff := cmp.Diff(tc.expSubsystems, tc.req.Subsystems); diff != "" {
+				t.Fatalf("unexpected subsystems: %s", diff)
+			}
+		})
+	}
+}
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingRank      bool
@@ -890,19 +974,27 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 		"nil request": {
 			expErr: errors.New("nil request"),
 		},
-		"empty masks string in request; no configured log mask": {
-			req:    &ctlpb.SetLogMasksReq{},
-			expErr: errors.New("no log_mask set in engine config"),
-		},
 		"empty masks string in request; configured log mask": {
 			cfgLogMask: "DEBUG",
-			req:        &ctlpb.SetLogMasksReq{},
-			expErr:     errors.New("dRPC returned no response"),
+			req: &ctlpb.SetLogMasksReq{
+				ResetMasks: true,
+			},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: dRPC returned no response",
+					"validate response: dRPC returned no response",
+				},
+			},
 		},
 		"instances stopped": {
 			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
 			instancesStopped: true,
-			expErr:           errors.New("not ready"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					FaultDataPlaneNotStarted.Error(),
+					FaultDataPlaneNotStarted.Error(),
+				},
+			},
 		},
 		"dRPC resp fails": {
 			req:     &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -911,7 +1003,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expErr: errors.New("bad dRPC response"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"validate response: bad dRPC response status: FAILURE",
+					"validate response: bad dRPC response status: FAILURE",
+				},
+			},
 		},
 		"dRPC resp junk": {
 			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -925,7 +1022,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"successful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -933,7 +1032,9 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: 0},
 				&ctlpb.SetLogMasksResp{Status: 0},
 			},
-			expResp: &ctlpb.SetLogMasksResp{},
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{"", ""},
+			},
 		},
 		"unsuccessful call": {
 			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
@@ -941,7 +1042,12 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 				&ctlpb.SetLogMasksResp{Status: -1},
 				&ctlpb.SetLogMasksResp{Status: -1},
 			},
-			expErr: errors.New("DER_UNKNOWN(-1): Unknown error code -1"),
+			expResp: &ctlpb.SetLogMasksResp{
+				Errors: []string{
+					"DER_UNKNOWN(-1): Unknown error code -1",
+					"DER_UNKNOWN(-1): Unknown error code -1",
+				},
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

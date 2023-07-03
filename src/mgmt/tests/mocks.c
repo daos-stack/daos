@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -468,7 +468,7 @@ mock_ds_mgmt_pool_evict_setup(void)
  * TODO: Implement mocks when there is a test that uses these
  */
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	return 0;
 }
@@ -476,6 +476,12 @@ crt_rank_self_set(d_rank_t rank)
 void
 dss_init_state_set(enum dss_init_state state)
 {
+}
+
+int
+dss_module_setup_all()
+{
+	return 0;
 }
 
 size_t
@@ -608,4 +614,3 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 	ds_mgmt_dev_set_faulty_return = 0;
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
-

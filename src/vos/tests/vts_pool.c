@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,8 @@
 #include <vos_layout.h>
 #include <daos_srv/vos.h>
 #include <vos_internal.h>
+
+#define VPOOL_TEST_WAL_SZ	(1ULL << 25) /* default_cluster_sz(): DAOS_BS_CLUSTER_SZ: 32MB */
 
 struct vp_test_args {
 	char			**fname;
@@ -87,7 +89,7 @@ pool_ref_count_test(void **state)
 	int			num = 10;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 	for (i = 0; i < num; i++) {
 		ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[i]);
 		assert_rc_equal(ret, 0);
@@ -114,7 +116,7 @@ pool_policy_update(void **state)
 	struct vos_pool		*vp;
 
 	uuid_generate(uuid);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 
 	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[0]);
 	assert_rc_equal(ret, 0);
@@ -157,7 +159,7 @@ pool_interop(void **state)
 	uuid_generate(uuid);
 
 	daos_fail_loc_set(FLC_POOL_DF_VER | DAOS_FAIL_ONCE);
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_pool_open(arg->fname[0], uuid, 0, &poh);
@@ -188,17 +190,20 @@ pool_ops_run(void **state)
 					ret =
 					vts_pool_fallocate(&arg->fname[j]);
 					assert_int_equal(ret, 0);
-					ret = vos_pool_create(arg->fname[j],
+					ret = vos_pool_create_ex(arg->fname[j],
 							      arg->uuid[j],
-							      0, 0, 0, poh);
+							      0, 0,
+							      VPOOL_TEST_WAL_SZ,
+							      0, poh);
 				} else {
 					ret =
 					vts_alloc_gen_fname(&arg->fname[j]);
 					assert_int_equal(ret, 0);
-					ret = vos_pool_create(arg->fname[j],
+					ret = vos_pool_create_ex(arg->fname[j],
 							      arg->uuid[j],
-							      VPOOL_16M, 0, 0,
-							      poh);
+							      VPOOL_256M, 0,
+							      VPOOL_TEST_WAL_SZ,
+							      0, poh);
 				}
 				break;
 			case OPEN:
@@ -217,10 +222,10 @@ pool_ops_run(void **state)
 				assert_rc_equal(ret, 0);
 				assert_int_equal(pinfo.pif_cont_nr, 0);
 				assert_false(SCM_TOTAL(&pinfo.pif_space) !=
-						VPOOL_16M);
+						VPOOL_256M);
 				assert_false(NVME_TOTAL(&pinfo.pif_space) != 0);
 				assert_false(SCM_FREE(&pinfo.pif_space) >
-				     (VPOOL_16M - sizeof(struct vos_pool_df)));
+				     (VPOOL_256M - sizeof(struct vos_pool_df)));
 				assert_false(NVME_FREE(&pinfo.pif_space) != 0);
 				break;
 			default:
@@ -303,6 +308,15 @@ pool_unit_teardown(void **state)
 	int			i;
 
 	for (i = 0; i < arg->nfiles; i++) {
+		int cnt =  arg->seq_cnt[i];
+
+		/** Call vos_pool_kill() here to reclaim SMD_DEV space
+		 * by deleting pool blobs if pool was not destroyed yet.
+		 */
+		D_ASSERT(cnt > 0 && cnt <= QUERY);
+		if (arg->ops_seq[i][--cnt] != DESTROY)
+			vos_pool_kill(arg->uuid[i], 0);
+
 		if (vts_file_exists(arg->fname[i]))
 			assert_int_equal(remove(arg->fname[i]), 0);
 		if (arg->fname[i])
@@ -340,6 +354,8 @@ create_pools_test_construct(struct vp_test_args **arr,
 
 	/** Create number of files as CPUs */
 	nfiles = sysconf(_SC_NPROCESSORS_ONLN);
+	/* Limit to 16 to save file space when bdev=aio */
+	nfiles = min(nfiles, 16);
 	pool_allocate_params(nfiles, 1, arg);
 	arg->nfiles = nfiles;
 	print_message("Pool construct test with %d files\n",
@@ -451,7 +467,7 @@ pool_open_excl_test(void **state)
 	uuid_generate(uuid);
 
 	print_message("open EXCL shall fail upon existing create opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0,
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0,
 			      &arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
@@ -462,7 +478,7 @@ pool_open_excl_test(void **state)
 	assert_rc_equal(ret, 0);
 
 	print_message("open EXCL shall fail upon existing opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[0]);
 	assert_rc_equal(ret, 0);
@@ -474,7 +490,7 @@ pool_open_excl_test(void **state)
 	assert_rc_equal(ret, 0);
 
 	print_message("open EXCL shall fail upon existing EXCL opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[0]);
 	assert_rc_equal(ret, 0);
@@ -487,7 +503,7 @@ pool_open_excl_test(void **state)
 
 	print_message("open EXCL shall fail upon existing EXCL create "
 		      "opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, VOS_POF_EXCL,
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, VOS_POF_EXCL,
 			      &arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
@@ -498,7 +514,7 @@ pool_open_excl_test(void **state)
 	assert_rc_equal(ret, 0);
 
 	print_message("open shall fail upon existing EXCL opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, 0, NULL);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, NULL);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[0]);
 	assert_rc_equal(ret, 0);
@@ -510,7 +526,7 @@ pool_open_excl_test(void **state)
 	assert_rc_equal(ret, 0);
 
 	print_message("open shall fail upon existing EXCL create opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_16M, 0, VOS_POF_EXCL,
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, VOS_POF_EXCL,
 			      &arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[1]);

@@ -11,6 +11,7 @@ import json
 import re
 import sys
 from time import time
+import random
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -33,7 +34,7 @@ from general_utils import \
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
-from run_utils import stop_processes
+from run_utils import stop_processes, run_remote, command_as_user
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -140,6 +141,11 @@ class Test(avocadoTest):
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
+
+        # Random generator that could be seeded for reproducibility
+        seed = random.randrange(sys.maxsize)  # nosec
+        self.log.info("Test.random seed = %s", seed)
+        self.random = random.Random(seed)
 
     def setUp(self):
         """Set up each test case."""
@@ -413,7 +419,8 @@ class Test(avocadoTest):
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
         self.log.debug(
-            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
+            "Register: Adding calling %s(%s) during tearDown()",
+            method.__name__, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
@@ -916,6 +923,8 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "after restarting all servers")
+        else:
+            self._list_server_manager_info()
         self.log.info("-" * 100)
         return errors
 
@@ -1226,6 +1235,9 @@ class TestWithServers(TestWithoutServers):
                 "All %s groups(s) of servers currently running",
                 len(self.server_managers))
 
+        # List active server log files and storage devices
+        self._list_server_manager_info()
+
         return force_agent_start
 
     def check_running(self, name, manager_list, prepare_dmg=False,
@@ -1287,6 +1299,17 @@ class TestWithServers(TestWithoutServers):
                 manager.get_config_value("filename"))
             manager.start()
 
+    def _list_server_manager_info(self):
+        """Display information about the running servers."""
+        self.log.info("-" * 100)
+        self.log.info("--- SERVER INFORMATION ---")
+        for manager in self.server_managers:
+            manager.get_host_log_files()
+            try:
+                manager.dmg.storage_query_list_devices()
+            except CommandFailure:
+                pass
+
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.
 
@@ -1302,9 +1325,10 @@ class TestWithServers(TestWithoutServers):
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        results = pcmd(all_hosts, "rm -fr {}".format(self.test_dir))
-        if 0 not in results or len(results) > 1:
-            errors.append("Error removing temporary test files")
+        result = run_remote(
+            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        if not result.passed:
+            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors
 
     def dump_engines_stacks(self, message):

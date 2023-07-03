@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -238,7 +238,7 @@ type devID struct {
 	uuid   string
 }
 
-type engineDevMap map[*Engine][]devID
+type engineDevMap map[Engine][]devID
 
 // Map requested device IDs provided in comma-separated string to the engine that controls the given
 // device. Device can be identified either by UUID or transport (PCI) address.
@@ -258,14 +258,14 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 	edm := make(engineDevMap)
 
 	for _, rr := range resp.Ranks {
-		eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rr.Rank))
+		engines, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rr.Rank))
 		if err != nil {
 			return nil, err
 		}
-		if len(eis) == 0 {
+		if len(engines) == 0 {
 			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
 		}
-		eisPtr := &eis[0]
+		engine := engines[0]
 		for _, dev := range rr.Devices {
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
@@ -282,7 +282,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 				if trAddrs[dds.TrAddr] || uuidMatch {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm[eisPtr] = append(edm[eisPtr], devID{trAddr: dds.TrAddr})
+					edm[engine] = append(edm[engine], devID{trAddr: dds.TrAddr})
 					delete(trAddrs, dds.TrAddr)
 					delete(devUUIDs, dds.Uuid)
 					continue
@@ -291,7 +291,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 
 			if uuidMatch {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm[eisPtr] = append(edm[eisPtr], devID{uuid: dds.Uuid})
+				edm[engine] = append(edm[engine], devID{uuid: dds.Uuid})
 				delete(devUUIDs, dds.Uuid)
 			}
 		}
@@ -306,8 +306,14 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 	return edm, nil
 }
 
-func sendManageReq(c context.Context, e *Engine, m drpc.Method, b proto.Message) (*ctlpb.SmdManageResp_Result, error) {
-	dResp, err := (*e).CallDrpc(c, m, b)
+func sendManageReq(c context.Context, e Engine, m drpc.Method, b proto.Message) (*ctlpb.SmdManageResp_Result, error) {
+	if !e.IsReady() {
+		return &ctlpb.SmdManageResp_Result{
+			Status: daos.Unreachable.Int32(),
+		}, nil
+	}
+
+	dResp, err := e.CallDrpc(c, m, b)
 	if err != nil {
 		return nil, errors.Wrap(err, "call drpc")
 	}
@@ -372,7 +378,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 	for engine, devs := range engineDevMap {
 		devResults := []*ctlpb.SmdManageResp_Result{}
 
-		rank, err := (*engine).GetRank()
+		rank, err := engine.GetRank()
 		if err != nil {
 			return nil, errors.Wrap(err, "retrieving engine rank")
 		}

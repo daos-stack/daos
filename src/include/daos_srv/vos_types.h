@@ -92,6 +92,10 @@ enum vos_pool_open_flags {
 	VOS_POF_SKIP_UUID_CHECK = (1 << 2),
 	/** Caller does VEA flush periodically */
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
+	/** RDB pool */
+	VOS_POF_RDB	= (1 << 4),
+	/** SYS DB pool */
+	VOS_POF_SYSDB	= (1 << 5),
 };
 
 enum vos_oi_attr {
@@ -393,9 +397,7 @@ typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** standalone prepare:	pool connection handle or container open handle
-	 *  nested prepare:	DAOS_HDL_INVAL
-	 */
+	/** pool connection handle or container open handle */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle

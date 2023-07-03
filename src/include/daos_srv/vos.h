@@ -259,6 +259,24 @@ vos_self_fini(void);
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param wal_sz [IN]	Size of WAL blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
+ *
+ * \return              Zero on success, negative value if error
+ */
+int
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
+		   daos_size_t blob_sz, daos_size_t wal_sz,
+		   unsigned int flags, daos_handle_t *poh);
+/**
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
+ *
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]    Pool UUID
+ * \param scm_sz [IN]	Size of SCM for the pool
+ * \param blob_sz[IN]	Size of blob for the pool
  * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle if not NULL
  *
@@ -273,11 +291,24 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
  * \param uuid		[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid);
+vos_pool_kill(uuid_t uuid, unsigned int flags);
+
+/**
+ * Destroy a Versioned Object Storage Pool (VOSP)
+ *
+ * \param path	[IN]	Path of the memory pool
+ * \param uuid	[IN]	Pool UUID
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ *
+ * \return		Zero on success, negative value if error
+ */
+int
+vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -1222,14 +1253,6 @@ enum vos_cont_opc {
 int
 vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc);
 
-/**
- * Profile the VOS operation in standalone vos mode.
- **/
-int
-vos_profile_start(char *path, int avg);
-void
-vos_profile_stop(void);
-
 uint64_t
 vos_get_io_size(daos_handle_t ioh);
 
@@ -1243,6 +1266,11 @@ int
 vos_dedup_verify(daos_handle_t ioh);
 
 struct sys_db *vos_db_get(void);
+
+/* return sysdb pool uuid */
+uuid_t *
+vos_db_pool_uuid(void);
+
 /**
  * Create the system DB in VOS
  * System DB is KV store that can support insert/delete/traverse
@@ -1252,6 +1280,47 @@ int vos_db_init(const char *db_path);
 int vos_db_init_ex(const char *db_path, const char *db_name, bool force_create,
 		   bool destroy_db_on_fini);
 void vos_db_fini(void);
+
+typedef void (*vos_chkpt_update_cb_t)(void *arg, uint64_t commit_id, uint32_t used_blocks,
+				      uint32_t total_blocks);
+typedef void (*vos_chkpt_wait_cb_t)(void *arg, uint64_t chkpt_id, uint64_t *committed_id);
+/**
+ * Initialize checkpointing callbacks, retrieve the store.  Function will invoke commit_cb and
+ * reserve_cb to initialize values.
+ *
+ * \param[in]	poh		Open pool handle
+ * \param[in]	update_cb	Callback to invoke after wal changes
+ * \param[in]	arg		Callback argument
+ * \param[out]	store		Return the umem_store associated with the pool
+ */
+void
+vos_pool_checkpoint_init(daos_handle_t poh, vos_chkpt_update_cb_t update_cb,
+			 vos_chkpt_wait_cb_t wait_cb, void *arg, struct umem_store **store);
+
+/**
+ * Clears saved checkpoint callbacks to avoid any race on shutdown
+ *
+ * \param[in]	poh	Open pool handle
+ */
+void
+vos_pool_checkpoint_fini(daos_handle_t poh);
+
+/**
+ * Returns true if checkpointing is needed for the pool
+ *
+ * \param[in]	poh	Pool open handle
+ */
+bool
+vos_pool_needs_checkpoint(daos_handle_t poh);
+
+/** Checkpoint the VOS pool
+ *
+ * \param[in] poh		Open vos pool handle
+ * \param[in] chkpt_wait	Callback to wait for tx_id to commit
+ * \param[in] arg		Argument to callback
+ */
+int
+vos_pool_checkpoint(daos_handle_t poh);
 
 /**
  * The following declarations are for checksum scrubbing functions. The function
@@ -1415,5 +1484,18 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
  */
 int
 vos_obj_layout_upgrade(daos_handle_t hdl, daos_unit_oid_t oid, uint32_t layout_ver);
+
+/**
+ * Init standalone VOS TLS.
+ * \param[in]	tags
+ */
+int
+vos_standalone_tls_init(int tags);
+
+/**
+ * Finish standalone VOS TLS.
+ */
+void
+vos_standalone_tls_fini(void);
 
 #endif /* __VOS_API_H */

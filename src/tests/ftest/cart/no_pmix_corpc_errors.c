@@ -328,7 +328,7 @@ int main(int argc, char **argv)
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);

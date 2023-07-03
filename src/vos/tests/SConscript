@@ -3,7 +3,7 @@
 
 def scons():
     """Execute build"""
-    Import('denv', 'prereqs', 'utest_utils', 'conf_dir', 'cmd_parser')
+    Import('denv', 'utest_utils', 'conf_dir', 'cmd_parser')
 
     libraries = ['vos', 'bio', 'abt', 'pthread', 'daos_common_pmem',
                  'daos_tests', 'gurt', 'uuid', 'pthread',
@@ -12,7 +12,7 @@ def scons():
     tenv = denv.Clone()
     tenv.Append(CPPPATH=[Dir('..').srcnode()])
 
-    prereqs.require(tenv, 'argobots')
+    tenv.require('argobots')
 
     # Add runtime paths for daos libraries
     tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
@@ -21,7 +21,7 @@ def scons():
     vos_test_src = ['vos_tests.c', 'vts_io.c', 'vts_pool.c', 'vts_container.c',
                     tenv.Object("vts_common.c"), 'vts_aggregate.c', 'vts_dtx.c',
                     'vts_gc.c', 'vts_checksum.c', 'vts_ilog.c', 'vts_array.c',
-                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c',
+                    'vts_pm.c', 'vts_ts.c', 'vts_mvcc.c', 'vos_cmd.c', 'vts_wal.c',
                     '../../object/srv_csum.c', '../../object/srv_io_map.c']
     vos_tests = tenv.d_program('vos_tests', vos_test_src, LIBS=libraries)
     tenv.AppendUnique(CPPPATH=[Dir('../../common/tests').srcnode()])
@@ -35,10 +35,20 @@ def scons():
 
     libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
                  'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
-    test = unit_env.d_test_program('pool_scrubbing_tests',
-                                   ['pool_scrubbing_tests.c', '../vos_pool_scrub.c'],
-                                   LIBS=libraries)
-    unit_env.Install('$PREFIX/bin/', test)
+    unit_env.d_test_program('pool_scrubbing_tests', ['pool_scrubbing_tests.c',
+                                                     '../vos_pool_scrub.c'],
+                            LIBS=libraries)
+
+    tenv = denv.Clone()
+    tenv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+    tenv.Append(CPPDEFINES={'VOS_STANDALONE': '1'})
+
+    libraries = ['uuid', 'bio', 'gurt', 'cmocka', 'daos_common_pmem', 'daos_tests', 'vos', 'abt']
+
+    tenv.require('spdk')
+    bio_ut_src = ['bio_ut.c', 'wal_ut.c']
+    bio_ut = tenv.d_test_program('bio_ut', bio_ut_src, LIBS=libraries)
+    tenv.Install('$PREFIX/bin/', bio_ut)
 
 
 if __name__ == "SCons.Script":
