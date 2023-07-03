@@ -2453,6 +2453,8 @@ dfuse_count_query(struct cmd_args_s *ap)
 		return daos_errno2der(rc);
 	}
 
+	query.ino = ap->dfuse_mem.ino;
+
 	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
@@ -2464,6 +2466,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 	ap->dfuse_mem.fh_count        = query.fh_count;
 	ap->dfuse_mem.pool_count      = query.pool_count;
 	ap->dfuse_mem.container_count = query.container_count;
+	ap->dfuse_mem.found           = query.found;
 
 close:
 	close(fd);
@@ -2476,7 +2479,7 @@ close:
  */
 
 static int
-dfuse_evict_helper(int fd)
+dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
 {
 	struct dirent *ent;
 	DIR           *dir;
@@ -2499,7 +2502,7 @@ dfuse_evict_helper(int fd)
 			goto out;
 		}
 
-		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT);
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT, query);
 		close(cfd);
 		if (rc < 0) {
 			rc = errno;
@@ -2515,6 +2518,7 @@ out:
 int
 dfuse_evict(struct cmd_args_s *ap)
 {
+	struct dfuse_mem_query query = {};
 	struct stat buf;
 	int         rc = -DER_SUCCESS;
 	int         fd;
@@ -2534,17 +2538,27 @@ dfuse_evict(struct cmd_args_s *ap)
 	}
 
 	if (buf.st_ino == 1) {
-		rc = daos_errno2der(dfuse_evict_helper(fd));
-		DH_PERROR_DER(ap, rc, "Unable to traverse root");
-		goto close;
+		rc = daos_errno2der(dfuse_evict_helper(fd, &query));
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Unable to traverse root");
+			goto close;
+		}
+		goto out;
 	}
 
-	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT);
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
 		DH_PERROR_DER(ap, rc, "ioctl failed");
 		goto close;
 	}
+
+	ap->dfuse_mem.ino = buf.st_ino;
+out:
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
 
 close:
 	close(fd);

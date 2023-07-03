@@ -298,6 +298,33 @@ err:
 }
 
 static void
+handle_cont_qe_ioctl_helper(fuse_req_t req, const struct dfuse_mem_query *in_query)
+{
+	struct dfuse_info     *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_mem_query query      = {};
+
+	if (in_query && in_query->ino) {
+		d_list_t *rlink;
+
+		DFUSE_TRA_ERROR(dfuse_info, "Checking for inode %#lx", in_query->ino);
+
+		rlink =
+		    d_hash_rec_find(&dfuse_info->dpi_iet, &in_query->ino, sizeof(in_query->ino));
+		if (rlink) {
+			query.found = true;
+			d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
+		}
+	}
+
+	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
+	query.fh_count        = atomic_load_relaxed(&dfuse_info->di_fh_count);
+	query.pool_count      = atomic_load_relaxed(&dfuse_info->di_pool_count);
+	query.container_count = atomic_load_relaxed(&dfuse_info->di_container_count);
+
+	DFUSE_REPLY_IOCTL_SIZE(dfuse_info, req, &query, sizeof(query));
+}
+
+static void
 handle_cont_query_ioctl(fuse_req_t req, const void *in_buf, size_t in_bufsz)
 {
 	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
@@ -308,20 +335,20 @@ handle_cont_query_ioctl(fuse_req_t req, const void *in_buf, size_t in_bufsz)
 	if (in_bufsz != sizeof(query))
 		D_GOTO(err, rc = EIO);
 
-	/* Not supported yet, future-proofing for DAOS-12751 */
-	if (in_query->ino != 0)
-		D_GOTO(err, rc = EIO);
-
-	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
-	query.fh_count        = atomic_load_relaxed(&dfuse_info->di_fh_count);
-	query.pool_count      = atomic_load_relaxed(&dfuse_info->di_pool_count);
-	query.container_count = atomic_load_relaxed(&dfuse_info->di_container_count);
-
-	DFUSE_REPLY_IOCTL_SIZE(dfuse_info, req, &query, sizeof(query));
+	handle_cont_qe_ioctl_helper(req, in_query);
 	return;
 
 err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+}
+
+static void
+handle_cont_evict_ioctl(fuse_req_t req, struct dfuse_obj_hdl *oh, const void *in_buf,
+			size_t in_bufsz)
+{
+	oh->doh_evict_on_close = true;
+
+	handle_cont_qe_ioctl_helper(req, NULL);
 }
 
 #ifdef FUSE_IOCTL_USE_INT
@@ -363,15 +390,11 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 
 	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
-	if (cmd == DFUSE_IOCTL_DFUSE_EVICT) {
-		oh->doh_evict_on_close = true;
-		DFUSE_REPLY_IOCTL_SIZE(oh, req, NULL, 0);
-	}
+	if (cmd == DFUSE_IOCTL_COUNT_QUERY)
+		return handle_cont_query_ioctl(req, in_buf, in_bufsz);
 
-	if (cmd == DFUSE_IOCTL_COUNT_QUERY) {
-		handle_cont_query_ioctl(req, in_buf, in_bufsz);
-		return;
-	}
+	if (cmd == DFUSE_IOCTL_DFUSE_EVICT)
+		return handle_cont_evict_ioctl(req, oh, in_buf, in_bufsz);
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))

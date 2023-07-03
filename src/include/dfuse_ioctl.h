@@ -26,7 +26,7 @@
 #define DFUSE_IOCTL_REPLY_PFILE  (DFUSE_IOCTL_REPLY_BASE + 8)
 
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
-#define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 11)
+#define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 10)
 #define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
 
 /** Metadada caching is enabled for this file */
@@ -88,6 +88,7 @@ struct dfuse_mem_query {
 #define DFUSE_IOCTL_COUNT_QUERY                                                                    \
 	((int)_IOWR(DFUSE_IOCTL_TYPE, DFUSE_COUNT_QUERY_CMD, struct dfuse_mem_query))
 
-#define DFUSE_IOCTL_DFUSE_EVICT ((int)_IO(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR))
+#define DFUSE_IOCTL_DFUSE_EVICT                                                                    \
+	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR, struct dfuse_mem_query))
 
 #endif /* __DFUSE_IOCTL_H__ */
