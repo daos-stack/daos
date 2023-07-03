@@ -705,6 +705,13 @@ vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
 	if (vos_iter_sched_check(iter))
 		*acts |= VOS_ITER_CB_YIELD;
 
+	if (rc != 0 && param->ip_error_cb != NULL) {
+		/** Filter the error, if necessary */
+		rc = param->ip_error_cb(ih, iter_ent, type, arg, rc);
+		if (rc == 0)
+			*acts |= VOS_ITER_CB_SKIP;
+	}
+
 	return rc;
 }
 
@@ -863,6 +870,14 @@ probe:
 			rc = vos_iterate(&child_param, iter_ent.ie_child_type,
 					 recursive, anchors, pre_cb, post_cb,
 					 arg, dth);
+			acts = 0;
+			if (rc != 0 && param->ip_error_cb != NULL) {
+				/** Filter the error, if necessary */
+				rc = param->ip_error_cb(ih, &iter_ent, type, arg, rc);
+				if (rc == 0)
+					acts |= VOS_ITER_CB_SKIP;
+			}
+
 			if (rc != 0)
 				D_GOTO(out, rc);
 
@@ -872,7 +887,7 @@ probe:
 			    anchors->ia_probe_level != iter->it_type)
 				goto finish;
 
-			rc = advance_stage(type, 0, param, anchors, anchor, &stage,
+			rc = advance_stage(type, acts, param, anchors, anchor, &stage,
 					   VOS_ITER_STAGE_POST, &probe_flags);
 			JUMP_TO_STAGE(rc, next, probe, out);
 		}
