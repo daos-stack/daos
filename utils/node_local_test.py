@@ -1063,7 +1063,7 @@ class DaosServer():
             rc.returncode = 0
         assert rc.returncode == 0, rc
 
-    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None):
+    def run_daos_client_cmd_pil4dfs(self, cmd, check=True, container=None, report=True):
         """Run a DAOS client with libpil4dfs.so
 
         Run a command, returning what subprocess.run() would.
@@ -1088,7 +1088,8 @@ class DaosServer():
             cmd_env['D_LOG_FILE'] = log_name
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
-        cmd_env['D_IL_REPORT'] = '1'
+        if report:
+            cmd_env['D_IL_REPORT'] = '1'
         cmd_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libpil4dfs.so')
         if container is not None:
             # Create a temporary directory for the mount point, this will be removed as it goes out
@@ -1124,6 +1125,9 @@ class DaosServer():
 
         if check:
             assert rc.returncode == 0, rc
+
+        if not report:
+            return rc
 
         # check stderr for interception summary
         search = re.findall(r'\[op_sum\ ]  \d+', rc.stderr.decode('utf-8'))
@@ -5689,13 +5693,13 @@ def server_fi(args):
     """Run the server under fault injection.
 
     Start the server, create a container, enable periodic failing of D_ALLOC() and then perform
-    I/O.
+    I/O.  At some point this could be extended to checking the client also behaves properly but
+    for now just check the server logs.
     """
     conf = load_conf(args)
 
     wf = WarningsFactory('nlt-errors.json', post_error=True, check='Server FI testing')
 
-    args.server_debug = 'INFO'
     args.dfuse_debug = 'INFO'
     args.client_debug = 'INFO'
     args.memcheck = 'no'
@@ -5714,7 +5718,9 @@ def server_fi(args):
 
         for idx in range(100):
             server.run_daos_client_cmd_pil4dfs(
-                ['touch', f'file.{idx}'], container=cont, check=False)
+                ['touch', f'file.{idx}'], container=cont, check=False, report=False)
+            server.run_daos_client_cmd_pil4dfs(
+                ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
 
         server.set_fi(probability=0)
 

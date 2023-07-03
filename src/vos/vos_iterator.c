@@ -123,8 +123,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare %s iterator: %d\n", dict->id_name,
-			rc);
+		D_ERROR("Failed to prepare %s iterator: " DF_RC "\n", dict->id_name, DP_RC(rc));
 		goto out;
 	}
 
