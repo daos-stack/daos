@@ -220,6 +220,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 		D_GOTO(error_out, 0);
 
 	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
+	fi_attr_in->fa_probability_y = 100;
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)

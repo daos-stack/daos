@@ -519,10 +519,13 @@ class DaosCont():
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf, test_class=None, valgrind=False, wf=None, fatal_errors=None):
+    def __init__(self, conf, test_class=None, valgrind=False, wf=None, fatal_errors=None,
+                 enable_fi=False):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
+        self._fi = enable_fi
+        self._fi_file = None
         self.wf = wf
         self.fatal_errors = fatal_errors
         self.conf = conf
@@ -710,6 +713,18 @@ class DaosServer():
         scyaml['helper_log_file'] = self.helper_log.name
 
         scyaml['socket_dir'] = self.agent_dir
+
+        if self._fi:
+            # Set D_ALLOC to fail 0/100 times.  The x value can be modified later.
+            faults = {'fault_config': [{'id': 0,
+                                        'probability_x': 0,
+                                        'probability_y': 100}]}
+
+            self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
+
+            self._fi_file.write(yaml.dump(faults, encoding='utf=8'))
+            self._fi_file.flush()
+            server_env['D_FI_CONFIG'] = self._fi_file.name
 
         for (key, value) in server_env.items():
             # If server log is set via server_debug then do not also set env settings.
@@ -917,7 +932,7 @@ class DaosServer():
         self.conf.compress_file(self.control_log.name)
 
         for log in self.server_logs:
-            log_test(self.conf, log.name, leak_wf=wf)
+            log_test(self.conf, log.name, leak_wf=wf, skip_fi=self._fi)
             self.server_logs.remove(log)
         self.running = False
         return ret
@@ -1087,6 +1102,9 @@ class DaosServer():
         else:
             cwd = None
 
+        if self.conf.args.client_debug:
+            cmd_env['D_LOG_MASK'] = self.conf.args.client_debug
+
         print('Run command: ')
         print(cmd)
         rc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
@@ -1116,6 +1134,70 @@ class DaosServer():
             raise NLTestFail('op_sum is zero. Unexpected.')
         print(f'DBG> num_op = {num_op}')
         return rc
+
+    def set_fi(self, probability=0):
+        """Run the client code to set server params"""
+        cmd_env = get_base_env()
+
+        cmd_env['OFI_INTERFACE'] = self.network_interface
+        cmd_env['CRT_PHY_ADDR_STR'] = self.network_provider
+        valgrind_hdl = ValgrindHelper(self.conf)
+
+        if self.conf.args.memcheck == 'no':
+            valgrind_hdl.use_valgrind = False
+
+        system_name = 'daos_server'
+
+        exec_cmd = valgrind_hdl.get_cmd_prefix()
+
+        agent_bin = join(self.conf['PREFIX'], 'bin', 'daos_agent')
+
+        with tempfile.TemporaryDirectory(prefix='dnt_addr_',) as addr_dir:
+
+            addr_file = join(addr_dir, f'{system_name}.attach_info_tmp')
+
+            agent_cmd = [agent_bin,
+                         '-i',
+                         '-s',
+                         self.agent_dir,
+                         'dump-attachinfo',
+                         '-o',
+                         addr_file]
+
+            rc = subprocess.run(agent_cmd, env=cmd_env, check=True)
+            print(rc)
+
+            # options here are: fault_id,max_faults,probability,err_code[,argument]
+            cmd = ['set_fi_attr',
+                   '--cfg_path',
+                   addr_dir,
+                   '--group-name',
+                   'daos_server',
+                   '--rank',
+                   '0',
+                   '--attr',
+                   f'0,0,{probability},0,0']
+
+            exec_cmd.append(join(self.conf['PREFIX'], 'bin', 'cart_ctl'))
+            exec_cmd.extend(cmd)
+
+            with tempfile.NamedTemporaryFile(prefix=f'dnt_crt_ctl_{get_inc_id()}_',
+                                             suffix='.log',
+                                             delete=False) as log_file:
+
+                cmd_env['D_LOG_FILE'] = log_file.name
+                cmd_env['DAOS_AGENT_DRPC_DIR'] = self.agent_dir
+
+                rc = subprocess.run(exec_cmd,
+                                    env=cmd_env,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    check=False)
+                print(rc)
+                valgrind_hdl.convert_xml()
+                log_test(self.conf, log_file.name)
+                assert rc.returncode == 0
+                return False  # fatal_errors
 
 
 class ValgrindHelper():
@@ -1409,6 +1491,8 @@ class DFuse():
         my_env['LD_PRELOAD'] = join(self.conf['PREFIX'], 'lib64', 'libioil.so')
         my_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
         my_env['D_IL_REPORT'] = '2'
+        if self.conf.client_debug:
+            my_env['D_LOG_MASK'] = self.conf.client_debug
         ret = subprocess.run(cmd, env=my_env, check=False)
         print(f'Logged il to {log_name}')
         print(ret)
@@ -1542,6 +1626,10 @@ def run_daos_cmd(conf,
     exec_cmd.extend(daos_cmd)
 
     cmd_env = get_base_env()
+
+    if conf.args.client_debug:
+        cmd_env['D_LOG_MASK'] = conf.args.client_debug
+
     if not log_check:
         del cmd_env['DD_MASK']
         del cmd_env['DD_SUBSYS']
@@ -4304,71 +4392,6 @@ def log_test(conf,
     return lto.fi_location
 
 
-def set_server_fi(server):
-    """Run the client code to set server params"""
-    # pylint: disable=consider-using-with
-
-    cmd_env = get_base_env()
-
-    cmd_env['OFI_INTERFACE'] = server.network_interface
-    cmd_env['CRT_PHY_ADDR_STR'] = server.network_provider
-    valgrind_hdl = ValgrindHelper(server.conf)
-
-    if server.conf.args.memcheck == 'no':
-        valgrind_hdl.use_valgrind = False
-
-    system_name = 'daos_server'
-
-    exec_cmd = valgrind_hdl.get_cmd_prefix()
-
-    agent_bin = join(server.conf['PREFIX'], 'bin', 'daos_agent')
-
-    addr_dir = tempfile.TemporaryDirectory(prefix='dnt_addr_',)
-    addr_file = join(addr_dir.name, f'{system_name}.attach_info_tmp')
-
-    agent_cmd = [agent_bin,
-                 '-i',
-                 '-s',
-                 server.agent_dir,
-                 'dump-attachinfo',
-                 '-o',
-                 addr_file]
-
-    rc = subprocess.run(agent_cmd, env=cmd_env, check=True)
-    print(rc)
-
-    cmd = ['set_fi_attr',
-           '--cfg_path',
-           addr_dir.name,
-           '--group-name',
-           'daos_server',
-           '--rank',
-           '0',
-           '--attr',
-           '0,0,0,0,0']
-
-    exec_cmd.append(join(server.conf['PREFIX'], 'bin', 'cart_ctl'))
-    exec_cmd.extend(cmd)
-
-    log_file = tempfile.NamedTemporaryFile(prefix=f'dnt_crt_ctl_{get_inc_id()}_',
-                                           suffix='.log',
-                                           delete=False)
-
-    cmd_env['D_LOG_FILE'] = log_file.name
-    cmd_env['DAOS_AGENT_DRPC_DIR'] = server.agent_dir
-
-    rc = subprocess.run(exec_cmd,
-                        env=cmd_env,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        check=False)
-    print(rc)
-    valgrind_hdl.convert_xml()
-    log_test(server.conf, log_file.name)
-    assert rc.returncode == 0
-    return False  # fatal_errors
-
-
 def create_and_read_via_il(dfuse, path):
     """Create file in dir, write to and read through the interception library"""
     fname = join(path, 'test_file')
@@ -5662,6 +5685,40 @@ def test_alloc_fail(server, conf):
     return rc
 
 
+def server_fi(args):
+    """Run the server under fault injection.
+
+    Start the server, create a container, enable periodic failing of D_ALLOC() and then perform
+    I/O.
+    """
+    conf = load_conf(args)
+
+    wf = WarningsFactory('nlt-errors.json', post_error=True, check='Server FI testing')
+
+    args.server_debug = 'INFO'
+    args.dfuse_debug = 'INFO'
+    args.client_debug = 'INFO'
+    args.memcheck = 'no'
+
+    conf.set_wf(wf)
+    conf.set_args(args)
+    setup_log_test(conf)
+
+    with DaosServer(conf, wf=wf, test_class='server-fi', enable_fi=True) as server:
+
+        pool = server.get_test_pool_obj()
+        cont = create_cont(conf, pool=pool, ctype='POSIX', label='server_test')
+
+        # Instruct the server to fail a % of allocations.
+        server.set_fi(probability=5)
+
+        for idx in range(100):
+            server.run_daos_client_cmd_pil4dfs(
+                ['touch', f'file.{idx}'], container=cont, check=False)
+
+        server.set_fi(probability=0)
+
+
 def run(wf, args):
     """Main entry point"""
     # pylint: disable=too-many-branches
@@ -5688,7 +5745,7 @@ def run(wf, args):
             elif args.mode == 'overlay':
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
             elif args.mode == 'set-fi':
-                fatal_errors.add_result(set_server_fi(server))
+                fatal_errors.add_result(server.set_fi())
             elif args.mode == 'all':
                 fi_test_dfuse = True
                 fatal_errors.add_result(run_posix_tests(server, conf))
@@ -5696,7 +5753,7 @@ def run(wf, args):
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
                 test_pydaos_kv(server, conf)
                 test_pydaos_kv_obj_class(server, conf)
-                fatal_errors.add_result(set_server_fi(server))
+                fatal_errors.add_result(server.set_fi())
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
             elif args.test:
@@ -5704,7 +5761,7 @@ def run(wf, args):
             else:
                 fatal_errors.add_result(run_posix_tests(server, conf))
                 fatal_errors.add_result(run_dfuse(server, conf))
-                fatal_errors.add_result(set_server_fi(server))
+                fatal_errors.add_result(server.set_fi())
 
     if args.mode == 'all':
         with DaosServer(conf, test_class='restart', wf=wf_server,
@@ -5811,9 +5868,11 @@ def main():
     parser = argparse.ArgumentParser(description='Run DAOS client on local node')
     parser.add_argument('--server-debug', default=None)
     parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--client-debug', default=None)
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
     parser.add_argument('--server-valgrind', action='store_true')
+    parser.add_argument('--server-fi', action='store_true')
     parser.add_argument('--multi-user', action='store_true')
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
@@ -5825,6 +5884,10 @@ def main():
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')
     args = parser.parse_args()
+
+    if args.server_fi:
+        server_fi(args)
+        return
 
     if args.mode:
         mode_list = args.mode
