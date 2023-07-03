@@ -512,7 +512,7 @@ func checkEnginesReady(instances []Engine) error {
 		if !inst.IsReady() {
 			var err error = FaultDataPlaneNotStarted
 			if inst.IsStarted() {
-				err = errInstanceNotReady
+				err = errEngineNotReady
 			}
 
 			return errors.Wrapf(err, "instance %d", inst.Index())

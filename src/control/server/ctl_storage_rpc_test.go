@@ -1440,7 +1440,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 					{Message: newBioHealthResp(2)},
 				},
 			},
-			expErr: errInstanceNotReady,
+			expErr: errEngineNotReady,
 		},
 		// Sometimes when more than a few ssds are assigned to engine without many targets,
 		// some of the smd entries for the latter ssds are in state "NEW" rather than
