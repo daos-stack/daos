@@ -74,6 +74,7 @@ class FileLine():
         """Mark a line as updated"""
         self.correct(new_code)
         self.modified = True
+        self.note('Required fixes')
 
     def raw(self):
         """Returns the code"""
@@ -122,7 +123,8 @@ PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FAT
 
 # Logging macros that do not expect a new-line.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
-                'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO']
+                'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
+                'DH_PERROR_SYS', 'DH_PERROR_DER']
 
 
 PREFIXES_ALL = PREFIXES.copy()
@@ -137,7 +139,7 @@ class AllChecks():
         self.line = ''
         self._output = io.StringIO()
         self.modified = False
-        self.corrected = True
+        self.corrected = False
 
     def run_all_checks(self):
         """Run everything"""
