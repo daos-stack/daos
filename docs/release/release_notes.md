@@ -46,7 +46,7 @@ Storage Class Memory Support:
 * DAOS Servers with 2nd gen Intel Xeon Scalable processors and
   Intel Optane Persistent Memory 100 Series.
 
-* DAOS Servers with 3nd gen Intel Xeon Scalable processors and
+* DAOS Servers with 3rd gen Intel Xeon Scalable processors and
   Intel Optane Persistent Memory 200 Series.
 
 * DAOS Servers without Intel Optane Persistent Memory,
@@ -70,7 +70,7 @@ For a complete list of supported hardware and software, refer to the
 * The `ipmctl` tool to manage Intel Optane Persistent Memory
   has been updated to Version 3 (provided by the OS distributions).
 
-* The following prerequsite software packages that are included
+* The following prerequisite software packages that are included
   in the DAOS RPM builds have been updated:
 
   - Argobots has been updated to 1.1-2
