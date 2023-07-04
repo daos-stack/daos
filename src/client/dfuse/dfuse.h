@@ -61,6 +61,9 @@ struct dfuse_info {
 	ATOMIC uint64_t      di_fh_count;
 	ATOMIC uint64_t      di_pool_count;
 	ATOMIC uint64_t      di_container_count;
+
+	ATOMIC uint64_t      di_open_count;
+	ATOMIC uint64_t      di_open_preread;
 };
 
 /* legacy, allow the old name for easier migration */
