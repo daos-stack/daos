@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 
-"""Re-write code to preferred style"""
+"""Check and re-write DAOS logging macros to preferred coding style
+
+Apply some checks for the macros, partly for correctness but also for consistency.  Some errors
+can be fixed however not all can.  Code formatting will be incorrect after fixing so clang-format
+(or git-clang-format -f) should be used after this.
+
+Use --fix to apply any correctness fixes that can be applied.
+Use --correct to apply any style changes that can be applied.   Style changes will be applied
+if fixes are being applied.
+"""
 
 import argparse
 import sys
@@ -138,7 +147,7 @@ class AllChecks():
                 continue
 
             if line.endswith('\\'):
-                line.note('Part of macro, not checking')
+                # line.note('Part of macro, not checking')
                 line.write(self._output)
                 continue
 
