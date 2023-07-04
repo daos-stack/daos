@@ -6,4 +6,4 @@
 
 # exit 0
 
-find src/client -name "*.[ch]" -a ! -name "*pb-c.[ch]" -exec ./utils/d_error_rewrite.py {} \;
+find src -name "*.[ch]" -a ! -name "*pb-c.[ch]" -exec ./utils/d_error_rewrite.py {} \;

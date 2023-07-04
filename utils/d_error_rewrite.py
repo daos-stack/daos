@@ -59,7 +59,11 @@ class FileLine():
     def warning(self, msg):
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
-        print(f'::warning file{self._fo.fname},line={self._lineno},::err, {msg}')
+        print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
+
+    def none(self, msg):
+        """Show a note"""
+        print(f'{self._fo.fname}:{self._lineno} {msg}')
 
 
 class FileParser:
@@ -118,7 +122,7 @@ class AllChecks():
                 continue
 
             if line.endswith('\\'):
-                line.warning('Part of macro, not checking')
+                line.note('Part of macro, not checking')
                 line.write(self._output)
                 continue
 
@@ -161,7 +165,6 @@ def main():
     """Do something"""
     fname = sys.argv[1]
 
-    print(fname)
     filep = FileParser(fname)
 
     checks = AllChecks(filep)
