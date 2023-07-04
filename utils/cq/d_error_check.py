@@ -5,6 +5,7 @@
 import argparse
 import sys
 import io
+import os
 
 ARGS = None
 
@@ -183,6 +184,25 @@ class AllChecks():
             line.warning("Line contains too many newlines")
 
 
+def one_entry(fname):
+    """Process one path entry"""
+    if not any(map(fname.endswith, ['.c', '.h'])):
+        return
+
+    if any(map(fname.endswith, ['pb-c.c', 'pb-c..h'])):
+        return
+
+    filep = FileParser(fname)
+
+    checks = AllChecks(filep)
+
+    checks.run_all_checks()
+
+    if (ARGS.fix and checks.modified) or (ARGS.correct and checks.corrected):
+        print(f'Saving updates to {fname}')
+        checks.save(fname)
+
+
 def main():
     """Do something"""
     parser = argparse.ArgumentParser(description='Verify DAOS logging in source tree')
@@ -196,16 +216,16 @@ def main():
     ARGS = parser.parse_args()
 
     for fname in ARGS.files:
-
-        filep = FileParser(fname)
-
-        checks = AllChecks(filep)
-
-        checks.run_all_checks()
-
-        if (ARGS.fix and checks.modified) or (ARGS.correct and checks.corrected):
-            print(f'Saving updates to {fname}')
-            checks.save(fname)
+        if os.path.isfile(fname):
+            one_entry(fname)
+        else:
+            for root, dirs, files in os.walk(fname):
+                for name in files:
+                    one_entry(os.path.join(root, name))
+                if '.git' in dirs:
+                    dirs.remove('.git')
+                if root == 'src/control' and 'vendor' in dirs:
+                    dirs.remove('vendor')
 
 
 def old_main():

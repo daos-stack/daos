@@ -16,5 +16,5 @@ jobs:
           skip: ./src/control/vendor,./.git
           ignore_words_file: ci/codespell.ignores
           builtin: clear,rare,informal,names,en-GB_to_en-US
-      - name: Check DAOS logging
-        run: ./re-write.sh
+      - name: Check DAOS logging macro use.
+        run: .utils/cq/d_error_check.py --github src
