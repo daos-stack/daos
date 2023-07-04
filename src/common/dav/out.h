@@ -99,7 +99,6 @@
 		ASSERTne_rt(lhs, rhs);\
 	} while (0)
 
-#define ERR(fmt, ...)\
-	D_ERROR(fmt "\n", ## __VA_ARGS__)
+#define ERR(fmt, ...) D_ERROR(fmt "\n", ##__VA_ARGS__)
 
 #endif /* __DAOS_COMMON_OUT_H */

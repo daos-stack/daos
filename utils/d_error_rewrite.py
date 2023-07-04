@@ -61,7 +61,7 @@ class FileLine():
         print(f'{self._fo.fname}:{self._lineno} {msg}')
         print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
 
-    def none(self, msg):
+    def note(self, msg):
         """Show a note"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
 
@@ -94,7 +94,7 @@ class FileParser:
 # Logging macros that expect a new-line.
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
-            'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT']
+            'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR']
 
 # Logging macros that do not expect a new-line.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
@@ -156,7 +156,14 @@ class AllChecks():
 
         count = code.count('\\n')
         if count < expected_newlines:
-            line.warning("Line does not contain newline")
+            parts = code.split('"')
+            if len(parts) == 3:
+                new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
+                line.update(new_line)
+                print(new_line)
+                line.warning("Line does not contain newline (autofixable)")
+            else:
+                line.warning("Line does not contain newline")
         elif count > expected_newlines:
             line.warning("Line contains too many newlines")
 
@@ -170,7 +177,9 @@ def main():
     checks = AllChecks(filep)
 
     checks.run_all_checks()
-    checks.save('nf.txt')
+
+    # Fix issues.
+    checks.save(fname)
 
 
 def old_main():
