@@ -12,7 +12,6 @@ if fixes are being applied.
 """
 
 import argparse
-import sys
 import io
 import os
 
@@ -239,62 +238,5 @@ def main():
                     dirs.remove('vendor')
 
 
-def old_main():
-    """Old code"""
-    replace = True
-
-    output = io.StringIO()
-
-    fname = sys.argv[1]
-
-    with open(fname, 'r') as fd:
-        for line in fd:
-            raw = line.strip()
-            if not raw.startswith('D_ERROR'):
-                output.write(line)
-
-                continue
-
-            err_cmd = raw
-            while not raw.endswith(';'):
-                raw = next(fd).strip()
-                err_cmd += raw
-            err_cmd = err_cmd.replace('""', '')
-            if 'DF_RC' in err_cmd:
-                err_cmd = err_cmd.replace('DF_RC ', 'DF_RC')
-                if 'DF_RC"\\n"' in err_cmd:
-                    err_cmd = err_cmd.replace(' DP_RC', 'DP_RC')
-                    parts = err_cmd[:-3].split('(')
-                    assert parts[-2].endswith('DP_RC')
-                    df_name = parts.pop()
-                    last_part = parts.pop()
-                    assert last_part.endswith(',DP_RC')
-                    parts.append(last_part[:-6])
-                    new_err_cmd = '('.join(parts)
-                    new_err_cmd = new_err_cmd.replace('DF_RC"\\n"', '')
-                    new_err_cmd = new_err_cmd.rstrip()
-                    if new_err_cmd.endswith('"'):
-                        new_err_cmd = new_err_cmd[:-1]  # Strip off "
-                        if new_err_cmd.endswith(' '):
-                            new_err_cmd = new_err_cmd[:-1]
-                        if new_err_cmd.endswith(':'):
-                            new_err_cmd = new_err_cmd[:-1]
-                        if new_err_cmd.endswith(df_name):
-                            new_err_cmd = new_err_cmd[:-len(df_name)]
-                        if new_err_cmd.endswith(' '):
-                            new_err_cmd = new_err_cmd[:-1]
-                        if new_err_cmd.endswith(','):
-                            new_err_cmd = new_err_cmd[:-1]
-                        new_err_cmd += '"'
-                    err_cmd = f'DL_ERROR({df_name}, {new_err_cmd[8:]});'
-
-            output.write(f'{err_cmd}\n')
-
-    if replace:
-        with open(fname, 'w') as fd:
-            fd.write(output.getvalue())
-    else:
-        print(output.getvalue())
-
-
-main()
+if __name__ == '__main__':
+    main()
