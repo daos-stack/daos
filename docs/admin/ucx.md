@@ -1,18 +1,9 @@
-# UCX Fabric Support (DAOS 2.2 Technology Preview)
+# UCX Fabric Support
 
-DAOS 2.2 includes a technology preview of
+DAOS 2.4 includes
 [UCX](https://www.openucx.org/) support for clusters using InfiniBand,
 as an alternative to the default
 [libfabric](https://ofiwg.github.io/libfabric/) network stack.
-
-!!! note UCX support has been enabled for the DAOS builds on
-         EL8 and Leap15 only. It is not supported on CentOS7.
-
-The goal of this technology preview is to allow early
-evaluation and testing. DAOS over UCX has not been fully
-validated yet, and it is not recommended to use it in a
-production environment with DAOS 2.2.
-It is a roadmap item to fully support UCX in DAOS 2.4.
 
 !!! note The network provider is an immutable property of a DAOS system.
          Changing the network provider to UCX requires that the DAOS storage
@@ -77,7 +68,8 @@ the following steps are needed:
       zypper install mercury-ucx
 ```
 
-*  To **update** from DAOS 2.0 (with libfabric) to DAOS 2.2 with
+*  To **update** from an earlier DAOS version (with libfabric)
+   to DAOS 2.4 with
    UCX, the recommended path is to first perform a standard DAOS
    RPM update (which will update the default `mercury` package).
    After the update, the `mercury` RPM package can be replaced by
@@ -89,4 +81,3 @@ configuration file (`/etc/daos/daos_server.yml`).
 A sample YML file is available on
 [github](https://github.com/daos-stack/daos/blob/release/2.4/utils/config/examples/daos_server_ucx.yml).
 The recommended setting for UCX is `provider: ucx+dc_x`.
-
