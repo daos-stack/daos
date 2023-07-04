@@ -36,7 +36,7 @@ class FileLine():
         return string in self._code
 
     def __str__(self):
-        if self.modified or self.corrected:
+        if self.modified or (self.corrected and ARGS.correct):
             return f'{self._code}\n'
         return self._line
 
