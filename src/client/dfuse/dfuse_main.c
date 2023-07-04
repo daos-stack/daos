@@ -398,8 +398,8 @@ main(int argc, char **argv)
 	dfuse_info->di_wb_cache = true;
 	dfuse_info->di_eq_count = 1;
 
-	atomic_init(&dfuse_info->di_open_count, 1);
-	atomic_init(&dfuse_info->di_open_preread, 1);
+	atomic_init(&dfuse_info->di_open_count, 0);
+	atomic_init(&dfuse_info->di_open_preread, 0);
 
 	while (1) {
 		c = getopt_long(argc, argv, "Mm:St:o:fhv", long_options, NULL);
@@ -691,14 +691,11 @@ out_fini:
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
 		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
 	}
-
-	DFUSE_TRA_DOWN(dfuse_info);
-	daos_fini();
-out_debug:
-
 	DFUSE_TRA_INFO(dfuse_info, "Opens %lx preread %lx",
 		       atomic_load_relaxed(&dfuse_info->di_open_count),
 		       atomic_load_relaxed(&dfuse_info->di_open_preread));
+	daos_fini();
+out_debug:
 	D_FREE(dfuse_info);
 	DFUSE_LOG_INFO("Exiting with status %d", rc);
 	daos_debug_fini();
