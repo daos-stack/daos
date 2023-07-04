@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
@@ -33,7 +34,7 @@ type collectLogCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	support.CollectLogSubCmd
 }
 
@@ -146,7 +147,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	// set of support collection steps to show in progress bar
 	progress := support.ProgressBar{
 		Total:     len(LogCollection) + len(DmgInfoCollection) + 1, // Extra 1 is for rsync operation.
-		NoDisplay: cmd.jsonOutputEnabled(),
+		NoDisplay: cmd.JSONOutputEnabled(),
 	}
 
 	// Add custom log location
@@ -219,7 +220,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	params.Config = cmd.cfgCmd.config.Path
 	params.TargetFolder = cmd.TargetFolder
 	params.ExtraLogsDir = cmd.ExtraLogsDir
-	params.JsonOutput = cmd.jsonOutputEnabled()
+	params.JsonOutput = cmd.JSONOutputEnabled()
 	params.Hostlist = strings.Join(cmd.hostlist, " ")
 	for logFunc, logCmdSet := range DmgInfoCollection {
 		for _, logCmd := range logCmdSet {
@@ -266,8 +267,8 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	fmt.Printf(progress.Display())
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	return nil
