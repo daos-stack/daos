@@ -174,6 +174,12 @@ func TestControl_PoolProperties(t *testing.T) {
 			expStr:  "self_heal:exclude,rebuild",
 			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
 		},
+		"self_heal-rebuild,exclude": {
+			name:    "self_heal",
+			value:   "rebuild,exclude",
+			expStr:  "self_heal:exclude,rebuild",
+			expJson: []byte(`{"name":"self_heal","description":"Self-healing policy","value":"exclude,rebuild"}`),
+		},
 		"self_heal-invalid": {
 			name:   "self_heal",
 			value:  "wat",
