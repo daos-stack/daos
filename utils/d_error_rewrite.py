@@ -2,8 +2,11 @@
 
 """Re-write code to preferred style"""
 
+import argparse
 import sys
 import io
+
+ARGS = None
 
 
 class FileLine():
@@ -18,6 +21,7 @@ class FileLine():
         # Striped text
         self._code = line.strip()
         self.modified = False
+        self.corrected = False
 
     def startswith(self, string):
         """Starts-with method"""
@@ -31,7 +35,7 @@ class FileLine():
         return string in self._code
 
     def __str__(self):
-        if self.modified:
+        if self.modified or self.corrected:
             return f'{self._code}\n'
         return self._line
 
@@ -47,9 +51,18 @@ class FileLine():
         """Write line to file"""
         flo.write(str(self))
 
-    def update(self, code):
+    def correct(self, new_code):
+        """Apply corrections to a line.
+
+        These will only be applied if fixes are also being applied.
+        """
+        self._code = new_code
+        self.corrected = True
+        self.note('Optional fixes')
+
+    def fix(self, new_code):
         """Mark a line as updated"""
-        self._code = code
+        self.correct(new_code)
         self.modified = True
 
     def raw(self):
@@ -59,7 +72,8 @@ class FileLine():
     def warning(self, msg):
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
-        print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
+        if ARGS.github:
+            print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
 
     def note(self, msg):
         """Show a note"""
@@ -113,6 +127,7 @@ class AllChecks():
         self.line = ''
         self._output = io.StringIO()
         self.modified = False
+        self.corrected = True
 
     def run_all_checks(self):
         """Run everything"""
@@ -132,11 +147,12 @@ class AllChecks():
             line.write(self._output)
             if line.modified:
                 self.modified = True
+            if line.corrected:
+                self.corrected = True
 
     def save(self, fname):
         """Save new file to file"""
-        if not self.modified:
-            # print('File not modified')
+        if not self.modified and not self.corrected:
             return
         with open(fname, 'w') as fd:
             fd.write(self._output.getvalue())
@@ -145,7 +161,7 @@ class AllChecks():
         """Check for double quotes in message"""
         if '""' not in line:
             return
-        line.update(line.raw().replace('""', ''))
+        line.correct(line.raw().replace('""', ''))
 
     def check_return(self, line):
         """Check for one return character"""
@@ -159,8 +175,7 @@ class AllChecks():
             parts = code.split('"')
             if len(parts) == 3:
                 new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
-                line.update(new_line)
-                print(new_line)
+                line.fix(new_line)
                 line.warning("Line does not contain newline (autofixable)")
             else:
                 line.warning("Line does not contain newline")
@@ -170,16 +185,27 @@ class AllChecks():
 
 def main():
     """Do something"""
-    fname = sys.argv[1]
+    parser = argparse.ArgumentParser(description='Verify DAOS logging in source tree')
+    parser.add_argument('--fix', action='store_true', help='Apply required fixes')
+    parser.add_argument('--correct', action='store_true', help='Apply optional fixes')
+    parser.add_argument('--github', action='store_true')
+    parser.add_argument('files', nargs='*')
 
-    filep = FileParser(fname)
+    global ARGS
 
-    checks = AllChecks(filep)
+    ARGS = parser.parse_args()
 
-    checks.run_all_checks()
+    for fname in ARGS.files:
 
-    # Fix issues.
-    checks.save(fname)
+        filep = FileParser(fname)
+
+        checks = AllChecks(filep)
+
+        checks.run_all_checks()
+
+        if (ARGS.fix and checks.modified) or (ARGS.correct and checks.corrected):
+            print(f'Saving updates to {fname}')
+            checks.save(fname)
 
 
 def old_main():
