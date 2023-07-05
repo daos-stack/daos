@@ -195,19 +195,17 @@ set_local_repo() {
     rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
     ln "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
 
-    if [ "$repo_server" = "artifactory" ] &&
-       { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
-       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
-        # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
-        # used for daos packages
-        dnf -y config-manager \
-            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
-    fi
-
     if [ "$repo_server" = "artifactory" ]; then
+        if { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
+           [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
+            # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
+            # used for daos packages
+            dnf -y config-manager \
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+        fi
         # Disable module filtering for our deps repo
-	deps_repo="daos-stack-deps-${DISTRO_GENERIC}-$version-x86_64-stable-local-artifactory"
-	dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
+        deps_repo="daos-stack-deps-${DISTRO_GENERIC}-${VERSION_ID%%.*}-x86_64-stable-local-artifactory"
+        dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
     fi
 
     dnf repolist
