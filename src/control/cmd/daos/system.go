@@ -56,8 +56,8 @@ func (cmd *systemQueryCmd) Execute(_ []string) error {
 		})
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(sysInfo, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(sysInfo, nil)
 	}
 
 	cmd.Infof("connected to DAOS system:")

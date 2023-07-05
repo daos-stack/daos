@@ -514,6 +514,8 @@ on_normal(struct bio_blobstore *bbs)
 	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
 		D_ERROR("Reint reaction failed. "DF_RC"\n", DP_RC(rc));
+	else if (rc > 0)
+		D_DEBUG(DB_MGMT, "Reint reaction is in-progress.");
 	else
 		bdev->bb_trigger_reint = false;
 }
