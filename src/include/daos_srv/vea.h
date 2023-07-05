@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,24 @@ struct vea_free_extent {
 	uint32_t	vfe_age;	/* Monotonic timestamp */
 };
 
+/* Bitmap chunk size */
+#define VEA_BITMAP_MIN_CHUNK_BLKS	256	/* 1MiB */
+#define VEA_BITMAP_MAX_CHUNK_BLKS	16384	/* 64 MiB */
+
+/* Min bitmap allocation class */
+#define VEA_MIN_BITMAP_CLASS	1
+/* Max bitmap allocation class */
+#define VEA_MAX_BITMAP_CLASS	64
+
+/* Common free bitmap structure for both SCM & in-memory index */
+struct vea_free_bitmap {
+	uint64_t	vfb_blk_off;				/* Block offset of the bitmap */
+	uint32_t	vfb_blk_cnt;				/* Block count of the bitmap */
+	uint16_t	vfb_class;				/* Allocation class of bitmap */
+	uint16_t	vfb_bitmap_sz;				/* Bitmap size*/
+	uint64_t	vfb_bitmaps[0];				/* Bitmaps of this chunk */
+};
+
 /* Maximum extents a non-contiguous allocation can have */
 #define VEA_EXT_VECTOR_MAX	9
 
@@ -49,8 +67,12 @@ struct vea_resrvd_ext {
 	uint64_t		 vre_hint_seq;
 	/* Total reserved blocks */
 	uint32_t		 vre_blk_cnt;
+	/* New extent allocated for bitmap */
+	uint32_t		 vre_new_bitmap_chunk:1;
 	/* Extent vector for non-contiguous reserve */
 	struct vea_ext_vector	*vre_vector;
+	/* private pointer */
+	void			*vre_private;
 };
 
 /*
@@ -83,6 +105,8 @@ struct vea_unmap_context {
 	bool vnc_ext_flush;
 };
 
+#define	VEA_COMPAT_FEATURE_BITMAP	(1 << 0)
+
 /* Free space tracking information on SCM */
 struct vea_space_df {
 	uint32_t	vsd_magic;
@@ -95,8 +119,10 @@ struct vea_space_df {
 	uint64_t	vsd_tot_blks;
 	/* Free extent tree, sorted by offset */
 	struct btr_root	vsd_free_tree;
+	/* Free bitmap tree, sorted by offset */
+	struct btr_root vsd_bitmap_tree;
 	/* Allocated extent vector tree, for non-contiguous allocation */
-	struct btr_root	vsd_vec_tree;
+	//struct btr_root	vsd_vec_tree;
 };
 
 /* VEA attributes */
@@ -116,8 +142,10 @@ struct vea_stat {
 	uint64_t	vs_resrv_hint;	/* Number of hint reserve */
 	uint64_t	vs_resrv_large;	/* Number of large reserve */
 	uint64_t	vs_resrv_small;	/* Number of small reserve */
+	uint64_t	vs_resrv_bitmap; /* Number of bitmap reserve */
 	uint64_t	vs_frags_large;	/* Large free frags */
 	uint64_t	vs_frags_small;	/* Small free frags */
+	uint64_t	vs_frags_bitmap; /* Bitmap frags */
 	uint64_t	vs_frags_aging;	/* Aging frags */
 };
 
@@ -148,6 +176,18 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	       struct vea_space_df *md, uint32_t blk_sz, uint32_t hdr_blks,
 	       uint64_t capacity, vea_format_callback_t cb, void *cb_data,
 	       bool force);
+/**
+ * Upgrade VEA to support latest disk format
+ *
+ * \param umem     [IN]	An instance of SCM
+ * \param md       [IN]	The allocation metadata on SCM
+ * \param version  [IN] Version which we try to upgrade
+ *
+ * \return			Zero on success, in-memory compound free extent
+ *				index returned by @vsi; Appropriated negative
+ *				value on error
+ */
+int vea_upgrade(struct umem_instance *umem, struct vea_space_df *md, uint32_t version);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,6 +69,44 @@ verify_vec_entry(uint64_t *off, struct vea_ext_vector *vec)
 	return 0;
 }
 
+int
+verify_bitmap_entry(struct vea_free_bitmap *vfb)
+{
+	D_ASSERT(vfb != NULL);
+	if (vfb->vfb_blk_off == VEA_HINT_OFF_INVAL) {
+		D_CRIT("corrupted bitmap entry, off == VEA_HINT_OFF_INVAL(%d)\n",
+			VEA_HINT_OFF_INVAL);
+		return -DER_INVAL;
+	}
+
+	if (vfb->vfb_class < VEA_MIN_BITMAP_CLASS || vfb->vfb_class > VEA_MAX_BITMAP_CLASS) {
+		D_CRIT("corrupted bitmap entry, class: %u is out of [%u, %u]\n",
+			vfb->vfb_class, VEA_MIN_BITMAP_CLASS, VEA_MAX_BITMAP_CLASS);
+		return -DER_INVAL;
+	}
+
+	if (vfb->vfb_blk_cnt < VEA_BITMAP_MIN_CHUNK_BLKS ||
+	    vfb->vfb_blk_cnt > VEA_BITMAP_MAX_CHUNK_BLKS) {
+		D_CRIT("corrupted bitmap entry, chunk size: %u is out of [%u, %u]\n",
+			vfb->vfb_blk_cnt, VEA_BITMAP_MIN_CHUNK_BLKS, VEA_BITMAP_MAX_CHUNK_BLKS);
+		return -DER_INVAL;
+	}
+
+	if (vfb->vfb_blk_cnt % VEA_BITMAP_MIN_CHUNK_BLKS) {
+		D_CRIT("coruppted bitmap entry, chunk size: %u should be times of %u\n",
+			vfb->vfb_blk_cnt, VEA_BITMAP_MIN_CHUNK_BLKS);
+		return -DER_INVAL;
+	}
+
+	if (vfb->vfb_bitmap_sz * 64 * vfb->vfb_class < vfb->vfb_blk_cnt) {
+		D_CRIT("corrupted bitmap entry, bitmap size: %u could not cover chunk size: %u\n",
+			vfb->vfb_bitmap_sz, vfb->vfb_blk_cnt);
+		return -DER_INVAL;
+	}
+
+	return 0;
+}
+
 /**
  * Check if current extent is adjacent with next one.
  * returns	1 - Adjacent
@@ -111,19 +149,20 @@ verify_resrvd_ext(struct vea_resrvd_ext *resrvd)
 	return 0;
 }
 
-int
-vea_dump(struct vea_space_info *vsi, bool transient)
+static int
+vea_dump_bitmap(struct vea_space_info *vsi, bool transient)
 {
-	struct vea_free_extent *ext;
-	daos_handle_t ih, btr_hdl;
-	d_iov_t key, val;
-	uint64_t *off;
-	int rc, print_cnt = 0, opc = BTR_PROBE_FIRST;
+	struct vea_free_bitmap	*bitmap;
+	struct vea_bitmap_entry	*entry;
+	daos_handle_t		 ih, btr_hdl;
+	d_iov_t			 key, val;
+	uint64_t		*off;
+	int			 rc, print_cnt = 0, opc = BTR_PROBE_FIRST;
 
 	if (transient)
-		btr_hdl = vsi->vsi_free_btr;
+		btr_hdl = vsi->vsi_bitmap_btr;
 	else
-		btr_hdl = vsi->vsi_md_free_btr;
+		btr_hdl = vsi->vsi_md_bitmap_btr;
 
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
 	rc = dbtree_iter_prepare(btr_hdl, BTR_ITER_EMBEDDED, &ih);
@@ -132,6 +171,71 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 
 	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
 
+	D_PRINT("Bitmaps:");
+	while (rc == 0) {
+		d_iov_set(&key, NULL, 0);
+		d_iov_set(&val, NULL, 0);
+		rc = dbtree_iter_fetch(ih, &key, &val, NULL);
+		if (rc != 0)
+			break;
+
+		off = (uint64_t *)key.iov_buf;
+		if (*off == VEA_BITMAP_CHUNK_HINT_KEY)
+			goto next;
+
+		if (transient) {
+			entry = (struct vea_bitmap_entry *)val.iov_buf;
+			bitmap = &entry->vbe_bitmap;
+		} else {
+			bitmap = (struct vea_free_bitmap *)val.iov_buf;
+
+		}
+		rc = verify_bitmap_entry(bitmap);
+		if (rc != 0) {
+			D_ERROR("dump failed???\n");
+			break;
+		}
+
+		D_PRINT("["DF_U64", %u]", bitmap->vfb_blk_off, bitmap->vfb_blk_cnt);
+		print_cnt++;
+		if (print_cnt % 10 == 0)
+			D_PRINT("\n");
+		else
+			D_PRINT(" ");
+next:
+		rc = dbtree_iter_next(ih);
+	}
+
+	D_PRINT("\n");
+	dbtree_iter_finish(ih);
+
+	return rc = -DER_NONEXIST ? 0 : rc;
+
+
+}
+
+static int
+vea_dump_extent(struct vea_space_info *vsi, bool transient)
+{
+	struct vea_free_extent	*ext;
+	struct vea_extent_entry	*entry;
+	daos_handle_t		 ih, btr_hdl;
+	d_iov_t			 key, val;
+	uint64_t		*off;
+	int			 rc, print_cnt = 0, opc = BTR_PROBE_FIRST;
+
+	if (transient)
+		btr_hdl = vsi->vsi_free_btr;
+	else
+		btr_hdl = vsi->vsi_md_free_btr;
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
+	rc = dbtree_iter_prepare(btr_hdl, BTR_ITER_EMBEDDED, &ih);
+	if (rc)
+		return rc;
+
+	rc = dbtree_iter_probe(ih, opc, DAOS_INTENT_DEFAULT, NULL, NULL);
+
+	D_PRINT("Free extents:");
 	while (rc == 0) {
 		d_iov_set(&key, NULL, 0);
 		d_iov_set(&val, NULL, 0);
@@ -141,14 +245,11 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 
 		off = (uint64_t *)key.iov_buf;
 		if (transient) {
-			struct vea_entry *entry;
-
-			entry = (struct vea_entry *)val.iov_buf;
-			ext = &entry->ve_ext;
+			entry = (struct vea_extent_entry *)val.iov_buf;
+			ext = &entry->vee_ext;
 		} else {
 			ext = (struct vea_free_extent *)val.iov_buf;
 		}
-
 		rc = verify_free_entry(off, ext);
 		if (rc != 0)
 			break;
@@ -167,6 +268,18 @@ vea_dump(struct vea_space_info *vsi, bool transient)
 	dbtree_iter_finish(ih);
 
 	return rc = -DER_NONEXIST ? 0 : rc;
+}
+
+int
+vea_dump(struct vea_space_info *vsi, bool transient)
+{
+	int rc;
+
+	rc = vea_dump_bitmap(vsi, transient);
+	if (rc)
+		return rc;
+
+	return vea_dump_extent(vsi, transient);
 }
 
 /**
@@ -189,27 +302,70 @@ ext_overlapping(struct vea_free_extent *ext1, struct vea_free_extent *ext2)
 	return -DER_INVAL;
 }
 
-/**
- * Verify if an extent is allocated in persistent or transient metadata.
- *
- * \param vsi       [IN]	In-memory compound index
- * \param transient [IN]	Persistent or transient
- * \param off       [IN]	Block offset of extent
- * \param cnt       [IN]	Block count of extent
- *
- * \return			0 - Allocated
- *				1 - Not allocated
- *				Negative value on error
- */
-int
-vea_verify_alloc(struct vea_space_info *vsi, bool transient, uint64_t off,
-		 uint32_t cnt)
+static int
+verify_alloc_bitmap(struct vea_space_info *vsi, bool transient, uint64_t off,
+		    uint32_t cnt)
 {
-	struct vea_free_extent vfe, *ext;
 	daos_handle_t btr_hdl;
 	d_iov_t key, key_out, val;
-	uint64_t *key_off;
 	int rc, opc = BTR_PROBE_LE;
+	struct vea_free_bitmap *vfb;
+
+	if (transient)
+		btr_hdl = vsi->vsi_bitmap_btr;
+	else
+		btr_hdl = vsi->vsi_md_bitmap_btr;
+
+	D_ASSERT(daos_handle_is_valid(btr_hdl));
+	d_iov_set(&key, &off, sizeof(off));
+
+	d_iov_set(&key_out, NULL, 0);
+	d_iov_set(&val, NULL, 0);
+	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key, &key_out,
+			  &val);
+	/* bitmap not allocated */
+	if (rc == -DER_NONEXIST)
+		return 1;
+
+	if (rc)
+		return rc;
+
+	if (transient) {
+		struct vea_bitmap_entry *entry;
+
+		entry = (struct vea_bitmap_entry *)val.iov_buf;
+		vfb = &entry->vbe_bitmap;
+	} else {
+		vfb = (struct vea_free_bitmap *)val.iov_buf;
+	}
+
+	rc = verify_bitmap_entry(vfb);
+	if (rc != 0) {
+		D_ERROR("verify bitmap alloc failed\n");
+		return rc;
+	}
+
+	/* not in the bitmap range */
+	if (off + cnt <= vfb->vfb_blk_off || off >= vfb->vfb_blk_off + vfb->vfb_blk_cnt)
+		return 1;
+
+	if (isset_range((uint8_t *)vfb->vfb_bitmaps,
+			(off - vfb->vfb_blk_off) / vfb->vfb_class,
+			(off - vfb->vfb_blk_off + cnt - 1) / vfb->vfb_class))
+		return 0;
+
+	return 1;
+}
+
+
+static int
+verify_alloc_extent(struct vea_space_info *vsi, bool transient, uint64_t off, uint32_t cnt)
+{
+	struct vea_free_extent	 vfe, *ext;
+	daos_handle_t		 btr_hdl;
+	d_iov_t			 key, key_out, val;
+	uint64_t		*key_off;
+	int			 rc, opc = BTR_PROBE_LE;
 
 	/* Sanity check on input parameters */
 	vfe.vfe_blk_off = off;
@@ -243,10 +399,10 @@ repeat:
 
 	key_off = (uint64_t *)key_out.iov_buf;
 	if (transient) {
-		struct vea_entry *entry;
+		struct vea_extent_entry *entry;
 
-		entry = (struct vea_entry *)val.iov_buf;
-		ext = &entry->ve_ext;
+		entry = (struct vea_extent_entry *)val.iov_buf;
+		ext = &entry->vee_ext;
 	} else {
 		ext = (struct vea_free_extent *)val.iov_buf;
 	}
@@ -267,6 +423,29 @@ repeat:
 	return rc;
 }
 
+/**
+ * Verify if an extent is allocated in persistent or transient metadata.
+ *
+ * \param vsi       [IN]	In-memory compound index
+ * \param transient [IN]	Persistent or transient
+ * \param off       [IN]	Block offset of extent
+ * \param cnt       [IN]	Block count of extent
+ * \param is_bitmap [IN]	Bitmap or extent
+ *
+ * \return			0 - Allocated
+ *				1 - Not allocated
+ *				Negative value on error
+ */
+int
+vea_verify_alloc(struct vea_space_info *vsi, bool transient,
+		 uint64_t off, uint32_t cnt, bool is_bitmap)
+{
+	if (!is_bitmap)
+		return verify_alloc_extent(vsi, transient, off, cnt);
+
+	return verify_alloc_bitmap(vsi, transient, off, cnt);
+}
+
 void
 vea_metrics_free(void *data)
 {
@@ -283,6 +462,8 @@ rsrv_type2str(int rsrv_type)
 		return "large";
 	case STAT_RESRV_SMALL:
 		return "small";
+	case STAT_RESRV_BITMAP:
+		return "bitmap";
 	default:
 		return "unknown";
 	}
@@ -298,6 +479,8 @@ frags_type2str(int frags_type)
 		return "small";
 	case STAT_FRAGS_AGING:
 		return "aging";
+	case STAT_FRAGS_BITMAP:
+		return "bitmap";
 	default:
 		return "unknown";
 	}
@@ -366,6 +549,7 @@ update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool de
 	case STAT_RESRV_HINT:
 	case STAT_RESRV_LARGE:
 	case STAT_RESRV_SMALL:
+	case STAT_RESRV_BITMAP:
 		D_ASSERT(!dec && nr == 1);
 		vsi->vsi_stat[type] += nr;
 		if (metrics && metrics->vm_rsrv[type])
@@ -373,6 +557,7 @@ update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool de
 		break;
 	case STAT_FRAGS_LARGE:
 	case STAT_FRAGS_SMALL:
+	case STAT_FRAGS_BITMAP:
 	case STAT_FRAGS_AGING:
 		D_ASSERT(nr == 1 && type >= STAT_FRAGS_LARGE);
 		if (dec) {

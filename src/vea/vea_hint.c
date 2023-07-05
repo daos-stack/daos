@@ -54,12 +54,14 @@ hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 		 */
 		hint->vhc_off = off;
 		return 0;
-	} else if (hint->vhc_seq > seq_max) {
+	} else if (hint->vhc_seq >= seq_max) {
 		/*
 		 * Subsequent reserve detected, abort hint cancel. It could
 		 * result in un-allocated holes on out of order hint cancels,
 		 * not a big deal.
 		 */
+		if (hint->vhc_seq == seq_max)
+			hint->vhc_off = VEA_HINT_OFF_INVAL;
 		return 0;
 	}
 
