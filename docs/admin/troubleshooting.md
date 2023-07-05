@@ -463,6 +463,15 @@ fabric_iface_port: 31316
 # engine 1
 fabric_iface_port: 31416
 ```
+### daos_agent cache of engine URIs is stale
+
+The `daos_agent` cache may become invalid if `daos_engine` processes restart with different
+configurations or IP addresses, or if the DAOS system is reformatted.
+If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) may return
+`-DER_BAD_TARGET` (-1035) errors.
+
+To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
+force an immediate cache refresh.
 
 ## Diagnostic and Recovery Tools
 
