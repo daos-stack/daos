@@ -303,7 +303,7 @@ class PoolSecurityTestBase(TestWithServers):
         self.log.info(
             "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
             user_type, user_name, perm_type, permission)
-        result = self.update_container_acl(
+        self.update_container_acl(
             secTestBase.acl_entry(user_type, user_name, permission))
 #        if result.stderr_text:
 #            self.fail(
