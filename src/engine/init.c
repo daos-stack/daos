@@ -274,29 +274,19 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 	}
 
 	if (oversubscribe) {
-		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
-			if (ncores > DAOS_TGT0_OFFSET + tgt_nr)
-				dss_tgt_offload_xs_nr = ncores - DAOS_TGT0_OFFSET - tgt_nr;
-			else
-				dss_tgt_offload_xs_nr = 0;
-
-			D_PRINT("Force to start engine with %d targets on %d cores, #nr_xs_helpers "
-				"set as %d.\n",
-				tgt_nr, ncores, dss_tgt_offload_xs_nr);
-		}
+		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores)
+			D_PRINT("Force to start engine with %d targets %d xs_helpers on %d cores("
+				"%d cores reserved for system service).\n",
+				tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
 		goto out;
 	}
 
 	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
-		if (ncores < DAOS_TGT0_OFFSET + tgt_nr) {
-			D_ERROR("cannot start engine with %d targets on %d cores, may try with "
-				"DAOS_TARGET_OVERSUBSCRIBE=1\n",
-				tgt_nr, ncores);
-			return -DER_INVAL;
-		}
-		dss_tgt_offload_xs_nr = ncores - DAOS_TGT0_OFFSET - tgt_nr;
-		D_PRINT("Start engine with %d targets on %d cores, #nr_xs_helpers set as %d.\n",
-			tgt_nr, ncores, dss_tgt_offload_xs_nr);
+		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
+			"%d cores reserved for system service).\n",
+			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		return -DER_INVAL;
 	}
 
 out:
@@ -332,9 +322,8 @@ dss_topo_init()
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
 		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
-				"(set by \"-f\" option),"
-				" should within range [0, %u]",
+			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+				"range [0, %u]\n",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
@@ -343,16 +332,13 @@ dss_topo_init()
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. "
-			"Must be no larger than %d\n",
-			numa_node_nr);
+		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
 		return -DER_INVAL;
 	}
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -385,9 +371,9 @@ dss_topo_init()
 	free(cpuset);
 
 	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
+			"[0, %d]\n",
+			dss_core_offset, dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
 	D_PRINT("Using NUMA core allocation algorithm\n");

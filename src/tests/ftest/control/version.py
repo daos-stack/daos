@@ -6,7 +6,7 @@
 import re
 import json
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from general_utils import run_pcmd, report_errors
 from server_utils_base import DaosServerCommandRunner
 
@@ -26,6 +26,7 @@ class DAOSVersion(TestWithServers):
         self.setup_start_servers = False
         self.setup_start_agents = False
 
+    @skipForTicket("DAOS-13380")
     def test_version(self):
         """Verify version number for dmg, daos, daos_server, and daos_agent against RPM.
 

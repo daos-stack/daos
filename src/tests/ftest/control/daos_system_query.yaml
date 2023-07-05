@@ -7,6 +7,7 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
+      targets: 4
       nr_xs_helpers: 1
       fabric_iface_port: 31416
       log_file: daos_server0.log

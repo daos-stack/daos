@@ -9,6 +9,7 @@ import time
 
 from dfuse_test_base import DfuseTestBase
 from run_utils import run_remote
+from apricot import skipForTicket
 
 
 class DaosBuild(DfuseTestBase):
@@ -49,6 +50,7 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("writethrough")
 
+    @skipForTicket("DAOS-13380")
     def test_dfuse_daos_build_wt_il(self):
         """This test builds DAOS on a dfuse filesystem.
 

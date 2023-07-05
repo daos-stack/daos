@@ -5,7 +5,7 @@
 """
 
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from exception_utils import CommandFailure
 
 
@@ -16,6 +16,7 @@ class DaosControlConfigTest(TestWithServers):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-13380")
     def test_daos_control_config_basic(self):
         """
         JIRA ID: DAOS-1508

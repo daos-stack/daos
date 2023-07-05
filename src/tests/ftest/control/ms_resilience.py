@@ -8,7 +8,7 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from run_utils import stop_processes
 
 
@@ -323,6 +323,7 @@ class ManagementServiceResilience(TestWithServers):
         # Run test cases
         self.verify_retained_quorum(2)
 
+    @skipForTicket("DAOS-13380")
     def test_ms_resilience_3(self):
         """
         JIRA ID: DAOS-3798
@@ -340,6 +341,7 @@ class ManagementServiceResilience(TestWithServers):
         # Run test case
         self.verify_regained_quorum(1)
 
+    @skipForTicket("DAOS-13380")
     def test_ms_resilience_4(self):
         """
         JIRA ID: DAOS-3798

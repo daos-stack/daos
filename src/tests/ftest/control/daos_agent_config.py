@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
+from apricot import TestWithServers, skipForTicket
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
 
@@ -23,6 +23,7 @@ class DaosAgentConfigTest(TestWithServers):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
+    @skipForTicket("DAOS-13380")
     def test_daos_agent_config_basic(self):
         """
         JIRA ID: DAOS-1508
