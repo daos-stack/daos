@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/Jille/raft-grpc-transport v1.2.0
 	github.com/dustin/go-humanize v1.0.0
-	github.com/google/go-cmp v0.5.8
+	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-hclog v1.2.2
 	github.com/hashicorp/raft v1.3.9
@@ -19,16 +19,16 @@ require (
 	go.etcd.io/bbolt v1.3.5
 	golang.org/x/net v0.7.0
 	golang.org/x/sys v0.5.0
-	google.golang.org/genproto v0.0.0-20220725144611-272f38e5d71b
-	google.golang.org/grpc v1.48.0
-	google.golang.org/protobuf v1.28.0
+	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f
+	google.golang.org/grpc v1.53.0
+	google.golang.org/protobuf v1.28.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
 	github.com/armon/go-metrics v0.4.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cespare/xxhash/v2 v2.1.2 // indirect
+	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
