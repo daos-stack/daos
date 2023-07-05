@@ -1356,6 +1356,14 @@ per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
 
+The `targets:` requirement is mandatory, if the number of physical cores are
+not enough it will fail the starting of the daos engine, or configures with
+"DAOS_TARGET_OVERSUBSCRIBE=1" to force starting daos engine with that number
+of targets (possibly hurt performance as multiple XS compete on same core).
+
+The 'nr_xs_helpers:' requirement is not mandatory, if the number of physical
+cores are not enough it will reduce the number of helper XS to start engine.
+
 
 ## Storage Formatting
 
