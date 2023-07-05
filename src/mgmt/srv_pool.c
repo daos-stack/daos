@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,25 @@ fini_ranks:
 	return rc;
 }
 
+static uint32_t
+pool_create_rpc_timeout(size_t scm_size)
+{
+	uint32_t	timeout;
+	size_t		gib;
+
+	gib = scm_size / ((size_t)1024 * 1024 * 1024);
+	if (gib < 32)
+		timeout = 15;
+	else if (gib < 64)
+		timeout = 30;
+	else if (gib < 128)
+		timeout = 60;
+	else
+		timeout = 90;
+
+	return timeout;
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
 			      size_t scm_size, size_t nvme_size)
@@ -69,6 +88,11 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	int				topo;
 	int				rc;
 	int				rc_cleanup;
+	uint32_t			timeout;
+
+	timeout = pool_create_rpc_timeout(scm_size);
+	rc = crt_context_set_timeout(dss_get_module_info()->dmi_ctx, timeout);
+	D_ASSERTF(rc == 0, "pool create RPC timeout could not be override: "DF_RC"\n", DP_RC(rc));
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
