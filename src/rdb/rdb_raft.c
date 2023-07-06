@@ -1445,7 +1445,6 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
 
 	D_DEBUG(DB_TRACE, DF_DB ": snapping " DF_U64 "\n", DP_DB(db), index);
 
-	/* TODO: This can fail */
 	rc = raft_begin_snapshot(db->d_raft, index);
 	D_ASSERTF(rc == 0, "raft_begin_snapshot() returned %d\n", rc);
 	/*

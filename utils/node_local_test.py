@@ -715,7 +715,8 @@ class DaosServer():
         scyaml['socket_dir'] = self.agent_dir
 
         if self._fi:
-            # Set D_ALLOC to fail 0/100 times.  The x value can be modified later.
+            # Set D_ALLOC to fail, but do not enable it.  This can be changed later via
+            # the set_fi() method.
             faults = {'fault_config': [{'id': 0,
                                         'probability_x': 0,
                                         'probability_y': 100}]}
@@ -5695,6 +5696,10 @@ def server_fi(args):
     Start the server, create a container, enable periodic failing of D_ALLOC() and then perform
     I/O.  At some point this could be extended to checking the client also behaves properly but
     for now just check the server logs.
+
+    This is not run in CI yet so needs to run manually.  As it's probabilistic then it can be
+    expected to find more issues based on how often it's run so it is not suitable for PRs
+    but should be run for long periods of time.
     """
     conf = load_conf(args)
 
@@ -5722,6 +5727,7 @@ def server_fi(args):
             server.run_daos_client_cmd_pil4dfs(
                 ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
 
+        # Turn off fault injection again to assist in server shutdown.
         server.set_fi(probability=0)
 
 

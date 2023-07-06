@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -608,7 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_ALLOC_PTR(priv_entry); /* This is segfaulting somehow */
+	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
 		D_GOTO(out, rc);
