@@ -1,6 +1,5 @@
 hosts:
   test_servers: 3
-  replica_count: 3
 timeouts:
   test_pool_query_ranks_basic: 120
   test_pool_query_ranks_error: 120
@@ -20,3 +19,4 @@ server_config:
 pool:
   control_method: dmg
   size: 4GB
+  svcn: 3
