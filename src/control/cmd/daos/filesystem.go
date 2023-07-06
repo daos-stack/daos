@@ -70,14 +70,14 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to copy %s -> %s", cmd.Source, cmd.Dest)
 	}
 
-	if cmd.shouldEmitJSON {
+	if cmd.JSONOutputEnabled() {
 		type CopyStats struct {
 			NumDirs  uint64 `json:"num_dirs"`
 			NumFiles uint64 `json:"num_files"`
 			NumLinks uint64 `json:"num_links"`
 		}
 
-		return cmd.outputJSON(struct {
+		return cmd.OutputJSON(struct {
 			SourcePool string    `json:"src_pool"`
 			SourceCont string    `json:"src_cont"`
 			DestPool   string    `json:"dst_pool"`
@@ -263,7 +263,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	var oclassName [16]C.char
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		jsonAttrs := &struct {
 			ObjClass  string `json:"oclass"`
 			ChunkSize uint64 `json:"chunk_size"`
@@ -271,7 +271,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			ObjClass:  C.GoString(&oclassName[0]),
 			ChunkSize: uint64(attrs.doi_chunk_size),
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
@@ -453,7 +453,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		jsonAttrs := &struct {
 			NumInodes      uint64 `json:"inodes"`
 			NumFileHandles uint64 `json:"open_files"`
@@ -465,7 +465,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 			NumPools:       uint64(ap.dfuse_mem.pool_count),
 			NumContainers:  uint64(ap.dfuse_mem.container_count),
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("DFuse descriptor usage.")
