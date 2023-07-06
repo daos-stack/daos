@@ -178,7 +178,7 @@ func (s *Provider) addPCIDevice(topo *hardware.Topology, subsystem string, path 
 
 	pciAddr, err := s.getPCIAddress(path)
 	if err != nil {
-		s.log.Debug(err.Error())
+		s.log.Trace(err.Error())
 		return nil
 	}
 	dev.PCIAddr = *pciAddr
@@ -258,7 +258,7 @@ func (s *Provider) addNetvscDevice(topo *hardware.Topology, path string) error {
 
 	backingDev, err := s.getBackingDevice(path, topo.AllDevices())
 	if err != nil {
-		s.log.Noticef("Skipping NetVSC network adapter %q: not found physical backing device",
+		s.log.Noticef("Skipping NetVSC network adapter %q: physical backing device not found",
 			ifaceName)
 		return nil
 	}
