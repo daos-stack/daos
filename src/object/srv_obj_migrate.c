@@ -2588,19 +2588,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_FOR_MIGRATION;
+	if (tls->mpt_opc == RB_OP_UPGRADE)
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
-		if (!daos_oclass_is_ec(&unpack_arg.oc_attr)) {
-			dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-			enum_flags |= DIOF_TO_SPEC_GROUP;
-		}
-	} else {
-		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
-	}
+
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+	enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {

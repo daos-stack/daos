@@ -619,8 +619,12 @@ daos_eq_create(daos_handle_t *eqh)
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
-	if (eq_ref == 0)
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
 		return -DER_UNINIT;
+	}
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 
 	eq = daos_eq_alloc();
 	if (eq == NULL)

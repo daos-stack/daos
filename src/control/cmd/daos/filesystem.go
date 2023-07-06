@@ -37,6 +37,7 @@ type fsCmd struct {
 	ResetAttr      fsResetAttrCmd      `command:"reset-attr" description:"reset fs attributes"`
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
+	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
 }
 
 type fsCopyCmd struct {
@@ -69,14 +70,14 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to copy %s -> %s", cmd.Source, cmd.Dest)
 	}
 
-	if cmd.shouldEmitJSON {
+	if cmd.JSONOutputEnabled() {
 		type CopyStats struct {
 			NumDirs  uint64 `json:"num_dirs"`
 			NumFiles uint64 `json:"num_files"`
 			NumLinks uint64 `json:"num_links"`
 		}
 
-		return cmd.outputJSON(struct {
+		return cmd.OutputJSON(struct {
 			SourcePool string    `json:"src_pool"`
 			SourceCont string    `json:"src_cont"`
 			DestPool   string    `json:"dst_pool"`
@@ -262,7 +263,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	var oclassName [16]C.char
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		jsonAttrs := &struct {
 			ObjClass  string `json:"oclass"`
 			ChunkSize uint64 `json:"chunk_size"`
@@ -270,7 +271,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 			ObjClass:  C.GoString(&oclassName[0]),
 			ChunkSize: uint64(attrs.doi_chunk_size),
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("Object Class = %s", C.GoString(&oclassName[0]))
@@ -425,6 +426,53 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 	if err := dfsError(C.fs_relink_root_hdlr(ap)); err != nil {
 		return errors.Wrapf(err, "Relink Root failed")
 	}
+
+	return nil
+}
+
+type fsDfuseQueryCmd struct {
+	daosCmd
+
+	Args struct {
+		Path string `positional-arg-name:"path" description:"DFuse path to query" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Args.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	rc := C.dfuse_count_query(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
+	}
+
+	if cmd.JSONOutputEnabled() {
+		jsonAttrs := &struct {
+			NumInodes      uint64 `json:"inodes"`
+			NumFileHandles uint64 `json:"open_files"`
+			NumPools       uint64 `json:"pools"`
+			NumContainers  uint64 `json:"containers"`
+		}{
+			NumInodes:      uint64(ap.dfuse_mem.inode_count),
+			NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+			NumPools:       uint64(ap.dfuse_mem.pool_count),
+			NumContainers:  uint64(ap.dfuse_mem.container_count),
+		}
+		return cmd.OutputJSON(jsonAttrs, nil)
+	}
+
+	cmd.Infof("DFuse descriptor usage.")
+	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
 
 	return nil
 }
