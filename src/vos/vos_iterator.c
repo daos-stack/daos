@@ -364,7 +364,8 @@ static inline int
 iter_verify_state(struct vos_iterator *iter)
 {
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor " DF_RC "\n",
+			DP_RC(-DER_NO_PERM));
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
 		D_DEBUG(DB_TRACE, "The end of iteration\n");

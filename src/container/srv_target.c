@@ -437,8 +437,8 @@ out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished. "DF_RC"\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, DP_RC(rc));
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
