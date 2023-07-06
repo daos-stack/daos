@@ -121,12 +121,11 @@ func (cmd *aclCmd) getACL(ap *C.struct_cmd_args_s) (*control.AccessControlList, 
 }
 
 func (cmd *aclCmd) outputACL(out io.Writer, acl *control.AccessControlList, verbose bool) error {
-	if cmd.jsonOutputEnabled() {
-		cmd.wroteJSON.SetTrue()
-		return outputJSON(out, acl, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(acl, nil)
 	}
 
-	_, err := fmt.Fprintf(out, control.FormatACL(acl, verbose))
+	_, err := fmt.Fprint(out, control.FormatACL(acl, verbose))
 	return err
 }
 
@@ -406,9 +405,8 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	if cmd.jsonOutputEnabled() {
-		cmd.wroteJSON.SetTrue()
-		return outputJSON(os.Stdout, nil, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, nil)
 	}
 
 	var contID string
