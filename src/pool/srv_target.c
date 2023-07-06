@@ -1380,6 +1380,13 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	if (rc != 0)
 		return rc;
 
+	d_rank_t r = CRT_NO_RANK;
+	rc = crt_group_rank(pool->sp_group, &r);
+	D_INFO(DF_UUID": r=%u rc=%d\n", DP_UUID(pool->sp_uuid), r, rc);
+	int i;
+	for (i = 0; i < ranks.rl_nr; i++)
+		D_INFO(DF_UUID": ranks[%d]=%u\n", DP_UUID(pool->sp_uuid), i, ranks.rl_ranks[i]);
+
 	/* Let secondary rank == primary rank. */
 	rc = crt_group_secondary_modify(pool->sp_group, &ranks, &ranks,
 					CRT_GROUP_MOD_OP_REPLACE,
