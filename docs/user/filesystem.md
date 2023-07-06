@@ -713,7 +713,7 @@ Paths can be requested for eviction from dfuse using the `daos filesystem evict`
 not change any data that is stored in DAOS in any way but rather releases local resources.  This
 command will return the inode number of the path as well as key dfuse metrics.
 
-DFuse metrics can be queried with the `daos filesystem query` command which takes an optionan
+DFuse metrics can be queried with the `daos filesystem query` command which takes an optional
 `--inode` parameter.  This will return information on the number of inodes held in memory, the
 number of open files as well as the number of pools and containers that DFuse is connected to.  If
 the `--inode` option is given then this command will also report if the inode is in memory or not.

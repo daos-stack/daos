@@ -1474,7 +1474,7 @@ class DFuse():
             while found:
                 rc = self.check_usage(inode)
                 print(rc)
-                found = rc['found']
+                found = rc['resident']
                 if not found:
                     time.sleep(1)
                     sleeps += 1

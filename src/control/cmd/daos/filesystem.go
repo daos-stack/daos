@@ -480,7 +480,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 				NumFileHandles uint64 `json:"open_files"`
 				NumPools       uint64 `json:"pools"`
 				NumContainers  uint64 `json:"containers"`
-				Found          bool   `json:"found"`
+				Found          bool   `json:"resident"`
 			}{
 				NumInodes:      uint64(ap.dfuse_mem.inode_count),
 				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
@@ -499,9 +499,9 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
 	if cmd.Ino != 0 {
 		if ap.dfuse_mem.found {
-			cmd.Infof(" Inode %#lx known", cmd.Ino)
+			cmd.Infof(" Inode %#lx resident", cmd.Ino)
 		} else {
-			cmd.Infof(" Inode %#lx not known", cmd.Ino)
+			cmd.Infof(" Inode %#lx not resident", cmd.Ino)
 		}
 	}
 
