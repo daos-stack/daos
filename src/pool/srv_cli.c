@@ -248,14 +248,9 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 			break;
 		}
 
-		/*
-		 * Cap the RPC timeout according to the deadline. It's unlikely
-		 * that we have passed the deadline here; comparing t with
-		 * deadline is just to make the subtraction below obviously
-		 * underflow-free.
-		 */
+		/* Cap the RPC timeout according to the deadline. */
 		t = daos_getmtime_coarse();
-		if (t > deadline) {
+		if (t >= deadline) {
 			cbs->pscc_fini(uuid, rpc, arg);
 			crt_req_decref(rpc);
 			goto time_out;
@@ -264,7 +259,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		D_ASSERTF(rc == 0, DF_PRE": get RPC timeout: "DF_RC"\n", DP_PRE(uuid, cbs),
 			  DP_RC(rc));
 		if (t + rpc_timeout * 1000 > deadline) {
-			/* We know that deadline >= t here. See above. */
+			/* We know that t < deadline here. See above. */
 			rpc_timeout = (deadline - t) / 1000;
 			/*
 			 * If the RPC timeout becomes less than 1 s, just time
@@ -301,8 +296,17 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		crt_req_decref(rpc);
 
 		t = daos_getmtime_coarse();
-		if (t + backoff >= deadline) {
+		if (t >= deadline || t + backoff >= deadline) {
 time_out:
+			/*
+			 * If we were to return before reaching the deadline,
+			 * the current control plane code would have just
+			 * enough time to call us again but would soon give up,
+			 * leaving us behind until the second deadline. Hence,
+			 * sleep to the deadline.
+			 */
+			if (t < deadline)
+				dss_sleep(deadline - t);
 			rc = -DER_TIMEDOUT;
 			D_ERROR(DF_PRE": "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
 			break;
