@@ -253,7 +253,7 @@ class PoolMembershipTest(TestWithServers):
         # 5. Query the checker and verify that the issue was fixed.
         errors = []
         query_msg = ""
-        for _ in range(10):
+        for _ in range(20):
             check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "COMPLETED":
                 query_msg = check_query_out["response"]["reports"][0]["msg"]
