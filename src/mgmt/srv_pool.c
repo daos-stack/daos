@@ -296,8 +296,8 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
 				     destroy, force_destroy, machine, count);
 	if (rc != 0) {
-		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to evict pool handles" DF_UUID " rc: " DF_RC "\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out;
 	}
 

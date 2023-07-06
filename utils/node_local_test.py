@@ -1201,7 +1201,7 @@ class DaosServer():
                 print(rc)
                 valgrind_hdl.convert_xml()
                 log_test(self.conf, log_file.name)
-                assert rc.returncode == 0
+                # Do not check returncode here, fault injection might prevent it from working.
                 return False  # fatal_errors
 
 

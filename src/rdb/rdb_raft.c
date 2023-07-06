@@ -1151,8 +1151,8 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
 				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
-				DP_DB(db), index, rc);
+			D_ERROR(DF_DB ": failed to apply entry " DF_U64 ": " DF_RC "\n", DP_DB(db),
+				index, DP_RC(rc));
 			goto err;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
@@ -1976,8 +1976,8 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0) {
 		if (rc != -DER_NOTLEADER)
-			D_ERROR(DF_DB": failed to append entry: %d\n",
-				DP_DB(db), rc);
+			D_ERROR(DF_DB ": failed to append entry: " DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
 		goto out_result;
 	}
 

@@ -96,7 +96,7 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 
 	rc = d_fault_attr_set(in_args_fi_attr->fa_fault_id, fa_in);
 	if (rc != 0)
-		D_ERROR("d_fault_attr_set() failed. rc: %d\n", rc);
+		D_ERROR("d_fault_attr_set() failed. rc: " DF_RC "\n", DP_RC(rc));
 
 	out_args_fi_attr->fa_ret = rc;
 	rc = crt_reply_send(rpc_req);

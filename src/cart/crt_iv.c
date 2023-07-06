@@ -3424,11 +3424,11 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	* All other checks are performed inside of crt_iv_update_interna.
 	*/
 	if (iv_value == NULL) {
-		D_ERROR("iv_value is NULL\n");
-
 		rc = -DER_INVAL;
-		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
-			       rc, cb_arg);
+
+		D_ERROR("iv_value is NULL " DF_RC "\n", DP_RC(rc));
+
+		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value, rc, cb_arg);
 
 		D_GOTO(exit, rc);
 	}
