@@ -450,7 +450,7 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
-	D_ASSERT(priv == NULL || priv > (void *)4096);
+	D_ASSERT(priv == NULL || priv > (void *)4096); /* DAOS-13906 */
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
 	if (rc != 0)
