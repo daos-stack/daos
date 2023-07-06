@@ -5,6 +5,8 @@
 """
 import time
 
+from ClusterShell.NodeSet import NodeSet
+
 from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
@@ -18,12 +20,48 @@ class DmgPoolQueryRanks(ControlTestBase):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a ManagementServiceFailover object."""
+        super().__init__(*args, **kwargs)
+
+        self.setup_start_servers = False
+        self.start_servers_once = False
+
     def setUp(self):
         """Set up for dmg pool query."""
         super().setUp()
 
-        # Init the pool
+        self.log.info("Start servers")
+        replica_count = self.params.get("replica_count", "/run/hosts/*", 1)
+        self.assertEqual(1, replica_count % 2, "non-odd number of access point replicas")
+        self.launch_servers(replica_count)
+
+        self.log.info("Create pool")
         self.add_pool(connect=False)
+
+    def launch_servers(self, replica_count):
+        """Setup and start the daos_servers.
+
+        Args:
+            replica_count (int): Number of replicas to launch.
+
+        """
+        hostlist = self.random.sample(list(self.hostlist_servers), replica_count)
+        replicas = NodeSet.fromlist(hostlist)
+        server_groups = {
+            self.server_group:
+                {
+                    "hosts": self.hostlist_servers,
+                    "access_points": replicas,
+                    "svr_config_file": None,
+                    "dmg_config_file": None,
+                    "svr_config_temp": None,
+                    "dmg_config_temp": None
+                }
+        }
+        self.log.debug(
+            "Starting server with access_points: %s", ", ".join(self.hostlist_servers))
+        self.start_servers(server_groups)
 
     def test_pool_query_ranks_basic(self):
         """Test the state of ranks with dmg pool query.
