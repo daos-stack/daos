@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2014-2023, Intel Corporation */
+/* Copyright 2014-2021, Intel Corporation */
 
 /*
  * out.h -- definitions for "out" module
@@ -99,6 +99,7 @@
 		ASSERTne_rt(lhs, rhs);\
 	} while (0)
 
-#define ERR(fmt, ...) D_ERROR(fmt "\n", ##__VA_ARGS__)
+#define ERR(fmt, ...)\
+	D_ERROR(fmt "\n", ## __VA_ARGS__)
 
 #endif /* __DAOS_COMMON_OUT_H */

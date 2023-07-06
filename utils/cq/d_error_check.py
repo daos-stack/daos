@@ -141,20 +141,33 @@ class AllChecks():
         self.corrected = False
 
     def run_all_checks(self):
-        """Run everything"""
-        for line in self._fo:
-            if not any(map(line.startswith, PREFIXES_ALL)):
-                line.write(self._output)
-                continue
+        """Run everything
 
+        Iterate over the input file line by line checking for logging use and run checks on lines
+        where the macros are used.  Ignore lines within macro definitions.
+        """
+        prev_macro = False
+        for line in self._fo:
             if line.endswith('\\'):
+                prev_macro = True
                 # line.note('Part of macro, not checking')
                 line.write(self._output)
                 continue
 
+            if prev_macro:
+                prev_macro = False
+                line.write(self._output)
+                continue
+
+            if not any(map(line.startswith, PREFIXES_ALL)):
+                line.write(self._output)
+                continue
+
             line.expand()
+
             self.check_quote(line)
             self.check_return(line)
+
             line.write(self._output)
             if line.modified:
                 self.modified = True
