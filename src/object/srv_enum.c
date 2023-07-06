@@ -788,6 +788,6 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	rc = iter_cb(param, type, recursive, anchors, enum_pack_cb, NULL,
 		     arg, dth);
 
-	D_DEBUG(DB_IO, "enum type %d rc "DF_RC"\n", type, DP_RC(rc));
+	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
 	return rc;
 }

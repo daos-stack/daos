@@ -4210,6 +4210,13 @@ cont_filter_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_t 
 	uint32_t	combine_op = filt->pcf_combine_func;
 	int		rc = 0;
 
+	/* defensive, partially redundant with pool_cont_filter_is_valid() from top-level handler */
+	if ((filt->pcf_nparts > 0) && (filt->pcf_parts == NULL)) {
+		D_ERROR(DF_CONT": filter has %u parts but pcf_parts is NULL\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), filt->pcf_nparts);
+		return -DER_INVAL;
+	}
+
 	/* logical OR combining: start with false result, transition to true on first match */
 	if ((filt->pcf_parts != NULL) && (combine_op == PCF_COMBINE_LOGICAL_OR))
 		whole_match = false;

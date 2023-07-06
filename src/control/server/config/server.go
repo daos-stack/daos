@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -362,6 +363,10 @@ func (cfg *Server) Load() error {
 		return errors.WithMessagef(err, "parse of %q failed; config contains invalid "+
 			"parameters and may be out of date, see server config examples",
 			cfg.Path)
+	}
+
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return errors.Errorf("invalid system name: %q", cfg.SystemName)
 	}
 
 	// Update server config based on legacy parameters.
