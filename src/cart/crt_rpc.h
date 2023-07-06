@@ -67,7 +67,7 @@ struct crt_common_hdr {
 	d_rank_t	cch_src_rank;
 	/* destination tag */
 	uint16_t	cch_dst_tag;
-	/* source timeout */
+	/* source timeout, to be replaced by deadline eventually */
 	uint16_t	cch_src_timeout;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
