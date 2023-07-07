@@ -38,9 +38,13 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
+		.nad_type	= CRT_PROV_OFI_TCP,
+		.nad_str	= "ofi+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
+	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
-		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {

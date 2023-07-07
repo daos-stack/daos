@@ -338,8 +338,8 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		}
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(pqr, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(pqr, nil)
 	}
 
 	var bld strings.Builder
@@ -410,8 +410,8 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		}
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(infoResp, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(infoResp, nil)
 	}
 
 	var bld strings.Builder
@@ -443,11 +443,11 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 			"failed to list attributes for pool %s", cmd.poolUUID)
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		if cmd.Verbose {
-			return cmd.outputJSON(attrs.asMap(), nil)
+			return cmd.OutputJSON(attrs.asMap(), nil)
 		}
-		return cmd.outputJSON(attrs.asList(), nil)
+		return cmd.OutputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -484,12 +484,12 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to get attributes for pool %s", cmd.PoolID())
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		// Maintain compatibility with older behavior.
 		if len(cmd.Args.Attrs.ParsedProps) == 1 && len(attrs) == 1 {
-			return cmd.outputJSON(attrs[0], nil)
+			return cmd.OutputJSON(attrs[0], nil)
 		}
-		return cmd.outputJSON(attrs, nil)
+		return cmd.OutputJSON(attrs, nil)
 	}
 
 	var bld strings.Builder
