@@ -1,4 +1,3 @@
-rank: 37
 modules: foo,bar,baz
 targets: 12
 nr_xs_helpers: 1

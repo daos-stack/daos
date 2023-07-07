@@ -27,6 +27,7 @@ apt-get install \
     kmod \
     libaio-dev \
     libboost-dev \
+    libcapstone-dev \
     libcmocka-dev \
     libcunit1-dev \
     libfuse3-dev \
@@ -36,6 +37,7 @@ apt-get install \
     liblz4-dev \
     libnuma-dev \
     libopenmpi-dev \
+    libprotobuf-c-dev \
     librdmacm-dev \
     libssl-dev \
     libtool-bin \

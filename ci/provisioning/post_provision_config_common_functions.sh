@@ -188,13 +188,21 @@ set_local_repo() {
     local version
     version="$(lsb_release -sr)"
     version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] && [ -z "$(rpm_test_version)" ] &&
-       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-0-9A-Za-z]+-testing ]]; then
+    if [ "$repo_server" = "artifactory" ] &&
+       { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
+       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
         # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
         # used for daos packages
         dnf -y config-manager \
             --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
     fi
+
+    if [ "$repo_server" = "artifactory" ]; then
+        # Disable module filtering for our deps repo
+	deps_repo="daos-stack-deps-${DISTRO_GENERIC}-$version-x86_64-stable-local-artifactory"
+	dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
+    fi
+
     dnf repolist
 }
 
@@ -256,6 +264,27 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
+    lsb_release -a
+
+    # start with everything fully up-to-date
+    # all subsequent package installs beyond this will install the newest packages
+    # but we need some hacks for images with MOFED already installed
+    cmd=(retry_dnf 600)
+    if grep MOFED_VERSION /etc/do-release; then
+        cmd+=(--setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE")
+    else
+        cmd+=(upgrade)
+    fi
+    if ! "${cmd[@]}"; then
+        dump_repos
+        return 1
+    fi
+
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+        # Remove OPA and install MOFED
+        install_mofed
+    fi
+
     if [ -n "$INST_REPOS" ]; then
         local repo
         for repo in $INST_REPOS; do
@@ -300,16 +329,35 @@ post_provision_config_nodes() {
         fi
     fi
 
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+        # Need this module file
+        version="$(rpm -q --qf "%{version}" openmpi)"
+        mkdir -p /etc/modulefiles/mpi/
+        cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+#%Module 1.0
+#
+#  OpenMPI module for use with 'environment-modules' package:
+#
+conflict		mpi
+prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
+prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
+prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
+prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
+setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
+setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
+setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
+setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
+setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
+setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
+setenv			MPI_COMPILER	openmpi-x86_64
+setenv			MPI_SUFFIX	_openmpi
+setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
+EOF
+
+        printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
+    fi 
+
     distro_custom
-
-    lsb_release -a
-
-    # now make sure everything is fully up-to-date
-    # shellcheck disable=SC2154
-    if ! retry_dnf 600 --setopt=best=0 upgrade --exclude "$EXCLUDE_UPGRADE"; then
-        dump_repos
-        return 1
-    fi
 
     lsb_release -a
 

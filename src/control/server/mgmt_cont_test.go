@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -18,13 +17,14 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 const (
-	mockUUID = "00000000-0000-0000-0000-000000000000"
+	mockUUID = "11111111-1111-1111-1111-111111111111"
 )
 
 func makeBadBytes(count int) (badBytes []byte) {
@@ -39,10 +39,10 @@ func testPoolService() *system.PoolService {
 	return &system.PoolService{
 		PoolLabel: "test-pool",
 		PoolUUID:  uuid.MustParse(mockUUID),
-		Replicas:  []system.Rank{0, 1, 2},
+		Replicas:  []ranklist.Rank{0, 1, 2},
 		State:     system.PoolServiceStateReady,
 		Storage: &system.PoolServiceStorage{
-			CreationRankStr: system.MustCreateRankSet("0-2").String(),
+			CreationRankStr: ranklist.MustCreateRankSet("0-2").String(),
 		},
 	}
 }
@@ -84,7 +84,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(context.Background(), log))
+					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validListContReq(),
 			expErr: FaultHarnessNotStarted,
@@ -137,7 +137,7 @@ func TestMgmt_ListContainers(t *testing.T) {
 				tc.setupDrpc(t, svc)
 			}
 
-			resp, err := svc.ListContainers(context.TODO(), tc.req)
+			resp, err := svc.ListContainers(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {
@@ -183,7 +183,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				db := raft.MockDatabase(t, log)
 				ms := system.MockMembership(t, log, db, mockTCPResolver)
 				return newMgmtSvc(NewEngineHarness(log), ms, db, nil,
-					events.NewPubSub(context.Background(), log))
+					events.NewPubSub(test.Context(t), log))
 			},
 			req:    validContSetOwnerReq(),
 			expErr: FaultHarnessNotStarted,
@@ -227,7 +227,7 @@ func TestMgmt_ContSetOwner(t *testing.T) {
 				tc.setupDrpc(t, svc)
 			}
 
-			resp, err := svc.ContSetOwner(context.TODO(), tc.req)
+			resp, err := svc.ContSetOwner(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp, test.DefaultCmpOpts()...); diff != "" {

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -51,7 +51,7 @@ struct vs_perf_cntr {
 };
 
 enum {
-	VS_OP_RESERV	= 0,
+	VS_OP_RESERVE	= 0,
 	VS_OP_PUBLISH,
 	VS_OP_FREE,
 	VS_OP_MERGE,
@@ -319,7 +319,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 			fprintf(stderr, "failed to reserve %u blks for io\n", blk_cnt);
 			goto error;
 		}
-		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+		vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 		/*
 		 * Reserved list will be freed on publish, duplicate it to track the
@@ -468,7 +468,7 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 		fprintf(stderr, "failed to reserve %u blks for aggregation\n", merge_blks);
 		return rc;
 	}
-	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERV], cur_ts);
+	vs_counter_inc(&vs_pool->vsp_cntr[VS_OP_RESERVE], cur_ts);
 
 	rsrvd = d_list_entry(r_list.prev, struct vea_resrvd_ext, vre_link);
 	D_ASSERT(rsrvd->vre_blk_cnt == merge_blks);
@@ -584,7 +584,7 @@ vs_stop_run(struct vea_stress_pool *vs_pool, int rc)
 		last_print_ts ? now - last_print_ts : 0);
 	last_print_ts = now;
 
-	ret = pmemobj_ctl_get(vs_pool->vsp_umm.umm_pool, "stats.heap.curr_allocated", &heap_bytes);
+	ret = umempobj_get_heapusage(vs_pool->vsp_umm.umm_pool, &heap_bytes);
 	if (ret) {
 		fprintf(stderr, "failed to get heap usage\n");
 		return stop;
@@ -724,7 +724,7 @@ vs_teardown_pool(struct vea_stress_pool *vs_pool)
 		vea_unload(vs_pool->vsp_vsi);
 
 	if (vs_pool->vsp_umm.umm_pool != NULL)
-		pmemobj_close(vs_pool->vsp_umm.umm_pool);
+		umempobj_close(vs_pool->vsp_umm.umm_pool);
 
 	umem_fini_txd(&vs_pool->vsp_txd);
 	D_FREE(vs_pool);
@@ -735,13 +735,12 @@ vs_setup_pool(void)
 {
 	struct vea_stress_pool	*vs_pool;
 	struct umem_attr	 uma = { 0 };
-	PMEMoid			 root;
 	void			*root_addr;
 	struct vea_unmap_context unmap_ctxt = { 0 };
 	struct vea_attr		 attr;
 	struct vea_stat		 stat;
 	uint64_t		 load_time;
-	int			 rc, enable_stats = 1;
+	int			 rc;
 
 	D_ALLOC(vs_pool, vs_arg_size());
 	if (vs_pool == NULL) {
@@ -759,29 +758,25 @@ vs_setup_pool(void)
 
 	uma.uma_id = UMEM_CLASS_PMEM;
 	if (loading_test) {
-		uma.uma_pool = pmemobj_open(pool_file, "vea_stress");
+		uma.uma_pool = umempobj_open(pool_file, "vea_stress",
+					     UMEMPOBJ_ENABLE_STATS, NULL);
 		if (uma.uma_pool == NULL) {
-			fprintf(stderr, "failed to open pmemobj pool\n");
+			fprintf(stderr, "failed to open pobj pool\n");
 			goto error;
 		}
 	} else {
 		unlink(pool_file);
-		uma.uma_pool = pmemobj_create(pool_file, "vea_stress", heap_size, 0666);
+		uma.uma_pool = umempobj_create(pool_file, "vea_stress",
+				    UMEMPOBJ_ENABLE_STATS, heap_size, 0666, NULL);
 		if (uma.uma_pool == NULL) {
-			fprintf(stderr, "failed to create pmemobj pool\n");
+			fprintf(stderr, "failed to create pobj pool\n");
 			goto error;
 		}
 	}
 
-	rc = pmemobj_ctl_set(uma.uma_pool, "stats.enabled", &enable_stats);
-	if (rc) {
-		fprintf(stderr, "failed to enable pmemobj stats\n");
-		goto error;
-	}
-
-	root = pmemobj_root(uma.uma_pool, vs_root_size());
-	if (OID_IS_NULL(root)) {
-		fprintf(stderr, "failed to get pmemobj pool root\n");
+	root_addr = umempobj_get_rootptr(uma.uma_pool, vs_root_size());
+	if (root_addr == NULL) {
+		fprintf(stderr, "failed to get pobj pool root\n");
 		goto error;
 	}
 
@@ -792,7 +787,6 @@ vs_setup_pool(void)
 	}
 	uma.uma_pool = NULL;
 
-	root_addr = pmemobj_direct(root);
 	vs_pool->vsp_vsd = root_addr;
 	root_addr += sizeof(struct vea_space_df);
 
@@ -836,7 +830,7 @@ vs_setup_pool(void)
 	return vs_pool;
 error:
 	if (uma.uma_pool != NULL)
-		pmemobj_close(uma.uma_pool);
+		umempobj_close(uma.uma_pool);
 	vs_teardown_pool(vs_pool);
 	return NULL;
 }
@@ -863,6 +857,14 @@ vs_init(void)
 				   &dbtree_iv_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
 		fprintf(stderr, "failed to register DBTREE_CLASS_IV\n");
+		vs_fini();
+		return rc;
+	}
+
+	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
+				   &dbtree_ifv_ops);
+	if (rc != 0 && rc != -DER_EXIST) {
+		fprintf(stderr, "failed to register DBTREE_CLASS_IFV\n");
 		vs_fini();
 		return rc;
 	}
@@ -913,8 +915,8 @@ static inline char *
 vs_op2str(unsigned int op)
 {
 	switch (op) {
-	case VS_OP_RESERV:
-		return "reserv";
+	case VS_OP_RESERVE:
+		return "reserve";
 	case VS_OP_PUBLISH:
 		return "tx_publish";
 	case VS_OP_FREE:

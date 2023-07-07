@@ -5,7 +5,7 @@ persistent=no
 py-version=3.6
 
 [BASIC]
-good-names=rc,ret,fd,kv
+good-names=rc,ret,fd,kv,wf,rf
 
 [MESSAGES CONTROL]
 disable=locally-disabled,locally-enabled,star-args,global-statement,bad-option-value,
@@ -27,3 +27,7 @@ notes=FIXME,XXX,TODO
 [REPORTS]
 reports=no
 score=no
+
+[DESIGN]
+# Controls the too-many-ancestors message.  Default is 7, much of our ftest code has 8 or 9
+max-parents=9

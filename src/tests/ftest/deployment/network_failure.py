@@ -1,15 +1,12 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import time
-<<<<<<< HEAD
 import threading
-=======
 from collections import defaultdict
->>>>>>> master
 from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
@@ -68,13 +65,11 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.test_file.update(os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
 
@@ -127,7 +122,8 @@ class NetworkFailureTest(IorTestBase):
 
         return ip_to_host
 
-    def create_host_to_ranks(self, ip_to_host, system_query_members):
+    @staticmethod
+    def create_host_to_ranks(ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
         Args:
@@ -206,8 +202,7 @@ class NetworkFailureTest(IorTestBase):
         errors = []
         self.network_down_host = NodeSet(self.hostlist_servers[0])
         self.log.info("network_down_host = %s", self.network_down_host)
-        self.interface = self.params.get(
-            "fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
         self.log.info("interface to update = %s", self.interface)
 
         # For non-IO testing, bring the network interface down now.
@@ -273,8 +268,8 @@ class NetworkFailureTest(IorTestBase):
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         for disabled_rank in disabled_ranks:
             self.pool.reintegrate(rank=disabled_rank)
-            self.pool.wait_for_rebuild(to_start=True, interval=5)
-            self.pool.wait_for_rebuild(to_start=False, interval=10)
+            self.pool.wait_for_rebuild_to_start(interval=5)
+            self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 8. Run IOR again. It should work this time.
         job_num = 2
@@ -299,30 +294,30 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("############################")
 
     def test_network_failure_wo_rf(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure without redundancy factor and SX object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_wo_rf
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_wo_rf
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_wo_rf/*",
             container_namespace="/run/container_wo_rf/*")
 
     def test_network_failure_with_rp(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure with redundancy factor and RP_2G1 object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_rp
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_rp
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_rp/*",
@@ -345,22 +340,22 @@ class NetworkFailureTest(IorTestBase):
             with_io=True)
 
     def test_network_failure_with_ec(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure with redundancy factor and EC_2P1G1 object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_ec
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_ec
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
     def test_network_failure_isolation(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Verify that network failure in a node where pool isn't created doesn't affect the
         connection.
@@ -382,7 +377,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_isolation
+        :avocado: tags=NetworkFailureTest,test_network_failure_isolation
         """
         # 1. Determine the four ranks to create the pool and an interface to take down.
         # We'll create a pool on two ranks in hostlist_servers[0] and two ranks in
@@ -421,7 +416,7 @@ class NetworkFailureTest(IorTestBase):
 
         # 4. Take down the interface where the pool isn't created.
         errors = []
-        self.interface = self.params.get("fabric_iface", "/run/server_config/servers/0/*")
+        self.interface = self.server_managers[0].get_config_value("fabric_iface")
 
         # wolf
         if self.test_env == "ci":
@@ -433,12 +428,6 @@ class NetworkFailureTest(IorTestBase):
             command = "sudo ip link set {} {}".format(self.interface, "down")
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
-
-        # Some ranks may be excluded after bringing down the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            self.fail(
-                "One or more servers crashed after bringing down the network interface!")
 
         # 5. Run IOR with oclass SX.
         ior_results = {}
@@ -452,7 +441,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 
@@ -479,11 +468,33 @@ class NetworkFailureTest(IorTestBase):
             self.log.debug("## Call %s on %s", command, self.network_down_host)
             time.sleep(20)
 
-        # Some ranks may be excluded after bringing up the network interface, so wait
-        # until they are up (joined).
-        if not self.wait_for_ranks_to_join():
-            msg = "One or more servers crashed after bringing up the network interface!"
-            errors.append(msg)
+        # Some ranks may be excluded after bringing up the network interface. Check if
+        # all ranks are joined. If not, restart the servers and check again.
+        dmg_command = self.get_dmg_command()
+
+        # First, wait up to 60 sec for server(s) to crash. Whether a rank is marked as
+        # dead is determined by SWIM, so we need to give some time for the protocol to
+        # make the decision.
+        count = 0
+        server_crashed = False
+        while count < 60:
+            if not check_system_query_status(dmg_command.system_query()):
+                server_crashed = True
+                break
+            count += 1
+            time.sleep(1)
+
+        # If server crash was detected, restart.
+        if server_crashed:
+            self.log.info("Not all ranks are joined. Restart the servers.")
+            dmg_command.system_stop()
+            dmg_command.system_start()
+
+            # Now all ranks should be joined.
+            if not self.wait_for_ranks_to_join():
+                msg = ("One or more servers crashed after bringing up the network "
+                       "interface!")
+                errors.append(msg)
 
         self.log.info("########## Errors ##########")
         report_errors(test=self, errors=errors)

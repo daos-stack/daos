@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -225,8 +225,7 @@ int  pool_buf_extract(struct pool_map *map, struct pool_buf **buf_pp);
 int  pool_buf_attach(struct pool_buf *buf, struct pool_component *comps,
 		     unsigned int comp_nr);
 int gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_version, int ndomains,
-		 int nnodes, int ntargets, const uint32_t *domains, const d_rank_list_t *ranks,
-		 uint32_t dss_tgt_nr);
+		 int nnodes, int ntargets, const uint32_t *domains, uint32_t dss_tgt_nr);
 
 int pool_map_comp_cnt(struct pool_map *map);
 
@@ -360,6 +359,12 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 	return tgt->ta_comp.co_status & allow_status;
 }
 
+static inline bool
+pool_target_is_up_or_drain(struct pool_target *tgt)
+{
+	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
+}
+
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
 pool_target_down(struct pool_target *tgt)
@@ -383,6 +388,13 @@ pool_comp_name(struct pool_component *comp)
 {
 	return pool_comp_type2str(comp->co_type);
 }
+
+bool
+is_pool_map_adding(struct pool_map *map);
+void
+pool_map_init_in_fseq(struct pool_map *map);
+int
+pool_map_failure_domain_level(struct pool_map *map, uint32_t level);
 
 #define pool_target_name(target)	pool_comp_name(&(target)->ta_comp)
 #define pool_domain_name(domain)	pool_comp_name(&(domain)->do_comp)

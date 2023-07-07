@@ -7,14 +7,18 @@ timeout: 1200
 server_config:
   name: daos_server
   port: 10001
-  servers:
-    targets: 4
-    nr_xs_helpers: 0
-    scm_size: 4
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+          scm_size: 4
 pool:
-  name: daos_server
   scm_size: 138374182
-  control_method: dmg
 container:
   control_method: daos
 container_acl:
@@ -41,21 +45,21 @@ container_acl:
   permissions: !mux
     no_permission:
       perm_expect:
-         - ""     #container read/write permission
-         - deny   #read expect
-         - deny   #write expect
+        - ""     # container read/write permission
+        - deny   # read expect
+        - deny   # write expect
     read_only:
       perm_expect:
-         - r
-         - pass
-         - deny
+        - r
+        - pass
+        - deny
     write_only:
       perm_expect:
-         - w
-         - deny
-         - pass
+        - w
+        - deny
+        - pass
     read_write:
       perm_expect:
-         - rw
-         - pass
-         - pass
+        - rw
+        - pass
+        - pass

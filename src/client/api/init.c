@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -23,6 +23,9 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#if BUILD_PIPELINE
+#include <daos/pipeline.h>
+#endif
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -90,14 +93,14 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_list_class, sizeof(daos_obj_list_class_t)},
 	{dc_obj_open, sizeof(daos_obj_open_t)},
 	{dc_obj_close, sizeof(daos_obj_close_t)},
-	{dc_obj_punch_task,		sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_dkeys_task,	sizeof(daos_obj_punch_t)},
-	{dc_obj_punch_akeys_task,	sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_dkeys_task, sizeof(daos_obj_punch_t)},
+	{dc_obj_punch_akeys_task, sizeof(daos_obj_punch_t)},
 	{dc_obj_query, sizeof(daos_obj_query_t)},
 	{dc_obj_query_key, sizeof(daos_obj_query_key_t)},
 	{dc_obj_sync, sizeof(struct daos_obj_sync_args)},
-	{dc_obj_fetch_task,		sizeof(daos_obj_fetch_t)},
-	{dc_obj_update_task,		sizeof(daos_obj_update_t)},
+	{dc_obj_fetch_task, sizeof(daos_obj_fetch_t)},
+	{dc_obj_update_task, sizeof(daos_obj_update_t)},
 	{dc_obj_list_dkey, sizeof(daos_obj_list_dkey_t)},
 	{dc_obj_list_akey, sizeof(daos_obj_list_akey_t)},
 	{dc_obj_list_rec, sizeof(daos_obj_list_recx_t)},
@@ -123,6 +126,16 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
 	{dc_kv_list, sizeof(daos_kv_list_t)},
+
+	{dc_pool_filter_cont, sizeof(daos_pool_filter_cont_t)},
+	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
+	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
+	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
+
+#if BUILD_PIPELINE
+	/** Pipeline */
+	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
+#endif
 };
 
 /**
@@ -197,10 +210,17 @@ daos_init(void)
 		D_GOTO(out_job, rc);
 	}
 
+	/**
+	 * daos_eq_lib_init() might change net cfg, check it.
+	 */
+	rc = dc_mgmt_net_cfg_check(NULL);
+	if (rc != 0)
+		D_GOTO(out_eq, rc);
+
 	/** set up placement */
 	rc = pl_init();
 	if (rc != 0)
-		goto out_eq;
+		D_GOTO(out_eq, rc);
 
 	/** set up management interface */
 	rc = dc_mgmt_init();
@@ -222,9 +242,19 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+#if BUILD_PIPELINE
+	/** set up pipeline */
+	rc = dc_pipeline_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+#endif
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
+#if BUILD_PIPELINE
+out_obj:
+	dc_obj_fini();
+#endif
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -279,6 +309,9 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+#if BUILD_PIPELINE
+	dc_pipeline_fini();
+#endif
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,6 +22,7 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	daos_epoch_t		dre_epoch;
 	daos_unit_oid_t		dre_oid;
+	uint32_t		dre_inline_mbs:1;
 	uint64_t		dre_dkey_hash;
 	struct dtx_entry	dre_dte;
 };
@@ -46,8 +47,11 @@ dtx_dre_release(struct dtx_resync_head *drh, struct dtx_resync_entry *dre)
 {
 	drh->drh_count--;
 	d_list_del(&dre->dre_link);
-	if (--(dre->dre_dte.dte_refs) == 0)
+	if (--(dre->dre_dte.dte_refs) == 0) {
+		if (dre->dre_inline_mbs == 0)
+			D_FREE(dre->dre_dte.dte_mbs);
 		D_FREE(dre);
+	}
 }
 
 static int
@@ -111,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, 0);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -121,6 +125,8 @@ next:
 
 			dre = d_list_entry(dtes[i], struct dtx_resync_entry,
 					   dre_dte);
+			if (dre->dre_inline_mbs == 0)
+				D_FREE(dre->dre_dte.dte_mbs);
 			D_FREE(dre);
 		}
 	} else {
@@ -330,9 +336,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * related RPC to the new leader, but such DTX is still not
 		 * committable yet. Here, the resync logic will abort it by
 		 * race during the new leader waiting for other replica(s).
-		 * The dtx_abort() logic will abort the local DTX firstly.
-		 * When the leader get replies from other replicas, it will
-		 * check whether local DTX is still valid or not.
+		 *
+		 * So when the leader get replies from other replicas, it
+		 * needs to check whether local DTX is still valid or not.
 		 *
 		 * If we abort multiple non-ready DTXs together, then there
 		 * is race that one DTX may become committable when we abort
@@ -395,16 +401,34 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
-			dtx_dre_release(drh, dre);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
-				goto out;
+				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
+					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
+					dra->discard_version, DP_RC(err));
+			dtx_dre_release(drh, dre);
 			continue;
+		}
+
+		if (dre->dre_dte.dte_mbs == NULL) {
+			rc = vos_dtx_load_mbs(cont->sc_hdl, &dre->dre_xid, &dre->dre_dte.dte_mbs);
+			if (rc != 0) {
+				if (rc != -DER_NONEXIST)
+					D_WARN("Failed to load mbs, do not know the leader for DTX "
+					       DF_DTI" (ver = %u/%u/%u): rc = %d, skip it.\n",
+					       DP_DTI(&dre->dre_xid), dra->resync_version,
+					       dra->discard_version, dre->dre_dte.dte_ver, rc);
+				dtx_dre_release(drh, dre);
+				continue;
+			}
 		}
 
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
+
+		if (mbs->dm_dte_flags & DTE_PARTIAL_COMMITTED)
+			goto commit;
 
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
@@ -481,7 +505,6 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	struct dtx_resync_entry		*dre;
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
-	size_t				 size;
 
 	/* We commit the DTXs periodically, there will be not too many DTXs
 	 * to be checked when resync. So we can load all those uncommitted
@@ -527,8 +550,11 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
-	size = sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize;
-	D_ALLOC(dre, size);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+		D_ALLOC_PTR(dre);
+	else
+		D_ALLOC(dre, sizeof(*dre) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+
 	if (dre == NULL)
 		return -DER_NOMEM;
 
@@ -536,16 +562,23 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	dre->dre_dkey_hash = ent->ie_dkey_hash;
 
 	dte = &dre->dre_dte;
-	mbs = (struct dtx_memberships *)(dte + 1);
 
-	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-	mbs->dm_flags = ent->ie_dtx_mbs_flags;
-	mbs->dm_dte_flags = ent->ie_dtx_flags;
-	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
+		dre->dre_inline_mbs = 0;
+		dte->dte_mbs = NULL;
+	} else {
+		mbs = (struct dtx_memberships *)(dte + 1);
 
-	dte->dte_mbs = mbs;
+		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+		mbs->dm_flags = ent->ie_dtx_mbs_flags;
+		mbs->dm_dte_flags = ent->ie_dtx_flags;
+		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+		dre->dre_inline_mbs = 1;
+		dte->dte_mbs = mbs;
+	}
 
 out:
 	dre->dre_epoch = ent->ie_epoch;
@@ -577,6 +610,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		return rc;
 	}
 
+	D_INFO("Enter DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
@@ -585,12 +621,13 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 					      dss_get_module_info()->dmi_tgt_id, &target);
 	D_ASSERT(rc == 1);
 
-	if (target->ta_comp.co_status == PO_COMP_ST_UP)
+	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-	ABT_rwlock_unlock(pool->sp_lock);
+		D_INFO("DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
+		       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	}
 
-	D_INFO("DTX resync for "DF_UUID"/"DF_UUID" with discard version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ABT_mutex_lock(cont->sc_mutex);
 
@@ -605,13 +642,11 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
-		uint64_t	hint = 0;
-
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl, true);
 
 		while (1) {
-			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+			rc = vos_dtx_cmt_reindex(cont->sc_hdl);
 			if (rc > 0)
 				break;
 
@@ -623,12 +658,11 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	cont->sc_dtx_resyncing = 1;
-	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = crt_hlc_get();
+	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -672,6 +706,9 @@ fail:
 out:
 	if (!dtx_cont_opened(cont))
 		stop_dtx_reindex_ult(cont);
+
+	D_INFO("Exit DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;
@@ -744,8 +781,8 @@ dtx_resync_ult(void *data)
 	struct ds_pool		*pool;
 	int			rc = 0;
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	D_ASSERT(pool != NULL);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	D_ASSERTF(pool != NULL, DF_UUID" rc %d\n", DP_UUID(arg->pool_uuid), rc);
 	if (pool->sp_dtx_resync_version >= arg->version) {
 		D_DEBUG(DB_MD, DF_UUID" ignore dtx resync version %u/%u\n",
 			DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,

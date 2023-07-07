@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2021 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -19,8 +18,7 @@ class HarnessTimeoutTest(Test):
         """Tear down after each test case."""
         super().tearDown()
 
-        # Sleep almost the full 60 seconds to verify that this method is not
-        # interrupted
+        # Sleep almost the full 60 seconds to verify that this method is not interrupted
         self.log.info("Verifying that timeout is given 60 seconds to execute")
         self.log.info("Sleeping for 59 seconds")
         sleep(59)
@@ -28,18 +26,15 @@ class HarnessTimeoutTest(Test):
     def test_timeout(self):
         """Test to verify time allotted for tearDown after test timeout.
 
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
         This test can be run in any CI stage: vm, small, medium, large
 
-        :avocado: tags=all
-        :avocado: tags=harness,harness_timeout_test,test_timeout
+        :avocado: tags=manual
+        :avocado: tags=vm
+        :avocado: tags=harness,failure_expected
+        :avocado: tags=HarnessTimeoutTest,test_timeout
         """
         sleep_timeout = self.timeout + 1
-        self.log.info(
-            "Timing out the test method with a %s second sleep", sleep_timeout)
+        self.log.info("Timing out the test method with a %s second sleep", sleep_timeout)
 
         # Force a timeout for the execution of this method
         self.log.info("*** TEST IS EXPECTED TO BE INTERRUPTED ***")
@@ -51,14 +46,11 @@ class HarnessTimeoutTest(Test):
     def test_timeout_hw(self):
         """Test to verify time allotted for tearDown after test timeout.
 
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
         This test can be run in any CI stage: vm, small, medium, large
 
-        :avocado: tags=all
-        :avocado: tags=hw,small,medium,ib2,large
-        :avocado: tags=harness,harness_timeout_test,test_timeout_hw
+        :avocado: tags=manual
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,failure_expected
+        :avocado: tags=HarnessTimeoutTest,test_timeout_hw
         """
         self.test_timeout()

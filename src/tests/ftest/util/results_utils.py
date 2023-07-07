@@ -1,10 +1,11 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
+from argparse import Namespace
 
 
 class TestName():
@@ -50,8 +51,6 @@ class TestResult():
         Args:
             class_name (str): the test class name, e.g. FTEST_<name>
             name (TestName): the test uid, name, and variant
-            uid (str): the test uid
-            variant (str): the test variant
             log_file (str): the log file for a single test
             log_dir (str): the log file directory for a single test
         """
@@ -66,6 +65,7 @@ class TestResult():
         self.status = None
         self.fail_class = None
         self.fail_reason = None
+        self.fail_count = 0
         self.traceback = None
 
     def __getitem__(self, name, default=None):
@@ -285,13 +285,14 @@ class Job():
                 writing xml files with different names and/or file locations. Defaults to None.
             html_enabled (str, optional): if set to 'on' results will be written to
                 {logdir}/results.html. Defaults to None.
-            html_output (_type_, optional): optional full path of an html file to generate.  Used
+            html_output (str, optional): optional full path of an html file to generate.  Used
                 for writing html files with different names and/or file locations. Defaults to None.
             log_dir (str, optional): directory in which to write the results.[xml|html] if
                 [xml|html]_enabled is set to 'on'. Defaults to None.
             max_chars (int, optional): maximum number of characters of each test log to include in
                 with any test errors. Defaults to 100000.
         """
+        # For newer avocado versions
         self.config = {
             "job.run.result.xunit.enabled": xml_enabled,
             "job.run.result.xunit.output": xml_output,
@@ -304,8 +305,38 @@ class Job():
         }
         self.logdir = log_dir
 
+        # For older avocado versions
+        self.args = Namespace(
+            xunit_job_result=('on' if xml_enabled else 'off'),
+            xunit_output=xml_output,
+            xunit_max_test_log_chars=max_chars,
+            xunit_job_name=name,
+            html_job_result=('on' if html_enabled else 'off'),
+            html_output=html_output,
+            open_browser=False,
+            stdout_claimed_by=None)
+
         # If set to either 'RUNNING', 'ERROR', or 'FAIL' an html result will not be generated
         self.status = "COMPLETE"
+
+
+def sanitize_results(results):
+    """Ensure each test status is set and all failure attributes are set for test failures.
+
+    Args:
+        results (Results): the test results to sanitize
+
+    Returns:
+        Results: sanitized test results
+    """
+    for test in results.tests:
+        if not test.status or test.status == TestResult.FAIL:
+            test.status = TestResult.FAIL
+            if not test.fail_class:
+                test.fail_class = 'Missing fail class'
+            if not test.fail_reason:
+                test.fail_reason = 'Missing fail reason'
+    return results
 
 
 def create_xml(job, results):
@@ -321,7 +352,7 @@ def create_xml(job, results):
     # pylint: disable=import-outside-toplevel
     from avocado.plugins.xunit import XUnitResult
     result_xml = XUnitResult()
-    result_xml.render(results, job)
+    result_xml.render(sanitize_results(results), job)
 
 
 def create_html(job, results):
@@ -337,4 +368,4 @@ def create_html(job, results):
     # pylint: disable=import-outside-toplevel
     from avocado_result_html import HTMLResult
     result_html = HTMLResult()
-    result_html.render(results, job)
+    result_html.render(sanitize_results(results), job)

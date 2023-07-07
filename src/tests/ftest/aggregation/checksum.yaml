@@ -4,14 +4,12 @@ hosts:
 timeout: 240
 server_config:
   name: daos_server
-  servers:
-    bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
 pool:
-  mode: 146
-  name: daos_server
-  scm_size: 20%
-  nvme_size: 50%
+  size: 50%
   svcn: 1
   control_method: dmg
 container:
@@ -22,10 +20,10 @@ ior:
   api: "DFS"
   client_processes:
     np: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
-      - "-w -E -k"
-      - "-r -R"
+    - "-w -E -k"
+    - "-r -R"
   repetitions: 1
   signature: 5
   transfersize_blocksize:

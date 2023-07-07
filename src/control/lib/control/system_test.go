@@ -20,9 +20,34 @@ import (
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+func TestControl_IsMSConnectionFailure(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err       error
+		expResult bool
+	}{
+		"nil": {},
+		"MS connection error": {
+			err:       errMSConnectionFailure,
+			expResult: true,
+		},
+		"wrapped MS connection error": {
+			err:       errors.Wrap(errMSConnectionFailure, "something bad happened"),
+			expResult: true,
+		},
+		"other error": {
+			err: errors.New("something went wrong"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, IsMSConnectionFailure(tc.err), "")
+		})
+	}
+}
 
 func TestControl_StartRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -113,7 +138,7 @@ func TestControl_StartRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StartRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := StartRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -215,7 +240,7 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PrepShutdownRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := PrepShutdownRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -317,7 +342,7 @@ func TestControl_StopRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := StopRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3", Force: true})
+			gotResp, gotErr := StopRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3", Force: true})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -419,7 +444,7 @@ func TestControl_PingRanks(t *testing.T) {
 				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
 			})
 
-			gotResp, gotErr := PingRanks(context.TODO(), mi, &RanksReq{Ranks: "0-3"})
+			gotResp, gotErr := PingRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -446,21 +471,21 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		},
 		"successful result": {
 			results: system.MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0)},
 			},
 			expRankErrs: make(map[string][]string),
 			expHosts:    []string{"10.0.0.1:10001"},
 		},
 		"successful result missing address": {
 			results: system.MemberResults{
-				{Addr: "", Rank: system.Rank(0)},
+				{Addr: "", Rank: ranklist.Rank(0)},
 			},
 			expErrMsg: "host address missing for rank 0 result",
 		},
 		"failed result": {
 			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
+					Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0),
 					Errored: true, Msg: "didn't start",
 				},
 			},
@@ -470,7 +495,7 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		"failed result missing error message": {
 			results: system.MemberResults{
 				{
-					Addr: "10.0.0.1:10001", Rank: system.Rank(0),
+					Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0),
 					Errored: true, Msg: "",
 				},
 			},
@@ -481,29 +506,29 @@ func TestControl_getResetRankErrors(t *testing.T) {
 		},
 		"mixed results": {
 			results: system.MemberResults{
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(0)},
-				{Addr: "10.0.0.1:10001", Rank: system.Rank(1)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(0)},
+				{Addr: "10.0.0.1:10001", Rank: ranklist.Rank(1)},
 				{
-					Addr: "10.0.0.2:10001", Rank: system.Rank(2),
+					Addr: "10.0.0.2:10001", Rank: ranklist.Rank(2),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.2:10001", Rank: system.Rank(3),
+					Addr: "10.0.0.2:10001", Rank: ranklist.Rank(3),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: system.Rank(4),
+					Addr: "10.0.0.3:10001", Rank: ranklist.Rank(4),
 					Errored: true, Msg: "something bad",
 				},
 				{
-					Addr: "10.0.0.3:10001", Rank: system.Rank(5),
+					Addr: "10.0.0.3:10001", Rank: ranklist.Rank(5),
 					Errored: true, Msg: "didn't start",
 				},
 				{
-					Addr: "10.0.0.4:10001", Rank: system.Rank(6),
+					Addr: "10.0.0.4:10001", Rank: ranklist.Rank(6),
 					Errored: true, Msg: "something bad",
 				},
-				{Addr: "10.0.0.4:10001", Rank: system.Rank(7)},
+				{Addr: "10.0.0.4:10001", Rank: ranklist.Rank(7)},
 			},
 			expRankErrs: map[string][]string{
 				"didn't start": {
@@ -534,7 +559,7 @@ func TestControl_SystemQuery(t *testing.T) {
 	testRespHS := new(SystemQueryResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemQueryReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemQueryResp)
@@ -646,7 +671,7 @@ func TestControl_SystemQuery(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemQuery(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemQuery(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -694,7 +719,7 @@ func TestControl_SystemQueryRespErrors(t *testing.T) {
 			resp := new(SystemQueryResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 
 			test.CmpErr(t, tc.expErr, resp.Errors())
@@ -709,7 +734,7 @@ func TestControl_SystemStart(t *testing.T) {
 	testRespHS := new(SystemStartResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStartReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStartResp)
@@ -795,7 +820,7 @@ func TestControl_SystemStart(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemStart(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemStart(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -864,7 +889,7 @@ func TestControl_SystemStartRespErrors(t *testing.T) {
 			resp := new(SystemStartResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
@@ -880,7 +905,7 @@ func TestControl_SystemStop(t *testing.T) {
 	testRespHS := new(SystemStopResp)
 	testRespHS.AbsentHosts.Replace(testHS)
 
-	testRS := system.MustCreateRankSet("1-23")
+	testRS := ranklist.MustCreateRankSet("1-23")
 	testReqRS := new(SystemStopReq)
 	testReqRS.Ranks.Replace(testRS)
 	testRespRS := new(SystemStopResp)
@@ -966,7 +991,7 @@ func TestControl_SystemStop(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemStop(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemStop(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1035,7 +1060,7 @@ func TestControl_SystemStopRespErrors(t *testing.T) {
 			resp := new(SystemStopResp)
 			ahs := hostlist.MustCreateSet(tc.absentHosts)
 			resp.AbsentHosts.Replace(ahs)
-			ars := system.MustCreateRankSet(tc.absentRanks)
+			ars := ranklist.MustCreateRankSet(tc.absentRanks)
 			resp.AbsentRanks.Replace(ars)
 			resp.Results = tc.results
 
@@ -1109,7 +1134,7 @@ func TestControl_SystemExclude(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemExclude(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemExclude(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1169,7 +1194,7 @@ func TestDmg_System_checkSystemErase(t *testing.T) {
 					&mgmtpb.SystemQueryResp{Members: tc.members}),
 			})
 
-			err := checkSystemErase(context.Background(), mi)
+			err := checkSystemErase(test.Context(t), mi)
 			test.CmpErr(t, tc.expErr, err)
 		})
 	}
@@ -1369,7 +1394,7 @@ func TestControl_SystemErase(t *testing.T) {
 				UnaryResponse: tc.uResp,
 			})
 
-			gotResp, gotErr := SystemErase(context.TODO(), mi, tc.req)
+			gotResp, gotErr := SystemErase(test.Context(t), mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1400,7 +1425,7 @@ func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
 				},
 			})
 
-			gotResp, gotErr := SystemJoin(context.TODO(), client, &SystemJoinReq{})
+			gotResp, gotErr := SystemJoin(test.Context(t), client, &SystemJoinReq{})
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %v", gotErr)
 			}
@@ -1491,7 +1516,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.Background()
+			ctx := test.Context(t)
 			client := NewMockInvoker(log, tc.mic)
 			gotResp, gotErr := SystemJoin(ctx, client, &SystemJoinReq{})
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -1553,7 +1578,7 @@ func TestControl_SystemSetAttr(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewMockInvoker(log, tc.mic)
-			gotErr := SystemSetAttr(context.TODO(), client, tc.req)
+			gotErr := SystemSetAttr(test.Context(t), client, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1610,7 +1635,7 @@ func TestControl_SystemGetAttr(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			client := NewMockInvoker(log, tc.mic)
-			gotResp, gotErr := SystemGetAttr(context.TODO(), client, tc.req)
+			gotResp, gotErr := SystemGetAttr(test.Context(t), client, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

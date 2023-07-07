@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,7 +42,6 @@ class DbenchCommand(ExecutableCommand):
 
     def get_param_names(self):
         """Overriding the original get_param_names."""
-
         param_names = super().get_param_names()
 
         # move key=num_of_procs to the end
@@ -65,6 +63,7 @@ class Dbench(DbenchCommand):
 
     def run(self, processes=1):
         # pylint: disable=arguments-differ
+        # pylint: disable=arguments-renamed
         """Run the dbench command.
 
         Args:
@@ -82,7 +81,7 @@ class Dbench(DbenchCommand):
         mpirun.assign_processes(processes)
         mpirun.exit_status_exception = True
 
-        # run dcp
+        # run dbench
         out = mpirun.run()
 
         return out

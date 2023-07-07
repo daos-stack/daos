@@ -1,15 +1,13 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 
 
 class PunchTest(TestWithServers):
@@ -41,7 +39,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=dkeypunch,test_dkey_punch
+        :avocado: tags=PunchTest,test_dkey_punch
         """
         try:
             # create an object and write some data into it
@@ -51,14 +49,14 @@ class PunchTest(TestWithServers):
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch dkey test")
 
-            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+            obj = self.container.write_an_obj(thedata, len(thedata) + 1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
             self.log.info("Committing the TX for punch dkey test")
             self.container.commit_tx(tx_handle)
             self.log.info("Committed the TX for punch dkey test")
 
             # read the data back and make sure its correct
-            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+            thedata2 = self.container.read_an_obj(len(thedata) + 1, dkey, akey,
                                                   obj, txn=tx_handle)
             if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)
@@ -72,7 +70,7 @@ class PunchTest(TestWithServers):
             self.fail("Punch should have failed but it didn't.\n")
 
         # expecting an exception so do nothing
-        except DaosApiError as dummy_e:
+        except DaosApiError:
             pass
 
         try:
@@ -83,8 +81,8 @@ class PunchTest(TestWithServers):
             obj.punch_dkeys(0, [dkey])
 
         # this one should work so error if exception occurs
-        except DaosApiError as dummy_e:
-            self.fail("Punch should have worked.\n")
+        except DaosApiError:
+            self.fail("Punch should have worked.")
 
         # there are a bunch of other cases to test here,
         #    --test punching the same updating and punching the same data in
@@ -98,7 +96,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=akeypunch,test_akey_punch
+        :avocado: tags=PunchTest,test_akey_punch
         """
         try:
             # create an object and write some data into it
@@ -154,7 +152,7 @@ class PunchTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objpunch,test_obj_punch
+        :avocado: tags=PunchTest,test_obj_punch
         """
         try:
 
@@ -164,13 +162,13 @@ class PunchTest(TestWithServers):
             akey = b"this is the akey"
             tx_handle = self.container.get_new_tx()
             self.log.info("Created a new TX for punch obj test")
-            obj = self.container.write_an_obj(thedata, len(thedata)+1, dkey,
+            obj = self.container.write_an_obj(thedata, len(thedata) + 1, dkey,
                                               akey, obj_cls=1, txn=tx_handle)
             self.log.info("Committing the TX for punch obj test")
             self.container.commit_tx(tx_handle)
             self.log.info("Committed the TX for punch obj test")
             # read the data back and make sure its correct
-            thedata2 = self.container.read_an_obj(len(thedata)+1, dkey, akey,
+            thedata2 = self.container.read_an_obj(len(thedata) + 1, dkey, akey,
                                                   obj, txn=tx_handle)
             if thedata != thedata2.value:
                 self.log.info("wrote data: %s", thedata)

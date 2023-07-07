@@ -1,15 +1,17 @@
-#!/usr/bin/python3
 """
-    (C) Copyright 2020-2022 Intel Corporation.
+    (C) Copyright 2020-2023 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 
 """
 import os
+
 from apricot import TestWithServers
+
 from command_utils_base import CommandFailure, EnvironmentVariables
 from job_manager_utils import get_job_manager
 from mpiio_utils import LLNLCommand, Mpi4pyCommand, RomioCommand, Hdf5Command
+from duns_utils import format_path
 
 
 class MpiioTests(TestWithServers):
@@ -49,7 +51,7 @@ class MpiioTests(TestWithServers):
 
         # Pass pool and container information to the commands
         env = EnvironmentVariables()
-        env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.pool.uuid, self.container.uuid)
+        env["DAOS_UNS_PREFIX"] = format_path(self.pool, self.container)
         if test_name == "llnl":
             env["MPIO_USER_PATH"] = "daos:/"
 

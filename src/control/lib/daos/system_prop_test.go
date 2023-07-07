@@ -7,9 +7,17 @@
 package daos
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+)
+
+var (
+	_ SystemPropertyValue = NewBoolPropVal(false)
+	_ SystemPropertyValue = NewStringPropVal("default")
+	_ SystemPropertyValue = NewCompPropVal(func() string { return "computed" })
+	_ SystemPropertyValue = NewIntPropVal(0)
 )
 
 func TestDaos_BoolPropVal(t *testing.T) {
@@ -78,6 +86,50 @@ func TestDaos_StringPropVal(t *testing.T) {
 	}
 
 	var nilPV *StringPropVal
+	if nilPV.String() != "(nil)" {
+		t.Fatalf("%T stringer should handle nil", nilPV)
+	}
+}
+
+func TestDaos_IntPropVal(t *testing.T) {
+	choices := []int64{1, 2, -3}
+	pv := NewIntPropVal(0, choices...)
+
+	if pv == nil {
+		t.Fatal("expected non-nil NumberPropVal")
+	}
+
+	intChoices := make([]string, len(choices))
+	for i, c := range choices {
+		intChoices[i] = strconv.FormatInt(c, 10)
+	}
+	if diff := cmp.Diff(intChoices, pv.Choices()); diff != "" {
+		t.Fatalf("unexpected choices: (-want,+got)\n%s", diff)
+	}
+
+	if pv.String() != "0" {
+		t.Fatalf("expected string %q, got %q", "0", pv.String())
+	}
+	if err := pv.Handler("1"); err != nil {
+		t.Fatalf("expected no error, got %s", err)
+	}
+	if pv.String() != "1" {
+		t.Fatalf("expected string %q, got %q", "1", pv.String())
+	}
+	if err := pv.Handler("-3"); err != nil {
+		t.Fatalf("expected no error, got %s", err)
+	}
+	if pv.String() != "-3" {
+		t.Fatalf("expected string %q, got %q", "-3", pv.String())
+	}
+	if err := pv.Handler("42"); err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+	if err := pv.Handler("invalid"); err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	var nilPV *IntPropVal
 	if nilPV.String() != "(nil)" {
 		t.Fatalf("%T stringer should handle nil", nilPV)
 	}

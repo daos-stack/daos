@@ -64,12 +64,12 @@ public class DaosObject {
   }
 
   /**
-   * open object with default mode, {@linkplain OpenMode#UNKNOWN}.
+   * open object with default mode, {@linkplain OpenMode#DAOS_OO_RW}.
    *
    * @throws DaosObjectException
    */
   public void open() throws DaosObjectException {
-    open(OpenMode.UNKNOWN);
+    open(OpenMode.DAOS_OO_RW);
   }
 
   /**
@@ -116,19 +116,23 @@ public class DaosObject {
     }
   }
 
-  private ByteBuf encodeKeys(List<String> keys) {
+  private ByteBuf encodeKeys(List<String> keys, boolean hasAkey) {
     int bufferLen = 0;
     List<byte[]> keyBytesList = new ArrayList<>(keys.size());
+    boolean checkAkey = hasAkey;
     for (String key : keys) {
       if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("one of akey is blank");
       }
-      byte bytes[] = DaosUtils.keyToBytes(key);
+      byte bytes[];
+      if (checkAkey) { // first entry is dkey
+        bytes = DaosUtils.keyToBytes8(key);
+        checkAkey = false;
+      } else { // remaining are akeys or all is dkey
+        bytes = hasAkey ? DaosUtils.keyToBytes(key) : DaosUtils.keyToBytes8(key);
+      }
       keyBytesList.add(bytes);
       bufferLen += (bytes.length + Constants.ENCODED_LENGTH_KEY);
-    }
-    if (bufferLen == 0) {
-      return null;
     }
     // encode keys to buffer
     ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(bufferLen);
@@ -165,8 +169,8 @@ public class DaosObject {
    */
   public void punchDkeys(List<String> dkeys) throws DaosObjectException {
     checkOpen();
-    ByteBuf buffer = encodeKeys(dkeys);
-    if (buffer == null) {
+    ByteBuf buffer = encodeKeys(dkeys, false);
+    if (buffer == null || buffer.readableBytes() == 0) {
       throw new DaosObjectException(oid, "no dkeys specified when punch dkeys");
     }
     if (log.isDebugEnabled()) {
@@ -200,7 +204,7 @@ public class DaosObject {
     List<String> allKeys = new ArrayList<>(nbrOfAkyes + 1);
     allKeys.add(dkey);
     allKeys.addAll(akeys);
-    ByteBuf buffer = encodeKeys(allKeys);
+    ByteBuf buffer = encodeKeys(allKeys, true);
     if (log.isDebugEnabled()) {
       log.debug("punching akeys: " + enumKeys(akeys, MAX_DEBUG_SIZE) + oid);
     }
@@ -423,11 +427,33 @@ public class DaosObject {
       log.debug(oid + " update object with description " + desc);
     }
     try {
-      client.updateObjNoDecode(objectPtr, desc.descMemoryAddress(), desc.getEqHandle(), desc.getEventId(),
+      client.updateObjAsyncNoDecode(objectPtr, desc.descMemoryAddress(), desc.getEqHandle(), desc.getEventId(),
           desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
     } catch (DaosIOException e) {
       throw new DaosObjectException(oid, "failed to update object with description " + desc,
           e);
+    }
+  }
+
+  /**
+   * update with {@link IODescUpdSync}.
+   *
+   * @param desc
+   * @throws DaosObjectException
+   */
+  public void updateSync(IODescUpdSync desc)
+          throws DaosObjectException {
+    checkOpen();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description " + desc);
+    }
+    try {
+      client.updateObjSyncNoDecode(objectPtr, desc.descMemoryAddress(),
+              desc.getDestOffset(), desc.readableBytes(), desc.dataMemoryAddress());
+    } catch (DaosIOException e) {
+      throw new DaosObjectException(oid, "failed to update object with description " + desc,
+              e);
     }
   }
 
@@ -518,7 +544,7 @@ public class DaosObject {
     if (DaosUtils.isBlankStr(akey)) {
       throw new IllegalArgumentException("akey is blank");
     }
-    byte dkeyBytes[] = DaosUtils.keyToBytes(dkey);
+    byte dkeyBytes[] = DaosUtils.keyToBytes8(dkey);
     byte akeyBytes[] = DaosUtils.keyToBytes(akey);
     ByteBuf buffer = BufferAllocator.objBufWithNativeOrder(dkeyBytes.length + akeyBytes.length + 4);
     buffer.writeShort(dkeyBytes.length);

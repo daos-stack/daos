@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,7 +86,10 @@ typedef struct crt_init_options {
 	/** If set, used as a port setting instead of OFI_PORT env */
 	char		*cio_port;
 
+	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
+	char		*cio_auth_key;
 } crt_init_options_t;
+
 
 typedef int		crt_status_t;
 /**
@@ -108,6 +111,9 @@ typedef d_string_t	crt_group_id_t;
 
 /** Indicates rank not being set */
 #define CRT_NO_RANK 0xFFFFFFFF
+
+/** Indicates incarnation unavailable or inapplicable */
+#define CRT_NO_INCARNATION 0
 
 typedef struct crt_group {
 	/** the group ID of this group */

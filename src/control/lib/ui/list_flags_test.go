@@ -16,8 +16,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestUI_RankSetFlag(t *testing.T) {
@@ -44,7 +44,7 @@ func TestUI_RankSetFlag(t *testing.T) {
 			arg: "1-128",
 			expFlag: func() *ui.RankSetFlag {
 				flag := &ui.RankSetFlag{}
-				flag.Replace(system.MustCreateRankSet("1-128"))
+				flag.Replace(ranklist.MustCreateRankSet("1-128"))
 				return flag
 			}(),
 			expString: "1-128",
@@ -64,7 +64,7 @@ func TestUI_RankSetFlag(t *testing.T) {
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(
 					ui.RankSetFlag{},
-					system.RankSet{},
+					ranklist.RankSet{},
 				),
 			}
 			if diff := cmp.Diff(tc.expFlag, &f, cmpOpts...); diff != "" {

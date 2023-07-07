@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,9 +13,11 @@ import (
 
 	"github.com/hashicorp/raft"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type (
@@ -104,7 +106,9 @@ func newMockRaftService(cfg *mockRaftServiceConfig, fsm raft.FSM) *mockRaftServi
 // MockDatabaseWithAddr is similar to MockDatabase but allows a custom
 // replica address to be supplied.
 func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *Database {
-	dbCfg := &DatabaseConfig{}
+	dbCfg := &DatabaseConfig{
+		SystemName: build.DefaultSystemName,
+	}
 	if addr != nil {
 		dbCfg.Replicas = append(dbCfg.Replicas, addr)
 	}
@@ -134,6 +138,13 @@ func MockDatabaseWithCfg(t *testing.T, log logging.Logger, dbCfg *DatabaseConfig
 // operations in memory.
 func MockDatabase(t *testing.T, log logging.Logger) *Database {
 	return MockDatabaseWithAddr(t, log, common.LocalhostCtrlAddr())
+}
+
+// MockDatabaseWithFaultDomainTree creates a MockDatabase and sets the fault domain tree.
+func MockDatabaseWithFaultDomainTree(t *testing.T, log logging.Logger, tree *system.FaultDomainTree) *Database {
+	db := MockDatabase(t, log)
+	db.data.Members.FaultDomains = tree
+	return db
 }
 
 // TestDatabase returns a database that is backed by temporary storage

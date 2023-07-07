@@ -67,6 +67,22 @@ func (s StringSet) String() string {
 	return strings.Join(s.ToSlice(), ", ")
 }
 
+// UnmarshalYAML converts from the YAML string slice to a StringSet.
+func (s *StringSet) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var strSlice []string
+	if err := unmarshal(&strSlice); err != nil {
+		return err
+	}
+
+	*s = NewStringSet(strSlice...)
+	return nil
+}
+
+// MarshalYAML converts from the StringSet to a slice that can be marshaled into YAML.
+func (s StringSet) MarshalYAML() (interface{}, error) {
+	return s.ToSlice(), nil
+}
+
 // NewStringSet creates a StringSet and initializes it with zero or more strings.
 func NewStringSet(values ...string) StringSet {
 	set := make(StringSet)

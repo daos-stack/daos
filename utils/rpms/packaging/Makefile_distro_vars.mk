@@ -60,7 +60,15 @@ VERSION_ID      := 15.3
 DISTRO_ID       := sl15.3
 DISTRO_BASE     := LEAP_15
 DISTRO_VERSION  ?= $(VERSION_ID)
-ORIG_TARGET_VER := 15.2
+ORIG_TARGET_VER := 15.3
+SED_EXPR        := 1p
+endif
+ifeq ($(CHROOT_NAME),opensuse-leap-15.4-x86_64)
+VERSION_ID      := 15.4
+DISTRO_ID       := sl15.4
+DISTRO_BASE     := LEAP_15
+DISTRO_VERSION  ?= $(VERSION_ID)
+ORIG_TARGET_VER := 15.4
 SED_EXPR        := 1p
 endif
 endif

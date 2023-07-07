@@ -60,6 +60,8 @@ enum {
 	VOS_OBJ_CREATE		= (1 << 1),
 	/** Hold for object specific discard */
 	VOS_OBJ_DISCARD		= (1 << 2),
+	/** Hold the object for delete dkey */
+	VOS_OBJ_KILL_DKEY	= (1 << 3),
 };
 
 /**
@@ -135,9 +137,9 @@ void vos_obj_cache_evict(struct daos_lru_cache *occ,
 			 struct vos_container *cont);
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
-struct daos_lru_cache *vos_obj_cache_current(void);
+struct daos_lru_cache *vos_obj_cache_current(bool standalone);
 
 /**
  * Object Index API and handles
@@ -210,7 +212,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 
 /** delete an object from OI table */
 int
-vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_entry);
 
 /** Hold object for range discard
  *

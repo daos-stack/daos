@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -90,9 +90,9 @@ class BoundaryPoolContainerSpace(TestWithServers):
             (7)Display and verify free space after container delete.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=container,pool
-        :avocado: tags=fill_cont_pool_stress,test_fill_destroy_cont_loop
+        :avocado: tags=hw,medium
+        :avocado: tags=container,pool,fill_cont_pool_stress
+        :avocado: tags=BoundaryPoolContainerSpace,test_fill_destroy_cont_loop
         """
         testloop = self.params.get("testloop", "/run/pool/*")
         # create pool and enable the aggregation
@@ -105,7 +105,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
             self.pool.set_query_data()
             self.log.info(
                 "--%s.(1)Pool Query before write:\n"
-                "--Pool %s query data: %s\n", test_loop, self.pool.uuid, self.pool.query_data)
+                "--%s query data: %s\n", test_loop, str(self.pool), self.pool.query_data)
             free_space = self.pool.get_pool_free_space()
             self.log.info("--%s.(2)Pool free space before container create: %s",
                           test_loop, free_space)

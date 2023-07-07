@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,8 +8,8 @@ import os
 from fio_test_base import FioBase
 from general_utils import run_pcmd, get_remote_file_size
 
+
 class Ecodtruncate(FioBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=protected-access
     """Test class Description: Runs Fio with EC object type over POSIX and
         verify truncate file does not corrupt the data.
@@ -33,9 +32,9 @@ class Ecodtruncate(FioBase):
             Verify the data content and file size
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_fio,ec_posix
-        :avocado: tags=ec_truncate
+        :avocado: tags=hw,large
+        :avocado: tags=ec,ec_fio,ec_posix,fio
+        :avocado: tags=Ecodtruncate,test_ec_truncate
         """
         truncate_size = int(self.params.get("truncate_size", '/run/fio/*'))
         fname = self.params.get("names", '/run/fio/*')

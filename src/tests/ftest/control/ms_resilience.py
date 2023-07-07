@@ -1,17 +1,15 @@
-#!/usr/bin/python
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import socket
 import time
 
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from general_utils import stop_processes
+from run_utils import stop_processes
 
 
 def get_hostname(host_addr):
@@ -45,12 +43,13 @@ class ManagementServiceResilience(TestWithServers):
     :avocado: recursive
     """
 
+    L_QUERY_TIMER = 30
+
     def __init__(self, *args, **kwargs):
         """Initialize a ManagementServiceResilience object."""
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False
-        self.L_QUERY_TIMER = 30
 
     def find_pool(self, search_uuid):
         """Find a pool in the output of `dmg pool list`.
@@ -93,7 +92,7 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         return get_hostname(l_addr)
 
@@ -171,7 +170,8 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", resilience_num)
-        replicas = NodeSet.fromlist(random.sample(list(self.hostlist_servers), resilience_num))
+        replicas = NodeSet.fromlist(
+            self.random.sample(list(self.hostlist_servers), resilience_num))
         server_groups = {
             self.server_group:
                 {
@@ -190,24 +190,24 @@ class ManagementServiceResilience(TestWithServers):
 
         return replicas
 
-    def kill_servers(self, leader, replicas, N):
+    def kill_servers(self, leader, replicas, num_hosts):
         """Kill a subset of servers in order to simulate failures.
 
         Args:
             leader (NodeSet): hostname of current leader.
             replicas (NodeSet): replica hostnames.
-            N (int): Number of hosts (including leader) to stop.
+            num_hosts (int): Number of hosts (including leader) to stop.
 
         Returns:
             NodeSet: hosts that were stopped.
 
         """
-        kill_list = NodeSet.fromlist(random.sample(list(replicas), N))
+        kill_list = NodeSet.fromlist(self.random.sample(list(replicas), num_hosts))
         if not leader.intersection(kill_list):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
-        self.log.info("*** stopping leader (%s) + %d others: %s", leader, N-1, kill_list)
-        stop_processes(kill_list, self.server_managers[0].manager.job.command_regex)
+        self.log.info("*** stopping leader (%s) + %d others: %s", leader, num_hosts - 1, kill_list)
+        stop_processes(self.log, kill_list, self.server_managers[0].manager.job.command_regex)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
         self.assertGreaterEqual(len(kill_ranks), len(kill_list),
@@ -217,7 +217,7 @@ class ManagementServiceResilience(TestWithServers):
 
         return kill_list
 
-    def verify_retained_quorum(self, N):
+    def verify_retained_quorum(self, num_hosts):
         """Verify 2N+1 resiliency.
 
         This method will launch 2 * N + 1 servers, stop the MS leader
@@ -226,14 +226,14 @@ class ManagementServiceResilience(TestWithServers):
         the test will verify that the MS is still writable by creating
         a new pool.
         """
-        replicas = self.launch_servers((2 * N) + 1)
+        replicas = self.launch_servers((2 * num_hosts) + 1)
         self.log.debug("<<<verify_retained_quorum>>> replicas  = %s", replicas)
         leader = self.verify_leader(replicas)
         self.log.debug("<<<verify_retained_quorum>>> leader    = %s", leader)
 
         # First, kill the leader plus just enough other replicas to
         # push up to the edge of quorum loss.
-        kill_list = self.kill_servers(leader, replicas, N)
+        kill_list = self.kill_servers(leader, replicas, num_hosts)
         self.log.debug("<<<verify_retained_quorum>>> kill_list = %s", kill_list)
 
         # Next, verify that one of the replicas has stepped up as
@@ -252,7 +252,7 @@ class ManagementServiceResilience(TestWithServers):
         self.create_pool()
         self.pool = None
 
-    def verify_regained_quorum(self, N):
+    def verify_regained_quorum(self, num_hosts):
         """Test that even with 2N+1 resiliency lost, reads still work, and
            that quorum can be regained.
 
@@ -262,7 +262,7 @@ class ManagementServiceResilience(TestWithServers):
         restarting the killed servers in order to check that the MS is once
         again available for writing.
         """
-        replicas = self.launch_servers((2 * N) + 1)
+        replicas = self.launch_servers((2 * num_hosts) + 1)
         leader = self.verify_leader(replicas)
 
         # First, create a pool.
@@ -270,7 +270,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Next, kill the leader plus enough other replicas to
         # lose quorum.
-        kill_list = self.kill_servers(leader, replicas, N+1)
+        kill_list = self.kill_servers(leader, replicas, num_hosts + 1)
 
         self.get_dmg_command().hostlist = self.hostlist_servers
 
@@ -284,7 +284,7 @@ class ManagementServiceResilience(TestWithServers):
 
         # Finally, restart the dead servers and verify that quorum is
         # regained, which should allow for write operations to succeed again.
-        self.server_managers[0].restart(list(kill_list), wait=True)
+        self.server_managers[0].restart(kill_list, wait=True)
         self.verify_leader(replicas)
 
         # Dump the current system state.
@@ -303,7 +303,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_retained_quorum_N_1
-        :avocado: tags=test_ms_resilience_1
+        :avocado: tags=ManagementServiceResilience,test_ms_resilience_1
         """
         # Run test cases
         self.verify_retained_quorum(1)
@@ -318,7 +318,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_retained_quorum_N_2
-        :avocado: tags=test_ms_resilience_2
+        :avocado: tags=ManagementServiceResilience,test_ms_resilience_2
         """
         # Run test cases
         self.verify_retained_quorum(2)
@@ -335,7 +335,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_regained_quorum_N_1
-        :avocado: tags=test_ms_resilience_3
+        :avocado: tags=ManagementServiceResilience,test_ms_resilience_3
         """
         # Run test case
         self.verify_regained_quorum(1)
@@ -352,7 +352,7 @@ class ManagementServiceResilience(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,ms_resilience,ms_regained_quorum_N_2
-        :avocado: tags=test_ms_resilience_4
+        :avocado: tags=ManagementServiceResilience,test_ms_resilience_4
         """
         # Run test case
         self.verify_regained_quorum(2)

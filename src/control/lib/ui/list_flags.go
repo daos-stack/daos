@@ -10,7 +10,7 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 // RankSetFlag is a go-flags compatible flag type for
 // handling inputs that can be converted to a system.RankSet.
 type RankSetFlag struct {
-	system.RankSet
+	ranklist.RankSet
 }
 
 // Empty returns true if the flag was not set.
@@ -32,7 +32,7 @@ func (f RankSetFlag) Empty() bool {
 // UnmarshalFlag implements the go-flags.Unmarshaler
 // interface.
 func (f *RankSetFlag) UnmarshalFlag(fv string) error {
-	rs, err := system.CreateRankSet(fv)
+	rs, err := ranklist.CreateRankSet(fv)
 	if err != nil {
 		return err
 	}

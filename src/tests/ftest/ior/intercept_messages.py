@@ -10,7 +10,6 @@ from ior_test_base import IorTestBase
 
 
 class IorInterceptMessages(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with interception.
 
        Look for messages provided by the library
@@ -31,18 +30,12 @@ class IorInterceptMessages(IorTestBase):
             Look for interception library messages.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse,il,ior,ior_intercept
-        :avocado: tags=ior_intercept_messages,test_ior_intercept_messages
+        :avocado: tags=IorInterceptMessages,test_ior_intercept_messages
         """
         d_il_report_value = self.params.get("value", "/run/tests/D_IL_REPORT/*")
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        summary_pattern = r"^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
-                          "writes from [0-9]+ files*"
-        # Set the env locally for this test
-        # Avoiding any impact to the rest of IOR test cases
-        job_manager = self.get_ior_job_manager_command()
-        env = self.ior_cmd.get_default_env(str(job_manager), self.client_log)
 
         # D_IL_REPORT VALUES
         #     -1: All printed calls # This needs its own test case
@@ -51,33 +44,19 @@ class IorInterceptMessages(IorTestBase):
         #      2: Print to stderr the first 2 read calls
         # If needed the test can mux the value of D_IL_REPORT
         # and look only for a limited number of prints
-        #
-        env['D_IL_REPORT'] = d_il_report_value
+        self.ior_cmd.env['D_IL_REPORT'] = d_il_report_value
 
-        # Summary
-        match_summary_results = []
+        out = self.run_ior_with_pool(intercept=intercept, fail_on_warning=False)
+        stderr = out.stderr.decode("utf-8")
 
-        compiled_sp = re.compile(summary_pattern)
-        expected_total_summaries = self.processes
+        # Verify expected number of interception messages
+        num_intercept = len(re.findall(r"\[libioil\] Intercepting write*", stderr))
+        expected = self.processes * int(d_il_report_value)
+        if num_intercept != expected:
+            self.fail('Expected {} intercept messages but got {}'.format(expected, num_intercept))
 
-        # Intercept
-        match_intercept_results = []
-        intercept_pattern = r"^\[libioil\] Intercepting write*"
-        compiled_ip = re.compile(intercept_pattern)
-        expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])
-
-        out = self.run_ior_with_pool(intercept=intercept, fail_on_warning=False, env=env)
-        # Check for libioil messages within stderr
-        for line in out.stderr.decode("utf-8").splitlines():
-
-            # Check for interception messages
-            match = compiled_ip.match(line)
-            if match:
-                match_intercept_results.append(match)
-            # Check for summary messages within stderr
-            match = compiled_sp.search(line)
-            if match:
-                match_summary_results.append(match)
-
-        self.assertEqual(len(match_intercept_results), expected_total_intercepts)
-        self.assertEqual(len(match_summary_results), expected_total_summaries)
+        # Verify expected number of summary messages
+        num_summary = len(re.findall(
+            r"\[libioil\] Performed [0-9]+ reads and [0-9]+ writes from [0-9]+ files*", stderr))
+        if num_summary != self.processes:
+            self.fail('Expected {} summary messages but got {}'.format(self.processes, num_summary))

@@ -11,6 +11,7 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
+      - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
       - requirements.txt
@@ -41,11 +42,11 @@ jobs:
             base: ubuntu
             with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -55,14 +56,14 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
       - name: Setup docker cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         with:
           key: ${{ steps.commit-hash.outputs.key }}
           restore-keys: ${{ steps.commit-hash.outputs.restore }}
@@ -98,14 +99,14 @@ jobs:
       COMPILER: clang
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -151,11 +152,11 @@ jobs:
             base: ubuntu
             with: ubuntu:22.04
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -166,14 +167,14 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -221,7 +222,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [alma.8, alma.9]
+        distro: [alma.8, alma.9, rocky.8]
         include:
           - distro: alma.8
             base: el.8
@@ -229,12 +230,15 @@ jobs:
           - distro: alma.9
             base: el.9
             with: almalinux:9
+          - distro: rocky.8
+            base: el.8
+            with: rockylinux/rockylinux:8
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Build dependencies in image.
@@ -291,10 +295,9 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
@@ -321,7 +324,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
       - name: Build dependencies in image.
@@ -378,7 +381,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy

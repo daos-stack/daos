@@ -4,18 +4,23 @@ hosts:
 timeout: 300
 server_config:
   name: daos_server
-  servers:
-    targets: 1
-    nr_xs_helpers: 0
-    scm_size: 4
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 pool:
-  mode: 511
-  name: daos_server
   scm_size: 1073741824
   svcn: 2
-  debug: True
+  debug: true
   control_method: dmg
   pool_query_timeout: 30
+  properties: rd_fac:2
 container:
   akey_size: 5
   dkey_size: 5
@@ -28,7 +33,7 @@ container:
       data_size: 8
       object_qty: 30
       record_qty: 1
-  debug: True
+  debug: true
 rebuild:
   rank: 4
   object_class: OC_RP_3G1

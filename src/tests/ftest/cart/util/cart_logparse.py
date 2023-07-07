@@ -1,45 +1,13 @@
-# Copyright 2018-2022 Intel Corporation
-# All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# /*
+#  * (C) Copyright 2016-2023 Intel Corporation.
+#  *
+#  * SPDX-License-Identifier: BSD-2-Clause-Patent
+# */
+
 """
-LogIter class definition.
-LogLine class definition.
+LogIter and LogLine class definitions.
 
 This provides a way of querying CaRT logfiles for processing.
-
 """
 
 from collections import OrderedDict
@@ -86,14 +54,12 @@ class LogRaw():
         self.trace = False
 
     def to_str(self):
-        """Convert the object to a string, in a way that is compatible with
-        LogLine
-        """
+        """Convert the object to a string, in a way that is compatible with LogLine"""
         return self.line
 
 
-# pylint: disable=too-many-instance-attributes,too-many-public-methods
 class LogLine():
+    # pylint: disable=too-many-instance-attributes,too-many-public-methods
     """Class for parsing CaRT log lines
 
     This class implements a way of inspecting individual lines of a log
@@ -136,7 +102,7 @@ class LogLine():
         except KeyError as error:
             raise InvalidLogFile(fields[4]) from error
 
-        self.ts = fields[0]
+        # self.time_stamp = fields[0]
         self._fields = fields[5:]
         try:
             if self._fields[1][-2:] == '()':
@@ -197,14 +163,14 @@ class LogLine():
         raise AttributeError
 
     def get_msg(self):
-        """Return the message part of a line, stripping up to and
-        including the filename"""
+        """Return the message part of a line, stripping up to and including the filename"""
         return ' '.join(self._fields[1:])
 
     def get_anon_msg(self):
-        """Return the message part of a line, stripping up to and
-        including the filename but removing pointers"""
+        """Return the message part of a line.
 
+        stripping up to and including the filename but removing pointers
+        """
         # As get_msg, but try and remove specific information from the message,
         # This is so that large volumes of logs can be amalgamated and reduced
         # a common set for easier reporting.  Specifically the trace pointer,
@@ -258,10 +224,10 @@ class LogLine():
         return '{}() {}'.format(self.function, ' '.join(fields))
 
     def endswith(self, item):
-        """Mimic the str.endswith() function
+        """Check if the line ends with a string.
 
-        This only matches on the actual string part of the message, not the
-        timestamp/pid/faculty parts.
+        This only matches on the actual string part of the message, not the timestamp/pid/faculty
+        parts.
         """
         return self._msg.endswith(item)
 
@@ -283,17 +249,14 @@ class LogLine():
 
     def is_new(self):
         """Returns True if line is new descriptor"""
-
         return self._is_type(['Registered', 'new'])
 
     def is_dereg(self):
         """Returns true if line is descriptor deregister"""
-
         return self._is_type(['Deregistered'])
 
     def is_new_rpc(self):
         """Returns True if line is new rpc"""
-
         if not self.trace:
             return False
 
@@ -307,7 +270,6 @@ class LogLine():
 
     def is_dereg_rpc(self):
         """Returns true if line is a rpc deregister"""
-
         if not self.trace:
             return False
         if self.function != 'crt_hg_req_destroy':
@@ -317,7 +279,6 @@ class LogLine():
 
     def is_callback(self):
         """Returns true if line is RPC callback"""
-
         if self.function not in ('crt_hg_req_send_cb', 'crt_rpc_complete'):
             return False
 
@@ -325,7 +286,6 @@ class LogLine():
 
     def is_link(self):
         """Returns True if line is Link descriptor"""
-
         return self._is_type(['Link'])
 
     def is_fi_site(self):
@@ -370,7 +330,6 @@ class LogLine():
 
     def realloc_sizes(self):
         """Returns a tuple of old and new memory region sizes"""
-
         # See comment in realloc_pointers() for basic method here.
         # new_size is made by combining count and elem size,
         # old_size is simply a size which is the only oddity.
@@ -414,10 +373,11 @@ class StateIter():
     and adds two new attributes, pdesc and pparent which are the local
     descriptor with the reuse-count appended.
     """
-    def __init__(self, li):
+
+    def __init__(self, log_iter):
         self.reuse_table = {}
         self.active_desc = {}
-        self.li = li
+        self._li = log_iter
         self._l = None
 
     def __iter__(self):
@@ -427,7 +387,7 @@ class StateIter():
         # Conversion from active pointer to line where it was created.
         self.active_desc = {}
 
-        self._l = iter(self.li)
+        self._l = iter(self._li)
         return self
 
     def __next__(self):
@@ -476,11 +436,9 @@ class StateIter():
 
         return line
 
-# pylint: disable=too-many-branches
 
-
-# pylint: disable=too-few-public-methods
 class LogIter():
+    # pylint: disable=too-many-branches,too-few-public-methods
     """Class for parsing CaRT log files
 
     This class implements a iterator for lines in a cart log file.  The iterator
@@ -489,7 +447,6 @@ class LogIter():
 
     def __init__(self, fname, check_encoding=False):
         """Load a file, and check how many processes have written to it"""
-
         # Depending on file size either pre-read entire file into memory,
         # or do a first pass checking the pid list.  This allows the same
         # iterator to work fast if the file can be kept in memory, or the
@@ -562,7 +519,6 @@ class LogIter():
 
     def _load_data(self):
         """Load all data into memory"""
-
         pids = OrderedDict()
 
         index = 0
@@ -584,7 +540,6 @@ class LogIter():
 
     def _load_pids(self):
         """Iterate through the file, loading data on pids"""
-
         pids = OrderedDict()
 
         index = 0
@@ -614,7 +569,6 @@ class LogIter():
         if raw is set then all lines in the file are returned, even non-log
         lines.
         """
-
         if pid is not None:
             try:
                 self._iter_pid = self._pids[pid]
@@ -659,7 +613,6 @@ class LogIter():
 
     def __lnext(self):
         """Helper function for __next__"""
-
         if self.__from_file:
             line = self._fd.readline()
             if not line:
@@ -706,4 +659,3 @@ class LogIter():
     def get_pids(self):
         """Return an array of pids appearing in the file"""
         return list(self._pids.keys())
-# pylint: enable=too-many-instance-attributes

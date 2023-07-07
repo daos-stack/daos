@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -19,6 +19,7 @@ import (
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -35,7 +36,7 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
+	updateInUseBdevs(context.Context, []storage.NvmeController, uint64, uint64) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
@@ -53,7 +54,7 @@ type Engine interface {
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
-	GetRank() (system.Rank, error)
+	GetRank() (ranklist.Rank, error)
 	GetTargetCount() int
 	Index() uint32
 	IsStarted() bool
@@ -61,7 +62,7 @@ type Engine interface {
 	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context, bool)
-	SetupRank(context.Context, system.Rank) error
+	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
 	OnReady(...onReadyFn)
@@ -110,7 +111,7 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]Engine, error)
 	h.RLock()
 	defer h.RUnlock()
 
-	rankList, err := system.ParseRanks(ranks)
+	rankList, err := ranklist.ParseRanks(ranks)
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +160,13 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		if err == nil {
 			return
 		}
+		// If the context was canceled, don't trigger callbacks.
+		if errors.Cause(err) == context.Canceled {
+			return
+		}
 		// Don't trigger callbacks for these errors which can happen when
 		// things are still starting up.
-		if err == FaultHarnessNotStarted || err == errInstanceNotReady {
+		if err == FaultHarnessNotStarted || err == errEngineNotReady {
 			return
 		}
 
@@ -181,22 +186,10 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	// the first one that is available to service the request.
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
-		if !i.IsReady() {
-			if i.IsStarted() {
-				if err == nil {
-					err = errInstanceNotReady
-				}
-			} else {
-				if err == nil {
-					err = FaultDataPlaneNotStarted
-				}
-			}
-			continue
-		}
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case errDRPCNotReady, FaultDataPlaneNotStarted:
+		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
 			continue
 		default:
 			return
@@ -235,12 +228,12 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		ei.Run(ctx, cfg.RecreateSuperblocks)
 	}
 
-	h.OnDrpcFailure(func(_ context.Context, err error) {
+	h.OnDrpcFailure(func(_ context.Context, errIn error) {
 		if !db.IsLeader() {
 			return
 		}
 
-		switch errors.Cause(err) {
+		switch errors.Cause(errIn) {
 		case errDRPCNotReady, FaultDataPlaneNotStarted:
 			break
 		default:
@@ -252,7 +245,7 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 		// If we cannot service a dRPC request on this node,
 		// we should resign as leader in order to force a new
 		// leader election.
-		if err := db.ResignLeadership(err); err != nil {
+		if err := db.ResignLeadership(errIn); err != nil {
 			h.log.Errorf("failed to resign leadership after dRPC failure: %s", err)
 		}
 	})
@@ -265,11 +258,11 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 
 // readyRanks returns rank assignment of configured harness instances that are
 // in a ready state. Rank assignments can be nil.
-func (h *EngineHarness) readyRanks() []system.Rank {
+func (h *EngineHarness) readyRanks() []ranklist.Rank {
 	h.RLock()
 	defer h.RUnlock()
 
-	ranks := make([]system.Rank, 0)
+	ranks := make([]ranklist.Rank, 0)
 	for idx, ei := range h.instances {
 		if ei.IsReady() {
 			rank, err := ei.GetRank()

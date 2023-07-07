@@ -33,8 +33,7 @@
 #define M_CSUM_CORRUPTION "corruption/current"
 #define M_CSUM_CORRUPTION_TOTAL "corruption/total"
 #define M_STARTED "scrubber_started"
-#define M_ENDED "scrubber_finished"
-#define M_LAST_DURATION "last_duration"
+#define M_LAST_DURATION "prev_duration"
 
 /*
  * DAOS_CSUM_SCRUB_DISABLED can be set in the server config to disable the
@@ -43,9 +42,10 @@
 static inline bool
 scrubbing_is_enabled()
 {
-	char *disabled = getenv("DAOS_CSUM_SCRUB_DISABLED");
+	bool result = false;
 
-	return disabled == NULL;
+	d_getenv_bool("DAOS_CSUM_SCRUB_DISABLED", &result);
+	return !result;
 }
 
 static inline int
@@ -81,6 +81,7 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	cont->scs_cont_hdl = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
 	cont->scs_cont_src = cont_child;
+	cont->scs_props_fetched = cont_child->sc_props_fetched;
 
 	ABT_mutex_lock(cont_child->sc_mutex);
 	cont_child->sc_scrubbing = 1;
@@ -116,73 +117,84 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 	int	rc;
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_scrub_count,
-			     D_TM_COUNTER, "Number of full VOS tree scrubs",
+			     D_TM_COUNTER, "Number of times the VOS tree has been scanned and "
+					   "scrubbed (since the scrubber started)",
 			     NULL, DF_POOL_DIR"/scrubs_completed", DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_scrub_count metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_start,
 			     D_TM_TIMESTAMP,
-			     "When the current scrubbing started", NULL,
+			     "Time stamp when the current tree scrub started", NULL,
 			     DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_start timestamp metric: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "",
-			     DF_POOL_DIR"/"M_ENDED, DP_POOL_DIR(ctx));
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_next_csum_scrub, D_TM_GAUGE,
+			     "milliseconds until next csum scrub", "msec",
+			     DF_POOL_DIR"/next_csum_scrub", DP_POOL_DIR(ctx));
 	if (rc)
-		D_WARN("Failed to create scm_end timestamp metric: "DF_RC"\n", DP_RC(rc));
+		D_WARN("Failed to create scm_next_csum_scrub metric: "DF_RC"\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
-			     "How long waiting between checksum calculations", "ms",
-			     DF_POOL_DIR"/sleep", DP_POOL_DIR(ctx));
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_next_tree_scrub, D_TM_GAUGE,
+			     "seconds until next tree scrub", "sec",
+			     DF_POOL_DIR"/next_tree_scrub", DP_POOL_DIR(ctx));
 	if (rc)
-		D_WARN("Failed to create scm_pool_ult_wait_time metric: "DF_RC"\n", DP_RC(rc));
+		D_WARN("Failed to create scm_next_tree_scrub metric: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&ctx->sc_metrics.scm_busy_time, D_TM_GAUGE,
+			     "current seconds scrubber isn't able to proceed because of active IO",
+			     "sec",
+			     DF_POOL_DIR"/busy_time", DP_POOL_DIR(ctx));
+	if (rc)
+		D_WARN("Failed to create scm_next_tree_scrub metric: "DF_RC"\n", DP_RC(rc));
+
+
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
 			     D_TM_DURATION,
-			     "How long the previous scrub took", "ms",
+			     "The duration the previous tree scrub took", "ms",
 			     DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_last_duration metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs,
-			     D_TM_COUNTER, "Number of checksums calculated for "
-					   "current scan", NULL,
+			     D_TM_COUNTER, "Number of checksums calculated during  "
+					   "current tree scrub", NULL,
 			     DF_POOL_DIR"/"M_CSUM_COUNTER, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_csum_calcs metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_last,
-			     D_TM_COUNTER, "Number of checksums calculated in last "
-					   "scan", NULL,
-			     DF_POOL_DIR"/"M_CSUM_COUNTER_PREV, DP_POOL_DIR(ctx));
+			     D_TM_COUNTER, "Number of checksums calculated in last tree scrub",
+			     NULL, DF_POOL_DIR"/"M_CSUM_COUNTER_PREV, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_csum_calcs_last metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs_total,
-			     D_TM_COUNTER, "Total number of checksums calculated",
-			     NULL,
+			     D_TM_COUNTER, "Total number of checksums scrubbed (since the "
+					   "scrubber process started)", NULL,
 			     DF_POOL_DIR"/"M_CSUM_COUNTER_TOTAL, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_csum_calcs_total metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed,
-			     D_TM_COUNTER, "Number of bytes scrubbed",
+			     D_TM_COUNTER, "Number of bytes scrubbed during the current tree scrub",
 			     "bytes",
 			     DF_POOL_DIR"/"M_BYTES_SCRUBBED, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_bytes_scrubbed metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_last,
-			     D_TM_COUNTER, "Number of bytes scrubbed in last scan",
+			     D_TM_COUNTER, "Number of bytes scrubbed in last tree scrub",
 			     "bytes",
 			     DF_POOL_DIR"/"M_BYTES_SCRUBBED_PREV, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_bytes_scrubbed_last metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_bytes_scrubbed_total,
-			     D_TM_COUNTER, "Total number of bytes scrubbed",
+			     D_TM_COUNTER, "Total number of bytes scrubbed bytes (since the "
+					   "scrubber process started)",
 			     "bytes",
 			     DF_POOL_DIR"/"M_BYTES_SCRUBBED_TOTAL, DP_POOL_DIR(ctx));
 	if (rc)
@@ -190,15 +202,15 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_corruption,
 			     D_TM_COUNTER, "Number of silent data corruption "
-					   "detected during current scan",
+					   "detected during current tree scrub",
 			     NULL,
 			     DF_POOL_DIR"/"M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
 	if (rc)
 		D_WARN("Failed to create scm_corruption metric: "DF_RC"\n", DP_RC(rc));
 
 	rc = d_tm_add_metric(&ctx->sc_metrics.scm_corruption_total,
-			     D_TM_COUNTER, "Total number of silent data corruption "
-					   "detected",
+			     D_TM_COUNTER, "Total number of silent data corruption detected (since "
+					   "the pool was created)",
 			     NULL,
 			     DF_POOL_DIR"/"M_CSUM_CORRUPTION_TOTAL,
 			     DP_POOL_DIR(ctx));
@@ -214,7 +226,7 @@ drain_pool_target(uuid_t pool_uuid, d_rank_t rank, uint32_t target)
 	struct pool_target_addr		 addr = {0};
 	int rc;
 
-	D_ERROR("Draining target. rank: %d, target: %d", rank, target);
+	D_ERROR("Draining target. rank: %d, target: %d\n", rank, target);
 
 	rc = ds_pool_get_ranks(pool_uuid, PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_NEW,
 			       &out_ranks);
@@ -327,7 +339,7 @@ scrubbing_ult(void *arg)
 
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
-		uint32_t sleep_time = 5000;
+		uint32_t sleep_time = 1000;
 
 		rc = vos_scrub_pool(&ctx);
 		if (rc == -DER_SHUTDOWN) {
@@ -356,14 +368,12 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 
 	/** Don't even create the ULT if scrubbing is disabled. */
 	if (!scrubbing_is_enabled()) {
-		C_TRACE("Checksum scrubbing DISABLED. "
-			"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
+		C_TRACE("Checksum scrubbing DISABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 			dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 		return 0;
 	}
 
-	C_TRACE("Checksum scrubbing ENABLED. "
-		"xs_id: %d, tgt_id: %d, ctx_id: %d, ",
+	C_TRACE("Checksum scrubbing ENABLED. xs_id: %d, tgt_id: %d, ctx_id: %d\n",
 		dmi->dmi_xs_id, dmi->dmi_tgt_id, dmi->dmi_ctx_id);
 
 	/* There will be several levels iteration, such as pool, container, object, and lower,
@@ -373,7 +383,7 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	child->spc_scrubbing_req = sched_create_ult(&attr, scrubbing_ult, child,
 						    DSS_DEEP_STACK_SZ);
 	if (child->spc_scrubbing_req == NULL) {
-		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.n",
+		D_ERROR(DF_UUID"[%d]: Failed to create Scrubbing ULT.\n",
 			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}

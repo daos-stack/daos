@@ -1,44 +1,35 @@
 hosts:
-  test_servers: 4
-  test_clients: 4
+  test_servers: 2
+  test_clients: 2
 timeout: 700
 server_config:
-  engines_per_host: 2
   name: daos_server
-  servers:
+  engines_per_host: 2
+  crt_timeout: 60
+  engines:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem0"]
-      scm_mount: /mnt/daos0
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
-      scm_class: dcpm
-      scm_list: ["/dev/pmem1"]
-      scm_mount: /mnt/daos1
+      storage: auto
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 pool:
-  mode: 146
-  name: daos_server
   scm_size: 3000000000
   nvme_size: 9000000000
   control_method: dmg
@@ -49,10 +40,10 @@ container:
 ior:
   ior_timeout: 60
   client_processes:
-    np: 128
+    ppn: 32
   test_file: daos:/testFile
   repetitions: 2
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     ior_flags:
       - "-v -W -w -r -R"
@@ -61,7 +52,7 @@ ior:
       - DFS
       - MPIIO
       - POSIX
-      - POSIX+IL # Custom DFUSE with interception handled by test
+      - POSIX+IL  # Custom DFUSE with interception handled by test
       - HDF5
       - HDF5-VOL
     transfer_block_size:
@@ -72,6 +63,6 @@ ior:
       - "RP_2GX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
-  disable_caching: True
+  disable_caching: true
 hdf5_vol:
   plugin_path: /usr/lib64/mpich/lib

@@ -8,6 +8,7 @@ package test
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/fs"
@@ -190,6 +191,9 @@ func ShowBufferOnFailure(t *testing.T, buf fmt.Stringer) {
 
 	if t.Failed() {
 		fmt.Printf("captured log output:\n%s", buf.String())
+	}
+	if r, ok := buf.(interface{ Reset() }); ok {
+		r.Reset()
 	}
 }
 
@@ -395,4 +399,12 @@ func CopyDir(t *testing.T, src, dst string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Context returns a context that is canceled when the test is done.
+func Context(t *testing.T) context.Context {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	return ctx
 }

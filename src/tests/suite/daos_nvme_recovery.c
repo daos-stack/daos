@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -630,7 +630,9 @@ nvme_test_simulate_IO_error(void **state)
 	 * Get DAOS server file
 	 */
 	D_ALLOC(control_log_file, 1024);
+	D_ASSERT(control_log_file);
 	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
+	D_ASSERT(server_config_file);
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
@@ -673,9 +675,9 @@ nvme_test_simulate_IO_error(void **state)
 
 	/*
 	 * Read the data which will induce the READ Error and expected to fail
-	 * with DER_IO Error.
+	 * with DER_NVME_IO Error (no replica for retry).
 	 */
-	arg->expect_result = -DER_IO;
+	arg->expect_result = -DER_NVME_IO;
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
 				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 
@@ -687,9 +689,10 @@ nvme_test_simulate_IO_error(void **state)
 
 	/*
 	 * Insert the 4K record again which will induce WRITE Error and
-	 * expected to fail with DER_IO Error.
+	 * expected write succeeded (on retry).
 	 */
 	rx_nr = size / OW_IOD_SIZE;
+	arg->expect_result = -DER_SUCCESS;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 

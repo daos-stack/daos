@@ -28,7 +28,7 @@ jobs:
       DOCKER_BASE: ${{ matrix.base }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
@@ -37,7 +37,7 @@ jobs:
         run: ./ci/gha_helper.py
         id: commit-hash
       - name: Fetch docker images from cache.
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -78,11 +78,11 @@ jobs:
         compiler: [clang, gcc]
         include:
           - distro: rocky
-            base: el.8
-            with: rockylinux/rockylinux:8
+            base: el.9
+            with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -93,7 +93,7 @@ jobs:
       COMPILER: ${{ matrix.compiler }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           submodules: true
           fetch-depth: 500
@@ -102,7 +102,7 @@ jobs:
         run: ./ci/gha_helper.py
         id: commit-hash
       - name: Fetch docker images from cache.
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}

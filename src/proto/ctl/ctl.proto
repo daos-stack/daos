@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,6 +15,7 @@ import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
 import "ctl/server.proto";
+import "ctl/support.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -38,6 +39,8 @@ service CtlSvc {
 	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
+	// Manage devices (per-server) identified in SMD table
+	rpc SmdManage(SmdManageReq) returns (SmdManageResp) {}
 	// Set log level for DAOS I/O Engines on a host.
 	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
@@ -50,4 +53,6 @@ service CtlSvc {
 	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StartRanks(RanksReq) returns (RanksResp) {}
+	// Perform a Log collection on Servers for support/debug purpose
+	rpc CollectLog (CollectLogReq) returns (CollectLogResp) {};
 }

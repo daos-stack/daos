@@ -73,7 +73,7 @@ public class IODataDescSync extends IODataDescBase {
    * and buffer length.
    *
    * @param maxKeyLen
-   * max length of dkey and akey
+   * max length of dkey and akey, should be no less than 8
    * @param nbrOfEntries
    * number of entries/akeys
    * @param entryBufLen
@@ -89,8 +89,9 @@ public class IODataDescSync extends IODataDescBase {
   protected IODataDescSync(int maxKeyLen, int nbrOfEntries, int entryBufLen,
                            IodType iodType, int recordSize, boolean updateOrFetch) {
     super(null, updateOrFetch);
-    if (maxKeyLen <= 0) {
-      throw new IllegalArgumentException("dkey length should be positive. " + maxKeyLen);
+    if (maxKeyLen < Constants.DKEY_MIN_LENGTH) {
+      throw new IllegalArgumentException("dkey length should be no less than " + Constants.DKEY_MIN_LENGTH +
+          ". " + maxKeyLen);
     }
     if (maxKeyLen > Short.MAX_VALUE) {
       throw new IllegalArgumentException("dkey and akey length in should not exceed "
@@ -145,7 +146,7 @@ public class IODataDescSync extends IODataDescBase {
     super(dkey, updateOrFetch);
     this.maxKeyLen = -1;
     this.dkey = dkey;
-    this.dkeyBytes = DaosUtils.keyToBytes(dkey);
+    this.dkeyBytes = DaosUtils.keyToBytes8(dkey);
     if (iodType == IodType.NONE) {
       throw new IllegalArgumentException("need valid IodType, either " + IodType.ARRAY + " or " +
         IodType.SINGLE);
@@ -269,7 +270,7 @@ public class IODataDescSync extends IODataDescBase {
     if (dkey.equals(this.dkey)) { // in case of same dkey
       return;
     }
-    byte[] dkeyBytes = DaosUtils.keyToBytes(dkey);
+    byte[] dkeyBytes = DaosUtils.keyToBytes8(dkey);
     this.dkey = dkey;
     this.dkeyBytes = dkeyBytes;
   }

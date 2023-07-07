@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,13 +15,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func getPBNvmeQueryResults(t *testing.T, devs storage.NvmeControllers) []*ctlpb.NvmeFirmwareQueryResp {
@@ -300,7 +299,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 		"NVMe - specific devices": {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
-				DeviceIDs: []string{"0000:80:00.1", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "0000:02:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: testNVMeDevs},
@@ -460,7 +459,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			req: ctlpb.FirmwareQueryReq{
 				QueryNvme: true,
 				QueryScm:  true,
-				DeviceIDs: []string{"0000:80:00.1", "Device0", "0000:80:00.2"},
+				DeviceIDs: []string{"0000:01:00.0", "Device0", "0000:02:00.0"},
 			},
 			smbc: &scm.MockBackendConfig{
 				GetModulesRes:        mockSCM,
@@ -498,7 +497,7 @@ func TestCtlSvc_FirmwareQuery(t *testing.T) {
 			config := config.DefaultServer()
 			cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 
-			resp, err := cs.FirmwareQuery(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareQuery(test.Context(t), &tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -780,7 +779,7 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 			req: ctlpb.FirmwareUpdateReq{
 				Type:         ctlpb.FirmwareUpdateReq_NVMe,
 				FirmwarePath: "/some/path",
-				DeviceIDs:    []string{"0000:80:00.0", "0000:80:00.1"},
+				DeviceIDs:    []string{"0000:00:00.0", "0000:01:00.0"},
 			},
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: mockNVMe},
@@ -811,14 +810,14 @@ func TestCtlSvc_FirmwareUpdate(t *testing.T) {
 				if !tc.noRankEngines {
 					instance._superblock = &Superblock{}
 					instance._superblock.ValidRank = true
-					instance._superblock.Rank = system.NewRankPtr(uint32(i))
+					instance._superblock.Rank = ranklist.NewRankPtr(uint32(i))
 				}
 				if err := cs.harness.AddInstance(instance); err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			resp, err := cs.FirmwareUpdate(context.TODO(), &tc.req)
+			resp, err := cs.FirmwareUpdate(test.Context(t), &tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 

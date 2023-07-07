@@ -1,25 +1,25 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from ior_test_base import IorTestBase
 
 
-# pylint: disable=too-many-ancestors
 class IoConsistency(IorTestBase):
     """Test class Description: Verify data consistency using different
-                               middlewares. In this case, using DFS and POSIX.
+                               middleware. In this case, using DFS and POSIX.
 
     :avocado: recursive
     """
 
     def test_ioconsistency(self):
         """Jira ID: DAOS-4778.
+
         Test Description:
             Run IOR first using DFS and then using POSIX to verify data
             consistency.
+
         Use Cases:
             Create a pool
             Create POSIX type container.
@@ -30,12 +30,13 @@ class IoConsistency(IorTestBase):
             Try to re-create to the same file name after deletion, which should
             work without issues.
             Repeat the same steps as above for SSF this time.
+
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=daosio,ioconsistency,ior,dfuse
+        :avocado: tags=hw,medium
+        :avocado: tags=io,daosio,ior,dfuse
+        :avocado: tags=IoConsistency,test_ioconsistency
         :avocado: tags=DAOS_5610
         """
-
         # test params
         apis_flags = self.params.get("api_flag", "/run/ior/io_consistency/*")
 

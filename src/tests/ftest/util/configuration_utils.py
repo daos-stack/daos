@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -296,7 +295,7 @@ class Configuration():
         """Is the specified path valid for the active configuration.
 
         Note:
-            Does not support paths with wildcards.
+            Does not support paths with wild-cards.
             Assumes configuration names are always at the end of the path.
 
         Args:

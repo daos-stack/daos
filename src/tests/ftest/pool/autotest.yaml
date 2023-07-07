@@ -10,13 +10,10 @@ setup:
   start_servers_once: False
 server_config:
   name: daos_server
-  servers:
-    scm_class: dcpm
-    scm_list: ["/dev/pmem0"]
-    bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a"]
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
 pool:
-  mode: 146
   size: 90%
-  tier_ratio: 6
   control_method: dmg

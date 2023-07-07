@@ -58,8 +58,8 @@ action).
 All storage targets are promptly notified of pool map changes by the pool
 service. This is not the case for client nodes, which are lazily informed
 of pool map invalidation each time they communicate with any engines. To do so,
-clients pack in every RPC their current pool map version. Servers reply not
-only with the current pool map version. Consequently, when a DAOS client
+clients include their last known pool map version with every RPC and servers reply
+with the current pool map version. Consequently, when a DAOS client
 experiences RPC timeout, it regularly communicates with the other DAOS
 target to guarantee that its pool map is always current. Clients will then
 eventually be informed of the target exclusion and enter into degraded mode.

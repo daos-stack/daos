@@ -249,7 +249,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	uint64_t *blk_off, found_end, vfe_end;
 	int rc, opc = BTR_PROBE_LE;
 
-	D_ASSERT(pmemobj_tx_stage() == TX_STAGE_WORK ||
+	D_ASSERT(umem_tx_inprogress(vsi->vsi_umem) ||
 		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	D_ASSERT(vfe->vfe_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(vfe->vfe_blk_cnt > 0);

@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -63,9 +62,9 @@ class CsumContainerValidation(TestWithServers):
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
         :avocado: tags=all,daily_regression
-        :avocado: vm
+        :avocado: tags=vm
         :avocado: tags=checksum
-        :avocado: tags=basic_checksum_object,test_single_object_with_checksum
+        :avocado: tags=CsumContainerValidation,test_single_object_with_checksum
         """
         self.d_log.info("Writing the Single Dataset")
         record_index = 0
@@ -87,13 +86,10 @@ class CsumContainerValidation(TestWithServers):
         record_index = 0
         for dkey in range(self.no_of_dkeys):
             for akey in range(self.no_of_akeys):
-                indata = ("{0}".format(str(akey)[0]) *
-                          self.record_length[record_index])
+                indata = str(akey)[0] * self.record_length[record_index]
                 c_dkey = create_string_buffer("dkey {0}".format(dkey))
                 c_akey = create_string_buffer("akey {0}".format(akey))
-                val = self.ioreq.single_fetch(c_dkey,
-                                              c_akey,
-                                              len(indata)+1)
+                val = self.ioreq.single_fetch(c_dkey, c_akey, len(indata) + 1)
                 if indata != val.value.decode('utf-8'):
                     message = (
                         "ERROR:Data mismatch for dkey={}, akey={}: indata={}, "

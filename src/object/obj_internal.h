@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,6 +21,7 @@
 #include <daos/btree_class.h>
 #include <daos/object.h>
 #include <daos/cont_props.h>
+#include <daos/container.h>
 
 #include "obj_rpc.h"
 #include "obj_ec.h"
@@ -48,8 +49,8 @@ struct dc_obj_shard {
 	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
-	/** container handler of the object */
-	daos_handle_t		do_co_hdl;
+	/** container ptr */
+	struct dc_cont		*do_co;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
@@ -82,8 +83,10 @@ struct dc_object {
 	struct daos_obj_md	 cob_md;
 	/** object class attribute */
 	struct daos_oclass_attr	 cob_oca;
-	/** container open handle */
-	daos_handle_t		 cob_coh;
+	/** container ptr */
+	struct dc_cont		*cob_co;
+	/** pool ptr */
+	struct dc_pool		*cob_pool;
 	/** cob_spin protects obj_shards' do_ref */
 	pthread_spinlock_t	 cob_spin;
 
@@ -103,7 +106,9 @@ struct dc_object {
 	uint64_t		*cob_time_fetch_leader;
 	/** shard object ptrs */
 	struct dc_obj_layout	*cob_shards;
-	uint32_t		cob_ec_parity_rotate:1;
+
+	/* The current layout version for the object. */
+	uint32_t		cob_layout_version;
 };
 
 /* to record EC singv fetch stat from different shards */
@@ -184,7 +189,9 @@ struct obj_reasb_req {
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
-					 orr_fail_alloc:1;
+					 orr_fail_alloc:1,
+	/* The fetch data/sgl is rebuilt by EC parity rebuild */
+					 orr_recov_data:1;
 };
 
 static inline void
@@ -197,6 +204,8 @@ struct obj_ec_parity {
 	unsigned char	**p_bufs;
 	unsigned int	  p_nr;
 };
+
+enum obj_rpc_opc;
 
 typedef int (*shard_io_cb_t)(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			     void *shard_args,
@@ -250,6 +259,7 @@ struct shard_sub_anchor {
 	d_sg_list_t	ssa_sgl;
 	daos_key_desc_t	*ssa_kds;
 	daos_recx_t	*ssa_recxs;
+	uint32_t	ssa_shard;
 };
 
 /**
@@ -299,6 +309,12 @@ struct obj_auxi_list_obj_enum {
 struct shard_sync_args {
 	struct shard_auxi_args	 sa_auxi;
 	daos_epoch_t		*sa_epoch;
+};
+
+struct shard_k2a_args {
+	struct shard_auxi_args	 ka_auxi;
+	struct dtx_id		 ka_dti;
+	daos_anchor_t		*ka_anchor;
 };
 
 #define OBJ_TGT_INLINE_NR	9
@@ -362,6 +378,7 @@ struct obj_auxi_args {
 					 csum_retry:1,
 					 csum_report:1,
 					 tx_uncertain:1,
+					 nvme_io_err:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
 					 ec_in_recov:1,
@@ -375,11 +392,14 @@ struct obj_auxi_args {
 					 cond_modify:1,
 					 /* conf_fetch split to multiple sub-tasks */
 					 cond_fetch_split:1,
-					 reintegrating:1;
+					 reintegrating:1,
+					 tx_renew:1,
+					 rebuilding:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
-	uint32_t			 retry_cnt;
+	uint16_t			 retry_cnt;
+	uint16_t			 inprogress_cnt;
 	struct obj_req_tgts		 req_tgts;
 	d_sg_list_t			*sgls_dup;
 	crt_bulk_t			*bulks;
@@ -388,15 +408,16 @@ struct obj_auxi_args {
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
-	uint64_t			dkey_hash;
+	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
 	union {
-		struct shard_rw_args	 rw_args;
-		struct shard_punch_args	 p_args;
-		struct shard_list_args	 l_args;
-		struct shard_sync_args	 s_args;
+		struct shard_rw_args		rw_args;
+		struct shard_punch_args		p_args;
+		struct shard_list_args		l_args;
+		struct shard_k2a_args		k_args;
+		struct shard_sync_args		s_args;
 	};
 };
 
@@ -420,11 +441,9 @@ obj_enum_iterate(daos_key_desc_t *kdss, d_sg_list_t *sgl, int nr,
 		 void *cb_arg);
 #define CLI_OBJ_IO_PARMS	8
 
-#define obj_ec_dkey_hash_get(obj, dkey_hash)	\
-	(obj->cob_ec_parity_rotate ? dkey_hash : 0)
-
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph,
+	   uint64_t boundary);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -451,6 +470,29 @@ ec_bulk_spec_get_skip(int index, struct ec_bulk_spec *skip_list)
 {
 	return skip_list[index].is_skip;
 }
+
+static inline bool
+is_ec_data_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
+{
+	D_ASSERT(daos_oclass_is_ec(&obj->cob_oca));
+	return obj_ec_shard_off(obj, dkey_hash, shard) < obj_ec_data_tgt_nr(&obj->cob_oca);
+}
+
+static inline bool
+is_ec_parity_shard(struct dc_object *obj, uint64_t dkey_hash, uint32_t shard)
+{
+	D_ASSERT(daos_oclass_is_ec(&obj->cob_oca));
+	return obj_ec_shard_off(obj, dkey_hash, shard) >= obj_ec_data_tgt_nr(&obj->cob_oca);
+}
+
+static inline bool
+daos_obj_id_is_ec(daos_obj_id_t oid)
+{
+	return daos_obj_id2ord(oid) >= OR_RS_2P1 && daos_obj_id2ord(oid) <= OR_RS_16P2;
+}
+
+#define obj_ec_parity_rotate_enabled(obj)	(obj->cob_layout_version > 0)
+#define obj_ec_parity_rotate_enabled_by_version(layout_ver)	(layout_ver > 0)
 #define DOVA_NUM	32
 #define DOVA_BUF_LEN	4096
 
@@ -472,8 +514,7 @@ struct dc_obj_verify_args {
 	uint32_t			 num;
 	unsigned int			 eof:1,
 					 non_exist:1,
-					 data_fetched:1,
-					 ec_parity_rotate:1;
+					 data_fetched:1;
 	daos_key_desc_t			 kds[DOVA_NUM];
 	d_sg_list_t			 list_sgl;
 	d_sg_list_t			 fetch_sgl;
@@ -491,9 +532,21 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
-int dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-		  enum daos_otype_t otype, daos_oclass_hints_t hints,
-		  enum daos_obj_redun *ord, uint32_t *nr);
+static inline int
+dc_cont2uuid(struct dc_cont *dc_cont, uuid_t *hdl_uuid, uuid_t *uuid)
+{
+	if (!dc_cont)
+		return -DER_NO_HDL;
+
+	if (hdl_uuid != NULL)
+		uuid_copy(*hdl_uuid, dc_cont->dc_cont_hdl);
+	if (uuid != NULL)
+		uuid_copy(*uuid, dc_cont->dc_uuid);
+	return 0;
+}
+
+int dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype,
+		  daos_oclass_hints_t hints, enum daos_obj_redun *ord, uint32_t *nr);
 
 
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
@@ -516,12 +569,15 @@ int dc_obj_shard_list(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		      void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
 		      uint32_t fw_cnt, tse_task_t *task);
 
-int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
-			   uint32_t flags, struct dc_object *obj,
-			   daos_key_t *dkey, daos_key_t *akey,
-			   daos_recx_t *recx, daos_epoch_t *max_epoch, const uuid_t coh_uuid,
-			   const uuid_t cont_uuid, struct dtx_id *dti,
-			   unsigned int *map_ver, unsigned int req_map_ver,
+int dc_obj_shard_key2anchor(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
+			    void *shard_args, struct daos_shard_tgt *fw_shard_tgts,
+			    uint32_t fw_cnt, tse_task_t *task);
+
+int dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint32_t flags,
+			   uint32_t req_map_ver, struct dc_object *obj,
+			   daos_key_t *dkey, daos_key_t *akey, daos_recx_t *recx,
+			   daos_epoch_t *max_epoch, const uuid_t coh_uuid, const uuid_t cont_uuid,
+			   struct dtx_id *dti, uint32_t *map_ver,
 			   daos_handle_t th, tse_task_t *task);
 
 int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
@@ -531,11 +587,11 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
-int obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, uint32_t tgt_off,
 		      daos_recx_t **recxs_p, daos_epoch_t **recx_ephs_p,
 		      unsigned int *nr, bool convert_parity);
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
-		       daos_iod_t *iods, uint32_t iod_nr, struct daos_oclass_attr *oca);
+		       daos_iod_t *iods, uint32_t iod_nr);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
@@ -554,18 +610,18 @@ bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 int obj_grp_leader_get(struct dc_object *obj, int grp_idx, uint64_t dkey_hash,
 		       bool has_condition, unsigned int map_ver, uint8_t *bit_map);
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
-int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, uint64_t dkey_hash, int shard,
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, uint32_t tgt_off,
 			   daos_recx_t **recxs_p, daos_epoch_t **recx_ephs_p,
 			   unsigned int *iod_nr);
-int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+int obj_ec_singv_encode_buf(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 			    uint64_t dkey_hash, daos_iod_t *iod, d_sg_list_t *sgl,
 			    d_iov_t *e_iov);
-int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+int obj_ec_singv_split(daos_unit_oid_t oid, uint16_t layout_ver, struct daos_oclass_attr *oca,
 		       uint64_t dkey_hash, daos_size_t iod_size, d_sg_list_t *sgl);
 
 int
 obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
-		       uint64_t dkey_hash, daos_iod_t *iods, uint64_t *offs,
+		       uint32_t tgt_off, daos_iod_t *iods, uint64_t *offs,
 		       daos_epoch_t epoch, uint32_t flags, uint32_t nr,
 		       bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
@@ -575,7 +631,7 @@ obj_ec_encode_buf(daos_obj_id_t oid, struct daos_oclass_attr *oca,
 		  unsigned char *p_bufs[]);
 
 int
-obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash);
+obj_ec_parity_alive(daos_handle_t oh, uint64_t dkey_hash, uint32_t *shard);
 
 static inline struct pl_obj_shard*
 obj_get_shard(void *data, int idx)
@@ -588,12 +644,11 @@ obj_get_shard(void *data, int idx)
 static inline bool
 obj_retry_error(int err)
 {
-	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       err == -DER_UPDATE_AGAIN || daos_crt_network_error(err);
+	return err == -DER_TIMEDOUT || err == -DER_STALE || err == -DER_INPROGRESS ||
+	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
+	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
+	       err == -DER_CHKPT_BUSY || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t
@@ -620,16 +675,9 @@ shard_task_abort(tse_task_t *task, void *arg)
 static inline void
 dc_io_epoch_set(struct dtx_epoch *epoch, uint32_t opc)
 {
-	if (srv_io_mode == DIM_CLIENT_DISPATCH && obj_is_modification_opc(opc)) {
-		epoch->oe_value = crt_hlc_get();
-		epoch->oe_first = epoch->oe_value;
-		/* DIM_CLIENT_DISPATCH doesn't promise consistency. */
-		epoch->oe_flags = 0;
-	} else {
-		epoch->oe_value = DAOS_EPOCH_MAX;
-		epoch->oe_first = epoch->oe_value;
-		epoch->oe_flags = 0;
-	}
+	epoch->oe_value = DAOS_EPOCH_MAX;
+	epoch->oe_first = epoch->oe_value;
+	epoch->oe_flags = 0;
 }
 
 static inline void
@@ -662,7 +710,7 @@ dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
 
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
-void obj_addref(struct dc_object *obj);
+struct dc_object *obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
@@ -671,8 +719,10 @@ struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 struct obj_io_context {
 	struct ds_cont_hdl	*ioc_coh;
 	struct ds_cont_child	*ioc_coc;
+	crt_rpc_t		*ioc_rpc;
 	struct daos_oclass_attr	 ioc_oca;
 	daos_handle_t		 ioc_vos_coh;
+	uint32_t		 ioc_layout_ver;
 	uint32_t		 ioc_map_ver;
 	uint32_t		 ioc_opc;
 	uint64_t		 ioc_start_time;
@@ -680,8 +730,7 @@ struct obj_io_context {
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
 				 ioc_lost_reply:1,
-				 ioc_fetch_snap:1,
-				 ioc_ec_rotate_parity:1;
+				 ioc_fetch_snap:1;
 };
 
 static inline uint64_t
@@ -819,12 +868,22 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
-	     tse_task_t *task);
+dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task,
+	     uint32_t backoff, bool comp);
 
 int
 dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
 
 int
 iov_alloc_for_csum_info(d_iov_t *iov, struct dcs_csum_info *csum_info);
+
+/* obj_layout.c */
+int
+obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
+
+int
+obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
+	     unsigned int mode, struct daos_obj_shard_md *shard_md,
+	     struct pl_obj_layout **layout_pp);
+
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

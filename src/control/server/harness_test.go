@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -26,7 +26,9 @@ import (
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	sysprov "github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -56,14 +58,17 @@ func TestServer_Harness_Start(t *testing.T) {
 		expStartCount    uint32                   // number of instance.runner.Start() calls
 		expDrpcCalls     map[uint32][]drpc.Method // method ids called for each instance.Index()
 		expGrpcCalls     map[uint32][]string      // string repr of call for each instance.Index()
-		expRanks         map[uint32]system.Rank   // ranks to have been set during Start()
+		expRanks         map[uint32]ranklist.Rank // ranks to have been set during Start()
 		expMembers       system.Members           // members to have been registered during Start()
 		expIoErrs        map[uint32]error         // errors expected from instances
 	}{
 		"normal startup/shutdown": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -85,18 +90,21 @@ func TestServer_Harness_Start(t *testing.T) {
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
-				0: {fmt.Sprintf("Join %d", system.NilRank)},
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
+				0: {fmt.Sprintf("Join %d", ranklist.NilRank)},
+				1: {fmt.Sprintf("Join %d", ranklist.NilRank)},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(0),
+				1: ranklist.Rank(1),
 			},
 		},
 		"startup/shutdown with preset ranks": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -118,9 +126,9 @@ func TestServer_Harness_Start(t *testing.T) {
 				0: {"Join 1"}, // rank == instance.Index() + 1
 				1: {"Join 2"},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(1),
-				1: system.Rank(2),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(1),
+				1: ranklist.Rank(2),
 			},
 		},
 		"fails to start": {
@@ -134,17 +142,20 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
 				},
 			},
 			expStartCount: maxEngines,
-			expRanks: map[uint32]system.Rank{
-				0: system.NilRank,
-				1: system.NilRank,
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.NilRank,
+				1: ranklist.NilRank,
 			},
 			expIoErrs: map[uint32]error{
 				0: errors.New("oops"),
@@ -155,8 +166,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
@@ -178,12 +192,12 @@ func TestServer_Harness_Start(t *testing.T) {
 				},
 			},
 			expGrpcCalls: map[uint32][]string{
-				0: {fmt.Sprintf("Join %d", system.NilRank)},
-				1: {fmt.Sprintf("Join %d", system.NilRank)},
+				0: {fmt.Sprintf("Join %d", ranklist.NilRank)},
+				1: {fmt.Sprintf("Join %d", ranklist.NilRank)},
 			},
-			expRanks: map[uint32]system.Rank{
-				0: system.Rank(0),
-				1: system.Rank(1),
+			expRanks: map[uint32]ranklist.Rank{
+				0: ranklist.Rank(0),
+				1: ranklist.Rank(1),
 			},
 			expIoErrs: map[uint32]error{
 				0: errors.New("oops"),
@@ -233,13 +247,14 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
 
-				msc := scm.MockSysConfig{IsMountedBool: true}
-				sysp := scm.NewMockSysProvider(log, &msc)
+				msc := &sysprov.MockSysConfig{IsMountedBool: true}
+				sysp := sysprov.NewMockSysProvider(log, msc)
 				provider := storage.MockProvider(
 					log, 0, &engineCfg.Storage,
 					sysp,
-					scm.NewMockProvider(log, nil, &msc),
+					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+					nil,
 				)
 
 				idx := uint32(i)
@@ -249,7 +264,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					defer joinMu.Unlock()
 					joinRequests[idx] = []string{fmt.Sprintf("Join %d", req.Rank)}
 					return &control.SystemJoinResp{
-						Rank: system.Rank(idx),
+						Rank: ranklist.Rank(idx),
 					}, nil
 				}
 
@@ -262,13 +277,13 @@ func TestServer_Harness_Start(t *testing.T) {
 				if UUID, exists := tc.instanceUuids[i]; exists {
 					uuid = UUID
 				}
-				var rank *system.Rank
+				var rank *ranklist.Rank
 				var isValid bool
 				if tc.rankInSuperblock {
-					rank = system.NewRankPtr(uint32(i + 1))
+					rank = ranklist.NewRankPtr(uint32(i + 1))
 					isValid = true
 				} else if isAP { // bootstrap will assume rank 0
-					rank = new(system.Rank)
+					rank = new(ranklist.Rank)
 				}
 				ei.setSuperblock(&Superblock{
 					UUID: uuid, Rank: rank, ValidRank: isValid,
@@ -289,7 +304,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(test.Context(t))
 			if tc.waitTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.waitTimeout)
 			}
@@ -476,15 +491,16 @@ func (db *mockdb) ResignLeadership(error) error {
 
 func TestServer_Harness_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mics         []*MockInstanceConfig
-		method       drpc.Method
-		body         proto.Message
-		notStarted   bool
-		notLeader    bool
-		resignCause  error
-		expShutdown  bool
-		expNotLeader bool
-		expErr       error
+		mics           []*MockInstanceConfig
+		method         drpc.Method
+		body           proto.Message
+		notStarted     bool
+		notLeader      bool
+		resignCause    error
+		expShutdown    bool
+		expNotLeader   bool
+		expFailHandler bool
+		expErr         error
 	}{
 		"success": {
 			mics: []*MockInstanceConfig{
@@ -515,15 +531,17 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: errors.New("whoops"),
 				},
 			},
-			expErr: errors.New("whoops"),
+			expErr:         errors.New("whoops"),
+			expFailHandler: true,
 		},
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
 				{
-					Started: atm.NewBool(true),
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
 				},
 			},
-			expErr: errInstanceNotReady,
+			expErr: errEngineNotReady,
 		},
 		"harness not started": {
 			mics:       []*MockInstanceConfig{},
@@ -540,7 +558,8 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					Ready: atm.NewBool(true),
 				},
 			},
-			expErr: errors.New("whoops"),
+			expErr:         errors.New("whoops"),
+			expFailHandler: true,
 		},
 		"none available": {
 			mics: []*MockInstanceConfig{
@@ -553,8 +572,18 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: FaultDataPlaneNotStarted,
 				},
 			},
-			expNotLeader: true,
-			expErr:       FaultDataPlaneNotStarted,
+			expNotLeader:   true,
+			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"context canceled": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: context.Canceled,
+				},
+			},
+			expErr: context.Canceled,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -568,7 +597,12 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			var drpcFailureInvoked atm.Bool
+			h.OnDrpcFailure(func(_ context.Context, err error) {
+				drpcFailureInvoked.SetTrue()
+			})
+
+			ctx, cancel := context.WithCancel(test.Context(t))
 			db := &mockdb{
 				isLeader: !tc.notLeader,
 			}
@@ -602,6 +636,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
+			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
 		})
 	}
 }

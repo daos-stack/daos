@@ -37,7 +37,7 @@ The DAOS data plane relies on [OFI libfabric](https://ofiwg.github.io/libfabric/
 and supports OFI providers for Ethernet/tcp and InfiniBand/verbs.
 Starting with a Technology Preview in DAOS 2.2, [UCX](https://www.openucx.org/)
 is also supported as an alternative network stack for DAOS.
-Refer to [UCX Fabric Support (DAOS 2.2 Technology Preview)](./uxd.md)
+Refer to [UCX Fabric Support (DAOS 2.2 Technology Preview)](./ucx.md)
 for details on setting up DAOS with UCX support.
 
 DAOS supports multiple network interfaces on the servers
@@ -127,10 +127,8 @@ to that CPU from that server instance. The DAOS control plane is
 responsible for detecting the storage and network affinity and starting
 the I/O Engines accordingly.
 
-![](media/image3.png)
 
 ## Fault Domains
-
 
 DAOS relies on single-ported storage massively distributed across
 different storage nodes. Each storage node is thus a single point of

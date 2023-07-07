@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -88,9 +87,7 @@ class CartIvOneNodeTest(CartTest):
 
     def _verify_action(self, action):
         """Verify the action."""
-        if (('operation' not in action) or
-                ('rank' not in action) or
-                ('key' not in action)):
+        if (('operation' not in action) or ('rank' not in action) or ('key' not in action)):
             self.print("Error happened during action check")
             raise ValueError(
                 "Each action must contain an operation, rank, and key")
@@ -101,8 +98,7 @@ class CartIvOneNodeTest(CartTest):
 
     def _verify_fetch_operation(self, action):
         """Verify the fetch operation."""
-        if (('return_code' not in action) or
-                ('expected_value' not in action)):
+        if (('return_code' not in action) or ('expected_value' not in action)):
             self.print("Error: fetch operation was malformed")
             raise ValueError("Fetch operation malformed")
 
@@ -147,25 +143,23 @@ class CartIvOneNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-                # Read the result into test_result and remove the temp file
-                log_file = open(log_path)
-
                 # Try to induce "No JSON object could be decoded" error
                 #
                 # 1.
-                # with open(log_path, "a") as myfile:
-                # myfile.write("some-invalid-junk-appended-to-json")
+                # with open(log_path, "a") as my_file:
+                # my_file.write("some-invalid-junk-appended-to-json")
                 #
                 # 2.
                 # codecs.open(log_file, "w", "unicode").write('')
 
                 # DEBUGGING: dump contents of JSON file to screen
-                with open(log_path, 'r') as f:
-                    print(f.read())
+                with open(log_path, 'r') as file:
+                    print(file.read())
 
-                test_result = json.load(log_file)
+                # Read the result into test_result and remove the temp file
+                with open(log_path, 'r') as log_file:
+                    test_result = json.load(log_file)
 
-                log_file.close()
                 os.close(log_fd)
                 os.remove(log_path)
 
@@ -230,8 +224,7 @@ class CartIvOneNodeTest(CartTest):
 
             if "set_grp_version" in operation:
                 command = " {!s} -o '{!s}' -r '{!s}' -v '{!s}' "\
-                        .format(command, operation, rank,
-                                action['version'])
+                    .format(command, operation, rank, action['version'])
 
                 if 'time' in action:
                     command = " {!s} -m '{!s}'"\
@@ -250,8 +243,7 @@ class CartIvOneNodeTest(CartTest):
                             cli_rtn, command))
 
             if "get_grp_version" in operation:
-                command = " {!s} -o '{!s}' -r '{!s}' " \
-                        .format(command, operation, rank)
+                command = " {!s} -o '{!s}' -r '{!s}' ".format(command, operation, rank)
                 clicmd += command
 
                 self.print("\nClient cmd : %s\n" % clicmd)
@@ -262,19 +254,21 @@ class CartIvOneNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-    def test_cart_iv(self):
+    def test_cart_iv_one_node(self):
         """Test CaRT IV.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,iv,one_node,memcheck
+        :avocado: tags=CartIvOneNodeTest,test_cart_iv_one_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as error:
+            self.print("Exception in launching server : {}".format(error))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
@@ -480,7 +474,7 @@ class CartIvOneNodeTest(CartTest):
 
         clicmd = self.build_cmd(self.env, "test_clients")
 
-        ########## Launch Client Actions ##########
+        # Launch Client Actions
 
         try:
             self._iv_test_actions(clicmd, actions)
@@ -489,9 +483,9 @@ class CartIvOneNodeTest(CartTest):
             traceback.print_stack()
             self.print("TEST FAILED: %s" % str(exception))
 
-        ########## Shutdown Servers ##########
+        # Shutdown Servers
 
-        num_servers = self.get_srv_cnt("test_servers")
+        num_servers = 1
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 
@@ -503,9 +497,9 @@ class CartIvOneNodeTest(CartTest):
             try:
                 subprocess.call(shlex.split(clicmdt))
             # pylint: disable=broad-except
-            except Exception as e:
+            except Exception as error:
                 failed = True
-                self.print("Exception in launching client : {}".format(e))
+                self.print("Exception in launching client : {}".format(error))
 
         time.sleep(1)
 
@@ -515,9 +509,9 @@ class CartIvOneNodeTest(CartTest):
         try:
             subprocess.call(shlex.split(clicmd))
         # pylint: disable=broad-except
-        except Exception as e:
+        except Exception as error:
             failed = True
-            self.print("Exception in launching client : {}".format(e))
+            self.print("Exception in launching client : {}".format(error))
 
         # wait for servers to finish shutting down
         time.sleep(2)

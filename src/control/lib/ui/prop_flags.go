@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 	"github.com/jessevdk/go-flags"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 var (
@@ -25,9 +26,7 @@ var (
 
 const (
 	// MaxPropKeyLen is the maximum length of a property key.
-	MaxPropKeyLen = 20
-	// MaxPropValLen is the maximum length of a property value.
-	MaxPropValLen = 128
+	MaxPropKeyLen = daos.MaxAttributeNameLength
 
 	propKvSep = ":"
 	propSep   = ","
@@ -42,11 +41,21 @@ func propError(fs string, args ...interface{}) *flags.Error {
 // CompletionMap is a map of key to a list of possible completions.
 type CompletionMap map[string][]string
 
+type PropertiesFlag struct {
+	completions      CompletionMap
+	deprecatedKeyMap map[string]string
+}
+
+// SettableDeprecated Keys accepts a list of deprecated property keys that are settable.
+func (f *PropertiesFlag) DeprecatedKeyMap(deprKeyMap map[string]string) {
+	f.deprecatedKeyMap = deprKeyMap
+}
+
 // SetPropertiesFlag is used to hold a list of properties to set.
 type SetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  map[string]string
 	settableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // SettableKeys accepts a list of property keys that are settable.
@@ -70,8 +79,48 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 		return true
 	}
 
-	_, isSettable := f.settableKeys[key]
+	if _, isSettable := f.settableKeys[key]; isSettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isSettable := f.deprecatedKeyMap[key]
 	return isSettable
+}
+
+// splitFn generates a function suitable for use with
+// strings.FieldsFunc that will split on the specified
+// separator, but ignore the separator if it is inside
+// quotes or is escaped. NB: Quotes must be balanced!
+func splitFn(sep rune, max int) func(r rune) bool {
+	var count int
+	var inDq bool
+	var inSq bool
+	var inEsc bool
+	return func(r rune) bool {
+		if !inSq && r == '"' {
+			inDq = !inDq
+		}
+		if !inDq && r == '\'' {
+			inSq = !inSq
+		}
+		if r == '\\' {
+			inEsc = true
+			return false
+		}
+		if max > 0 && count >= max {
+			return false
+		}
+		if !inDq && !inSq && !inEsc && r == sep {
+			count++
+			return true
+		}
+		inEsc = false
+		return false
+	}
 }
 
 // UnmarshalFlag implements the go-flags.Unmarshaler interface and is
@@ -79,8 +128,15 @@ func (f *SetPropertiesFlag) IsSettable(key string) bool {
 func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 	f.ParsedProps = make(map[string]string)
 
-	for _, propStr := range strings.Split(fv, propSep) {
-		keyVal := strings.Split(propStr, propKvSep)
+	if fv == "" {
+		return propError("empty property")
+	}
+
+	// Split on comma, but ignore commas inside quotes.
+	for _, propStr := range strings.FieldsFunc(fv, splitFn(rune(propSep[0]), -1)) {
+		// Split on colon, but ignore colons inside quotes. Result is
+		// like SplitN, but with quotes ignored.
+		keyVal := strings.FieldsFunc(propStr, splitFn(rune(propKvSep[0]), 1))
 		if len(keyVal) != 2 {
 			return propError("invalid property %q (must be key"+propKvSep+"val)", propStr)
 		}
@@ -94,13 +150,13 @@ func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
 			return propError("key must not be empty")
 		}
 		if len(key) > MaxPropKeyLen {
-			return propError("key too long (%d > %d)", len(key), MaxPropKeyLen)
+			return propError("%q: key too long (%d > %d)", key, len(key), MaxPropKeyLen)
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 		if len(value) == 0 {
 			return propError("value must not be empty")
-		}
-		if len(value) > MaxPropValLen {
-			return propError("value too long (%d > %d)", len(value), MaxPropValLen)
 		}
 
 		f.ParsedProps[key] = value
@@ -151,9 +207,9 @@ func (f *SetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 
 // GetPropertiesFlag is used to hold a list of property keys to get.
 type GetPropertiesFlag struct {
+	PropertiesFlag
 	ParsedProps  common.StringSet
 	gettableKeys common.StringSet
-	completions  CompletionMap
 }
 
 // GettableKeys accepts a list of property keys that are gettable.
@@ -177,7 +233,15 @@ func (f *GetPropertiesFlag) IsGettable(key string) bool {
 		return true
 	}
 
-	_, isGettable := f.gettableKeys[key]
+	if _, isGettable := f.gettableKeys[key]; isGettable {
+		return true
+	}
+
+	if len(f.deprecatedKeyMap) == 0 {
+		return false
+	}
+
+	_, isGettable := f.deprecatedKeyMap[key]
 	return isGettable
 }
 
@@ -186,7 +250,12 @@ func (f *GetPropertiesFlag) IsGettable(key string) bool {
 func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	f.ParsedProps = make(common.StringSet)
 
-	for _, key := range strings.Split(fv, propSep) {
+	if fv == "" {
+		return propError("key must not be empty")
+	}
+
+	// Split on comma, but ignore commas inside quotes.
+	for _, key := range strings.FieldsFunc(fv, splitFn(rune(propSep[0]), -1)) {
 		key = strings.TrimSpace(key)
 		if !f.IsGettable(key) {
 			return propError("%q is not a gettable property (valid: %s)", key, strings.Join(f.gettableKeys.ToSlice(), ","))
@@ -195,10 +264,14 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 			return propError("key must not be empty")
 		}
 		if len(key) > MaxPropKeyLen {
-			return propError("key too long (%d > %d)", len(key), MaxPropKeyLen)
+			return propError("%q: key too long (%d > %d)", key, len(key), MaxPropKeyLen)
 		}
-		if strings.Contains(key, propKvSep) {
-			return propError("key cannot contain '" + propKvSep + "'")
+		// Check for unescaped : in key.
+		if len(strings.FieldsFunc(key, splitFn(rune(propKvSep[0]), -1))) > 1 {
+			return propError("%q: key cannot contain '"+propKvSep+"'", key)
+		}
+		if newKey, found := f.deprecatedKeyMap[key]; found {
+			key = newKey
 		}
 
 		f.ParsedProps.Add(key)

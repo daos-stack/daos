@@ -1,14 +1,13 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 from ec_utils import ErasureCodeSingle
 
+
 class EcodDisabledRebuildSingle(ErasureCodeSingle):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object for single data
             type, after killing servers when pool rebuild is off.
@@ -24,10 +23,9 @@ class EcodDisabledRebuildSingle(ErasureCodeSingle):
                   read data with parity 2 and verify the content.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large,ib2
+        :avocado: tags=hw,large
         :avocado: tags=ec,ec_single,ec_disabled_rebuild,rebuild
-        :avocado: tags=ec_disabled_rebuild_single
-
+        :avocado: tags=EcodDisabledRebuildSingle,test_ec_degrade_single_value
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")

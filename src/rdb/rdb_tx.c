@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -164,6 +164,9 @@ struct rdb_tx_op {
 	struct rdb_kvs_attr    *dto_attr;
 };
 
+/* TX header to indicate if the transaction is critical and must bypass SCM space checks.
+ * If more protocol needed (e.g., to convey log compaction), could make this a bit flag.
+ */
 struct rdb_tx_hdr {
 	uint32_t	critical;	/* use VOS_OF_CRIT for all ops in TX? */
 };
@@ -308,12 +311,11 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 /* Append an update operation to tx->dt_entry. */
 static int
-rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
+rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op, bool is_critical)
 {
 	struct rdb_tx_hdr	hdr;
 	size_t			op_len;
 	size_t			len;
-	bool			opc_is_critical;
 	const size_t		RDB_TX_CRITICAL_OPS_LIMIT = 8;
 	int			rc;
 
@@ -369,16 +371,13 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op)
 
 	/* TX is critical if it is reasonably-sized, and any op is critical */
 	tx->dt_num_ops++;
-	opc_is_critical = ((op->dto_opc == RDB_TX_DESTROY_ROOT) ||
-			   (op->dto_opc == RDB_TX_DESTROY) ||
-			   (op->dto_opc == RDB_TX_DELETE));
 	if (tx->dt_entry_len == 0) {
-		hdr.critical = opc_is_critical ? 1 : 0;
+		hdr.critical = is_critical ? 1 : 0;
 		tx->dt_entry_len += rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	} else if (tx->dt_num_ops > RDB_TX_CRITICAL_OPS_LIMIT) {
 		hdr.critical = 0;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
-	} else if (opc_is_critical) {
+	} else if (is_critical) {
 		hdr.critical = 1;
 		rdb_tx_hdr_encode(&hdr, tx->dt_entry);
 	}
@@ -415,26 +414,60 @@ rdb_tx_commit(struct rdb_tx *tx)
 		goto out_lock;
 	}
 
-	/* If tx is not critical, and almost out of space, do not append.
-	 * TODO: decide if an official free space amount should be in lc
-	 *       and possibly adjusted based on differences across replicas.
-	 */
+	/* If tx is not critical, and out of space (even after log compaction), do not append. */
 	if (!rdb_tx_is_critical(tx)) {
 		daos_size_t	scm_remaining = 0;
+		uint32_t	nchecks = 0;
 
+check_space:
 		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to query free space\n",
-				DP_DB(tx->dt_db));
+			D_ERROR(DF_DB": failed to query free space\n", DP_DB(tx->dt_db));
 			goto out_lock;
 		}
+		nchecks++;
 
 		if (scm_remaining < RDB_NOAPPEND_FREE_SPACE) {
-			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not "
-			       "append! scm_left="DF_U64"\n", DP_DB(tx->dt_db),
-			       scm_remaining);
-			D_GOTO(out_lock, rc = -DER_NOSPACE);
+			uint64_t		idx = 0;
+
+			if (nchecks > 1) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not append! "
+				       "scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+
+			/* Compact applied entries (not too often). May recover enough space. */
+			if ((daos_getutime() - tx->dt_db->d_nospc_ts) < RDB_NOSPC_ERR_INTVL_USEC) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
+					"early to trigger compaction\n", DP_DB(tx->dt_db));
+				goto check_space;	/* will return via nchecks test above */
+			}
+			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, compact log before retry! "
+				"scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+			rc = rdb_raft_trigger_compaction(tx->dt_db, true /* compact_all */, &idx);
+			if (rc != 0) {
+				D_WARN(DF_DB": failed to trigger compaction!\n", DP_DB(tx->dt_db));
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+			while ((idx != 0) && (tx->dt_db->d_lc_record.dlr_aggregated < idx)) {
+				sched_cond_wait(tx->dt_db->d_compacted_cv, tx->dt_db->d_raft_mutex);
+				D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64", need "DF_U64"\n",
+					DP_DB(tx->dt_db), tx->dt_db->d_lc_record.dlr_aggregated,
+					idx);
+			}
+			tx->dt_db->d_nospc_ts = daos_getutime();
+
+			/* Do not append if we lost leadership while waiting for log compaction. */
+			rc = rdb_tx_leader_check(tx);
+			if (rc != 0)
+				goto out_lock;
+
+			goto check_space;
 		}
+
+		D_DEBUG(DB_TRACE, DF_DB": %s append tx entry to raft log, scm_left="DF_U64"\n",
+			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" : "",
+			scm_remaining);
 	}
 
 	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
@@ -466,7 +499,7 @@ rdb_tx_create_root(struct rdb_tx *tx, const struct rdb_kvs_attr *attr)
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -487,7 +520,7 @@ rdb_tx_destroy_root(struct rdb_tx *tx)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -512,7 +545,7 @@ rdb_tx_create_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= (struct rdb_kvs_attr *)attr
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
 }
 
 /**
@@ -537,7 +570,7 @@ rdb_tx_destroy_kvs(struct rdb_tx *tx, const rdb_path_t *parent,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -562,7 +595,33 @@ rdb_tx_update(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, false /* is_critical */);
+}
+
+/**
+ * Update the value of \a key in \a kvs to \a value.
+ * Mark the TX as critical (to not fail the TX due to SCM free space checks).
+ *
+ * \param[in]	tx	transaction
+ * \param[in]	kvs	path to KVS
+ * \param[in]	key	key in KVS
+ * \param[in]	value	new value
+ *
+ * \retval -DER_NOTLEADER	not current leader
+ */
+int
+rdb_tx_update_critical(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
+		       const d_iov_t *value)
+{
+	struct rdb_tx_op op = {
+		.dto_opc	= RDB_TX_UPDATE,
+		.dto_kvs	= *kvs,
+		.dto_key	= *key,
+		.dto_value	= *value,
+		.dto_attr	= NULL
+	};
+
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 /**
@@ -585,7 +644,7 @@ rdb_tx_delete(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key)
 		.dto_attr	= NULL
 	};
 
-	return rdb_tx_append(tx, &op);
+	return rdb_tx_append(tx, &op, true /* is_critical */);
 }
 
 static inline int

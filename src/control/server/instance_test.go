@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -43,7 +44,7 @@ func getTestEngineInstance(log logging.Logger) *EngineInstance {
 			WithScmMountPoint("/foo/bar"),
 	)
 	runner := engine.NewRunner(log, cfg)
-	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil, nil)
 	return NewEngineInstance(log, storage, nil, runner)
 }
 
@@ -182,7 +183,7 @@ type (
 	MockInstanceConfig struct {
 		CallDrpcResp        *drpc.Response
 		CallDrpcErr         error
-		GetRankResp         system.Rank
+		GetRankResp         ranklist.Rank
 		GetRankErr          error
 		TargetCount         int
 		Index               uint32
@@ -219,7 +220,7 @@ func (mi *MockInstance) CallDrpc(_ context.Context, _ drpc.Method, _ proto.Messa
 	return mi.cfg.CallDrpcResp, mi.cfg.CallDrpcErr
 }
 
-func (mi *MockInstance) GetRank() (system.Rank, error) {
+func (mi *MockInstance) GetRank() (ranklist.Rank, error) {
 	return mi.cfg.GetRankResp, mi.cfg.GetRankErr
 }
 
@@ -249,7 +250,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 
 func (mi *MockInstance) Run(_ context.Context, _ bool) {}
 
-func (mi *MockInstance) SetupRank(_ context.Context, _ system.Rank) error {
+func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
 	return mi.cfg.SetupRankErr
 }
 
@@ -277,8 +278,8 @@ func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.Member
 
 func (mi *MockInstance) requestStart(_ context.Context) {}
 
-func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ map[string]*storage.NvmeController) error {
-	return nil
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController, _ uint64, _ uint64) ([]storage.NvmeController, error) {
+	return []storage.NvmeController{}, nil
 }
 
 func (mi *MockInstance) isAwaitingFormat() bool {

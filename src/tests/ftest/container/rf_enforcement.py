@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,7 +7,6 @@ from container_rf_test_base import ContRedundancyFactor
 
 
 class ContRfEnforce(ContRedundancyFactor):
-    # pylint: disable=too-many-ancestors
     """Test Container redundancy factor enforcement with oclass traffic
        and rebuild.
 

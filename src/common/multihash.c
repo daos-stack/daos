@@ -16,6 +16,55 @@
 #include <daos/multihash.h>
 #include <daos/cont_props.h>
 
+#define NOOP_CSUM_TYPE 99
+#define NOOP_CSUM_SIZE 4
+static int
+noop_init(void **daos_mhash_ctx)
+{
+	return 0;
+}
+
+static void
+noop_fini(void *daos_mhash_ctx)
+{
+}
+
+static int
+noop_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	return 0;
+}
+
+static uint16_t
+noop_get_size(void *daos_mhash_ctx)
+{
+	return NOOP_CSUM_SIZE;
+}
+
+int
+noop_reset(void *daos_mhash_ctx)
+{
+	return 0;
+}
+
+int
+noop_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	*buf = 0;
+	return 0;
+}
+
+static struct hash_ft noop_algo = {
+	.cf_init		= noop_init,
+	.cf_destroy		= noop_fini,
+	.cf_update		= noop_update,
+	.cf_reset		= noop_reset,
+	.cf_finish		= noop_finish,
+	.cf_hash_len		= NOOP_CSUM_SIZE,
+	.cf_get_size		= noop_get_size,
+	.cf_type		= NOOP_CSUM_TYPE,
+	.cf_name		= "no-op"
+};
 
 /** ISA-L hash function table implemented in multihash_isal.c */
 extern struct hash_ft *isal_hash_algo_table[];
@@ -79,9 +128,11 @@ daos_mhash_type2algo(enum DAOS_HASH_TYPE type)
 {
 	struct hash_ft *result = NULL;
 
-	if (type > HASH_TYPE_UNKNOWN && type < HASH_TYPE_END) {
+	if (type == HASH_TYPE_NOOP)
+		result = &noop_algo;
+	else if (type > HASH_TYPE_UNKNOWN && type < HASH_TYPE_END)
 		result = algo_table[type - 1];
-	}
+
 	if (result && result->cf_type == HASH_TYPE_UNKNOWN)
 		result->cf_type = type;
 	return result;

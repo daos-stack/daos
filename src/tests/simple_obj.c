@@ -7,8 +7,8 @@
 /*
  * This provides a simple example for how to access different DAOS objects.
  *
- * For more information on the DAOS object model, please visit this
- * page: https://daos-stack.github.io/overview/storage/#daos-object
+ * For more information on the DAOS object model, please visit this page:
+ * https://docs.daos.io/latest/overview/storage/#daos-object
  */
 
 #include <stdlib.h>

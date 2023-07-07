@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // PrintTopology prints the topology to the given writer.
@@ -24,9 +24,9 @@ func PrintTopology(t *Topology, output io.Writer) error {
 	}
 
 	for _, numaNode := range t.NUMANodes.AsSlice() {
-		coreSet := &system.RankSet{}
+		coreSet := &ranklist.RankSet{}
 		for _, core := range numaNode.Cores {
-			coreSet.Add(system.Rank(core.ID))
+			coreSet.Add(ranklist.Rank(core.ID))
 		}
 
 		fmt.Fprintf(ew, "NUMA Node %d\n", numaNode.ID)

@@ -20,16 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-type daosServerTestErr string
-
-func (dste daosServerTestErr) Error() string {
-	return string(dste)
-}
-
-const (
-	errMissingFlag = daosServerTestErr("required flag")
-)
-
 type cmdTest struct {
 	name   string
 	cmd    string
@@ -117,83 +107,36 @@ func TestNoCommand(t *testing.T) {
 	testExpectedError(t, fmt.Errorf("Please specify one command"), err)
 }
 
-func TestDaosServer_NVMe_Commands(t *testing.T) {
-	multPCIAddrsSpaceSep := "0000:80:00.0 0000:81:00.0"
-	multPCIAddrsCommaSep := "0000:80:00.0,0000:81:00.0"
+func TestPreExecCheckBypass(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cmdLine string
+		expErr  error
+	}{
+		"help": {
+			cmdLine: "--help",
+			expErr:  flags.ErrHelp,
+		},
+		"version": {
+			cmdLine: "version",
+		},
+		"start (should fail)": {
+			cmdLine: "start",
+			expErr:  errors.New("ouch"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	runCmdTests(t, []cmdTest{
-		{
-			"Prepare drives with all opts; space separated PCI addresses",
-			fmt.Sprintf("nvme prepare --pci-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
-				"-l /tmp/foo "+multPCIAddrsSpaceSep, multPCIAddrsSpaceSep),
-			"",
-			errors.New("unexpected commandline arguments"),
-		},
-		{
-			"Prepare drives with all opts; comma separated PCI addresses",
-			fmt.Sprintf("nvme prepare --pci-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
-				"-l /tmp/foo "+multPCIAddrsCommaSep, multPCIAddrsCommaSep),
-			printCommand(t, (&prepareNVMeCmd{
-				PCIBlockList: multPCIAddrsCommaSep,
-				NrHugepages:  8192,
-				TargetUser:   "bob",
-				DisableVFIO:  true,
-			}).WithPCIAllowList(multPCIAddrsCommaSep)),
-			nil,
-		},
-		{
-			"Prepare drives; bad opt",
-			fmt.Sprintf("nvme prepare --pcx-block-list %s --hugepages 8192 --target-user bob --disable-vfio "+
-				"-l /tmp/foo "+multPCIAddrsCommaSep, multPCIAddrsCommaSep),
-			"",
-			errors.New("unknown"),
-		},
-		{
-			"Reset drives with all opts",
-			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disable-vfio -l /tmp/foo "+
-				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
-			printCommand(t, (&resetNVMeCmd{
-				PCIBlockList: multPCIAddrsCommaSep,
-				TargetUser:   "bob",
-				DisableVFIO:  true,
-			}).WithPCIAllowList(multPCIAddrsCommaSep)),
-			nil,
-		},
-		{
-			"Reset drives; bad opt",
-			fmt.Sprintf("nvme reset --pci-block-list %s --target-user bob --disble-vfio -l /tmp/foo "+
-				multPCIAddrsCommaSep, multPCIAddrsCommaSep),
-			"",
-			errors.New("unknown"),
-		},
-		{
-			"Prepare namespaces with all opts",
-			"scm prepare -S 2 -f --socket 0",
-			printCommand(t, &prepareSCMCmd{
-				NrNamespacesPerSocket: 2,
-				Force:                 true,
-			}),
-			nil,
-		},
-		{
-			"Prepare namespaces; bad opt",
-			"scm prepare -X",
-			"",
-			errors.New("unknown"),
-		},
-		{
-			"Reset namespaces with all opts",
-			"scm reset -f --socket 1",
-			printCommand(t, &resetSCMCmd{
-				Force: true,
-			}),
-			nil,
-		},
-		{
-			"Reset namespaces; bad opt",
-			"scm reset -S",
-			"",
-			errors.New("unknown"),
-		},
-	})
+			opts := mainOpts{
+				preExecTests: []execTestFn{
+					func() error {
+						return errors.New("ouch")
+					},
+				},
+			}
+			err := parseOpts([]string{tc.cmdLine}, &opts, log)
+			test.CmpErr(t, tc.expErr, err)
+		})
+	}
 }

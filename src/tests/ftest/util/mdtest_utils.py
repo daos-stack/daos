@@ -1,15 +1,15 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import uuid
+import os
 import re
 
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
+from general_utils import get_log_file
 
 
 class MdtestCommand(ExecutableCommand):
@@ -81,17 +81,17 @@ class MdtestCommand(ExecutableCommand):
         #  --dfs.dir_oclass=STRING       DAOS directory object class
         #  --dfs.prefix=STRING           Mount prefix
 
-        self.dfs_pool_uuid = FormattedParameter("--dfs.pool {}")
+        self.dfs_pool = FormattedParameter("--dfs.pool {}")
         self.dfs_cont = FormattedParameter("--dfs.cont {}")
         self.dfs_group = FormattedParameter("--dfs.group {}")
         self.dfs_destroy = FormattedParameter("--dfs.destroy", True)
         self.dfs_chunk = FormattedParameter("--dfs.chunk_size {}", 1048576)
-        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "SX")
+        self.dfs_oclass = FormattedParameter("--dfs.oclass {}", "S1")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
 
-        # A list of environment variable names to set and export with ior
-        self._env_names = ["D_LOG_FILE"]
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
 
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
@@ -107,31 +107,18 @@ class MdtestCommand(ExecutableCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont):
         """Set the Mdtest params for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool): DAOS test pool object
-            cont_uuid (str, optional): the container uuid. If not specified one
-                is generated. Defaults to None.
-            display (bool, optional): print updated params. Defaults to True.
+            cont (str): the container uuid or label
         """
-        self.set_daos_pool_params(pool, display)
-        self.dfs_group.update(group, "dfs_group" if display else None)
-        self.dfs_cont.update(
-            cont_uuid if cont_uuid else str(uuid.uuid4()),
-            "dfs_cont" if display else None)
-
-    def set_daos_pool_params(self, pool, display=True):
-        """Set the Mdtest parameters that are based on a DAOS pool.
-
-        Args:
-            pool (TestPool): DAOS test pool object
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.dfs_pool_uuid.update(
-            pool.pool.get_uuid_str(), "dfs_pool" if display else None)
+        self.update_params(
+            dfs_group=group,
+            dfs_pool=pool.identifier,
+            dfs_cont=cont)
 
     def get_default_env(self, manager_cmd, log_file=None):
         """Get the default environment settings for running mdtest.
@@ -144,15 +131,14 @@ class MdtestCommand(ExecutableCommand):
             EnvironmentVariables: a dictionary of environment names and values
 
         """
-        env = self.get_environment(None, log_file)
-        env["MPI_LIB"] = "\"\""
-        env["FI_PSM2_DISCONNECT"] = "1"
+        env = self.env.copy()
+        env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
+        env["MPI_LIB"] = '""'
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
-            env["DAOS_POOL"] = self.dfs_pool_uuid.value
+            env["DAOS_POOL"] = self.dfs_pool.value
             env["DAOS_CONT"] = self.dfs_cont.value
-            env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                self.dfs_oclass.value
+            env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
 
         return env
 
@@ -174,10 +160,10 @@ class MdtestMetrics():
         """Metrics for an individual operation. E.g. file_creation."""
         def __init__(self):
             """Initialize operations values."""
-            self.max = 0
-            self.min = 0
-            self.mean = 0
-            self.stddev = 0
+            self.max = 0.0
+            self.min = 0.0
+            self.mean = 0.0
+            self.stddev = 0.0
 
     class MdtestMetricsGroup():
         """Group of metrics. E.g. "SUMMARY rate" and "SUMMARY time"."""
@@ -249,9 +235,9 @@ class MdtestMetrics():
             operation_name = operation_name.lower().replace(" ", "_")
             try:
                 operation = getattr(group_obj, operation_name)
-                operation.max = metric_vals[2]
-                operation.min = metric_vals[3]
-                operation.mean = metric_vals[4]
-                operation.stddev = metric_vals[5]
+                operation.max = float(metric_vals[2])
+                operation.min = float(metric_vals[3])
+                operation.mean = float(metric_vals[4])
+                operation.stddev = float(metric_vals[5])
             except AttributeError:
                 pass

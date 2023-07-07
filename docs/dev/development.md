@@ -35,13 +35,13 @@ components individually by replacing `--build-deps=yes` with
 configuration from before. For automated environment setup, source
 `utils/sl/setup_local.sh`.
 
-The install path should be relocatable with the exception that `daos_admin`
+The install path should be relocatable with the exception that `daos_server_helper`
 will not be able to find the new location of daos and dependencies. All other
 libraries and binaries should work without any change due to relative
 paths.  Editing the `.build-vars.sh` file to replace the old with the new can
 restore the capability of setup_local.sh to automate path setup.
 
-To run daos_server, either the rpath in daos_admin needs to be patched to
+To run daos_server, either the rpath in daos_server_helper needs to be patched to
 the new installation location of `spdk` and `isal` or `LD_LIBRARY_PATH` needs to
 be set.  This can be done using `SL_SPDK_PREFIX` and `SL_ISAL_PREFIX` set when
 sourcing `setup_local.sh`.   This can also be done with the following
@@ -49,10 +49,10 @@ commands:
 
 ```
 source utils/sl/setup_local.sh
-sudo -E utils/setup_daos_admin.sh [path to new location of daos]
+sudo -E utils/setup_daos_server_helper.sh [path to new location of daos]
 ```
 
-This script is intended only for developer setup of `daos_admin`.
+This script is intended only for developer setup of `daos_server_helper`.
 
 With this approach, DAOS gets built using the prebuilt dependencies in
 `${daos_prefix_path}/prereq`, and required options are saved for future compilations.
@@ -121,44 +121,6 @@ scons reduces the clutter from compiler setup.
 
 Additionally, the tool supports options to filter by directory and file names and specify a lower
 bound value to report.
-
-### Building Optional Components
-
-There are a few optional components that can be included into the DAOS build.
-For instance, to include the `psm2` provider. Run the following `scons`
-command:
-
-```bash
-$ scons PREFIX=${daos_prefix_path}
-      INCLUDE=psm2
-      install
-      --build-deps=yes
-      --config=force
-```
-
-Refer to the built-in `scons` help command to get a full list of all the
-optional components under the `INCLUDE` optional parameter.
-
-```bash
-$ scons -h
-scons: Reading SConscript files ...
-
-INCLUDE: Optional components to build
-    (all|none|comma-separated list of names)
-    allowed names: psm2
-    default: none
-    actual:
-```
-
-The version of the components can be changed by editing the
-[utils/build.config](https://github.com/daos-stack/daos/blob/master/utils/build.config)
-file.
-
-
->**_NOTE_**
->
->The support of the optional components is not guarantee and can be removed
->without further notification.
 
 ## Go dependencies
 
@@ -304,6 +266,7 @@ or from a local tree:
 ```bash
 $ docker build  . -f utils/docker/Dockerfile.el.8 -t daos
 ```
+
 This creates a Rocky Linux 8 image, fetches the latest DAOS version from GitHub,
 builds it, and installs it in the image.
 For Ubuntu and other Linux distributions, replace Dockerfile.el.8 with

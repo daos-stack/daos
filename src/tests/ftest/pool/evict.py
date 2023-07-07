@@ -1,14 +1,13 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
+from pydaos.raw import DaosApiError, c_uuid_to_str
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError, c_uuid_to_str
 
 
 class EvictTests(TestWithServers):

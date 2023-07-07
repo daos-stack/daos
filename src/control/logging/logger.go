@@ -15,6 +15,9 @@ import (
 type (
 	// Logger defines a standard logging interface
 	Logger interface {
+		EnabledFor(level LogLevel) bool
+		TraceLogger
+		Trace(msg string)
 		DebugLogger
 		Debug(msg string)
 		InfoLogger
@@ -23,6 +26,12 @@ type (
 		Notice(msg string)
 		ErrorLogger
 		Error(msg string)
+	}
+
+	// TraceLogger defines an interface to be implemented
+	// by Trace loggers.
+	TraceLogger interface {
+		Tracef(format string, args ...interface{})
 	}
 
 	// DebugLogger defines an interface to be implemented
@@ -62,6 +71,7 @@ type (
 		sync.RWMutex
 
 		level         LogLevel
+		traceLoggers  []TraceLogger
 		debugLoggers  []DebugLogger
 		infoLoggers   []InfoLogger
 		noticeLoggers []NoticeLogger
@@ -86,9 +96,17 @@ func (ll *LeveledLogger) Level() LogLevel {
 	return ll.level.Get()
 }
 
+// EnabledFor returns true if the logger is enabled for the
+// specified LogLevel.
+func (ll *LeveledLogger) EnabledFor(level LogLevel) bool {
+	return ll.level.Get() >= level
+}
+
 // ClearLevel clears all loggers for the specified level.
 func (ll *LeveledLogger) ClearLevel(level LogLevel) {
 	switch level {
+	case LogLevelTrace:
+		ll.traceLoggers = nil
 	case LogLevelDebug:
 		ll.debugLoggers = nil
 	case LogLevelInfo:
@@ -107,6 +125,35 @@ func (ll *LeveledLogger) ClearLevel(level LogLevel) {
 func (ll *LeveledLogger) WithLogLevel(level LogLevel) *LeveledLogger {
 	ll.SetLevel(level)
 	return ll
+}
+
+// WithTraceLogger adds the specified Trace logger to
+// the logger as part of a chained method call.
+func (ll *LeveledLogger) WithTraceLogger(newLogger TraceLogger) *LeveledLogger {
+	ll.AddTraceLogger(newLogger)
+	return ll
+}
+
+// Trace emits an unformatted message at Trace level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Trace(msg string) {
+	ll.Tracef("%s", msg)
+}
+
+// Tracef emits a formatted message at Trace level, if
+// the logger is configured to do so.
+func (ll *LeveledLogger) Tracef(format string, args ...interface{}) {
+	if ll.Level() < LogLevelTrace {
+		return
+	}
+
+	ll.RLock()
+	loggers := ll.traceLoggers
+	ll.RUnlock()
+
+	for _, l := range loggers {
+		l.Tracef(format, args...)
+	}
 }
 
 // WithDebugLogger adds the specified Debug logger to
@@ -135,6 +182,13 @@ func (ll *LeveledLogger) WithNoticeLogger(newLogger NoticeLogger) *LeveledLogger
 func (ll *LeveledLogger) WithErrorLogger(newLogger ErrorLogger) *LeveledLogger {
 	ll.AddErrorLogger(newLogger)
 	return ll
+}
+
+// AddTraceLogger adds the specified Trace logger to the logger.
+func (ll *LeveledLogger) AddTraceLogger(newLogger TraceLogger) {
+	ll.Lock()
+	defer ll.Unlock()
+	ll.traceLoggers = append(ll.traceLoggers, newLogger)
 }
 
 // AddDebugLogger adds the specified Debug logger to the logger.

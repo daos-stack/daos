@@ -4,21 +4,15 @@
 #
 """Example code"""
 
-import daos_build
 
 def scons():
     """Execute build"""
     Import('env')
 
-    unit_env = env.Clone()
+    env.d_test_program('telemetry_producer_example', 'telem_producer_example.c', LIBS=['gurt'])
 
-    daos_build.test(unit_env, 'telemetry_producer_example',
-                    ['telem_producer_example.c'],
-                    LIBS=['gurt'])
+    env.d_test_program('telemetry_consumer_example', 'telem_consumer_example.c', LIBS=['gurt'])
 
-    daos_build.test(unit_env, 'telemetry_consumer_example',
-                    ['telem_consumer_example.c'],
-                    LIBS=['gurt'])
 
 if __name__ == "SCons.Script":
     scons()

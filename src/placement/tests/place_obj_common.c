@@ -51,8 +51,7 @@ plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
 	D_ASSERT(pl_map != NULL);
 	md.omd_ver = pool_map_get_version(pl_map->pl_poolmap);
 
-	rc = pl_obj_place(pl_map, &md, 0, NULL, layout);
-
+	rc = pl_obj_place(pl_map, PLT_LAYOUT_VERSION, &md, 0, NULL, layout);
 	if (print_layout_flag) {
 		if (*layout != NULL)
 			print_layout(*layout);
@@ -524,7 +523,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_rebuild(pl_map, &md, NULL, *po_ver,
+	rc = pl_obj_find_rebuild(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
 				 spare_tgt_ranks, shard_ids,
 				 spare_max_nr);
 	D_ASSERT(rc >= 0);
@@ -737,8 +736,8 @@ plt_reint_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 	D_ASSERT(pl_map != NULL);
 	dc_obj_fetch_md(oid, &md);
 	md.omd_ver = *po_ver;
-	rc = pl_obj_find_reint(pl_map, &md, NULL, *po_ver, spare_tgt_ranks,
-			       shard_ids, spare_max_nr);
+	rc = pl_obj_find_reint(pl_map, PLT_LAYOUT_VERSION, &md, NULL, *po_ver,
+			       spare_tgt_ranks, shard_ids, spare_max_nr);
 
 	D_ASSERT(rc >= 0);
 	*spare_cnt = rc;
@@ -804,7 +803,7 @@ get_object_classes(daos_oclass_id_t **oclass_id_pp)
 }
 
 int
-extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_list,
+extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 		     uint32_t ndomains, uint32_t *domains, bool *updated_p,
 		     uint32_t *map_version_p, uint32_t dss_tgt_nr)
 {
@@ -818,7 +817,7 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_
 	map_version = pool_map_get_version(map) + 1;
 
 	rc = gen_pool_buf(map, &map_buf, map_version, ndomains, nnodes, ntargets, domains,
-			  rank_list, dss_tgt_nr);
+			  dss_tgt_nr);
 	assert_success(rc);
 
 	D_ASSERT(map_buf != NULL);

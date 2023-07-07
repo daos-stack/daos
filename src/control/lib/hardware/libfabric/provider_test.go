@@ -14,7 +14,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -27,23 +26,37 @@ func TestLibfabric_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Can't mock the underlying libfabric calls, but we can make sure it doesn't crash or
-	// error on the normal happy path.
+	for name, tc := range map[string]struct {
+		provider string
+	}{
+		"all": {},
+		"tcp": {
+			provider: "ofi+tcp",
+		},
+		"not valid": {
+			provider: "fake",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+			// Can't mock the underlying libfabric calls, but we can make sure it doesn't crash or
+			// error on the normal happy path.
 
-	p := NewProvider(log)
+			p := NewProvider(log)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := p.GetFabricInterfaces(ctx)
+			ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
+			defer cancel()
 
-	if err != nil {
-		t.Fatal(err.Error())
+			result, err := p.GetFabricInterfaces(ctx, tc.provider)
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			t.Logf("\nwith %s:\n%+v\n", name, result)
+		})
 	}
-
-	t.Logf("\n%+v\n", result)
 }
 
 type mockInfo struct {
@@ -60,6 +73,7 @@ func (m *mockInfo) fabricProvider() string {
 }
 
 func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
+	testPriority := 5
 	for name, tc := range map[string]struct {
 		in        info
 		expResult *hardware.FabricInterface
@@ -86,9 +100,14 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 				fabricProviderReturn: "provider_x",
 			},
 			expResult: &hardware.FabricInterface{
-				Name:      "fi0_domain",
-				OSName:    "fi0_domain",
-				Providers: common.NewStringSet("provider_x"),
+				Name:   "fi0_domain",
+				OSName: "fi0_domain",
+				Providers: hardware.NewFabricProviderSet(
+					&hardware.FabricProvider{
+						Name:     "ofi+provider_x",
+						Priority: testPriority,
+					},
+				),
 			},
 		},
 	} {
@@ -98,10 +117,10 @@ func TestLibfabric_Provider_fiInfoToFabricInterfaceSet(t *testing.T) {
 
 			p := NewProvider(log)
 
-			result, err := p.infoToFabricInterface(tc.in)
+			result, err := p.infoToFabricInterface(tc.in, testPriority)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(hardware.FabricProviderSet{})); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -155,7 +174,7 @@ func TestLibfabric_libFabricProviderListToExt(t *testing.T) {
 		},
 		"unknown": {
 			in:     "provider_x",
-			expOut: "provider_x",
+			expOut: "ofi+provider_x",
 		},
 		"badly formed": {
 			in:     " ;ofi_rxm",
@@ -167,6 +186,31 @@ func TestLibfabric_libFabricProviderListToExt(t *testing.T) {
 
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, tc.expOut, out, "")
+		})
+	}
+}
+
+func TestLibfabric_extProviderToLibFabric(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in     string
+		expOut string
+	}{
+		"empty": {},
+		"no ofi prefix": {
+			in:     "tcp",
+			expOut: "tcp",
+		},
+		"ofi prefix": {
+			in:     "ofi+verbs",
+			expOut: "verbs",
+		},
+		"some other prefix": {
+			in:     "ucx+tcp",
+			expOut: "ucx+tcp",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expOut, extProviderToLibFabric(tc.in), "")
 		})
 	}
 }

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2021 Intel Corporation.
+ * (C) Copyright 2017-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -62,13 +62,15 @@ struct evt_context {
 	/** refcount on the context */
 	unsigned int			 tc_ref;
 	/** cached tree order (reduce PMEM access) */
-	uint16_t			 tc_order;
+	uint8_t                          tc_order;
+	/** Cached maximum tree order (reduce PMEM access) */
+	uint8_t                          tc_max_order;
 	/** cached tree depth (reduce PMEM access) */
 	uint16_t			 tc_depth;
 	/** number of credits for "drain" operation */
-	int				 tc_creds:30;
+	uint32_t                         tc_creds    : 30;
 	/** credits is enabled */
-	int				 tc_creds_on:1;
+	uint32_t                         tc_creds_on : 1;
 	/** cached number of bytes per entry */
 	uint32_t			 tc_inob;
 	/** cached tree feature bits (reduce PMEM access) */

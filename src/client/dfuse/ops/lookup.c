@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,6 +44,17 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		struct dfuse_inode_entry *inode;
 
 		inode = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+		if (fi_out) {
+			struct dfuse_obj_hdl *oh;
+			/* DAOS-12714 If create returns an existing file then oh->doe_ie will point
+			 * to the stale ie in this case.  This can probably only happen when there
+			 * is a race between a create call from one client and rename from a
+			 * different client.
+			 */
+			oh         = (struct dfuse_obj_hdl *)fi_out->fh;
+			oh->doh_ie = inode;
+		}
 
 		/* The lookup has resulted in an existing file, so reuse that
 		 * entry, drop the inode in the lookup descriptor and do not
@@ -115,27 +126,38 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 	 * already known inode for while the interception library is already in use so check
 	 * this and disable caching in this case.
 	 */
-	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0) {
-		if (S_ISDIR(ie->ie_stat.st_mode))
-			entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
-		else
-			entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
-
-		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
-	}
-
-	if (fi_out)
-		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
 	else
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+
+	if ((atomic_load_relaxed(&ie->ie_il_count)) == 0)
+		entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
+
+	ie->ie_stat = entry.attr;
+
+	if (fi_out) {
+		/* Now set the value of keep_cache, this is for creat where we need to do the hash
+		 * table lookup before setting this value.
+		 */
+		if (atomic_load_relaxed(&ie->ie_open_count) > 1) {
+			fi_out->keep_cache = 1;
+		} else if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_data_timeout)) {
+			fi_out->keep_cache = 1;
+		}
+
+		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
+	} else {
 		DFUSE_REPLY_ENTRY(ie, req, entry);
+	}
 
 	if (wipe_parent == 0)
 		return;
 
-	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
-					      wipe_name, strnlen(wipe_name, NAME_MAX));
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, wipe_parent, wipe_name,
+					      strnlen(wipe_name, NAME_MAX));
 	if (rc && rc != -ENOENT)
-		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+		DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 
 	return;
 out_err:
@@ -181,17 +203,17 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 		D_GOTO(out_dfp, rc);
 
 	/* The inode has a reference to the dfs, so keep that. */
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 
 	rc = dfs_release(ie->ie_obj);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_release() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
 	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfs, "dfs_lookup() failed: (%s)", strerror(rc));
+		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
 	}
 
@@ -209,7 +231,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
+	d_hash_rec_decref(&fs_handle->di_pool_table, &dfp->dfp_entry);
 out_err:
 	duns_destroy_attr(&dattr);
 
@@ -236,6 +258,8 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
+	dfuse_ie_init(fs_handle, ie);
+
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 
@@ -243,16 +267,15 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 			 O_RDWR | O_NOFOLLOW, &ie->ie_obj, NULL, &ie->ie_stat,
 			 1, &duns_xattr_name, (void **)&outp, &attr_len);
 	if (rc) {
-		DFUSE_TRA_DEBUG(parent, "dfs_lookup() failed: (%s)",
-				strerror(rc));
+		DFUSE_TRA_DEBUG(parent, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
 
 		D_GOTO(out_free, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
+	if (attr_len)
+		DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
@@ -261,8 +284,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(fs_handle, ie, out, attr_len);
-		DFUSE_TRA_DEBUG(ie,
-				"check_for_uns_ep() returned %d", rc);
+		DFUSE_TRA_DEBUG(ie, "check_for_uns_ep() returned %d", rc);
 		if (rc != 0)
 			D_GOTO(out_release, rc);
 	}
@@ -273,7 +295,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 out_release:
 	dfs_release(ie->ie_obj);
 out_free:
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 out:
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};

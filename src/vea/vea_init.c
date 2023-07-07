@@ -34,7 +34,7 @@ heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 	return nodea->ve_ext.vfe_blk_cnt > nodeb->ve_ext.vfe_blk_cnt;
 }
 
-struct d_binheap_ops heap_ops = {
+static struct d_binheap_ops heap_ops = {
 	.hop_enter	= NULL,
 	.hop_exit	= NULL,
 	.hop_compare	= heap_node_cmp,
@@ -58,8 +58,8 @@ create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 	memset(&uma, 0, sizeof(uma));
 	uma.uma_id = UMEM_CLASS_VMEM;
 	/* Create in-memory sized free extent tree */
-	rc = dbtree_create(DBTREE_CLASS_IV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR,
-			   &uma, NULL, &vfc->vfc_size_btr);
+	rc = dbtree_create(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR, &uma, NULL,
+			   &vfc->vfc_size_btr);
 	if (rc != 0)
 		destroy_free_class(vfc);
 

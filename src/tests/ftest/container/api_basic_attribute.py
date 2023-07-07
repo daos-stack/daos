@@ -1,14 +1,14 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
 
+from pydaos.raw import DaosApiError
+
 from apricot import TestWithServers
 from general_utils import DaosTestError
-from pydaos.raw import DaosApiError
 from test_utils_base import CallbackHandler
 
 

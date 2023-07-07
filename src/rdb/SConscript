@@ -1,5 +1,5 @@
 """Build rdb"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -16,22 +16,23 @@ def scons():
     # rdb-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     denv.AppendUnique(CPPPATH=[Dir('raft/include').srcnode()])
     denv.AppendUnique(LIBPATH=[Dir('raft/src')])
 
     # rdb
-    rdb = daos_build.library(denv, 'rdb',
-                             ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
-                              'rdb_kvs.c', 'rdb_rpc.c', 'rdb_raft.c',
-                              'rdb_tx.c', 'rdb.c', 'rdb_module.c'],
-                             install_off="../..", LIBS=['raft'])
+    rdb = denv.d_library('rdb',
+                         ['rdb_util.c', 'rdb_path.c', 'rdb_layout.c',
+                          'rdb_kvs.c', 'rdb_rpc.c', 'rdb_raft.c',
+                          'rdb_tx.c', 'rdb.c', 'rdb_module.c'],
+                         install_off="../..", LIBS=['raft'])
     denv.Install('$PREFIX/lib64/daos_srv', rdb)
 
     # tests
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
+
 
 if __name__ == "SCons.Script":
     scons()

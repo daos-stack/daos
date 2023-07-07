@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -129,8 +129,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (parent->ie_dfs->dfc_data_caching && fs_handle->dpi_info->di_wb_cache &&
-		(fi->flags & O_ACCMODE) == O_WRONLY) {
+	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->di_wb_cache &&
+	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
@@ -156,11 +156,16 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
-	dfuse_open_handle_init(oh, ie);
+	dfuse_ie_init(fs_handle, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
-	rc = _dfuse_mode_update(req, parent, &mode);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	oh->doh_linear_read = false;
+
+	if (!fs_handle->di_multi_user) {
+		rc = _dfuse_mode_update(req, parent, &mode);
+		if (rc != 0)
+			D_GOTO(err, rc);
+	}
 
 	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
 
@@ -169,6 +174,8 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(err, rc);
 
+	dfuse_cache_evict_dir(fs_handle, parent);
+
 	/** duplicate the file handle for the fuse handle */
 	rc = dfs_dup(dfs->dfs_ns, oh->doh_obj, O_RDWR, &ie->ie_obj);
 	if (rc)
@@ -176,9 +183,10 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	oh->doh_writeable = true;
 
-	if (dfs->dfc_data_caching) {
+	if (dfs->dfc_data_timeout != 0) {
 		if (fi->flags & O_DIRECT)
 			fi_out.direct_io = 1;
+
 	} else {
 		fi_out.direct_io = 1;
 	}
@@ -194,7 +202,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	strncpy(ie->ie_name, name, NAME_MAX);
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
-	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	LOG_FLAGS(ie, fi->flags);
 	LOG_MODES(ie, mode);
@@ -213,6 +220,6 @@ release:
 	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	D_FREE(oh);
-	D_FREE(ie);
+	dfuse_oh_free(fs_handle, oh);
+	dfuse_ie_free(fs_handle, ie);
 }

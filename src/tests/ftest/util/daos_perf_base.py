@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,6 +7,7 @@
 from apricot import TestWithServers
 from daos_perf_utils import DaosPerfCommand
 from exception_utils import CommandFailure
+from general_utils import get_log_file
 
 
 class DaosPerfBase(TestWithServers):
@@ -36,7 +36,8 @@ class DaosPerfBase(TestWithServers):
         daos_perf.cont_uuid.update(self.container.uuid)
         daos_perf.dmg_config_file.update(dmg_config_file)
         self.log.info("daos_perf command: %s", str(daos_perf))
-        daos_perf_env = daos_perf.get_environment(self.server_managers[0])
+        daos_perf_env = daos_perf.env.copy()
+        daos_perf_env["D_LOG_FILE"] = get_log_file("{}_daos.log".format(daos_perf.command))
 
         # Create the orterun command
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
@@ -52,3 +53,5 @@ class DaosPerfBase(TestWithServers):
         except CommandFailure as error:
             self.log.error("DAOS PERF Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+
+        return None

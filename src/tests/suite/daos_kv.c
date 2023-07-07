@@ -35,7 +35,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 
-	buf = malloc(ENUM_DESC_BUF);
+	D_ALLOC(buf, ENUM_DESC_BUF);
 	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
@@ -67,6 +67,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 #endif
 		key_nr += nr;
 	}
+	D_FREE(buf);
 	*num_keys = key_nr;
 }
 
@@ -105,7 +106,7 @@ simple_put_get_flags(void **state, bool is_old_flag)
 	}
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, NULL, buf_size, buf, NULL);
@@ -280,7 +281,7 @@ kv_cond_ops(void **state)
 	oid = daos_test_oid_gen(arg->coh, OC_SX, type, 0, arg->myrank);
 
 	/** open the object */
-	rc = daos_kv_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_kv_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	val_out = 5;

@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -17,9 +16,9 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // TestIOEngineInstance_exit establishes that event is published on exit.
@@ -73,7 +72,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 			if tc.rankInSuperblock {
 				engine.setSuperblock(&Superblock{
-					Rank: system.NewRankPtr(0), ValidRank: true,
+					Rank: ranklist.NewRankPtr(0), ValidRank: true,
 				})
 			}
 			if tc.expExPid == 0 {
@@ -83,7 +82,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 			hn, _ := os.Hostname()
 			engine.OnInstanceExit(createPublishInstanceExitFunc(fakePublish, hn))
 
-			engine.handleExit(context.Background(), tc.expExPid, exitErr)
+			engine.handleExit(test.Context(t), tc.expExPid, exitErr)
 
 			test.AssertEqual(t, 1, len(rxEvts),
 				"unexpected number of events published")

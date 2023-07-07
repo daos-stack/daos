@@ -1,12 +1,12 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -72,8 +72,7 @@ class Permission(TestWithServers):
             self.test_log.debug("Container write successful")
             if expected_result == RESULT_FAIL:
                 self.fail(
-                    "Test was expected to fail at container operations " +
-                    "but it passed.\n")
+                    "Test was expected to fail at container operations but it passed.\n")
             else:
                 self.test_log.debug("Test Passed.")
         except DaosApiError as excep:

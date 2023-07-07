@@ -18,12 +18,12 @@
 #define DAOS_PROP_ENTRY_DEDUP_THRESHOLD	"dedup_threshold"
 #define DAOS_PROP_ENTRY_COMPRESS	"compression"
 #define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
-#define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
+#define DAOS_PROP_ENTRY_REDUN_FAC	"rd_fac"
 #define DAOS_PROP_ENTRY_STATUS		"status"
 #define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell_sz"
 #define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
 #define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
-#define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
+#define DAOS_PROP_ENTRY_REDUN_LVL	"rd_lvl"
 #define DAOS_PROP_ENTRY_SNAPSHOT_MAX	"max_snapshot"
 #define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
 #define DAOS_PROP_ENTRY_OWNER		"owner"
@@ -31,6 +31,11 @@
 #define DAOS_PROP_ENTRY_EC_PDA		"ec_pda"
 #define DAOS_PROP_ENTRY_RP_PDA		"rp_pda"
 #define DAOS_PROP_ENTRY_GLOBAL_VERSION	"global_version"
+#define DAOS_PROP_ENTRY_OBJ_VERSION	"obj_version"
+
+/** DAOS deprecated property entry names keeped for backward compatibility */
+#define DAOS_PROP_ENTRY_REDUN_FAC_OLD	"rf"
+#define DAOS_PROP_ENTRY_REDUN_LVL_OLD	"rf_lvl"
 
 struct cont_props {
 	uint32_t	 dcp_chunksize;
@@ -49,6 +54,7 @@ struct cont_props {
 	uint32_t	 dcp_ec_pda;
 	uint32_t	 dcp_rp_pda;
 	uint32_t	 dcp_global_version;
+	uint32_t	 dcp_obj_version;
 	uint32_t	 dcp_csum_enabled:1,
 			 dcp_srv_verify:1,
 			 dcp_dedup_enabled:1,
@@ -145,5 +151,11 @@ daos_cont_prop2rp_pda(daos_prop_t *prop);
  */
 uint32_t
 daos_cont_prop2global_version(daos_prop_t *prop);
+
+/**
+ * object layout version properties
+ */
+uint32_t
+daos_cont_prop2obj_version(daos_prop_t *prop);
 
 #endif /** __DAOS_CONT_PROPS_H__ */

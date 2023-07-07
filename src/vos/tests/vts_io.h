@@ -44,17 +44,18 @@
 #define VTS_IO_KEYS		(DAOS_ON_VALGRIND ? 100 : VTS_DB_KEYS)
 
 enum vts_test_flags {
-	TF_IT_ANCHOR		= (1 << 0),
-	TF_ZERO_COPY		= (1 << 1),
-	TF_OVERWRITE		= (1 << 2),
-	TF_PUNCH		= (1 << 3),
-	TF_REC_EXT		= (1 << 4),
-	TF_FIXED_AKEY		= (1 << 5),
-	IF_USE_ARRAY		= (1 << 6),
-	TF_USE_VAL		= (1 << 7),
-	TF_USE_CSUMS		= (1 << 8),
-	TF_DELETE		= (1 << 9),
-	IF_DISABLED		= (1 << 30),
+	TF_IT_ANCHOR     = (1 << 0),
+	TF_ZERO_COPY     = (1 << 1),
+	TF_OVERWRITE     = (1 << 2),
+	TF_PUNCH         = (1 << 3),
+	TF_REC_EXT       = (1 << 4),
+	TF_FIXED_AKEY    = (1 << 5),
+	IF_USE_ARRAY     = (1 << 6),
+	TF_USE_VAL       = (1 << 7),
+	TF_USE_CSUMS     = (1 << 8),
+	TF_DELETE        = (1 << 9),
+	TF_IT_SET_ANCHOR = (1 << 10),
+	IF_DISABLED      = (1 << 30),
 };
 
 #define VTS_BUF_SIZE 128
@@ -123,6 +124,16 @@ hash_key(d_iov_t *key, int flag)
 
 	return d_hash_string_u32((char *)key->iov_buf, key->iov_len);
 }
+
+/* vts_aggregate.c */
+void
+update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	     daos_size_t iod_size, daos_recx_t *recx, char *buf);
+void
+fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
+	    uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
+	    daos_size_t iod_size, daos_recx_t *recx, char *buf);
 
 #endif
 

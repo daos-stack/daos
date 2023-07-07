@@ -16,8 +16,8 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
@@ -66,7 +66,7 @@ func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {
 	)
 }
 
-func FaultInstancesNotStopped(action string, rank system.Rank) *fault.Fault {
+func FaultInstancesNotStopped(action string, rank ranklist.Rank) *fault.Fault {
 	return serverFault(
 		code.ServerInstancesNotStopped,
 		fmt.Sprintf("%s not supported when rank %d is running", action, rank),
@@ -96,7 +96,7 @@ func FaultPoolScmTooSmall(minTotal, minSCM uint64) *fault.Fault {
 	)
 }
 
-func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
+func FaultPoolInvalidRanks(invalid []ranklist.Rank) *fault.Fault {
 	rs := make([]string, len(invalid))
 	for i, r := range invalid {
 		rs[i] = r.String()
@@ -110,6 +110,14 @@ func FaultPoolInvalidRanks(invalid []system.Rank) *fault.Fault {
 	)
 }
 
+func FaultPoolInvalidNumRanks(req, avail int) *fault.Fault {
+	return serverFault(
+		code.ServerPoolInvalidNumRanks,
+		fmt.Sprintf("pool request contains invalid number of ranks (requested: %d, available: %d)", req, avail),
+		"retry the request with a valid number of ranks",
+	)
+}
+
 func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	return serverFault(
 		code.ServerPoolDuplicateLabel,
@@ -118,14 +126,11 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultInsufficientFreeHugePageMem(engineIndex, required, available, pagesReq, pagesAvail int) *fault.Fault {
+func FaultEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
 	return serverFault(
-		code.ServerInsufficientFreeHugePageMem,
-		fmt.Sprintf("insufficient amount of hugepage memory allocated for engine %d: "+
-			"want %s (%d hugepages), got %s (%d hugepages)", engineIndex,
-			humanize.IBytes(uint64(humanize.MiByte*required)), pagesReq,
-			humanize.IBytes(uint64(humanize.MiByte*available)), pagesAvail),
-		"reboot the system or manually clear /dev/hugepages as appropriate",
+		code.ServerConfigEngineNUMAImbalance,
+		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
+		"config requires an equal number of engines assigned to each NUMA node",
 	)
 }
 
@@ -150,6 +155,14 @@ func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.F
 		code.ServerIncompatibleComponents,
 		fmt.Sprintf("components %s and %s are not compatible", self, other),
 		"retry the request with compatible components",
+	)
+}
+
+func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
+	return serverFault(
+		code.ServerNoCompatibilityInsecure,
+		fmt.Sprintf("versions %s and %s are not compatible in insecure mode", self, other),
+		"enable certificates or use identical component versions",
 	)
 }
 

@@ -9,7 +9,7 @@ package daos
 /*
 #cgo LDFLAGS: -lgurt
 
-#include <cart/api.h>
+#include <gurt/common.h>
 */
 import "C"
 
@@ -19,6 +19,12 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 )
 
+const (
+	// ZeroHLCDate is the date of the zero HLC, as
+	// defined by D_HLC_START_SEC in src/gurt/hlc.c
+	ZeroHLCDate = "2021-01-01 00:00:00 +0000 UTC"
+)
+
 type (
 	// HLC is a high-resolution clock.
 	HLC uint64
@@ -26,7 +32,7 @@ type (
 
 // Nanoseconds returns the HLC represented as the number of nanoseconds since the Unix epoch.
 func (hlc HLC) Nanoseconds() int64 {
-	return int64(C.crt_hlc2unixnsec(C.uint64_t(hlc)))
+	return int64(C.d_hlc2unixnsec(C.uint64_t(hlc)))
 }
 
 func (hlc HLC) String() string {
@@ -52,5 +58,5 @@ func (hlc *HLC) UnmarshalJSON(b []byte) error {
 
 // NewHLC creates a new HLC from the given number of nanoseconds since the Unix epoch.
 func NewHLC(nsec int64) HLC {
-	return HLC(C.crt_unixnsec2hlc(C.uint64_t(nsec)))
+	return HLC(C.d_unixnsec2hlc(C.uint64_t(nsec)))
 }

@@ -1,5 +1,4 @@
 """Build versioned object store"""
-import daos_build
 
 FILES = ["evt_iter.c", "vos_common.c", "vos_iterator.c", "vos_io.c",
          "vos_pool.c", "vos_aggregate.c", "vos_container.c", "vos_obj.c",
@@ -28,8 +27,7 @@ def build_vos(env, standalone):
         # profiling tools will point at preprocessed file lines.
         files = denv.Preprocess(FILES)
 
-    vos = daos_build.library(denv, libname, files, install_off='../..',
-                             LIBS=['vea'])
+    vos = denv.d_library(libname, files, install_off='../..', LIBS=['vea'])
     denv.Install('$PREFIX/lib64/daos_srv', vos)
 
 
@@ -42,8 +40,7 @@ def build_vos_internal(env):
     # Add runtime paths for daos libraries
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
-    vos_size = daos_build.library(denv, 'vos_size', ['vos_size.c'],
-                                  LIBS=libraries, install_off='../..')
+    vos_size = denv.d_library('vos_size', ['vos_size.c'], LIBS=libraries, install_off='../..')
 
     denv.Install('$PREFIX/lib64/daos_srv', vos_size)
 
@@ -59,10 +56,9 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc', 'hwloc')
+    denv.require('pmdk', 'argobots', 'protobufc')
 
     # Compiler options
-    denv.Append(CPPPATH=[Dir('.').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     build_vos(denv, False)
     build_vos(denv, True)

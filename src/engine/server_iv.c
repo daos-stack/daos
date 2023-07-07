@@ -356,8 +356,8 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 }
 
 struct iv_priv_entry {
-	struct ds_iv_entry	 *entry;
-	void			**priv;
+	struct ds_iv_entry	*entry;
+	void			*priv;
 };
 
 static bool
@@ -470,6 +470,11 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				      priv_entry ? priv_entry->priv : NULL);
 	} else {
 		D_ASSERT(iv_value != NULL);
+		if (ns->iv_master_rank != key.rank) {
+			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
+				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
+			D_GOTO(output, rc = -DER_GRPVER);
+		}
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
@@ -571,6 +576,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry;
+	void			*entry_priv_val;
 	bool			alloc_entry = false;
 	int			rc;
 
@@ -596,17 +602,17 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 			D_GOTO(out, rc);
 	}
 
-	rc = class->iv_class_ops->ivc_ent_get(entry, priv);
+	rc = class->iv_class_ops->ivc_ent_get(entry, &entry_priv_val);
 	if (rc)
 		D_GOTO(out, rc);
 
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
-		class->iv_class_ops->ivc_ent_put(entry, priv);
+		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
 		D_GOTO(out, rc);
 	}
 
-	priv_entry->priv = *priv;
+	priv_entry->priv = entry_priv_val;
 	priv_entry->entry = entry;
 	*priv = priv_entry;
 
@@ -643,6 +649,8 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	entry = priv_entry->entry;
 	D_ASSERT(entry != NULL);
 
+	D_DEBUG(DB_TRACE, "Put entry %p/%d priv %p/%p\n", entry, entry->iv_ref - 1,
+		priv_entry, priv_entry->priv);
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
@@ -651,7 +659,6 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 		D_GOTO(put, rc);
 
 	D_FREE(priv_entry);
-	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
 		D_GOTO(put, rc);
 
@@ -819,12 +826,16 @@ free:
 
 /* Update iv namespace */
 void
-ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term)
 {
-	D_INFO("update iv_ns %u master rank %u new master rank %u "
-	       "myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-	       master_rank, dss_self_rank(), ns);
+	if (term <= ns->iv_master_term)
+		return;
+
+	D_INFO("update iv_ns %u master rank %u->%u term "DF_U64"->"DF_U64
+	       " myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+	       master_rank,  ns->iv_master_term, term, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
+	ns->iv_master_term = term;
 }
 
 void
@@ -1052,12 +1063,11 @@ retry:
 
 		/* otherwise retry and wait for others to update the ns. */
 		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
-		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
-		       ns->iv_ns_id, rc, key->class_id, opc, key->rank,
-		       ns->iv_master_rank);
+		D_WARN("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
+		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
 		goto retry;

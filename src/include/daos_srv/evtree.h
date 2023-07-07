@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,12 +16,6 @@
 #include <daos/mem.h>
 #include <gurt/list.h>
 #include <daos_srv/bio.h>
-
-/** Minimum tree order for an evtree */
-#define EVT_MIN_ORDER	4
-/** Maximum tree order for an evtree */
-#define EVT_MAX_ORDER	128
-
 
 enum {
 	EVT_UMEM_TYPE	= 150,
@@ -236,8 +230,13 @@ struct evt_root {
 	uint64_t			tr_node;
 	/** the current tree depth */
 	uint16_t			tr_depth;
-	/** tree order */
-	uint16_t			tr_order;
+	/** Note, this is backward compatible with 2.2 release where dynamic order isn't
+	 *  supported. In 2.2, it's a 16 bit field but the maximum is 128
+	 */
+	/** current tree order */
+	uint8_t                         tr_order;
+	/** maximum tree order */
+	uint8_t                         tr_max_order;
 	/** number of bytes per index */
 	uint32_t			tr_inob;
 	/** see \a evt_feats */
@@ -274,18 +273,21 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma);
 
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
-	EVT_FEAT_SORT_SOFF		= (1 << 0),
+	EVT_FEAT_SORT_SOFF = (1 << 0),
 	/** rectangles split by closest side of MBR
 	 */
-	EVT_FEAT_SORT_DIST		= (1 << 1),
+	EVT_FEAT_SORT_DIST = (1 << 1),
 	/** rectangles are sorted by distance to sides of MBR and split
 	 *  evenly
 	 */
-	EVT_FEAT_SORT_DIST_EVEN		= (1 << 2),
-	/** Place new feats above this line */
+	EVT_FEAT_SORT_DIST_EVEN = (1 << 2),
+	/** Dynamic root tree size */
+	EVT_FEAT_DYNAMIC_ROOT = (1 << 3),
 	EVT_FEATS_END,
 	/** Calculated mask for all supported feats */
-	EVT_FEATS_SUPPORTED		= ((EVT_FEATS_END - 1) << 1) - 1,
+	EVT_FEATS_SUPPORTED = ((EVT_FEATS_END - 1) << 1) - 1,
+	/** Policy mask */
+	EVT_POLICY_MASK = EVT_FEATS_SUPPORTED ^ EVT_FEAT_DYNAMIC_ROOT,
 };
 
 /** These are "internal" flags meant to match the btree ones */

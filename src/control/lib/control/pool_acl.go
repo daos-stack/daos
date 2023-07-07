@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
@@ -30,15 +31,15 @@ type PoolGetACLResp struct {
 
 // PoolGetACL gets the Access Control List for the pool.
 func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq) (*PoolGetACLResp, error) {
+	pbReq := &mgmtpb.GetACLReq{
+		Sys: req.getSystem(rpcClient),
+		Id:  req.ID,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolGetACL(ctx, &mgmtpb.GetACLReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolGetACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Get DAOS pool ACL request: %+v\n", req)
-
+	rpcClient.Debugf("Get DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -47,7 +48,7 @@ func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq)
 	pgar := &PoolGetACLResp{
 		ACL: &AccessControlList{},
 	}
-	return pgar, convertMSResponse(ur, pgar.ACL)
+	return pgar, convertMSResponse(ur, pgar)
 }
 
 // PoolOverwriteACLReq contains the input parameters for PoolOverwriteACL
@@ -71,16 +72,16 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 		return nil, errors.New("empty ACL on modify")
 	}
 
+	pbReq := &mgmtpb.ModifyACLReq{
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, &mgmtpb.ModifyACLReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
-			ACL: req.ACL.Entries,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Overwrite DAOS pool ACL request: %+v\n", req)
-
+	rpcClient.Debugf("Overwrite DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -89,7 +90,7 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 	poar := &PoolOverwriteACLResp{
 		ACL: &AccessControlList{},
 	}
-	return poar, convertMSResponse(ur, poar.ACL)
+	return poar, convertMSResponse(ur, poar)
 
 }
 
@@ -114,16 +115,16 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 		return nil, errors.New("empty ACL on modify")
 	}
 
+	pbReq := &mgmtpb.ModifyACLReq{
+		Sys:     req.getSystem(rpcClient),
+		Id:      req.ID,
+		Entries: req.ACL.Entries,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, &mgmtpb.ModifyACLReq{
-			Sys: req.getSystem(rpcClient),
-			Id:  req.ID,
-			ACL: req.ACL.Entries,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Update DAOS pool ACL request: %+v\n", req)
-
+	rpcClient.Debugf("Update DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -132,7 +133,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 	puar := &PoolUpdateACLResp{
 		ACL: &AccessControlList{},
 	}
-	return puar, convertMSResponse(ur, puar.ACL)
+	return puar, convertMSResponse(ur, puar)
 }
 
 // PoolDeleteACLReq contains the input parameters for PoolDeleteACL.
@@ -156,16 +157,16 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 		return nil, errors.New("no principal provided")
 	}
 
+	pbReq := &mgmtpb.DeleteACLReq{
+		Sys:       req.getSystem(rpcClient),
+		Id:        req.ID,
+		Principal: req.Principal,
+	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).PoolDeleteACL(ctx, &mgmtpb.DeleteACLReq{
-			Sys:       req.getSystem(rpcClient),
-			Id:        req.ID,
-			Principal: req.Principal,
-		})
+		return mgmtpb.NewMgmtSvcClient(conn).PoolDeleteACL(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Delete DAOS pool ACL request: %+v\n", req)
-
+	rpcClient.Debugf("Delete DAOS pool ACL request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -174,5 +175,5 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 	pdar := &PoolDeleteACLResp{
 		ACL: &AccessControlList{},
 	}
-	return pdar, convertMSResponse(ur, pdar.ACL)
+	return pdar, convertMSResponse(ur, pdar)
 }

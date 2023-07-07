@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -55,9 +55,11 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
+		"/ctl.CtlSvc/CollectLog":               {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
 		"/ctl.CtlSvc/SmdQuery":                 {ComponentAdmin},
+		"/ctl.CtlSvc/SmdManage":                {ComponentAdmin},
 		"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
 		"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
 		"/ctl.CtlSvc/StopRanks":                {ComponentServer},

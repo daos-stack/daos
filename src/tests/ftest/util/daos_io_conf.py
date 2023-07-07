@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,8 +8,7 @@ import random
 
 from apricot import TestWithServers
 from command_utils import ExecutableCommand
-from command_utils_base import \
-    BasicParameter, FormattedParameter
+from command_utils_base import BasicParameter, FormattedParameter
 from exception_utils import CommandFailure, MPILoadError
 from env_modules import load_mpi
 from job_manager_utils import Orterun
@@ -44,8 +42,13 @@ class IoConfGen(ExecutableCommand):
         self.filename = BasicParameter(None, filename)
         self.mpi_type = mpi_type
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -55,7 +58,7 @@ class IoConfGen(ExecutableCommand):
         if not load_mpi(self.mpi_type):
             raise MPILoadError(self.mpi_type)
 
-        return super().run()
+        return super().run(raise_exception)
 
     def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.
@@ -113,12 +116,8 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
         "{2}]045\"".format(rand_ofs_start, rand_ofs_end, record_size),
         "pool --query\n")
 
-    try:
-        file_hd = open(filename, "w+")
+    with open(filename, "w+") as file_hd:
         file_hd.write("\n".join(file_data))
-        file_hd.close()
-    except Exception as error:
-        raise error
 
 
 class IoConfTestBase(TestWithServers):
@@ -151,7 +150,7 @@ class IoConfTestBase(TestWithServers):
         """
         mpi_type = self.params.get("mpi_type", "/run/gen_io_conf/*", "openmpi")
         io_conf = IoConfGen(os.path.join(self.prefix, "bin"), self.testfile, mpi_type)
-        io_conf.set_environment({"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)})
+        io_conf.env.update({"POOL_SCM_SIZE": str(self.pool.scm_size)})
         io_conf.get_params(self)
         return io_conf
 

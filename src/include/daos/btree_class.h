@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -97,5 +97,12 @@ extern btr_ops_t dbtree_recx_ops;
  * The key is dtx_cos_key: oid + dkey_hash
  */
 #define DBTREE_CLASS_DTX_COS (DBTREE_DSM_BEGIN + 7)
+
+/** Integer-fixed-value pairs
+ *
+ *  Each key is uint64_t integer, values have fixed size for a given key.  Keys ordered numerically.
+ */
+#define DBTREE_CLASS_IFV     (DBTREE_DSM_BEGIN + 8)
+extern btr_ops_t dbtree_ifv_ops;
 
 #endif /* __DAOS_SRV_BTREE_CLASS_H__ */

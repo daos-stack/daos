@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,10 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
 
+	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
+	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
+	 * does not know how large to pre-allocate any buffers.
+	 */
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
@@ -89,7 +93,7 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->time_gran = 1;
 
-	if (fs_handle->dpi_info->di_wb_cache)
+	if (fs_handle->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);
@@ -174,7 +178,8 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
@@ -189,7 +194,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
 		double timeout;
 
-		if (dfuse_cache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
+		if (dfuse_mcache_get_valid(inode, inode->ie_dfs->dfc_attr_timeout, &timeout)) {
 			DFUSE_REPLY_ATTR_FORCE(inode, req, timeout);
 			D_GOTO(done, 0);
 		}
@@ -223,7 +228,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		handle = (void *)fi->fh;
 
 	if (handle) {
-		inode = handle->doh_ie;
+		inode                   = handle->doh_ie;
+		handle->doh_linear_read = false;
 	} else {
 		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
@@ -398,13 +404,13 @@ err:
  * or pools to use this fact to avoid a hash table lookup on the inode.
  */
 static void
-df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
-	      struct fuse_file_info *fi)
+df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}
@@ -416,10 +422,11 @@ static void
 df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		  struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
 
 	if (oh == NULL) {
+		struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+
 		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOTSUP);
 		return;
 	}

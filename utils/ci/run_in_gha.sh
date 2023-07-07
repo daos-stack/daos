@@ -75,11 +75,11 @@ python3 setup.py install
 cd -
 echo ::endgroup::
 
-echo ::group::Setting up daos_admin
+echo ::group::Setting up daos_server_helper
 . utils/sl/setup_local.sh
-./utils/setup_daos_admin.sh
+./utils/setup_daos_server_helper.sh
 echo ::endgroup::
 
 echo ::group::Container copy test
-./utils/node_local_test.py --no-root --memcheck no --test cont_copy
+./utils/node_local_test.py --no-root --memcheck no --system-ram-reserved 1 --test cont_copy
 echo ::endgroup::

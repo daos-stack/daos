@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,12 +9,14 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"time"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -24,18 +26,35 @@ const (
 	defaultLogFile    = "/tmp/daos_agent.log"
 )
 
+type refreshMinutes time.Duration
+
+func (rm *refreshMinutes) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var mins uint
+	if err := unmarshal(&mins); err != nil {
+		return err
+	}
+	*rm = refreshMinutes(time.Duration(mins) * time.Minute)
+	return nil
+}
+
+func (rm refreshMinutes) Duration() time.Duration {
+	return time.Duration(rm)
+}
+
 // Config defines the agent configuration.
 type Config struct {
-	SystemName       string                    `yaml:"name"`
-	AccessPoints     []string                  `yaml:"access_points"`
-	ControlPort      int                       `yaml:"port"`
-	RuntimeDir       string                    `yaml:"runtime_dir"`
-	LogFile          string                    `yaml:"log_file"`
-	LogLevel         common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
-	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
-	DisableCache     bool                      `yaml:"disable_caching,omitempty"`
-	DisableAutoEvict bool                      `yaml:"disable_auto_evict,omitempty"`
-	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
+	SystemName          string                    `yaml:"name"`
+	AccessPoints        []string                  `yaml:"access_points"`
+	ControlPort         int                       `yaml:"port"`
+	RuntimeDir          string                    `yaml:"runtime_dir"`
+	LogFile             string                    `yaml:"log_file"`
+	LogLevel            common.ControlLogLevel    `yaml:"control_log_mask,omitempty"`
+	TransportConfig     *security.TransportConfig `yaml:"transport_config"`
+	DisableCache        bool                      `yaml:"disable_caching,omitempty"`
+	CacheExpiration     refreshMinutes            `yaml:"cache_expiration,omitempty"`
+	DisableAutoEvict    bool                      `yaml:"disable_auto_evict,omitempty"`
+	ExcludeFabricIfaces common.StringSet          `yaml:"exclude_fabric_ifaces,omitempty"`
+	FabricInterfaces    []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
 // NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA
@@ -65,6 +84,11 @@ func LoadConfig(cfgPath string) (*Config, error) {
 	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
 		return nil, err
 	}
+
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return nil, fmt.Errorf("invalid system name: %q", cfg.SystemName)
+	}
+
 	return cfg, nil
 }
 

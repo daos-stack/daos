@@ -1,5 +1,5 @@
 """Build rsvc"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -11,14 +11,12 @@ def scons():
     # rsvc-specific env
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     # ds_rsvc
-    ds_rsvc = daos_build.library(denv, 'rsvc', ['srv.c',
-                                                'srv_common.c',
-                                                'rpc.c'],
-                                 install_off="../..")
+    ds_rsvc = denv.d_library('rsvc', ['srv.c', 'srv_common.c', 'rpc.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', ds_rsvc)
+
 
 if __name__ == "SCons.Script":
     scons()

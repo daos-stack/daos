@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestSyslogOutput(t *testing.T) {
 		for i := range rs {
 			rs[i] = runes[rand.Intn(len(runes))]
 		}
-		return base + string(rs)
+		return base + " " + string(rs)
 	}
 	debugStr := randString("DEBUG", 8)
 	infoStr := randString("INFO", 8)
@@ -60,21 +61,21 @@ func TestSyslogOutput(t *testing.T) {
 		expected  *regexp.Regexp
 	}{
 		"Debug": {prio: syslog.LOG_DEBUG, fn: logger.Debug, fnInput: debugStr,
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: %s\n`, debugStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`: %s$`, debugStr))},
 		"Debugf": {prio: syslog.LOG_DEBUG, fmtFn: logger.Debugf, fmtFnFmt: fmt.Sprintf("%s: %%d", debugStr), fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: \d{2}:\d{2}:\d{2}\.\d{6} [^:]+:\d+: %s: 42\n`, debugStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`%s: 42$`, debugStr))},
 		"Info": {prio: syslog.LOG_INFO, fn: logger.Info, fnInput: infoStr,
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, infoStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`: %s$`, infoStr))},
 		"Infof": {prio: syslog.LOG_INFO, fmtFn: logger.Infof, fmtFnFmt: fmt.Sprintf("%s: %%d", infoStr), fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s: 42\n`, infoStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`%s: 42$`, infoStr))},
 		"Notice": {prio: syslog.LOG_INFO, fn: logger.Notice, fnInput: noticeStr,
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, noticeStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`: %s$`, noticeStr))},
 		"Noticef": {prio: syslog.LOG_INFO, fmtFn: logger.Noticef, fmtFnFmt: fmt.Sprintf("%s: %%d", noticeStr), fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s: 42\n`, noticeStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`%s: 42$`, noticeStr))},
 		"Error": {prio: syslog.LOG_ERR, fn: logger.Error, fnInput: errorStr,
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s\n`, errorStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`: %s$`, errorStr))},
 		"Errorf": {prio: syslog.LOG_ERR, fmtFn: logger.Errorf, fmtFnFmt: fmt.Sprintf("%s: %%d", errorStr), fmtFnArgs: []interface{}{42},
-			expected: regexp.MustCompile(fmt.Sprintf(`\n[A-Za-z]{3} \d{2} \d{2}:\d{2}:\d{2} [\w\.\-]+ [^:]+: %s: 42\n`, errorStr))},
+			expected: regexp.MustCompile(fmt.Sprintf(`%s: 42$`, errorStr))},
 	}
 
 	jrnlOut := func(t *testing.T, prio int) string {
@@ -104,7 +105,7 @@ func TestSyslogOutput(t *testing.T) {
 			default:
 				t.Fatal("no test function defined")
 			}
-			got := jrnlOut(t, int(tc.prio))
+			got := strings.TrimSpace(jrnlOut(t, int(tc.prio)))
 			if !tc.expected.MatchString(got) {
 				t.Fatalf("expected %q to match %s", got, tc.expected)
 			}

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,19 +10,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
-	"unsafe"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 /*
@@ -35,6 +36,9 @@ import "C"
 const (
 	BdevPciAddrSep = " "
 	NilBdevAddress = "<nil>"
+	sysXSTgtID     = 1024
+	// Minimum amount of hugepage memory (in bytes) needed for each target.
+	memHugepageMinPerTarget = 1 << 30 // 1GiB
 )
 
 // JSON config file constants.
@@ -47,6 +51,7 @@ const (
 	ConfVmdEnable                = C.NVME_CONF_ENABLE_VMD
 	ConfSetHotplugBusidRange     = C.NVME_CONF_SET_HOTPLUG_RANGE
 	ConfSetAccelProps            = C.NVME_CONF_SET_ACCEL_PROPS
+	ConfSetSpdkRpcServer         = C.NVME_CONF_SET_SPDK_RPC_SERVER
 )
 
 // Acceleration related constants for engine setting and optional capabilities.
@@ -58,56 +63,111 @@ const (
 	AccelOptCRCFlag  = C.NVME_ACCEL_FLAG_CRC
 )
 
-// NvmeDevState represents the health state of NVMe device as reported by DAOS engine BIO module.
-type NvmeDevState uint32
-
-// NvmeDevState values representing individual bit-flags.
+// Role assignments for NVMe SSDs related to type of storage (enables Metadata-on-SSD capability).
 const (
-	NvmeStatePlugged  NvmeDevState = C.NVME_DEV_FL_PLUGGED
-	NvmeStateInUse    NvmeDevState = C.NVME_DEV_FL_INUSE
-	NvmeStateFaulty   NvmeDevState = C.NVME_DEV_FL_FAULTY
-	NvmeStateIdentify NvmeDevState = C.NVME_DEV_FL_IDENTIFY
-	NvmeStateUnknown  NvmeDevState = C.NVME_DEV_STATE_INVALID
+	BdevRoleData = C.NVME_ROLE_DATA
+	BdevRoleMeta = C.NVME_ROLE_META
+	BdevRoleWAL  = C.NVME_ROLE_WAL
+	BdevRoleAll  = BdevRoleData | BdevRoleMeta | BdevRoleWAL
 )
 
-// IsNew returns true if SSD is not in use by DAOS.
-func (bs NvmeDevState) IsNew() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateInUse == 0
+// NvmeDevState represents the operation state of an NVMe device.
+type NvmeDevState int32
+
+// NvmeDevState values representing the operational device state.
+const (
+	NvmeStateNormal NvmeDevState = iota
+	NvmeStateNew
+	NvmeStateFaulty
+	NvmeStateUnplugged
+)
+
+func (nds NvmeDevState) String() string {
+	ndss, ok := ctlpb.NvmeDevState_name[int32(nds)]
+	if !ok {
+		return "UNKNOWN"
+	}
+	return strings.ToUpper(ndss)
 }
 
-// IsNormal returns true if SSD is in a normal, non-faulty state.
-func (bs NvmeDevState) IsNormal() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty == 0 && bs&NvmeStateInUse != 0
+func (nds NvmeDevState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.NvmeDevState_name[int32(nds)]
+	if !ok {
+		return nil, errors.Errorf("invalid nvme dev state %d", nds)
+	}
+	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
-// IsFaulty returns true if SSD is in a faulty state.
-func (bs NvmeDevState) IsFaulty() bool {
-	return bs&NvmeStatePlugged != 0 && bs&NvmeStateFaulty != 0
+func (nds *NvmeDevState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
+
+	state, ok := ctlpb.NvmeDevState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid nvme dev state number parse %q", stateStr)
+		}
+
+		if _, ok = ctlpb.NvmeDevState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid nvme dev state name lookup %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*nds = NvmeDevState(state)
+
+	return nil
 }
 
-func (bs NvmeDevState) String() string {
-	return C.GoString(C.nvme_state2str(C.int(bs)))
+// LedState represents the LED state of device.
+type LedState int32
+
+// LedState values representing the VMD LED state (see include/spdk/vmd.h).
+const (
+	LedStateNormal LedState = iota
+	LedStateIdentify
+	LedStateFaulty
+	LedStateRebuild
+	LedStateUnknown
+)
+
+func (vls LedState) String() string {
+	vlss, ok := ctlpb.LedState_name[int32(vls)]
+	if !ok {
+		return "UNKNOWN"
+	}
+	return strings.ToUpper(vlss)
 }
 
-// States lists each flag in state bitset.
-func (bs NvmeDevState) States() string {
-	return fmt.Sprintf("plugged: %v, in-use: %v, faulty: %v, identify: %v",
-		bs&C.NVME_DEV_FL_PLUGGED != 0, bs&C.NVME_DEV_FL_INUSE != 0,
-		bs&C.NVME_DEV_FL_FAULTY != 0, bs&C.NVME_DEV_FL_IDENTIFY != 0)
+func (vls LedState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := ctlpb.LedState_name[int32(vls)]
+	if !ok {
+		return nil, errors.Errorf("invalid vmd led state %d", vls)
+	}
+	return []byte(`"` + strings.ToUpper(stateStr) + `"`), nil
 }
 
-// Uint32 returns uint32 representation of BIO device state.
-func (bs NvmeDevState) Uint32() uint32 {
-	return uint32(bs)
-}
+func (vls *LedState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(strings.ToUpper(string(data)), "\"")
 
-// NvmeDevStateFromString converts a status string into a state bitset.
-func NvmeDevStateFromString(status string) NvmeDevState {
-	cStr := C.CString(status)
-	defer C.free(unsafe.Pointer(cStr))
+	state, ok := ctlpb.LedState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid vmd led state number parse %q", stateStr)
+		}
 
-	return NvmeDevState(C.nvme_str2state(cStr))
+		if _, ok = ctlpb.LedState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid vmd led state name lookup %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*vls = LedState(state)
 
+	return nil
 }
 
 // NvmeHealth represents a set of health statistics for a NVMe device
@@ -152,6 +212,8 @@ type NvmeHealth struct {
 	NandBytesWritten        uint64 `json:"nand_bytes_written"`
 	HostBytesWritten        uint64 `json:"host_bytes_written"`
 	ClusterSize             uint64 `json:"cluster_size"`
+	MetaWalSize             uint64 `json:"meta_wal_size"`
+	RdbWalSize              uint64 `json:"rdb_wal_size"`
 }
 
 // TempK returns controller temperature in degrees Kelvin.
@@ -179,46 +241,59 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string       `json:"uuid"`
-	TargetIDs   []int32      `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState `json:"-"`
-	Rank        system.Rank  `json:"rank"`
-	TotalBytes  uint64       `json:"total_bytes"`
-	AvailBytes  uint64       `json:"avail_bytes"`
-	ClusterSize uint64       `json:"cluster_size"`
-	Health      *NvmeHealth  `json:"health"`
-	TrAddr      string       `json:"tr_addr"`
+	UUID        string        `json:"uuid"`
+	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
+	NvmeState   NvmeDevState  `json:"dev_state"`
+	LedState    LedState      `json:"led_state"`
+	Rank        ranklist.Rank `json:"rank"`
+	TotalBytes  uint64        `json:"total_bytes"`
+	AvailBytes  uint64        `json:"avail_bytes"`
+	UsableBytes uint64        `json:"usable_bytes"`
+	ClusterSize uint64        `json:"cluster_size"`
+	MetaSize    uint64        `json:"meta_size"`
+	MetaWalSize uint64        `json:"meta_wal_size"`
+	RdbSize     uint64        `json:"rdb_size"`
+	RdbWalSize  uint64        `json:"rdb_wal_size"`
+	Health      *NvmeHealth   `json:"health"`
+	TrAddr      string        `json:"tr_addr"`
+	Roles       BdevRoles     `json:"roles"`
+	HasSysXS    bool          `json:"has_sys_xs"`
 }
 
-// MarshalJSON marshals SmdDevice to JSON.
+func (sd *SmdDevice) String() string {
+	if sd == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%+v", *sd)
+}
+
+// MarshalJSON handles the special case where native SmdDevice converts BdevRoles to bitmask in
+// proto SmdDevice type. Native BdevRoles type en/decodes to/from human readable JSON strings.
 func (sd *SmdDevice) MarshalJSON() ([]byte, error) {
 	if sd == nil {
 		return nil, errors.New("tried to marshal nil SmdDevice")
 	}
 
-	// use a type alias to leverage the default marshal for
-	// most fields
 	type toJSON SmdDevice
 	return json.Marshal(&struct {
-		NvmeStateStr string `json:"dev_state"`
+		RoleBits uint32 `json:"role_bits"`
 		*toJSON
 	}{
-		NvmeStateStr: sd.NvmeState.String(),
-		toJSON:       (*toJSON)(sd),
+		RoleBits: uint32(sd.Roles.OptionBits),
+		toJSON:   (*toJSON)(sd),
 	})
 }
 
-// UnmarshalJSON unmarshals SmaDevice from JSON.
+// UnmarshalJSON handles the special case where proto SmdDevice converts BdevRoles bitmask to
+// native BdevRoles type. Native BdevRoles type en/decodes to/from human readable JSON strings.
 func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
 
-	// use a type alias to leverage the default unmarshal for
-	// most fields
 	type fromJSON SmdDevice
 	from := &struct {
-		NvmeStateStr string `json:"dev_state"`
+		RoleBits uint32 `json:"role_bits"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sd),
@@ -228,7 +303,23 @@ func (sd *SmdDevice) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	sd.NvmeState = NvmeDevStateFromString(from.NvmeStateStr)
+	if from.Roles.IsEmpty() && from.RoleBits != 0 {
+		sd.Roles.OptionBits = OptionBits(from.RoleBits)
+	}
+
+	seen := make(map[int32]bool)
+	newTgts := make([]int32, 0, len(sd.TargetIDs))
+	for _, i := range sd.TargetIDs {
+		if !seen[i] {
+			if i == sysXSTgtID {
+				sd.HasSysXS = true
+			} else {
+				newTgts = append(newTgts, i)
+			}
+			seen[i] = true
+		}
+	}
+	sd.TargetIDs = newTgts
 
 	return nil
 }
@@ -248,20 +339,25 @@ type NvmeController struct {
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.
-func (nc *NvmeController) UpdateSmd(smdDev *SmdDevice) {
-	for idx := range nc.SmdDevices {
-		if smdDev.UUID == nc.SmdDevices[idx].UUID {
-			nc.SmdDevices[idx] = smdDev
-
+func (nc *NvmeController) UpdateSmd(newDev *SmdDevice) {
+	if nc == nil {
+		return
+	}
+	for _, exstDev := range nc.SmdDevices {
+		if newDev.UUID == exstDev.UUID {
+			*exstDev = *newDev
 			return
 		}
 	}
 
-	nc.SmdDevices = append(nc.SmdDevices, smdDev)
+	nc.SmdDevices = append(nc.SmdDevices, newDev)
 }
 
 // Capacity returns the cumulative total bytes of all namespace sizes.
 func (nc *NvmeController) Capacity() (tb uint64) {
+	if nc == nil {
+		return 0
+	}
 	for _, n := range nc.Namespaces {
 		tb += n.Size
 	}
@@ -331,23 +427,36 @@ func (ncs NvmeControllers) Summary() string {
 }
 
 // Update adds or updates slice of NVMe Controllers.
-func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
+func (ncs *NvmeControllers) Update(ctrlrs ...NvmeController) {
+	if ncs == nil {
+		return
+	}
+
 	for _, ctrlr := range ctrlrs {
 		replaced := false
-
-		for idx, existing := range ncs {
+		for _, existing := range *ncs {
 			if ctrlr.PciAddr == existing.PciAddr {
-				ncs[idx] = ctrlr
+				*existing = ctrlr
 				replaced = true
-				continue
+				break
 			}
 		}
 		if !replaced {
-			ncs = append(ncs, ctrlr)
+			newCtrlr := ctrlr
+			*ncs = append(*ncs, &newCtrlr)
 		}
 	}
+}
 
-	return ncs
+// Addresses returns a hardware.PCIAddressSet pointer to controller addresses.
+func (ncs NvmeControllers) Addresses() (*hardware.PCIAddressSet, error) {
+	pas := hardware.MustNewPCIAddressSet()
+	for _, c := range ncs {
+		if err := pas.AddStrings(c.PciAddr); err != nil {
+			return nil, err
+		}
+	}
+	return pas, nil
 }
 
 // NvmeAioDevice returns struct representing an emulated NVMe AIO device (file or kdev).
@@ -370,9 +479,9 @@ type (
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
 	BdevPrepareRequest struct {
 		pbin.ForwardableRequest
-		HugePageCount      int
+		HugepageCount      int
 		HugeNodes          string
-		CleanHugePagesOnly bool
+		CleanHugepagesOnly bool
 		PCIAllowList       string
 		PCIBlockList       string
 		TargetUser         string
@@ -383,7 +492,7 @@ type (
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		NrHugePagesRemoved uint
+		NrHugepagesRemoved uint
 		VMDPrepared        bool
 	}
 
@@ -407,6 +516,7 @@ type (
 		DeviceList     *BdevDeviceList
 		DeviceFileSize uint64 // size in bytes for NVMe device emulation
 		Tier           int
+		DeviceRoles    BdevRoles // NVMe SSD role assignments
 	}
 
 	// BdevFormatRequest defines the parameters for a Format operation.
@@ -434,6 +544,7 @@ type (
 		Hostname          string
 		BdevCache         *BdevScanResponse
 		AccelProps        AccelProps
+		SpdkRpcSrvProps   SpdkRpcServer
 	}
 
 	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
@@ -536,8 +647,8 @@ func getNumaNodeBusidRange(ctx context.Context, getTopology topologyGetter, numa
 
 // filterBdevScanResponse removes controllers that are not in the input list from the scan response.
 // As the response contains controller references which may be shared elsewhere, copy them to avoid
-// accessing the same references in multiple code paths.
-func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) error {
+// accessing the same references in multiple code paths and return a new BdevScanResponse objecst.
+func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) (*BdevScanResponse, error) {
 	oldCtrlrRefs := resp.Controllers
 	newCtrlrRefs := make(NvmeControllers, 0, len(oldCtrlrRefs))
 
@@ -550,7 +661,7 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 		if addr.IsVMDBackingAddress() {
 			vmdAddr, err := addr.BackingToVMDAddress()
 			if err != nil {
-				return errors.Wrap(err, "converting pci address of vmd backing device")
+				return nil, errors.Wrap(err, "convert pci address of vmd backing device")
 			}
 			// If addr is a VMD backing address, use the VMD endpoint instead as that is the
 			// address that will be in the config.
@@ -564,9 +675,11 @@ func filterBdevScanResponse(incBdevs *BdevDeviceList, resp *BdevScanResponse) er
 			newCtrlrRefs = append(newCtrlrRefs, newCtrlrRef)
 		}
 	}
-	resp.Controllers = newCtrlrRefs
 
-	return nil
+	return &BdevScanResponse{
+		Controllers: newCtrlrRefs,
+		VMDEnabled:  resp.VMDEnabled,
+	}, nil
 }
 
 type BdevForwarder struct {
@@ -587,7 +700,7 @@ type BdevAdminForwarder struct {
 }
 
 func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
-	pf := pbin.NewForwarder(log, pbin.DaosAdminName)
+	pf := pbin.NewForwarder(log, pbin.DaosPrivHelperName)
 
 	return &BdevAdminForwarder{
 		Forwarder: *pf,
@@ -706,4 +819,20 @@ func (f *NVMeFirmwareForwarder) UpdateFirmware(req NVMeFirmwareUpdateRequest) (*
 	}
 
 	return res, nil
+}
+
+// CalcMinHugepages returns the minimum number of hugepages that should be
+// requested for the given number of targets.
+func CalcMinHugepages(hugepageSizeKb int, numTargets int) (int, error) {
+	if numTargets < 1 {
+		return 0, errors.New("numTargets must be > 0")
+	}
+
+	hugepageSizeBytes := hugepageSizeKb * humanize.KiByte // KiB to B
+	if hugepageSizeBytes == 0 {
+		return 0, errors.New("invalid system hugepage size")
+	}
+	minHugeMem := memHugepageMinPerTarget * numTargets
+
+	return minHugeMem / hugepageSizeBytes, nil
 }
