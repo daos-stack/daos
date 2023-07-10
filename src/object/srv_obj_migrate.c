@@ -2588,19 +2588,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_FOR_MIGRATION;
+	if (tls->mpt_opc == RB_OP_UPGRADE)
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
-		if (!daos_oclass_is_ec(&unpack_arg.oc_attr)) {
-			dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-			enum_flags |= DIOF_TO_SPEC_GROUP;
-		}
-	} else {
-		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
-	}
+
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+	enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
@@ -2884,13 +2877,21 @@ migrate_obj_ult(void *data)
 	 * discard, or discard has been done. spc_discard_done means
 	 * discarding has been done in the current VOS target.
 	 */
-	while (tls->mpt_pool->spc_pool->sp_need_discard &&
-	       !tls->mpt_pool->spc_discard_done) {
-		D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
-			DP_UUID(arg->pool_uuid));
-		dss_sleep(2 * 1000);
-		if (tls->mpt_fini)
+	if (tls->mpt_pool->spc_pool->sp_need_discard) {
+		while(!tls->mpt_pool->spc_discard_done) {
+			D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
+				DP_UUID(arg->pool_uuid));
+			dss_sleep(2 * 1000);
+			if (tls->mpt_fini)
+				D_GOTO(free_notls, rc);
+		}
+		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
+		if (tls->mpt_pool->spc_pool->sp_discard_status) {
+			rc = tls->mpt_pool->spc_pool->sp_discard_status;
+			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
+				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(free_notls, rc);
+		}
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {

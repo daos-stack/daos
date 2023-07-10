@@ -118,7 +118,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		dfuse_ie_close(ie);
+		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
 	}
 
@@ -258,7 +258,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
@@ -295,7 +295,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 out_release:
 	dfs_release(ie->ie_obj);
 out_free:
-	D_FREE(ie);
+	dfuse_ie_free(fs_handle, ie);
 out:
 	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
