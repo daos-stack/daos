@@ -292,15 +292,15 @@ management tools and will be documented here once available.
 
 ### Upgrading a Pool
 
-The pool upgrade operation upgrades pool's disk format to latest pool
-format while preserving its data. The existing containers should be
-accessible after the upgrade with the same level of functionality as
+The pool upgrade operation upgrades a pool's disk format to the latest
+pool format while preserving its data. The existing containers should
+be accessible after the upgrade with the same level of functionality as
 before the upgrade. New features available at the pool, container or
 object level won’t be automatically enabled on existing pools unless
 upgrade is performed.
 
 NB: The pool upgrade operation will evict any existing connections
-to this pool, pool will be unavailable to connect during pool upgrading.
+to this pool - pool will be unavailable to connect during pool upgrading.
 
 To see all UpgradeNeeded pools:
 
@@ -317,10 +317,10 @@ Below is an example of pool list
    pool2 1.0 GB Ready 0%   0%        0/4      1->2
 ```
 
-For above example, pool1 and pool2 need be upgraded from pool
+For the above example, pool1 and pool2 need be upgraded from pool
 version 1 to pool version 2.
 
-NB: jump upgrading is not supported, eg upgrade pools created from
+NB: jump upgrading is not supported; e.g. upgrading pools created from
 DAOS v2.0 to DAOS v2.2 is ok, but not for DAOS v2.0 to v2.4 directly.
 
 The example below shows before and after pool upgrade.
@@ -385,7 +385,7 @@ $ dmg pool get-prop pool1
 Duration of upgrade depends on possible format change across different DAOS releases.
 It might trigger rebuild to re-place objects data which might be time-consuming.
 So `dmg pool upgrade` will return within seconds, but it might take hours to see Pool Status
-become 'in progress' to 'completed'. pool will keep offline and deny any pool connection until
+change from 'in progress' to 'completed'. The pool will stay offline and deny any pool connection until
 pool upgrade status become 'completed'.
 
 !!! warning

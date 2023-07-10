@@ -948,7 +948,7 @@ required that all engines in the same system run the same DAOS version.
 !!! warning
     Rolling upgrade is not supporting at this time.
 
-DAOS v2.2 clients connections to pools which were created before DAOS v2.4
+DAOS v2.2 client connections to pools which were created before DAOS v2.4
 will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
 server. To upgrade all pools to latest format after software upgrade, run
 `dmg pool upgrade <pool>`
