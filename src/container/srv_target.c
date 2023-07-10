@@ -1751,7 +1751,6 @@ cont_query_one(void *vin)
 	struct ds_pool_child		*pool_child;
 	daos_handle_t			vos_chdl;
 	vos_cont_info_t			vos_cinfo;
-	char				*opstr;
 	int				rc;
 
 	info = dss_get_module_info();
@@ -1763,20 +1762,17 @@ cont_query_one(void *vin)
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
-	opstr = "Opening VOS container open handle\n";
-	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
-			   &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed %s: " DF_RC "\n",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr, DP_RC(rc));
+		D_ERROR(DF_CONT ": Opening VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(ds_child, rc);
 	}
 
-	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D_ERROR(DF_CONT ": Failed :%s: " DF_RC "\n",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr, DP_RC(rc));
+		D_ERROR(DF_CONT ": Querying VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	pack_args->xcq_hae = vos_cinfo.ci_hae;
