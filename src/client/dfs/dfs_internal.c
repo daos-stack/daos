@@ -88,11 +88,15 @@ static d_hash_table_ops_t hdl_hash_ops = {
 	.hop_rec_hash = rec_hash
 };
 
-int
+bool
 dfs_is_init()
 {
-	if (module_initialized > 0)
+	D_MUTEX_LOCK(&module_lock);
+	if (module_initialized > 0) {
+		D_MUTEX_UNLOCK(&module_lock);
 		return true;
+	}
+	D_MUTEX_UNLOCK(&module_lock);
 	return false;
 }
 

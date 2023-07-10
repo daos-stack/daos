@@ -622,7 +622,7 @@ __bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 
 /*
  * Calculate a reasonable WAL size based on following assumptions:
- * - Single target update IOPS can be upto 65k;
+ * - Single target update IOPS can be up to 65k;
  * - Each TX consumes 2 WAL blocks in average;
  * - Checkpointing interval is 5 seconds, and the WAL should have at least
  *   half free space before next checkpoint;
@@ -996,7 +996,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 		D_ERROR("The blob is in closing\n");
 		return -DER_AGAIN;
 	} else if (ctxt->bic_inflight_dmas) {
-		D_ERROR("There are %u inflight blob IOs\n",
+		D_ERROR("There are %u in-flight blob IOs\n",
 			ctxt->bic_inflight_dmas);
 		return -DER_BUSY;
 	}
@@ -1104,7 +1104,7 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	int			 rc;
 
 	/*
-	 * TODO: track inflight DMA extents and check the tracked extents
+	 * TODO: track in-flight DMA extents and check the tracked extents
 	 *	 on blob unmap to avoid following very unlikely race:
 	 *
 	 * 1. VOS fetch locates a blob extent and trigger DMA transfer;

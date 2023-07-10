@@ -97,7 +97,7 @@ struct crt_gdata {
 	/** global swim index for all servers */
 	int32_t			cg_swim_crt_idx;
 
-	/** credits limitation for #inflight RPCs per target EP CTX */
+	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
 	/** the global opcode map */
@@ -199,7 +199,7 @@ struct crt_context {
 	/** RPC tracking */
 	/** in-flight endpoint tracking hash table */
 	struct d_hash_table	 cc_epi_table;
-	/** binheap for inflight RPC timeout tracking */
+	/** binheap for in-flight RPC timeout tracking */
 	struct d_binheap	 cc_bh_timeout;
 	/**
 	 * mutex to protect cc_epi_table and timeout binheap (see the lock
@@ -234,7 +234,7 @@ struct crt_ep_inflight {
 
 	/* in-flight RPC req queue */
 	d_list_t		 epi_req_q;
-	/* (ei_req_num - ei_reply_num) is the number of inflight req */
+	/* (ei_req_num - ei_reply_num) is the number of in-flight req */
 	int64_t			 epi_req_num; /* total number of req send */
 	int64_t			 epi_reply_num; /* total number of reply recv */
 	/* RPC req wait queue */
@@ -311,7 +311,7 @@ struct crt_opc_map {
 	struct crt_opc_map_L2	*com_map;
 };
 
-
-void crt_na_config_fini(bool primary, int provider);
+void
+crt_na_config_fini(bool primary, crt_provider_t provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */

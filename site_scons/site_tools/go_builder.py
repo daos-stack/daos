@@ -8,7 +8,7 @@ import json
 from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.17.0'
+MIN_GO_VERSION = '1.18.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
 
 

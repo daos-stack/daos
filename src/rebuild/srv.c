@@ -1357,7 +1357,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		if (rgt->rgt_init_scan) {
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
-			 * (reclaim - 1 see obj_reclaim()), but keep the inflight I/O data.
+			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
 			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
 						 rgt->rgt_stable_epoch,
