@@ -196,10 +196,14 @@ class AllChecks():
         if any(map(code.startswith, PREFIXES_NNL)):
             expected_newlines = 0
 
+        if '"%s",' in code:
+            line.note('Use of %s at end of log-line, unable to check')
+            return
+
         count = code.count('\\n')
         if count < expected_newlines:
             parts = code.split('"')
-            if len(parts) == 3:
+            if len(parts) == 3 and 'DF_RC' not in code:
                 new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
                 line.fix(new_line)
                 line.warning("Line does not contain newline (autofixable)")
