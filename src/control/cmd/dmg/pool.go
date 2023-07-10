@@ -380,10 +380,10 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	// If rebuild-only pools requested, remove the pools which are idle state
-	// and only display the pools which has been rebuild.
+	// If rebuild-only pools requested, list the pools which has been rebuild only
+	// and not in idle state, otherwise list all the pools.
 	resp := new(control.ListPoolsResp)
-	if err := pretty.UpdateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
+	if err := updateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
 		return err
 	}
 
@@ -403,6 +403,22 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
+}
+
+// Update the pool list, which has been rebuild and not in idle state.
+func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
+	for _, pool := range resp.Pools {
+		if rebuildOnly {
+			if pool.RebuildState != "idle" {
+				finalResp.Pools = append(finalResp.Pools, pool)
+			}
+		} else {
+			finalResp.Pools = append(finalResp.Pools, pool)
+		}
+
+	}
+
+	return nil
 }
 
 type PoolID struct {
@@ -605,6 +621,9 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
+
+	// Update the Pool Query State based on response
+	control.UpdatePoolQueryState(resp)
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(resp, err)

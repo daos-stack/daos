@@ -338,6 +338,9 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 		}
 	}
 
+	// Update the Pool Query State based on response
+	control.UpdatePoolQueryState(pqr)
+
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(pqr, nil)
 	}

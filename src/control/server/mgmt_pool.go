@@ -926,8 +926,9 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	}
 
 	resp.State = ps.State.String()
-	if resp.DisabledTargets > 0 {
-		resp.State = fmt.Sprintf("%s-%s", resp.State, "Degraded")
+	// Update the Pool state if it's Ready and any target is disabled
+	if resp.DisabledTargets > 0 && resp.State == "Ready" {
+		resp.State = fmt.Sprintf("%s", "Degraded")
 	}
 
 	return resp, nil

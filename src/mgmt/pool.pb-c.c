@@ -2723,12 +2723,12 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "rebuild_stat",
+    "rebuild_state",
     5,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ListPoolsResp__Pool, rebuild_stat),
+    offsetof(Mgmt__ListPoolsResp__Pool, rebuild_state),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -2737,7 +2737,7 @@ static const ProtobufCFieldDescriptor mgmt__list_pools_resp__pool__field_descrip
 };
 static const unsigned mgmt__list_pools_resp__pool__field_indices_by_name[] = {
   1,   /* field[1] = label */
-  4,   /* field[4] = rebuild_stat */
+  4,   /* field[4] = rebuild_state */
   3,   /* field[3] = state */
   2,   /* field[2] = svc_reps */
   0,   /* field[0] = uuid */

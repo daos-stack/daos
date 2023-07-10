@@ -591,9 +591,9 @@ struct  _Mgmt__ListPoolsResp__Pool
    */
   char *state;
   /*
-   * pool rebuild status
+   * pool rebuild state
    */
-  char *rebuild_stat;
+  char *rebuild_state;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \

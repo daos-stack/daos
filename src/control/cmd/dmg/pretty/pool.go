@@ -273,7 +273,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		"SvcReps":        svcReps,
 		"Disabled":       fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 		"UpgradeNeeded?": upgrade,
-		"Rebuild State":  pool.RebuildStat,
+		"Rebuild State":  pool.RebuildState,
 	}
 
 	for _, tu := range pool.Usage {
@@ -314,27 +314,6 @@ func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPo
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))
-
-	return nil
-}
-
-// UpdateListPoolsResponse will update the pool which has been rebuild and not in idle state
-func UpdateListPoolsResponse(final_resp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
-	// Update the pool state to Degraded if any pool target is disabled.
-	for _, pool := range resp.Pools {
-		if pool.TargetsDisabled > 0 {
-			pool.State = fmt.Sprintf("%s-%s", pool.State, "Degraded")
-		}
-
-		if rebuildOnly {
-			if pool.RebuildStat != "idle" {
-				final_resp.Pools = append(final_resp.Pools, pool)
-			}
-		} else {
-			final_resp.Pools = append(final_resp.Pools, pool)
-		}
-
-	}
 
 	return nil
 }

@@ -611,6 +611,24 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, convertMSResponse(ur, pqr)
 }
 
+func UpdatePoolQueryState(pqr *PoolQueryResp) {
+	// Pool state is unknown as default, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = "Unknown"
+	}
+
+	// Update the state output for `daos pool query` command to aligned with dmg output.
+	if pqr.State == "" {
+		pqr.State = "Ready"
+	}
+
+	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
+	if pqr.State == "Ready" && pqr.DisabledTargets > 0 {
+		pqr.State = "Degraded"
+	}
+
+}
+
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
 // for the specified pool ID, pool engine rank, and target indices.
 func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryTargetReq) (*PoolQueryTargetResp, error) {
@@ -1050,7 +1068,7 @@ type (
 		Usage []*PoolTierUsage `json:"usage"`
 
 		// PoolRebuildStatus contains detailed information about the pool rebuild process.
-		RebuildStat string `json:"rebuild"`
+		RebuildState string `json:"rebuild_state"`
 	}
 )
 
@@ -1199,12 +1217,17 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
+		// Update the Pool state if it's Ready and any target is disabled
+		if resp.DisabledTargets > 0 && p.State == "Ready" {
+			p.State = fmt.Sprintf("%s", "Degraded")
+		}
+
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
-		p.RebuildStat = fmt.Sprintf("%s", resp.Rebuild.State)
+		p.RebuildState = resp.Rebuild.State.String()
 	}
 
 	sort.Slice(resp.Pools, func(i int, j int) bool {

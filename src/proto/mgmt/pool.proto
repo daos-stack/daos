@@ -145,7 +145,7 @@ message ListPoolsResp {
 		string label = 2; // pool label
 		repeated uint32 svc_reps = 3; // pool service replica ranks
 		string state = 4; // pool state
-		string rebuild_stat = 5; // pool rebuild status
+		string rebuild_state = 5; // pool rebuild state
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
