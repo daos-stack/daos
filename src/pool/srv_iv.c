@@ -704,7 +704,7 @@ pool_iv_prop_ent_copy(struct pool_iv_entry *dst_iv, struct pool_iv_entry *src_iv
 
 	rc = pool_iv_prop_g2l(&src_iv->piv_prop, prop_fetch);
 	if (rc) {
-		D_ERROR("pool_iv_prop_g2l failed: rc " DF_RC "\n", DP_RC(rc));
+		D_ERROR("pool_iv_prop_g2l failed: " DF_RC "\n", DP_RC(rc));
 		goto out;
 	}
 
