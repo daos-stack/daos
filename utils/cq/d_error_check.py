@@ -167,6 +167,7 @@ class AllChecks():
 
             self.check_quote(line)
             self.check_return(line)
+            self.check_df_rc(line)
 
             line.write(self._output)
             if line.modified:
@@ -204,7 +205,74 @@ class AllChecks():
             else:
                 line.warning("Line does not contain newline")
         elif count > expected_newlines:
-            line.warning("Line contains too many newlines")
+            if count == 1:
+                line.warning("Line contains too many newlines")
+            else:
+                line.note("More than one newline")
+
+    def check_df_rc(self, line):
+        r"""Check for text before DF_RC macro
+
+        Re-flow lines that use DF_RC so that they are of the form '...: " DF_RC "\n",'
+        There should be a ": " before the DF_RC.
+        There should not be other special characters used.
+        The variable name should not be printed
+
+        """
+        code = line.raw()
+        count = code.count('DF_RC')
+        if count == 0:
+            return
+        if count != 1:
+            line.note('Cannot check lines with multiple DF_RC')
+            return
+        if not code.endswith('));'):
+            line.note('Unable to check DF_RC')
+            return
+
+        # Remove any spaces around macros as these may or may not be present.  This updated input
+        # is used for the update check at the end so white-space differences here will not cause
+        # code to be re-written.
+        code = code.replace('DF_RC ', 'DF_RC')
+        code = code.replace(' DF_RC', 'DF_RC')
+        code = code.replace('DP_RC ', 'DP_RC')
+        code = code.replace(' DP_RC ', 'DP_RC')
+
+        # Check that DF_RC is at the end of the line, it should be.
+        if 'DF_RC"\\n"' not in code:
+            line.note('DF_RC is not at end of line')
+            return
+
+        # Extract the variable name
+        parts = code[:-3].split('(')
+        var_name = parts.pop()
+        new_code = '('.join(parts)
+        assert new_code.endswith('DP_RC')
+        new_code = new_code[:-5]
+
+        # Strip out the string formatting message
+        parts = code.split('DF_RC')
+        assert len(parts) == 2
+        msg = parts[0]
+
+        assert msg.endswith('"')
+        msg = msg[:-1]
+
+        # Check what comes before DF_RC in the message, and strip any trailing punctuation.
+        imsg = None
+        while imsg != msg:
+            imsg = msg
+            if any(map(msg.endswith, [' ', '=', '.', ',', ':', ';'])):
+                msg = msg[:-1]
+            if msg.endswith(var_name):
+                msg = msg[:-len(var_name)]
+            if msg.endswith('rc'):
+                msg = msg[:-2]
+
+        # Put it all back together with consistent style.
+        new_code = f'{msg}: "DF_RC{parts[1]}'
+        if new_code != code:
+            line.correct(new_code)
 
 
 def one_entry(fname):
