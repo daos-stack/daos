@@ -1418,9 +1418,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 					     &enum_type_val, ci_to_compare);
 
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d",
-				kd->kd_val_type == OBJ_ITER_AKEY ?
-				"AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
 			return rc;
 		}
 		break;

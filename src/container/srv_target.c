@@ -1767,18 +1767,16 @@ cont_query_one(void *vin)
 	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
 			   &vos_chdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed %s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Failed %s: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr, DP_RC(rc));
 		D_GOTO(ds_child, rc);
 	}
 
 	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed :%s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Failed :%s: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	pack_args->xcq_hae = vos_cinfo.ci_hae;
