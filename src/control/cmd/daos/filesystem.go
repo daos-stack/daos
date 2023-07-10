@@ -453,7 +453,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		jsonAttrs := &struct {
 			NumInodes      uint64 `json:"inodes"`
 			NumFileHandles uint64 `json:"open_files"`
@@ -465,7 +465,7 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 			NumPools:       uint64(ap.dfuse_mem.pool_count),
 			NumContainers:  uint64(ap.dfuse_mem.container_count),
 		}
-		return cmd.outputJSON(jsonAttrs, nil)
+		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("DFuse descriptor usage.")
