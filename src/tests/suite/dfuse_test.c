@@ -445,10 +445,11 @@ do_directory(void **state)
 	assert_return_code(dfd, errno);
 
 	for (i = 0; i < 100; i++) {
-		char fname[10];
+		char fname[17];
 		int  fd;
 
-		sprintf(fname, "file %d", i);
+		rc = snprintf(fname, 17, "file %d", i);
+		assert_in_range(rc, 0, 16);
 
 		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
 		assert_return_code(fd, errno);
