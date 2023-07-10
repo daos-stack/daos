@@ -167,6 +167,7 @@ class AllChecks():
 
             self.check_quote(line)
             self.check_return(line)
+            self.check_df_rc_dot(line)
             self.check_df_rc(line)
 
             line.write(self._output)
@@ -210,6 +211,18 @@ class AllChecks():
             else:
                 line.note("More than one newline")
 
+    def check_df_rc_dot(self, line):
+        """Check there is no . after DF_RC"""
+        code = line.raw()
+        count = code.count('DF_RC')
+        if count == 0:
+            return
+        code = code.replace('DF_RC ', 'DF_RC')
+        if 'DF_RC".\\n"' not in code:
+            return
+        code = code.replace('DF_RC".\\n"', 'DF_RC"\\n"')
+        line.fix(code)
+
     def check_df_rc(self, line):
         r"""Check for text before DF_RC macro
 
@@ -245,6 +258,9 @@ class AllChecks():
 
         # Extract the variable name
         parts = code[:-3].split('(')
+        if not parts[-2].endswith('DP_RC'):
+            line.note('Function in DF_RC call')
+            return
         var_name = parts.pop()
         new_code = '('.join(parts)
         assert new_code.endswith('DP_RC')
