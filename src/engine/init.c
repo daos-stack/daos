@@ -348,8 +348,7 @@ dss_topo_init()
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 

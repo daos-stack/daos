@@ -133,7 +133,7 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (cred_resp == NULL) {
-		D_ERROR("Body was not a GetCredentialResp");
+		D_ERROR("Body was not a GetCredentialResp\n");
 		return -DER_PROTO;
 	}
 

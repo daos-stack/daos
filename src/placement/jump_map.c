@@ -494,7 +494,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
+		D_ERROR("Could not find root node in pool map.\n");
 		return -DER_NONEXIST;
 	}
 	rc = 0;
@@ -726,7 +726,7 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
+		D_ERROR("Could not find root node in pool map.\n");
 		rc = -DER_NONEXIST;
 		goto ERR;
 	}
