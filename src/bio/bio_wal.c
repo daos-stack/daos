@@ -548,7 +548,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 	unsigned int		 left, entry_sz = sizeof(struct wal_trans_entry), dc_idx = 0;
 	uint64_t		 src_addr;
 
-	/* Simulate a server crash before the inflight WAL tx committed */
+	/* Simulate a server crash before the in-flight WAL tx committed */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
 		D_ERROR("Injected WAL tx lost for ID:"DF_U64".\n", tx->utx_id);
 		return;
@@ -1670,7 +1670,7 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
 	uint64_t		 total_bytes = 0, rpl_entries = 0, total_tx = 0;
-	uint64_t		 s_us;
+	uint64_t                 s_us = 0;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)
@@ -1771,7 +1771,7 @@ out:
 		 * Unmap the unused region to erase stale tx entries, otherwise, stale tx could
 		 * be mistakenly replayed on next restart in following scenario:
 		 *
-		 * 1. Imagine two inflight transactions T1 and T2, T1 is submitted before T2;
+		 * 1. Imagine two in-flight transactions T1 and T2, T1 is submitted before T2;
 		 * 2. Before T1 is written to WAL, T2 is written successfully, both transactions
 		 *    are still regarded as incompleted since the preceding T1 is not persistent;
 		 * 3. Sever restart;
@@ -1886,7 +1886,7 @@ wal_close(struct bio_meta_context *mc)
 	if (si->si_rsrv_waiters > 0)
 		wakeup_reserve_waiters(si, true);
 
-	/* Simulate a server crash before inflight WAL commit completed */
+	/* Simulate a server crash before in-flight WAL commit completed */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
 		D_ERROR("Injected WAL tx lost, reset committed ID to zero.\n");
 		si->si_commit_id = 0;

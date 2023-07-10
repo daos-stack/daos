@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       3%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -72,7 +72,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-1.408.g9524cdb%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -216,6 +216,7 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: golang >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -420,6 +421,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -552,6 +554,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.105-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
 * Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
 - Remove lmdb-devel for MD on SSD
 

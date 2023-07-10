@@ -52,18 +52,16 @@ RUN if $QUICKBUILD; then                                          \
     fi
 
 ARG BULLSEYE
-RUN if [ "x$BULLSEYE" != "x" ]; then \
-      dnf install zip && \
-      dnf clean all;     \
+RUN if [ "x$BULLSEYE" != "x" ]; then                                               \
+      dnf install xz && dnf clean all &&                                           \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
-        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
-      mkdir -p bullseye; \
-      tar -C bullseye --strip-components=1 -xf bullseye.tar; \
-      pushd bullseye; \
-        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage; \
-      popd; \
-      rm -f bullseye.tar; \
-      rm -rf bullseye; \
+        --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar.xz && \
+      mkdir -p bullseye &&                                                         \
+      tar -C bullseye --strip-components=1 -xf bullseye.tar.xz &&                  \
+      pushd bullseye &&                                                            \
+        ./install --quiet --key "${BULLSEYE}" --prefix /opt/BullseyeCoverage &&    \
+      popd &&                                                                      \
+      rm -rf bullseye.tar.xz bullseye;                                             \
     fi
 
 USER daos_server:daos_server
@@ -158,6 +156,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
         cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        export JAVA_HOME=$(daos-java/find_java_home.sh) && \
         mvn clean install -T 1C                                                               \
             -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
             -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \

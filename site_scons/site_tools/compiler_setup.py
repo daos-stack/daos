@@ -67,6 +67,7 @@ def _base_setup(env):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
+        env.AppendUnique(CPPDEFINES={'BUILD_PIPELINE': '1'})
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED': '0'})
 

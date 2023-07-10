@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -32,7 +33,7 @@ type configGenCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
 	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
@@ -87,8 +88,8 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	req.HostList = hl
 
 	// TODO: decide whether we want meaningful JSON output
-	if cmd.jsonOutputEnabled() {
-		return nil, cmd.outputJSON(nil, errors.New("JSON output not supported"))
+	if cmd.JSONOutputEnabled() {
+		return nil, cmd.OutputJSON(nil, errors.New("JSON output not supported"))
 	}
 
 	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
