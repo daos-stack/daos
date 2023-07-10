@@ -79,8 +79,8 @@ pipeline {
                             'repeat each functional test. CAUTION: only use in combination with ' +
                             'a reduced number of tests specified with the TestTag parameter.')
         string(name: 'TestProvider',
-               defaultValue: 'ofi+tcp',
-               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp)')
+               defaultValue: 'ofi+tcp;ofi_rxm',
+               description: 'Provider to use for the Functional Hardware Medium/Large stages of this run (i.e. ofi+tcp;ofi_rxm)')
         string(name: 'BaseBranch',
                defaultValue: base_branch,
                description: 'The base branch to run testing against (i.e. master, or a PR\'s branch)')
