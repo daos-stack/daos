@@ -619,8 +619,12 @@ daos_eq_create(daos_handle_t *eqh)
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
-	if (eq_ref == 0)
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
 		return -DER_UNINIT;
+	}
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 
 	eq = daos_eq_alloc();
 	if (eq == NULL)
@@ -668,7 +672,7 @@ eq_progress_cb(void *arg)
 	d_list_for_each_entry_safe(evx, tmp, &eq->eq_comp, evx_link) {
 		D_ASSERT(eq->eq_n_comp > 0);
 
-		/** don't poll out a parent if it has inflight events */
+		/** don't poll out a parent if it has in-flight events */
 		if (evx->evx_nchild_running > 0)
 			continue;
 

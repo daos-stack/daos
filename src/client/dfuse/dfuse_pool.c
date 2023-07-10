@@ -83,7 +83,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(dfuse_info, ie);
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	strncpy(ie->ie_name, name, NAME_MAX);
@@ -134,7 +134,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	return;
 decref:
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
-	D_FREE(ie);
+	dfuse_ie_free(dfuse_info, ie);
 	daos_prop_free(prop);
 err:
 	if (rc == ENOENT) {
