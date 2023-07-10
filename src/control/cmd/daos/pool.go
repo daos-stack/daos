@@ -342,7 +342,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	control.UpdatePoolQueryState(pqr)
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(pqr, err)
+		return cmd.OutputJSON(pqr, nil)
 	}
 
 	var bld strings.Builder
