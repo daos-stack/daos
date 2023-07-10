@@ -2877,13 +2877,21 @@ migrate_obj_ult(void *data)
 	 * discard, or discard has been done. spc_discard_done means
 	 * discarding has been done in the current VOS target.
 	 */
-	while (tls->mpt_pool->spc_pool->sp_need_discard &&
-	       !tls->mpt_pool->spc_discard_done) {
-		D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
-			DP_UUID(arg->pool_uuid));
-		dss_sleep(2 * 1000);
-		if (tls->mpt_fini)
+	if (tls->mpt_pool->spc_pool->sp_need_discard) {
+		while(!tls->mpt_pool->spc_discard_done) {
+			D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
+				DP_UUID(arg->pool_uuid));
+			dss_sleep(2 * 1000);
+			if (tls->mpt_fini)
+				D_GOTO(free_notls, rc);
+		}
+		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
+		if (tls->mpt_pool->spc_pool->sp_discard_status) {
+			rc = tls->mpt_pool->spc_pool->sp_discard_status;
+			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
+				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(free_notls, rc);
+		}
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {

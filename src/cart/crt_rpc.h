@@ -65,15 +65,16 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
-	uint32_t	cch_dst_tag;
-	/* flags */
+	/* destination tag */
+	uint16_t	cch_dst_tag;
+	/* source timeout, to be replaced by deadline eventually */
+	uint16_t	cch_src_timeout;
 	/* indicates whether rpc originator intended to send on a primary ctx */
 	uint32_t	cch_src_is_primary : 1;
-
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
