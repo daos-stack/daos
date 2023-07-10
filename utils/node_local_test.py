@@ -3898,6 +3898,11 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
         self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
+        # dd to write a file
+        file5 = join(path, 'newfile')
+        self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
+                                                'count=1024'])
+
         if dfuse.stop():
             self.fatal_errors = True
 
