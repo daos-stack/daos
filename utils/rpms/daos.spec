@@ -555,7 +555,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
-- Fix golang aos-client-tests dependency to be go instead
+- Fix golang daos-client-tests dependency to be go instead
 
 * Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
 - Install golang >= 1.18 as a daos-client-tests dependency
