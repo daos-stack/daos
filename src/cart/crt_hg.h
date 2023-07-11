@@ -95,11 +95,16 @@ struct crt_na_dict {
 
 extern struct crt_na_dict crt_na_dict[];
 
+enum crt_hdl_state { CRT_HDL_IN_USE = 0xf00d, CRT_HDL_ON_LIST, CRT_HDL_FREE };
+
 struct crt_hg_hdl {
 	/* link to crt_hg_pool::chp_hg_list */
-	d_list_t		chh_link;
+	d_list_t             chh_link;
 	/* HG handle */
-	hg_handle_t		chh_hdl;
+	hg_handle_t          chh_hdl;
+
+	enum crt_hdl_state   chh_state;
+	struct crt_rpc_priv *chh_rpc;
 };
 
 struct crt_hg_pool {

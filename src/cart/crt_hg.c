@@ -207,11 +207,13 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 
 		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL, CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
+			hdl->chh_state = CRT_HDL_FREE;
 			D_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
 			rc = crt_hgret_2_der(hg_ret);
 			break;
 		}
+		hdl->chh_state = CRT_HDL_ON_LIST;
 
 		D_SPIN_LOCK(&hg_pool->chp_lock);
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
@@ -246,9 +248,8 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 		hg_pool);
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
 
-	while ((hdl = d_list_pop_entry(&destroy_list,
-				       struct crt_hg_hdl,
-				       chh_link))) {
+	while ((hdl = d_list_pop_entry(&destroy_list, struct crt_hg_hdl, chh_link))) {
+		D_ASSERT(hdl->chh_state == CRT_HDL_ON_LIST);
 		D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
 		hg_ret = HG_Destroy(hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS)
@@ -256,6 +257,7 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 				hdl->chh_hdl, hg_ret);
 		else
 			D_DEBUG(DB_NET, "hg_hdl %p destroyed.\n", hdl->chh_hdl);
+		hdl->chh_state = CRT_HDL_FREE;
 		D_FREE(hdl);
 	}
 }
@@ -296,36 +298,36 @@ crt_hg_pool_fini(struct crt_hg_context *hg_ctx)
 	}
 }
 
-static inline struct crt_hg_hdl *
-crt_hg_pool_get(struct crt_hg_context *hg_ctx)
+/* Tries to get a handle from the pool, may succeed or fail */
+static inline void
+crt_hg_pool_get(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_hg_pool	*hg_pool = &hg_ctx->chc_hg_pool;
-	struct crt_hg_hdl	*hdl = NULL;
+	struct crt_context    *ctx     = rpc_priv->crp_pub.cr_ctx;
+	struct crt_hg_context *hg_ctx  = &ctx->cc_hg_ctx;
+	struct crt_hg_pool    *hg_pool = &hg_ctx->chc_hg_pool;
+	struct crt_hg_hdl     *hdl     = NULL;
 
 	D_SPIN_LOCK(&hg_pool->chp_lock);
 	if (!hg_pool->chp_enabled) {
-		D_DEBUG(DB_NET,
-			"hg_pool %p is not enabled cannot get.\n", hg_pool);
+		D_DEBUG(DB_NET, "hg_pool %p is not enabled cannot get.\n", hg_pool);
 		D_GOTO(unlock, hdl);
 	}
-	hdl = d_list_pop_entry(&hg_pool->chp_list,
-			       struct crt_hg_hdl,
-			       chh_link);
+	hdl = d_list_pop_entry(&hg_pool->chp_list, struct crt_hg_hdl, chh_link);
 	if (hdl == NULL) {
-		D_DEBUG(DB_NET,
-			"hg_pool %p is empty, cannot get.\n", hg_pool);
+		D_DEBUG(DB_NET, "hg_pool %p is empty, cannot get.\n", hg_pool);
 		D_GOTO(unlock, hdl);
 	}
-
+	D_ASSERT(hdl->chh_state == CRT_HDL_ON_LIST);
 	D_ASSERT(hdl->chh_hdl != HG_HANDLE_NULL);
+	hdl->chh_state = CRT_HDL_IN_USE;
+	hdl->chh_rpc   = rpc_priv;
 	hg_pool->chp_num--;
 	D_ASSERT(hg_pool->chp_num >= 0);
-	D_DEBUG(DB_NET, "hg_pool %p, remove, chp_num %d.\n",
-		hg_pool, hg_pool->chp_num);
+	D_DEBUG(DB_NET, "hg_pool %p, remove, chp_num %d.\n", hg_pool, hg_pool->chp_num);
 
 unlock:
 	D_SPIN_UNLOCK(&hg_pool->chp_lock);
-	return hdl;
+	rpc_priv->crp_hdl_reuse = hdl;
 }
 
 /* returns true on success */
@@ -349,16 +351,20 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 	} else {
 		hdl = rpc_priv->crp_hdl_reuse;
 		rpc_priv->crp_hdl_reuse = NULL;
+		D_ASSERT(hdl->chh_state == CRT_HDL_IN_USE);
+		D_ASSERT(hdl->chh_rpc == rpc_priv);
 	}
 
 	D_SPIN_LOCK(&hg_pool->chp_lock);
 	if (hg_pool->chp_enabled && hg_pool->chp_num < hg_pool->chp_max_num) {
 		d_list_add_tail(&hdl->chh_link, &hg_pool->chp_list);
 		hg_pool->chp_num++;
+		hdl->chh_state = CRT_HDL_ON_LIST;
 		D_DEBUG(DB_NET, "hg_pool %p, add, chp_num %d.\n",
 			hg_pool, hg_pool->chp_num);
 		rc = true;
 	} else {
+		hdl->chh_state = CRT_HDL_FREE;
 		D_FREE(hdl);
 		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
 			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
@@ -1156,22 +1162,27 @@ out:
 	return hg_ret;
 }
 
+/* TODO: Update this to not take hg_ctx */
 int
 crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 {
-	hg_id_t		rpcid;
-	hg_return_t	hg_ret = HG_SUCCESS;
-	bool		hg_created = false;
-	int		rc = 0;
+	hg_id_t             rpcid;
+	hg_return_t         hg_ret     = HG_SUCCESS;
+	bool                hg_created = false;
+	int                 rc         = 0;
+	struct crt_context *ctx;
 
-	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgcla != NULL &&
-		 hg_ctx->chc_hgctx != NULL);
+	ctx = rpc_priv->crp_pub.cr_ctx;
+
+	D_ASSERT(hg_ctx != NULL && hg_ctx->chc_hgcla != NULL && hg_ctx->chc_hgctx != NULL);
 	D_ASSERT(rpc_priv != NULL);
 	D_ASSERT(rpc_priv->crp_opc_info != NULL);
 
+	D_ASSERT(hg_ctx == &ctx->cc_hg_ctx);
+
 	if (!rpc_priv->crp_opc_info->coi_no_reply) {
 		rpcid = CRT_HG_RPCID;
-		rpc_priv->crp_hdl_reuse = crt_hg_pool_get(hg_ctx);
+		crt_hg_pool_get(rpc_priv);
 	} else {
 		rpcid = CRT_HG_ONEWAY_RPCID;
 	}
