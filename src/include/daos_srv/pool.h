@@ -78,6 +78,8 @@ struct ds_pool {
 	uint32_t		sp_rebuild_gen;
 
 	int			sp_reintegrating;
+
+	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 

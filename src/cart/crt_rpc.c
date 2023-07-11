@@ -1898,6 +1898,28 @@ out:
 }
 
 int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout)
+{
+	struct crt_rpc_priv	*rpc_priv = NULL;
+	int			rc = 0;
+
+	if (rpc == NULL) {
+		D_ERROR("NULL rpc passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (timeout == NULL) {
+		D_ERROR("NULL timeout passed\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	*timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+out:
+	return rc;
+}
+
+int
 crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg)
 {
 	int rc = 0;
