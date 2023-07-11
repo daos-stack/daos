@@ -2457,8 +2457,9 @@ dfuse_count_query(struct cmd_args_s *ap)
 
 	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
 	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "ioctl failed");
 		rc = daos_errno2der(errno);
-		DH_PERROR_DER(ap, rc, "ioctl failed");
 		goto close;
 	}
 
@@ -2530,15 +2531,17 @@ dfuse_evict(struct cmd_args_s *ap)
 
 	rc = fstat(fd, &buf);
 	if (rc < 0) {
-		rc = daos_errno2der(errno);
-		DH_PERROR_DER(ap, rc, "Failed to stat file");
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		rc = daos_errno2der(rc);
 		goto close;
 	}
 
 	if (buf.st_ino == 1) {
-		rc = daos_errno2der(dfuse_evict_helper(fd, &query));
+		rc = dfuse_evict_helper(fd, &query);
 		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "Unable to traverse root");
+			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
+			rc = daos_errno2der(rc);
 			goto close;
 		}
 		goto out;
@@ -2546,8 +2549,9 @@ dfuse_evict(struct cmd_args_s *ap)
 
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
 	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "ioctl failed");
 		rc = daos_errno2der(errno);
-		DH_PERROR_DER(ap, rc, "ioctl failed");
 		goto close;
 	}
 

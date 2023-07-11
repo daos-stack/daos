@@ -1476,9 +1476,9 @@ class DFuse():
                 print(rc)
                 found = rc['resident']
                 if not found:
-                    time.sleep(1)
                     sleeps += 1
                     assert sleeps < 10, 'Path still present 10 seconds after eviction'
+                    time.sleep(1)
 
 
 def assert_file_size_fd(fd, size):

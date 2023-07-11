@@ -703,13 +703,13 @@ These will affect all containers accessed via DFuse, regardless of any container
 
 ### Managing memory usage and disconnecting from containers
 
-DFuse can be instructed to evict paths from local memory which drops and open handles on containers
+DFuse can be instructed to evict paths from local memory which drops any open handles on containers
 or pools as well as reducing the working set size and memory consumption.  This is an asynchronous
-operation and there is no automatic way to tell if it's completed, in addition any lookup of the
+operation and there is no automatic way to tell if it's completed.  In addition, any lookup of the
 path specified in the eviction call will cause a new lookup and prevent the eviction from
 completing.
 
-Paths can be requested for eviction from dfuse using the `daos filesystem evict` command, this does
+Paths can be requested for eviction from dfuse using the `daos filesystem evict` command.  This does
 not change any data that is stored in DAOS in any way but rather releases local resources.  This
 command will return the inode number of the path as well as key dfuse metrics.
 
@@ -718,11 +718,11 @@ DFuse metrics can be queried with the `daos filesystem query` command which take
 number of open files as well as the number of pools and containers that DFuse is connected to.  If
 the `--inode` option is given then this command will also report if the inode is in memory or not.
 
-Together these two commands can be used to request eviction of a path and to poll for it's release,
+Together these two commands can be used to request eviction of a path and to poll for its release,
 although lookups from other processes might block the eviction process.
 
 If `daos filesystem evict` is passed the root of the DFuse mount then the path itself cannot be
-evicted, in this case all top-level entries in the directory are evicted instead and no inode
+evicted - in this case all top-level entries in the directory are evicted instead and no inode
 number is returned.
 
 ### Permissions
