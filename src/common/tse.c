@@ -58,9 +58,9 @@ struct tse_task_private {
 	    dtp_no_propagate : 1, dtp_dep_cnt : 28;
 
 	/* refcount of the task */
-	uint16_t dtp_refcnt;
+	uint16_t        dtp_refcnt;
 
-	uint16_t dtp_magic;
+	uint16_t        dtp_magic;
 
 	/*
 	 * task parameter pointer, it can be assigned while creating task, or explicitly call API
