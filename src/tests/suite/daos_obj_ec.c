@@ -2292,6 +2292,62 @@ ec_update_2akeys(void **state)
 	}
 }
 
+static void
+ec_dkey_enum_fail(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		num_dkey = 1000;
+	daos_anchor_t	anchor = { 0 };
+	int		total = 0;
+	char		buf[512];
+	daos_size_t	buf_len = 512;
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 3))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < num_dkey; i++) {
+		char dkey[32];
+		char data[5];
+		daos_recx_t recx;
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		sprintf(dkey, "dkey_%d", i);
+		recx.rx_nr = 5;
+		recx.rx_idx = 0;
+		memset(data, 'a', 5);
+		insert_recxs(dkey, "a_key", 1, DAOS_TX_NONE, &recx, 1, data, 16, &req);
+	}
+
+	print_message("iterate dkey...\n");
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_key_desc_t	kds[10];
+		uint32_t	number = 10;
+
+		memset(buf, 0, buf_len);
+		memset(kds, 0, sizeof(*kds) * number);
+		rc = enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf, buf_len, &req);
+		assert_rc_equal(rc, 0);
+		if (total == 0) {
+			daos_fail_loc_set(DAOS_FAIL_SHARD_OPEN | DAOS_FAIL_ALWAYS);
+			daos_fail_value_set(2);
+		}
+		total += number;
+	}
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+
+	assert_rc_equal(total, 1000);
+
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -2341,6 +2397,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC23: ec multi-singv overwrite", ec_multi_singv_overwrite, async_disable,
 	test_case_teardown},
 	{"EC24: ec multi-array update", ec_multi_array, async_disable,
+	test_case_teardown},
+	{"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
 	test_case_teardown},
 };
 

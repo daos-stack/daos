@@ -10,10 +10,10 @@
 #define D_LOGFAC        DD_FAC(placement)
 
 #include "pl_map.h"
+#include "jump_map.h"
 #include <inttypes.h>
 #include <daos/pool_map.h>
 #include <isa-l.h>
-
 
 /*
  * These ops determine whether extra information is calculated during
@@ -35,32 +35,114 @@ enum PL_OP_TYPE {
 	PL_ADD,
 };
 
-/**
- * Contains information related to object layout size.
- */
-struct jm_obj_placement {
-	unsigned int		jmop_grp_size;
-	unsigned int		jmop_grp_nr;
-	pool_comp_type_t	jmop_fdom_lvl;
-	uint32_t		jmop_dom_nr;
-};
+static void
+jm_obj_placement_fini(struct jm_obj_placement *jmop)
+{
+	if (jmop->jmop_pd_ptrs != NULL && jmop->jmop_pd_ptrs != jmop->jmop_pd_ptrs_inline)
+		D_FREE(jmop->jmop_pd_ptrs);
+}
 
-/**
- * jump_map Placement map structure used to place objects.
- * The map is returned as a struct pl_map and then converted back into a
- * pl_jump_map once passed from the caller into the object placement
- * functions.
- */
-struct pl_jump_map {
-	/** placement map interface */
-	struct pl_map		jmp_map;
-	/* Total size of domain type specified during map creation */
-	unsigned int		jmp_domain_nr;
-	/* # UPIN targets */
-	unsigned int		jmp_target_nr;
-	/* The dom that will contain no colocated shards */
-	pool_comp_type_t	jmp_redundant_dom;
-};
+/** Initialize the PDs for object to prepare for the layout calculation */
+#define LOCAL_PD_ARRAY_SIZE	(4)
+static int
+jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_domain *root,
+	       struct jm_obj_placement *jmop)
+{
+	struct pool_domain	*pds, *pd;
+	uint8_t			*pd_used = NULL;
+	uint8_t			 pd_used_array[LOCAL_PD_ARRAY_SIZE] = {0};
+	uint32_t		 pd_array_size;
+	daos_obj_id_t		 oid;
+	uint64_t		 key;
+	uint32_t		 selected_pd, pd_id;
+	uint32_t		 pd_nr = jmap->jmp_pd_nr;
+	uint32_t		 dom_nr = jmop->jmop_dom_nr;
+	uint32_t		 shard_nr = jmop->jmop_grp_size * jmop->jmop_grp_nr;
+	uint32_t		 doms_per_pd;
+	uint32_t		 pd_grp_size, pd_grp_nr;
+	int			 i, rc;
+
+	jmop->jmop_root = root;
+	if (md->omd_pda == 0)
+		pd_nr = 0;
+	jmop->jmop_pd_nr = pd_nr;
+	if (jmop->jmop_pd_nr == 0) {
+		jmop->jmop_pd_grp_size = 0;
+		return 0;
+	}
+
+	D_ASSERT(pd_nr >= 1);
+	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &pds);
+	D_ASSERT(rc == pd_nr);
+	rc = 0;
+
+	doms_per_pd = dom_nr / pd_nr;
+	D_ASSERTF(doms_per_pd >= 1, "bad dom_nr %d, pd_nr %d\n", dom_nr, pd_nr);
+
+	if (jmop->jmop_grp_size == 1) /* non-replica */
+		pd_grp_size = min(md->omd_pda, pds->do_target_nr);
+	else
+		pd_grp_size = min(md->omd_pda, doms_per_pd);
+	pd_grp_nr = shard_nr / pd_grp_size + (shard_nr % pd_grp_size != 0);
+	jmop->jmop_pd_grp_size = pd_grp_size;
+	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
+
+	if (jmop->jmop_pd_nr <= JMOP_PD_INLINE) {
+		jmop->jmop_pd_ptrs = jmop->jmop_pd_ptrs_inline;
+	} else {
+		D_ALLOC_ARRAY(jmop->jmop_pd_ptrs, jmop->jmop_pd_nr);
+		if (jmop->jmop_pd_ptrs == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+	pd_array_size = jmap->jmp_pd_nr / NBBY + 1;
+	if (pd_array_size > LOCAL_PD_ARRAY_SIZE) {
+		D_ALLOC_ARRAY(pd_used, pd_array_size);
+		if (pd_used == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	} else {
+		pd_used = pd_used_array;
+	}
+
+	oid = md->omd_id;
+	key = oid.hi ^ oid.lo;
+	for (i = 0; i < jmop->jmop_pd_nr; i++) {
+		key = crc(key, i);
+		selected_pd = d_hash_jump(key, jmap->jmp_pd_nr);
+		do {
+			selected_pd = selected_pd % jmap->jmp_pd_nr;
+			pd = &pds[selected_pd];
+			pd_id = pd->do_comp.co_id;
+			selected_pd++;
+		} while (isset(pd_used, pd_id));
+
+		setbit(pd_used, pd_id);
+		D_DEBUG(DB_PL, "PD[%d] -- pd_id %d\n", i, pd_id);
+		jmop->jmop_pd_ptrs[i] = pd;
+	}
+
+out:
+	if (pd_used != NULL && pd_used != pd_used_array)
+		D_FREE(pd_used);
+	if (rc)
+		jm_obj_placement_fini(jmop);
+	return rc;
+}
+
+/** Calculates the PD for the shard */
+struct pool_domain *
+jm_obj_shard_pd(struct jm_obj_placement *jmop, uint32_t shard)
+{
+	uint32_t pd_idx;
+
+	if (jmop->jmop_pd_nr == 0)
+		return jmop->jmop_root;
+
+	D_ASSERT(shard < jmop->jmop_grp_size * jmop->jmop_grp_nr);
+	pd_idx = (shard / jmop->jmop_pd_grp_size) % jmop->jmop_pd_nr;
+
+	D_DEBUG(DB_PL, "shard %d, on pd_idx %d\n", shard, pd_idx);
+	return jmop->jmop_pd_ptrs[pd_idx];
+}
 
 /**
  * This functions finds the pairwise differences in the two layouts provided
@@ -140,9 +222,9 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
  *                      layout requirements could not be determined / satisfied.
  */
 static int
-jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
-		     struct daos_obj_shard_md *shard_md,
-		     struct jm_obj_placement *jmop)
+jm_obj_placement_init(struct pl_jump_map *jmap, struct daos_obj_md *md,
+		      struct daos_obj_shard_md *shard_md,
+		      struct jm_obj_placement *jmop)
 {
 	struct daos_oclass_attr *oc_attr;
 	struct pool_domain      *root;
@@ -151,6 +233,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	uint32_t		dom_nr;
 	uint32_t		nr_grps;
 
+	jmop->jmop_pd_ptrs = NULL;
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
 	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
@@ -191,8 +274,11 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		jmop->jmop_grp_nr = nr_grps;
 		if (jmop->jmop_grp_nr == DAOS_OBJ_GRP_MAX)
 			jmop->jmop_grp_nr = grp_max;
-		else if (jmop->jmop_grp_nr > grp_max)
+		else if (jmop->jmop_grp_nr > grp_max) {
+			D_ERROR("jmop->jmop_grp_nr %d, grp_max %d, grp_size %d\n",
+				jmop->jmop_grp_nr, grp_max, jmop->jmop_grp_size);
 			return -DER_INVAL;
+		}
 	} else {
 		jmop->jmop_grp_nr = 1;
 	}
@@ -200,11 +286,15 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 	D_ASSERT(jmop->jmop_grp_nr > 0);
 	D_ASSERT(jmop->jmop_grp_size > 0);
 
-	D_DEBUG(DB_PL,
-		"obj="DF_OID"/ grp_size=%u grp_nr=%d\n",
-		DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr);
+	rc = jm_obj_pd_init(jmap, md, root, jmop);
+	if (rc == 0)
+		D_DEBUG(DB_PL, "obj="DF_OID"/ grp_size=%u grp_nr=%d, pd_nr=%u pd_grp_size=%u\n",
+			DP_OID(oid), jmop->jmop_grp_size, jmop->jmop_grp_nr,
+			jmop->jmop_pd_nr, jmop->jmop_pd_grp_size);
+	else
+		D_ERROR("obj="DF_OID", jm_obj_pd_init failed, "DF_RC"\n", DP_OID(oid), DP_RC(rc));
 
-	return 0;
+	return rc;
 }
 
 /**
@@ -292,7 +382,7 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 	struct failed_shard     *f_shard;
 	struct pl_obj_shard     *l_shard;
 	struct pool_target      *spare_tgt;
-	struct pool_domain      *root;
+	struct pool_domain      *root, *curr_pd;
 	d_list_t                *current;
 	daos_obj_id_t           oid;
 	bool                    spare_avail = true;
@@ -338,9 +428,11 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 
 			D_ASSERT(dgu != NULL);
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
-			get_target(root, layout_ver, &spare_tgt, crc(key, rebuild_key),
+			curr_pd = jm_obj_shard_pd(jmop, shard_id);
+			get_target(root, curr_pd, layout_ver, &spare_tgt, crc(key, rebuild_key),
 				   dom_used, dom_full, dgu->dgu_used, tgts_used, shard_id,
-				   allow_status, fdom_lvl, &spares_left, &spare_avail);
+				   allow_status, fdom_lvl, jmop->jmop_grp_size, &spares_left,
+				   &spare_avail);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
 				DP_TARGET(spare_tgt));
@@ -464,7 +556,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 {
 	struct pool_target      *target;
 	struct pool_domain      *domain;
-	struct pool_domain      *root;
+	struct pool_domain      *root, *curr_pd;
 	daos_obj_id_t           oid;
 	uint8_t                 *dom_used = NULL;
 	uint8_t                 *dom_full = NULL;
@@ -494,7 +586,7 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 	rc = pool_map_find_domain(jmap->jmp_map.pl_poolmap, PO_COMP_TP_ROOT,
 				  PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
+		D_ERROR("Could not find root node in pool map.\n");
 		return -DER_NONEXIST;
 	}
 	rc = 0;
@@ -560,9 +652,10 @@ get_object_layout(struct pl_jump_map *jmap, uint32_t layout_ver, struct pl_obj_l
 				setbit(tgts_used, target->ta_comp.co_id);
 				setbit(dom_cur_grp_used, domain - root);
 			} else {
-				get_target(root, layout_ver, &target, key, dom_used,
+				curr_pd = jm_obj_shard_pd(jmop, k);
+				get_target(root, curr_pd, layout_ver, &target, key, dom_used,
 					   dom_full, dom_cur_grp_used, tgts_used, k,
-					   allow_status, fdom_lvl, NULL, NULL);
+					   allow_status, fdom_lvl, jmop->jmop_grp_size, NULL, NULL);
 			}
 
 			if (target == NULL) {
@@ -723,23 +816,32 @@ jump_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	pool_map_addref(poolmap);
 	jmap->jmp_map.pl_poolmap = poolmap;
 
-	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT,
-				  PO_COMP_ID_ALL, &root);
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_ROOT, PO_COMP_ID_ALL, &root);
 	if (rc == 0) {
-		D_ERROR("Could not find root node in pool map.");
+		D_ERROR("Could not find root node in pool map.\n");
 		rc = -DER_NONEXIST;
 		goto ERR;
 	}
 
 	jmap->jmp_redundant_dom = mia->ia_jump_map.domain;
-	rc = pool_map_find_domain(poolmap, mia->ia_jump_map.domain,
-				  PO_COMP_ID_ALL, &doms);
+
+	rc = pool_map_find_domain(poolmap, PO_COMP_TP_GRP, PO_COMP_ID_ALL, &doms);
+	if (rc < 0)
+		goto ERR;
+	jmap->jmp_pd_nr = rc;
+
+	rc = pool_map_find_domain(poolmap, mia->ia_jump_map.domain, PO_COMP_ID_ALL, &doms);
 	if (rc <= 0) {
 		rc = (rc == 0) ? -DER_INVAL : rc;
 		goto ERR;
 	}
-
 	jmap->jmp_domain_nr = rc;
+	if (jmap->jmp_domain_nr < jmap->jmp_pd_nr) {
+		D_ERROR("Bad parameter, dom_nr %d < pd_nr %d\n",
+			jmap->jmp_domain_nr, jmap->jmp_pd_nr);
+		return -DER_INVAL;
+	}
+
 	rc = pool_map_find_upin_tgts(poolmap, NULL, &jmap->jmp_target_nr);
 	if (rc) {
 		D_ERROR("cannot find active targets: %d\n", rc);
@@ -859,12 +961,12 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 
 	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
-	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d\n",
-		DP_OID(oid), md->omd_ver);
+	D_DEBUG(DB_PL, "Determining location for object: "DF_OID", ver: %d, pda %u\n",
+		DP_OID(oid), md->omd_ver, md->omd_pda);
 
-	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
+	rc = jm_obj_placement_init(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("jm_obj_placement_get failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("jm_obj_placement_init failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -901,6 +1003,7 @@ jump_map_obj_place(struct pl_map *map, uint32_t layout_version, struct daos_obj_
 
 	*layout_pp = layout;
 out:
+	jm_obj_placement_fini(&jmop);
 	if (rc != 0) {
 		D_ERROR("Could not generate placement layout, rc "DF_RC"\n",
 			DP_RC(rc));
@@ -957,9 +1060,9 @@ jump_map_obj_find_rebuild(struct pl_map *map, uint32_t layout_ver, struct daos_o
 	jmap = pl_map2jmap(map);
 	oid = md->omd_id;
 
-	rc = jm_obj_placement_get(jmap, md, shard_md, &jmop);
+	rc = jm_obj_placement_init(jmap, md, shard_md, &jmop);
 	if (rc) {
-		D_ERROR("jm_obj_placement_get failed, rc "DF_RC"\n", DP_RC(rc));
+		D_ERROR("jm_obj_placement_init failed, rc "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -974,6 +1077,7 @@ jump_map_obj_find_rebuild(struct pl_map *map, uint32_t layout_ver, struct daos_o
 			     array_size, &idx, layout, &remap_list, false);
 
 out:
+	jm_obj_placement_fini(&jmop);
 	remap_list_free_all(&remap_list);
 	if (layout != NULL)
 		pl_obj_layout_free(layout);
@@ -1005,9 +1109,9 @@ jump_map_obj_find_reint(struct pl_map *map, uint32_t layout_ver, struct daos_obj
 	}
 
 	jmap = pl_map2jmap(map);
-	rc = jm_obj_placement_get(jmap, md, shard_md, &jop);
+	rc = jm_obj_placement_init(jmap, md, shard_md, &jop);
 	if (rc) {
-		D_ERROR("jm_obj_placement_get failed, rc %d.\n", rc);
+		D_ERROR("jm_obj_placement_init failed, rc %d.\n", rc);
 		return rc;
 	}
 
@@ -1031,6 +1135,7 @@ jump_map_obj_find_reint(struct pl_map *map, uint32_t layout_ver, struct daos_obj
 	rc = remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
 			     array_size, &idx, reint_layout, &reint_list, false);
 out:
+	jm_obj_placement_fini(&jop);
 	remap_list_free_all(&reint_list);
 	if (layout != NULL)
 		pl_obj_layout_free(layout);

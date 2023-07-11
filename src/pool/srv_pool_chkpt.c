@@ -190,7 +190,7 @@ chkpt_ult(void *arg)
 
 	rc = ABT_eventual_create(0, &ctx.cc_eventual);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create ABT eventual: %d", dss_abterr2der(rc));
+		D_ERROR("Failed to create ABT eventual: %d\n", dss_abterr2der(rc));
 		return;
 	}
 
