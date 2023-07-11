@@ -168,6 +168,13 @@ crt_prov_str_to_prov(const char *prov_str)
 	return CRT_PROV_UNKNOWN;
 }
 
+#define CRT_HG_HDL_FREE(_hdl)                                                                      \
+	do {                                                                                       \
+		memset(_hdl, 0x55, sizeof(*(_hdl)));                                               \
+		(_hdl)->chh_state = CRT_HDL_FREE;                                                  \
+		D_FREE(_hdl);                                                                      \
+	} while (0)
+
 /**
  * Enable the HG handle pool, can change/tune the max_num and prepost_num.
  * This allows the pool be enabled/re-enabled and be tunable at runtime
@@ -203,12 +210,10 @@ crt_hg_pool_enable(struct crt_hg_context *hg_ctx, int32_t max_num,
 			rc = -DER_NOMEM;
 			break;
 		}
-		D_INIT_LIST_HEAD(&hdl->chh_link);
 
 		hg_ret = HG_Create(hg_ctx->chc_hgctx, NULL, CRT_HG_RPCID, &hdl->chh_hdl);
 		if (hg_ret != HG_SUCCESS) {
-			hdl->chh_state = CRT_HDL_FREE;
-			D_FREE(hdl);
+			CRT_HG_HDL_FREE(hdl);
 			D_ERROR("HG_Create() failed, hg_ret: %d.\n", hg_ret);
 			rc = crt_hgret_2_der(hg_ret);
 			break;
@@ -257,8 +262,7 @@ crt_hg_pool_disable(struct crt_hg_context *hg_ctx)
 				hdl->chh_hdl, hg_ret);
 		else
 			D_DEBUG(DB_NET, "hg_hdl %p destroyed.\n", hdl->chh_hdl);
-		hdl->chh_state = CRT_HDL_FREE;
-		D_FREE(hdl);
+		CRT_HG_HDL_FREE(hdl);
 	}
 }
 
@@ -346,7 +350,6 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 		D_ALLOC_PTR(hdl);
 		if (hdl == NULL)
 			D_GOTO(out, 0);
-		D_INIT_LIST_HEAD(&hdl->chh_link);
 		hdl->chh_hdl = rpc_priv->crp_hg_hdl;
 	} else {
 		hdl = rpc_priv->crp_hdl_reuse;
@@ -364,8 +367,7 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 			hg_pool, hg_pool->chp_num);
 		rc = true;
 	} else {
-		hdl->chh_state = CRT_HDL_FREE;
-		D_FREE(hdl);
+		CRT_HG_HDL_FREE(hdl);
 		D_DEBUG(DB_NET, "hg_pool %p, chp_num %d, max_num %d, "
 			"enabled %d, cannot put.\n", hg_pool, hg_pool->chp_num,
 			hg_pool->chp_max_num, hg_pool->chp_enabled);
