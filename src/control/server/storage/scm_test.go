@@ -52,7 +52,7 @@ func Test_CalcRamdiskSize(t *testing.T) {
 			memSys:   DefaultSysMemRsvd,
 			tgtCount: 16,
 			engCount: 2,
-			expSize:  humanize.GiByte * 10, // (60 - (30+6+4)) / 2
+			expSize:  humanize.GiByte * 9, // (60 - (30+8+4)) / 2
 		},
 		"default values; low nr targets": {
 			memTotal: humanize.GiByte * 60,
@@ -60,7 +60,7 @@ func Test_CalcRamdiskSize(t *testing.T) {
 			memSys:   DefaultSysMemRsvd,
 			tgtCount: 1,
 			engCount: 2,
-			expSize:  humanize.GiByte * 11, // (60 - (30+6+2)) / 2
+			expSize:  humanize.GiByte * 10, // (60 - (30+8+2)) / 2
 		},
 		"custom values; low sys reservation": {
 			memTotal: humanize.GiByte * 60,

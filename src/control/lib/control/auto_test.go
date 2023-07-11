@@ -1576,7 +1576,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			memTotal: (54 * humanize.GiByte) / humanize.KiByte,
 			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
-					MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
+					MockEngineCfgTmpfs(0, 4, /* tmpfs size in gib */
 						mockBdevTier(0, 0).WithBdevDeviceRoles(4),
 						mockBdevTier(0, 1, 2).WithBdevDeviceRoles(3)).
 						WithHelperStreamCount(0).
@@ -1585,7 +1585,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 							filepath.Join(controlMetadata.EngineDirectory(0),
 								storage.BdevOutConfName),
 						),
-					MockEngineCfgTmpfs(1, 5, /* tmpfs size in gib */
+					MockEngineCfgTmpfs(1, 4, /* tmpfs size in gib */
 						mockBdevTier(1, 3).WithBdevDeviceRoles(4),
 						mockBdevTier(1, 4, 5).WithBdevDeviceRoles(3)).
 						WithHelperStreamCount(0).
