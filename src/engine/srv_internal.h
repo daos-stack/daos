@@ -251,7 +251,8 @@ static inline void
 dss_free_stack_cb(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	struct dss_xstream *dx = dss_current_xstream();
+	/* main thread doesn't have TLS and XS */
+	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
 
 	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
 	if (dx != NULL)
