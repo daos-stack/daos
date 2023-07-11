@@ -40,6 +40,10 @@ class FileLine():
         """Ends-with method"""
         return self._code.endswith(string)
 
+    def count(self, string):
+        """Returns count of substring"""
+        return self._code.count(string)
+
     def __contains__(self, string):
         return string in self._code
 
@@ -118,7 +122,8 @@ class FileParser:
 # Logging macros that expect a new-line.
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
-            'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR']
+            'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
+            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL']
 
 # Logging macros that do not expect a new-line.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
@@ -165,6 +170,7 @@ class AllChecks():
 
             line.expand()
 
+            self.check_print_string(line)
             self.check_quote(line)
             self.check_return(line)
             self.check_df_rc_dot(line)
@@ -182,6 +188,17 @@ class AllChecks():
             return
         with open(fname, 'w') as fd:
             fd.write(self._output.getvalue())
+
+    def check_print_string(self, line):
+        """Check for %s in message"""
+        if line.startswith('DH_PERROR'):
+            return
+        count = line.count('%s')
+        if count == 0:
+            return
+        if count == 1 and line.count('strerror') == 1:
+            return
+        line.note('Message uses %s')
 
     def check_quote(self, line):
         """Check for double quotes in message"""
@@ -256,9 +273,16 @@ class AllChecks():
         code = code.replace(' DP_RC ', 'DP_RC')
 
         # Check that DF_RC is at the end of the line, it should be.
-        if 'DF_RC"\\n"' not in code:
-            line.note('DF_RC is not at end of line')
-            return
+
+        # no return code, check for a ,
+        if any(map(code.startswith, PREFIXES_NNL)):
+            if 'DF_RC,' not in code:
+                line.note('DF_RC is not at end of line')
+                return
+        else:
+            if 'DF_RC"\\n"' not in code:
+                line.note('DF_RC is not at end of line')
+                return
 
         # Extract the variable name
         parts = code[:-3].split('(')
