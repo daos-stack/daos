@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,15 @@
 #define __DAOS_COMMON_FAULT_DOMAIN__
 
 #include <daos/common.h>
+
+/**
+ * The group domain level indicates which level (if any) represents the "group"
+ * domains.
+ *
+ * TODO DAOS-6353: Remove this when we have an arbitrary number of levels. At that
+ * point the concept of "groups" goes away.
+ */
+#define D_FD_GROUP_DOMAIN_LEVEL	2
 
 /**
  * Possible types of fault domain tree node.
@@ -124,5 +133,19 @@ d_fd_tree_reset(struct d_fd_tree *tree);
 int
 d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 			 uint32_t *result);
+
+/**
+ * Determine whether the domain tree node is a group component.
+ *
+ * TODO DAOS-6353: Remove this when we have an arbitrary number of levels. At that
+ * point the concept of "groups" goes away.
+ *
+ * @param[in]	node	Node of a fault domain tree
+ *
+ * @return	true	if the node is at the right level to be a group component
+ *		false	otherwise
+ */
+bool
+d_fd_node_is_group(struct d_fd_node *node);
 
 #endif /* __DAOS_COMMON_FAULT_DOMAIN__ */

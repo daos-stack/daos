@@ -682,6 +682,13 @@ out_daos:
 	if (rc == -DER_SUCCESS)
 		rc = rc2;
 out_fini:
+	if (dfuse_info) {
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_inode_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_fh_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_pool_count) == 0);
+		D_ASSERT(atomic_load_relaxed(&dfuse_info->di_container_count) == 0);
+	}
+
 	DFUSE_TRA_DOWN(dfuse_info);
 	daos_fini();
 out_debug:
