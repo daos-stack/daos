@@ -82,7 +82,7 @@ unpack_recx_csum(d_iov_t *csum_iov, d_iov_t *csum_iov_out)
 	D_ASSERT(csum_iov->iov_buf != NULL);
 	ci_cast(&tmp_csum_info, csum_iov);
 	if (tmp_csum_info == NULL) {
-		D_ERROR("Expected a valid checksum info to unpack");
+		D_ERROR("Expected a valid checksum info to unpack\n");
 		return -DER_CSUM;
 	}
 

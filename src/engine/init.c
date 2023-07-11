@@ -348,8 +348,7 @@ dss_topo_init()
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -801,11 +800,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	rc = dss_module_setup_all();
-	if (rc != 0)
-		goto exit_init_state;
-	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
