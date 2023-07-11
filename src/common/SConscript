@@ -43,9 +43,6 @@ def build_daos_common(denv, client):
         benv.require('argobots')
         benv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
-    if benv.get('BUILD_TYPE') != 'release':
-        benv.Append(CPPDEFINES={'TSE_DEBUG': '1'})
-
     common = benv.d_library(libname, COMMON_FILES + dav_src + ad_mem_files + stack_mmap_files,
                             LIBS=common_libs)
     benv.Install('$PREFIX/lib64/', common)

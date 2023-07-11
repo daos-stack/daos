@@ -21,6 +21,10 @@
 
 #include <gurt/atomic.h>
 
+#ifndef DAOS_BUILD_RELEASE
+#define TSE_DEBUG
+#endif
+
 struct tse_task_private {
 	struct tse_sched_private *dtp_sched;
 
@@ -53,14 +57,11 @@ struct tse_task_private {
 	    /* Don't propagate err-code from dependent tasks */
 	    dtp_no_propagate : 1, dtp_dep_cnt : 28;
 
-#if TSE_DEBUG
 	/* refcount of the task */
 	uint16_t dtp_refcnt;
 
 	uint16_t dtp_magic;
-#else
-	uint32_t dtp_refcnt;
-#endif
+
 	/*
 	 * task parameter pointer, it can be assigned while creating task, or explicitly call API
 	 * tse_task_priv_set. User can just use \a dtp_buf instead of this if parameter structure is
@@ -125,7 +126,7 @@ struct tse_sched_comp {
 	void               *dsc_arg;
 };
 
-#if TSE_DEBUG
+#ifdef TSE_DEBUG
 
 #define TASK_MAGIC     0xf0f0
 #define TASK_BAD_MAGIC (TASK_MAGIC + 1)
@@ -357,6 +358,7 @@ static void
 tse_task_addref_locked(struct tse_task_private *dtp)
 {
 	dtp->dtp_refcnt++;
+	D_ASSERT(dtp->dtp_refcnt < 32767);
 }
 
 static bool
@@ -397,7 +399,7 @@ tse_task_decref(tse_task_t *task)
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 
-#if TSE_DEBUG
+#ifdef TSE_DEBUG
 	dtp->dtp_magic = TASK_BAD_MAGIC;
 #endif
 
@@ -1122,7 +1124,7 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	dtp->dtp_func	  = task_func;
 	dtp->dtp_priv	  = priv;
 	dtp->dtp_sched    = dsp;
-#if TSE_DEBUG
+#ifdef TSE_DEBUG
 	dtp->dtp_magic = TASK_MAGIC;
 #endif
 	*taskp = task;
