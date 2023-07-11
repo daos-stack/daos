@@ -317,7 +317,7 @@ Below is an example of pool list
    pool2 1.0 GB Ready 0%   0%        0/4      1->2
 ```
 
-For the above example, pool1 and pool2 need be upgraded from pool
+For the above example, pool1 and pool2 need to be upgraded from pool
 version 1 to pool version 2.
 
 NB: jump upgrading is not supported; e.g. upgrading pools created from
@@ -386,7 +386,7 @@ Duration of upgrade depends on possible format change across different DAOS rele
 It might trigger rebuild to re-place objects data which might be time-consuming.
 So `dmg pool upgrade` will return within seconds, but it might take hours to see Pool Status
 change from 'in progress' to 'completed'. The pool will stay offline and deny any pool connection until
-pool upgrade status become 'completed'.
+pool upgrade status becomes 'completed'.
 
 !!! warning
     Once upgrade was done, upgraded pools will become unavailable if downgrading software.
