@@ -1917,7 +1917,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 		break;
 
 	default:
-		D_ERROR("Unknown event type %#x", sync_type->ivs_event);
+		D_ERROR("Unknown event type %#x\n", sync_type->ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
 		break;
 	}
@@ -2551,8 +2551,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* Respond back to child; might fail if child is not alive */
 		if (crt_reply_send(iv_info->uci_child_rpc) != DER_SUCCESS)
-			D_ERROR("Failed to respond on rpc: %p",
-				iv_info->uci_child_rpc);
+			D_ERROR("Failed to respond on rpc: %p\n", iv_info->uci_child_rpc);
 
 		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
