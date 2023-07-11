@@ -141,6 +141,8 @@ struct daos_obj_md {
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
 	uint32_t		omd_fdom_lvl;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
 };
 
 /** object shard metadata stored in each container shard */

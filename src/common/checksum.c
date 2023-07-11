@@ -44,7 +44,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 	int			 rc = 0;
 
 	if (!ft) {
-		D_ERROR("No function table");
+		D_ERROR("No function table\n");
 		return -DER_INVAL;
 	}
 
@@ -261,12 +261,12 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 	int		i;
 
 	if (a->cs_type != b->cs_type) {
-		D_ERROR("%d != %d", a->cs_type, b->cs_type);
+		D_ERROR("%d != %d\n", a->cs_type, b->cs_type);
 		return false;
 	}
 
 	if (a_len != b_len) {
-		D_ERROR("%d != %d", a_len, b_len);
+		D_ERROR("%d != %d\n", a_len, b_len);
 		return false;
 	}
 

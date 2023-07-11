@@ -784,7 +784,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
 	if (rc != 0) {
-		D_ERROR("container props failed to initialize");
+		D_ERROR("container props failed to initialize\n");
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
 	}
@@ -2555,8 +2555,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 			return -DER_INVAL;
 		}
 		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
-			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
-				i);
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX\n", i);
 			return -DER_INVAL;
 		}
 		if (sizes != NULL) {
@@ -2564,8 +2563,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 				sizes[i] = 0;
 			else if (values[i] == NULL || sizes[i] == 0) {
 				if (!readonly) {
-					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
-						i, values[i], i, sizes[i]);
+					D_ERROR(
+					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu\n",
+					    i, values[i], i, sizes[i]);
 					return -DER_INVAL;
 				}
 				sizes[i] = 0;
