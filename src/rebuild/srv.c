@@ -1291,7 +1291,6 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 {
 	/* Only be called if rebuild task failed */
 
-	D_ASSERT(error != 0);
 	/* retry with network error, since the pool map will be changed accordingly, so
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
