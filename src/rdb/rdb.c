@@ -245,6 +245,8 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
+		D_ERROR(DF_UUID": failed to allocate db object\n",
+			DP_UUID(uuid));
 		rc = -DER_NOMEM;
 		goto err;
 	}
