@@ -108,3 +108,4 @@ class DAOSVersion(TestWithServers):
                 append_error(errors, msg)
 
         report_errors(self, errors)
+        self.log.info("Test passed")

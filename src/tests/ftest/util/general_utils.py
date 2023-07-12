@@ -1346,7 +1346,7 @@ def report_errors(test, errors):
             len(errors), "" if len(errors) == 0 else "s"))
         test.fail(error_msg)
 
-    test.log.info("Test passed")
+    test.log.info("No errors detected.")
 
 
 def percent_change(val1, val2):
