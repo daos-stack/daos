@@ -2389,7 +2389,8 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		d_sgl_fini(&fail_info->efi_recov_tasks[i].ert_sgl, false);
 		if (daos_handle_is_valid(fail_info->efi_recov_tasks[i].ert_th))
-			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th);
+			dc_tx_local_close(fail_info->efi_recov_tasks[i].ert_th,
+					  &fail_info->efi_recov_tasks[i]);
 	}
 	D_FREE(fail_info->efi_recov_tasks);
 }

@@ -950,7 +950,7 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 	else
 		rc = dc_obj_verify_rep_rdg(obj, dova, rdg_idx, reps, th);
 
-	dc_tx_local_close(th);
+	dc_tx_local_close(th, NULL);
 
 	return rc > 0 ? 0 : rc;
 }
