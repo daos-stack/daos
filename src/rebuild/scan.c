@@ -718,6 +718,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
+	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
@@ -738,7 +739,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_UPGRADE:
 		if (oid.id_layout_ver < rpt->rt_new_layout_ver) {
 			rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
-					     arg->co_props.dcp_obj_version, &md, tgts, shards);
+					     arg->co_props.dcp_obj_version, &md,
+					     tgts, shards, LOCAL_ARRAY_SIZE);
 			/* Then only upgrade the layout version */
 			if (rc == 0) {
 				rc = vos_obj_layout_upgrade(param->ip_hdl, oid,
@@ -758,6 +760,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {

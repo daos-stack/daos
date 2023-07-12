@@ -7,6 +7,7 @@
 package build
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -35,4 +36,22 @@ func revString(version string) string {
 // the revision of the binary.
 func String(name string) string {
 	return fmt.Sprintf("%s version %s", name, revString(DaosVersion))
+}
+
+// MarshalJSON returns a JSON string containing a structured representation of
+// the binary build info.
+func MarshalJSON(name string) ([]byte, error) {
+	return json.Marshal(&struct {
+		Name     string `json:"name"`
+		Version  string `json:"version"`
+		Revision string `json:"revision,omitempty"`
+		Dirty    bool   `json:"dirty,omitempty"`
+		Release  bool   `json:"release,omitempty"`
+	}{
+		Name:     name,
+		Version:  DaosVersion,
+		Revision: Revision,
+		Dirty:    DirtyBuild,
+		Release:  ReleaseBuild,
+	})
 }
