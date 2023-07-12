@@ -7,6 +7,7 @@
 package main
 
 import (
+	"github.com/google/uuid"
 	"runtime"
 	"unsafe"
 
@@ -18,6 +19,7 @@ import (
  #cgo LDFLAGS: -lddb -lgurt
 
  #include <ddb.h>
+ #include <ddb_vos.h>
  #include <daos_errno.h>
 */
 import "C"
@@ -54,7 +56,7 @@ func InitDdb() (*DdbContext, func(), error) {
 
 // DdbContext structure for wrapping the C code context structure
 type DdbContext struct {
-	ctx C.struct_ddb_ctx
+	ctx C.struct_ddb_ctx /* c structure used for the commands */
 }
 
 func ddbPoolIsOpen(ctx *DdbContext) bool {
@@ -91,9 +93,33 @@ func ddbClose(ctx *DdbContext) error {
 	return daosError(C.ddb_run_close(&ctx.ctx))
 }
 
-func ddbSuperblockDump(ctx *DdbContext) error {
+func ddbSuperblockDump(ctx *DdbContext) (*SuperBlock, error) {
+
 	/* Run the c code command */
-	return daosError(C.ddb_run_superblock_dump(&ctx.ctx))
+	cSb := C.struct_ddb_superblock{}
+	err := daosError(C.dv_superblock2(ctx.ctx.dc_poh, &cSb))
+	if err != nil {
+		return nil, err
+	}
+
+	/* Convert C uuit_t into a go UUID */
+	var goUuid uuid.UUID
+	cUUIDBytes := (*[16]byte)(unsafe.Pointer(&cSb.dsb_id))[:]
+	copy(goUuid[:], cUUIDBytes)
+
+	/* convert the c struct to the go struct */
+	sb := SuperBlock{
+		PoolUuid:             goUuid.String(),
+		ScmSize:              uint64(cSb.dsb_scm_sz),
+		ContCount:            int(cSb.dsb_cont_nr),
+		NvmeSize:             uint64(cSb.dsb_nvme_sz),
+		TotalBlocks:          uint64(cSb.dsb_tot_blks),
+		DurableFormatVersion: int(cSb.dsb_durable_format_version),
+		BlockSize:            uint64(cSb.dsb_blk_sz),
+		HdrBlocks:            uint64(cSb.dsb_hdr_blks),
+	}
+
+	return &sb, nil
 }
 
 func ddbValueDump(ctx *DdbContext, path string, dst string) error {

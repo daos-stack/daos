@@ -7,10 +7,11 @@
 package main
 
 import (
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/desertbit/grumble"
 )
 
-func addAppCommands(app *grumble.App, ctx *DdbContext) {
+func addAppCommands(app *grumble.App, ctx *CommandContext) {
 	// Command: ls
 	app.AddCommand(&grumble.Command{
 		Name:      "ls",
@@ -25,7 +26,7 @@ func addAppCommands(app *grumble.App, ctx *DdbContext) {
 			a.String("path", "Optional, list contents of the provided path", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbLs(ctx, c.Args.String("path"), c.Flags.Bool("recursive"))
+			return ddbLs(ctx.CContext, c.Args.String("path"), c.Flags.Bool("recursive"))
 		},
 		Completer: nil,
 	})
@@ -45,7 +46,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 			a.String("path", "Path to the vos file to open.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbOpen(ctx, c.Args.String("path"), c.Flags.Bool("write_mode"))
+			return ddbOpen(ctx.CContext, c.Args.String("path"), c.Flags.Bool("write_mode"))
 		},
 		Completer: openCompleter,
 	})
@@ -57,7 +58,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "",
 		Run: func(c *grumble.Context) error {
-			return ddbVersion(ctx)
+			return ddbVersion(ctx.CContext)
 		},
 		Completer: nil,
 	})
@@ -69,7 +70,7 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return ddbClose(ctx)
+			return ddbClose(ctx.CContext)
 		},
 		Completer: nil,
 	})
@@ -81,7 +82,16 @@ pool shard. Part of the path is used to determine what the pool uuid is.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return ddbSuperblockDump(ctx)
+			sb, err := ddbSuperblockDump(ctx.CContext)
+			if err != nil {
+				return err
+			}
+
+			log := logging.NewCommandLineLogger()
+			err = printSuperBlock(log, sb, ctx.jsonOutput)
+			ctx.jsonOutputHandled = true
+
+			return err
 		},
 		Completer: nil,
 	})
@@ -100,7 +110,7 @@ the file, else it will be printed to the screen.`,
 			a.String("dst", "File path to dump the value to.", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbValueDump(ctx, c.Args.String("path"), c.Args.String("dst"))
+			return ddbValueDump(ctx.CContext, c.Args.String("path"), c.Args.String("dst"))
 		},
 		Completer: nil,
 	})
@@ -116,7 +126,7 @@ and everything under it, to a single value.`,
 			a.String("path", "VOS tree path to remove.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbRm(ctx, c.Args.String("path"))
+			return ddbRm(ctx.CContext, c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -137,7 +147,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dst", "Destination vos tree path to a value.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbValueLoad(ctx, c.Args.String("src"), c.Args.String("dst"))
+			return ddbValueLoad(ctx.CContext, c.Args.String("src"), c.Args.String("dst"))
 		},
 		Completer: nil,
 	})
@@ -152,7 +162,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbIlogDump(ctx, c.Args.String("path"))
+			return ddbIlogDump(ctx.CContext, c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -167,7 +177,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbIlogCommit(ctx, c.Args.String("path"))
+			return ddbIlogCommit(ctx.CContext, c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -182,7 +192,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to an object, dkey, or akey.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbIlogClear(ctx, c.Args.String("path"))
+			return ddbIlogClear(ctx.CContext, c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -201,7 +211,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to a container.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbDtxDump(ctx, c.Args.String("path"), c.Flags.Bool("active"), c.Flags.Bool("committed"))
+			return ddbDtxDump(ctx.CContext, c.Args.String("path"), c.Flags.Bool("active"), c.Flags.Bool("committed"))
 		},
 		Completer: nil,
 	})
@@ -216,7 +226,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("path", "VOS tree path to a container.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbDtxCmtClear(ctx, c.Args.String("path"))
+			return ddbDtxCmtClear(ctx.CContext, c.Args.String("path"))
 		},
 		Completer: nil,
 	})
@@ -232,7 +242,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("db_path", "Path to the vos db. (default /mnt/daos)", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbSmdSync(ctx, c.Args.String("nvme_conf"), c.Args.String("db_path"))
+			return ddbSmdSync(ctx.CContext, c.Args.String("nvme_conf"), c.Args.String("db_path"))
 		},
 		Completer: nil,
 	})
@@ -244,7 +254,7 @@ the path must include the extent, otherwise, it must not.`,
 		LongHelp:  "",
 		HelpGroup: "vos",
 		Run: func(c *grumble.Context) error {
-			return ddbVeaDump(ctx)
+			return ddbVeaDump(ctx.CContext)
 		},
 		Completer: nil,
 	})
@@ -260,7 +270,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("blk_cnt", "Total blocks of the region to mark free.")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbVeaUpdate(ctx, c.Args.String("offset"), c.Args.String("blk_cnt"))
+			return ddbVeaUpdate(ctx.CContext, c.Args.String("offset"), c.Args.String("blk_cnt"))
 		},
 		Completer: nil,
 	})
@@ -276,7 +286,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dtx_id", "DTX id of the entry to commit. ")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbDtxActCommit(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+			return ddbDtxActCommit(ctx.CContext, c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
 	})
@@ -292,7 +302,7 @@ the path must include the extent, otherwise, it must not.`,
 			a.String("dtx_id", "DTX id of the entry to abort. ")
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbDtxActAbort(ctx, c.Args.String("path"), c.Args.String("dtx_id"))
+			return ddbDtxActAbort(ctx.CContext, c.Args.String("path"), c.Args.String("dtx_id"))
 		},
 		Completer: nil,
 	})

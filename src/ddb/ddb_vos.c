@@ -795,6 +795,35 @@ dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args)
 }
 
 int
+dv_superblock2(daos_handle_t poh, struct ddb_superblock *sb)
+{
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+
+	pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_INVAL;
+
+	pool_df = pool->vp_pool_df;
+
+	if (pool_df == NULL || pool_df->pd_magic != POOL_DF_MAGIC)
+		return -DER_DF_INVAL;
+
+	uuid_copy(sb->dsb_id, pool_df->pd_id);
+	sb->dsb_durable_format_version = pool_df->pd_version;
+	sb->dsb_cont_nr                = pool_df->pd_cont_nr;
+	sb->dsb_nvme_sz                = pool_df->pd_nvme_sz;
+	sb->dsb_scm_sz                 = pool_df->pd_scm_sz;
+
+	sb->dsb_blk_sz   = pool_df->pd_vea_df.vsd_blk_sz;
+	sb->dsb_hdr_blks = pool_df->pd_vea_df.vsd_hdr_blks;
+	sb->dsb_tot_blks = pool_df->pd_vea_df.vsd_tot_blks;
+
+	return 0;
+}
+
+int
 dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb, void *cb_arg)
 {
 	daos_iod_t	iod = {0};

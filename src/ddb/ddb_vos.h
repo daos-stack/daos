@@ -111,6 +111,8 @@ struct ddb_superblock {
 typedef int (*dv_dump_superblock_cb)(void *cb_arg, struct ddb_superblock *sb);
 
 int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
+int
+dv_superblock2(daos_handle_t poh, struct ddb_superblock *sb);
 
 typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
