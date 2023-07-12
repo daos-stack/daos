@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import re
+import json
 
 from apricot import TestWithServers
 from general_utils import run_pcmd, report_errors
@@ -17,90 +18,101 @@ class DAOSVersion(TestWithServers):
 
     :avocado: recursive
     """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a DAOSVersion object."""
+        super().__init__(*args, **kwargs)
+
+        # Don't waste time starting servers and agents.
+        self.setup_start_servers = False
+        self.setup_start_agents = False
+
+        self.errors = []
+
+    def report_result(self):
+        """Helper printing test result"""
+        self.log.info("###### Test Result ######")
+        report_errors(test=self, errors=self.errors)
+        self.log.info("#########################")
+
+    def append_error(self, title, details):
+        """Helper adding an error to the list of errors
+
+        Args:
+            title (str): Error message title
+            details (list): List of string of the error details
+        """
+        msg = title
+        if details:
+            msg += "\n\t" + "\n\t".join(details)
+        self.errors.append(msg)
+
     def test_version(self):
         """Verify version number for dmg, daos, daos_server, and daos_agent against RPM.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=control,daos_cmd
-        :avocado: tags=version_number,test_version
+        :avocado: tags=DAOSVersion,test_version
         """
-        errors = []
-
         # Get RPM version.
         rpm_command = "rpm -qa|grep daos-server"
         output = run_pcmd(hosts=self.hostlist_servers, command=rpm_command)
-        self.log.info("RPM output = %s", output)
-        stdout = output[0]["stdout"][0]
-        self.log.info("RPM stdout = %s", stdout)
-        result = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", stdout)
+        self.log.debug("RPM output = %s", output)
+        rc = output[0]["exit_status"]
+        stdout = output[0]["stdout"]
+        if rc != 0:
+            msg = "DAOS RPMs not properly installed: rc={}".format(rc)
+            self.append_error(msg, stdout)
+            self.report_result()
+        rpm_version = None
+        for rpm in stdout:
+            result = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", rpm)
+            if result:
+                rpm_version = result[0]
+                break
         if not result:
-            errors.append("RPM version is not in the output! {}".format(output))
-        else:
-            rpm_version = result[0]
-            self.log.info("RPM version = %s", rpm_version)
+            msg = "RPM version could not be defined"
+            self.append_error(msg, stdout)
+            self.report_result()
+        self.log.info("RPM version = %s", rpm_version)
+
+        # Remove configuration files
+        cleanup_cmds = [
+            "sudo find /etc/daos/certs -type f -delete -print",
+            "sudo rm -fv /etc/daos/daos_server.yml /etc/daos/daos_control.yml"
+            "     /etc/daos/daos_agent.yml",
+        ]
+        for cmd in cleanup_cmds:
+            run_pcmd(hosts=self.hostlist_servers, command=cmd)
 
         # Get dmg version.
-        dmg_cmd = self.get_dmg_command()
-        output = dmg_cmd.version().stdout.decode("utf-8")
-
-        # Verify that "dmg version" is in the output.
-        if "dmg version" not in output:
-            errors.append("dmg version is not in the output! {}".format(output))
-
-        result = re.findall(r"dmg version ([\d.]+)", output)
-        if not result:
-            errors.append("Failed to obtain dmg version! {}".format(output))
-        else:
-            dmg_version = result[0]
-            self.log.info("dmg version = %s", dmg_version)
+        dmg_version = self.get_dmg_command().version()["response"]["version"]
+        self.log.info("dmg version = %s", dmg_version)
 
         # Get daos version.
-        daos_cmd = self.get_daos_command()
-        output = daos_cmd.version().stdout.decode("utf-8")
-
-        # Verify that "daos version" is in the output.
-        if "daos version" not in output:
-            errors.append("daos version is not in the output! {}".format(output))
-
-        result = re.findall(r"daos version ([\d.]+)", output)
-        if not result:
-            errors.append("Failed to obtain daos version! {}".format(output))
-        else:
-            daos_version = result[0]
-            self.log.info("daos version = %s", daos_version)
+        daos_version = self.get_daos_command().version()["response"]["version"]
+        self.log.info("daos version = %s", daos_version)
 
         # Get daos_agent version.
-        daos_agent_cmd = "daos_agent version"
+        daos_agent_version = None
+        daos_agent_cmd = "daos_agent --json version"
         output = run_pcmd(hosts=self.hostlist_servers, command=daos_agent_cmd)
-        stdout = output[0]["stdout"][0]
-
-        # Verify that "DAOS Agent" is in the output.
-        if "DAOS Agent" not in stdout:
-            errors.append("DAOS Agent is not in the output! {}".format(stdout))
-
-        result = re.findall(r"DAOS Agent v([\d.]+)", stdout)
-        if not result:
-            errors.append("Failed to obtain daos_agent version! {}".format(output))
+        self.log.debug("DAOS Agent output = %s", output)
+        rc = output[0]["exit_status"]
+        stdout = output[0]["stdout"]
+        if rc != 0:
+            msg = "DAOS Agent not properly installed: rc={}".format(rc)
+            self.append_error(msg, stdout)
         else:
-            daos_agent_version = result[0]
+            self.log.info("DAOS Agent stdout = %s", "".join(stdout))
+            daos_agent_version = json.loads("".join(stdout))["response"]["version"]
             self.log.info("daos_agent version = %s", daos_agent_version)
 
         # Get daos_server version
         daos_server_cmd = DaosServerCommandRunner(path=self.bin)
-        output = daos_server_cmd.version()
-        stdout = output.stdout.decode("utf-8")
-
-        # Verify that "DAOS Control Server" is in the output.
-        if "DAOS Control Server" not in stdout:
-            errors.append("DAOS Control Server is not in the output! {}".format(stdout))
-
-        result = re.findall(r"DAOS Control Server v([\d.]+)", stdout)
-        if not result:
-            errors.append("Failed to obtain daos_server version! {}".format(output))
-        else:
-            daos_server_version = result[0]
-            self.log.info("daos_server version = %s", daos_server_version)
+        daos_server_version = daos_server_cmd.version()["response"]["version"]
+        self.log.info("daos_server version = %s", daos_server_version)
 
         # Verify the tool versions against the RPM.
         tool_versions = [
@@ -116,8 +128,6 @@ class DAOSVersion(TestWithServers):
             if version != rpm_version:
                 msg = "Unexpected version! {} = {}, RPM = {}".format(
                     tool, version, rpm_version)
-                errors.append(msg)
+                self.errors.append(msg)
 
-        self.log.info("###### Test Result ######")
-        report_errors(test=self, errors=errors)
-        self.log.info("#########################")
+        self.report_result()
