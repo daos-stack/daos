@@ -33,7 +33,7 @@ class DaosAgentConfigTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
-        :avocado: tags=agent_start,daos_agent_config_test,test_daos_agent_config_basic
+        :avocado: tags=DaosAgentConfigTest,test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()
