@@ -226,6 +226,12 @@ dc_obj_hdl2layout_ver(daos_handle_t oh)
 
 }
 
+static uint32_t
+dc_obj_get_pda(struct dc_object *obj)
+{
+	return daos_cont_props2pda(&obj->cob_co->dc_props, obj_is_ec(obj));
+}
+
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
@@ -247,6 +253,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
+	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
 			  NULL, &layout);
 	pl_map_decref(map);
@@ -1504,8 +1511,9 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
 	 */
-	md->omd_id      = oid;
-	md->omd_ver     = 0;
+	md->omd_id	= oid;
+	md->omd_ver	= 0;
+	md->omd_pda	= 0;
 	return 0;
 }
 
