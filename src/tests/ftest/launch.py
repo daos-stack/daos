@@ -66,6 +66,10 @@ PROVIDER_KEYS = OrderedDict(
         ("opx", "ofi+opx"),
     ]
 )
+# Temporary pipeline-lib workaround until DAOS-13934 is implemented
+PROVIDER_ALIAS = {
+    "ofi+tcp": "ofi+tcp;ofi_rxm"
+}
 PROCS_TO_CLEANUP = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
@@ -1282,6 +1286,8 @@ class Launch():
         """
         logger.debug("-" * 80)
         # Use the detected provider if one is not set
+        if provider in PROVIDER_ALIAS:
+            provider = PROVIDER_ALIAS[provider]
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
