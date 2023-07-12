@@ -1317,6 +1317,20 @@ def get_display_size(size):
         bytes_to_human(size, binary=False))
 
 
+def append_error(errors, title, details=None):
+    """Helper adding an error to the list of errors
+
+    Args:
+        errors (list): List of error messages
+        title (str): Error message title
+        details (list, optional): List of string of the error details
+    """
+    msg = title
+    if details:
+        msg += "\n\t" + "\n\t".join(details)
+    errors.append(msg)
+
+
 def report_errors(test, errors):
     """Print errors and fail the test if there's any errors.
 
@@ -1332,7 +1346,7 @@ def report_errors(test, errors):
             len(errors), "" if len(errors) == 0 else "s"))
         test.fail(error_msg)
 
-    test.log.info("No errors detected.")
+    test.log.info("Test passed")
 
 
 def percent_change(val1, val2):
