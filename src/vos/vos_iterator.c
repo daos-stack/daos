@@ -91,8 +91,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	if (dict->id_ops->iop_nested_prepare == NULL ||
 	    iter->it_ops->iop_nested_tree_fetch == NULL) {
-		D_ERROR("nested iterator prepare isn't supported for %s",
-			dict->id_name);
+		D_ERROR("nested iterator prepare isn't supported for %s\n", dict->id_name);
 		return -DER_NOSYS;
 	}
 

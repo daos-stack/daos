@@ -757,7 +757,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 
 		prop = daos_prop_alloc(nr);
 		if (prop == NULL) {
-			D_ERROR("Failed to allocate container prop.");
+			D_ERROR("Failed to allocate container prop.\n");
 			return ENOMEM;
 		}
 		if (attrp->da_props != NULL) {
