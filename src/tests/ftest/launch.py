@@ -1286,8 +1286,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         # Use the detected provider if one is not set
-        if provider in PROVIDER_ALIAS:
-            provider = PROVIDER_ALIAS[provider]
+        provider = PROVIDER_ALIAS.get(provider, provider)
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
