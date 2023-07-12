@@ -293,7 +293,10 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				 roundup(iv_prop->pip_acl_offset, 8));
 			acl = iv_prop->pip_acl;
 			if (acl->dal_len > 0) {
-				D_ASSERT(daos_acl_validate(acl) == 0);
+				rc = daos_acl_validate(acl);
+				if (rc == -DER_NOMEM)
+					D_GOTO(out, rc);
+				D_ASSERT(rc == 0);
 				prop_entry->dpe_val_ptr = daos_acl_dup(acl);
 				if (prop_entry->dpe_val_ptr == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
