@@ -126,12 +126,12 @@ func (r *Runner) run(parent context.Context, args, env []string, exitCh RunnerEx
 
 // Try to integrate DD_SUBSYS into D_LOG_MASK then unset DD_SUBSYS in environment.
 func processLogEnvs(env []string) ([]string, error) {
-	subsys, err := common.FindEnvValue(env, envLogSubsystems)
+	subsys, err := common.FindKeyValue(env, envLogSubsystems)
 	if err != nil || subsys == "" {
 		return env, nil // No DD_SUBSYS to process.
 	}
 
-	logMasks, err := common.FindEnvValue(env, envLogMasks)
+	logMasks, err := common.FindKeyValue(env, envLogMasks)
 	if err != nil || logMasks == "" {
 		return env, nil // No D_LOG_MASK to process.
 	}
@@ -144,12 +144,12 @@ func processLogEnvs(env []string) ([]string, error) {
 		return nil, errors.New("empty log masks string is invalid")
 	}
 
-	env, err = common.UpdateEnvValue(env, envLogMasks, newLogMasks)
+	env, err = common.UpdateKeyValue(env, envLogMasks, newLogMasks)
 	if err != nil {
 		return nil, err
 	}
 
-	env, err = common.DeleteEnvValue(env, envLogSubsystems)
+	env, err = common.DeleteKeyValue(env, envLogSubsystems)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (r *Runner) Start(ctx context.Context) (RunnerExitChan, error) {
 	if err != nil {
 		return nil, err
 	}
-	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
+	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
 	env, err = processLogEnvs(env)
 	if err != nil {
