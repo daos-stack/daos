@@ -154,15 +154,20 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 
 		rdr := bufio.NewReader(r)
 		for {
-			line, err := rdr.ReadString('\n')
-			if err != nil {
-				if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
-					printLn(fmt.Sprintf("read err: %s", err))
-				}
-				r.Close()
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				line, err := rdr.ReadString('\n')
+				if err != nil {
+					if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
+						printLn(fmt.Sprintf("read err: %s", err))
+					}
+					r.Close()
+					return
+				}
+				printLn(line)
 			}
-			printLn(line)
 		}
 	}(ctx)
 
