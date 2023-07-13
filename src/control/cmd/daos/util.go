@@ -138,9 +138,8 @@ func freeString(str *C.char) {
 }
 
 func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE, func(), error) {
-	// Create a FILE object for the handler to use for
-	// printing output or errors, and call the callback
-	// for each line.
+	// Create a FILE object for the handler to use for printing output or errors, and call the
+	// callback for each line.
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err
@@ -169,7 +168,6 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 
 	return stream, func() {
 		C.fclose(stream)
-		w.Sync()
 		w.Close()
 	}, nil
 }
