@@ -450,7 +450,11 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
+#if 1
+	if (priv < (void *)4096)
+		return -DER_MISC;
 	D_ASSERT(priv == NULL || priv > (void *)4096); /* DAOS-13906 */
+#endif
 
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
 	if (rc != 0)
@@ -611,7 +615,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	priv_entry->priv = entry_priv_val;
@@ -648,6 +652,10 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 
 	D_ASSERT(priv_entry != NULL);
 
+#if 1
+	if (priv < (void *)4096)
+		return -DER_MISC;
+#endif
 	entry = priv_entry->entry;
 	D_ASSERT(entry != NULL);
 

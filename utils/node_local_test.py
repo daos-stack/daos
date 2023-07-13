@@ -5835,9 +5835,16 @@ def server_fi(args):
             server.run_daos_client_cmd_pil4dfs(
                 ['touch', f'file.{idx}'], container=cont, check=False, report=False)
             server.run_daos_client_cmd_pil4dfs(
+                ['dd', 'if=/dev/zero', f'of=file.{idx}', 'count=1', 'bs=1'],
+                container=cont, check=False, report=False)
+            server.run_daos_client_cmd_pil4dfs(
+                ['dd', 'of=nf', f'if=file.{idx}', 'count=1', 'bs=1'],
+                container=cont, check=False, report=False)
+            server.run_daos_client_cmd_pil4dfs(
                 ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
 
         # Turn off fault injection again to assist in server shutdown.
+        server.set_fi(probability=0)
         server.set_fi(probability=0)
 
 

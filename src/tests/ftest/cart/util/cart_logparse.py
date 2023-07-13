@@ -272,7 +272,7 @@ class LogLine():
         """Returns true if line is a rpc deregister"""
         if not self.trace:
             return False
-        if self.function != 'crt_hg_req_destroy':
+        if self.function not in ('crt_hg_req_destroy', 'crt_rpc_priv_free'):
             return False
 
         return self._fields[-1] == 'destroying'
