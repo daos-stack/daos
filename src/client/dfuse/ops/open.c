@@ -10,6 +10,7 @@
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+<<<<<<< HEAD
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
 	d_list_t                 *rlink;
@@ -17,6 +18,14 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct fuse_file_info     fi_out = {0};
 	int                       rc;
 	bool                      prefetch = false;
+=======
+	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
+	struct dfuse_inode_entry     *ie;
+	d_list_t                     *rlink;
+	struct dfuse_obj_hdl         *oh     = NULL;
+	struct fuse_file_info         fi_out = {0};
+	int                           rc;
+>>>>>>> master
 
 	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
@@ -208,6 +217,15 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		atomic_store_relaxed(&oh->doh_parent_dir->ie_linear_read, use_linear_read);
 
 		dfuse_inode_decref(dfuse_info, oh->doh_parent_dir);
+	}
+	if (oh->doh_evict_on_close) {
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
+						      oh->doh_ie->ie_name,
+						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+
+		if (rc != 0)
+			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
+					strerror(-rc));
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

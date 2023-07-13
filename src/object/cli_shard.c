@@ -1155,7 +1155,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
 			if (rc != 0)
-				D_ERROR("crt_req_set_timeout error: %d", rc);
+				D_ERROR("crt_req_set_timeout error: %d\n", rc);
 		    }
 
 		rc = daos_rpc_send(req, task);
@@ -1418,9 +1418,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 					     &enum_type_val, ci_to_compare);
 
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d",
-				kd->kd_val_type == OBJ_ITER_AKEY ?
-				"AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
 			return rc;
 		}
 		break;

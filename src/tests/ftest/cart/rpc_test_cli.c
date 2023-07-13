@@ -119,7 +119,7 @@ static void
 	while (rpc_cli.shutdown == 0) {
 		rc = crt_progress(*p_ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed %d", rc);
+			D_ERROR("crt_progress failed %d\n", rc);
 			break;
 		}
 	}
