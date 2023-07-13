@@ -1428,16 +1428,18 @@ class DFuse():
         assert ret.returncode == 0, ret
         return ret
 
-    def check_usage(self, inodes=None, open_files=None, pools=None, containers=None):
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
         """Query and verify the dfuse statistics.
 
         Returns the raw numbers in a dict.
         """
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir], use_json=True)
+        cmd = ['filesystem', 'query', self.dir]
+
+        if ino is not None:
+            cmd.extend(['--inode', str(ino)])
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
         print(rc)
         assert rc.returncode == 0
-
-        print(dir(rc.json))
 
         if inodes:
             assert rc.json['response']['inodes'] == inodes, rc
@@ -1448,6 +1450,35 @@ class DFuse():
         if containers:
             assert rc.json['response']['containers'] == containers, rc
         return rc.json['response']
+
+    def _evict_path(self, path):
+        """Evict a path from dfuse"""
+        cmd = ['filesystem', 'evict', path]
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        return rc.json['response']
+
+    def evict_and_wait(self, paths):
+        """Evict a number of paths from dfuse"""
+        inodes = []
+        for path in paths:
+            rc = self._evict_path(path)
+            inodes.append(rc['inode'])
+
+        sleeps = 0
+
+        for inode in inodes:
+            found = True
+            while found:
+                rc = self.check_usage(inode)
+                print(rc)
+                found = rc['resident']
+                if not found:
+                    sleeps += 1
+                    assert sleeps < 10, 'Path still present 10 seconds after eviction'
+                    time.sleep(1)
 
 
 def assert_file_size_fd(fd, size):
@@ -1995,8 +2026,12 @@ class PosixTests():
         _check_cmd(child_path_cwd)
         _check_cmd(self.dfuse.dir)
 
-        # Do not destroy the new containers at this point as dfuse will be holding references.
-        # new_cont.destroy()
+        # Now evict the new containers
+
+        self.dfuse.evict_and_wait([child_path, child_path_cwd])
+        # Destroy the new containers at this point as dfuse will have dropped references.
+        new_cont1.destroy()
+        new_cont_cwd.destroy()
 
     @needs_dfuse
     def test_read(self):
@@ -2495,6 +2530,23 @@ class PosixTests():
             xattr.set(fd, 'user.Xfuse.ids', b'other_value')
             for (key, value) in xattr.get_all(fd):
                 print(f'xattr is {key}:{value}')
+
+    @needs_dfuse
+    def test_evict(self):
+        """Evict a file from dfuse"""
+        new_file = join(self.dfuse.dir, 'e_file')
+        with open(new_file, 'w'):
+            pass
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', new_file])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
 
     @needs_dfuse
     def test_list_xattr(self):
