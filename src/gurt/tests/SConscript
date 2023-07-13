@@ -18,7 +18,7 @@ def scons():
 
     test_env = env.Clone()
     test_env.require('mercury', 'uuid')
-    test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm'])
+    test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     tests = []
 
