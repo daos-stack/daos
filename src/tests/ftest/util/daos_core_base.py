@@ -13,6 +13,7 @@ from general_utils import get_log_file
 from cmocka_utils import CmockaUtils
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
@@ -150,6 +151,11 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         cmocka_utils.run_cmocka_test(self, job)
+
+        self.log.debug("================= DEBUG =================")
+        command = "ls -al '{}'".format(get_log_file("*_daos_server_*.log*"))
+        run_remote(self.log, cmocka_utils.hosts, command)
+        self.log.debug("================= DEBUG =================")
 
         try:
             tmp_log_path = "/tmp/suite_dmg.log"
