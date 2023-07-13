@@ -137,7 +137,7 @@ func freeString(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
 
-func createWriteStream(ctx context.Context, prefix string, printLn func(line string)) (*C.FILE, func(), error) {
+func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE, func(), error) {
 	// Create a FILE object for the handler to use for
 	// printing output or errors, and call the callback
 	// for each line.
@@ -151,7 +151,7 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 		return nil, nil, err
 	}
 
-	go func(ctx context.Context, prefix string) {
+	go func(ctx context.Context) {
 
 		rdr := bufio.NewReader(r)
 		for {
@@ -163,13 +163,9 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 				r.Close()
 				return
 			}
-			if prefix == "" {
-				printLn(fmt.Sprintf("%s", line))
-			} else {
-				printLn(fmt.Sprintf("%s: %s", prefix, line))
-			}
+			printLn(fmt.Sprintf("%s", line))
 		}
-	}(ctx, prefix)
+	}(ctx)
 
 	return stream, func() {
 		C.fclose(stream)
@@ -215,7 +211,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	ap.sysname = C.CString(build.DefaultSystemName)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	outStream, outCleanup, err := createWriteStream(ctx, "", log.Info)
+	outStream, outCleanup, err := createWriteStream(ctx, log.Info)
 	if err != nil {
 		freeCmdArgs(ap)
 		cancel()
@@ -223,7 +219,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	}
 	ap.outstream = outStream
 
-	errStream, errCleanup, err := createWriteStream(ctx, "handler", log.Error)
+	errStream, errCleanup, err := createWriteStream(ctx, log.Error)
 	if err != nil {
 		outCleanup()
 		freeCmdArgs(ap)
