@@ -176,12 +176,9 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 	}(ctx, prefix)
 
 	return stream, func() {
+		C.fclose(stream)
 		w.WriteString("close\n")
 		w.Sync()
-		C.fflush(stream)
-		C.fflush(stream)
-		C.fflush(stream)
-		C.fclose(stream)
 	}, nil
 }
 
