@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -153,33 +152,36 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 	}
 
 	go func(ctx context.Context, prefix string) {
-		if prefix != "" {
-			prefix = ": "
-		}
 
 		rdr := bufio.NewReader(r)
 		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				line, err := rdr.ReadString('\n')
-				if err != nil {
-					if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
-						printLn(fmt.Sprintf("read err: %s", err))
-					}
-					return
+			line, err := rdr.ReadString('\n')
+			if err != nil {
+				if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
+					printLn(fmt.Sprintf("read err: %s", err))
 				}
-				printLn(fmt.Sprintf("%s%s", prefix, line))
+				return
+			}
+			if line == "close\n" {
+				w.Close()
+				r.Close()
+				return
+			}
+			if prefix == "" {
+				printLn(fmt.Sprintf("%s", line))
+			} else {
+				printLn(fmt.Sprintf("%s: %s", prefix, line))
 			}
 		}
 	}(ctx, prefix)
 
 	return stream, func() {
+		w.WriteString("close\n")
+		w.Sync()
+		C.fflush(stream)
+		C.fflush(stream)
 		C.fflush(stream)
 		C.fclose(stream)
-		r.Close()
-		w.Close()
 	}, nil
 }
 
@@ -241,8 +243,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 		outCleanup()
 		errCleanup()
 		freeCmdArgs(ap)
-		// Give the streams a chance to flush.
-		time.Sleep(250 * time.Millisecond)
 		cancel()
 	}, nil
 }
