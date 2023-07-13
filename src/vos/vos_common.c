@@ -200,14 +200,14 @@ vos_tx_publish(struct dtx_handle *dth, bool publish)
 }
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool standalone)
 {
 	int	rc;
 
 	if (dth == NULL)
-		return umem_tx_begin(umm, vos_txd_get(is_sysdb));
+		return umem_tx_begin(umm, vos_txd_get(standalone));
 
-	D_ASSERT(!is_sysdb);
+	D_ASSERT(!standalone);
 	/** Note: On successful return, dth tls gets set and will be cleared by the corresponding
 	 *        call to vos_tx_end.  This is to avoid ever keeping that set after a call to
 	 *        umem_tx_end, which may yield for bio operations.
@@ -218,7 +218,7 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb)
 		return 0;
 	}
 
-	rc = umem_tx_begin(umm, vos_txd_get(is_sysdb));
+	rc = umem_tx_begin(umm, vos_txd_get(standalone));
 	if (rc == 0) {
 		dth->dth_local_tx_started = 1;
 		vos_dth_set(dth, false);
@@ -264,7 +264,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 
 	/* Not the last modification. */
 	if (err == 0 && dth->dth_modification_cnt > dth->dth_op_seq) {
-		vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
+		vos_dth_set(NULL, vos_cont_standalone(cont));
 		return 0;
 	}
 
@@ -276,7 +276,7 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	if (err == 0)
 		err = vos_tx_publish(dth, true);
 
-	vos_dth_set(NULL, cont->vc_pool->vp_sysdb);
+	vos_dth_set(NULL, vos_cont_standalone(cont));
 
 	if (bio_nvme_configured(SMD_DEV_TYPE_META) && biod != NULL)
 		err = umem_tx_end_ex(vos_cont2umm(cont), err, biod);

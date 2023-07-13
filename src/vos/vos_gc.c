@@ -875,7 +875,7 @@ gc_check_cont(struct vos_container *cont)
 int
 gc_add_pool(struct vos_pool *pool)
 {
-	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
+	struct vos_tls	   *tls = vos_tls_get(vos_pool_standalone(pool));
 
 	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
 		DP_UUID(pool->vp_id));
@@ -1107,13 +1107,13 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
 	struct vos_pool		*pool = vos_hdl2pool(poh);
-	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
+	struct vos_tls		*tls  = vos_tls_get(vos_pool_standalone(pool));
 	struct vos_gc_param	 param;
 	uint32_t		 nr_flushed = 0;
 	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
-	D_ASSERT(pool->vp_sysdb == false);
+	D_ASSERT(vos_pool_standalone(pool) == false);
 
 	vos_space_update_metrics(pool);
 
