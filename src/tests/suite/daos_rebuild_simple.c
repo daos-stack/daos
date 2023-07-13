@@ -734,7 +734,8 @@ rebuild_objects(void **state)
 }
 
 static void
-rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
+rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
+			   bool verify, bool wait_rebuild)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
@@ -766,7 +767,8 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	assert_success(rc);
 
 	/* wait until rebuild done */
-	test_rebuild_wait(&arg, 1);
+	if (wait_rebuild)
+		test_rebuild_wait(&arg, 1);
 
 	/* add back the excluded targets */
 	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
@@ -777,7 +779,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 	test_rebuild_wait(&arg, 1);
 
 	print_message("lookup 100 dkeys\n");
-	for (i = 0; i < 100 && oclass != OC_SX; i++) {
+	for (i = 0; i < 100 && verify; i++) {
 		char buffer[32];
 
 		memset(buffer, 0, 32);
@@ -795,14 +797,42 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass)
 static void
 rebuild_sx_object(void **state)
 {
-	rebuild_sx_object_internal(state, OC_SX);
+	rebuild_sx_object_internal(state, OC_SX, false, true);
 }
 
 static void
 rebuild_xsf_object(void **state)
 {
-	rebuild_sx_object_internal(state, OC_RP_XSF);
+	rebuild_sx_object_internal(state, OC_RP_XSF, true, true);
 }
+
+static void
+rebuild_sx_object_no_data_sync(void **state)
+{
+	int		 rc;
+	test_arg_t	*arg = *state;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+				"no_data_sync");
+	assert_success(rc);
+
+	rebuild_sx_object_internal(state, OC_SX, false, false);
+}
+
+static int
+reintegration_no_data_sync_teardown(void **state)
+{
+	test_arg_t	*arg = *state;
+	int		 rc;
+
+	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+				"data_sync");
+	assert_success(rc);
+	test_teardown(state);
+
+	return rc;
+}
+
 
 static void
 rebuild_large_object(void **state)
@@ -1932,6 +1962,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_with_dfs_inflight_append_punch, rebuild_small_sub_rf1_setup, test_teardown},
 	{"REBUILD27: rebuild with dfs in-flight punch create",
 	 rebuild_with_dfs_inflight_punch_create, rebuild_small_sub_rf1_setup, test_teardown},
+	{"REBUILD28: rebuild sx object with reintegration mode no_data_sync",
+	 rebuild_sx_object_no_data_sync, rebuild_small_sub_rf0_setup,
+	 reintegration_no_data_sync_teardown},
 };
 
 int

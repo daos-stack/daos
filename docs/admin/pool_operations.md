@@ -444,6 +444,16 @@ It is not relevant when the checkpoint policy is "disabled". The value is specif
 as a percentage in the range [10-75] with a default of 50. Values outside the range are
 automatically adjusted.
 
+#### Reintegration mode (reintegration)
+
+This property controls how reintegration will recover data. Two options are supported:
+"data_sync" (default strategy) and "no_data_sync". with "data_sync", reintegration will
+discard pool data and trigger rebuild to sync data. While with "no_data_sync", reintegration
+only updates pool map to include rank.
+
+NB: with "no_data_sync" enabled, daos won't trigger rebuild to restore the pool data
+redundancy on the surviving storage engines if there are dead rank events.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
