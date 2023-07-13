@@ -1584,11 +1584,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
 		if (orw->orw_iod_array.oia_iods != iods) {
 			/* Need to copy iod sizes for checksums */
-			int i, j = 0;
+			int i, j;
 
-			for (i = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
-				if (skips != NULL && isset(skips, i))
+			for (i = 0, j = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+				if (skips != NULL && isset(skips, i)) {
+					orw->orw_iod_array.oia_iods[i].iod_size = 0;
 					continue;
+				}
 				orw->orw_iod_array.oia_iods[i].iod_size = iods[j].iod_size;
 				j++;
 			}
