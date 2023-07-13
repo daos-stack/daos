@@ -50,12 +50,18 @@ struct file_dfs {
 };
 
 /* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+#define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
+		fflush((AP)->errstream);                                                           \
+	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+#define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
+		fflush((AP)->errstream);                                                           \
+	} while (0)
 
 static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap);
@@ -727,9 +733,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* create the destination directory if it does not exist. Assume root always exists */
 	if (strcmp(dst_path, "/") != 0) {
 		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-		if (rc == EEXIST) {
-			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-		} else if (rc != 0) {
+		if (rc != 0 && rc != EEXIST) {
+			DH_PERROR_SYS(ap, rc, "mkdir '%s' failed", dst_path);
 			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 	}
@@ -1669,57 +1674,44 @@ dm_disconnect(struct cmd_args_s *ap,
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
-			if (rc != 0) {
-				DH_PERROR_DER(ap, daos_errno2der(rc), "failed to unmount source");
-				rc = dfs_sys_umount(src_file_dfs->dfs_sys);
-				if (rc != 0)
-					DH_PERROR_DER(ap, daos_errno2der(rc),
-						      "failed to unmount source on retry");
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-			rc = daos_cont_close(ca->src_coh, NULL);
-			if (rc != 0)
-				DH_PERROR_DER(ap, rc, "failed to close source container on retry");
-		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
-			rc = daos_pool_disconnect(ca->src_poh, NULL);
-			if (rc != 0)
-				DH_PERROR_DER(ap, rc, "failed to disconnect source pool on retry");
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->src_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(ap, rc,
+						      "failed to disconnect source pool on retry");
+			}
 		}
 	}
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
-			if (rc != 0) {
-				DH_PERROR_DER(ap, daos_errno2der(rc), "failed to unmount source");
-				rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
-				if (rc != 0)
-					DH_PERROR_DER(ap, daos_errno2der(rc),
-						      "failed to unmount source on retry");
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			dst_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->dst_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-			rc = daos_cont_close(ca->dst_coh, NULL);
-			if (rc != 0)
-				DH_PERROR_DER(ap, rc,
-					      "failed to close destination container on retry");
-		}
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
-			rc = daos_pool_disconnect(ca->dst_poh, NULL);
-			if (rc != 0)
-				DH_PERROR_DER(ap, rc,
-					      "failed to disconnect destination pool on retry");
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->dst_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(
+					    ap, rc,
+					    "failed to disconnect destination pool on retry");
+			}
 		}
 	}
 	return rc;
