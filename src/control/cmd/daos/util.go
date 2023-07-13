@@ -160,10 +160,6 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 				if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
 					printLn(fmt.Sprintf("read err: %s", err))
 				}
-				return
-			}
-			if line == "close\n" {
-				w.Close()
 				r.Close()
 				return
 			}
@@ -177,8 +173,8 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 
 	return stream, func() {
 		C.fclose(stream)
-		w.WriteString("close\n")
 		w.Sync()
+		w.Close()
 	}, nil
 }
 
