@@ -43,11 +43,4 @@ struct sys_db {
 	void	(*sd_unlock)(struct sys_db *db);
 };
 
-/* for lmdb backend apis */
-int lmm_db_init(const char *db_path);
-int lmm_db_init_ex(const char *db_path, const char *db_name,
-		   bool force_create, bool destroy_db_on_fini);
-void lmm_db_fini(void);
-struct sys_db *lmm_db_get(void);
-
 #endif /* __SYS_DB_H__ */

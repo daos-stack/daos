@@ -1,3 +1,9 @@
+daos (2.3.108-3) unstable; urgency=medium
+  [ Wang Shilong ]
+  * Remove lmdb-devel for MD on SSD
+
+ -- Wang Shilong <shilong.wang@intel.com> Thu, 13 Jul 2023 22:44:00 +0800
+
 daos (2.3.108-2) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to 0.10.1-1408.g9524cdb
