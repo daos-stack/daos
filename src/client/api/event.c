@@ -20,6 +20,12 @@
 static __thread daos_event_t	ev_thpriv;
 static __thread bool		ev_thpriv_is_init;
 
+/**
+ * Global progress timeout for synchronous operation
+ * busy-polling by default (0), timeout in us otherwise
+ */
+static uint32_t ev_prog_timeout;
+
 #define EQ_WITH_CRT
 
 #if !defined(EQ_WITH_CRT)
@@ -90,6 +96,8 @@ daos_eq_lib_init()
 		D_GOTO(crt, rc);
 
 	eq_ref = 1;
+
+	d_getenv_int("D_POLL_TIMEOUT", &ev_prog_timeout);
 
 unlock:
 	D_MUTEX_UNLOCK(&daos_eq_lock);
@@ -611,8 +619,12 @@ daos_eq_create(daos_handle_t *eqh)
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
-	if (eq_ref == 0)
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
 		return -DER_UNINIT;
+	}
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 
 	eq = daos_eq_alloc();
 	if (eq == NULL)
@@ -1261,7 +1273,7 @@ daos_event_priv_wait()
 
 	/* Wait on the event to complete */
 	while (evx->evx_status != DAOS_EVS_READY) {
-		rc = crt_progress_cond(evx->evx_ctx, 0, ev_progress_cb, &epa);
+		rc = crt_progress_cond(evx->evx_ctx, ev_prog_timeout, ev_progress_cb, &epa);
 
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
