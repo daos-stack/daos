@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,7 +52,7 @@ tx_close_cb(tse_task_t *task, void *data)
 {
 	daos_handle_t *th = (daos_handle_t *)data;
 
-	dc_tx_local_close(*th);
+	dc_tx_local_close(*th, task);
 	return task->dt_result;
 }
 
@@ -75,9 +75,12 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
+	rc = dx_tx_set_hint(th, task);
+	D_ASSERT(rc == 0);
+
 	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
 	if (rc) {
-		dc_tx_local_close(th);
+		dc_tx_local_close(th, task);
 		tse_task_complete(task, rc);
 		return rc;
 	}
@@ -106,9 +109,12 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
+	rc = dx_tx_set_hint(th, task);
+	D_ASSERT(rc == 0);
+
 	rc = tse_task_register_comp_cb(task, tx_close_cb, &th, sizeof(th));
 	if (rc) {
-		dc_tx_local_close(th);
+		dc_tx_local_close(th, task);
 		tse_task_complete(task, rc);
 		return rc;
 	}
