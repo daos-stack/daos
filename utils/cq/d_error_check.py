@@ -123,7 +123,7 @@ class FileParser:
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
             'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
-            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL']
+            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG']
 
 # Logging macros that do not expect a new-line.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
@@ -327,6 +327,8 @@ def one_entry(fname):
     if any(map(fname.endswith, ['pb-c.c', 'pb-c..h'])):
         return
 
+    if ARGS.verbose:
+        print(f'Checking {fname}')
     filep = FileParser(fname)
 
     checks = AllChecks(filep)
@@ -344,6 +346,7 @@ def main():
     parser.add_argument('--fix', action='store_true', help='Apply required fixes')
     parser.add_argument('--correct', action='store_true', help='Apply optional fixes')
     parser.add_argument('--github', action='store_true')
+    parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('files', nargs='*')
 
     global ARGS
