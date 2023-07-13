@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -85,7 +85,7 @@ func (ms MemberState) String() string {
 	}
 }
 
-func memberStateFromString(in string) MemberState {
+func MemberStateFromString(in string) MemberState {
 	switch strings.ToLower(in) {
 	case "awaitformat":
 		return MemberStateAwaitFormat
@@ -224,7 +224,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	}
 	sm.Addr = addr
 
-	sm.State = memberStateFromString(from.State)
+	sm.State = MemberStateFromString(from.State)
 
 	fd, err := NewFaultDomainFromString(from.FaultDomain)
 	if err != nil {
@@ -298,7 +298,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	mr.State = memberStateFromString(from.State)
+	mr.State = MemberStateFromString(from.State)
 
 	return nil
 }
@@ -353,4 +353,26 @@ func (mrs MemberResults) Errors() error {
 	}
 
 	return nil
+}
+
+// MaskFromStates returns a state bitmask and a flag indicating whether to include the "Unknown"
+// state from an input list of desired member states.
+func MaskFromStates(desiredStates ...MemberState) (MemberState, bool) {
+	var includeUnknown bool
+	stateMask := AllMemberFilter
+
+	if len(desiredStates) > 0 {
+		stateMask = 0
+		for _, s := range desiredStates {
+			if s == MemberStateUnknown {
+				includeUnknown = true
+			}
+			stateMask |= s
+		}
+	}
+	if stateMask == AllMemberFilter {
+		includeUnknown = true
+	}
+
+	return stateMask, includeUnknown
 }

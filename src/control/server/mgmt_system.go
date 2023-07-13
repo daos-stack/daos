@@ -506,7 +506,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
-	members := svc.membership.Members(hitRanks)
+	members := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}

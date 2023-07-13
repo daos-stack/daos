@@ -185,7 +185,35 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
+	FailOnUnavailable bool   // Fail without retrying if the MS is unavailable
+	NotJoinedOnly     bool   // Only show engines not in a joined state
+	WantedStates      string // Comma separated list of wanted states
+}
+
+func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
+	var states []system.MemberState
+
+	for _, tok := range strings.Split(statesStr, ",") {
+		ms := system.MemberStateFromString(tok)
+		if ms == system.MemberStateUnknown {
+			return 0, errors.Errorf("invalid state name %q", tok)
+		}
+		states = append(states, ms)
+	}
+
+	mask, _ := system.MaskFromStates(states...)
+	return mask, nil
+}
+
+func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+	switch {
+	case req.NotJoinedOnly:
+		return system.AllMemberFilter &^ system.MemberStateJoined, nil
+	case req.WantedStates != "":
+		return memberStateMaskFromStrings(req.WantedStates)
+	default:
+		return system.AllMemberFilter, nil
+	}
 }
 
 // SystemQueryResp contains the request response.
@@ -235,6 +263,12 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem(rpcClient)
+
+	mask, err := req.getStateMask()
+	if err != nil {
+		return nil, errors.Wrap(err, "calculating member state bitmask")
+	}
+	pbReq.StateMask = uint32(mask)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)

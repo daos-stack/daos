@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -330,22 +330,39 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 // Members returns slice of references to all system members ordered by rank.
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
-// not in the membership.
-func (m *Membership) Members(rankSet *RankSet) (members Members) {
+// not in the membership. Optionally filter on desired states.
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members) {
 	m.RLock()
 	defer m.RUnlock()
 
+	mask, _ := MaskFromStates(desiredStates...)
+
 	if rankSet == nil || rankSet.Count() == 0 {
-		var err error
-		members, err = m.db.AllMembers()
-		if err != nil {
-			m.log.Errorf("failed to get all members: %s", err)
-			return nil
+		if mask == AllMemberFilter {
+			// No rank or member filtering required so copy database.
+			var err error
+			members, err = m.db.AllMembers()
+			if err != nil {
+				m.log.Errorf("failed to get all members: %s", err)
+				return nil
+			}
+		} else {
+			// No rank filtering so use full rank-set.
+			rankList, err := m.db.MemberRanks()
+			if err != nil {
+				m.log.Errorf("failed to get all member ranks: %s", err)
+				return nil
+			}
+			rankSet = RankSetFromRanks(rankList)
 		}
-	} else {
+	}
+
+	if members == nil {
 		for _, rank := range rankSet.Ranks() {
 			if member, err := m.db.FindMemberByRank(rank); err == nil {
-				members = append(members, member)
+				if member.State&mask > 0 {
+					members = append(members, member)
+				}
 			}
 		}
 	}
