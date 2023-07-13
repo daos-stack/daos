@@ -136,31 +136,6 @@ def define_mercury(reqs):
                 patch_rpath=['lib'],
                 build_env={'CFLAGS': "-fstack-usage"})
 
-    ucx_configure = ['./configure', '--disable-assertions', '--disable-params-check', '--enable-mt',
-                     '--without-go', '--without-java', '--prefix=$UCX_PREFIX',
-                     '--libdir=$UCX_PREFIX/lib64', '--enable-cma', '--without-cuda',
-                     '--without-gdrcopy', '--with-verbs', '--without-knem', '--without-rocm',
-                     '--without-xpmem', '--without-fuse3', '--without-ugni']
-
-    if reqs.target_type == 'debug':
-        ucx_configure.extend(['--enable-debug'])
-    else:
-        ucx_configure.extend(['--disable-debug', '--disable-logging'])
-
-    reqs.define('ucx',
-                retriever=GitRepoRetriever('https://github.com/openucx/ucx.git'),
-                libs=['ucs', 'ucp', 'uct'],
-                functions={'ucs': ['ucs_debug_disable_signal']},
-                headers=['uct/api/uct.h'],
-                pkgconfig='ucx',
-                commands=[['./autogen.sh'],
-                          ucx_configure,
-                          ['make'],
-                          ['make', 'install'],
-                          ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
-                          ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
-                package='ucx-devel' if inst(reqs, 'ucx') else None)
-
     mercury_build = ['cmake',
                      '-DBUILD_SHARED_LIBS:BOOL=ON',
                      '-DCMAKE_BUILD_TYPE:STRING=RelWithDebInfo',
@@ -196,7 +171,7 @@ def define_mercury(reqs):
                           ['make', 'install']],
                 libs=['mercury'],
                 pkgconfig='mercury',
-                requires=['boost', 'ofi', 'ucx'] + libs,
+                requires=['boost', 'ofi'] + libs,
                 out_of_src_build=True,
                 package='mercury-devel' if inst(reqs, 'mercury') else None,
                 build_env={'CFLAGS': '-fstack-usage'})

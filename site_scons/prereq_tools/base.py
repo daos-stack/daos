@@ -525,7 +525,7 @@ class PreReqComponent():
     def run_build(self, opts):
         """Build and dependencies"""
         # argobots is not really needed by client but it's difficult to separate
-        common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
+        common_reqs = ['argobots', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c', 'capstone']
         server_reqs = ['pmdk', 'spdk']
