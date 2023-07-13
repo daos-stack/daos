@@ -106,9 +106,9 @@ type systemQueryCmd struct {
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
 	rankListCmd
-	Verbose       bool   `long:"verbose" short:"v" description:"Display more member details"`
-	NotJoinedOnly bool   `long:"--not-ok" description:"Only show engines not in a joined state"`
-	WantedStates  string `long:"--with-states" description:"Only show engines in one of the states. Comma separated list of AwaitFormat Starting Ready Joined Stopping Stopped Excluded AdminExcluded Errored Unresponsive"`
+	Verbose      bool   `long:"verbose" short:"v" description:"Display more member details"`
+	NotOK        bool   `long:"--not-ok" description:"Display components in need of administrative investigation"`
+	WantedStates string `long:"--with-states" description:"Only show engines in one of a set of states specified as a comma separated list of AwaitFormat Starting Ready Joined Stopping Stopped Excluded AdminExcluded Errored Unresponsive"`
 }
 
 // Execute is run when systemQueryCmd activates.
@@ -117,7 +117,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system query failed")
 	}()
 
-	if cmd.WantedStates != "" && cmd.NotJoinedOnly {
+	if cmd.WantedStates != "" && cmd.NotOK {
 		return errors.New("only one of --with-states and --not-ok options should be used at a time")
 	}
 	if err := cmd.validateHostsRanks(); err != nil {
@@ -126,7 +126,7 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 	req := new(control.SystemQueryReq)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
-	req.NotJoinedOnly = cmd.NotJoinedOnly
+	req.NotOK = cmd.NotOK
 	req.WantedStates = cmd.WantedStates
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)

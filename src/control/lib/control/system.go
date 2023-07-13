@@ -186,7 +186,7 @@ type SystemQueryReq struct {
 	sysRequest
 	retryableRequest
 	FailOnUnavailable bool   // Fail without retrying if the MS is unavailable
-	NotJoinedOnly     bool   // Only show engines not in a joined state
+	NotOK             bool   // Only show engines not in a joined state
 	WantedStates      string // Comma separated list of wanted states
 }
 
@@ -194,7 +194,7 @@ func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
 	var states []system.MemberState
 
 	for _, tok := range strings.Split(statesStr, ",") {
-		ms := system.MemberStateFromString(tok)
+		ms := system.MemberStateFromString(strings.TrimSpace(tok))
 		if ms == system.MemberStateUnknown {
 			return 0, errors.Errorf("invalid state name %q", tok)
 		}
@@ -207,7 +207,7 @@ func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
 
 func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 	switch {
-	case req.NotJoinedOnly:
+	case req.NotOK:
 		return system.AllMemberFilter &^ system.MemberStateJoined, nil
 	case req.WantedStates != "":
 		return memberStateMaskFromStrings(req.WantedStates)
