@@ -163,7 +163,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 				r.Close()
 				return
 			}
-			printLn(fmt.Sprintf("%s", line))
+			printLn(line)
 		}
 	}(ctx)
 
