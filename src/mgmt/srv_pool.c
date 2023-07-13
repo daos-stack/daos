@@ -406,6 +406,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver)
 {
+	uint64_t deadline;
+
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
 		return -DER_INVAL;
@@ -413,8 +415,16 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
-				 pool_layout_ver, upgrade_layout_ver);
+	/*
+	 * Use a fixed timeout that matches what the control plane uses for the
+	 * moment.
+	 *
+	 * TODO: Pass the deadline from dmg (or daos_server).
+	 */
+	deadline = daos_getmtime_coarse() + 5 * 60 * 1000;
+
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, ranks, pool_info, pool_layout_ver,
+				  upgrade_layout_ver);
 }
 
 /**
