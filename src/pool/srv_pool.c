@@ -3082,7 +3082,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to disconnect from "DF_RC" targets\n",
+		D_ERROR(DF_UUID ": failed to disconnect from targets: " DF_RC "\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	}
@@ -3243,7 +3243,7 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	out = crt_reply_get(rpc);
 	rc = out->tqo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
+		D_ERROR(DF_UUID ": failed to query from targets: " DF_RC "\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	} else {

@@ -330,9 +330,8 @@ dss_topo_init()
 					    tgt_oversub);
 
 		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
-				"(set by \"-f\" option),"
-				" should within range [0, %u]",
+			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+				"range [0, %u]\n",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
@@ -340,9 +339,7 @@ dss_topo_init()
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. "
-			"Must be no larger than %d\n",
-			numa_node_nr);
+		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
 		return -DER_INVAL;
 	}
 
@@ -383,9 +380,9 @@ dss_topo_init()
 	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
 				    tgt_oversub);
 	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
+			"[0, %d]\n",
+			dss_core_offset, dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
 
