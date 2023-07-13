@@ -10,29 +10,18 @@
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-<<<<<<< HEAD
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
-	d_list_t                 *rlink;
 	struct dfuse_obj_hdl     *oh;
 	struct fuse_file_info     fi_out = {0};
 	int                       rc;
 	bool                      prefetch = false;
-=======
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *ie;
-	d_list_t                     *rlink;
-	struct dfuse_obj_hdl         *oh     = NULL;
-	struct fuse_file_info         fi_out = {0};
-	int                           rc;
->>>>>>> master
 
-	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
+	ie = dfuse_inode_lookup(dfuse_info, ino);
+	if (!ie) {
 		DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOENT);
 		return;
 	}
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -115,7 +104,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 
-	d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, ie);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	if (oh->doh_readahead)
@@ -123,7 +112,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	return;
 err:
-	d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, ie);
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
