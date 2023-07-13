@@ -43,6 +43,7 @@
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
 |[SWIM](https://doi.org/10.1109/DSN.2002.1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
+|[UCF](https://ucfconsortium.org/)|Unified Communication Framework (UCF Consortium)|
 |[UCP](https://www.openucx.org/)|Unified Communication Protocols (high-level API of UCX)|
 |[UCS](https://www.openucx.org/)|Unified Communication Transports (low-level API of UCX)|
 |[UCT](https://www.openucx.org/)|Unified Communication Services (common utilities of UCX)|
