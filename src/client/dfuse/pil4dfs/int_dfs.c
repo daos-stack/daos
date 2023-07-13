@@ -4304,7 +4304,7 @@ utime(const char *path, const struct utimbuf *times)
 		stbuf.st_mtim.tv_nsec = 0;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
@@ -4376,7 +4376,7 @@ utimes(const char *path, const struct timeval times[2])
 		stbuf.st_mtim.tv_nsec = times[1].tv_usec * 1000;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		D_ERROR("dfs_osetattr() failed: %d (%s)\n", rc, strerror(rc));
 		dfs_release(obj);
@@ -4451,7 +4451,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
@@ -4550,7 +4550,7 @@ futimens(int fd, const struct timespec times[2])
 
 	rc = dfs_osetattr(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 			  file_list[fd_directed - FD_FILE_BASE]->file, &stbuf,
-			  DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+			  DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
