@@ -334,7 +334,13 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			AssertEqual(t, tc.expRanks, rankList, "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
-			if diff := cmp.Diff(tc.expMembers, ms.Members(rankSet), memberCmpOpts...); diff != "" {
+
+			members, err := ms.Members(rankSet)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
 				t.Fatalf("unexpected members (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -662,7 +668,13 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			cmpOpts := append(memberCmpOpts,
 				cmpopts.IgnoreUnexported(MemberResult{}),
 			)
-			for i, m := range ms.Members(nil) {
+
+			members, err := ms.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for i, m := range members {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected member (-want, +got)\n%s\n", diff)
 				}
@@ -911,7 +923,13 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			ps.Publish(tc.event)
 
 			<-ctx.Done()
-			if diff := cmp.Diff(tc.expMembers, ms.Members(nil), memberCmpOpts...); diff != "" {
+
+			members, err := ms.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
 				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
 		})

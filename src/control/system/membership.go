@@ -331,7 +331,7 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
 // not in the membership. Optionally filter on desired states.
-func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members) {
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -340,27 +340,25 @@ func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (me
 	if rankSet == nil || rankSet.Count() == 0 {
 		if mask == AllMemberFilter {
 			// No rank or member filtering required so copy database.
-			var err error
 			members, err = m.db.AllMembers()
 			if err != nil {
-				m.log.Errorf("failed to get all members: %s", err)
-				return nil
+				return
 			}
 		} else {
 			// No rank filtering so use full rank-set.
-			rankList, err := m.db.MemberRanks()
+			var rl []Rank
+			rl, err = m.db.MemberRanks()
 			if err != nil {
-				m.log.Errorf("failed to get all member ranks: %s", err)
-				return nil
+				return
 			}
-			rankSet = RankSetFromRanks(rankList)
+			rankSet = RankSetFromRanks(rl)
 		}
 	}
 
 	if members == nil {
 		for _, rank := range rankSet.Ranks() {
 			if member, err := m.db.FindMemberByRank(rank); err == nil {
-				if member.State&mask > 0 {
+				if member.State&mask != 0 {
 					members = append(members, member)
 				}
 			}

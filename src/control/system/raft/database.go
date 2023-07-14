@@ -643,7 +643,7 @@ func (db *Database) filterMembers(desiredStates ...system.MemberState) (result [
 	stateMask, includeUnknown := system.MaskFromStates(desiredStates...)
 
 	for _, m := range db.data.Members.Ranks {
-		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask > 0 {
+		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask != 0 {
 			result = append(result, m)
 		}
 	}
