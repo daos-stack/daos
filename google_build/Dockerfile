@@ -18,7 +18,7 @@ ARG VENV=/tmp/build_venv
 RUN virtualenv $VENV
 RUN source $VENV/bin/activate && \
   pip install --upgrade pip && \
-  pip install -r requirements.txt
+  pip install -r google_build/requirements.txt
 
 # Build DAOS.
 RUN source $VENV/bin/activate && \
