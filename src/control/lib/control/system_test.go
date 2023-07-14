@@ -552,6 +552,47 @@ func TestControl_getResetRankErrors(t *testing.T) {
 	}
 }
 
+func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *SystemQueryReq
+		expMask system.MemberState
+		expErr  error
+	}{
+		"not-ok": {
+			req: &SystemQueryReq{
+				NotOK: true,
+			},
+			expMask: system.AllMemberFilter &^ system.MemberStateJoined,
+		},
+		"with-states": {
+			req: &SystemQueryReq{
+				WantedStates: "joined,excluded",
+			},
+			expMask: system.MemberStateJoined | system.MemberStateExcluded,
+		},
+		"with-states; bad state": {
+			req: &SystemQueryReq{
+				WantedStates: "joined,excluded,unknown",
+			},
+			expErr: errors.New("invalid state name"),
+		},
+		"vanilla": {
+			req:     &SystemQueryReq{},
+			expMask: system.AllMemberFilter,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotMask, gotErr := tc.req.getStateMask()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expMask, gotMask, name)
+		})
+	}
+}
+
 func TestControl_SystemQuery(t *testing.T) {
 	testHS := hostlist.MustCreateSet("foo-[1-23]")
 	testReqHS := new(SystemQueryReq)

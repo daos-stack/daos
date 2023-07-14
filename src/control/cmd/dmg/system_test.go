@@ -101,6 +101,38 @@ func TestDmg_SystemCommands(t *testing.T) {
 			errors.New("--ranks and --rank-hosts options cannot be set together"),
 		},
 		{
+			"system query with not-ok specified",
+			"system query --not-ok",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					NotOK: true,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with states specified",
+			"system query --with-states joined,Excluded",
+			strings.Join([]string{
+				printRequest(t, &control.SystemQueryReq{
+					WantedStates: "joined,Excluded",
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"system query with invalid state specified",
+			"system query --with-states Joined,Exclud",
+			"",
+			errors.New("invalid state name"),
+		},
+		{
+			"system query with both not-ok and with-states specified",
+			"system query --not-ok --with-states Joined",
+			"",
+			errors.New("--not-ok and --with-states options cannot be set together"),
+		},
+		{
 			"system query verbose",
 			"system query --verbose",
 			strings.Join([]string{
