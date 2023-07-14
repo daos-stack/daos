@@ -409,14 +409,9 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 // Update the pool list, which has been rebuild and not in idle state.
 func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
 	for _, pool := range resp.Pools {
-		if rebuildOnly {
-			if pool.RebuildState != "idle" {
-				finalResp.Pools = append(finalResp.Pools, pool)
-			}
-		} else {
+		if !rebuildOnly || pool.RebuildState != "idle" {
 			finalResp.Pools = append(finalResp.Pools, pool)
 		}
-
 	}
 
 	return nil
@@ -622,9 +617,6 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 	req.IncludeDisabledRanks = cmd.ShowDisabledRanks
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
-
-	// Update the Pool Query State based on response
-	control.UpdatePoolQueryState(resp)
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(resp, err)

@@ -24,6 +24,10 @@ const (
 	PoolServiceStateReady
 	// PoolServiceStateDestroying indicates that the pool service is being destroyed
 	PoolServiceStateDestroying
+	// PoolServiceStateDegraded indicates that the pool service is being Degraded
+	PoolServiceStateDegraded
+	// PoolServiceStateUnknown indicates that the pool service is Unknown state
+	PoolServiceStateUnknown
 )
 
 type (
@@ -136,5 +140,7 @@ func (pss PoolServiceState) String() string {
 		"Creating",
 		"Ready",
 		"Destroying",
+		"Degraded",
+		"Unknown",
 	}[pss]
 }

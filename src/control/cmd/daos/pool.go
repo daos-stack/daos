@@ -339,7 +339,10 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	}
 
 	// Update the Pool Query State based on response
-	control.UpdatePoolQueryState(pqr)
+	err = pqr.UpdateState()
+	if err != nil {
+		return err
+	}
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(pqr, nil)

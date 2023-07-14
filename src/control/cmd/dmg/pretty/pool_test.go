@@ -38,7 +38,7 @@ Pool space info:
 		"normal response": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: "Degraded",
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -81,7 +81,7 @@ Rebuild busy, 42 objs, 21 recs
 		"normal response; enabled ranks": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: "Degraded",
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -126,7 +126,7 @@ Rebuild busy, 42 objs, 21 recs
 		"normal response; disabled ranks": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: "Degraded",
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -171,7 +171,7 @@ Rebuild busy, 42 objs, 21 recs
 		"unknown/invalid rebuild state response": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: "Degraded",
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -216,7 +216,7 @@ Rebuild unknown, 42 objs, 21 recs
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: "Degraded",
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -260,7 +260,7 @@ Rebuild failed, rc=0, status=2
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
-			control.UpdatePoolQueryState(tc.pqr)
+			tc.pqr.UpdateState()
 			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
 				t.Fatal(err)
 			}
@@ -1199,6 +1199,7 @@ no pools in system
 						State:            system.PoolServiceStateReady.String(),
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "idle",
 					},
 				},
 			},
@@ -1206,7 +1207,7 @@ no pools in system
 			expPrintStr: `
 Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
 ----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
--     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2                         
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2           idle          
 
 `,
 		},
@@ -1246,6 +1247,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 						State:            system.PoolServiceStateReady.String(),
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "idle",
 					},
 					{
 						Label:            "two",
@@ -1257,6 +1259,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 						State:            system.PoolServiceStateDestroying.String(),
 						PoolLayoutVer:    2,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "done",
 					},
 				},
 			},
@@ -1264,8 +1267,8 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 			expPrintStr: `
 Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
 ----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
-one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2                         
-two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     None                         
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2           idle          
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     None           done          
 
 `,
 		},
@@ -1279,7 +1282,7 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 						Usage:            exampleUsage,
 						TargetsTotal:     16,
 						TargetsDisabled:  8,
-						State:            "Degraded",
+						State:            system.PoolServiceStateDegraded.String(),
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
 						RebuildState:     "busy",

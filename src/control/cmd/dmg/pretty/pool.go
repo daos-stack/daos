@@ -310,7 +310,6 @@ func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPo
 			continue
 		}
 		table = append(table, poolListCreateRowVerbose(pool))
-
 	}
 
 	fmt.Fprintln(out, formatter.Format(table))

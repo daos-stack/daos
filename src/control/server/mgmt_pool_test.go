@@ -1803,23 +1803,8 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State: string("Ready"),
+				State: system.PoolServiceStateReady.String(),
 				Uuid:  mockUUID,
-			},
-		},
-		"successful query with status as Degraded": {
-			req: &mgmtpb.PoolQueryReq{
-				Id: mockUUID,
-			},
-			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolQueryResp{
-					State:           string("Ready"),
-					DisabledTargets: 1,
-				}, nil)
-			},
-			expResp: &mgmtpb.PoolQueryResp{
-				State:           string("Degraded"),
-				DisabledTargets: uint32(1),
 			},
 		},
 	} {

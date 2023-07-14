@@ -507,7 +507,7 @@ func TestControl_PoolCreate(t *testing.T) {
 	}
 }
 
-func TestControl_UpdatePoolQueryState(t *testing.T) {
+func TestControl_UpdateState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqr      *PoolQueryResp
 		expState string
@@ -522,30 +522,30 @@ func TestControl_UpdatePoolQueryState(t *testing.T) {
 					DisabledTargets: 0,
 				},
 			},
-			expState: "Ready",
+			expState: system.PoolServiceStateReady.String(),
 		},
 		"Pool state as Degraded": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
-				State:  "Ready",
+				State:  system.PoolServiceStateReady.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets:    1,
 					DisabledTargets: 4,
 				},
 			},
-			expState: "Degraded",
+			expState: system.PoolServiceStateDegraded.String(),
 		},
 		"Pool state as Unknown": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
-				State:  "Ready",
+				State:  system.PoolServiceStateReady.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets: 0,
 				},
 			},
-			expState: "Unknown",
+			expState: system.PoolServiceStateUnknown.String(),
 		},
 		"Pool state as Default": {
 			pqr: &PoolQueryResp{
@@ -560,7 +560,7 @@ func TestControl_UpdatePoolQueryState(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			UpdatePoolQueryState(tc.pqr)
+			tc.pqr.UpdateState()
 
 			if diff := cmp.Diff(tc.expState, tc.pqr.State); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
@@ -598,7 +598,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
-				State:  "Ready",
+				State:  system.PoolServiceStateReady.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -723,6 +723,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            system.PoolServiceStateDegraded.String(),
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -750,7 +751,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -793,6 +795,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            system.PoolServiceStateDegraded.String(),
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -821,7 +824,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -865,6 +869,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            system.PoolServiceStateDegraded.String(),
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -893,7 +898,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded.String(),
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -1498,7 +1504,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 				},
@@ -1550,7 +1556,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 					{
@@ -1559,7 +1565,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 				},
@@ -1603,7 +1609,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 				},
@@ -1649,7 +1655,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 				},
@@ -1685,7 +1691,7 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           "Degraded",
+						State:           system.PoolServiceStateDegraded.String(),
 						RebuildState:    "busy",
 					},
 					{

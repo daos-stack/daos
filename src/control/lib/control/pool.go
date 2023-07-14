@@ -608,25 +608,37 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	}
 
 	pqr := new(PoolQueryResp)
-	return pqr, convertMSResponse(ur, pqr)
+	err = convertMSResponse(ur, pqr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pqr.UpdateState()
+	if err != nil {
+		return nil, err
+	}
+
+	return pqr, err
 }
 
-func UpdatePoolQueryState(pqr *PoolQueryResp) {
+// Update the pool state
+func (pqr *PoolQueryResp) UpdateState() error {
 	// Pool state is unknown as default, if TotalTargets is 0.
 	if pqr.TotalTargets == 0 {
-		pqr.State = "Unknown"
+		pqr.State = system.PoolServiceStateUnknown.String()
 	}
 
 	// Update the state output for `daos pool query` command to aligned with dmg output.
 	if pqr.State == "" {
-		pqr.State = "Ready"
+		pqr.State = system.PoolServiceStateReady.String()
 	}
 
 	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
-	if pqr.State == "Ready" && pqr.DisabledTargets > 0 {
-		pqr.State = "Degraded"
+	if pqr.State == system.PoolServiceStateReady.String() && pqr.DisabledTargets > 0 {
+		pqr.State = system.PoolServiceStateDegraded.String()
 	}
 
+	return nil
 }
 
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
@@ -1217,11 +1229,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
-		// Update the Pool state if it's Ready and any target is disabled
-		if resp.DisabledTargets > 0 && p.State == "Ready" {
-			p.State = fmt.Sprintf("%s", "Degraded")
-		}
-
+		p.State = resp.State
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer
