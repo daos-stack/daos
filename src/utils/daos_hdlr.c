@@ -2452,8 +2452,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 	if (rc < 0) {
 		rc = errno;
 		if (rc == ENOTTY) {
-			/* TODO: What is the correct error here? */
-			rc = -DER_INVAL;
+			rc = -DER_NOTAPPLICABLE;
 		} else {
 			DH_PERROR_SYS(ap, rc, "ioctl failed");
 			rc = daos_errno2der(errno);
@@ -2549,7 +2548,7 @@ dfuse_evict(struct cmd_args_s *ap)
 	if (rc < 0) {
 		rc = errno;
 		if (rc == ENOTTY) {
-			rc = -DER_INVAL;
+			rc = -DER_NOTAPPLICABLE;
 		} else {
 			DH_PERROR_SYS(ap, rc, "ioctl failed");
 			rc = daos_errno2der(errno);
