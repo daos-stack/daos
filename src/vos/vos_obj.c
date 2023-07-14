@@ -570,7 +570,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Container is not open");
+		D_ERROR("Container is not open\n");
 		return -DER_INVAL;
 	}
 	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);

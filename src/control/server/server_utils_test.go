@@ -1247,3 +1247,43 @@ func TestServerUtils_getControlAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_processFabricProvider(t *testing.T) {
+	for name, tc := range map[string]struct {
+		cfgFabric string
+		expFabric string
+	}{
+		"ofi+verbs": {
+			cfgFabric: "ofi+verbs",
+			expFabric: "ofi+verbs;ofi_rxm",
+		},
+		"ofi+verbs;ofi_rxm": {
+			cfgFabric: "ofi+verbs;ofi_rxm",
+			expFabric: "ofi+verbs;ofi_rxm",
+		},
+		"ofi+tcp": {
+			cfgFabric: "ofi+tcp",
+			expFabric: "ofi+tcp",
+		},
+		"ofi+tcp;ofi_rxm": {
+			cfgFabric: "ofi+tcp;ofi_rxm",
+			expFabric: "ofi+tcp;ofi_rxm",
+		},
+		"ucx": {
+			cfgFabric: "ucx+ud",
+			expFabric: "ucx+ud",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.Server{
+				Fabric: engine.FabricConfig{
+					Provider: tc.cfgFabric,
+				},
+			}
+
+			processFabricProvider(cfg)
+
+			test.AssertEqual(t, tc.expFabric, cfg.Fabric.Provider, "")
+		})
+	}
+}

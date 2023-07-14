@@ -56,6 +56,11 @@ struct dfuse_info {
 	/* Array of dfuse_eq */
 	struct dfuse_eq     *di_eqt;
 	ATOMIC uint64_t      di_eqt_idx;
+
+	ATOMIC uint64_t      di_inode_count;
+	ATOMIC uint64_t      di_fh_count;
+	ATOMIC uint64_t      di_pool_count;
+	ATOMIC uint64_t      di_container_count;
 };
 
 /* legacy, allow the old name for easier migration */
@@ -135,6 +140,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_started;
 	/* Set to true if readdir calls reach EOF made on this handle */
 	bool                      doh_kreaddir_finished;
+
+	bool                      doh_evict_on_close;
 };
 
 /* Readdir support.
@@ -277,7 +284,8 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
  * Set required initial state in dfuse_obj_hdl.
  */
 void
-dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie);
+dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+		       struct dfuse_inode_entry *ie);
 
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
@@ -701,8 +709,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(desc, req, arg)			\
-	DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
+#define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.
@@ -849,10 +856,22 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		 daos_size_t len);
 
 void
-dfuse_ie_init(struct dfuse_inode_entry *ie);
+dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+#define dfuse_ie_free(_di, _ie)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&(_di)->di_inode_count, 1);                               \
+		D_FREE(_ie);                                                                       \
+	} while (0)
+
+#define dfuse_oh_free(_di, _oh)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&(_di)->di_fh_count, 1);                                  \
+		D_FREE(_oh);                                                                       \
+	} while (0)
 
 void
-dfuse_ie_close(struct dfuse_inode_entry *ie);
+dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* ops/...c */
 

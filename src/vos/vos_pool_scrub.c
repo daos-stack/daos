@@ -292,7 +292,10 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 		sc_m_track_idle(ctx);
 	} else {
-		D_ASSERTF(false, "Unknown Scrub Mode\n");
+		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
+			DP_UUID(ctx->sc_pool->sp_uuid));
+		/* sleep for 5 minutes to give pool property chance to resolve */
+		sc_sleep(ctx, 1000 * 60 * 5);
 	}
 }
 
@@ -384,9 +387,8 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		ctx->sc_dmi->dmi_tgt_id,
 		ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
-		D_ERROR("Corruption threshold reached. %d >= %d",
-			ctx->sc_pool_tgt_corrupted_detected,
-			sc_thresh(ctx));
+		D_ERROR("Corruption threshold reached. %d >= %d\n",
+			ctx->sc_pool_tgt_corrupted_detected, sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);
