@@ -13,7 +13,7 @@ from general_utils import get_log_file
 from cmocka_utils import CmockaUtils
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
-from run_utils import run_remote
+from run_utils import run_remote, find_command
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 
@@ -153,8 +153,9 @@ class DaosCoreBase(TestWithServers):
         cmocka_utils.run_cmocka_test(self, job)
 
         self.log.debug("================= DEBUG =================")
-        command = "ls -al '{}'".format(get_log_file("*_daos_server_*.log*"))
-        run_remote(self.log, cmocka_utils.hosts, command)
+        other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
+        command = find_command(self.base_test_dir, "*log*", 1, other)
+        run_remote(self.log, self.server_managers[0].hosts, command)
         self.log.debug("================= DEBUG =================")
 
         try:
