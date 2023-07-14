@@ -58,7 +58,7 @@ agg_rate_ctl(void *arg)
 	/* If the container is discarding the object mostly due to rebuild failure
 	 * reclaim, let's abort the aggregation to let discard proceed.
 	 */
-	if (cont->sc_discarding)
+	if (cont->sc_migrating)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
@@ -191,14 +191,14 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_reintegrating) {
+	if (pool->sp_rebuilding) {
 		if (vos_agg)
 			cont->sc_vos_agg_active = 0;
 		else
 			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
+		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_reintegrating);
+			vos_agg ? "VOS" : "EC", pool->sp_rebuilding);
 		return false;
 	}
 
