@@ -10,5 +10,4 @@ server_config:
       storage: auto
 pool:
   control_method: dmg
-  scm_size: 90%
-  nvme_size: 90%
+  size: 90%

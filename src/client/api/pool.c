@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -7,6 +7,7 @@
 
 #include <daos/pool.h>
 #include <daos/pool_map.h>
+#include <daos/security.h>
 #include <daos/task.h>
 #include "client_internal.h"
 #include "task_internal.h"
@@ -344,4 +345,10 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 	args->poh	= poh;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_get_perms(daos_prop_t *pool_prop, uid_t uid, gid_t *gids, size_t nr_gids, uint64_t *perms)
+{
+	return dc_sec_get_pool_permissions(pool_prop, uid, gids, nr_gids, perms);
 }

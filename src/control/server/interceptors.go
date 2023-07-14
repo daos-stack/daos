@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -132,13 +132,14 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	if err == nil {
 		buildComponent = build.Component(secComponent.String())
 	}
+	isInsecure := status.Code(err) == codes.Unauthenticated
 
-	otherVersion := "0.0.0"
+	otherVersion := build.MustNewVersion("0.0.0")
 	if sReq, ok := req.(interface{ GetSys() string }); ok {
 		comps := strings.Split(sReq.GetSys(), "-")
 		if len(comps) > 1 {
 			if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
-				otherVersion = ver.String()
+				otherVersion = ver
 			}
 		}
 	} else {
@@ -148,11 +149,15 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 		return nil
 	}
 
-	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
+	if isInsecure && !self.Version.Equals(otherVersion) {
+		return FaultNoCompatibilityInsecure(self.Version, otherVersion)
+	}
+
+	other, err := build.NewVersionedComponent(buildComponent, otherVersion.String())
 	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
-			Version:   build.MustNewVersion(otherVersion),
+			Version:   build.MustNewVersion(otherVersion.String()),
 		}
 		return FaultIncompatibleComponents(self, other)
 	}
@@ -216,14 +221,24 @@ func isSentinelErr(err error) bool {
 	return system.IsNotReady(err) || system.IsNotReplica(err) || system.IsNotLeader(err)
 }
 
+// shouldLogMsg determines whether or not the given message should be logged.
+func shouldLogMsg(msg interface{}, log logging.Logger, ldrChk func() bool) (protoreflect.ProtoMessage, bool) {
+	m, ok := msg.(protoreflect.ProtoMessage)
+	return m, ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m, ldrChk)
+}
+
 // unaryLoggingInterceptor generates a grpc.UnaryServerInterceptor that
 // will log an error if the RPC handler returned an error. If debugging is
 // enabled, it will also log the request and response messages.
 //
 // NB: This interceptor should be the last in the chain, i.e. first in the
 // list of interceptors passed to grpc.NewServer.
-func unaryLoggingInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
+func unaryLoggingInterceptor(log logging.Logger, ldrChk func() bool) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if m, ok := shouldLogMsg(req, log, ldrChk); ok {
+			log.Debugf("gRPC request: %s", proto.Debug(m))
+		}
+
 		startTime := time.Now()
 		res, err := handler(ctx, req)
 		elapsed := time.Since(startTime)
@@ -235,15 +250,6 @@ func unaryLoggingInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
 			}
 		}
 
-		// If the error is nil or is not a sentinel error, log the request.
-		// We don't want to log sentinel errors because they're spammy and
-		// don't provide any useful debug information.
-		if logErr == nil || !isSentinelErr(logErr) {
-			if m, ok := req.(protoreflect.ProtoMessage); ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m) {
-				log.Debugf("gRPC request: %s", proto.Debug(m))
-			}
-		}
-
 		// Log the unwrapped error if it's not a sentinel error.
 		if logErr != nil {
 			if !isSentinelErr(logErr) {
@@ -252,7 +258,7 @@ func unaryLoggingInterceptor(log logging.Logger) grpc.UnaryServerInterceptor {
 			return res, err
 		}
 
-		if m, ok := res.(protoreflect.ProtoMessage); ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m) {
+		if m, ok := shouldLogMsg(res, log, ldrChk); ok {
 			log.Debugf("gRPC response for %T: %s (elapsed: %s)", req, proto.Debug(m), elapsed)
 		}
 		return res, err

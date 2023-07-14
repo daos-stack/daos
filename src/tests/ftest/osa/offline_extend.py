@@ -1,10 +1,9 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
 
@@ -22,7 +21,6 @@ class OSAOfflineExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         # Start an additional server.
         self.ior_test_sequence = self.params.get("ior_test_sequence", "/run/ior/iorflags/*")
         self.extra_servers = self.get_hosts_from_yaml(
@@ -91,19 +89,23 @@ class OSAOfflineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Get initial total free space (scm+nvme)
+            initial_free_space = self.pool.get_total_free_space(refresh=True)
             # Enable aggregation for multiple pool testing only.
             if self.test_during_aggregation is True and (num_pool > 1):
                 self.delete_extra_container(self.pool)
             output = self.pool.extend(rank_val)
             self.print_and_assert_on_rebuild_failure(output)
+            free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %d", pver_extend)
             # Check pool version incremented after pool extend
             self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
-
             display_string = "Pool{} space at the End".format(val)
             pool[val].display_pool_daos_space(display_string)
+            self.assertTrue(free_space_after_extend > initial_free_space,
+                            "Expected free space after extend is less than initial")
 
             if data:
                 # Perform the IOR read using the same
@@ -115,10 +117,7 @@ class OSAOfflineExtend(OSAUtils):
                 self.run_ior_thread("Read", oclass[index], test_seq)
                 self.run_mdtest_thread(oclass[index])
                 self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                self.container.check()
 
     def test_osa_offline_extend(self):
         """JIRA ID: DAOS-4751.

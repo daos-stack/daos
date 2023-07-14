@@ -89,6 +89,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/dlopen"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Load dynamically loads the libfabric library and provides a method to unload it.
@@ -143,22 +144,40 @@ func (f *fiInfo) hfiUnit() (uint, error) {
 
 // fiGetInfo fetches the list of fi_info structs with the desired provider (if non-empty), or all of
 // them otherwise. It also returns the cleanup function to free the fi_info.
-func fiGetInfo(hdl *dlopen.LibHandle) ([]*fiInfo, func() error, error) {
+func fiGetInfo(log logging.Logger, hdl *dlopen.LibHandle, prov string) ([]*fiInfo, func() error, error) {
 	getInfoPtr, err := getLibFuncPtr(hdl, "fi_getinfo")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	var fi *C.struct_fi_info
-	result := C.call_fi_getinfo(getInfoPtr, nil, &fi)
-	if result < 0 {
-		return nil, nil, errors.Errorf("fi_getinfo() failed: %s", fiStrError(hdl, -result))
+	var hint *C.struct_fi_info
+	if len(prov) != 0 {
+		var cleanupHint func() error
+		hint, cleanupHint, err = fiAllocInfo(hdl)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "allocating fi_info hint")
+		}
+		defer func() {
+			if cleanupErr := cleanupHint(); cleanupErr != nil && err != nil {
+				log.Errorf("failed to clean up fi_info hint: %s", err.Error())
+			}
+		}()
+
+		hint.fabric_attr.prov_name = C.CString(prov)
 	}
-	if fi == nil {
+
+	var fi *C.struct_fi_info
+	fiList := make([]*fiInfo, 0)
+	result := C.call_fi_getinfo(getInfoPtr, hint, &fi)
+	switch {
+	case result == -C.FI_ENODATA: // unable to get anything for the requested provider
+		return fiList, func() error { return nil }, nil
+	case result < 0:
+		return nil, nil, errors.Errorf("fi_getinfo() failed: %s", fiStrError(hdl, -result))
+	case fi == nil:
 		return nil, nil, errors.Errorf("fi_getinfo() returned no results")
 	}
 
-	fiList := make([]*fiInfo, 0)
 	for ; fi != nil; fi = fi.next {
 		fiList = append(fiList, &fiInfo{
 			cFI: fi,

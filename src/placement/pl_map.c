@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -116,15 +116,14 @@ void pl_map_print(struct pl_map *map)
  * is not NULL.
  */
 int
-pl_obj_place(struct pl_map *map, uint32_t layout_gl_version, struct daos_obj_md *md,
-	     unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
+pl_obj_place(struct pl_map *map, uint16_t layout_gl_version, struct daos_obj_md *md,
+	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp)
 {
 	D_ASSERT(map->pl_ops != NULL);
 	D_ASSERT(map->pl_ops->o_obj_place != NULL);
-
-	return map->pl_ops->o_obj_place(map, layout_gl_version, md, mode, rebuild_ver, shard_md,
-					layout_pp);
+	D_ASSERT(layout_gl_version < MAX_OBJ_LAYOUT_VERSION);
+	return map->pl_ops->o_obj_place(map, layout_gl_version, md, mode, shard_md, layout_pp);
 }
 
 /**
@@ -223,7 +222,8 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 /* Returns whether or not a given layout contains the specified rank */
 bool
 pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard,
+		       bool ignore_rebuild_shard)
 {
 	struct pool_target *target;
 	int i;
@@ -232,9 +232,10 @@ pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
 	D_ASSERT(layout != NULL);
 
 	for (i = 0; i < layout->ol_nr; i++) {
-		if (layout->ol_shards[i].po_rebuilding ||
-		    layout->ol_shards[i].po_reintegrating ||
-		    layout->ol_shards[i].po_target == -1)
+		if ((ignore_rebuild_shard &&
+		     (layout->ol_shards[i].po_rebuilding ||
+		      layout->ol_shards[i].po_reintegrating)) ||
+		     layout->ol_shards[i].po_target == -1)
 			continue;
 		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
 					  &target);

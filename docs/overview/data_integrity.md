@@ -145,10 +145,12 @@ Unit and functional testing is performed at many layers.
 **With daos_server not running**
 
 ```
-./commont_test
-./vos_tests -z
-./srv_checksum_tests
-./pool_scrubbing_tests
+commont_test
+vos_tests -z
+srv_checksum_tests
+cli_checksum_tests
+pool_scrubbing_tests
+rpc_tests
 ```
 
 **With daos_server running**

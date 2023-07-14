@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -120,7 +120,7 @@ class RbldBasic(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=rebuild,pool,rebuild_tests
+        :avocado: tags=rebuild,pool,rebuild_tests,daos_cmd
         :avocado: tags=RbldBasic,test_simple_rebuild
         """
         self.run_rebuild_test(1)

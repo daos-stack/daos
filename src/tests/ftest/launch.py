@@ -10,6 +10,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
+import getpass
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing, CoreFileException
+from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -35,23 +37,25 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util")
 from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
 from logger_utils import get_console_handler, get_file_handler                # noqa: E402
 from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException       # noqa: E402
+from run_utils import run_local, run_remote, find_command, RunException, \
+    stop_processes   # noqa: E402
 from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
 from storage_utils import StorageInfo, StorageException                       # noqa: E402
 from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
     get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, find_values, YamlUpdater, \
+from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
     YamlException    # noqa: E402
+from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
-DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
+MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 PROVIDER_KEYS = OrderedDict(
     [
@@ -59,8 +63,12 @@ PROVIDER_KEYS = OrderedDict(
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
         ("tcp", "ofi+tcp"),
+        ("opx", "ofi+opx"),
     ]
 )
+PROCS_TO_CLEANUP = [
+    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
+TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -116,7 +124,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -459,16 +468,23 @@ class TestInfo():
         "client_users",
     ]
 
-    def __init__(self, test_file, order):
+    def __init__(self, test_file, order, yaml_extension=None):
         """Initialize a TestInfo object.
 
         Args:
             test_file (str): the test python file
             order (int): order in which this test is executed
+            yaml_extension (str, optional): if defined and a test yaml file exists with this
+                extension, the yaml file will be used in place of the default test yaml file.
         """
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
+        if yaml_extension:
+            custom_yaml = ".".join(
+                [os.path.splitext(self.test_file)[0], str(yaml_extension), "yaml"])
+            if os.path.exists(custom_yaml):
+                self.yaml_file = custom_yaml
         parts = self.test_file.split(os.path.sep)[1:]
         self.python_file = parts.pop()
         self.directory = os.path.join(*parts)
@@ -495,7 +511,13 @@ class TestInfo():
         """
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
-        info = find_values(yaml_data, self.YAML_INFO_KEYS, (str, list))
+        info = {}
+        for key in self.YAML_INFO_KEYS:
+            # Get the unique values with lists flattened
+            values = list_unique(list_flatten(dict_extract_values(yaml_data, [key], (str, list))))
+            if values:
+                # Use single value if list only contains 1 element
+                info[key] = values if len(values) > 1 else values[0]
 
         logger.debug("Test yaml information for %s:", self.test_file)
         for key in self.YAML_INFO_KEYS:
@@ -536,9 +558,7 @@ class TestInfo():
 
         """
         yaml_data = get_yaml_data(self.yaml_file)
-        client_users = find_values(yaml_data, ["client_users"], val_type=list)
-        client_users = client_users['client_users'] if client_users else []
-        return client_users
+        return list_flatten(dict_extract_values(yaml_data, ["client_users"], list))
 
     def get_log_file(self, logs_dir, repeat, total):
         """Get the test log file name.
@@ -564,17 +584,22 @@ class TestInfo():
 class Launch():
     """Class to launch avocado tests."""
 
-    def __init__(self, name, repeat, mode):
+    RESULTS_DIRS = (
+        "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
+
+    def __init__(self, name, mode, slurm_install, slurm_setup):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
-            repeat (int): number of times to repeat executing all of the tests
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
+            slurm_install (bool): whether or not to install slurm RPMs if needed
+            slurm_setup (bool): whether or not to enable configuring slurm if needed
         """
         self.name = name
-        self.repeat = repeat
         self.mode = mode
+        self.slurm_install = slurm_install
+        self.slurm_setup = slurm_setup
 
         self.avocado = AvocadoInfo()
         self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
@@ -582,7 +607,9 @@ class Launch():
         self.logfile = None
         self.tests = []
         self.tag_filters = []
+        self.repeat = 1
         self.local_host = get_local_host()
+        self.user = getpass.getuser()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -598,7 +625,6 @@ class Launch():
         # Options for creating slurm partitions
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
-        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -636,8 +662,7 @@ class Launch():
         if test_result:
             test_result.end()
 
-    @staticmethod
-    def _pass_test(test_result, message=None):
+    def _pass_test(self, test_result, message=None):
         """Set the test result as passed.
 
         Args:
@@ -646,10 +671,21 @@ class Launch():
         """
         if message is not None:
             logger.debug(message)
-        test_result.status = TestResult.PASS
+        self.__set_test_status(test_result, TestResult.PASS, None, None)
 
-    @staticmethod
-    def _fail_test(test_result, fail_class, fail_reason, exc_info=None):
+    def _warn_test(self, test_result, fail_class, fail_reason, exc_info=None):
+        """Set the test result as warned.
+
+        Args:
+            test_result (TestResult): the test result to mark as warned
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
+        logger.warning(fail_reason)
+        self.__set_test_status(test_result, TestResult.WARN, fail_class, fail_reason, exc_info)
+
+    def _fail_test(self, test_result, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
@@ -659,12 +695,35 @@ class Launch():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         logger.error(fail_reason)
+        self.__set_test_status(test_result, TestResult.ERROR, fail_class, fail_reason, exc_info)
+
+    @staticmethod
+    def __set_test_status(test_result, status, fail_class, fail_reason, exc_info=None):
+        """Set the test result.
+
+        Args:
+            test_result (TestResult): the test result to mark as failed
+            status (str): TestResult status to set.
+            fail_class (str): failure category.
+            fail_reason (str): failure description.
+            exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
+        """
         if exc_info is not None:
             logger.debug("Stacktrace", exc_info=True)
+        if not test_result:
+            return
 
-        if test_result and test_result.fail_count == 0:
-            # Update the test result with the information about the first error
-            test_result.status = TestResult.ERROR
+        if status == TestResult.PASS:
+            # Do not override a possible WARN status
+            if test_result.status is None:
+                test_result.status = status
+            return
+
+        if test_result.fail_count == 0 \
+                or test_result.status == TestResult.WARN and status == TestResult.ERROR:
+            # Update the test result with the information about the first ERROR.
+            # Elevate status from WARN to ERROR if WARN came first.
+            test_result.status = status
             test_result.fail_class = fail_class
             test_result.fail_reason = fail_reason
             if exc_info is not None:
@@ -674,15 +733,15 @@ class Launch():
                     test_result.traceback = prepare_exc_info(exc_info)
                 except Exception:       # pylint: disable=broad-except
                     pass
-        elif test_result:
-            # Additional errors only update the test result fail reason with a fail counter
+
+        if test_result.fail_count > 0:
+            # Additional ERROR/WARN only update the test result fail reason with a fail counter
             plural = "s" if test_result.fail_count > 1 else ""
             fail_reason = test_result.fail_reason.split(" (+")[0:1]
             fail_reason.append(f"{test_result.fail_count} other failure{plural})")
             test_result.fail_reason = " (+".join(fail_reason)
 
-        if test_result:
-            test_result.fail_count += 1
+        test_result.fail_count += 1
 
     def get_exit_status(self, status, message, fail_class=None, exc_info=None):
         """Get the exit status for the current mode.
@@ -714,9 +773,8 @@ class Launch():
             try:
                 logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.xml file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.xml file: %s", str(error))
             else:
                 if not os.path.exists(results_xml_path):
                     logger.error("results.xml does not exist: %s", results_xml_path)
@@ -726,9 +784,8 @@ class Launch():
             try:
                 logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.html file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.html file: %s", str(error))
             else:
                 if not os.path.exists(results_html_path):
                     logger.error("results.html does not exist: %s", results_html_path)
@@ -776,6 +833,16 @@ class Launch():
         setup_result = self._start_test(
             self.class_name, TestName("./launch.py", 0, 0), self.logfile)
 
+        # Set the number of times to repeat execution of each test
+        if "ci" in self.mode and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            self._warn_test(setup_result, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
+
         # Record the command line arguments
         logger.debug("Arguments:")
         for key in sorted(args.__dict__.keys()):
@@ -808,7 +875,7 @@ class Launch():
 
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
-            self.list_tests(args.tags)
+            self.list_tests(args.tags, args.yaml_extension)
         except RunException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -847,9 +914,10 @@ class Launch():
 
         try:
             self.setup_fuse_config(args.test_servers | args.test_clients)
-        except LaunchException as error:
+        except LaunchException:
             # Warn but don't fail
-            logger.warning(error)
+            message = "Issue detected setting up the fuse configuration"
+            self._warn_test(setup_result, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -882,7 +950,6 @@ class Launch():
             message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
-        self.slurm_add_partition = args.slurm_setup
 
         # Execute the tests
         status = self.run_tests(
@@ -999,8 +1066,6 @@ class Launch():
 
             # Set the default location for daos log files written during testing
             # if not already defined.
-            if "DAOS_APP_DIR" not in os.environ:
-                os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
             if "DAOS_TEST_USER_DIR" not in os.environ:
@@ -1010,6 +1075,9 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
                 else:
                     os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
+            if "DAOS_TEST_APP_DIR" not in os.environ:
+                os.environ["DAOS_TEST_APP_DIR"] = os.path.join(
+                    os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
@@ -1051,12 +1119,12 @@ class Launch():
 
         except ValueError as error:
             if not list_tests:
-                raise LaunchException("Error setting test environment") from error
+                raise LaunchException("Error setting test environment:", str(error)) from error
 
         except IOError as error:
             if error.errno == errno.ENOENT:
                 if not list_tests:
-                    raise LaunchException("Error setting test environment") from error
+                    raise LaunchException("Error setting test environment:", str(error)) from error
 
         return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
@@ -1308,7 +1376,7 @@ class Launch():
             os.environ["PYTHONPATH"] = python_path
         logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
-    def list_tests(self, tags):
+    def list_tests(self, tags, yaml_extension=None):
         """List the test files matching the tags.
 
         Populates the self.tests list and defines the self.tag_filters list to use when running
@@ -1316,6 +1384,8 @@ class Launch():
 
         Args:
             tags (list): a list of tags or test file names
+            yaml_extension (str, optional): optional test yaml file extension to use when creating
+                the TestInfo object.
 
         Raises:
             RunException: if there is a problem listing tests
@@ -1356,7 +1426,7 @@ class Launch():
         output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
-            self.tests.append(TestInfo(test_file, index + 1))
+            self.tests.append(TestInfo(test_file, index + 1, yaml_extension))
             logger.info("  %s", self.tests[-1])
 
     @staticmethod
@@ -1399,6 +1469,12 @@ class Launch():
         #                             'filter' in the device description. If generating automatic
         #                             storage extra files, use a 'class: dcpm' first storage tier.
         #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
         #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
         #                             found to exist on all server hosts. If a 'filter' is specified
         #                             use it to find devices with the 'filter' in the device
@@ -1419,7 +1495,7 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
-        scm_size = 16
+        control_metadata = None
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1437,6 +1513,13 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_0_type = "ram"
+                max_nvme_tiers = 5
+                control_metadata = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], 'control_metadata')
+
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
@@ -1451,7 +1534,9 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
+        self._add_auto_storage_yaml(
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers,
+            control_metadata)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1472,7 +1557,8 @@ class Launch():
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
+                               max_nvme_tiers, control_metadata):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1480,7 +1566,10 @@ class Launch():
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
             scm_size (int): scm_size to use with ram storage tiers
+            scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD.
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1490,20 +1579,29 @@ class Launch():
         engine_storage_yaml = {}
         for test in self.tests:
             yaml_data = get_yaml_data(test.yaml_file)
-            info = find_values(yaml_data, ["engines_per_host", "storage"], val_type=(int, str))
-            logger.debug("Checking for auto-storage request in %s: %s", test.yaml_file, info)
-            if "storage" in info and info["storage"] == "auto":
-                engines = info["engines_per_host"]
+            logger.debug("Checking for auto-storage request in %s", test.yaml_file)
+
+            storage = dict_extract_values(yaml_data, ["server_config", "engines", "*", "storage"])
+            if "auto" in storage:
+                if len(list_unique(storage)) > 1:
+                    raise StorageException("storage: auto only supported for all or no engines")
+                engines = list_unique(dict_extract_values(yaml_data, ["engines_per_host"]))
+                if len(engines) > 1:
+                    raise StorageException(
+                        "storage: auto not supported for varying engines_per_host")
+                engines = engines[0]
                 yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
+                        control_metadata)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
                     engine_storage_yaml[engines], str(test))
-                test.extra_yaml.append(engine_storage_yaml[engines])
+                # Allow extra yaml files to be to override the generated storage yaml
+                test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -1715,8 +1813,11 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure slurm if any tests use partitions
+        return_code |= self.setup_slurm()
+
         # Configure hosts to collect code coverage
-        self.setup_bullseye()
+        return_code |= self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -1768,7 +1869,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        self.finalize_bullseye()
+        return_code |= self.finalize_bullseye()
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -1840,6 +1941,80 @@ class Launch():
                             os.rename(old_file, new_file)
         return status
 
+    def setup_slurm(self):
+        """Set up slurm on the hosts if any tests are using partitions.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        status = 0
+        logger.info("Setting up slurm partitions if required by tests")
+        if not any(test.yaml_info["client_partition"] for test in self.tests):
+            logger.debug("  No tests using client partitions detected - skipping slurm setup")
+            return status
+
+        if not self.slurm_setup:
+            logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
+            return status
+
+        status |= self.setup_application_directory()
+
+        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        try:
+            if self.slurm_install:
+                slurm_setup.install()
+            slurm_setup.update_config(self.user, 'daos_client')
+            slurm_setup.start_munge(self.user)
+            slurm_setup.start_slurm(self.user, True)
+        except SlurmSetupException:
+            message = "Error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+        except Exception:       # pylint: disable=broad-except
+            message = "Unknown error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+
+        return status
+
+    def setup_application_directory(self):
+        """Set up the application directory.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        app_dir = os.environ.get('DAOS_TEST_APP_DIR')
+        app_src = os.environ.get('DAOS_TEST_APP_SRC')
+
+        logger.debug("Setting up the '%s' application directory", app_dir)
+        if not os.path.exists(app_dir):
+            # Create the apps directory if it does not already exist
+            try:
+                logger.debug('  Creating the application directory')
+                os.makedirs(app_dir)
+            except OSError:
+                message = 'Error creating the application directory'
+                self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                return 128
+        else:
+            logger.debug('  Using the existing application directory')
+
+        if app_src and os.path.exists(app_src):
+            logger.debug("  Copying applications from the '%s' directory", app_src)
+            run_local(logger, f"ls -al '{app_src}'")
+            for app in os.listdir(app_src):
+                try:
+                    run_local(
+                        logger, f"cp -r '{os.path.join(app_src, app)}' '{app_dir}'", check=True)
+                except RunException:
+                    message = 'Error copying files to the application directory'
+                    self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                    return 128
+
+        logger.debug("  Applications in '%s':", app_dir)
+        run_local(logger, f"ls -al '{app_dir}'")
+        return 0
+
     @staticmethod
     def display_disk_space(path):
         """Display disk space of provided path destination.
@@ -1906,18 +2081,18 @@ class Launch():
             partition = test.yaml_info["client_partition"]
             logger.debug("Determining if the %s client partition exists", partition)
             exists = show_partition(logger, self.slurm_control_node, partition).passed
-            if not exists and not self.slurm_add_partition:
+            if not exists and not self.slurm_setup:
                 message = f"Error missing {partition} partition"
                 self._fail_test(self.result.tests[-1], "Prepare", message, None)
                 return 128
-            if self.slurm_add_partition and exists:
+            if self.slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, self.slurm_control_node, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self._fail_test(self.result.tests[-1], "Prepare", message, None)
                     return 128
-            if self.slurm_add_partition:
+            if self.slurm_setup:
                 hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
                 logger.debug(
                     "Partition hosts from '%s', excluding test servers '%s': %s",
@@ -1964,16 +2139,21 @@ class Launch():
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
         user_dir = os.environ["DAOS_TEST_USER_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
+        hosts = test.host_info.all_hosts
+        hosts.add(self.local_host)
+        logger.debug("Setting up '%s' on %s:", test_dir, hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
-            f"chmod a+wr {test_dir}",
+            f"chmod a+wrx {test_dir}",
             f"ls -al {test_dir}",
             f"mkdir -p {user_dir}"
         ]
+        # Predefine the sub directories used to collect the files process()/_archive_files()
+        for directory in self.RESULTS_DIRS:
+            commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
-            if not run_remote(logger, test.host_info.all_hosts, command).passed:
+            if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2108,6 +2288,7 @@ class Launch():
             return_code |= self._stop_daos_agent_services(test)
             return_code |= self._stop_daos_server_service(test)
             return_code |= self._reset_server_storage(test)
+            return_code |= self._cleanup_procs(test)
 
         # Mark the test execution as failed if a results.xml file is not found
         test_logs_dir = os.path.realpath(os.path.join(self.avocado.get_logs_dir(), "latest"))
@@ -2125,7 +2306,7 @@ class Launch():
             remote_files = OrderedDict()
             remote_files["local configuration files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "*_*_*.yaml",
                 "hosts": self.local_host,
                 "depth": 1,
@@ -2133,7 +2314,7 @@ class Launch():
             }
             remote_files["remote configuration files"] = {
                 "source": os.path.join(os.sep, "etc", "daos"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_configs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[0]),
                 "pattern": "daos_*.yml",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2141,7 +2322,7 @@ class Launch():
             }
             remote_files["daos log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[1]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 1,
@@ -2149,7 +2330,7 @@ class Launch():
             }
             remote_files["cart log files"] = {
                 "source": daos_test_log_dir,
-                "destination": os.path.join(self.job_results_dir, "latest", "cart_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[2]),
                 "pattern": "*log*",
                 "hosts": test.host_info.all_hosts,
                 "depth": 2,
@@ -2157,7 +2338,7 @@ class Launch():
             }
             remote_files["ULTs stacks dump files"] = {
                 "source": os.path.join(os.sep, "tmp"),
-                "destination": os.path.join(self.job_results_dir, "latest", "daos_dumps"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[3]),
                 "pattern": "daos_dump*.txt*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2165,7 +2346,7 @@ class Launch():
             }
             remote_files["valgrind log files"] = {
                 "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
-                "destination": os.path.join(self.job_results_dir, "latest", "valgrind_logs"),
+                "destination": os.path.join(self.job_results_dir, "latest", self.RESULTS_DIRS[4]),
                 "pattern": "valgrind*",
                 "hosts": test.host_info.servers.hosts,
                 "depth": 1,
@@ -2174,7 +2355,8 @@ class Launch():
             for index, hosts in enumerate(core_files):
                 remote_files[f"core files {index + 1}/{len(core_files)}"] = {
                     "source": core_files[hosts]["path"],
-                    "destination": os.path.join(self.job_results_dir, "latest", "stacktraces"),
+                    "destination": os.path.join(
+                        self.job_results_dir, "latest", self.RESULTS_DIRS[5]),
                     "pattern": core_files[hosts]["pattern"],
                     "hosts": NodeSet(hosts),
                     "depth": 1,
@@ -2346,6 +2528,51 @@ class Launch():
             logger.debug("  Skipping resetting server storage - no server hosts")
         return 0
 
+    def _cleanup_procs(self, test):
+        """Cleanup any processes left running on remote nodes.
+
+        Args:
+            test (TestInfo): the test information
+
+        Returns:
+            int: status code: 0 = success; 4096 if processes were found
+
+        """
+        any_found = False
+        hosts = test.host_info.all_hosts
+        logger.debug("-" * 80)
+        logger.debug("Cleaning up running processes after running %s", test)
+
+        proc_pattern = "|".join(PROCS_TO_CLEANUP)
+        logger.debug("Looking for running processes: %s", proc_pattern)
+        detected, running = stop_processes(logger, hosts, f"'{proc_pattern}'", force=True)
+        if running:
+            message = f"Failed to kill processes on {running}"
+            self._fail_test(self.result.tests[-1], "Process", message)
+        elif detected:
+            message = f"Running processes found on {detected}"
+            self._warn_test(self.result.tests[-1], "Process", message)
+
+        logger.debug("Looking for mount types: %s", " ".join(TYPES_TO_UNMOUNT))
+        # Use mount | grep instead of mount -t for better logging
+        grep_pattern = "|".join(f'type {_type}' for _type in TYPES_TO_UNMOUNT)
+        mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
+        mount_grep_result = run_remote(logger, hosts, mount_grep_cmd)
+        if mount_grep_result.passed_hosts:
+            any_found = True
+            logger.debug("Unmounting: %s", " ".join(TYPES_TO_UNMOUNT))
+            type_list = ",".join(TYPES_TO_UNMOUNT)
+            umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
+            umount_result = run_remote(logger, mount_grep_result.passed_hosts, umount_cmd)
+            if umount_result.failed_hosts:
+                message = f"Failed to unmount on {umount_result.failed_hosts}"
+                self._fail_test(self.result.tests[-1], "Process", message)
+            else:
+                message = f"Unexpected mounts on {mount_grep_result.passed_hosts}"
+                self._warn_test(self.result.tests[-1], "Process", message)
+
+        return 4096 if any_found else 0
+
     def _archive_files(self, summary, hosts, source, pattern, destination, depth, threshold,
                        timeout, test=None):
         """Archive the files from the source to the destination.
@@ -2510,7 +2737,7 @@ class Launch():
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
         result = run_remote(
-            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
+            logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2605,7 +2832,7 @@ class Launch():
             tmp_copy_dir = os.path.join(source, tmp_copy_dir)
             sudo_command = ""
 
-        # Create a temporary remote directory
+        # Create a temporary remote directory - should already exist, see _setup_test_directory()
         command = f"mkdir -p {tmp_copy_dir}"
         if not run_remote(logger, hosts, command).passed:
             message = f"Error creating temporary remote copy directory {tmp_copy_dir}"
@@ -2666,14 +2893,22 @@ class Launch():
             self._fail_test(self.result.tests[-1], "Process", message, sys.exc_info())
             return 256
 
+        if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
+            logger.debug(
+                "Skipping checking core file detection for %s as it is not supported on this OS",
+                str(test))
+            return 0
+
         if corefiles_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
             message = "One or more core files detected after test execution"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 2048
+
         if corefiles_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
             message = "No core files detected when expected"
             self._fail_test(self.result.tests[-1], "Process", message, None)
             return 256
+
         return 0
 
     def _rename_avocado_test_dir(self, test, jenkinslog):
@@ -2795,6 +3030,7 @@ class Launch():
             512: "ERROR: Failed to stop daos_server.service after one or more tests!",
             1024: "ERROR: Failed to rename logs and results after one or more tests!",
             2048: "ERROR: Core stack trace files detected!",
+            4096: "ERROR: Unexpected processes or mounts found running!"
         }
         for bit_code, error_message in bit_error_map.items():
             if status & bit_code == bit_code:
@@ -2849,6 +3085,11 @@ def main():
         "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
         "\t\twith the 'filter' in the device description. If generating automatic storage extra",
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
         "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
@@ -2872,10 +3113,6 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
-    parser.add_argument(
-        "-c", "--clean",
-        action="store_true",
-        help="remove daos log files from the test hosts prior to the test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -2932,7 +3169,8 @@ def main():
         action="store",
         help="Detect available disk options for replacing the devices specified in the server "
              "storage yaml configuration file. Supported options include:  auto[:filter], "
-             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",
@@ -2968,10 +3206,6 @@ def main():
         action="store_true",
         help="limit output to pass/fail")
     parser.add_argument(
-        "-ss", "--slurm_setup",
-        action="store_true",
-        help="setup any slurm partitions required by the tests")
-    parser.add_argument(
         "-sc", "--slurm_control_node",
         action="store",
         default=str(get_local_host()),
@@ -2979,9 +3213,29 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
-        "-u", "--user_create",
+        "-si", "--slurm_install",
         action="store_true",
-        help="create additional users defined by each test's yaml file")
+        help="enable installing slurm RPMs if required by the tests")
+    parser.add_argument(
+        "--scm_mount",
+        action="store",
+        default="/mnt/daos",
+        type=str,
+        help="the scm_mount base path to use in each server engine tier 0 storage config when "
+             "generating an automatic storage config (test yaml includes 'storage: auto'). The "
+             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.")
+    parser.add_argument(
+        "-ss", "--slurm_setup",
+        action="store_true",
+        help="enable setting up slurm partitions if required by the tests")
+    parser.add_argument(
+        "--scm_size",
+        action="store",
+        default=0,
+        type=int,
+        help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
+             "config when generating an automatic storage config (test yaml includes 'storage: "
+             "auto'). Set value to '0' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3012,6 +3266,10 @@ def main():
              "'--test_clients' argument is not specified, this list of hosts "
              "will also be used to replace client placeholders.")
     parser.add_argument(
+        "-u", "--user_create",
+        action="store_true",
+        help="create additional users defined by each test's yaml file")
+    parser.add_argument(
         "-v", "--verbose",
         action="count",
         default=0,
@@ -3024,15 +3282,19 @@ def main():
         help="directory in which to write the modified yaml files. A temporary "
              "directory - which only exists for the duration of the launch.py "
              "command - is used by default.")
+    parser.add_argument(
+        "-ye", "--yaml_extension",
+        action="store",
+        default=None,
+        help="extension used to run custom test yaml files. If a test yaml file "
+             "exists with the specified extension - e.g. dtx/basic.custom.yaml "
+             "for --yaml_extension=custom - this file will be used instead of the "
+             "standard test yaml file.")
     args = parser.parse_args()
-
-    # Setup the Launch object
-    launch = Launch(args.name, args.repeat, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
-        args.clean = True
         args.include_localhost = True
         args.jenkinslog = True
         args.process_cores = True
@@ -3040,8 +3302,12 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+
+    # Setup the Launch object
+    launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
 
     # Perform the steps defined by the arguments specified
     try:

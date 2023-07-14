@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -45,63 +47,72 @@ type PoolCmd struct {
 	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
+var (
+	// Default to 6% SCM:94% NVMe
+	defaultTierRatios = []float64{0.06, 0.94}
+)
+
 type tierRatioFlag struct {
 	ratios []float64
 }
 
-func (tr *tierRatioFlag) IsSet() bool {
-	return len(tr.ratios) > 0
+func (trf *tierRatioFlag) IsSet() bool {
+	return len(trf.ratios) > 0
 }
 
-func (tr tierRatioFlag) Ratios() []float64 {
-	if tr.IsSet() {
-		return tr.ratios
+func (trf tierRatioFlag) Ratios() []float64 {
+	if trf.IsSet() {
+		return trf.ratios
 	}
 
-	// Default to 6% SCM:94% NVMe
-	return []float64{0.06, 0.94}
+	return defaultTierRatios
 }
 
-func (tr tierRatioFlag) String() string {
+func (trf tierRatioFlag) String() string {
 	var ratioStrs []string
-	for _, ratio := range tr.Ratios() {
-		ratioStrs = append(ratioStrs, fmt.Sprintf("%.2f", ratio))
+	for _, ratio := range trf.Ratios() {
+		ratioStrs = append(ratioStrs, pretty.PrintTierRatio(ratio))
 	}
 	return strings.Join(ratioStrs, ",")
 }
 
-func (tr *tierRatioFlag) UnmarshalFlag(fv string) error {
+func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	if fv == "" {
 		return errors.New("no tier ratio specified")
 	}
 
-	var ratios []uint64
+	roundFloatTo := func(f float64, places int) float64 {
+		if f <= 0 && f >= 100 {
+			return f
+		}
+		shift := math.Pow(10, float64(places))
+		return math.Round(f*shift) / shift
+	}
+
 	for _, trStr := range strings.Split(fv, ",") {
-		trUint, err := strconv.ParseUint(strings.TrimSpace(trStr), 10, 64)
+		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
 		if err != nil {
 			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
 		}
-		ratios = append(ratios, trUint)
+		trf.ratios = append(trf.ratios, roundFloatTo(tr, 2)/100)
 	}
 
 	// Handle single tier ratio as a special case and fill
 	// second tier with remainder (-t 6 will assign 6% of total
 	// storage to tier0 and 94% to tier1).
-	if len(ratios) == 1 && ratios[0] < 100 {
-		ratios = append(ratios, 100-ratios[0])
+	if len(trf.ratios) == 1 && trf.ratios[0] < 1 {
+		trf.ratios = append(trf.ratios, 1-trf.ratios[0])
 	}
 
-	tr.ratios = make([]float64, len(ratios))
-	var totalRatios uint64
-	for tierIdx, ratio := range ratios {
-		if ratio > 100 {
+	var totalRatios float64
+	for _, ratio := range trf.ratios {
+		if ratio < 0 || ratio > 1 {
 			return errors.New("Storage tier ratio must be a value between 0-100")
 		}
 		totalRatios += ratio
-		tr.ratios[tierIdx] = float64(ratio) / 100
 	}
-	if totalRatios != 100 {
-		return errors.New("Storage tier ratios must add up to 100")
+	if math.Abs(totalRatios-1) > 0.01 {
+		return errors.Errorf("Storage tier ratios must add up to 100 (got %f)", totalRatios*100)
 	}
 
 	return nil
@@ -177,7 +188,7 @@ type PoolCreateCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	GroupName  ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
@@ -191,8 +202,8 @@ type PoolCreateCmd struct {
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
-		PoolLabel string `positional-arg-name:"<pool label>"`
-	} `positional-args:"yes" required:"1"`
+		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolCreateCmd subcommand is activated
@@ -299,8 +310,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -345,7 +356,7 @@ type PoolListCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
 	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
@@ -369,8 +380,8 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	var out, outErr strings.Builder
@@ -396,11 +407,11 @@ type poolCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool label or UUID>"`
-	} `positional-args:"yes" required:"1"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *poolCmd) PoolID() *PoolID {
@@ -588,8 +599,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -628,8 +639,8 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -669,8 +680,8 @@ type PoolSetPropCmd struct {
 	poolCmd
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>"`
-	} `positional-args:"yes" required:"1"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
+	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
@@ -693,8 +704,8 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	}
 
 	err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -721,8 +732,8 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.PoolGetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -750,8 +761,8 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 	req := &control.PoolGetACLReq{ID: cmd.PoolID().String()}
 
 	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -820,8 +831,8 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -868,8 +879,8 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -898,8 +909,8 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +11,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -27,7 +26,6 @@ class OSAOnlineExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
@@ -72,7 +70,7 @@ class OSAOnlineExtend(OSAUtils):
             pool[val] = add_pool(self, connect=False)
             pool[val].set_property("reclaim", "disabled")
 
-        # Extend the pool_uuid, rank and targets
+        # Extend the pool, rank and targets
         for val in range(0, num_pool):
             threads = []
             self.pool = pool[val]
@@ -110,13 +108,18 @@ class OSAOnlineExtend(OSAUtils):
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
+            # Get initial total free space (scm+nvme)
+            initial_free_space = self.pool.get_total_free_space(refresh=True)
             output = self.pool.extend(self.ranks)
             self.print_and_assert_on_rebuild_failure(output)
+            free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
             pver_extend = self.pool.get_version(True)
             self.log.info("Pool Version after extend %s", pver_extend)
             # Check pool version incremented after pool exclude
             self.assertTrue(pver_extend > pver_begin, "Pool Version Error:  After extend")
+            self.assertTrue(free_space_after_extend > initial_free_space,
+                            "Expected free space after extend is less than initial")
             # Wait to finish the threads
             for thrd in threads:
                 thrd.join()
@@ -140,10 +143,7 @@ class OSAOnlineExtend(OSAUtils):
             else:
                 break
             self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            self.container.check()
 
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751.

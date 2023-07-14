@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
+
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 from nvme_utils import ServerFillUp
 from test_utils_pool import add_pool
 from write_host_file import write_host_file
@@ -25,7 +25,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.ior_test_repetitions = self.params.get("pool_test_repetitions", '/run/pool_capacity/*')
@@ -94,6 +93,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.pool.get_version(True)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
+                # Get initial total free space (scm+nvme)
+                initial_free_space = self.pool.get_total_free_space(refresh=True)
                 if server_boot is False:
                     if (self.test_during_rebuild is True and index == 0):
                         # Exclude rank 5
@@ -124,11 +125,14 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
                 pver_exclude = self.pool.get_version(True)
                 self.log.info("Pool Version after exclude %s", pver_exclude)
+                free_space_after_exclude = self.pool.get_total_free_space(refresh=True)
                 # Check pool version incremented after pool exclude
                 # pver_exclude should be greater than
                 # pver_begin + 1 (1 target + exclude)
                 self.assertTrue(pver_exclude > (pver_begin + 1),
                                 "Pool Version Error: After exclude")
+                self.assertTrue(initial_free_space > free_space_after_exclude,
+                                "Expected free space after exclude is less than initial")
 
             # Reintegrate the ranks which was excluded
             self.log.info(
@@ -149,11 +153,13 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                         continue
                     output = self.pool.reintegrate(rank)
                 self.print_and_assert_on_rebuild_failure(output, timeout=15)
-
+                free_space_after_reintegration = self.pool.get_total_free_space(refresh=True)
                 pver_reint = self.pool.get_version(True)
                 self.log.info("Pool Version after reintegrate %d", pver_reint)
                 # Check pool version incremented after pool reintegrate
                 self.assertTrue(pver_reint > pver_exclude, "Pool Version Error:  After reintegrate")
+                self.assertTrue(free_space_after_reintegration > free_space_after_exclude,
+                                "Expected free space after reintegration is less than exclude")
 
             display_string = "{} space at the End".format(str(self.pool))
             self.pool.display_pool_daos_space(display_string)
@@ -169,10 +175,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
                     self.container = self.pool_cont_dict[self.pool][0]
-                    kwargs = {"pool": self.pool.uuid,
-                              "cont": self.container.uuid}
-                    output = self.daos_command.container_check(**kwargs)
-                    self.log.info(output)
+                    self.container.check()
 
     def test_osa_offline_reintegration_without_checksum(self):
         """Test ID: DAOS-6923.

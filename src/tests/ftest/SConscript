@@ -21,7 +21,8 @@ def scons():
             'object', 'osa', 'pool', 'rebuild', 'security',
             'server', 'soak', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness',
-            'telemetry', 'deployment', 'performance', 'scrubber']
+            'telemetry', 'deployment', 'performance',
+            'scrubber', 'vmd']
 
     for sub_dir in dirs:
         env.Install(os.path.join(ftest_install_dir, sub_dir), Glob(f'{sub_dir}/*.*'))

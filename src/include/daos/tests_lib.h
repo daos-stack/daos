@@ -14,16 +14,17 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_rc_equal(rc, expected_rc)				\
-	do {								\
-		if ((rc) == (expected_rc))				\
-			break;						\
-		print_message("Failure assert_rc_equal %s:%d "		\
-			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
-			      d_errstr(rc), rc,				\
-			      d_errstr(expected_rc), expected_rc);	\
-		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
-		assert_int_equal(rc, expected_rc);			\
+#define assert_rc_equal(rc, expected_rc)                                                           \
+	do {                                                                                       \
+		int __rc = (rc);                                                                   \
+		if (__rc == (expected_rc))                                                         \
+			break;                                                                     \
+		print_message("Failure assert_rc_equal %s:%d "                                     \
+			      "%s(%d) != %s(%d)\n",                                                \
+			      __FILE__, __LINE__, d_errstr(__rc), __rc, d_errstr(expected_rc),     \
+			      expected_rc);                                                        \
+		assert_string_equal(d_errstr(__rc), d_errstr(expected_rc));                        \
+		assert_int_equal(__rc, expected_rc);                                               \
 	} while (0)
 
 /** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
@@ -127,6 +128,17 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 void
 dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size);
+
+void
+dts_sgl_generate(d_sg_list_t *sgl, uint32_t iov_nr, daos_size_t data_size, uint8_t value);
+
+/** easily setup an iov with a string */
+static inline void
+dts_iov_alloc_str(d_iov_t *iov, const char *str)
+{
+	daos_iov_alloc(iov, strlen(str) + 1, true);
+	strcpy(iov->iov_buf, str);
+}
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -376,5 +388,27 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
 int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
 
 const char *daos_target_state_enum_to_str(int state);
+
+/* Used to easily setup data needed for tests */
+struct test_data {
+	d_sg_list_t		*td_sgls;
+	daos_iod_t		*td_iods;
+	daos_iom_t		*td_maps;
+	uint64_t		*td_sizes;
+	uint32_t		 td_iods_nr;
+	daos_key_t		 dkey;
+};
+
+struct td_init_args {
+	daos_iod_type_t ca_iod_types[10];
+	uint32_t        ca_recx_nr[10];
+	uint32_t        ca_data_size;
+};
+
+void td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args);
+void td_init_single_values(struct test_data *td, uint32_t iod_nr);
+void td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr,
+			  uint32_t data_size, uint32_t chunksize);
+void td_destroy(struct test_data *td);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

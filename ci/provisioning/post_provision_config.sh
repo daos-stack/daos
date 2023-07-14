@@ -5,7 +5,7 @@ set -eux
 export PS4='+ ${HOSTNAME%%.*}:${BASH_SOURCE:+$BASH_SOURCE:}$LINENO:${FUNCNAME:+$FUNCNAME():} '
 
 rm -f ci_key*
-ssh-keygen -N "" -f ci_key
+ssh-keygen -m PEM -N "" -f ci_key
 cat << "EOF" > ci_key_ssh_config
 host wolf-*
     CheckHostIp no

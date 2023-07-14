@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -193,6 +193,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			iv_prop->pip_upgrade_status = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			iv_prop->pip_perf_domain = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_PO_SCRUB_MODE:
 			iv_prop->pip_scrub_mode = prop_entry->dpe_val;
 			break;
@@ -205,6 +208,15 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			iv_prop->pip_svc_redun_fac = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			iv_prop->pip_checkpoint_mode = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			iv_prop->pip_checkpoint_freq = prop_entry->dpe_val;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			iv_prop->pip_checkpoint_thresh = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -215,17 +227,12 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 static int
 pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 {
-	struct daos_prop_entry	*prop_entry;
-	struct daos_acl		*acl;
-	void			*label_alloc = NULL;
-	void			*owner_alloc = NULL;
-	void			*owner_grp_alloc = NULL;
-	void			*acl_alloc = NULL;
-	void			*policy_str_alloc = NULL;
-	d_rank_list_t		*svc_list = NULL;
-	d_rank_list_t		*dst_list;
-	int			i;
-	int			rc = 0;
+	struct daos_prop_entry *prop_entry;
+	struct daos_acl        *acl;
+	d_rank_list_t          *svc_list;
+	d_rank_list_t          *dst_list;
+	int                     i;
+	int                     rc = 0;
 
 	D_ASSERT(prop->dpp_nr == DAOS_PROP_PO_NUM);
 	for (i = 0; i < DAOS_PROP_PO_NUM; i++) {
@@ -239,7 +246,6 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				  DAOS_PROP_LABEL_MAX_LEN);
 			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			label_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
@@ -248,7 +254,6 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
 			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-			owner_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
@@ -289,10 +294,8 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			acl = iv_prop->pip_acl;
 			if (acl->dal_len > 0) {
 				D_ASSERT(daos_acl_validate(acl) == 0);
-				acl_alloc = daos_acl_dup(acl);
-				if (acl_alloc != NULL)
-					prop_entry->dpe_val_ptr = acl_alloc;
-				else
+				prop_entry->dpe_val_ptr = daos_acl_dup(acl);
+				if (prop_entry->dpe_val_ptr == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 			} else {
 				prop_entry->dpe_val_ptr = NULL;
@@ -322,9 +325,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_PROP_POLICYSTR_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_policy_str,
 				  DAOS_PROP_POLICYSTR_MAX_LEN);
-			if (prop_entry->dpe_str)
-				policy_str_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			break;
 		case DAOS_PROP_PO_GLOBAL_VERSION:
@@ -336,8 +337,20 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			prop_entry->dpe_val = iv_prop->pip_upgrade_status;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			prop_entry->dpe_val = iv_prop->pip_perf_domain;
+			break;
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			prop_entry->dpe_val = iv_prop->pip_svc_redun_fac;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_mode;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_freq;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			prop_entry->dpe_val = iv_prop->pip_checkpoint_thresh;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
@@ -346,17 +359,6 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 	}
 
 out:
-	if (rc) {
-		if (acl_alloc)
-			daos_acl_free(acl_alloc);
-		D_FREE(label_alloc);
-		D_FREE(owner_alloc);
-		D_FREE(owner_grp_alloc);
-		if (svc_list)
-			d_rank_list_free(dst_list);
-		if (policy_str_alloc)
-			D_FREE(policy_str_alloc);
-	}
 	return rc;
 }
 
@@ -691,11 +693,10 @@ pool_iv_map_ent_update(d_sg_list_t *dst_sgl, struct pool_iv_entry *src_iv)
 }
 
 static int
-pool_iv_prop_ent_copy(struct pool_iv_entry *dst_iv,
-		      struct pool_iv_entry *src_iv)
+pool_iv_prop_ent_copy(struct pool_iv_entry *dst_iv, struct pool_iv_entry *src_iv)
 {
-	daos_prop_t	*prop_fetch;
-	int		rc = 0;
+	daos_prop_t *prop_fetch;
+	int          rc;
 
 	prop_fetch = daos_prop_alloc(DAOS_PROP_PO_NUM);
 	if (prop_fetch == NULL)
@@ -703,12 +704,12 @@ pool_iv_prop_ent_copy(struct pool_iv_entry *dst_iv,
 
 	rc = pool_iv_prop_g2l(&src_iv->piv_prop, prop_fetch);
 	if (rc) {
-		daos_prop_free(prop_fetch);
-		D_ERROR("prop g2l failed: rc %d\n", rc);
-		return rc;
+		D_ERROR("pool_iv_prop_g2l failed: " DF_RC "\n", DP_RC(rc));
+		goto out;
 	}
 
 	pool_iv_prop_l2g(prop_fetch, &dst_iv->piv_prop);
+out:
 	daos_prop_free(prop_fetch);
 
 	return rc;
@@ -847,9 +848,16 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			D_GOTO(out_put, rc);
 	}
 
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
+
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1002,9 +1010,15 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 
 update_iv_cache:
-	rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-	if (rc == 0)
-		ent_pool_key->pik_eph = pool_key->pik_eph;
+	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
+	 * connective operation, so it need check sp_stopping again before
+	 * pool_iv_ent_copy, in case the entry has been destroyed.
+	 */
+	if (!pool->sp_stopping) {
+		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
+		if (rc == 0 && pool_key->pik_eph != 0)
+			ent_pool_key->pik_eph = pool_key->pik_eph;
+	}
 out_put:
 	D_DEBUG(DB_MD, DF_UUID": key %u rc %d\n",
 		DP_UUID(entry->ns->iv_pool_uuid), key->class_id, rc);
@@ -1649,8 +1663,7 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 
 out:
 	D_FREE(iv_entry);
-	if (prop_fetch)
-		daos_prop_free(prop_fetch);
+	daos_prop_free(prop_fetch);
 	return rc;
 }
 

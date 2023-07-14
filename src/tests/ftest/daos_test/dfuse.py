@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,32 +14,26 @@ from job_manager_utils import get_job_manager
 
 
 class DaosCoreTestDfuse(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Runs DAOS DFuse tests.
 
     :avocado: recursive
     """
 
-    def test_daos_dfuse_unit(self):
+    def run_test(self, il_lib=None):
         """
-
         Test Description: Run dfuse_test to check correctness.
 
         Use cases:
-            DAOS DFuse unit tests
-
-        :avocado: tags=all,pr,daily_regression
-        :avocado: tags=vm
-        :avocado: tags=dfuse,dfuse_test
-        :avocado: tags=dfuse_unit,test_daos_dfuse_unit
+            DAOS DFuse unit tests with an interception library
         """
+        if il_lib is None:
+            self.fail('il_lib is not defined.')
+
         self.daos_test = os.path.join(self.bin, 'dfuse_test')
 
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
         self.add_container(self.pool)
-
-        daos_cmd = self.get_daos_command()
 
         cont_attrs = OrderedDict()
 
@@ -76,9 +70,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             self.fail('Invalid cache_mode: {}'.format(cache_mode))
 
         if use_dfuse:
-            for key, value in cont_attrs.items():
-                daos_cmd.container_set_attr(pool=self.pool.uuid, cont=self.container.uuid,
-                                            attr=key, val=value)
+            self.container.set_attr(attrs=cont_attrs)
 
             self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
@@ -93,8 +85,9 @@ class DaosCoreTestDfuse(DfuseTestBase):
         daos_test_env = cmocka_utils.get_cmocka_env()
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:
-            daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
-            daos_test_env['D_LOG_FILE'] = get_log_file('daos-il.log')
+            daos_test_env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', il_lib)
+            daos_test_env['D_LOG_FILE'] = get_log_file(
+                'daos-' + il_lib.replace(".so", "").replace("lib", "") + '.log')
             daos_test_env['DD_MASK'] = 'all'
             daos_test_env['DD_SUBSYS'] = 'all'
             daos_test_env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
@@ -110,3 +103,31 @@ class DaosCoreTestDfuse(DfuseTestBase):
         cmocka_utils.run_cmocka_test(self, job)
         if not job.result.passed:
             self.fail(f'Error running {job.command} on {job.hosts}')
+
+    def test_daos_dfuse_unit_ioil(self):
+        """
+        Test Description: Run dfuse_test to check correctness.
+
+        Use cases:
+            DAOS DFuse unit tests with an interception library
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_test,daos_cmd
+        :avocado: tags=DaosCoreTestDfuse,dfuse_unit,test_daos_dfuse_unit_ioil
+        """
+        self.run_test(il_lib='libioil.so')
+
+    def test_daos_dfuse_unit_pil4dfs(self):
+        """
+        Test Description: Run dfuse_test to check correctness.
+
+        Use cases:
+            DAOS DFuse unit tests with an interception library
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=dfuse,dfuse_test,daos_cmd,pil4dfs
+        :avocado: tags=DaosCoreTestDfuse,dfuse_unit,test_daos_dfuse_unit_pil4dfs
+        """
+        self.run_test(il_lib='libpil4dfs.so')

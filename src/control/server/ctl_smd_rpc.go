@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	uuid "github.com/google/uuid"
@@ -78,27 +77,6 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 					rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
 					found = true
 					break
-				}
-			}
-			if !found {
-				rResp.Devices = nil
-			}
-		}
-
-		if req.Target != "" {
-			reqTgtID, err := strconv.ParseInt(req.Target, 10, 32)
-			if err != nil {
-				return errors.Errorf("invalid target idx %q", req.Target)
-			}
-
-			found := false
-			for _, dev := range rResp.Devices {
-				for _, tgtID := range dev.Details.TgtIds {
-					if int32(reqTgtID) == tgtID {
-						rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
-						found = true
-						break
-					}
 				}
 			}
 			if !found {
@@ -201,9 +179,6 @@ func (svc *ControlService) SmdQuery(ctx context.Context, req *ctlpb.SmdQueryReq)
 	if req.Uuid != "" && (!req.OmitDevices && !req.OmitPools) {
 		return nil, errors.New("UUID is ambiguous when querying both pools and devices")
 	}
-	if req.Target != "" && req.Rank == uint32(ranklist.NilRank) {
-		return nil, errors.New("Target is invalid without Rank")
-	}
 
 	resp := new(ctlpb.SmdQueryResp)
 	if !req.OmitDevices {
@@ -263,7 +238,7 @@ type devID struct {
 	uuid   string
 }
 
-type engineDevMap map[*Engine][]devID
+type engineDevMap map[Engine][]devID
 
 // Map requested device IDs provided in comma-separated string to the engine that controls the given
 // device. Device can be identified either by UUID or transport (PCI) address.
@@ -283,14 +258,14 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 	edm := make(engineDevMap)
 
 	for _, rr := range resp.Ranks {
-		eis, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rr.Rank))
+		engines, err := svc.harness.FilterInstancesByRankSet(fmt.Sprintf("%d", rr.Rank))
 		if err != nil {
 			return nil, err
 		}
-		if len(eis) == 0 {
+		if len(engines) == 0 {
 			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
 		}
-		eisPtr := &eis[0]
+		engine := engines[0]
 		for _, dev := range rr.Devices {
 			if dev == nil {
 				return nil, errors.New("nil device in smd query resp")
@@ -307,7 +282,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 				if trAddrs[dds.TrAddr] || uuidMatch {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm[eisPtr] = append(edm[eisPtr], devID{trAddr: dds.TrAddr})
+					edm[engine] = append(edm[engine], devID{trAddr: dds.TrAddr})
 					delete(trAddrs, dds.TrAddr)
 					delete(devUUIDs, dds.Uuid)
 					continue
@@ -316,7 +291,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 
 			if uuidMatch {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm[eisPtr] = append(edm[eisPtr], devID{uuid: dds.Uuid})
+				edm[engine] = append(edm[engine], devID{uuid: dds.Uuid})
 				delete(devUUIDs, dds.Uuid)
 			}
 		}
@@ -331,8 +306,14 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 	return edm, nil
 }
 
-func sendManageReq(c context.Context, e *Engine, m drpc.Method, b proto.Message) (*ctlpb.SmdManageResp_Result, error) {
-	dResp, err := (*e).CallDrpc(c, m, b)
+func sendManageReq(c context.Context, e Engine, m drpc.Method, b proto.Message) (*ctlpb.SmdManageResp_Result, error) {
+	if !e.IsReady() {
+		return &ctlpb.SmdManageResp_Result{
+			Status: daos.Unreachable.Int32(),
+		}, nil
+	}
+
+	dResp, err := e.CallDrpc(c, m, b)
 	if err != nil {
 		return nil, errors.Wrap(err, "call drpc")
 	}
@@ -397,7 +378,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 	for engine, devs := range engineDevMap {
 		devResults := []*ctlpb.SmdManageResp_Result{}
 
-		rank, err := (*engine).GetRank()
+		rank, err := engine.GetRank()
 		if err != nil {
 			return nil, errors.Wrap(err, "retrieving engine rank")
 		}

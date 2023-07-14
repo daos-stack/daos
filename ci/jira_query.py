@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import time
 import urllib
 import random
 import string
@@ -26,8 +27,8 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury', 'swim',
-                    'test', 'tools')
+VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury',
+                    'packaging', 'pil4dfs', 'swim', 'test', 'tools')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -73,8 +74,18 @@ def fetch_pr_data():
         github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
         gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
-        with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
-            pr_data = json.loads(raw_pr_data.read())
+        # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
+        # while and re-try once.
+        try:
+            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                pr_data = json.loads(raw_pr_data.read())
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                time.sleep(60 * 10)
+                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                    pr_data = json.loads(raw_pr_data.read())
+            else:
+                raise
     else:
         print('Pass PR number on command line')
         sys.exit(1)
@@ -85,12 +96,19 @@ def fetch_pr_data():
 
 def main():
     """Run the script"""
+    # pylint: disable=too-many-branches
     pr_data = fetch_pr_data()
 
     priority = None
     errors = []
-    gh_label = []
+    gh_label = set()
     pr_title = pr_data['title']
+
+    # Revert PRs can be auto-generated, detect and handle this, as well as
+    # marking them a priority.
+    if pr_title.startswith('Revert "'):
+        pr_title = pr_title[8:-1]
+        priority = 2
 
     parts = pr_title.split(' ')
     ticket_number = parts[0]
@@ -130,8 +148,8 @@ def main():
         set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
-    print(ticket.fields.summary)
-    print(ticket.fields.status)
+    print(f'Ticket summary: {ticket.fields.summary}')
+    print(f'Ticket status: {ticket.fields.status}')
 
     # Highest priority, tickets with "Approved to Merge" set.
     if ticket.fields.customfield_10044:
@@ -153,9 +171,9 @@ def main():
                 rv_priority = 3
 
             if str(version) in ('2.2 Community Release'):
-                gh_label.append('release-2.2')
+                gh_label.add('release-2.2')
             if str(version) in ('2.4 Community Release'):
-                gh_label.append('release-2.4')
+                gh_label.add('release-2.4')
 
         # If a PR does not otherwise have priority then use custom values from above.
         if priority is None and not pr_data['base']['ref'].startswith('release'):
@@ -172,7 +190,7 @@ def main():
 
     if priority is not None:
         output.append(f'Job should run at elevated priority ({priority})')
-        gh_label.append('priority')
+        gh_label.add('priority')
 
     if errors:
         output.append(f'Errors are {",".join(errors)}')
@@ -182,7 +200,7 @@ def main():
     set_output('message', '\n'.join(output))
 
     if gh_label:
-        set_output('label', '\n'.join(gh_label))
+        set_output('label', '\n'.join(sorted(gh_label)))
 
     # Remove all managed labels which are not to be set.
     to_remove = []

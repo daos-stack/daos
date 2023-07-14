@@ -117,15 +117,17 @@ class IorTestBase(DfuseTestBase):
             self.update_ior_cmd_with_pool(create_cont)
 
         # start dfuse if api is POSIX or HDF5 with vol connector
-        if self.ior_cmd.api.value == "POSIX" or plugin_path:
-            # add a substring in case of HDF5-VOL
+        if (self.ior_cmd.api.value == "POSIX" or plugin_path) and not self.dfuse:
+            # Initialize dfuse instance
+            self.load_dfuse(self.hostlist_clients)
+            # Default mount_dir to value in dfuse instance
+            mount_dir = mount_dir or self.dfuse.mount_dir.value
+            # Add a substring in case of HDF5-VOL
             if plugin_path:
                 sub_dir = get_random_string(5)
                 mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
-            if not self.dfuse:
-                params = {'mount_dir': mount_dir} if mount_dir else {}
-                self.start_dfuse(self.hostlist_clients, self.pool, self.container, **params)
+            self.start_dfuse(self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:

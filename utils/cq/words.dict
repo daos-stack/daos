@@ -162,12 +162,14 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
 env
 environ
 epcrange
+epilog
 errored
 ethernet
 fchmod
@@ -177,7 +179,6 @@ filesystem
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -202,6 +203,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -321,6 +323,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -338,6 +341,7 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
 puuid
@@ -353,6 +357,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor
@@ -382,7 +388,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src

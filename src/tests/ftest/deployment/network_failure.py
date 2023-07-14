@@ -64,9 +64,8 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.test_file.update(os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
             test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
@@ -413,7 +412,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 

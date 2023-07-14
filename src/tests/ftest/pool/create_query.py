@@ -3,11 +3,11 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from pool_test_base import PoolTestBase
+from apricot import TestWithServers
+from test_utils_pool import add_pool
 
 
-class PoolCreateQueryTests(PoolTestBase):
-    # pylint: disable=too-many-ancestors
+class PoolCreateQueryTests(TestWithServers):
     """Pool create tests.
 
     All of the tests verify pool create response with 4 servers.
@@ -15,6 +15,12 @@ class PoolCreateQueryTests(PoolTestBase):
 
     :avocado: recursive
     """
+
+    def setUp(self):
+        """Set up each test case."""
+        # Create test-case-specific DAOS log files
+        self.update_log_file_names()
+        super().setUp()
 
     def test_create_and_query(self):
         """JIRA ID: DAOS-10339
@@ -25,33 +31,33 @@ class PoolCreateQueryTests(PoolTestBase):
             pool create.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=pool_create_and_query,test_create_and_query
+        :avocado: tags=PoolCreateQueryTests,test_create_and_query
         """
         # Create pool
-        self.add_pool()
+        pool = add_pool(self)
         epsilon_bytes = 1 << 20  # 1 MiB
         self.assertLessEqual(
-            abs(self.pool.scm_per_rank - self.pool.scm_size.value), epsilon_bytes,
+            abs(pool.scm_per_rank - pool.scm_size.value), epsilon_bytes,
             "SCM size of the pool created too different from the given size")
         self.assertGreaterEqual(
-            self.pool.scm_per_rank, self.pool.scm_size.value,
+            pool.scm_per_rank, pool.scm_size.value,
             "SCM size of the pool created should be at least "
             "greater than or equal to the given size")
         self.assertLessEqual(
-            abs(self.pool.nvme_per_rank - self.pool.nvme_size.value), epsilon_bytes,
+            abs(pool.nvme_per_rank - pool.nvme_size.value), epsilon_bytes,
             "NVMe size of the pool created too different from the given size")
 
         # Query pool created
-        resp = self.dmg.pool_query(self.pool.identifier, show_enabled=True)["response"]
+        resp = self.get_dmg_command().pool_query(pool.identifier, show_enabled=True)["response"]
         nb_ranks = len(resp["enabled_ranks"])
         tier_stats = resp["tier_stats"]
         self.assertEqual("SCM", tier_stats[0]["media_type"].upper(), "Unexpected tier media type")
         self.assertEqual("NVME", tier_stats[1]["media_type"].upper(), "Unexpected tier media type")
         self.assertEqual(
-            self.pool.scm_per_rank * nb_ranks, tier_stats[0]["total"],
+            pool.scm_per_rank * nb_ranks, tier_stats[0]["total"],
             "SCM size of the pool created not coherent")
         self.assertEqual(
-            self.pool.nvme_per_rank * nb_ranks, tier_stats[1]["total"],
+            pool.nvme_per_rank * nb_ranks, tier_stats[1]["total"],
             "NVMe size of the pool created not coherent")

@@ -8,7 +8,6 @@ from mdtest_test_base import MdtestBase
 
 
 class MdtestSmall(MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify MDTest functionality with various configurations.
 
     :avocado: recursive
@@ -24,9 +23,9 @@ class MdtestSmall(MdtestBase):
             Run MDTest with various APIs and configurations.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=mdtest,checksum,dfs,dfuse
-        :avocado: tags=mdtest_small,test_mdtest_small
+        :avocado: tags=MdtestSmall,test_mdtest_small
         """
         mdtest_params = self.params.get("mdtest_params", "/run/mdtest/*")
         self.run_mdtest_multiple_variants(mdtest_params)

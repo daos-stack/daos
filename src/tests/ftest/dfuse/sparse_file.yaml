@@ -15,9 +15,6 @@ pool:
   scm_size: 200000000
   nvme_size: 1073741824
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"

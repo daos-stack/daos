@@ -26,6 +26,10 @@ func (ds Status) Error() string {
 	return fmt.Sprintf("%s(%d): %s", dErrStr, ds, dErrDesc)
 }
 
+func (ds Status) Int32() int32 {
+	return int32(ds)
+}
+
 const (
 	// Success indicates no error
 	Success Status = 0
@@ -150,4 +154,8 @@ const (
 	ChecksumError Status = -C.DER_CSUM
 	// ControlIncompatible indicates that one or more control plane components are incompatible
 	ControlIncompatible Status = -C.DER_CONTROL_INCOMPAT
+	// NoCert indicates that one or more configured certificates could not be accessed.
+	NoCert Status = -C.DER_NO_CERT
+	// BadCert indicates that an invalid certificate was detected.
+	BadCert Status = -C.DER_BAD_CERT
 )

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,11 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
+#if BUILD_PIPELINE
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
+#else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
+#endif
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -260,6 +264,8 @@ dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 	/* at most 2 helper XS per target */
 	if (dss_tgt_offload_xs_nr > 2 * nr)
 		dss_tgt_offload_xs_nr = 2 * nr;
+	else if (dss_tgt_offload_xs_nr == 0)
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 
 	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
 	 * offload XS. Calculate the tgt_nr as the number of main XS based
@@ -342,8 +348,7 @@ dss_topo_init()
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -762,22 +767,23 @@ server_init(int argc, char *argv[])
 	hlc_recovery_end(bound);
 	dss_set_start_epoch();
 
+	/* init nvme */
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_nvme_init, rc);
 	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -794,11 +800,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	rc = dss_module_setup_all();
-	if (rc != 0)
-		goto exit_init_state;
-	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)
@@ -831,6 +832,8 @@ exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
 	dss_srv_fini(true);
+exit_nvme_init:
+	bio_nvme_fini();
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
@@ -883,6 +886,8 @@ server_fini(bool force)
 	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	bio_nvme_fini();
+	D_INFO("bio_nvme_fini() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
 	dss_module_unload_all();
@@ -1062,8 +1067,8 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
-				printf("Requires 1 or 2 tiers\n");
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 4) {
+				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
 			break;

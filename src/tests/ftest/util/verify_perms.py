@@ -102,7 +102,8 @@ def _delete(path):
         os.remove(path)
 
 
-def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mode='simple'):
+def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mode='simple',
+           do_chmod=True):
     '''Verify rwx permissions.
 
     Args:
@@ -114,6 +115,8 @@ def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mod
         other_user (str, optional): user to verify "other" permissions for. Defaults to None
         verify_mode (str, optional): mode of permission checks. Either 'simple' or 'real'.
             Default is 'simple'.
+        do_chmod (bool, optional): whether to chmod the entry before verifying permissions.
+            Must be True when verifying multiple permission sets. Default is True.
 
     Raises:
         ValueError: on invalid input
@@ -125,6 +128,8 @@ def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mod
     if verify_mode not in ('simple', 'real'):
         raise ValueError(f'Invalid verify_mode: {verify_mode}')
     parsed_perms = _parse_perms(perms)
+    if not do_chmod and len(parsed_perms) > 1:
+        raise ValueError('do_chmod must be True when verifying multiple permission sets')
 
     # Map each user to their uid and gid
     owner_uid_gid = get_user_uid_gid(owner)
@@ -145,7 +150,8 @@ def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mod
     for perm in parsed_perms:
         # chmod as the owner
         logger.info('  with perms %s', perm)
-        _as_user(owner_uid_gid, os.chmod, path, int(perm, base=8))
+        if do_chmod:
+            _as_user(owner_uid_gid, os.chmod, path, int(perm, base=8))
 
         # verify as owner
         logger.info('    as user %s, perm %s', owner, perm[0])
@@ -437,6 +443,10 @@ def main():
         '-c', '--create-type',
         choices=['file', 'dir'],
         help='create the path if non-existent')
+    parser.add_argument(
+        '-nc', '--no-chmod',
+        action='store_true',
+        help='do not chmod the entry before verifying permissions')
     args = parser.parse_args()
 
     # Conditionally create the file/dir
@@ -444,7 +454,9 @@ def main():
         create(args.path, args.create_type, args.owner)
 
     # Run the verification
-    verify(args.path, args.perms, args.owner, args.group_user, args.other_user, args.verify_mode)
+    verify(
+        args.path, args.perms, args.owner, args.group_user, args.other_user, args.verify_mode,
+        not args.no_chmod)
 
     # Delete if we created
     if args.create_type:

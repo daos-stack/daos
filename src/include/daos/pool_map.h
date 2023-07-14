@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +33,7 @@ typedef enum pool_comp_type {
 	PO_COMP_TP_RANK		= 1, /** reserved, hard-coded */
 	PO_COMP_TP_MIN		= 2, /** first user-defined domain */
 	PO_COMP_TP_NODE		= 2, /** for test only */
+	PO_COMP_TP_GRP		= 3, /** group, commonly used for performance domain */
 	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
 	PO_COMP_TP_ROOT		= 255,
 	PO_COMP_TP_END		= 256,
@@ -359,6 +360,12 @@ pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
 	return tgt->ta_comp.co_status & allow_status;
 }
 
+static inline bool
+pool_target_is_up_or_drain(struct pool_target *tgt)
+{
+	return tgt->ta_comp.co_status & (PO_COMP_ST_UP | PO_COMP_ST_DRAIN);
+}
+
 /** Check if the target is in PO_COMP_ST_DOWN status */
 static inline bool
 pool_target_down(struct pool_target *tgt)
@@ -384,9 +391,11 @@ pool_comp_name(struct pool_component *comp)
 }
 
 bool
-is_pool_map_adding(struct pool_map *map, uint32_t version);
+is_pool_map_adding(struct pool_map *map);
 void
 pool_map_init_in_fseq(struct pool_map *map);
+int
+pool_map_failure_domain_level(struct pool_map *map, uint32_t level);
 
 #define pool_target_name(target)	pool_comp_name(&(target)->ta_comp)
 #define pool_domain_name(domain)	pool_comp_name(&(domain)->do_comp)

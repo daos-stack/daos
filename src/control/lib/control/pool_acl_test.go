@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -57,9 +56,11 @@ func TestControl_PoolGetACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolGetACLReq{
@@ -77,7 +78,7 @@ func TestControl_PoolGetACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetACL(ctx, mi, tc.req)
@@ -129,9 +130,11 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolOverwriteACLReq{
@@ -150,7 +153,7 @@ func TestControl_PoolOverwriteACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolOverwriteACL(ctx, mi, tc.req)
@@ -202,9 +205,11 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
-					ACL:        MockACL.Entries,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+						Entries:    MockACL.Entries,
+					},
 				}),
 			},
 			req: &PoolUpdateACLReq{
@@ -223,7 +228,7 @@ func TestControl_PoolUpdateACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolUpdateACL(ctx, mi, tc.req)
@@ -277,8 +282,10 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 		"success": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("", nil, &mgmtpb.ACLResp{
-					OwnerUser:  MockACL.Owner,
-					OwnerGroup: MockACL.OwnerGroup,
+					Acl: &mgmtpb.AccessControlList{
+						OwnerUser:  MockACL.Owner,
+						OwnerGroup: MockACL.OwnerGroup,
+					},
 				}),
 			},
 			req: &PoolDeleteACLReq{
@@ -302,7 +309,7 @@ func TestControl_PoolDeleteACL(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolDeleteACL(ctx, mi, tc.req)

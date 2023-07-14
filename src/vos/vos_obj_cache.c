@@ -22,8 +22,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <inttypes.h>
-#include <vos_obj.h>
-#include <vos_internal.h>
+#include "vos_obj.h"
+#include "vos_internal.h"
 #include <daos_errno.h>
 
 /**
@@ -190,12 +190,12 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 }
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
 struct daos_lru_cache *
-vos_obj_cache_current(void)
+vos_obj_cache_current(bool standalone)
 {
-	return vos_obj_cache_get();
+	return vos_obj_cache_get(standalone);
 }
 
 static __thread struct vos_object	 obj_local = {0};
@@ -415,7 +415,8 @@ check_object:
 	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    bound, NULL, NULL, &obj->obj_ilog_info);
+				    bound, false, /* has_cond: no object level condition. */
+				    NULL, NULL, &obj->obj_ilog_info);
 		if (rc != 0) {
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))
@@ -466,7 +467,7 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    vos_dth_get() != NULL &&
+	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL &&
 	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the

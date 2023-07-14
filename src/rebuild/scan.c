@@ -66,14 +66,14 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	shards[count] = obj_val->shard;
 	arg->count++;
 
-	rc = dbtree_iter_delete(ih, NULL);
-	if (rc != 0)
-		return rc;
-
 	D_DEBUG(DB_REBUILD, "send oid/con "DF_UOID"/"DF_UUID" ephs "DF_U64
 		"shard %d cnt %d tgt_id %d\n", DP_UOID(oids[count]),
 		DP_UUID(arg->cont_uuid), obj_val->eph, shards[count],
 		arg->count, arg->tgt_id);
+
+	rc = dbtree_iter_delete(ih, NULL);
+	if (rc != 0)
+		return rc;
 
 	/* re-probe the dbtree after delete */
 	rc = dbtree_iter_probe(ih, BTR_PROBE_FIRST, DAOS_INTENT_MIGRATION, NULL,
@@ -435,7 +435,7 @@ find_rebuild_shards(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 
 retry:
 	switch (rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 		rc = pl_obj_find_rebuild(map, gl_layout_ver, md, NULL, rebuild_ver,
 					 *tgts, *shards, max_shards_size);
 		break;
@@ -512,15 +512,35 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 	 * still includes the current rank. If not, the object can be
 	 * deleted/reclaimed because it is no longer reachable
 	 */
-	rc = pl_obj_place(map, layout_ver, md, DAOS_OO_RO, -1, NULL, &layout);
+	rc = pl_obj_place(map, oid.id_layout_ver, md, DAOS_OO_RO, NULL, &layout);
 	if (rc != 0)
 		return rc;
 
-	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank, mytarget,
-					      oid.id_shard);
+	/* If there are further targets failure during reintegration/extend/drain,
+	 * rebuild will choose replacement targets for the impacted objects anyway,
+	 * so we do not need reclaim these impacted shards by @ignore_rebuild_shard.
+	 */
+	still_needed = pl_obj_layout_contains(rpt->rt_pool->sp_map, layout, myrank,
+					      mytarget, oid.id_shard,
+					      rpt->rt_rebuild_op == RB_OP_RECLAIM ? false : true);
 	pl_obj_layout_free(layout);
-	if (still_needed && new_layout_ver <= oid.id_layout_ver)
+	if (still_needed) {
+		if (new_layout_ver > 0) {
+			/* upgrade job reclaim */
+			if (rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
+				if (oid.id_layout_ver == new_layout_ver) {
+					*acts |= VOS_ITER_CB_DELETE;
+					vos_obj_delete_ent(param->ip_hdl, oid);
+				}
+			} else {
+				if (oid.id_layout_ver < new_layout_ver) {
+					*acts |= VOS_ITER_CB_DELETE;
+					vos_obj_delete_ent(param->ip_hdl, oid);
+				}
+			}
+		}
 		return 0;
+	}
 
 	D_DEBUG(DB_REBUILD, "deleting stale object "DF_UOID" rank %u tgt %u oid layout %u/%u",
 		DP_UOID(oid), myrank, mytarget, oid.id_layout_ver, new_layout_ver);
@@ -698,10 +718,11 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
+	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
-	case RB_OP_FAIL:
+	case RB_OP_EXCLUDE:
 	case RB_OP_DRAIN:
 	case RB_OP_REINT:
 	case RB_OP_EXTEND:
@@ -716,8 +737,18 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 				 &md, rpt, myrank, oid, param, acts);
 		break;
 	case RB_OP_UPGRADE:
-		rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
-				     arg->co_props.dcp_obj_version, &md, tgts, shards);
+		if (oid.id_layout_ver < rpt->rt_new_layout_ver) {
+			rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
+					     arg->co_props.dcp_obj_version, &md,
+					     tgts, shards, LOCAL_ARRAY_SIZE);
+			/* Then only upgrade the layout version */
+			if (rc == 0) {
+				rc = vos_obj_layout_upgrade(param->ip_hdl, oid,
+							    rpt->rt_new_layout_ver);
+				if (rc == 0)
+					*acts |= VOS_ITER_CB_DELETE;
+			}
+		}
 		break;
 	default:
 		D_ASSERT(0);
@@ -729,6 +760,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
@@ -894,7 +926,7 @@ rebuild_scanner(void *data)
 				      PO_COMP_ST_NEW) ||
 	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
 	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
-		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
+		D_DEBUG(DB_REBUILD, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
 		D_GOTO(out, rc = 0);
 	}
 
@@ -974,13 +1006,21 @@ rebuild_scan_leader(void *data)
 
 	/* Wait for dtx resync to finish */
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+		if (!rpt->rt_abort && !rpt->rt_finishing) {
+			ABT_mutex_lock(rpt->rt_lock);
+			ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			ABT_mutex_unlock(rpt->rt_lock);
+		}
 		if (rpt->rt_abort || rpt->rt_finishing) {
 			D_INFO("shutdown rebuild "DF_UUID": "DF_RC"\n",
 			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
-		dss_sleep(2 * 1000);
+
 	}
+
+	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
+		DP_UUID(rpt->rt_pool_uuid));
 
 	rc = dss_thread_collective(rebuild_scanner, rpt, DSS_ULT_DEEP_STACK);
 	if (rc)

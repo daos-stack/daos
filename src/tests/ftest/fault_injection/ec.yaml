@@ -25,8 +25,7 @@ server_config:
       storage: auto
 pool:
   control_method: dmg
-  scm_size: 50%
-  nvme_size: 93%
+  size: 93%
   properties: ec_cell_sz:64KiB
 container:
   type: POSIX

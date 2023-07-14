@@ -189,8 +189,7 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 
 	shmid = shmget(key, size, flags);
 	if (shmid < 0) {
-		D_ERROR("can't get shmid for key 0x%x, %s\n", key,
-			strerror(errno));
+		D_INFO("can't get shmid for key 0x%x, %s\n", key, strerror(errno));
 		return -DER_NO_SHMEM;
 	}
 
@@ -207,9 +206,16 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 static int
 new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
 {
+	int rc;
+
 	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
 	       key, size);
-	return attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
+	if (rc < 0)
+		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
+			DP_RC(rc));
+
+	return rc;
 }
 
 static int
@@ -704,6 +710,44 @@ create_shmem(const char *root_path, key_t key, size_t size_bytes,
 	return 0;
 }
 
+int
+destroy_shmem_with_key(key_t key)
+{
+	struct d_tm_shmem_hdr		*header;
+	struct shmem_region_list	*entry;
+	d_list_t			*cur;
+	d_list_t			*head;
+	int				rc;
+	int				shmid;
+
+	rc = open_shmem(key, &header);
+	if (rc == -DER_NO_SHMEM) /* if it doesn't exist, nothing to do */
+		return 0;
+	if (rc < 0) {
+		D_ERROR("Unable to open shmem region 0x%x for cleanup. An admin must clean up "
+			"manually using ipcrm.\n", key);
+		return rc;
+	}
+	shmid = rc;
+
+	header->sh_deleted = 1;
+	head = &header->sh_subregions;
+	for (cur = conv_ptr(header, head->next); cur != head; cur = conv_ptr(header, cur->next)) {
+		if (cur == NULL)
+			break;
+		entry = d_list_entry(cur, __typeof__(*entry), rl_link);
+		rc = destroy_shmem_with_key(entry->rl_key);
+		if (rc != 0)
+			D_ERROR("Unable to destroy shmem region 0x%x: "DF_RC"\n", entry->rl_key,
+				DP_RC(rc));
+	}
+
+	D_INFO("destroying shmem with key: 0x%x\n", key);
+	destroy_shmem(shmid);
+	close_shmem(header);
+	return 0;
+}
+
 /**
  * Initialize an instance of the telemetry and metrics API for the producer
  * process.
@@ -754,6 +798,9 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	tm_shmem.id = id;
 	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	key = d_tm_get_srv_key(id);
+	rc = destroy_shmem_with_key(key);
+	if (rc != 0)
+		goto failure;
 	rc = create_shmem(tmp, key, mem_size, &shmid, &new_shmem);
 	if (rc != 0)
 		goto failure;
@@ -2275,8 +2322,7 @@ parse_path_fmt(char *path, size_t path_size, const char *fmt, va_list args)
 	rc = vsnprintf(path, path_size, fmt, args);
 
 	if (rc < 0) {
-		D_ERROR("error parsing arguments (errno=%d, %s)", errno,
-			strerror(errno));
+		D_ERROR("error parsing arguments (errno=%d, %s)\n", errno, strerror(errno));
 		return -DER_INVAL;
 	}
 

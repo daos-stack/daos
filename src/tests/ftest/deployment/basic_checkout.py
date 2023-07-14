@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,6 @@ from exception_utils import CommandFailure
 
 
 class BasicCheckout(PerformanceTestBase):
-    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
@@ -48,7 +47,7 @@ class BasicCheckout(PerformanceTestBase):
         self.log.info("Autotest start")
         daos_cmd = self.get_daos_command()
         try:
-            daos_cmd.pool_autotest(pool=self.pool.uuid)
+            daos_cmd.pool_autotest(pool=self.pool.identifier)
             self.log.info("daos pool autotest passed.")
         except CommandFailure as error:
             self.log.error("Error: %s", error)
@@ -96,8 +95,6 @@ class BasicCheckout(PerformanceTestBase):
 
 
 class BasicCheckoutDm(DataMoverTestBase):
-    # pylint: disable=too-few-public-methods
-    # pylint: disable=attribute-defined-outside-init
     # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
@@ -120,6 +117,7 @@ class BasicCheckoutDm(DataMoverTestBase):
         self.ior_cmd.namespace = "/run/ior_dm/*"
         self.ior_cmd.get_params(self)
         self.ppn = self.params.get("ppn", '/run/ior_dm/client_processes/*')
+        self.ior_ppn = self.ppn
 
         # create pool and container
         pool = self.create_pool()

@@ -335,6 +335,7 @@ set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
 {
 	oid->id_shard	= 1;
 	oid->id_layout_ver = 0;
+	oid->id_padding = 0;
 	oid->id_pub.lo = oid_lo;
 	daos_obj_set_oid(&oid->id_pub, 0, OR_RP_1, MAX_NUM_GROUPS, 0);
 }
@@ -983,7 +984,7 @@ main(int argc, char *argv[])
 	int rc;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
-	rc = vos_self_init("/mnt/daos", false, 0);
+	rc = vos_self_init("/mnt/daos", false, BIO_STANDALONE_TGT_ID);
 	if (rc != 0) {
 		print_error("Error initializing VOS instance: "DF_RC"\n",
 			    DP_RC(rc));

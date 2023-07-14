@@ -283,7 +283,7 @@ class FaultInjection():
         self._fault_list = fault_list
         self._test_dir = test_dir
         if self._fault_list:
-            # not using workdir because the huge path was messing up
+            # not using "workdir" because the huge path was messing up
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
@@ -305,11 +305,12 @@ class FaultInjection():
         """
         # Remove the fault injection files on the hosts.
         error_list = []
-        commands = ["rm -f {}".format(self.fault_file)]
+        command = "rm -f {}".format(self.fault_file)
         if self._hosts:
-            commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
+            command = get_clush_command(
+                self._hosts, args="-S -v", command=command, command_sudo=True)
         try:
-            run_command(" ".join(commands), verbose=True, raise_exception=False)
+            run_command(command, verbose=True, raise_exception=False)
         except DaosTestError as error:
             error_list.append(error)
         return error_list

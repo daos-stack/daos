@@ -701,7 +701,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* Disabled Pool Aggrgation */
 	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
@@ -921,7 +921,7 @@ io_rewritten_array_with_mixed_size(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* choose random object */
 	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
@@ -2662,7 +2662,7 @@ tx_discard(void **state)
 	/** Write three timestamps to same set of d-key and a-keys. */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 
 		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
@@ -2689,11 +2689,11 @@ tx_discard(void **state)
 		if (t == 1) {
 			print_message("aborting transaction %d.\n", t);
 			rc = daos_tx_abort(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		} else {
 			print_message("committing transaction %d.\n", t);
 			rc = daos_tx_commit(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		}
 		par_barrier(PAR_COMM_WORLD);
 	}
@@ -2729,7 +2729,7 @@ tx_discard(void **state)
 			D_FREE(rec_verify);
 		}
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	/** Close and reopen the container and the obj. */
@@ -2841,7 +2841,7 @@ tx_commit(void **state)
 	/** Write at 3 different txs to same set of d-key and a-keys. */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		print_message("writing to transaction %d\n", t);
 		for (i = 0; i < nakeys; i++) {
 			if (i % 2 == 0) {
@@ -2893,14 +2893,14 @@ tx_commit(void **state)
 		if (t != 2) {
 			print_message("committing transaction %d\n", t);
 			rc = daos_tx_commit(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		} else {
 			print_message("aborting transaction %d\n", t);
 			rc = daos_tx_abort(th[t], NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 		}
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		par_barrier(PAR_COMM_WORLD);
 	}
 
@@ -2920,7 +2920,7 @@ tx_commit(void **state)
 
 			rc = enumerate_akey(DAOS_TX_NONE, dkey, &n, &kd,
 					    &anchor, buf, sizeof(buf), &req);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			found += n;
 		}
 		assert_int_equal(found, nakeys);
@@ -3061,7 +3061,8 @@ echo_fetch_update(void **state)
 static void
 tgt_idx_change_retry(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
 	struct ioreq		 req;
 	const char		 dkey[] = "tgt_change dkey";
@@ -3078,10 +3079,16 @@ tgt_idx_change_retry(void **state)
 	int			 i;
 	int			 rc;
 
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_success(rc);
+	dt_redun_fac = 0;
+
 	/* create a 3 replica small object, to test the case that:
 	 * update:
 	 * 1) shard 0 IO finished, then the target x of shard 0 dead/excluded
-	 * 2) shard 1 and shard 2 IO still inflight (not scheduled)
+	 * 2) shard 1 and shard 2 IO still in-flight (not scheduled)
 	 * 3) obj IO retry, shard 0 goes to new target y
 	 *
 	 * Then fetch and verify the data.
@@ -3091,16 +3098,12 @@ tgt_idx_change_retry(void **state)
 	if (!test_runable(arg, 4))
 		skip();
 
-	if (1) {
-		print_message("Temporary disable IO30\n");
-		skip();
-	}
-
-	if (!arg->async) {
+	if (!arg0->async) {
 		if (arg->myrank == 0)
 			print_message("this test can-only run in async mode\n");
 		skip();
 	}
+	async_enable((void **)&arg);
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -3216,6 +3219,7 @@ tgt_idx_change_retry(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 static void
@@ -3276,6 +3280,7 @@ fetch_replica_unavail(void **state)
 
 		/* wait until reintegration is done */
 		test_rebuild_wait(&arg, 1);
+		daos_cont_status_clear(arg->coh, NULL);
 	}
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);
@@ -3482,6 +3487,12 @@ io_obj_key_query(void **state)
 	rc = daos_tx_close(th, NULL);
 	assert_rc_equal(rc, 0);
 
+	flags = DAOS_GET_RECX | DAOS_GET_MAX;
+	rc = daos_obj_query_key(oh, DAOS_TX_NONE, flags, &dkey, &akey, &recx, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(recx.rx_idx, 50);
+	assert_int_equal(recx.rx_nr, 1);
+
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -3537,7 +3548,7 @@ blob_unmap_trigger(void **state)
 	 */
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_open(arg->coh, &th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 
 		for (i = 0; i < nvme_recs; i++) {
 			sprintf(akey, "blob_unmap_akey%d", i);
@@ -3558,9 +3569,9 @@ blob_unmap_trigger(void **state)
 	/* Discard the NVMe records (Discard second tx) */
 	print_message("Discarding second transaction\n");
 	rc = daos_tx_abort(th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	rc = daos_tx_close(th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -3572,7 +3583,7 @@ blob_unmap_trigger(void **state)
 	sprintf(akey, "blob_unmap akey%d", nvme_recs);
 	print_message("insert dkey:'%s', akey:'%s'\n", dkey, akey);
 	rc = daos_tx_open(arg->coh, &th[1], NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	insert_single(dkey, akey, 0, update_buf, IO_SIZE_NVME, th[1], &req);
 	/* Verify record was inserted */
 	memset(fetch_buf, 0, IO_SIZE_NVME);
@@ -3583,7 +3594,7 @@ blob_unmap_trigger(void **state)
 
 	for (t = 0; t < 3; t++) {
 		rc = daos_tx_close(th[t], NULL);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 	}
 
 	D_FREE(enum_buf);
@@ -3773,7 +3784,7 @@ split_sgl_internal(void **state, int size)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = sg_iov;
 
-	/** Let's use differet iod_size to see if fetch
+	/** Let's use different iod_size to see if fetch
 	 *  can reset the correct iod_size
 	 */
 	iod.iod_size = size/2;
@@ -4825,7 +4836,7 @@ oid_in_list(daos_obj_id_t oid, daos_obj_id_t *oid_list, uint32_t nr)
 	return false;
 }
 
-#define OIT_TEST_OID_NR	(16)
+#define OIT_TEST_OID_NR	(128)
 
 static int
 oit_get_markdata_as1(daos_obj_id_t oid, d_iov_t *marker)
@@ -4841,19 +4852,54 @@ oit_get_markdata_as1(daos_obj_id_t oid, d_iov_t *marker)
 }
 
 static void
+oit_eq_init(struct ioreq *req)
+{
+	int	rc;
+
+	if (req->arg->async) {
+		rc = daos_event_init(&req->ev, req->arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+}
+
+static void
+oit_eq_fini(struct ioreq *req)
+{
+	int	rc;
+	bool	ev_flag;
+
+	if (req->arg->async) {
+		rc = daos_event_test(&req->ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req->ev.ev_error, 0);
+		rc = daos_event_fini(&req->ev);
+	}
+}
+
+static void
+oit_mark(daos_handle_t oh, daos_obj_id_t oid, d_iov_t *marker, struct ioreq *req)
+{
+	int rc;
+
+	oit_eq_init(req);
+	rc = daos_oit_mark(oh, oid, marker, req->arg->async ? &req->ev : NULL);
+	assert_rc_equal(rc, 0);
+	oit_eq_fini(req);
+}
+
+static void
 oit_list_filter(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	struct ioreq		req;
-	daos_obj_id_t		oid[OIT_TEST_OID_NR], oid_new;
-	daos_obj_id_t		oid_list[OIT_TEST_OID_NR] = {0};
+	daos_obj_id_t		*oid, oid_new;
+	daos_obj_id_t		*oid_list;
 	char			*ow_buf;
 	char			*fbuf;
-	d_iov_t			 marker;
-	uint64_t		 mark_data;
-	const char		dkey[] = "dkey";
-	const char		akey[] = "akey";
+	d_iov_t			marker;
+	uint64_t		mark_data;
 	daos_size_t		size = 128;
 	daos_epoch_t		snap_epoch;
 	daos_handle_t		toh;
@@ -4861,10 +4907,11 @@ oit_list_filter(void **state)
 	uint32_t		oids_nr;
 	int			total;
 	int			i, rc;
+	bool			ev_flag;
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* Alloc and set buffer to be a string*/
 	D_ALLOC(ow_buf, size);
@@ -4874,7 +4921,15 @@ oit_list_filter(void **state)
 	D_ALLOC(fbuf, size);
 	assert_non_null(fbuf);
 
+	D_ALLOC_ARRAY(oid, OIT_TEST_OID_NR);
+	assert_non_null(oid);
+	D_ALLOC_ARRAY(oid_list, OIT_TEST_OID_NR);
+	assert_non_null(oid_list);
+
 	for (i = 0; i < OIT_TEST_OID_NR; i++) {
+		const char		dkey[] = "dkey";
+		const char		akey[] = "akey";
+
 		oid[i] = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oid[i], DAOS_IOD_ARRAY, arg);
 
@@ -4888,21 +4943,30 @@ oit_list_filter(void **state)
 		ioreq_fini(&req);
 	}
 
-	rc = daos_cont_create_snap_opt(arg->coh, &snap_epoch, NULL,
-				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
-				       NULL);
+	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_oit_open(arg->coh, snap_epoch, &toh, NULL);
+	arg->async = arg0->async;
+	req.arg = arg;
+	oit_eq_init(&req);
+	rc = daos_cont_snap_oit_create(arg->coh, snap_epoch, NULL, arg->async ? &req.ev : NULL);
 	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
+
+	oit_eq_init(&req);
+	rc = daos_oit_open(arg->coh, snap_epoch, &toh, arg->async ? &req.ev : NULL);
+	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
 
 	print_message("list oit after updated %d objests\n", OIT_TEST_OID_NR);
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list(toh, oid_list, &oids_nr, &anchor, arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR);
+		oit_eq_fini(&req);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
@@ -4917,36 +4981,48 @@ oit_list_filter(void **state)
 	print_message("mark a few oids in the OIT\n");
 	mark_data = 1;
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
-	rc = daos_oit_mark(toh, oid[0], &marker, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_oit_mark(toh, oid[1], &marker, NULL);
-	assert_rc_equal(rc, 0);
+	oit_mark(toh, oid[0], &marker, &req);
+	oit_mark(toh, oid[1], &marker, &req);
 	mark_data = 0;
-	rc = daos_oit_mark(toh, oid[7], &marker, NULL);
-	assert_rc_equal(rc, 0);
-	rc = daos_oit_mark(toh, oid[15], &marker, NULL);
-	assert_rc_equal(rc, 0);
+	oit_mark(toh, oid[7], &marker, &req);
+	oit_mark(toh, oid[15], &marker, &req);
+
 	print_message("mark a non-existed oid should fail with -DER_NONEXIST\n");
 	oid_new = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
-	rc = daos_oit_mark(toh, oid_new, &marker, NULL);
-	assert_rc_equal(rc, -DER_NONEXIST);
+	oit_eq_init(&req);
+	rc = daos_oit_mark(toh, oid_new, &marker, arg->async ? &req.ev : NULL);
+	if (req.arg->async) {
+		assert_rc_equal(rc, 0);
+		rc = daos_event_test(&req.ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req.ev.ev_error, -DER_NONEXIST);
+		rc = daos_event_fini(&req.ev);
+	} else {
+		assert_rc_equal(rc, -DER_NONEXIST);
+	}
 
 	print_message("list un-marked oids in the OIT\n");
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor,
+					    arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR - 4);
+		oit_eq_fini(&req);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 4);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[15], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[15], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
@@ -4954,24 +5030,31 @@ oit_list_filter(void **state)
 	}
 
 	print_message("clear an oid's marker in the OIT\n");
-	rc = daos_oit_mark(toh, oid[15], NULL, NULL);
+	oit_eq_init(&req);
+	rc = daos_oit_mark(toh, oid[15], NULL, arg->async ? &req.ev : NULL);
 	assert_rc_equal(rc, 0);
+	oit_eq_fini(&req);
 	print_message("list un-marked oids in the OIT\n");
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
-		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor, NULL);
+		oit_eq_init(&req);
+		rc = daos_oit_list_unmarked(toh, oid_list, &oids_nr, &anchor,
+					    arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, OIT_TEST_OID_NR - 3);
+		oit_eq_fini(&req);
+		assert_int_equal(oids_nr + total, OIT_TEST_OID_NR - 3);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
-		D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
-		D_ASSERT(oid_in_list(oid[15], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(!oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[1], oid_list, oids_nr));
+			D_ASSERT(!oid_in_list(oid[7], oid_list, oids_nr));
+			D_ASSERT(oid_in_list(oid[15], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
@@ -4982,28 +5065,53 @@ oit_list_filter(void **state)
 	memset(&anchor, 0, sizeof(anchor));
 	for (total = 0; true; ) {
 		oids_nr = OIT_TEST_OID_NR;
+		oit_eq_init(&req);
 		rc = daos_oit_list_filter(toh, oid_list, &oids_nr, &anchor, oit_get_markdata_as1,
-					  NULL);
+					  arg->async ? &req.ev : NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(oids_nr, 2);
+		oit_eq_fini(&req);
+		assert_int_equal(oids_nr + total, 2);
 		for (i = 0; i < oids_nr; i++) {
 			print_message("list oid[%d] ="DF_OID"\n", total, DP_OID(oid_list[i]));
 			total++;
 			D_ASSERT(oid_in_list(oid_list[i], oid, OIT_TEST_OID_NR));
 		}
-		D_ASSERT(oid_in_list(oid[0], oid_list, oids_nr));
-		D_ASSERT(oid_in_list(oid[1], oid_list, oids_nr));
+		if (oids_nr > 0) {
+			D_ASSERT(oid_in_list(oid[0], oid_list, oids_nr));
+			D_ASSERT(oid_in_list(oid[1], oid_list, oids_nr));
+		}
 		if (daos_anchor_is_eof(&anchor)) {
 			print_message("listed %d objects\n", total);
 			break;
 		}
 	}
 
-	rc = daos_oit_close(toh, NULL);
+	oit_eq_init(&req);
+	rc = daos_cont_snap_oit_destroy(arg->coh, toh, arg->async ? &req.ev : NULL);
 	D_ASSERT(rc == 0);
+	oit_eq_fini(&req);
+
+	oit_eq_init(&req);
+	rc = daos_oit_close(toh, arg->async ? &req.ev : NULL);
+	D_ASSERT(rc == 0);
+	oit_eq_fini(&req);
+
+	oit_eq_init(&req);
+	rc = daos_oit_open(arg->coh, snap_epoch, &toh, arg->async ? &req.ev : NULL);
+	if (req.arg->async) {
+		rc = daos_event_test(&req.ev, DAOS_EQ_WAIT, &ev_flag);
+		assert_rc_equal(rc, 0);
+		assert_int_equal(ev_flag, true);
+		assert_int_equal(req.ev.ev_error, -DER_NONEXIST);
+		rc = daos_event_fini(&req.ev);
+	} else {
+		assert_rc_equal(rc, -DER_NONEXIST);
+	}
 
 	D_FREE(fbuf);
 	D_FREE(ow_buf);
+	D_FREE(oid);
+	D_FREE(oid_list);
 	test_teardown((void **)&arg);
 }
 
@@ -5104,6 +5212,7 @@ static const struct CMUnitTest io_tests[] = {
 	  io_tx_convert, async_disable, test_case_teardown},
 	{ "IO47: obj_open perf", obj_open_perf, async_disable, test_case_teardown},
 	{ "IO48: oit_list_filter", oit_list_filter, async_disable, test_case_teardown},
+	{ "IO49: oit_list_filter async", oit_list_filter, async_enable, test_case_teardown},
 };
 
 int
@@ -5118,6 +5227,7 @@ obj_setup_internal(void **state)
 	else if (arg->obj_class != OC_UNKNOWN)
 		dts_obj_class = arg->obj_class;
 
+	dt_redun_lvl = DAOS_PROP_CO_REDUN_RANK;
 	return 0;
 }
 

@@ -110,10 +110,9 @@ given set of hosts either through the `dmg` or `daos_server` tools.
 To generate a configuration file for a single storage server, run the `daos_server config generate`
 command locally. In this case, the `daos_server` service should not be running on the local host.
 
-`daos_server nvme prepare` should be run prior to `daos_server config generate` if the intent is to
-use NVMe and likewise `daos_server scm prepare` should be run prior to `daos_server config generate`
-if the intent is to use PMem for SCM. This will allow the relevant storage to be available for
-detection when attempting to generate the configuration files.
+`daos_server scm prepare` should be run prior to `daos_server config generate` if the intent is to
+use PMem for SCM. This will allow the relevant storage to be available for detection when
+attempting to generate the configuration files.
 
 ```bash
 $ daos_server config generate --help
@@ -660,8 +659,8 @@ Once the DAOS server started, the storage and network can be configured on the
 storage nodes via the dmg utility.
 
 !!! note
-    `daos_server storage` commands are not config aware meaning they will not
-    read parameters from the server configuration file.
+    `daos_server (nvme|scm)` commands are config aware meaning they will read parameters from the
+    server configuration file unless the `--ignore-config` flag is supplied.
 
 ### SCM Preparation
 
@@ -767,8 +766,8 @@ The server configuration file gives an administrator the ability to control
 storage selection.
 
 !!! note
-    `daos_server storage` commands are not config aware meaning they will not
-    read parameters from the server configuration file.
+    `daos_server (nvme|scm)` commands are config aware meaning they will read parameters from the
+    server configuration file unless the `--ignore-config` flag is supplied.
 
 #### Discovery
 
@@ -777,15 +776,15 @@ DAOS tools will discover NVMe SSDs and Persistent Memory Modules using the stora
 `dmg storage scan` can be run to query remote running `daos_server` processes over the management
 network.
 
-`daos_server storage scan` can be used to query storage on the local host directly.
+`daos_server (nvme|scm) scan` can be used to query storage on the local host directly.
 
-!!! warning
-    'daos_server' should not be running (e.g. as a systemd service under the 'daos_server'
-    userid) when the `daos_server storage scan` command is executed, as the NVMe SSDs will then
-    already be bound to the 'daos_server' processes and trying to access them (as a
-    non-'daos_server' user, even as root) will cause access failures.
+!!! note
+    'daos_server' commands will refuse to run if a process with the same name exists (e.g. as a
+    systemd service under the 'daos_server' userid).
 
-NVMe SSDs need to be made accessible first by running `daos_server nvme prepare`.
+NVMe SSDs no longer need to be made accessible first by running `daos_server nvme prepare`,
+`daos_server nvme scan` will take the necessary steps to prepare the devices unless `--skip-prep`
+flag is supplied.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `--disable-vfio` in the nvme prepare command to
@@ -828,7 +827,19 @@ For further info on dmg storage command usage run `dmg storage --help`.
 
 To release the NVMe drives from the user-space drivers and bind them back to the kernel "nvme"
 driver so they can be used by the OS (and reappear as /dev/nvme\* block devices), run
-`daos_server nvme reset` with any relevant options (see command help for details).
+`daos_server nvme reset` with any relevant options (see command help for details). The reset
+command will also release any hugepages used by no-longer-active SPDK processes.
+
+`daos_server nvme scan` will perform a subsequent reset implicitly so manual reset is not required
+but a stopped `daos_server` may not reset device bindings and hugepage resources and may require a
+manual reset to do so.
+
+!!! warning
+    Due to [SPDK issue 2926](https://github.com/spdk/spdk/issues/2926), if VMD is enabled and
+    PCI_ALLOWED list is set to a subset of available VMD controllers (as specified in the server
+    config file) then the backing devices of the unselected VMD controllers will be bound to no
+    driver and therefore inaccessible from both OS and SPDK. Workaround is to run
+    `daos_server nvme scan --ignore-config` to reset driver bindings for all VMD controllers.
 
 #### Health
 
@@ -1039,6 +1050,9 @@ the list defining an individual storage tier.
 Each tier has a `class` parameter which defines the storage type.
 Typical class values are "dcpm" for PMem (Intel(R) Optane(TM) persistent
 memory) and "nvme" for NVMe SSDs.
+When persistent memory is unavailable, class may be set to "ram", which
+emulates SCM using a ramfs device, and metadata and small objects are
+saved to NVMe SSDs using logging and checkpointing.
 
 For class == "dcpm", the following parameters should be populated:
 
@@ -1049,9 +1063,41 @@ For class == "dcpm", the following parameters should be populated:
   for DAOS persistent storage mounted on the specified PMem device specified in
   `scm_list`.
 
+For class == "ram", `scm_list` is omitted and `scm_size` is specified instead.
+In this case, the subsequent bdev tiers describe the persistent storage used
+for both data and metadata.
+
+- `scm_size` specifies the amount of RAM dedicated to emulate SCM for holding
+  DAOS metadata.  As with SCM, the RAM size must be sufficient to hold metadata
+  to accommodate the size of data tiers.  Required metadata to data ratios vary
+  by usage, but typically metadata size will only be a few percent of data.
+  The [storage requirements](hardware.md#storage-requirements) discussion of
+  the ratio between SCM size and the size of NVMe data tiers is relevant, as
+  the required RAM / NVMe ratio will be similar.
+
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
+- `bdev_roles` optionally specifies a list of roles for this tier.
+  By default, the DAOS server will assign roles to bdev tiers
+  automatically, so the bdev_roles directive is only needed when that
+  assignment doesn't match your use case.
+
+  When "dcpm" is used for the first tier, this list should be omitted or
+  specify only "data".  Only a single NVMe tier is supported.
+
+  When class == "ram" is used, the NVMe tier roles can be one or more of
+  "wal" (write-ahead-log for tracking the changes made by local
+  transactions), "meta" (for persistent metadata and small object storage),
+  or "data" (contents of larger objects).  Only the "data" role may be
+  assigned to multiple tiers.  If no roles are specified, then the server
+  will assign them.  Otherwise all roles must be assigned to a tier.
+
+See the sample configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configuration files in the
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+directory for more details.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `disable_vfio: true` in the global section of the
@@ -1184,7 +1230,7 @@ this goal:
 
 ```bash
 $ dmg network scan
-$ dgm network scan -p all
+$ dmg network scan -p all
 ```
 
 Typical network scan results look as follows:
@@ -1541,3 +1587,17 @@ the `[Service]` section before reloading systemd and restarting the
 [^5]: https://github.com/pmem/ndctl/issues/130
 
 [6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+
+## Multi-user DFuse setup
+
+Running a single-user dfuse instance, for example on a compute node, requires no special setup.
+However configuration is required for allowing multi-user dfuse on a node.
+
+### Updating fuse config
+
+Multi-user dfuse makes use of the `allow_other` fuse mount option which allows requests from users
+other than the user running dfuse.  For reasons of safety this option is disabled by default for
+fuse and must be enabled by root before any user can use it.  To allow this then root must add or
+uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
+does not do this automatically. An administrator must set this option on all nodes on which they
+want to provide a persistent multi-user dfuse service.

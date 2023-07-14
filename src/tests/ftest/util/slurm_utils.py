@@ -49,9 +49,9 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
         control (NodeSet): slurm control host
         name (str): slurm partition name
         hosts (NodeSet): hosts to include in the partition
-        default (str, optional): _description_. Defaults to 'yes'.
-        max_time (str, optional): _description_. Defaults to 'UNLIMITED'.
-        state (str, optional): _description_. Defaults to 'up'.
+        default (str, optional): whether this partition should be the default. Defaults to 'yes'.
+        max_time (str, optional): maximum run time for jobs. Defaults to 'UNLIMITED'.
+        state (str, optional): state of jobs that can be allocated. Defaults to 'up'.
 
     Returns:
         RemoteCommandResult: results from the scontrol command

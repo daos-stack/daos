@@ -1,21 +1,31 @@
 hosts:
-  test_servers: 8
-  test_clients: 2
+  test_servers: 4
+  test_clients: 4
 timeout: 2000
 server_config:
   name: daos_server
-  engines_per_host: 1
+  engines_per_host: 2
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 16
+      pinned_numa_node: 0
+      nr_xs_helpers: 1
+      fabric_iface: ib0
+      fabric_iface_port: 31317
+      log_file: daos_server0.log
+      storage: auto
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      storage: auto
 pool:
-  scm_size: 60000000000
-  svcn: 3
+  size: 95%
   control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
 ior:
   client_processes: !mux
     slots_16:

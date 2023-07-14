@@ -1063,12 +1063,11 @@ retry:
 
 		/* otherwise retry and wait for others to update the ns. */
 		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
-		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
-		       ns->iv_ns_id, rc, key->class_id, opc, key->rank,
-		       ns->iv_master_rank);
+		D_WARN("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
+		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
 		goto retry;

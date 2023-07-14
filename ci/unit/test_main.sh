@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # This is the script used for running unit testing
-# run_test.sh and run_test.sh with memcheck stages on the CI
+# run_utest.py and run_utest.py with memcheck stages on the CI
 set -uex
 
 # JENKINS-52781 tar function is breaking symlinks
 
 rm -rf unit_test_memcheck_logs unit-test*.memcheck.xml
 rm -rf unit_test_memcheck_logs.tar.gz
+rm -rf unit_test_memcheck_bdev_logs.tar.gz
 rm -rf unit_test_logs
 rm -rf test_results
 mkdir test_results
@@ -15,9 +16,13 @@ chmod 777 test_results
 
 # Check if this is a Bulleye stage
 USE_BULLSEYE=false
+BDEV_TEST=false
 case $STAGE_NAME in
   *Bullseye**)
   USE_BULLSEYE=true
+  ;;
+  *bdev**)
+  BDEV_TEST=true
   ;;
 esac
 
@@ -39,4 +44,5 @@ ssh -tt "$SSH_KEY_ARGS" jenkins@"$NODE" "HOSTNAME=$HOSTNAME        \
                                          HOSTPWD=$PWD              \
                                          WITH_VALGRIND=$WITH_VALGRIND \
                                          BULLSEYE=$BULLSEYE        \
+                                         BDEV_TEST=$BDEV_TEST       \
                                          ./build/ci/unit/test_main_node.sh"

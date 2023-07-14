@@ -33,6 +33,10 @@ const (
 	CurrentSchemaVersion = 0
 )
 
+var (
+	dbgUuidStr = logging.ShortUUID
+)
+
 type (
 	onLeadershipGainedFn func(context.Context) error
 	onLeadershipLostFn   func() error
@@ -493,7 +497,10 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 			runOnLeadershipLost()
 
-			db.shutdownErrCh <- db.ShutdownRaft()
+			select {
+			case <-parent.Done():
+			case db.shutdownErrCh <- db.ShutdownRaft():
+			}
 			close(db.shutdownErrCh)
 			return
 		case isLeader := <-db.raftLeaderNotifyCh:
@@ -1094,6 +1101,9 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	if err := db.UpdatePoolService(lock.InContext(ctx), ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)
 	}
+
+	newRanks := ranklist.RankSetFromRanks(ps.Replicas)
+	db.log.Infof("pool %s: service ranks set to %s", ps.PoolLabel, newRanks)
 }
 
 // OnEvent handles events and updates system database accordingly.
@@ -1150,8 +1160,4 @@ func (db *Database) GetSystemAttrs(keys []string, filterFn func(string) bool) (m
 		return nil, system.ErrSystemAttrNotFound(k)
 	}
 	return out, nil
-}
-
-func dbgUuidStr(u uuid.UUID) string {
-	return u.String()[0:8]
 }

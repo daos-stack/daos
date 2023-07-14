@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.103
-Release:       1%{?relval}%{?dist}
+Version:       2.5.100
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -58,9 +58,11 @@ BuildRequires: fuse3-devel >= 3.4.2
 BuildRequires: go-race
 BuildRequires: libprotobuf-c-devel
 BuildRequires: liblz4-devel
+BuildRequires: libcapstone-devel
 %else
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
+BuildRequires: capstone-devel
 %endif
 BuildRequires: spdk-devel >= 22.01.2
 %if (0%{?rhel} >= 8)
@@ -70,14 +72,14 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.1-2.402.gbae8a56%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-1.408.g9524cdb%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
-BuildRequires: go >= 1.16
+BuildRequires: go >= 1.17
 %if (0%{?rhel} >= 8)
 BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
@@ -112,7 +114,6 @@ BuildRequires: libuct-devel
 BuildRequires: ucx-devel
 %endif
 
-Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
 # of mercury, at which time the autoprov shared library version should
@@ -138,16 +139,18 @@ Requires: spdk-tools >= 22.01.2
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl >= 02.00.00.3733
+Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libfabric1 >= %{libfabric_version}
 %else
-Requires: ipmctl > 02.00.00.3816
+Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
+Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: numactl
 %{?systemd_requires}
 
 %description server
@@ -165,12 +168,8 @@ Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse3 >= 3.4.2
-%endif
 %if (0%{?suse_version} >= 1500)
+Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -211,15 +210,19 @@ Requires: %{name}-admin%{?_isa} = %{version}-%{release}
 Requires: python3-distro
 Requires: python3-tabulate
 Requires: python3-defusedxml
+Requires: protobuf-c-devel
 Requires: fio
 Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: go >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
+Requires: libcapstone-devel
 %else
 Requires: Lmod
+Requires: capstone-devel
 %endif
 
 %description client-tests
@@ -418,6 +421,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -453,6 +457,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
+%{_libdir}/libpil4dfs.so
 %dir %{python3_sitearch}/pydaos
 %{python3_sitearch}/pydaos/*.py
 %dir %{python3_sitearch}/pydaos/raw
@@ -476,7 +481,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -513,8 +517,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/rdbt
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
+%{_bindir}/bio_ut
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -551,6 +554,71 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
+- Fix golang daos-client-tests dependency to be go instead
+
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
+- Removed unnecessary test files
+
+* Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
+- Switch version to 2.5.100 for 2.6 test builds
+
+* Mon Jun  5 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-7
+- Remove libfabric pinning and allow for 1.18 builds
+
+* Fri May 26 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.107-6
+- Add lmdb-devel and bio_ut for MD on SSD
+
+* Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
+- Add libcapstone-devel to deps of client-tests package
+
+* Tue May 16 2023 Lei Huang <lei.huang@intel.com> 2.3.107-4
+- Add libcapstone as a new prerequisite package
+- Add libpil4dfs.so in daos-client rpm
+
+* Mon May 15 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-3
+- Fix libfabric/libfabric1 dependency mismatch on SuSE
+
+* Wed May 10 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-2
+- Temporarily pin libfabric to < 1.18
+
+* Fri May 5 2023 Johann Lombardi <johann.lombardi@intel.com> 2.3.107-1
+- Bump version to 2.3.107
+
+* Fri Mar 17 2023 Tom Nabarro <tom.nabarro@intel.com> 2.3.106-2
+- Add numactl requires for server package
+
+* Tue Mar 14 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.106-1
+- Bump version to be higher than TB5
+
+* Wed Feb 22 2023 Li Wei <wei.g.li@intel.com> 2.3.103-6
+- Update raft to 0.9.2-1.403.g3d20556
+
+* Tue Feb 21 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.103-5
+- Bump min supported go version to 1.17
+
+* Fri Feb 17 2023 Ashley M. Pittman <ashley.m.pittman@intel.com> 2.3.103-4
+- Add protobuf-c-devel to deps of client-tests package
+
+* Mon Feb 13 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.103-3
+- Remove explicit R: protobuf-c and let the auto-dependency generator
+  handle it
+
+* Wed Feb 8 2023 Michael Hennecke <michael.hennecke@intel.com> 2.3.103-2
+- Change ipmctl requirement from v2 to v3
+
 * Fri Jan 27 2023 Phillip Henderson <phillip.henderson@intel.com> 2.3.103-1
 - Bump version to 2.3.103
 

@@ -44,7 +44,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: %s\n", d_errstr(rc));
+	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -67,12 +67,8 @@ obj_mod_fini(void)
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler obj_handlers_0[] = {
-	OBJ_PROTO_CLI_RPC_LIST(0)
-};
-
-static struct daos_rpc_handler obj_handlers_1[] = {
-	OBJ_PROTO_CLI_RPC_LIST(1)
+static struct daos_rpc_handler obj_handlers[] = {
+	OBJ_PROTO_CLI_RPC_LIST
 };
 
 #undef X
@@ -113,7 +109,7 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 }
 
 static void *
-obj_tls_init(int xs_id, int tgt_id)
+obj_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct obj_tls	*tls;
 	uint32_t	opc;
@@ -188,7 +184,7 @@ obj_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-obj_tls_fini(void *data)
+obj_tls_fini(int tags, void *data)
 {
 	struct obj_tls *tls = data;
 	struct migrate_pool_tls *pool_tls;
@@ -348,10 +344,10 @@ struct dss_module obj_module = {
 	.sm_ver		= DAOS_OBJ_VERSION,
 	.sm_init	= obj_mod_init,
 	.sm_fini	= obj_mod_fini,
-	.sm_proto_count	= 2,
-	.sm_proto_fmt	= {&obj_proto_fmt_0, &obj_proto_fmt_1},
-	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT, OBJ_PROTO_CLI_COUNT},
-	.sm_handlers	= {obj_handlers_0, obj_handlers_1},
+	.sm_proto_count	= 1,
+	.sm_proto_fmt	= {&obj_proto_fmt},
+	.sm_cli_count	= {OBJ_PROTO_CLI_COUNT},
+	.sm_handlers	= {obj_handlers},
 	.sm_key		= &obj_module_key,
 	.sm_mod_ops	= &ds_obj_mod_ops,
 	.sm_metrics	= &obj_metrics,
