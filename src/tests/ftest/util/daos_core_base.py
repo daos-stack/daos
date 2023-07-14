@@ -6,6 +6,9 @@
 
 import os
 import shutil
+from threading import Thread, Event
+import time
+
 from avocado import fail_on
 
 from apricot import TestWithServers
@@ -15,6 +18,24 @@ from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
 from run_utils import run_remote, find_command
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
+
+
+def report_log_files(log, hosts, path, delay, event):
+    """Periodically report on the daos log files.
+
+    Args:
+        log (logger): logger for displaying messages
+        hosts (NodeSet): hosts from which to report the log files
+        path (str): path to the log files
+        delay (int): number of seconds to wait between reporting on the logs
+        event (Event): event used to stop the log reporting
+    """
+    while event.is_set():
+        log.debug("================= DEBUG =================")
+        other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
+        run_remote(log, hosts, find_command(path, "*log*", 1, other))
+        log.debug("================= DEBUG =================")
+        time.sleep(delay)
 
 
 class DaosCoreBase(TestWithServers):
@@ -150,13 +171,21 @@ class DaosCoreBase(TestWithServers):
                     manager.update_expected_states(
                         rank, ["Stopped", "Excluded"])
 
+        log_event = Event()
+        log_event.set()
+        log_thread = Thread(
+            target=report_log_files,
+            kwargs={'log': self.log,
+                    'hosts': self.server_managers[0].hosts,
+                    'path': self.base_test_dir,
+                    'delay': 30,
+                    'event': log_event})
+        log_thread.start()
+
         cmocka_utils.run_cmocka_test(self, job)
 
-        self.log.debug("================= DEBUG =================")
-        other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
-        command = find_command(self.base_test_dir, "*log*", 1, other)
-        run_remote(self.log, self.server_managers[0].hosts, command)
-        self.log.debug("================= DEBUG =================")
+        log_event.clear()
+        log_thread.join()
 
         try:
             tmp_log_path = "/tmp/suite_dmg.log"

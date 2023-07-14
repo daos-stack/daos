@@ -34,7 +34,7 @@ from general_utils import \
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
-from run_utils import stop_processes, run_remote, command_as_user
+from run_utils import stop_processes, run_remote, command_as_user, find_command
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -1374,6 +1374,12 @@ class TestWithServers(TestWithoutServers):
 
         # Report whether or not the timeout has expired
         self.report_timeout()
+
+        self.log.debug("================= DEBUG =================")
+        other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
+        command = find_command(self.base_test_dir, "*log*", 1, other)
+        run_remote(self.log, self.server_managers[0].hosts, command)
+        self.log.debug("================= DEBUG =================")
 
         # Tear down any test-specific items
         self._teardown_errors = self.pre_tear_down()
