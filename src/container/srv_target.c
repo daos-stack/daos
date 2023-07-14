@@ -1464,10 +1464,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_hdl, rc);
 
 		hdl->sch_cont = cont;
-		if (rc == 1) {
+		if (rc == 1)
 			poh = hdl->sch_cont->sc_pool->spc_hdl;
-			rc = 0;
-		}
 	}
 
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
