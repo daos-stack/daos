@@ -1,26 +1,33 @@
 ARG BASE=rockylinux/rockylinux:8
 FROM $BASE as builder
 
-RUN dnf -y install git virtualenv epel-release dnf-plugins-core && \
+# Set WORKDIR to a new directory and copy the build context contents into it.
+# The build context is expected to be the daos repository root. This makes the
+# source available to later RUN commands.
+WORKDIR /daos
+COPY . ./
+
+# Install build dependencies.
+RUN dnf -y install virtualenv epel-release dnf-plugins-core && \
     dnf config-manager --enable powertools && \
     dnf config-manager --save --setopt=assumeyes=True
-
-RUN git clone --recurse-submodules https://github.com/daos-stack/daos.git --branch release/2.4
-
-WORKDIR daos
-
 RUN utils/scripts/install-el8.sh
 
-RUN virtualenv venv
-RUN source venv/bin/activate && \
+# Install Python packages in a virtualenv.
+ARG VENV=/tmp/build_venv
+RUN virtualenv $VENV
+RUN source $VENV/bin/activate && \
   pip install --upgrade pip && \
   pip install -r requirements.txt
 
-RUN source venv/bin/activate && \
+# Build DAOS.
+RUN source $VENV/bin/activate && \
   scons --jobs="$(nproc --all)" --build-deps=yes install PREFIX=/opt/daos
 
+# Start a new image from the base image.
 FROM $BASE
 
+# Install runtime dependencies.
 RUN dnf -y install epel-release && dnf config-manager --enable powertools
 RUN dnf -y install \
   kmod hwloc openssl Lmod ipmctl ndctl numactl protobuf-c \
