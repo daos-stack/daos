@@ -940,11 +940,8 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 				cb_info->tci_class_id);
 	D_ASSERT(iv_ops != NULL);
 
-	rc = iv_ops->ivo_on_put(cb_info->tci_ivns_internal,
-				&cb_info->tci_iv_value,
-				cb_info->tci_user_priv);
-	if (rc != 0)
-		D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
+	iv_ops->ivo_on_put(cb_info->tci_ivns_internal, &cb_info->tci_iv_value,
+			   cb_info->tci_user_priv);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
@@ -1392,12 +1389,8 @@ crt_hdlr_iv_fetch_aux(void *arg)
 			D_GOTO(send_error, rc = -DER_INVAL);
 		}
 
-		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		put_needed = false;
-		if (rc != 0) {
-			D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
-			D_GOTO(send_error, rc);
-		}
 
 		/* Reset the iv_value, since it maybe freed in on_put() */
 		memset(&iv_value, 0, sizeof(iv_value));
@@ -1896,12 +1889,8 @@ crt_hdlr_iv_sync_aux(void *arg)
 			D_GOTO(exit, rc);
 		}
 
-		rc = iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 		need_put = false;
-		if (rc != 0) {
-			D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
-			D_GOTO(exit, rc);
-		}
 
 		break;
 	}
@@ -2532,16 +2521,10 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* uci_bulk_hdl will not be set for invalidate call */
 		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
-			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
-						&iv_info->uci_iv_value,
-						iv_info->uci_user_priv);
+			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
+					   iv_info->uci_user_priv);
 
-			if (rc != 0) {
-				D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
-				child_output->rc = rc;
-			} else {
-				child_output->rc = output->rc;
-			}
+			child_output->rc = output->rc;
 		} else {
 			child_output->rc = output->rc;
 		}
@@ -2580,9 +2563,8 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_user_priv,
 					  rc);
 		if (rc != 0) {
-			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
-						tmp_iv_value,
-						iv_info->uci_user_priv);
+			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, tmp_iv_value,
+					   iv_info->uci_user_priv);
 		}
 	}
 
@@ -2888,9 +2870,9 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_GOTO(exit, rc);
 		}
 
-		output->rc = iv_ops->ivo_on_put(ivns_internal,
-						&cb_info->buc_iv_value,
-						cb_info->buc_user_priv);
+		output->rc = -DER_SUCCESS;
+
+		iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value, cb_info->buc_user_priv);
 
 		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
