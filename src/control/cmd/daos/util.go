@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -145,8 +144,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 	if err != nil {
 		return nil, nil, err
 	}
-	var done = new(sync.Mutex)
-	done.Lock()
+	done := make(chan int)
 
 	stream, err := fd2FILE(w.Fd(), "w")
 	if err != nil {
@@ -154,7 +152,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 	}
 
 	go func(ctx context.Context) {
-		defer done.Unlock()
+		defer func() { done <- 1 }()
 
 		rdr := bufio.NewReader(r)
 		for {
@@ -164,7 +162,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 			default:
 				line, err := rdr.ReadString('\n')
 				if err != nil {
-					if !(errors.Is(err, io.EOF)) {
+					if !errors.Is(err, io.EOF) {
 						printLn(fmt.Sprintf("read err: %s", err))
 					}
 					return
@@ -177,7 +175,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 	return stream, func() {
 		C.fclose(stream)
 		w.Close()
-		done.Lock()
+		<-done
 	}, nil
 }
 
