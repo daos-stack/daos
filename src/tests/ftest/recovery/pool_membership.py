@@ -217,7 +217,7 @@ class PoolMembershipTest(TestWithServers):
 
         1. Create a pool.
         2. Stop servers.
-        3. Manually remove /mnt/daos0/<pool_uuid>/vos-0 from rank 0 node.
+        3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
         4. Enable and start the checker.
         5. Query the checker and verify that the issue was fixed. i.e., Current status is
         COMPLETED.
@@ -239,26 +239,48 @@ class PoolMembershipTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
-        # 3. Manually remove /mnt/daos0/<pool_uuid>/vos-0 from rank 0 node.
+        # 3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
         rank_0_host = NodeSet(self.server_managers[0].get_host(0))
-        rm_cmd = f"sudo rm /mnt/daos0/{pool.uuid.lower()}/vos-0"
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rm_cmd = f"sudo rm {scm_mount}/{pool.uuid.lower()}/vos-0"
         if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
             self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
 
         # 4. Enable and start the checker.
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
-        dmg_command.check_start()
 
-        # 5. Query the checker and verify that the issue was fixed.
         errors = []
         query_msg = ""
-        for _ in range(20):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
+
+        # If we start the checker right after enabling it, the checker may not detect any
+        # fault (can't reproduce manually). If it happens, stop and restart the checker.
+        repair_reports = None
+        restart_count = 0
+        while restart_count < 5:
+            # Start checker.
+            dmg_command.check_start()
+
+            # 5. Query the checker and verify that the issue was fixed.
+            for _ in range(8):
+                check_query_out = dmg_command.check_query()
+                if check_query_out["response"]["status"] == "COMPLETED":
+                    repair_reports = check_query_out["response"]["reports"]
+                    # query_msg = check_query_out["response"]["reports"][0]["msg"]
+                    break
+                time.sleep(5)
+
+            if repair_reports:
                 break
-            time.sleep(5)
+
+            self.log.info("Checker didn't detect fault. Restart %d", restart_count)
+            dmg_command.check_stop()
+            restart_count += 1
+
+        if not repair_reports:
+            self.fail("Checker didn't detect or repair any inconsistency!")
+
+        query_msg = repair_reports[0]["msg"]
         if "dangling target" not in query_msg:
             errors.append(
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
@@ -269,12 +291,10 @@ class PoolMembershipTest(TestWithServers):
 
         # 7. Verify that the pool has one less target.
         query_out = pool.query()
-        self.log.debug("## query_out = %s", query_out)
         total_targets = query_out["response"]["total_targets"]
         active_targets = query_out["response"]["active_targets"]
-        diff = total_targets - active_targets
-        if diff != 1:
-            expected_targets = total_targets - 1
+        expected_targets = total_targets - 1
+        if active_targets != expected_targets:
             msg = (f"Unexpected number of active targets! Expected = {expected_targets}; "
                    f"Actual = {active_targets}")
             errors.append(msg)
