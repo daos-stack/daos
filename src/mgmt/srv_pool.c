@@ -64,8 +64,7 @@ pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
 	uint32_t	timeout;
 	uint32_t	default_timeout;
 	size_t		gib;
-	int		rc;
-	int		rc;
+	int		rc = crt_req_get_timeout(tc_req, &default_timeout);
 
 	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
 
