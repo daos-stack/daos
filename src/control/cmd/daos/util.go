@@ -144,7 +144,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 	if err != nil {
 		return nil, nil, err
 	}
-	done := make(chan bool)
+	done := make(chan bool, 1)
 
 	stream, err := fd2FILE(w.Fd(), "w")
 	if err != nil {
@@ -152,7 +152,7 @@ func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE,
 	}
 
 	go func(ctx context.Context) {
-		defer func() { done <- true }()
+		defer close(done)
 
 		rdr := bufio.NewReader(r)
 		for {
