@@ -1332,7 +1332,14 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 
 	/* The original job is not being started correctly, let's give another chance */
 	if (rgt == NULL) {
-		D_ASSERT(ret != 0);
+		/* ret = 0, it do not need any rebuild, only update target status */
+		if (ret == 0) {
+			D_INFO(DF_UUID"opc %u/%u only update tgt status: %d\n",
+			       DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
+			       task->dst_map_ver, ret);
+			return 0;
+		}
+
 		D_INFO(DF_UUID"retry opc %u/%u: %d\n", DP_UUID(task->dst_pool_uuid),
 		       task->dst_rebuild_op, task->dst_map_ver, ret);
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_reclaim_eph,
