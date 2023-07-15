@@ -7,15 +7,13 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from tempfile import TemporaryDirectory
-import errno
 import getpass
 import json
 import logging
 import os
 import re
-import site
 import sys
 
 # When SRE-439 is fixed we should be able to include these import statements here
@@ -32,6 +30,8 @@ from slurm_setup import SlurmSetup, SlurmSetupException
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
+from bullseye_utils import setup_bullseye, finalize_bullseye, set_bullseye_environment, \
+    BULLSEYE_SRC                                                                        # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
 from launch_utils import LaunchException, AvocadoInfo, TestInfo, TestRunner, \
     fault_injection_enabled                                                             # noqa: E402
@@ -40,35 +40,14 @@ from package_utils import find_packages                                         
 from results_utils import Job, Results, LaunchTestName                                  # noqa: E402
 from run_utils import run_local, run_remote, RunException                               # noqa: E402
 from storage_utils import StorageInfo, StorageException                                 # noqa: E402
+from test_env_utils import TestEnvironment, TestEnvironmentException, set_path, \
+    set_python_environment, log_environment, PROVIDER_KEYS, PROVIDER_ALIAS              # noqa: E402
 from yaml_utils import get_yaml_data, YamlUpdater, YamlException                        # noqa: E402
 from data_utils import list_unique, dict_extract_values                                 # noqa: E402
 
-BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
-BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
-DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
-DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
-DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
-FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
-TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp;ofi_rxm"),
-        ("opx", "ofi+opx"),
-    ]
-)
-# Temporary pipeline-lib workaround until DAOS-13934 is implemented
-PROVIDER_ALIAS = {
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
-}
-PROCS_TO_CLEANUP = [
-    "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
-TYPES_TO_UNMOUNT = ["fuse.daos"]
 
 
 # Set up a logger for the console messages. Initially configure the console handler to report debug
@@ -110,6 +89,9 @@ class Launch():
         self.local_host = get_local_host()
         self.user = getpass.getuser()
 
+        # Functional test environment variables
+        self.test_env = TestEnvironment()
+
         # Results tracking settings
         self.job_results_dir = None
         self.job = None
@@ -141,7 +123,7 @@ class Launch():
 
         """
         if self.result and self.result.tests:
-            self.result.tests[0].finish_test(logger, message, fail_class, exc_info)
+            self.result.tests[0].finish_test(message, fail_class, exc_info)
         else:
             # Log the status if a Results or TestResult object has not been defined
             if message is not None and fail_class is None:
@@ -198,7 +180,7 @@ class Launch():
         # Set the number of times to repeat execution of each test
         if self.mode == "ci" and args.repeat > MAX_CI_REPETITIONS:
             message = "The requested number of test repetitions exceeds the CI limitation."
-            setup_result.warn_test(logger, "Setup", message)
+            setup_result.warn_test("Setup", message)
             logger.debug(
                 "The number of test repetitions has been reduced from %s to %s.",
                 args.repeat, MAX_CI_REPETITIONS)
@@ -279,7 +261,7 @@ class Launch():
         except LaunchException:
             # Warn but don't fail
             message = "Issue detected setting up the fuse configuration"
-            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
+            setup_result.warn_test("Setup", message, sys.exc_info())
 
         # Get the core file pattern information
         try:
@@ -422,336 +404,36 @@ class Launch():
             LaunchException: if there is a problem setting up the test environment
 
         """
-        base_dir = self._get_build_environment(list_tests)["PREFIX"]
-        bin_dir = os.path.join(base_dir, "bin")
-        sbin_dir = os.path.join(base_dir, "sbin")
-        # /usr/sbin is not setup on non-root user for CI nodes.
-        # SCM formatting tool mkfs.ext4 is located under
-        # /usr/sbin directory.
-        usr_sbin = os.path.sep + os.path.join("usr", "sbin")
-        path = os.environ.get("PATH")
-        os.environ["COVFILE"] = BULLSEYE_FILE
+        try:
+            set_path()
+        except TestEnvironmentException as error:
+            raise LaunchException("Error setting test environment:", str(error)) from error
+        set_bullseye_environment()
 
         if not list_tests:
-            # Get the default fabric_iface value (DAOS_TEST_FABRIC_IFACE)
-            self._set_interface_environment(servers, clients)
+            # Get the default fabric interface and provider
+            self.test_env.provider(provider)
+            try:
+                self.test_env.set_with_hosts(servers, clients)
+            except TestEnvironmentException as error:
+                raise LaunchException("Error setting test environment:", str(error)) from error
+            logger.info("Testing with interface:   %s", self.test_env.interface)
+            logger.info("Testing with provider:    %s", self.test_env.provider)
 
-            # Get the default provider if CRT_PHY_ADDR_STR is not set
-            self._set_provider_environment(servers, os.environ["DAOS_TEST_FABRIC_IFACE"], provider)
+            self.details["interface"] = self.test_env.interface
+            self.details["provider"] = self.test_env.provider
 
-            # Set the default location for daos log files written during testing
-            # if not already defined.
-            if "DAOS_TEST_LOG_DIR" not in os.environ:
-                os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
-            if "DAOS_TEST_USER_DIR" not in os.environ:
-                os.environ["DAOS_TEST_USER_DIR"] = DEFAULT_DAOS_TEST_USER_DIR
-            if "DAOS_TEST_SHARED_DIR" not in os.environ:
-                if base_dir != os.path.join(os.sep, "usr"):
-                    os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
-                else:
-                    os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
-            if "DAOS_TEST_APP_DIR" not in os.environ:
-                os.environ["DAOS_TEST_APP_DIR"] = os.path.join(
-                    os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
-            os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
+            # Assign DAOS environment variables used in functional testing
+            os.environ["D_LOG_FILE"] = os.path.join(self.test_env.log_dir, "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
-
-            # Assign the default value for transport configuration insecure mode
             os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
-
-        # Update PATH
-        os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
-        os.environ["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+            os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
         # Python paths required for functional testing
-        self._set_python_environment()
+        set_python_environment()
 
-        logger.debug("ENVIRONMENT VARIABLES")
-        for key in sorted(os.environ):
-            if not key.startswith("BASH_FUNC_"):
-                logger.debug("  %s: %s", key, os.environ[key])
-
-    @staticmethod
-    def _get_build_environment(list_tests):
-        """Obtain DAOS build environment variables from the .build_vars.json file.
-
-        Args:
-            list_tests (bool): whether or not the user has requested to just list the tests that
-                match the specified tags
-
-        Raises:
-            LaunchException: if there is an error obtaining the DAOS build environment variables
-
-        Returns:
-            dict: a dictionary of DAOS build environment variable names and values
-
-        """
-        build_vars_file = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
-        try:
-            with open(build_vars_file, encoding="utf-8") as vars_file:
-                return json.load(vars_file)
-
-        except ValueError as error:
-            if not list_tests:
-                raise LaunchException("Error setting test environment:", str(error)) from error
-
-        except IOError as error:
-            if error.errno == errno.ENOENT:
-                if not list_tests:
-                    raise LaunchException("Error setting test environment:", str(error)) from error
-
-        return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
-
-    def _set_interface_environment(self, servers, clients):
-        """Set up the interface environment variables.
-
-        Use the existing OFI_INTERFACE setting if already defined, or select the fastest, active
-        interface on this host to define the DAOS_TEST_FABRIC_IFACE environment variable.
-
-        The DAOS_TEST_FABRIC_IFACE defines the default fabric_iface value in the daos_server
-        configuration file.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-
-        Raises:
-            LaunchException: if there is a problem obtaining the default interface
-
-        """
-        logger.debug("-" * 80)
-        # Get the default interface to use if OFI_INTERFACE is not set
-        interface = os.environ.get("OFI_INTERFACE")
-        if interface is None:
-            # Find all the /sys/class/net interfaces on the launch node
-            # (excluding lo)
-            logger.debug("Detecting network devices - OFI_INTERFACE not set")
-            available_interfaces = self._get_available_interfaces(servers, clients)
-            try:
-                # Select the fastest active interface available by sorting
-                # the speed
-                interface = available_interfaces[sorted(available_interfaces)[-1]]
-            except IndexError as error:
-                raise LaunchException("Error obtaining a default interface!") from error
-
-        # Update env definitions
-        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-        os.environ["DAOS_TEST_FABRIC_IFACE"] = interface
-        logger.info("Testing with interface:   %s", interface)
-        self.details["interface"] = interface
-        for name in ("OFI_INTERFACE", "DAOS_TEST_FABRIC_IFACE", "CRT_CTX_SHARE_ADDR"):
-            try:
-                logger.debug("Testing with %s=%s", name, os.environ[name])
-            except KeyError:
-                logger.debug("Testing with %s unset", name)
-
-    @staticmethod
-    def _get_available_interfaces(servers, clients):
-        # pylint: disable=too-many-nested-blocks,too-many-branches,too-many-locals
-        """Get a dictionary of active available interfaces and their speeds.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-
-        Raises:
-            LaunchException: if there is a problem finding active network interfaces
-
-        Returns:
-            dict: a dictionary of speeds with the first available active interface providing that
-                speed
-
-        """
-        available_interfaces = {}
-        all_hosts = NodeSet()
-        all_hosts.update(servers)
-        all_hosts.update(clients)
-
-        # Find any active network interfaces on the server or client hosts
-        net_path = os.path.join(os.path.sep, "sys", "class", "net")
-        operstate = os.path.join(net_path, "*", "operstate")
-        command = [f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"]
-
-        result = run_remote(all_hosts, " | ".join(command))
-        if not result.passed:
-            raise LaunchException(
-                f"Error obtaining a default interface on {str(all_hosts)} from {net_path}")
-
-        # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
-        active_interfaces = {}
-        for data in result.output:
-            for line in data.stdout:
-                try:
-                    interface = line.split("/")[-2]
-                    if interface not in active_interfaces:
-                        active_interfaces[interface] = data.hosts
-                    else:
-                        active_interfaces[interface].update(data.hosts)
-                except IndexError:
-                    pass
-
-        # From the active interface dictionary find all the interfaces that are common to all hosts
-        logger.debug("Active network interfaces detected:")
-        common_interfaces = []
-        for interface, node_set in active_interfaces.items():
-            logger.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == all_hosts)
-            if node_set == all_hosts:
-                common_interfaces.append(interface)
-
-        # Find the speed of each common active interface in order to be able to choose the fastest
-        interface_speeds = {}
-        for interface in common_interfaces:
-            # Check for a virtual interface
-            module_path = os.path.join(net_path, interface, "device", "driver", "module")
-            command = [f"readlink {module_path}", "grep 'virtio_net'"]
-            result = run_remote(all_hosts, " | ".join(command))
-            if result.passed and result.homogeneous:
-                interface_speeds[interface] = 1000
-                continue
-
-            # Verify each host has the same speed for non-virtual interfaces
-            command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-            result = run_remote(all_hosts, command)
-            if result.passed and result.homogeneous:
-                for line in result.output[0].stdout:
-                    try:
-                        interface_speeds[interface] = int(line.strip())
-                    except ValueError:
-                        # Any line not containing a speed (integer)
-                        pass
-            elif not result.homogeneous:
-                logger.error(
-                    "Non-homogeneous interface speed detected for %s on %s.",
-                    interface, str(all_hosts))
-            else:
-                logger.error("Error detecting speed of %s on %s", interface, str(all_hosts))
-
-        if interface_speeds:
-            logger.debug("Active network interface speeds on %s:", all_hosts)
-
-        for interface, speed in interface_speeds.items():
-            logger.debug("  - %-8s (speed: %6s)", interface, speed)
-            # Only include the first active interface for each speed - first is
-            # determined by an alphabetic sort: ib0 will be checked before ib1
-            if speed is not None and speed not in available_interfaces:
-                available_interfaces[speed] = interface
-
-        logger.debug("Available interfaces on %s: %s", all_hosts, available_interfaces)
-        return available_interfaces
-
-    def _set_provider_environment(self, servers, interface, provider):
-        """Set up the provider environment variables.
-
-        Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
-        select the appropriate provider based upon the interface driver.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            interface (str): the current interface being used.
-            provider (str): provider to use in testing
-
-        Raises:
-            LaunchException: if there is a problem finding a provider for the interface
-
-        """
-        logger.debug("-" * 80)
-        # Use the detected provider if one is not set
-        if self.mode == "ci":
-            provider = PROVIDER_ALIAS.get(provider, provider)
-        if not provider:
-            provider = os.environ.get("CRT_PHY_ADDR_STR")
-        if provider is None:
-            logger.debug("Detecting provider for %s - CRT_PHY_ADDR_STR not set", interface)
-
-            # Check for a Omni-Path interface
-            logger.debug("Checking for Omni-Path devices")
-            command = "sudo -n opainfo"
-            result = run_remote(servers, command)
-            if result.passed:
-                # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
-                logger.debug("  Excluding verbs provider for Omni-Path adapters")
-                PROVIDER_KEYS.pop("verbs")
-
-            # Detect all supported providers
-            command = f"fi_info -d {interface} -l | grep -v 'version:'"
-            result = run_remote(servers, command)
-            if result.passed:
-                # Find all supported providers
-                keys_found = defaultdict(NodeSet)
-                for data in result.output:
-                    for line in data.stdout:
-                        provider_name = line.replace(":", "")
-                        if provider_name in PROVIDER_KEYS:
-                            keys_found[provider_name].update(data.hosts)
-
-                # Only use providers available on all the server hosts
-                if keys_found:
-                    logger.debug("Detected supported providers:")
-                provider_name_keys = list(keys_found)
-                for provider_name in provider_name_keys:
-                    logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                    if keys_found[provider_name] != servers:
-                        keys_found.pop(provider_name)
-
-                # Select the preferred found provider based upon PROVIDER_KEYS order
-                logger.debug("Supported providers detected: %s", list(keys_found))
-                for key in PROVIDER_KEYS:
-                    if key in keys_found:
-                        provider = PROVIDER_KEYS[key]
-                        break
-
-            # Report an error if a provider cannot be found
-            if not provider:
-                raise LaunchException(
-                    f"Error obtaining a supported provider for {interface} "
-                    f"from: {list(PROVIDER_KEYS)}")
-
-            logger.debug("  Found %s provider for %s", provider, interface)
-
-        # Update env definitions
-        os.environ["CRT_PHY_ADDR_STR"] = provider
-        logger.info("Testing with provider:    %s", provider)
-        self.details["provider"] = provider
-        logger.debug("Testing with CRT_PHY_ADDR_STR=%s", os.environ["CRT_PHY_ADDR_STR"])
-
-    @staticmethod
-    def _set_python_environment():
-        """Set up the test python environment.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
-        logger.debug("-" * 80)
-        required_python_paths = [
-            os.path.abspath("util/apricot"),
-            os.path.abspath("util"),
-            os.path.abspath("cart"),
-        ]
-
-        # Include the cart directory paths when running from sources
-        for cart_dir in os.listdir(os.path.abspath("cart")):
-            cart_path = os.path.join(os.path.abspath("cart"), cart_dir)
-            if os.path.isdir(cart_path):
-                required_python_paths.append(cart_path)
-
-        required_python_paths.extend(site.getsitepackages())
-
-        # Check the PYTHONPATH env definition
-        python_path = os.environ.get("PYTHONPATH")
-        if python_path is None or python_path == "":
-            # Use the required paths to define the PYTHONPATH env if it is not set
-            os.environ["PYTHONPATH"] = ":".join(required_python_paths)
-        else:
-            # Append any missing required paths to the existing PYTHONPATH env
-            defined_python_paths = [
-                os.path.abspath(os.path.expanduser(path))
-                for path in python_path.split(":")]
-            for required_path in required_python_paths:
-                if required_path not in defined_python_paths:
-                    python_path += ":" + required_path
-            os.environ["PYTHONPATH"] = python_path
-        logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+        # Log the environment variable assignments
+        log_environment()
 
     def list_tests(self, tags, yaml_extension=None):
         """List the test files matching the tags.
@@ -877,7 +559,7 @@ class Launch():
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
-                control_metadata = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], 'control_metadata')
+                control_metadata = os.path.join(self.test_env.log_dir, 'control_metadata')
 
         self.details["storage"] = storage_info.device_dict()
 
@@ -1064,7 +746,8 @@ class Launch():
         return_code |= self.setup_slurm()
 
         # Configure hosts to collect code coverage
-        return_code |= self.setup_bullseye()
+        if not setup_bullseye(self.bullseye_hosts, self.result.tests[0]):
+            return_code |= 128
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -1104,77 +787,11 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        return_code |= self.finalize_bullseye()
+        if not finalize_bullseye(self.bullseye_hosts, self.job_results_dir, self.result.tests[0]):
+            return_code |= 16
 
         # Summarize the run
         return self._summarize_run(return_code)
-
-    def setup_bullseye(self):
-        """Set up the hosts for bullseye code coverage collection.
-
-        Returns:
-            int: status code: 0 = success, 128 = failure
-
-        """
-        if self.bullseye_hosts:
-            logger.debug("-" * 80)
-            logger.info("Setting up bullseye code coverage on %s:", self.bullseye_hosts)
-
-            logger.debug("Removing any existing %s file", BULLSEYE_FILE)
-            command = ["rm", "-fr", BULLSEYE_FILE]
-            if not run_remote(self.bullseye_hosts, " ".join(command)).passed:
-                message = "Error removing bullseye code coverage file on at least one host"
-                self.result.tests[0].fail_test(logger, "Run", message, None)
-                return 128
-
-            logger.debug("Copying %s bullseye code coverage source file", BULLSEYE_SRC)
-            command = ["cp", BULLSEYE_SRC, BULLSEYE_FILE]
-            if not run_remote(self.bullseye_hosts, " ".join(command)).passed:
-                message = "Error copying bullseye code coverage file on at least one host"
-                self.result.tests[0].fail_test(logger, "Run", message, None)
-                return 128
-
-            logger.debug("Updating %s bullseye code coverage file permissions", BULLSEYE_FILE)
-            command = ["chmod", "777", BULLSEYE_FILE]
-            if not run_remote(self.bullseye_hosts, " ".join(command)).passed:
-                message = "Error updating bullseye code coverage file on at least one host"
-                self.result.tests[0].fail_test(logger, "Run", message, None)
-                return 128
-        return 0
-
-    def finalize_bullseye(self):
-        """Retrieve the bullseye code coverage collection information from the hosts.
-
-        Returns:
-            int: status code: 0 = success, 16 = failure
-
-        """
-        if not self.bullseye_hosts:
-            return 0
-
-        bullseye_path, bullseye_file = os.path.split(BULLSEYE_FILE)
-        bullseye_dir = os.path.join(self.job_results_dir, "bullseye_coverage_logs")
-        status = self._archive_files(
-            "bullseye coverage log files", self.bullseye_hosts, bullseye_path,
-            "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900)
-        # Rename bullseye_coverage_logs.host/test.cov.* to
-        # bullseye_coverage_logs/test.host.cov.*
-        for item in os.listdir(self.job_results_dir):
-            item_full = os.path.join(self.job_results_dir, item)
-            if os.path.isdir(item_full) and "bullseye_coverage_logs" in item:
-                host_ext = os.path.splitext(item)
-                if len(host_ext) > 1:
-                    os.makedirs(bullseye_dir, exist_ok=True)
-                    for name in os.listdir(item_full):
-                        old_file = os.path.join(item_full, name)
-                        if os.path.isfile(old_file):
-                            new_name = name.split(".")
-                            new_name.insert(1, host_ext[-1][1:])
-                            new_file_name = ".".join(new_name)
-                            new_file = os.path.join(bullseye_dir, new_file_name)
-                            logger.debug("Renaming %s to %s", old_file, new_file)
-                            os.rename(old_file, new_file)
-        return status
 
     def setup_slurm(self):
         """Set up slurm on the hosts if any tests are using partitions.
@@ -1205,11 +822,11 @@ class Launch():
             slurm_setup.start_slurm(self.user, True)
         except SlurmSetupException:
             message = "Error setting up slurm"
-            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
+            self.result.tests[-1].fail_test("Run", message, sys.exc_info())
             status |= 128
         except Exception:       # pylint: disable=broad-except
             message = "Unknown error setting up slurm"
-            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
+            self.result.tests[-1].fail_test("Run", message, sys.exc_info())
             status |= 128
 
         return status
@@ -1232,7 +849,7 @@ class Launch():
                 os.makedirs(app_dir)
             except OSError:
                 message = 'Error creating the application directory'
-                self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
+                self.result.tests[-1].fail_test('Run', message, sys.exc_info())
                 return 128
         else:
             logger.debug('  Using the existing application directory')
@@ -1245,7 +862,7 @@ class Launch():
                     run_local(f"cp -r '{os.path.join(app_src, app)}' '{app_dir}'", check=True)
                 except RunException:
                     message = 'Error copying files to the application directory'
-                    self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
+                    self.result.tests[-1].fail_test('Run', message, sys.exc_info())
                     return 128
 
         logger.debug("  Applications in '%s':", app_dir)
@@ -1453,11 +1070,11 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()),
+        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values()))}")
+             f"e.g. {', '.join(list(PROVIDER_KEYS.values() + list(PROVIDER_ALIAS.keys())))}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

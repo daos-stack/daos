@@ -12,13 +12,13 @@ import sys
 
 from ClusterShell.NodeSet import NodeSet
 
+from bullseye_utils import BULLSEYE_FILE
 from host_utils import get_local_host
 from process_core_files import CoreFileProcessing, CoreFileException
 from run_utils import RunException, run_local, run_remote, find_command, stop_processes
 from user_utils import get_chown_command
 from yaml_utils import get_test_category
 
-BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 CLEANUP_PROCESS_NAMES = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 CLEANUP_UNMOUNT_TYPES = ["fuse.daos"]
