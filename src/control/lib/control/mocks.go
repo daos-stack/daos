@@ -162,16 +162,16 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 			}
 			if delay > 0 {
 				mi.log.Debugf("delaying mock response for %s", delay)
-				time.Sleep(delay)
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
+					return
+				}
 			}
 
-			select {
-			case <-ctx.Done():
-				mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
-				return
-			case responses <- hr:
-				mi.log.Debug("sending mock response")
-			}
+			mi.log.Debug("sending mock response")
+			responses <- hr
 		}
 		close(responses)
 	}(invokeCount)

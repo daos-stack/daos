@@ -210,9 +210,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
+int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
+		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
