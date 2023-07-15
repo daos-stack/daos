@@ -12,6 +12,7 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 
+from bullseye_utils import set_bullseye_environment
 from run_utils import run_remote
 
 PROVIDER_KEYS = OrderedDict(
@@ -489,3 +490,52 @@ class TestEnvironment():
         self.__env_map['interface']['kwargs']['hosts'] = hosts
         self.__env_map['provider']['kwargs']['hosts'] = servers
         self.__set_environment()
+
+
+def set_test_environment(test_env, servers=None, clients=None, provider=None, insecure_mode=False,
+                         details=None):
+    """Set up the test environment.
+
+    Args:
+        test_env (TestEnvironment, optional): the current test environment. Defaults to None.
+        servers (NodeSet, optional): hosts designated for the server role in testing. Defaults to
+            None.
+        clients (NodeSet, optional): hosts designated for the client role in testing. Defaults to
+            None.
+        provider (str, optional): provider to use in testing. Defaults to None.
+        insecure_mode (bool, optional): whether or not to run tests in insecure mode. Defaults to
+            False.
+        details (dict, optional): dictionary to update with interface and provider settings if
+            provided. Defaults to None.
+
+    Raises:
+        TestEnvironmentException: if there is a problem setting up the test environment
+
+    """
+    set_path()
+    set_bullseye_environment()
+
+    if test_env:
+        # Get the default fabric interface and provider
+        test_env.provider(provider)
+        test_env.set_with_hosts(servers, clients)
+
+        log = getLogger()
+        log.info("Testing with interface:   %s", test_env.interface)
+        log.info("Testing with provider:    %s", test_env.provider)
+
+        if details:
+            details["interface"] = test_env.interface
+            details["provider"] = test_env.provider
+
+        # Assign additional DAOS environment variables used in functional testing
+        os.environ["D_LOG_FILE"] = os.path.join(test_env.log_dir, "daos.log")
+        os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+        os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
+        os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+
+    # Python paths required for functional testing
+    set_python_environment()
+
+    # Log the environment variable assignments
+    log_environment()

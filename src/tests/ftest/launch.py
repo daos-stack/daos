@@ -30,8 +30,7 @@ from slurm_setup import SlurmSetup, SlurmSetupException
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from bullseye_utils import setup_bullseye, finalize_bullseye, set_bullseye_environment, \
-    BULLSEYE_SRC                                                                        # noqa: E402
+from bullseye_utils import setup_bullseye, finalize_bullseye, BULLSEYE_SRC              # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
 from launch_utils import LaunchException, AvocadoInfo, TestInfo, TestRunner, \
     fault_injection_enabled                                                             # noqa: E402
@@ -40,8 +39,8 @@ from package_utils import find_packages                                         
 from results_utils import Job, Results, LaunchTestName                                  # noqa: E402
 from run_utils import run_local, run_remote, RunException                               # noqa: E402
 from storage_utils import StorageInfo, StorageException                                 # noqa: E402
-from test_env_utils import TestEnvironment, TestEnvironmentException, set_path, \
-    set_python_environment, log_environment, PROVIDER_KEYS, PROVIDER_ALIAS              # noqa: E402
+from test_env_utils import TestEnvironment, TestEnvironmentException, set_test_environment, \
+    PROVIDER_KEYS, PROVIDER_ALIAS                                                       # noqa: E402
 from yaml_utils import get_yaml_data, YamlUpdater, YamlException                        # noqa: E402
 from data_utils import list_unique, dict_extract_values                                 # noqa: E402
 
@@ -212,10 +211,15 @@ class Launch():
 
         # Setup the user environment
         try:
-            self._set_test_environment(
-                args.test_servers, args.test_clients, args.list, args.provider, args.insecure_mode)
-        except LaunchException as error:
-            return self.get_exit_status(1, str(error), "Setup", sys.exc_info())
+            if args.list:
+                set_test_environment()
+            else:
+                set_test_environment(
+                    self.test_env, args.test_servers, args.test_clients, args.provider,
+                    args.insecure_mode)
+        except TestEnvironmentException as error:
+            message = f"Error setting up test environment: {str(error)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
@@ -388,52 +392,6 @@ class Launch():
         os.makedirs(self.logdir)
 
         return old_launch_log_dir
-
-    def _set_test_environment(self, servers, clients, list_tests, provider, insecure_mode):
-        """Set up the test environment.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-            list_tests (bool): whether or not the user has requested to just list the tests that
-                match the specified tags
-            provider (str): provider to use in testing
-            insecure_mode (bool): whether or not to run tests in insecure mode
-
-        Raises:
-            LaunchException: if there is a problem setting up the test environment
-
-        """
-        try:
-            set_path()
-        except TestEnvironmentException as error:
-            raise LaunchException("Error setting test environment:", str(error)) from error
-        set_bullseye_environment()
-
-        if not list_tests:
-            # Get the default fabric interface and provider
-            self.test_env.provider(provider)
-            try:
-                self.test_env.set_with_hosts(servers, clients)
-            except TestEnvironmentException as error:
-                raise LaunchException("Error setting test environment:", str(error)) from error
-            logger.info("Testing with interface:   %s", self.test_env.interface)
-            logger.info("Testing with provider:    %s", self.test_env.provider)
-
-            self.details["interface"] = self.test_env.interface
-            self.details["provider"] = self.test_env.provider
-
-            # Assign DAOS environment variables used in functional testing
-            os.environ["D_LOG_FILE"] = os.path.join(self.test_env.log_dir, "daos.log")
-            os.environ["D_LOG_FILE_APPEND_PID"] = "1"
-            os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
-            os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-
-        # Python paths required for functional testing
-        set_python_environment()
-
-        # Log the environment variable assignments
-        log_environment()
 
     def list_tests(self, tags, yaml_extension=None):
         """List the test files matching the tags.

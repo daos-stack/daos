@@ -16,14 +16,13 @@ from bullseye_utils import BULLSEYE_FILE
 from host_utils import get_local_host
 from process_core_files import CoreFileProcessing, CoreFileException
 from run_utils import RunException, run_local, run_remote, find_command, stop_processes
+from test_env_utils import TestEnvironment
 from user_utils import get_chown_command
 from yaml_utils import get_test_category
 
 CLEANUP_PROCESS_NAMES = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 CLEANUP_UNMOUNT_TYPES = ["fuse.daos"]
-DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
-DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 TEST_RESULTS_DIRS = (
@@ -510,8 +509,7 @@ def move_files(hosts, source, pattern, destination, depth, timeout, test_result)
     rcopy_dest, tmp_copy_dir = os.path.split(destination)
     if source == os.path.join(os.sep, "etc", "daos"):
         # Use a temporary sub-directory in a directory where the user has permissions
-        tmp_copy_dir = os.path.join(
-            os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR), tmp_copy_dir)
+        tmp_copy_dir = os.path.join(TestEnvironment().log_dir, tmp_copy_dir)
         sudo_command = "sudo -n "
     else:
         tmp_copy_dir = os.path.join(source, tmp_copy_dir)
@@ -834,11 +832,11 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
     # Optionally store all of the server and client config files and remote logs along with
     # this test's results. Also report an error if the test generated any log files with a
     # size exceeding the threshold.
+    test_env = TestEnvironment()
     if archive:
-        daos_test_log_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
         remote_files = OrderedDict()
         remote_files["local configuration files"] = {
-            "source": daos_test_log_dir,
+            "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[0]),
             "pattern": "*_*_*.yaml",
             "hosts": get_local_host(),
@@ -854,7 +852,7 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
             "timeout": 300,
         }
         remote_files["daos log files"] = {
-            "source": daos_test_log_dir,
+            "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[1]),
             "pattern": "*log*",
             "hosts": test.host_info.all_hosts,
@@ -862,7 +860,7 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
             "timeout": 900,
         }
         remote_files["cart log files"] = {
-            "source": daos_test_log_dir,
+            "source": test_env.log_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[2]),
             "pattern": "*log*",
             "hosts": test.host_info.all_hosts,
@@ -878,7 +876,7 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
             "timeout": 900,
         }
         remote_files["valgrind log files"] = {
-            "source": os.environ.get("DAOS_TEST_SHARED_DIR", DEFAULT_DAOS_TEST_SHARED_DIR),
+            "source": test_env.shared_dir,
             "destination": os.path.join(job_results_dir, "latest", TEST_RESULTS_DIRS[4]),
             "pattern": "valgrind*",
             "hosts": test.host_info.servers.hosts,

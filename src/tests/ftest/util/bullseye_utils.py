@@ -13,7 +13,7 @@ BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 
 
-def set_environment():
+def set_bullseye_environment():
     """Set the bullseye code coverage environment variables."""
     os.environ["COVFILE"] = BULLSEYE_FILE
 

@@ -15,6 +15,7 @@ from host_utils import get_node_set, get_local_host, HostInfo, HostException
 from results_utils import LaunchTestName
 from run_utils import RunException, run_local, run_remote
 from slurm_utils import show_partition, create_partition, delete_partition
+from test_env_utils import TestEnvironment
 from user_utils import groupadd, useradd, userdel, get_group_id, get_user_groups
 from yaml_utils import get_yaml_data
 
@@ -484,7 +485,7 @@ class TestRunner():
         if status:
             return status
 
-        # Setup (remove/create/list) the common DAOS_TEST_LOG_DIR directory on each test host
+        # Setup (remove/create/list) the common test directory on each test host
         status = self._setup_test_directory(test)
         if status:
             return status
@@ -670,24 +671,23 @@ class TestRunner():
         """
         log = getLogger()
         log.debug("-" * 80)
-        test_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        user_dir = os.environ["DAOS_TEST_USER_DIR"]
+        test_env = TestEnvironment()
         hosts = test.host_info.all_hosts
         hosts.add(self.local_host)
-        log.debug("Setting up '%s' on %s:", test_dir, hosts)
+        log.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
-            f"sudo -n rm -fr {test_dir}",
-            f"mkdir -p {test_dir}",
-            f"chmod a+wrx {test_dir}",
-            f"ls -al {test_dir}",
-            f"mkdir -p {user_dir}"
+            f"sudo -n rm -fr {test_env.log_dir}",
+            f"mkdir -p {test_env.log_dir}",
+            f"chmod a+wrx {test_env.log_dir}",
+            f"ls -al {test_env.log_dir}",
+            f"mkdir -p {test_env.user_dir}"
         ]
         # Predefine the sub directories used to collect the files process()/_archive_files()
         for directory in TEST_RESULTS_DIRS:
-            commands.append(f"mkdir -p {test_dir}/{directory}")
+            commands.append(f"mkdir -p {test_env.log_dir}/{directory}")
         for command in commands:
             if not run_remote(hosts, command).passed:
-                message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
+                message = "Error setting up the common test directory on all hosts"
                 self.test_result.fail_test("Prepare", message, sys.exc_info())
                 return 128
         return 0
@@ -805,8 +805,8 @@ class TestRunner():
         _ = userdel(hosts, user, True)
 
         log.info('Creating user %s in group %s', user, gid)
-        parent_dir = os.environ["DAOS_TEST_USER_DIR"]
-        if not useradd(hosts, user, gid, parent_dir, True).passed:
+        test_env = TestEnvironment()
+        if not useradd(hosts, user, gid, test_env.user_dir, True).passed:
             raise LaunchException(f'Error creating user {user}')
 
     def _generate_certs(self):
@@ -819,14 +819,14 @@ class TestRunner():
         log = getLogger()
         log.debug("-" * 80)
         log.debug("Generating certificates")
-        daos_test_log_dir = os.environ["DAOS_TEST_LOG_DIR"]
-        certs_dir = os.path.join(daos_test_log_dir, "daosCA")
+        test_env = TestEnvironment()
+        certs_dir = os.path.join(test_env.log_dir, "daosCA")
         certgen_dir = os.path.abspath(
             os.path.join("..", "..", "..", "..", "lib64", "daos", "certgen"))
         command = os.path.join(certgen_dir, "gen_certificates.sh")
         try:
             run_local(f"/usr/bin/rm -rf {certs_dir}")
-            run_local(f"{command} {daos_test_log_dir}")
+            run_local(f"{command} {test_env.log_dir}")
         except RunException:
             message = "Error generating certificates"
             self.test_result.fail_test("Prepare", message, sys.exc_info())
