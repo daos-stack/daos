@@ -144,7 +144,7 @@ class ParallelIo(FioBase, IorTestBase):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
             cmd = "ls -a {}".format(dfuse_cont_dir)
             # execute bash cmds
-            result = run_remote(self.log, self.hostlist_clients, cmd, timeout=30)
+            result = run_remote(self.hostlist_clients, cmd, timeout=30)
             if result.failed_hosts:
                 self.fail("Error running '{}' on the following hosts: {}".format(
                     cmd, result.failed_hosts))
@@ -243,7 +243,7 @@ class ParallelIo(FioBase, IorTestBase):
                 cont_num = (pool_count * self.cont_count) + counter
                 dfuse_cont_dir = str(dfuse_pool_dir + "/" + self.container[cont_num].uuid)
                 cmd = "ls -a {}".format(dfuse_cont_dir)
-                if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                if not run_remote(self.hostlist_clients, cmd).passed:
                     self.fail("Failed to {}".format(cmd))
 
                 # run ior on all containers

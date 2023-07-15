@@ -36,7 +36,7 @@ class DaosServerDumpTest(TestWithServers):
         super().tearDown()
 
         # DAOS-1452 may need to check for one file per engine...
-        result = run_remote(self.log, self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
+        result = run_remote(self.hostlist_servers, r"ls /tmp/daos_dump*.txt")
         if not result.passed:
             self.log.info("no ULT stacks dump found on following hosts: %s", result.failed_hosts)
             self._Test__status = 'FAIL'

@@ -74,12 +74,12 @@ class DfuseMUMount(DfuseTestBase):
 
         self.log.info('Verify stat as dfuse user in single-user mode succeeds')
         command = 'stat {}'.format(root_dir)
-        if not run_remote(self.log, self.hostlist_clients, command).passed:
+        if not run_remote(self.hostlist_clients, command).passed:
             self.fail('Failed to stat in single-user mode')
 
         self.log.info('Verify stat as root user in single-user mode fails')
         command = command_as_user('stat {}'.format(root_dir), 'root')
-        if run_remote(self.log, self.hostlist_clients, command).passed:
+        if run_remote(self.hostlist_clients, command).passed:
             self.fail('Expected stat to fail as root in single-user mode')
 
         self.log.info('Re-mounting dfuse in multi-user mode')
@@ -89,12 +89,12 @@ class DfuseMUMount(DfuseTestBase):
 
         self.log.info('Verify stat as dfuse user in multi-user mode succeeds')
         command = 'stat {}'.format(root_dir)
-        if not run_remote(self.log, self.hostlist_clients, command).passed:
+        if not run_remote(self.hostlist_clients, command).passed:
             self.fail('Failed to stat in multi-user mode')
 
         self.log.info('Verify stat as root user in multi-user mode succeeds')
         command = command_as_user('stat {}'.format(root_dir), 'root')
-        if not run_remote(self.log, self.hostlist_clients, command).passed:
+        if not run_remote(self.hostlist_clients, command).passed:
             self.fail('Failed to stat as root in multi-user mode')
 
         # Cleanup leftover dfuse
@@ -166,7 +166,7 @@ class DfuseMUMount(DfuseTestBase):
                 '{} container create {} --type POSIX --path {}'.format(
                     daos_path, pool_label, cont_path),
                 'root')
-            if not run_remote(self.log, first_client, command).passed:
+            if not run_remote(first_client, command).passed:
                 self.fail('Failed to create sub-container as root in multi-user mode')
 
             self.log.info('Verify dfuse user was automatically given ACLs for the new container')
@@ -174,7 +174,7 @@ class DfuseMUMount(DfuseTestBase):
             self.log.info('Expected ACL: %s', expected_acl)
             command = command_as_user(
                 '{} container get-acl --path {}'.format(daos_path, cont_path), 'root')
-            result = run_remote(self.log, first_client, command)
+            result = run_remote(first_client, command)
             if not result.passed:
                 self.fail('Failed to get ACLs for container created by root')
             for stdout in result.all_stdout.values():
@@ -183,17 +183,17 @@ class DfuseMUMount(DfuseTestBase):
 
             self.log.info('Verify dfuse user can access the container created by root')
             command = '{} container get-prop --path {}'.format(daos_path, cont_path)
-            if not run_remote(self.log, first_client, command).passed:
+            if not run_remote(first_client, command).passed:
                 self.fail('Failed to get sub-container properties in multi-user mode')
 
             self.log.info('Verify dfuse user can read the container created by root')
             command = 'ls -l {}'.format(cont_path)
-            if not run_remote(self.log, first_client, command).passed:
+            if not run_remote(first_client, command).passed:
                 self.fail('Failed to read container created by root, as dfuse user')
 
             self.log.info('Verify root can read its own container')
             command = command_as_user('ls -l {}'.format(cont_path), 'root')
-            if not run_remote(self.log, first_client, command).passed:
+            if not run_remote(first_client, command).passed:
                 self.fail('Failed to read container created by root, as root')
 
             self.log.info('Revoking ACLs for just dfuse user on the container created by root')
@@ -202,7 +202,7 @@ class DfuseMUMount(DfuseTestBase):
                 '{} container delete-acl --path {} --principal {}'.format(
                     daos_path, cont_path, principal),
                 'root')
-            if not run_remote(self.log, first_client, command).passed:
+            if not run_remote(first_client, command).passed:
                 self.fail('Failed to revoke ACLs on container created by root')
 
             self.log.info('Restarting dfuse to pick up ACL changes')
@@ -211,12 +211,12 @@ class DfuseMUMount(DfuseTestBase):
 
             self.log.info('Verifying dfuse user can no longer read the container through dfuse')
             command = 'ls -l {}'.format(cont_path)
-            if run_remote(self.log, first_client, command).passed:
+            if run_remote(first_client, command).passed:
                 self.fail('Expected ls to fail on container created by root, as dfuse user')
 
             self.log.info('Verifying root can no longer read the container through dfuse')
             command = command_as_user('ls -l {}'.format(cont_path), 'root')
-            if run_remote(self.log, first_client, command).passed:
+            if run_remote(first_client, command).passed:
                 self.fail('Expected ls to fail on container created by root, as root')
 
         self.log.info('Verify UNS sub-container create as root - in dfuse pool')

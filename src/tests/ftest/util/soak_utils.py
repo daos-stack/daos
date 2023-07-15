@@ -152,7 +152,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
             # copy the directory from each client node to a shared directory
             # tagged with the hostname
             command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir_tmp}/.."
-            result = run_remote(self.log, host, command, timeout=300)
+            result = run_remote(host, command, timeout=300)
             if not result.passed:
                 raise SoakTestError(
                     f"<<FAILED: Soak remote logfiles not copied from clients>>: {host}")
@@ -167,7 +167,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     else:
         # copy the remote dir on all client nodes to a shared directory
         command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir}/.."
-        result = run_remote(self.log, host_list, command, timeout=300)
+        result = run_remote(host_list, command, timeout=300)
         if not result.passed:
             raise SoakTestError(
                 f"<<FAILED: Soak remote logfiles not copied from clients>>: {host_list}")
@@ -185,7 +185,7 @@ def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
     if rm_remote:
         # remove the remote soak logs for this pass
         command = f"/usr/bin/rm -rf {source_dir}"
-        result = run_remote(self.log, host_list, command)
+        result = run_remote(host_list, command)
         if not result.passed:
             raise SoakTestError(
                 f"<<FAILED: Soak logfiles removal failed>>: {directory} on {host_list}")
@@ -862,10 +862,10 @@ def cleanup_dfuse(self):
         "do fusermount3 -uz $dir",
         "rm -rf $dir",
         "done'"]
-    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd), timeout=600)
+    result = run_remote(self.hostlist_clients, ";".join(cmd), timeout=600)
     if not result.passed:
         self.log.info("Dfuse processes not stopped Error")
-    result = run_remote(self.log, self.hostlist_clients, ";".join(cmd2), timeout=600)
+    result = run_remote(self.hostlist_clients, ";".join(cmd2), timeout=600)
     if not result.passed:
         self.log.info("Dfuse mount points not deleted Error")
 

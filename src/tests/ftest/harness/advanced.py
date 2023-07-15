@@ -128,7 +128,7 @@ class HarnessAdvancedTest(TestWithServers):
             self.fail("Error writing {}: {}".format(local_trigger_file, str(error)))
 
         for command in commands:
-            if not run_remote(self.log, host, command, timeout=20).passed:
+            if not run_remote(host, command, timeout=20).passed:
                 self.fail("Error creating directory {}".format(failure_trigger_dir))
 
         for failure_trigger_file in failure_trigger_files:
@@ -140,7 +140,7 @@ class HarnessAdvancedTest(TestWithServers):
                 "echo 'THIS IS JUST A TEST' > {}".format(failure_trigger_file),
             ]
             for command in commands:
-                if not run_remote(self.log, host, command, timeout=20).passed:
+                if not run_remote(host, command, timeout=20).passed:
                     self.fail("Error creating file {}".format(failure_trigger_file))
 
     def test_launch_failures_hw(self):

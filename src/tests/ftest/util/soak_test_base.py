@@ -367,7 +367,7 @@ class SoakTestBase(TestWithServers):
 
         for script in job_cmdlist:
             try:
-                job_id = slurm_utils.run_slurm_script(self.log, str(script))
+                job_id = slurm_utils.run_slurm_script(str(script))
             except slurm_utils.SlurmFailed as error:
                 self.log.error(error)
                 # Force the test to exit with failure
@@ -418,7 +418,7 @@ class SoakTestBase(TestWithServers):
                         "<< SOAK test timeout in Job Completion at %s >>",
                         time.ctime())
                     for job in job_id_list:
-                        if not slurm_utils.cancel_jobs(self.log, self.control, int(job)).passed:
+                        if not slurm_utils.cancel_jobs(self.control, int(job)).passed:
                             self.fail("Error canceling Job {}".format(job))
                 # monitor events every 15 min
                 if datetime.now() > check_time:
@@ -492,8 +492,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
-        result = run_remote(
-            self.log, self.hostlist_clients, "mkdir -p {}".format(self.soaktest_dir))
+        result = run_remote(self.hostlist_clients, "mkdir -p {}".format(self.soaktest_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: logfile directory not created on clients>>: {}".format(
@@ -583,7 +582,7 @@ class SoakTestBase(TestWithServers):
                 " ".join([pool.identifier for pool in self.pool]))
 
         # cleanup soak log directories before test on all nodes
-        result = run_remote(self.log, self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
+        result = run_remote(self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
         if not result.passed:
             raise SoakTestError(
                 "<<FAILED: Soak directories not removed from clients>>: {}".format(

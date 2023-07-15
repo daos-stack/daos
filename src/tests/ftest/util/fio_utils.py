@@ -177,7 +177,7 @@ class FioCommand(ExecutableCommand):
             raise_exception = self.exit_status_exception
 
         # Run fio remotely
-        result = run_remote(self.log, self._hosts, self.with_exports, timeout=None)
+        result = run_remote(self._hosts, self.with_exports, timeout=None)
         if raise_exception and not result.passed:
             raise CommandFailure("Error running fio on: {}".format(result.failed_hosts))
         return result

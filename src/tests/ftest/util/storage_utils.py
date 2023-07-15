@@ -355,7 +355,7 @@ class StorageInfo():
 
         # Find the NVMe devices that exist on every host in the same NUMA slot
         command = ' | '.join(self.TYPE_SEARCH[key]) + ' || :'
-        result = run_remote(self._log, self._hosts, command)
+        result = run_remote(self._hosts, command)
         if result.passed:
             # Collect all the devices defined by the command output
             self._log.debug('Processing device information')
@@ -472,7 +472,7 @@ class StorageInfo():
         self._log.debug("Determining the number of devices behind each VMD controller")
         command_list = ["ls -l /sys/block/", "grep nvme"]
         command = " | ".join(command_list) + " || :"
-        result = run_remote(self._log, self._hosts, command)
+        result = run_remote(self._hosts, command)
 
         # Verify the command was successful on each server host
         if not result.passed:

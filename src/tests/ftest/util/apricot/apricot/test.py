@@ -562,14 +562,14 @@ class TestWithoutServers(Test):
         control = get_local_host()
         data = list(get_host_parameters(self, yaml_key, partition_key, reservation_key, namespace))
         try:
-            data.append(get_partition_hosts(self.log, control, data[1]))
+            data.append(get_partition_hosts(control, data[1]))
         except SlurmFailed:
             self.log.error(
                 "Error collecting hosts from the %s partition",
                 partition_key, exc_info=sys.exc_info())
             self.fail("Unable to collect partition information")
         try:
-            data.append(get_reservation_hosts(self.log, control, data[2]))
+            data.append(get_reservation_hosts(control, data[2]))
         except SlurmFailed:
             self.log.error(
                 "Error collecting hosts from the %s reservation",
@@ -701,7 +701,7 @@ class TestWithServers(TestWithoutServers):
         client_params = get_host_parameters(
             self, "test_clients", "client_partition", "client_reservation", "/run/hosts/*")
         try:
-            self.host_info.set_hosts(self.log, get_local_host(), *server_params, *client_params)
+            self.host_info.set_hosts(get_local_host(), *server_params, *client_params)
         except HostException:
             self.log.error("Error collecting host information", exc_info=sys.exc_info())
             self.fail("Unable to collect host information for the test")
@@ -741,7 +741,7 @@ class TestWithServers(TestWithoutServers):
                 self.hostfile_clients_slots)
 
         # Display host information
-        self.host_info.display(self.log)
+        self.host_info.display()
 
         # List common test directory contents before running the test
         self.log.info("-" * 100)
@@ -1325,8 +1325,7 @@ class TestWithServers(TestWithoutServers):
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        result = run_remote(
-            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        result = run_remote(all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
         if not result.passed:
             errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors

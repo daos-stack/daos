@@ -140,7 +140,7 @@ class HarnessBasicTest(TestWithoutServers):
         self.log.info("Running the 'hostname' command via CmockaUtils")
         self.log.info("  This should generate a cmocka xml file with a 'Missing file' error")
         name = "no_cmocka_xml_file_test"
-        cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir, self.log)
+        cmocka_utils = CmockaUtils(None, name, self.outputdir, self.test_dir)
         command = cmocka_utils.get_cmocka_command("hostname")
         cmocka_utils.run_cmocka_test(self, command)
 

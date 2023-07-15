@@ -377,8 +377,8 @@ class DaosServerManager(SubprocessManager):
             self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
         if not result.passed:
             # Add some debug due to the failure
-            run_remote(self.log, self._hosts, "sudo -n ipmctl show -v -dimm")
-            run_remote(self.log, self._hosts, "ndctl list")
+            run_remote(self._hosts, "sudo -n ipmctl show -v -dimm")
+            run_remote(self._hosts, "ndctl list")
         return result
 
     def scm_reset(self, **kwargs):
@@ -398,8 +398,7 @@ class DaosServerManager(SubprocessManager):
         cmd.debug.value = False
         cmd.set_command(("scm", "reset"), **kwargs)
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        return run_remote(
-            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        return run_remote(self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
     def nvme_prepare(self, **kwargs):
         """Run daos_server nvme prepare on the server hosts.
@@ -418,8 +417,7 @@ class DaosServerManager(SubprocessManager):
         cmd.debug.value = False
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         cmd.set_command(("nvme", "prepare"), **kwargs)
-        return run_remote(
-            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+        return run_remote(self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
 
     def support_collect_log(self, **kwargs):
         """Run daos_server support collect-log on the server hosts.
@@ -439,7 +437,7 @@ class DaosServerManager(SubprocessManager):
         cmd.config.value = get_default_config_file("server")
         self.log.info("Support collect-log on servers: %s", str(cmd))
         cmd.set_command(("support", "collect-log"), **kwargs)
-        return run_remote(self.log, self._hosts, cmd.with_exports)
+        return run_remote(self._hosts, cmd.with_exports)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -562,7 +560,7 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        result = run_remote(self._hosts, cmd.with_exports, timeout=120)
         if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
@@ -1086,7 +1084,7 @@ class DaosServerManager(SubprocessManager):
 
         # Get a list of engine pids from all of the hosts
         host_engine_pids = defaultdict(list)
-        result = run_remote(self.log, self.hosts, "pgrep daos_engine", False)
+        result = run_remote(self.hosts, "pgrep daos_engine", False)
         for data in result.output:
             if data.passed:
                 # Search each individual line of output independently to ensure a pid match
@@ -1107,7 +1105,7 @@ class DaosServerManager(SubprocessManager):
             # Determine which of those log files actually do exist on this host
             # This matches the engine pid to the engine log file name
             command = f"ls -1 {' '.join(file_search)} | grep -v 'No such file or directory'"
-            result = run_remote(self.log, host, command, False)
+            result = run_remote(host, command, False)
             for data in result.output:
                 for line in data.stdout:
                     match = re.findall(fr"^({'|'.join(file_search)})", line)
@@ -1140,7 +1138,7 @@ class DaosServerManager(SubprocessManager):
         for host, log_files in host_log_files.items():
             log_file_matches = 0
             self.log.debug("Searching for '%s' in %s on %s", pattern, log_files, host)
-            result = run_remote(self.log, host, f"grep -E '{pattern}' {' '.join(log_files)}")
+            result = run_remote(host, f"grep -E '{pattern}' {' '.join(log_files)}")
             for data in result.output:
                 if data.returncode == 0:
                     matches = re.findall(fr'{pattern}', '\n'.join(data.stdout))

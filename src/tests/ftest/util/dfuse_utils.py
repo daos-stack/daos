@@ -96,8 +96,7 @@ class Dfuse(DfuseCommand):
             RemoteCommandResult: result of the command
 
         """
-        return run_remote(
-            self.log, hosts, command_as_user(command, self.run_user), timeout=timeout)
+        return run_remote(hosts, command_as_user(command, self.run_user), timeout=timeout)
 
     def _update_mount_state(self):
         """Update the mount state for each host."""
@@ -217,7 +216,7 @@ class Dfuse(DfuseCommand):
 
         # Try removing as root for good measure
         command = command_as_user(f"rm -rf {self.mount_dir.value}", "root")
-        rm_result = run_remote(self.log, rmdir_result.failed_hosts, command, timeout=30)
+        rm_result = run_remote(rmdir_result.failed_hosts, command, timeout=30)
         if not rm_result.passed:
             raise CommandFailure(
                 f"Error removing the {self.mount_dir.value} dfuse mount point with rm on "
@@ -257,7 +256,7 @@ class Dfuse(DfuseCommand):
         if not self._fusermount_cmd:
             self.log.info('Check which fusermount command to use')
             for fusermount in ('fusermount3', 'fusermount'):
-                if run_remote(self.log, self.hosts, f'{fusermount} --version').passed:
+                if run_remote(self.hosts, f'{fusermount} --version').passed:
                     self._fusermount_cmd = fusermount
                     break
             if not self._fusermount_cmd:
@@ -270,7 +269,7 @@ class Dfuse(DfuseCommand):
         self._setup_mount_point()
 
         # run dfuse command
-        result = run_remote(self.log, self.hosts, self.with_exports, timeout=30)
+        result = run_remote(self.hosts, self.with_exports, timeout=30)
         self._running_hosts.add(result.passed_hosts)
         if mount_callback:
             mount_callback(result)
@@ -513,7 +512,7 @@ class VerifyPermsCommand(ExecutableCommand):
 
         """
         self.log.info('Running verify_perms.py on %s', str(self.hosts))
-        result = run_remote(self.log, self.hosts, self.with_exports, timeout=self.timeout)
+        result = run_remote(self.hosts, self.with_exports, timeout=self.timeout)
         if not result.passed:
             raise CommandFailure(f'verify_perms.py failed on: {result.failed_hosts}')
         return result

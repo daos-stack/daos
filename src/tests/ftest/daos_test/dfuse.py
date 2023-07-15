@@ -80,8 +80,7 @@ class DaosCoreTestDfuse(DfuseTestBase):
             mount_dir = '/tmp/dfuse-test'
             create_directory(self.hostlist_clients, mount_dir)
 
-        cmocka_utils = CmockaUtils(
-            self.hostlist_clients, "dfuse", self.outputdir, self.test_dir, self.log)
+        cmocka_utils = CmockaUtils(self.hostlist_clients, "dfuse", self.outputdir, self.test_dir)
         daos_test_env = cmocka_utils.get_cmocka_env()
         intercept = self.params.get('use_intercept', '/run/intercept/*', default=False)
         if intercept:

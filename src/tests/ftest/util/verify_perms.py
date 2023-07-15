@@ -289,7 +289,7 @@ def _real_x(entry_type, path):
     '''
     if entry_type == 'file':
         try:
-            return run_local(logger, path, check=True, verbose=False).returncode == 0
+            return run_local(path, check=True, verbose=False).returncode == 0
         except RunException:
             return False
     if entry_type == 'dir':

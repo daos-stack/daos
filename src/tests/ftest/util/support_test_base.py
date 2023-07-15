@@ -36,7 +36,7 @@ class SupportTestBase(ControlTestBase):
 
         # make the custom log dir on node (clients or servers)
         mkdir_cmd = "mkdir -p {}".format(self.custom_log_dir)
-        result = run_remote(self.log, self.log_hosts, mkdir_cmd)
+        result = run_remote(self.log_hosts, mkdir_cmd)
         if not result.passed:
             self.fail("Failed to create the custom log dir {} ".format(result))
 
@@ -46,7 +46,7 @@ class SupportTestBase(ControlTestBase):
 
         # Create the custom log file on node (clients or servers)
         create_file = " echo \'{}\' > {}".format(self.custom_log_data, self.custom_log_file)
-        result = run_remote(self.log, self.log_hosts, create_file)
+        result = run_remote(self.log_hosts, create_file)
         if not result.passed:
             self.fail("Failed to create the custom log file {} ".format(result))
 
@@ -57,7 +57,7 @@ class SupportTestBase(ControlTestBase):
         read_filedata = "find {}  -name {} | xargs cat".format(
             self.extract_dir, os.path.basename(self.custom_log_file))
 
-        result = run_remote(self.log, self.log_hosts, read_filedata)
+        result = run_remote(self.log_hosts, read_filedata)
         if not result.passed:
             self.fail("Failed to read the custom log file {} ".format(result))
 
@@ -78,13 +78,13 @@ class SupportTestBase(ControlTestBase):
         """
         # Create the new extract directory
         cmd = "mkdir -p {}".format(self.extract_dir)
-        result = run_remote(self.log, self.log_hosts, cmd)
+        result = run_remote(self.log_hosts, cmd)
         if not result.passed:
             self.fail("cmd {} failed, result:{}".format(cmd, result))
 
         # Extract The tar.gz file to newly created directory
         cmd = "tar -xf {} -C {}".format(tar_gz_filename, self.extract_dir)
-        result = run_remote(self.log, self.log_hosts, cmd)
+        result = run_remote(self.log_hosts, cmd)
         if not result.passed:
             self.fail("Failed to extract the {} file, result:{}".format(tar_gz_filename, result))
 
@@ -106,7 +106,7 @@ class SupportTestBase(ControlTestBase):
         # Verify server log files are collected.
         for log_file in log_files:
             list_file = "ls -lsaRt {} | grep {}".format(self.extract_dir, log_file)
-            result = run_remote(self.log, self.log_hosts, list_file)
+            result = run_remote(self.log_hosts, list_file)
             if not result.passed:
                 self.fail("Failed to list the {} file from extracted folder{}".format(
                           result, self.extract_dir))
@@ -126,7 +126,7 @@ class SupportTestBase(ControlTestBase):
         folders = [log_dir, self.extract_dir]
         for folder in folders:
             delete_cmd = "sudo rm -rf {}*".format(folder)
-            result = run_remote(self.log, self.log_hosts, delete_cmd)
+            result = run_remote(self.log_hosts, delete_cmd)
             if not result.passed:
                 error_list.append(
                     "Failed to delete folder {} with result:{}".format(folder, result))

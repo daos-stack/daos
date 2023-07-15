@@ -247,7 +247,7 @@ class HarnessUnitTest(TestWithoutServers):
         command = 'uname -o'
         self.log_step('Verify run_remote() w/ single host')
         self._verify_remote_command_result(
-            result=run_remote(self.log, NodeSet(hosts[0]), command),
+            result=run_remote(NodeSet(hosts[0]), command),
             passed=True,
             expected=[ResultData(command, 0, NodeSet(hosts[0]), ['GNU/Linux'], [], False)],
             timeout=False,
@@ -271,7 +271,7 @@ class HarnessUnitTest(TestWithoutServers):
         command = 'uname -o'
         self.log_step('Verify run_remote() w/ homogeneous output')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command),
+            result=run_remote(hosts, command),
             passed=True,
             expected=[ResultData(command, 0, hosts, ['GNU/Linux'], [], False)],
             timeout=False,
@@ -295,7 +295,7 @@ class HarnessUnitTest(TestWithoutServers):
         command = 'hostname -s'
         self.log_step('Verify run_remote() w/ heterogeneous output')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command),
+            result=run_remote(hosts, command),
             passed=True,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), [hosts[0]], [], False),
@@ -329,7 +329,7 @@ class HarnessUnitTest(TestWithoutServers):
             hosts[1])
         self.log_step('Verify run_remote() w/ separated stdout and stderr')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command, stderr=False),
+            result=run_remote(hosts, command, stderr=False),
             passed=True,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), ['stdout'], [], False),
@@ -363,7 +363,7 @@ class HarnessUnitTest(TestWithoutServers):
             hosts[1])
         self.log_step('Verify run_remote() w/ separated stdout and stderr')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command, stderr=True),
+            result=run_remote(hosts, command, stderr=True),
             passed=True,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), ['stdout'], [], False),
@@ -396,7 +396,7 @@ class HarnessUnitTest(TestWithoutServers):
         command = 'if [ $(hostname -s) == \'{}\' ]; then echo stderr 1>&2; fi'.format(hosts[1])
         self.log_step('Verify run_remote() w/ no stdout')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command, stderr=True),
+            result=run_remote(hosts, command, stderr=True),
             passed=True,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), [], [], False),
@@ -430,7 +430,7 @@ class HarnessUnitTest(TestWithoutServers):
             hosts[1])
         self.log_step('Verify run_remote() w/ a failure')
         self._verify_remote_command_result(
-            result=run_remote(self.log, hosts, command, stderr=True),
+            result=run_remote(hosts, command, stderr=True),
             passed=False,
             expected=[
                 ResultData(command, 0, NodeSet(hosts[0]), ['pass'], [], False),

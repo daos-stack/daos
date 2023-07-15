@@ -307,7 +307,7 @@ class DaosAgentManager(SubprocessManager):
         cmd.config.value = get_default_config_file("agent")
         self.log.info("Support collect-log on clients: %s", str(cmd))
         cmd.set_command(("support", "collect-log"), **kwargs)
-        return run_remote(self.log, self.hosts, cmd.with_exports)
+        return run_remote(self.hosts, cmd.with_exports)
 
     def get_attachinfo_file(self):
         """Run dump-attachinfo on the daos_agent.

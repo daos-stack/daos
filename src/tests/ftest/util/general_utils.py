@@ -1479,28 +1479,24 @@ def nodeset_append_suffix(nodeset, suffix):
         map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
 
 
-def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
+def wait_for_result(get_method, timeout, delay=1, **kwargs):
     """Wait for a result with a timeout.
 
     Args:
-        log (logger): logger for the messages produced by this method.
         get_method (object): method that returns a boolean used to determine if the result.
             is found.
         timeout (int): number of seconds to wait for a response to be found.
         delay (int, optional): number of seconds to wait before checking the another result.
             This should be a small number. Defaults to 1.
-        add_log (bool, optional): whether or not to include the log argument for get_method.
-            Defaults to False.
         kwargs (dict): kwargs for get_method.
 
     Returns:
         bool: if the result was found.
     """
-    if add_log:
-        kwargs["log"] = log
+    log = getLogger()
     method_str = "{}({})".format(
         get_method.__name__,
-        ", ".join([list_to_str(items, "=") for items in kwargs.items() if items[0] != "log"]))
+        ", ".join([list_to_str(items, "=") for items in kwargs.items()]))
     result_found = False
     timed_out = False
     start = time.time()
@@ -1519,7 +1515,7 @@ def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
     return not timed_out
 
 
-def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
+def check_ping(host, expected_ping=True, cmd_timeout=60, verbose=True):
     """Check the host for a ping response.
 
     Args:
@@ -1527,22 +1523,21 @@ def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
         host (Node): destination host to ping to.
         expected_ping (bool, optional): whether a ping response is expected. Defaults to True.
         cmd_timeout (int, optional): number of seconds to wait for a response to be found.
-            Defaults to 60.
+            Defaults to 60.
         verbose (bool, optional): display check ping commands. Defaults to True.
 
     Returns:
         bool: True if the expected number of pings were returned; False otherwise.
     """
-    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
+    getLogger().debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
     try:
-        run_local(
-            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
+        run_local("ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
     except RunException:
         return not expected_ping
     return expected_ping
 
 
-def check_ssh(log, hosts, cmd_timeout=60, verbose=True):
+def check_ssh(hosts, cmd_timeout=60, verbose=True):
     """Check the host for a successful pass-wordless ssh.
 
     Args:
@@ -1554,5 +1549,5 @@ def check_ssh(log, hosts, cmd_timeout=60, verbose=True):
     Returns:
         bool: True if all hosts respond to the remote ssh session; False otherwise.
     """
-    result = run_remote(log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
+    result = run_remote(hosts, "uname", timeout=cmd_timeout, verbose=verbose)
     return result.passed

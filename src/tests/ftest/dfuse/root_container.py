@@ -185,7 +185,7 @@ class RootContainerTest(DfuseTestBase):
             cmd (str): Command to run
 
         """
-        result = run_remote(self.log, self.dfuse_hosts, cmd, timeout=30)
+        result = run_remote(self.dfuse_hosts, cmd, timeout=30)
         if not result.passed:
             self.log.error(
                 "Error running '%s' on the following hosts: %s", cmd, result.failed_hosts)

@@ -1213,7 +1213,7 @@ class Clush(JobManager):
             raise_exception = self.exit_status_exception
 
         command = " ".join([self.env.to_export_str(), str(self.job)]).strip()
-        self.result = run_remote(self.log, self._hosts, command, self.verbose, self.timeout)
+        self.result = run_remote(self._hosts, command, self.verbose, self.timeout)
 
         if raise_exception and self.result.timeout:
             raise CommandFailure(

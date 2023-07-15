@@ -42,7 +42,7 @@ class HarnessCoreFilesTest(TestWithServers):
         # create a core.gdb file
         self.log.debug("Create a core.gdb.harness.advanced file in core_pattern dir.")
         try:
-            results = run_local(self.log, "cat /proc/sys/kernel/core_pattern", check=True)
+            results = run_local("cat /proc/sys/kernel/core_pattern", check=True)
         except RunException:
             self.fail("Unable to find local core file pattern")
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
@@ -60,7 +60,7 @@ class HarnessCoreFilesTest(TestWithServers):
         ranks = self.server_managers[0].get_host_ranks(host)
         self.log.info("Obtaining pid of the daos_engine process on %s (rank %s)", host, ranks)
         pid = None
-        result = run_remote(self.log, host, "pgrep --list-full daos_engine", timeout=20)
+        result = run_remote(host, "pgrep --list-full daos_engine", timeout=20)
         if not result.passed:
             self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
         pid = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", "\n".join(result.output[0].stdout))[0]
@@ -70,7 +70,7 @@ class HarnessCoreFilesTest(TestWithServers):
 
         # Send a signal 6 to its daos_engine process
         self.log.info("Sending a signal 6 to %s", pid)
-        if not run_remote(self.log, host, "sudo -n kill -6 {}".format(pid)).passed:
+        if not run_remote(host, "sudo -n kill -6 {}".format(pid)).passed:
             self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
 
         # Simplify resolving the host name to rank by marking all ranks as

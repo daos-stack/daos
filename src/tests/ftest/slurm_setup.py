@@ -78,7 +78,7 @@ class SlurmSetup():
             SlurmSetupException: if there is a problem removing the packages
         """
         self.log.info("Removing slurm packages")
-        result = remove_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
+        result = remove_packages(self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
             raise SlurmSetupException(f"Error removing slurm packages on {result.failed_hosts}")
 
@@ -89,7 +89,7 @@ class SlurmSetup():
             SlurmSetupException: if there is a problem installing the packages
         """
         self.log.info("Installing slurm packages")
-        result = install_packages(self.log, self.all_nodes, self.PACKAGE_LIST, self.root)
+        result = install_packages(self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
             raise SlurmSetupException(f"Error installing slurm packages on {result.failed_hosts}")
 
@@ -127,17 +127,14 @@ class SlurmSetup():
         self.log.info("Starting munge")
 
         # Create munge key only if it does not exist.
-        result = run_remote(
-            self.log, self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
+        result = run_remote(self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
         if not result.passed:
             # Create a munge key on the control host
             self.log.debug('Creating a new munge key on %s', self.control)
-            result = run_remote(
-                self.log, self.control, command_as_user('create-munge-key', self.root))
+            result = run_remote(self.control, command_as_user('create-munge-key', self.root))
             if not result.passed:
                 # Try the other possible munge key creation command:
-                result = run_remote(
-                    self.log, self.control, command_as_user('mungekey -c', self.root))
+                result = run_remote(self.control, command_as_user('mungekey -c', self.root))
                 if not result.passed:
                     raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
@@ -152,7 +149,7 @@ class SlurmSetup():
         self.log.debug('Copying the munge key to %s', non_control)
         command = get_clush_command(
             non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
-        result = run_remote(self.log, self.control, command)
+        result = run_remote(self.control, command)
         if not result.passed:
             raise SlurmSetupException(f'Error creating munge key on {result.failed_hosts}')
 
@@ -195,7 +192,7 @@ class SlurmSetup():
         # Update nodes to the idle state
         command = command_as_user(
             f'scontrol update nodename={str(self.nodes)} state=idle', self.root)
-        result = run_remote(self.log, self.nodes, command)
+        result = run_remote(self.nodes, command)
         if not result.passed or debug:
             self._display_debug(self.control, '/var/log/slurmctld.log', self.SLURM_CONF)
             self._display_debug(self.all_nodes, '/var/log/slurmd.log', self.SLURM_CONF)
@@ -222,11 +219,11 @@ class SlurmSetup():
                 script_file.write('exit 0\n')
         except IOError as error:
             self.log.debug('Error writing %s - verifying file existence:', script)
-            run_remote(self.log, self.control, f'ls -al {script}')
+            run_remote(self.control, f'ls -al {script}')
             raise SlurmSetupException(f'Error writing slurm epilog script {script}') from error
 
         command = command_as_user(f'chmod 755 {script}', self.root)
-        if not run_remote(self.log, self.control, command).passed:
+        if not run_remote(self.control, command).passed:
             raise SlurmSetupException(f'Error setting slurm epilog script {script} permissions')
 
     def _copy_file(self, nodes, source, destination):
@@ -242,7 +239,7 @@ class SlurmSetup():
         """
         self.log.debug(f'Copying the {source} file to {destination} on {str(nodes)}')
         command = command_as_user(f'cp {source} {destination}', self.root)
-        result = run_remote(self.log, nodes, command)
+        result = run_remote(nodes, command)
         if not result.passed:
             raise SlurmSetupException(
                 f'Error copying {source} to {destination} on {str(result.failed_hosts)}')
@@ -280,7 +277,7 @@ class SlurmSetup():
         not_updated = self.all_nodes.copy()
         for control_keyword in ['SlurmctldHost', 'ControlMachine']:
             command = f'grep {control_keyword} {self.SLURM_CONF}'
-            results = run_remote(self.log, self.all_nodes, command)
+            results = run_remote(self.all_nodes, command)
             if results.passed_hosts:
                 not_updated.remove(
                     self._modify_slurm_config_file(
@@ -314,7 +311,7 @@ class SlurmSetup():
         self.log.debug(
             'Updating the %s in the %s config file on %s', description, self.SLURM_CONF, hosts)
         command = command_as_user(f'sed -i -e \'{replacement}\' {self.SLURM_CONF}', user)
-        result = run_remote(self.log, hosts, command)
+        result = run_remote(hosts, command)
         if result.failed_hosts:
             raise SlurmSetupException(
                 f'Error updating {description} in the {self.SLURM_CONF} config '
@@ -329,7 +326,7 @@ class SlurmSetup():
         """
         self.log.debug('Updating slurm config socket/core/thread information on %s', self.all_nodes)
         command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
-        result = run_remote(self.log, self.all_nodes, command)
+        result = run_remote(self.all_nodes, command)
         for data in result.output:
             info = {
                 match[0]: match[1]
@@ -373,7 +370,7 @@ class SlurmSetup():
             RemoteCommandResult: the result from the echo | tee command
         """
         tee_command = command_as_user(f'tee -a {self.SLURM_CONF}', self.root)
-        return run_remote(self.log, self.all_nodes, f'{echo_command} | {tee_command}')
+        return run_remote(self.all_nodes, f'{echo_command} | {tee_command}')
 
     def _update_file(self, nodes, file, permission, user):
         """Update file permissions and ownership.
@@ -403,8 +400,7 @@ class SlurmSetup():
             SlurmSetupException: if there was an error updating the file permissions
         """
         self.log.debug('Updating file permissions for %s on %s', self.MUNGE_DIR, nodes)
-        result = run_remote(
-            self.log, nodes, command_as_user(f'chmod -R {permission} {file}', self.root))
+        result = run_remote(nodes, command_as_user(f'chmod -R {permission} {file}', self.root))
         if not result.passed:
             raise SlurmSetupException(
                 f'Error updating permissions to {permission} for {file} on {result.failed_hosts}')
@@ -420,7 +416,7 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there was an error updating the file ownership
         """
-        result = run_remote(self.log, nodes, command_as_user(f'chown {user}. {file}', self.root))
+        result = run_remote(nodes, command_as_user(f'chown {user}. {file}', self.root))
         if not result.passed:
             raise SlurmSetupException(
                 f'Error updating ownership to {user} for {file} on {result.failed_hosts}')
@@ -436,7 +432,7 @@ class SlurmSetup():
             SlurmSetupException: if there was an error removing the file
         """
         self.log.debug('Removing %s on %s', file, nodes)
-        result = run_remote(self.log, nodes, command_as_user(f'rm -fr {file}', self.root))
+        result = run_remote(nodes, command_as_user(f'rm -fr {file}', self.root))
         if not result.passed:
             raise SlurmSetupException(f'Error removing {file} on {result.failed_hosts}')
 
@@ -455,7 +451,7 @@ class SlurmSetup():
         self.log.debug('Restarting %s on %s', service, nodes)
         for action in ('restart', 'enable'):
             command = command_as_user(f'systemctl {action} {service}', self.root)
-            result = run_remote(self.log, self.all_nodes, command)
+            result = run_remote(self.all_nodes, command)
             if not result.passed:
                 self._display_debug(result.failed_hosts, debug_log, debug_config)
                 raise SlurmSetupException(f'Error restarting {service} on {result.failed_hosts}')
@@ -471,11 +467,11 @@ class SlurmSetup():
         if debug_log:
             self.log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
-            run_remote(self.log, nodes, command)
+            run_remote(nodes, command)
         if debug_config:
             self.log.debug('DEBUG: %s contents:', debug_config)
             command = command_as_user(f'grep -v \"^#\\w\" {debug_config}', self.root)
-            run_remote(self.log, nodes, command)
+            run_remote(nodes, command)
 
     def _mkdir(self, nodes, directory):
         """Create a directory.
@@ -488,7 +484,7 @@ class SlurmSetup():
             SlurmSetupException: if there was an error creating the directory
         """
         self.log.debug('Creating %s on %s', directory, nodes)
-        result = run_remote(self.log, nodes, command_as_user(f'mkdir -p {directory}', self.root))
+        result = run_remote(nodes, command_as_user(f'mkdir -p {directory}', self.root))
         if not result.passed:
             raise SlurmSetupException(f'Error creating {directory} on {result.failed_hosts}')
 

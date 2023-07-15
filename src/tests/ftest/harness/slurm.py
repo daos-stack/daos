@@ -25,7 +25,7 @@ class HarnessSlurmTest(TestWithoutServers):
         """
         partition = self.params.get('client_partition', '/run/hosts/*', 'unknown')
         control = get_local_host()
-        result = sinfo(self.log, control)
+        result = sinfo(control)
         if not result.passed:
             self.fail('Error running sinfo')
         if partition not in '\n'.join(result.all_stdout.values()):

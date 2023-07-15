@@ -25,7 +25,7 @@ class EcodServerRestart(TestWithServers):
             expected_free_space (int): expected free space after aggregation.
         """
         self.log.info("Waiting for aggregation to complete..")
-        if not wait_for_result(self.log, self.check_free_space, 180, delay=5,
+        if not wait_for_result(self.check_free_space, 180, delay=5,
                                expected_free=expected_free_space):
             self.fail("aggregation completion not detected.")
 

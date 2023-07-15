@@ -3,10 +3,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from logging import getLogger
+import shlex
 from socket import gethostname
 import subprocess   # nosec
-import shlex
 import time
+
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -40,24 +42,34 @@ class ResultData():
         """Determine if another ResultData object is less than this one.
 
         Args:
-            other (NodeSet): the other NodSet to compare
+            other (ResultData): the other ResultData to compare
+
+        Raises:
+            TypeError: if other is not a ResultData object
 
         Returns:
             bool: True if this object is less than the other ResultData object; False otherwise
         """
         if not isinstance(other, ResultData):
-            raise NotImplementedError
+            raise TypeError(
+                "'<' not supported between instances of {} and {}".format(type(self), type(other)))
         return str(self.hosts) < str(other.hosts)
 
     def __gt__(self, other):
         """Determine if another ResultData object is greater than this one.
 
         Args:
-            other (NodeSet): the other NodSet to compare
+            other (ResultData): the other ResultData to compare
+
+        Raises:
+            TypeError: if other is not a ResultData object
 
         Returns:
             bool: True if this object is greater than the other ResultData object; False otherwise
         """
+        if not isinstance(other, ResultData):
+            raise TypeError(
+                "'>' not supported between instances of {} and {}".format(type(self), type(other)))
         return not self.__lt__(other)
 
     @property
@@ -299,11 +311,10 @@ def get_clush_command(hosts, args=None, command="", command_env=None, command_su
     return " ".join(cmd_list)
 
 
-def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
+def run_local(command, capture_output=True, timeout=None, check=False, verbose=True):
     """Run the command locally.
 
     Args:
-        log (logger): logger for the messages produced by this method
         command (str): command from which to obtain the output
         capture_output(bool, optional): whether or not to include the command output in the
             subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
@@ -328,6 +339,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
                 - stderr (not used; included in stdout)
 
     """
+    log = getLogger()
     local_host = gethostname().split(".")[0]
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
@@ -379,11 +391,10 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
     return result
 
 
-def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False):
+def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False, stderr=False):
     """Run the command on the remote hosts.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         command (str): command from which to obtain the output
         verbose (bool, optional): log the command output. Defaults to True.
@@ -397,6 +408,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
             return status
 
     """
+    log = getLogger()
     task = task_self()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
@@ -404,7 +416,7 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False,
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
         if timeout is None:
-            log.debug("Running on %s without a timeout: %s", hosts, timeout, command)
+            log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
             log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
@@ -471,11 +483,10 @@ def find_command(source, pattern, depth, other=None):
     return " ".join(command)
 
 
-def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+def stop_processes(hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
     """Stop the processes on each hosts that match the pattern.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to stop any processes matching the pattern
         pattern (str): regular expression used to find process names to stop
         verbose (bool, optional): display command output. Defaults to True.
@@ -492,6 +503,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             process was killed or no process matching the pattern were found).
 
     """
+    log = getLogger()
     processes_detected = NodeSet()
     processes_running = NodeSet()
     command = f"/usr/bin/pgrep --list-full {pattern}"
@@ -502,7 +514,7 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
 
     # Search for any active processes
     log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
-    result = run_remote(log, hosts, command, verbose, timeout)
+    result = run_remote(hosts, command, verbose, timeout)
     if not result.passed_hosts:
         log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
         return processes_detected, processes_running
@@ -523,9 +535,9 @@ def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, 
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
         kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
-        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
+        run_remote(result.passed_hosts, kill_command, verbose, timeout)
         time.sleep(step[1])
-        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+        result = run_remote(result.passed_hosts, command, verbose, timeout)
         if not result.passed_hosts:
             # Indicate all running processes matching the pattern were stopped in the return status
             log.debug(

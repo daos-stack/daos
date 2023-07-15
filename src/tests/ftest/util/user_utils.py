@@ -35,7 +35,7 @@ def get_primary_group(user=None):
 
 
 def get_user_uid_gid(user):
-    """Get a user's uid and gid
+    """Get a user's uid and gid.
 
     Args:
         user (str, optional): the user account name. Defaults to None, which uses the current user.
@@ -70,11 +70,10 @@ def get_chown_command(user=None, group=None, options=None, file=None):
     return " ".join(command)
 
 
-def getent(log, hosts, database, key, sudo=False):
+def getent(hosts, database, key, sudo=False):
     """Run getent remotely.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         database (str): the administrative database
         key (str): the key/entry to check for
@@ -89,14 +88,13 @@ def getent(log, hosts, database, key, sudo=False):
         'getent',
         database,
         key]))
-    return run_remote(log, hosts, command)
+    return run_remote(hosts, command)
 
 
-def groupadd(log, hosts, group, force=False, sudo=False):
+def groupadd(hosts, group, force=False, sudo=False):
     """Run groupadd remotely.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         group (str): the group to create
         force (bool, optional): whether to use the force option. Default is False
@@ -112,14 +110,13 @@ def groupadd(log, hosts, group, force=False, sudo=False):
         '-r',
         '-f' if force else None,
         group]))
-    return run_remote(log, hosts, command)
+    return run_remote(hosts, command)
 
 
-def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
+def useradd(hosts, user, group=None, parent_dir=None, sudo=False):
     """Run useradd remotely.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         user (str): user to create
         group (str, optional): user group. Default is None
@@ -137,14 +134,13 @@ def useradd(log, hosts, user, group=None, parent_dir=None, sudo=False):
         f'-g {group}' if group else None,
         f'-d {os.path.join(parent_dir, user)}' if parent_dir else None,
         user]))
-    return run_remote(log, hosts, command)
+    return run_remote(hosts, command)
 
 
-def userdel(log, hosts, user, sudo=False):
+def userdel(hosts, user, sudo=False):
     """Run userdel remotely.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         user (str): user to create
         sudo (bool): whether to execute commands with sudo. Default is False
@@ -159,14 +155,13 @@ def userdel(log, hosts, user, sudo=False):
         '-f',
         '-r',
         user]))
-    return run_remote(log, hosts, command)
+    return run_remote(hosts, command)
 
 
-def get_group_id(log, hosts, group, sudo=False):
+def get_group_id(hosts, group, sudo=False):
     """Get a group's id on remote nodes.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         group (str): group to get id of
         sudo (bool): whether to execute commands with sudo. Default is False
@@ -176,7 +171,7 @@ def get_group_id(log, hosts, group, sudo=False):
 
     """
     gids = defaultdict(NodeSet)
-    result = getent(log, hosts, 'group', group, sudo)
+    result = getent(hosts, 'group', group, sudo)
     for data in result.output:
         if data.returncode == 0:
             gid = re.findall(r'.*:.*:(.*):.*', '\n'.join(data.stdout))[0]
@@ -186,11 +181,10 @@ def get_group_id(log, hosts, group, sudo=False):
     return dict(gids)
 
 
-def get_user_groups(log, hosts, user):
+def get_user_groups(hosts, user):
     """Get a user's groups on remote nodes.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to run the command
         user (str): user to get groups of
 
@@ -200,7 +194,7 @@ def get_user_groups(log, hosts, user):
 
     """
     groups = defaultdict(NodeSet)
-    result = run_remote(log, hosts, f'id {user}')
+    result = run_remote(hosts, f'id {user}')
     for data in result.output:
         if data.returncode == 0:
             group = re.findall(r'groups=([0-9,]*)', '\n'.join(data.stdout))[0]

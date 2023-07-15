@@ -3,6 +3,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from logging import getLogger
 import os
 from socket import gethostname
 
@@ -105,12 +106,13 @@ class HostInfo():
         """
         return self._clients
 
-    def display(self, log):
+    def display(self):
         """Display the host information.
 
         Args:
             log (logger): logger for the messages produced by this method
         """
+        log = getLogger()
         log.info("-" * 100)
         log.info("--- HOST INFORMATION ---")
         log.info("servers:             %s", self.servers.hosts)
@@ -121,12 +123,11 @@ class HostInfo():
         log.info("client_reservation:  %s", self.clients.partition.reservation)
         log.info("access_points:       %s", self.access_points)
 
-    def set_hosts(self, log, control_host, server_hosts, server_partition, server_reservation,
+    def set_hosts(self, control_host, server_hosts, server_partition, server_reservation,
                   client_hosts, client_partition, client_reservation, include_local_host=False):
         """Set the host information.
 
         Args:
-            log (logger): logger for the messages produced by this method
             control_host (object): slurm control host
             server_hosts (object): hosts to define as servers
             server_partition (str): server partition name
@@ -141,19 +142,20 @@ class HostInfo():
             HostException: if there is a problem obtaining the hosts
 
         """
+        log = getLogger()
         try:
             self._servers = HostRole(
                 server_hosts, server_partition, server_reservation,
-                get_partition_hosts(log, control_host, server_partition),
-                get_reservation_hosts(log, control_host, server_reservation))
+                get_partition_hosts(control_host, server_partition),
+                get_reservation_hosts(control_host, server_reservation))
         except SlurmFailed as error:
             raise HostException("Error defining the server hosts") from error
 
         try:
             self._clients = HostRole(
                 client_hosts, client_partition, client_reservation,
-                get_partition_hosts(log, control_host, client_partition),
-                get_reservation_hosts(log, control_host, client_reservation),
+                get_partition_hosts(control_host, client_partition),
+                get_reservation_hosts(control_host, client_reservation),
                 include_local_host)
         except SlurmFailed as error:
             raise HostException("Error defining the server hosts") from error

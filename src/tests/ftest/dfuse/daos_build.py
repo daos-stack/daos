@@ -211,8 +211,7 @@ class DaosBuild(DfuseTestBase):
             if cmd.startswith('scons'):
                 timeout = build_time * 60
             start = time.time()
-            result = run_remote(
-                self.log, self.hostlist_clients, command, verbose=True, timeout=timeout)
+            result = run_remote(self.hostlist_clients, command, verbose=True, timeout=timeout)
             elapsed = time.time() - start
             (minutes, seconds) = divmod(elapsed, 60)
             self.log.info('Command %s completed in %d:%02d (%d%% of timeout)',
@@ -224,12 +223,12 @@ class DaosBuild(DfuseTestBase):
             fail_type = 'Failure to build'
             if result.timeout:
                 self.log.info('Command timed out')
-                run_remote(self.log, self.hostlist_clients, 'ps auwx', timeout=30)
+                run_remote(self.hostlist_clients, 'ps auwx', timeout=30)
                 fail_type = 'Timeout building'
 
             self.log.error('BuildDaos Test Failed')
             if cmd.startswith('scons'):
-                run_remote(self.log, self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
+                run_remote(self.hostlist_clients, 'cat {}/config.log'.format(build_dir),
                            timeout=30)
             if intercept:
                 self.fail('{} over dfuse with il in mode {}.\n'.format(fail_type, cache_mode))

@@ -60,7 +60,7 @@ class ControlLogEntry(TestWithServers):
             return len(not_found) == 0
 
         # Wait up to 5 seconds for journalctl to contain the messages
-        wait_for_result(self.log, _search, timeout=5, delay=1)
+        wait_for_result(_search, timeout=5, delay=1)
 
         # Print the status of each message
         for message in expected_messages:
@@ -150,7 +150,7 @@ class ControlLogEntry(TestWithServers):
             + [r'Rebuild \[queued\]', r'Rebuild \[completed\]']
         with self.verify_journalctl(expected):
             kill_cmd = "sudo -n pkill daos_server --signal KILL && sudo systemctl stop daos_server"
-            if not run_remote(self.log, kill_host, kill_cmd):
+            if not run_remote(kill_host, kill_cmd):
                 self.fail("failed to pkill daos_server")
             pool.wait_for_rebuild_to_start()
             pool.wait_for_rebuild_to_end()

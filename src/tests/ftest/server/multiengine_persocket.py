@@ -113,7 +113,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         cmd.sub_command_class.sub_command_class.force.value = True
         self.log.info(
             "===(%s.A)Starting daos_server scm reset: %s", step, str(cmd))
-        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
+        results = run_remote(self.hostlist_servers, str(cmd), timeout=180)
         if not results.passed:
             self.fail(
                 "#({0}.A){1} failed, "
@@ -136,7 +136,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
         self.log.info(
             "===(%s.B)Starting daos_server scm prepare -S: %s", step, str(cmd))
-        results = run_remote(self.log, self.hostlist_servers, str(cmd), timeout=180)
+        results = run_remote(self.hostlist_servers, str(cmd), timeout=180)
         if not results.passed:
             self.fail(
                 "#({0}.B){1} failed, "
@@ -150,17 +150,16 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
              hosts (NodeSet): hosts set to be rebooted.
         """
         cmd = "sudo shutdown -r now"
-        run_remote(self.log, hosts, cmd, timeout=210)
+        run_remote(hosts, cmd, timeout=210)
         self.log.info("==Server %s rebooting... \n", hosts)
 
-        if not wait_for_result(self.log, check_ping, 600, 5, True, host=hosts[0],
-                               expected_ping=False, cmd_timeout=60, verbose=True):
+        if not wait_for_result(check_ping, 600, 5, host=hosts[0], expected_ping=False,
+                               cmd_timeout=60, verbose=True):
             self.fail("Shutwown not detected within 600 seconds.")
-        if not wait_for_result(self.log, check_ping, 600, 5, True, host=hosts[0],
-                               expected_ping=True, cmd_timeout=60, verbose=True):
+        if not wait_for_result(check_ping, 600, 5, host=hosts[0], expected_ping=True,
+                               cmd_timeout=60, verbose=True):
             self.fail("Reboot not detected within 600 seconds.")
-        if not wait_for_result(self.log, check_ssh, 300, 2, True, hosts=hosts,
-                               cmd_timeout=30, verbose=True):
+        if not wait_for_result(check_ssh, 300, 2, hosts=hosts, cmd_timeout=30, verbose=True):
             self.fail("All hosts not responding to ssh after reboot within 300 seconds.")
 
     def check_pmem(self, hosts, count):
@@ -182,7 +181,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
 
     def storage_format(self):
         """Perform storage format."""
-        run_local(self.log, "dmg storage format")
+        run_local("dmg storage format")
 
     def cleanup(self):
         """Servers clean up after test complete."""
@@ -194,7 +193,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "/usr/bin/ls -l /dev/pmem*",
             'lsblk|grep -E "NAME|pmem"']
         for cmd in cleanup_cmds:
-            run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
+            run_remote(self.hostlist_servers, cmd, timeout=90)
 
     def test_multiengines_per_socket(self):
         """Test ID: DAOS-12076.
@@ -227,8 +226,8 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.daos_server_scm_prepare_ns(1.1, engines_per_socket)
         self.host_reboot(self.hostlist_servers)
         self.daos_server_scm_prepare_ns(1.2, engines_per_socket)
-        if not wait_for_result(self.log, self.check_pmem, 160, 1, False,
-                               hosts=self.hostlist_servers, count=num_pmem):
+        if not wait_for_result(self.check_pmem, 160, 1, hosts=self.hostlist_servers,
+                               count=num_pmem):
             self.fail("#{} pmem devices not found on all hosts.".format(num_pmem))
         self.storage_format()
 
@@ -240,7 +239,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "sudo cp /etc/daos/daos_server.yml_4 /etc/daos/daos_server.yml",
             "sudo systemctl start daos_server.service"]
         for cmd in start_server_cmds:
-            results = run_remote(self.log, self.hostlist_servers, cmd, timeout=90)
+            results = run_remote(self.hostlist_servers, cmd, timeout=90)
         # Check for server start status
             if not results.passed:
                 self.fail("#Fail on {0}".format(cmd))
@@ -257,7 +256,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "dmg storage query list-devices",
             "dmg system query"]
         for cmd in start_agent_cmds:
-            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
+            results = run_remote(self.hostlist_clients, cmd, timeout=90)
             # Check for agent start status
             if not results.passed and "sudo systemctl" in cmd:
                 self.fail("#Fail on {0}".format(cmd))
@@ -269,7 +268,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
             "dmg system query",
             "dmg system query -v"]
         for cmd in query_cmds:
-            results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
+            results = run_remote(self.hostlist_clients, cmd, timeout=90)
 
         # (5) Pool create
         step += 1
@@ -321,5 +320,5 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         step += 1
         self.log.info("===(%s)===Cleanup", step)
         cmd = "dmg system query -v"
-        results = run_remote(self.log, self.hostlist_clients, cmd, timeout=90)
+        results = run_remote(self.hostlist_clients, cmd, timeout=90)
         self.cleanup()

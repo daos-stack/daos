@@ -130,7 +130,7 @@ class DfuseMUPerms(DfuseTestBase):
         """
         self.log.info('Creating directory: %s', path)
         command = command_as_user('mkdir ' + path, create_as)
-        if not run_remote(self.log, client, command).passed:
+        if not run_remote(client, command).passed:
             self.fail('Failed to create directory: {}'.format(path))
 
         if group:
@@ -138,10 +138,10 @@ class DfuseMUPerms(DfuseTestBase):
         else:
             self.log.info('Giving ownership to %s', owner)
         command = command_as_user(get_chown_command(user=owner, group=group, file=path), 'root')
-        if not run_remote(self.log, client, command).passed:
+        if not run_remote(client, command).passed:
             self.fail('Failed to give ownership to {}'.format(owner))
         command = command_as_user('stat {}'.format(path), owner)
-        if not run_remote(self.log, client, command).passed:
+        if not run_remote(client, command).passed:
             self.fail('Failed to stat {}'.format(path))
 
     def test_dfuse_mu_perms_cache(self):
@@ -221,12 +221,12 @@ class DfuseMUPerms(DfuseTestBase):
 
             self.log.info('Creating a test %s in the first dfuse instance', entry_type)
             command = command_as_user('{} "{}"'.format(create_cmd, dfuse1_entry_path), dfuse_user)
-            if not run_remote(self.log, client, command).passed:
+            if not run_remote(client, command).passed:
                 self.fail('Failed to create test {}'.format(entry_type))
 
             self.log.info('Setting %s permissions to %s', entry_type, perms)
             command = command_as_user('chmod {} "{}"'.format(perms, dfuse1_entry_path), dfuse_user)
-            if not run_remote(self.log, client, command).passed:
+            if not run_remote(client, command).passed:
                 self.fail('Failed to chmod test {}'.format(entry_type))
             _wait_for_cache_expiration()
 
@@ -237,7 +237,7 @@ class DfuseMUPerms(DfuseTestBase):
 
             self.log.info('Revoking %s permissions', entry_type)
             command = command_as_user('chmod 000 "{}"'.format(dfuse1_entry_path), dfuse_user)
-            if not run_remote(self.log, client, command).passed:
+            if not run_remote(client, command).passed:
                 self.fail('Failed to chmod test {}'.format(entry_type))
             _wait_for_cache_expiration()
 
@@ -350,7 +350,7 @@ class DfuseMUPerms(DfuseTestBase):
 
             self.log.info('Creating a test %s in dfuse', entry_type)
             command = command_as_user('{} "{}"'.format(create_cmd, dfuse_entry_path), dfuse_user)
-            if not run_remote(self.log, self.hostlist_clients, command).passed:
+            if not run_remote(self.hostlist_clients, command).passed:
                 self.fail('Failed to create test {}'.format(entry_type))
 
             verify_perms_cmd.update_params(path=dfuse_entry_path)
@@ -360,7 +360,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
-            if not run_remote(self.log, self.hostlist_clients, command).passed:
+            if not run_remote(self.hostlist_clients, command).passed:
                 self.fail('Failed to chmod test {}'.format(entry_type))
 
             # Without pool/container ACLs, access is based on POSIX perms,
@@ -376,7 +376,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
-            if not run_remote(self.log, self.hostlist_clients, command).passed:
+            if not run_remote(self.hostlist_clients, command).passed:
                 self.fail('Failed to chmod test {}'.format(entry_type))
 
             # With POSIX perms only, access is based on POSIX perms whether using IL or not
@@ -403,7 +403,7 @@ class DfuseMUPerms(DfuseTestBase):
             self.log.info('Setting %s POSIX permissions to %s', entry_type, posix_perms)
             command = command_as_user(
                 'chmod {} "{}"'.format(posix_perms, dfuse_entry_path), dfuse_user)
-            if not run_remote(self.log, self.hostlist_clients, command).passed:
+            if not run_remote(self.hostlist_clients, command).passed:
                 self.fail('Failed to chmod test {}'.format(entry_type))
 
             # Without POSIX permissions, pool/container ACLs don't matter since open requires POSIX

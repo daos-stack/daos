@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from argparse import Namespace
+from logging import getLogger
 import os
 import time
 
@@ -129,68 +130,63 @@ class TestResult():
         # Increase the elapsed time by the delta between the last start call and this end call
         self.time_elapsed += self.time_end - self._time_split
 
-    def finish_test(self, log, message, fail_class=None, exc_info=None):
+    def finish_test(self, message, fail_class=None, exc_info=None):
         """Mark the end of the test result with a status.
 
         Args:
-            log (logger): object configured to log messages
             message (str): exit message or reason for failure
             fail_class (str, optional): failure category.
             exc_info (OptExcInfo, optional): return value from sys.exc_info().
         """
         if fail_class is None:
-            self.pass_test(log, message)
+            self.pass_test(message)
         else:
-            self.fail_test(log, fail_class, message, exc_info)
+            self.fail_test(fail_class, message, exc_info)
         self.end()
 
-    def pass_test(self, log, message=None):
+    def pass_test(self, message=None):
         """Set the test result as passed.
 
         Args:
-            log (logger): object configured to log messages
             message (str, optional): explanation of test passing. Defaults to None.
         """
         if message is not None:
-            log.debug(message)
-        self.__set_test_status(log, TestResult.PASS, None, None)
+            getLogger().debug(message)
+        self.__set_test_status(TestResult.PASS, None, None)
 
-    def warn_test(self, log, fail_class, fail_reason, exc_info=None):
+    def warn_test(self, fail_class, fail_reason, exc_info=None):
         """Set the test result as warned.
 
         Args:
-            log (logger): object configured to log messages
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
-        log.warning(fail_reason)
-        self.__set_test_status(log, TestResult.WARN, fail_class, fail_reason, exc_info)
+        getLogger().warning(fail_reason)
+        self.__set_test_status(TestResult.WARN, fail_class, fail_reason, exc_info)
 
-    def fail_test(self, log, fail_class, fail_reason, exc_info=None):
+    def fail_test(self, fail_class, fail_reason, exc_info=None):
         """Set the test result as failed.
 
         Args:
-            log (logger): object configured to log messages
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
-        log.error(fail_reason)
-        self.__set_test_status(log, TestResult.ERROR, fail_class, fail_reason, exc_info)
+        getLogger().error(fail_reason)
+        self.__set_test_status(TestResult.ERROR, fail_class, fail_reason, exc_info)
 
-    def __set_test_status(self, log, status, fail_class, fail_reason, exc_info=None):
+    def __set_test_status(self, status, fail_class, fail_reason, exc_info=None):
         """Set the test result.
 
         Args:
-            log (logger): object configured to log messages
             status (str): TestResult status to set.
             fail_class (str): failure category.
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         if exc_info is not None:
-            log.debug("Stacktrace", exc_info=True)
+            getLogger().debug("Stacktrace", exc_info=True)
 
         if status == TestResult.PASS:
             # Do not override a possible WARN status
@@ -493,3 +489,108 @@ def create_html(job, results):
     from avocado_result_html import HTMLResult
     result_html = HTMLResult()
     result_html.render(sanitize_results(results), job)
+
+
+class LaunchTestName():
+    """Define a launch.py test name compatible with avocado's result render classes."""
+
+    def __init__(self, name, order, repeat):
+        """Initialize a LaunchTestName object.
+
+        Args:
+            name (str): test name
+            order (int): order in which this test is executed
+            repeat (int): repeat count for this test
+        """
+        self.name = name
+        self.order = order
+        self.repeat = repeat
+
+    def __str__(self):
+        """Get the test name as a string.
+
+        Returns:
+            str: combination of the order and name
+
+        """
+        if self.repeat > 0:
+            return f"{self.uid}-{self.name}{self.variant}"
+        return f"{self.uid}-{self.name}"
+
+    def __getitem__(self, name, default=None):
+        """Get the value of the attribute name.
+
+        Args:
+            name (str): name of the class attribute to get
+            default (object, optional): value to return if name is not defined. Defaults to None.
+
+        Returns:
+            object: the attribute value or default if not defined
+
+        """
+        return self.get(name, default)
+
+    def get(self, name, default=None):
+        """Get the value of the attribute name.
+
+        Args:
+            name (str): name of the class attribute to get
+            default (object, optional): value to return if name is not defined. Defaults to None.
+
+        Returns:
+            object: the attribute value or default if not defined
+
+        """
+        try:
+            return getattr(self, name, default)
+        except TypeError:
+            return default
+
+    @property
+    def order_str(self):
+        """Get the string representation of the order count.
+
+        Returns:
+            str: the order count as a string
+
+        """
+        return f"{self.order:02}"
+
+    @property
+    def repeat_str(self):
+        """Get the string representation of the repeat count.
+
+        Returns:
+            str: the repeat count as a string
+
+        """
+        return f"repeat{self.repeat:03}"
+
+    @property
+    def uid(self):
+        """Get the test order to use as the test uid for xml/html results.
+
+        Returns:
+            str: the test uid (order)
+
+        """
+        return self.order_str
+
+    @property
+    def variant(self):
+        """Get the test repeat count as the test variant for xml/html results.
+
+        Returns:
+            str: the test variant (repeat)
+
+        """
+        return f";{self.repeat_str}"
+
+    def copy(self):
+        """Create a copy of this object.
+
+        Returns:
+            LaunchTestName: a copy of this LaunchTestName object
+
+        """
+        return LaunchTestName(self.name, self.order, self.repeat)
