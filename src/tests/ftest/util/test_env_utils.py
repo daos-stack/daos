@@ -64,8 +64,8 @@ def get_build_environment(build_vars_file):
     return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
 
-def set_path(build_vars_file):
-    """Set the PATH environment variable for functional testing.
+def update_path(build_vars_file):
+    """Update the PATH environment variable for functional testing.
 
     Args:
         build_vars_file (str): the full path to the DAOS build_vars.json file
@@ -594,9 +594,11 @@ def set_test_environment(build_vars_file, test_env=None, servers=None, clients=N
     log = getLogger()
     log.debug("-" * 80)
     log.debug("Setting up the test environment variables")
-    set_path(build_vars_file)
 
     if test_env:
+        # Update the PATH environment variable
+        update_path(build_vars_file)
+
         # Get the default fabric interface and provider
         test_env.provider = provider
         test_env.insecure_mode = insecure_mode

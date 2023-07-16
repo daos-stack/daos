@@ -19,11 +19,11 @@ from run_utils import stop_processes
 
 class ServerRankFailure(IorTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Verify server rank, or engine, failure is properly handled
-    and recovered.
+    """Test class Description: Verify proper handling and recovery of server rank (engine) failures.
 
     :avocado: recursive
     """
+
     def run_ior_report_error(self, results, job_num, file_name, pool, container,
                              namespace, timeout=None):
         """Run IOR command and store the results to results dictionary.

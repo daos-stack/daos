@@ -238,7 +238,7 @@ class SlurmSetup():
             SlurmSetupException: if there is an error copying the file on any host
         """
         log = logging.getLogger()
-        log.debug(f'Copying the {source} file to {destination} on {str(nodes)}')
+        log.debug('Copying the %s file to %s on %s', source, destination, nodes)
         command = command_as_user(f'cp {source} {destination}', self.root)
         result = run_remote(nodes, command)
         if not result.passed:

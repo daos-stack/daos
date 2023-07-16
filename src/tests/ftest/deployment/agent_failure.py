@@ -23,6 +23,7 @@ class AgentFailure(IorTestBase):
 
     :avocado: recursive
     """
+
     def run_ior_collect_error(self, results, job_num, file_name, clients):
         """Run IOR command and store error in results.
 
