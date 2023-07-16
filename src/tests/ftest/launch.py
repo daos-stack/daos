@@ -88,16 +88,10 @@ class Launch():
         self.local_host = get_local_host()
         self.user = getpass.getuser()
 
-        # Functional test environment variables
-        self.test_env = TestEnvironment()
-
         # Results tracking settings
         self.job_results_dir = None
         self.job = None
         self.result = None
-
-        # Options for bullseye code coverage
-        self.code_coverage = CodeCoverage(self.test_env)
 
         # Details about the run
         self.details = OrderedDict()
@@ -210,6 +204,7 @@ class Launch():
         self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
 
         # Setup the user environment
+        test_env = TestEnvironment()
         build_vars_file = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
         try:
@@ -217,7 +212,7 @@ class Launch():
                 set_test_environment(build_vars_file)
             else:
                 set_test_environment(
-                    build_vars_file, self.test_env, args.test_servers, args.test_clients,
+                    build_vars_file, test_env, args.test_servers, args.test_clients,
                     args.provider, args.insecure_mode, self.details)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
@@ -252,7 +247,7 @@ class Launch():
 
         # Modify the test yaml files to run on this cluster
         try:
-            self.setup_test_files(yaml_dir, args)
+            self.setup_test_files(test_env, yaml_dir, args)
         except (RunException, YamlException):
             message = "Error modifying the test yaml files"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -288,8 +283,9 @@ class Launch():
         setup_result.end()
 
         # Determine if bullseye code coverage collection is enabled
+        code_coverage = CodeCoverage(test_env)
         # pylint: disable=unsupported-binary-operation
-        self.code_coverage.check(args.test_servers | self.local_host)
+        code_coverage.check(args.test_servers | self.local_host)
 
         # Define options for creating any slurm partitions required by the tests
         try:
@@ -302,7 +298,7 @@ class Launch():
         # Execute the tests
         status = self.run_tests(
             args.sparse, args.failfast, not args.disable_stop_daos, args.archive, args.rename,
-            args.jenkins_xml, core_files, args.logs_threshold, args.user_create)
+            args.jenkins_xml, core_files, args.logs_threshold, args.user_create, code_coverage)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
@@ -440,10 +436,11 @@ class Launch():
             self.tests.append(TestInfo(test_file, index + 1, yaml_extension))
             logger.info("  %s", self.tests[-1])
 
-    def setup_test_files(self, yaml_dir, args):
+    def setup_test_files(self, test_env, yaml_dir, args):
         """Set up the test yaml files with any placeholder replacements.
 
         Args:
+            test_env (TestEnvironment): the current test environment
             yaml_dir (str): directory in which to write the modified yaml files
             args (argparse.Namespace): command line arguments for this program
 
@@ -511,7 +508,7 @@ class Launch():
             if args.nvme.startswith("auto_md_on_ssd"):
                 tier_0_type = "ram"
                 max_nvme_tiers = 5
-                control_metadata = os.path.join(self.test_env.log_dir, 'control_metadata')
+                control_metadata = os.path.join(test_env.log_dir, 'control_metadata')
 
         self.details["storage"] = storage_info.device_dict()
 
@@ -668,7 +665,7 @@ class Launch():
         return core_files
 
     def run_tests(self, sparse, fail_fast, stop_daos, archive, rename, jenkins_xml, core_files,
-                  threshold, user_create):
+                  threshold, user_create, code_coverage):
         # pylint: disable=too-many-arguments
         """Run all the tests.
 
@@ -682,6 +679,7 @@ class Launch():
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
             user_create (bool): whether to create extra test users defined by the test
+            code_coverage (CodeCoverage): bullseye code coverage
 
         Returns:
             int: status code to use when exiting launch.py
@@ -698,7 +696,7 @@ class Launch():
         return_code |= self.setup_slurm()
 
         # Configure hosts to collect code coverage
-        if not self.code_coverage.setup(self.result.tests[0]):
+        if not code_coverage.setup(self.result.tests[0]):
             return_code |= 128
 
         # Run each test for as many repetitions as requested
@@ -738,7 +736,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        if not self.code_coverage.finalize(self.job_results_dir, self.result.tests[0]):
+        if not code_coverage.finalize(self.job_results_dir, self.result.tests[0]):
             return_code |= 16
 
         # Summarize the run
@@ -763,7 +761,7 @@ class Launch():
 
         status |= self.setup_application_directory()
 
-        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        slurm_setup = SlurmSetup(self.slurm_partition_hosts, self.slurm_control_node, True)
         logger.debug("-" * 80)
         try:
             if self.slurm_install:
