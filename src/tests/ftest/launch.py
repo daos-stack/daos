@@ -30,7 +30,8 @@ from slurm_setup import SlurmSetup, SlurmSetupException
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from bullseye_utils import setup_bullseye, finalize_bullseye, BULLSEYE_SRC              # noqa: E402
+from bullseye_utils import setup_bullseye, finalize_bullseye, BULLSEYE_SRC, \
+    BULLSEYE_FILE                                                                       # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
 from launch_utils import LaunchException, AvocadoInfo, TestInfo, TestRunner, \
     fault_injection_enabled                                                             # noqa: E402
@@ -212,7 +213,7 @@ class Launch():
         # Setup the user environment
         try:
             if args.list:
-                set_test_environment()
+                set_test_environment(None)
             else:
                 set_test_environment(
                     self.test_env, args.test_servers, args.test_clients, args.provider,
@@ -736,7 +737,7 @@ class Launch():
                 # Archive the test results
                 return_code |= runner.process(
                     self.job_results_dir, test, repeat, stop_daos, archive, rename, jenkins_xml,
-                    core_files, threshold)
+                    core_files, threshold, BULLSEYE_FILE)
 
                 # Display disk usage after the test is complete
                 self.display_disk_space(self.logdir)
