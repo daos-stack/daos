@@ -30,8 +30,8 @@ from slurm_setup import SlurmSetup, SlurmSetupException
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from bullseye_utils import setup_bullseye, finalize_bullseye, BULLSEYE_SRC, \
-    BULLSEYE_FILE                                                                       # noqa: E402
+from code_coverage_utils import CodeCoverage                                            # noqa: E402
+from data_utils import list_unique, dict_extract_values                                 # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
 from launch_utils import LaunchException, AvocadoInfo, TestInfo, TestRunner, \
     fault_injection_enabled                                                             # noqa: E402
@@ -43,7 +43,6 @@ from storage_utils import StorageInfo, StorageException                         
 from test_env_utils import TestEnvironment, TestEnvironmentException, set_test_environment, \
     PROVIDER_KEYS, PROVIDER_ALIAS                                                       # noqa: E402
 from yaml_utils import get_yaml_data, YamlUpdater, YamlException                        # noqa: E402
-from data_utils import list_unique, dict_extract_values                                 # noqa: E402
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
@@ -98,7 +97,7 @@ class Launch():
         self.result = None
 
         # Options for bullseye code coverage
-        self.bullseye_hosts = NodeSet()
+        self.code_coverage = CodeCoverage(self.test_env)
 
         # Details about the run
         self.details = OrderedDict()
@@ -287,16 +286,8 @@ class Launch():
         setup_result.end()
 
         # Determine if bullseye code coverage collection is enabled
-        logger.debug("Checking for bullseye code coverage configuration")
         # pylint: disable=unsupported-binary-operation
-        self.bullseye_hosts = args.test_servers | self.local_host
-        result = run_remote(self.bullseye_hosts, " ".join(["ls", "-al", BULLSEYE_SRC]))
-        if not result.passed:
-            logger.info(
-                "Bullseye code coverage collection not configured on %s", self.bullseye_hosts)
-            self.bullseye_hosts = NodeSet()
-        else:
-            logger.info("Bullseye code coverage collection configured on %s", self.bullseye_hosts)
+        self.code_coverage.check(args.test_servers | self.local_host)
 
         # Define options for creating any slurm partitions required by the tests
         try:
@@ -705,7 +696,7 @@ class Launch():
         return_code |= self.setup_slurm()
 
         # Configure hosts to collect code coverage
-        if not setup_bullseye(self.bullseye_hosts, self.result.tests[0]):
+        if not self.code_coverage.setup(self.result.tests[0]):
             return_code |= 128
 
         # Run each test for as many repetitions as requested
@@ -737,7 +728,7 @@ class Launch():
                 # Archive the test results
                 return_code |= runner.process(
                     self.job_results_dir, test, repeat, stop_daos, archive, rename, jenkins_xml,
-                    core_files, threshold, BULLSEYE_FILE)
+                    core_files, threshold)
 
                 # Display disk usage after the test is complete
                 self.display_disk_space(self.logdir)
@@ -746,7 +737,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        if not finalize_bullseye(self.bullseye_hosts, self.job_results_dir, self.result.tests[0]):
+        if not self.code_coverage.finalize(self.job_results_dir, self.result.tests[0]):
             return_code |= 16
 
         # Summarize the run

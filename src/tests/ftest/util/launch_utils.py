@@ -547,7 +547,7 @@ class TestRunner():
         return return_code
 
     def process(self, job_results_dir, test, repeat, stop_daos, archive, rename,
-                jenkins_xml, core_files, threshold, bullseye_file):
+                jenkins_xml, core_files, threshold):
         """Process the test results.
 
         This may include (depending upon argument values):
@@ -566,7 +566,6 @@ class TestRunner():
             jenkins_xml (bool): whether or not to update the results.xml to use Jenkins-style names
             core_files (dict): location and pattern defining where core files may be written
             threshold (str): optional upper size limit for test log files
-            bullseye_file (str): bullseye code coverage file to use with daos_server command
 
         Returns:
             int: status code: 0 = success, >0 = failure
@@ -582,7 +581,7 @@ class TestRunner():
             test, repeat, self.total_repeats)
         status = collect_test_result(
             test, self.test_result, job_results_dir, stop_daos, archive, rename, jenkins_xml,
-            core_files, threshold, self.total_repeats, bullseye_file)
+            core_files, threshold, self.total_repeats)
 
         # Mark the execution of the test as passed if nothing went wrong
         if self.test_result.status is None:

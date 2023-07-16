@@ -155,7 +155,7 @@ def get_service_status(hosts, service):
     return status
 
 
-def reset_server_storage(test, bullseye_file):
+def reset_server_storage(test):
     """Reset the server storage for the hosts that ran servers in the test.
 
     This is a workaround to enable binding devices back to nvme or vfio-pci after they are
@@ -164,7 +164,6 @@ def reset_server_storage(test, bullseye_file):
 
     Args:
         test (TestInfo): the test information
-        bullseye_file (str): bullseye code coverage file to use with daos_server command
 
     Returns:
         bool: True if the service was successfully stopped; False otherwise
@@ -175,9 +174,11 @@ def reset_server_storage(test, bullseye_file):
     log.debug("-" * 80)
     log.debug("Resetting server storage after running %s", test)
     if hosts:
+        test_env = TestEnvironment()
         commands = [
             "if lspci | grep -i nvme",
-            f"then export COVFILE={bullseye_file} && daos_server storage prepare -n --reset && "
+            f"then export COVFILE={test_env.bullseye_file} && "
+            "daos_server storage prepare -n --reset && "
             "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
             "fi"]
         log.info("Resetting server storage on %s after running '%s'", hosts, test)
@@ -781,7 +782,7 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
 
 
 def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, rename, jenkins_xml,
-                        core_files, threshold, total_repeats, bullseye_file):
+                        core_files, threshold, total_repeats):
     """Process the test results.
 
     This may include (depending upon argument values):
@@ -803,7 +804,6 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
         core_files (dict): location and pattern defining where core files may be written
         threshold (str): optional upper size limit for test log files
         total_repeats (int): total number of times the test will be repeated
-        bullseye_file (str): bullseye code coverage file to use with daos_server command
 
     Returns:
         int: status code: 0 = success, >0 = failure
@@ -817,7 +817,7 @@ def collect_test_result(test, test_result, job_results_dir, stop_daos, archive, 
             return_code |= 512
         if not stop_daos_server_service(test):
             return_code |= 512
-        if not reset_server_storage(test, bullseye_file):
+        if not reset_server_storage(test):
             return_code |= 512
         if not cleanup_processes(test, test_result):
             return_code |= 4096

@@ -12,7 +12,6 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 
-from bullseye_utils import set_bullseye_environment
 from run_utils import run_remote
 
 PROVIDER_KEYS = OrderedDict(
@@ -258,6 +257,14 @@ class TestEnvironment():
             'method': self.__default_provider,
             'kwargs': {'hosts': None}
         }
+        self.__env_map['bullseye_src'] = {
+            'name': 'DAOS_TEST_BULLSEYE_SRC',
+            'method': self.__default_bullseye_src
+        }
+        self.__env_map['bullseye_file'] = {
+            'name': 'COVFILE',
+            'method': self.__default_bullseye_file
+        }
         self.__set_environment()
 
     @property
@@ -326,6 +333,24 @@ class TestEnvironment():
             os.environ[self.__env_map['provider']['name']] = alias
         elif value:
             os.environ[self.__env_map['provider']['name']] = value
+
+    @property
+    def bullseye_src(self):
+        """Get the bullseye source file.
+
+        Returns:
+            str: the bullseye source file
+        """
+        return os.environ[self.__env_map['bullseye_src']['name']]
+
+    @property
+    def bullseye_file(self):
+        """Get the bullseye file.
+
+        Returns:
+            str: the bullseye file
+        """
+        return os.environ[self.__env_map['bullseye_file']['name']]
 
     def __default_app_dir(self):
         """Get the default application directory path.
@@ -457,6 +482,24 @@ class TestEnvironment():
         log.debug("  Found %s provider for %s", provider, self.interface)
         return provider
 
+    @staticmethod
+    def __default_bullseye_src():
+        """Get the default bullseye source file.
+
+        Returns:
+            str: the default bullseye source file
+        """
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
+
+    @staticmethod
+    def __default_bullseye_file():
+        """Get the default bullseye file.
+
+        Returns:
+            str: the default bullseye file
+        """
+        return os.path.join(os.sep, "tmp", "test.cov")
+
     def __set_environment(self):
         """Set the test environment.
 
@@ -513,7 +556,6 @@ def set_test_environment(test_env, servers=None, clients=None, provider=None, in
 
     """
     set_path()
-    set_bullseye_environment()
 
     if test_env:
         # Get the default fabric interface and provider
