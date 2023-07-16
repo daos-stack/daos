@@ -20,7 +20,7 @@ from user_utils import get_user_uid_gid
 from run_utils import run_local, RunException
 
 # Set up a logger for the console messages
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.INFO))
 

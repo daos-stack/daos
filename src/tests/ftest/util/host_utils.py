@@ -11,8 +11,6 @@ from ClusterShell.NodeSet import NodeSet
 
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 
-logger = getLogger()
-
 
 class HostException(Exception):
     """Base exception for this module."""
@@ -109,20 +107,17 @@ class HostInfo():
         return self._clients
 
     def display(self):
-        """Display the host information.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-        """
-        logger.info("-" * 100)
-        logger.info("--- HOST INFORMATION ---")
-        logger.info("servers:             %s", self.servers.hosts)
-        logger.info("clients:             %s", self.clients.hosts)
-        logger.info("server_partition:    %s", self.servers.partition.name)
-        logger.info("client_partition:    %s", self.clients.partition.name)
-        logger.info("server_reservation:  %s", self.servers.partition.reservation)
-        logger.info("client_reservation:  %s", self.clients.partition.reservation)
-        logger.info("access_points:       %s", self.access_points)
+        """Display the host information."""
+        log = getLogger()
+        log.info("-" * 100)
+        log.info("--- HOST INFORMATION ---")
+        log.info("servers:             %s", self.servers.hosts)
+        log.info("clients:             %s", self.clients.hosts)
+        log.info("server_partition:    %s", self.servers.partition.name)
+        log.info("client_partition:    %s", self.clients.partition.name)
+        log.info("server_reservation:  %s", self.servers.partition.reservation)
+        log.info("client_reservation:  %s", self.clients.partition.reservation)
+        log.info("access_points:       %s", self.access_points)
 
     def set_hosts(self, control_host, server_hosts, server_partition, server_reservation,
                   client_hosts, client_partition, client_reservation, include_local_host=False):
@@ -143,6 +138,7 @@ class HostInfo():
             HostException: if there is a problem obtaining the hosts
 
         """
+        log = getLogger()
         try:
             self._servers = HostRole(
                 server_hosts, server_partition, server_reservation,
@@ -163,7 +159,7 @@ class HostInfo():
         # Optionally remove any servers that may have ended up in the client list.  This can occur
         # with tests using slurm partitions as the client partition is setup with all of the hosts.
         if self._clients.partition.hosts:
-            logger.debug(
+            log.debug(
                 "Excluding any %s servers from the current client list: %s",
                 self.servers.hosts, self.clients.hosts)
             self._clients.hosts.difference_update(self.servers.hosts)

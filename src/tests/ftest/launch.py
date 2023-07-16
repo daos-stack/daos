@@ -137,7 +137,7 @@ class Launch():
 
         if self.job and self.result:
             # Generate the results.xml and results.html for this run
-            self.job.generate_results(logger, self.result)
+            self.job.generate_results(self.result)
 
         # Set the return code for the program based upon the mode and the provided status
         #   - always return 0 in CI mode since errors will be reported via the results.xml file
@@ -701,9 +701,8 @@ class Launch():
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
-            repeat_id = f"{repeat}/{self.repeat}"
             logger.info("-" * 80)
-            logger.info("Starting test repetition %s", repeat_id)
+            logger.info("Starting test repetition %s/%s", repeat, self.repeat)
 
             for index, test in enumerate(self.tests):
                 # Define a log for the execution of this test for this repetition
@@ -715,7 +714,7 @@ class Launch():
 
                 # Prepare the hosts to run the tests
                 step_status = runner.prepare(
-                    test_log_file, test, repeat_id, user_create, self.slurm_setup,
+                    test_log_file, test, repeat, user_create, self.slurm_setup,
                     self.slurm_control_node, self.slurm_partition_hosts)
                 if step_status:
                     # Do not run this test - update its failure status to interrupted

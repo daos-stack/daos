@@ -29,8 +29,6 @@ PROVIDER_ALIAS = {
     "ofi+tcp": "ofi+tcp;ofi_rxm"
 }
 
-logger = getLogger()
-
 
 class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
@@ -46,7 +44,8 @@ def get_build_environment():
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    logger.debug("Obtaining DAOS build environment PREFIX path")
+    log = getLogger()
+    log.debug("Obtaining DAOS build environment PREFIX path")
     build_vars_file = os.path.join(
         os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
     try:
@@ -84,12 +83,9 @@ def set_path():
 
 
 def set_python_environment():
-    """Set up the test python environment.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-    """
-    logger.debug("-" * 80)
+    """Set up the test python environment."""
+    log = getLogger()
+    log.debug("-" * 80)
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
@@ -118,15 +114,16 @@ def set_python_environment():
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+    log.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
 
 def log_environment():
     """Log the current environment variable assignments."""
-    logger.debug("ENVIRONMENT VARIABLES")
+    log = getLogger()
+    log.debug("ENVIRONMENT VARIABLES")
     for key in sorted(os.environ):
         if not key.startswith("BASH_FUNC_"):
-            logger.debug("  %s: %s", key, os.environ[key])
+            log.debug("  %s: %s", key, os.environ[key])
 
 
 def get_available_interfaces(hosts):
@@ -144,6 +141,7 @@ def get_available_interfaces(hosts):
             speed
 
     """
+    log = getLogger()
     available_interfaces = {}
 
     # Find any active network interfaces on the server or client hosts
@@ -170,10 +168,10 @@ def get_available_interfaces(hosts):
                 pass
 
     # From the active interface dictionary find all the interfaces that are common to all hosts
-    logger.debug("Active network interfaces detected:")
+    log.debug("Active network interfaces detected:")
     common_interfaces = []
     for interface, node_set in active_interfaces.items():
-        logger.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == hosts)
+        log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == hosts)
         if node_set == hosts:
             common_interfaces.append(interface)
 
@@ -199,21 +197,21 @@ def get_available_interfaces(hosts):
                     # Any line not containing a speed (integer)
                     pass
         elif not result.homogeneous:
-            logger.error("Non-homogeneous interface speed detected for %s on %s.", interface, hosts)
+            log.error("Non-homogeneous interface speed detected for %s on %s.", interface, hosts)
         else:
-            logger.error("Error detecting speed of %s on %s", interface, hosts)
+            log.error("Error detecting speed of %s on %s", interface, hosts)
 
     if interface_speeds:
-        logger.debug("Active network interface speeds on %s:", hosts)
+        log.debug("Active network interface speeds on %s:", hosts)
 
     for interface, speed in interface_speeds.items():
-        logger.debug("  - %-8s (speed: %6s)", interface, speed)
+        log.debug("  - %-8s (speed: %6s)", interface, speed)
         # Only include the first active interface for each speed - first is
         # determined by an alphabetic sort: ib0 will be checked before ib1
         if speed is not None and speed not in available_interfaces:
             available_interfaces[speed] = interface
 
-    logger.debug("Available interfaces on %s: %s", hosts, available_interfaces)
+    log.debug("Available interfaces on %s: %s", hosts, available_interfaces)
     return available_interfaces
 
 
@@ -401,10 +399,11 @@ class TestEnvironment():
         Returns:
             str: the default interface; can be None
         """
+        log = getLogger()
         interface = os.environ.get("OFI_INTERFACE")
         if interface is None and hosts:
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-            logger.debug("Detecting network devices - OFI_INTERFACE not set")
+            log.debug("Detecting network devices - OFI_INTERFACE not set")
             available_interfaces = get_available_interfaces(hosts)
             try:
                 # Select the fastest active interface available by sorting
@@ -430,17 +429,18 @@ class TestEnvironment():
         if not hosts:
             return None
 
-        logger.debug(
+        log = getLogger()
+        log.debug(
             "Detecting provider for %s - %s not set",
             self.interface, self.__env_map['provider']['name'])
 
         # Check for a Omni-Path interface
-        logger.debug("Checking for Omni-Path devices")
+        log.debug("Checking for Omni-Path devices")
         command = "sudo -n opainfo"
         result = run_remote(hosts, command)
         if result.passed:
             # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
-            logger.debug("  Excluding verbs provider for Omni-Path adapters")
+            log.debug("  Excluding verbs provider for Omni-Path adapters")
             PROVIDER_KEYS.pop("verbs")
 
         # Detect all supported providers
@@ -457,15 +457,15 @@ class TestEnvironment():
 
             # Only use providers available on all the server hosts
             if keys_found:
-                logger.debug("Detected supported providers:")
+                log.debug("Detected supported providers:")
             provider_name_keys = list(keys_found)
             for provider_name in provider_name_keys:
-                logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
+                log.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
                 if keys_found[provider_name] != hosts:
                     keys_found.pop(provider_name)
 
             # Select the preferred found provider based upon PROVIDER_KEYS order
-            logger.debug("Supported providers detected: %s", list(keys_found))
+            log.debug("Supported providers detected: %s", list(keys_found))
             for key in PROVIDER_KEYS:
                 if key in keys_found:
                     provider = PROVIDER_KEYS[key]
@@ -477,7 +477,7 @@ class TestEnvironment():
                 f"Error obtaining a supported provider for {self.interface} "
                 f"from: {list(PROVIDER_KEYS)}")
 
-        logger.debug("  Found %s provider for %s", provider, self.interface)
+        log.debug("  Found %s provider for %s", provider, self.interface)
         return provider
 
     @staticmethod
@@ -553,8 +553,9 @@ def set_test_environment(test_env, servers=None, clients=None, provider=None, in
         TestEnvironmentException: if there is a problem setting up the test environment
 
     """
-    logger.debug("-" * 80)
-    logger.debug("Setting up the test environment variables")
+    log = getLogger()
+    log.debug("-" * 80)
+    log.debug("Setting up the test environment variables")
     set_path()
 
     if test_env:
@@ -562,8 +563,8 @@ def set_test_environment(test_env, servers=None, clients=None, provider=None, in
         test_env.provider = provider
         test_env.set_with_hosts(servers, clients)
 
-        logger.info("Testing with interface:   %s", test_env.interface)
-        logger.info("Testing with provider:    %s", test_env.provider)
+        log.info("Testing with interface:   %s", test_env.interface)
+        log.info("Testing with provider:    %s", test_env.provider)
 
         if details:
             details["interface"] = test_env.interface

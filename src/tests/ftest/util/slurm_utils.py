@@ -17,8 +17,6 @@ from run_utils import run_remote, run_local, RunException
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']
 W_LOCK = threading.Lock()
 
-logger = getLogger()
-
 
 class SlurmFailed(Exception):
     """Thrown when something goes wrong with slurm."""
@@ -128,7 +126,6 @@ def sbatch(script, log_file=None):
     """Run the specified script with the sbatch command.
 
     Args:
-        log (logger): logger for the messages produced by this method
         script (str): script file suitable to by run by slurm
         log_file (str, optional): logfile to generate. Defaults to None.
 
@@ -299,6 +296,7 @@ def check_slurm_job(handle):
             UNKNOWN if the handle doesn't match a known slurm job.
 
     """
+    log = getLogger()
     state = "UNKNOWN"
     command = ["scontrol", "show", "job", handle]
     try:
@@ -307,7 +305,7 @@ def check_slurm_job(handle):
         if match is not None:
             state = match.group(1)
     except RunException as error:
-        logger.debug(str(error))
+        log.debug(str(error))
     return state
 
 
@@ -337,20 +335,21 @@ def watch_job(handle, max_wait, test_obj):
         max_wait (int): max time in seconds to wait
         test_obj (Test): whom to notify when its done
     """
+    log = getLogger()
     wait_time = 0
     while True:
         state = check_slurm_job(handle)
         if state in ("PENDING", "RUNNING", "COMPLETING", "CONFIGURING"):
             if wait_time > max_wait:
                 state = "MAXWAITREACHED"
-                logger.error("Job %s has timed out after %s secs", handle, max_wait)
+                log.error("Job %s has timed out after %s secs", handle, max_wait)
                 break
             wait_time += 5
             time.sleep(5)
         else:
             break
 
-    logger.debug("FINAL STATE: slurm job %s completed with : %s at %s", handle, state, time.ctime())
+    log.debug("FINAL STATE: slurm job %s completed with : %s at %s", handle, state, time.ctime())
     params = {"handle": handle, "state": state}
     with W_LOCK:
         test_obj.job_done(params)
@@ -413,7 +412,8 @@ def install_slurm(hosts, sudo, timeout=600):
         bool: True if slurm was installed successfully on all hosts
 
     """
-    logger.info('Installing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    log = getLogger()
+    log.info('Installing packages on %s: %s', hosts, ', '.join(PACKAGES))
     sudo_command = ['sudo', '-n'] if sudo else []
     command = sudo_command + ['dnf', 'install', '-y'] + PACKAGES
     return run_remote(hosts, ' '.join(command), timeout=timeout).passed
@@ -431,7 +431,8 @@ def remove_slurm(hosts, sudo, timeout=600):
         bool: True if slurm was removed successfully on all hosts
 
     """
-    logger.info('Removing packages on %s: %s', hosts, ', '.join(PACKAGES))
+    log = getLogger()
+    log.info('Removing packages on %s: %s', hosts, ', '.join(PACKAGES))
     sudo_command = ['sudo', '-n'] if sudo else []
     command = sudo_command + ['dnf', 'remove', '-y'] + PACKAGES
     return run_remote(hosts, ' '.join(command), timeout=timeout).passed
@@ -447,7 +448,8 @@ def slurm_installed(hosts):
         bool: True if all slurm packages are installed on all hosts
 
     """
-    logger.info('Determining if slurm is installed on %s', hosts)
+    log = getLogger()
+    log.info('Determining if slurm is installed on %s', hosts)
     regex = ['\'(', '|'.join(PACKAGES), ')-[0-9]\'']
     command = ['rpm', '-qa', '|', 'grep', '-E', ''.join(regex)]
     result = run_remote(hosts, ' '.join(command))

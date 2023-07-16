@@ -12,8 +12,6 @@ import time
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
-logger = getLogger()
-
 
 class RunException(Exception):
     """Base exception for this module."""
@@ -262,25 +260,25 @@ def log_result_data(data):
     """Log a single command result data entry.
 
     Args:
-        log (logger): logger for the messages produced by this method
         data (ResultData): command result common to a set of hosts
     """
+    log = getLogger()
     info = " timed out" if data.timeout else ""
     if not data.stdout and not data.stderr:
-        logger.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
+        log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
     elif data.stdout and len(data.stdout) == 1 and not data.stderr:
-        logger.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
+        log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
     else:
-        logger.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
+        log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
         indent = 6 if data.stderr else 4
         if data.stdout and data.stderr:
-            logger.debug("    <stdout>:")
+            log.debug("    <stdout>:")
         for line in data.stdout:
-            logger.debug("%s%s", " " * indent, line)
+            log.debug("%s%s", " " * indent, line)
         if data.stderr:
-            logger.debug("    <stderr>:")
+            log.debug("    <stderr>:")
         for line in data.stderr:
-            logger.debug("%s%s", " " * indent, line)
+            log.debug("%s%s", " " * indent, line)
 
 
 def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
@@ -336,15 +334,16 @@ def run_local(command, capture_output=True, timeout=None, check=False, verbose=T
                 - stderr (not used; included in stdout)
 
     """
+    log = getLogger()
     local_host = gethostname().split(".")[0]
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
     if timeout and verbose:
-        logger.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
     elif verbose:
-        logger.debug("Running on %s: %s", local_host, command)
+        log.debug("Running on %s: %s", local_host, command)
 
     try:
         # pylint: disable=subprocess-run-check
@@ -352,37 +351,37 @@ def run_local(command, capture_output=True, timeout=None, check=False, verbose=T
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
-        logger.debug(str(error))
-        logger.debug("  output: %s", error.output)
-        logger.debug("  stderr: %s", error.stderr)
+        log.debug(str(error))
+        log.debug("  output: %s", error.output)
+        log.debug("  stderr: %s", error.stderr)
         raise RunException(f"Command '{command}' exceed {timeout}s timeout") from error
 
     except subprocess.CalledProcessError as error:
         # Raised if command yields a non-zero return status with check=True
-        logger.debug(str(error))
-        logger.debug("  output: %s", error.output)
-        logger.debug("  stderr: %s", error.stderr)
+        log.debug(str(error))
+        log.debug("  output: %s", error.output)
+        log.debug("  stderr: %s", error.stderr)
         raise RunException(f"Command '{command}' returned non-zero status") from error
 
     except KeyboardInterrupt as error:
         # User Ctrl-C
         message = f"Command '{command}' interrupted by user"
-        logger.debug(message)
+        log.debug(message)
         raise RunException(message) from error
 
     except Exception as error:
         # Catch all
         message = f"Command '{command}' encountered unknown error"
-        logger.debug(message)
-        logger.debug(str(error))
+        log.debug(message)
+        log.debug(str(error))
         raise RunException(message) from error
 
     if capture_output and verbose:
         # Log the output of the command
-        logger.debug("  %s (rc=%s):", local_host, result.returncode)
+        log.debug("  %s (rc=%s):", local_host, result.returncode)
         if result.stdout:
             for line in result.stdout.splitlines():
-                logger.debug("    %s", line)
+                log.debug("    %s", line)
 
     return result
 
@@ -404,6 +403,7 @@ def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False, stde
             return status
 
     """
+    log = getLogger()
     task = task_self()
     task.set_info('debug', task_debug)
     task.set_default("stderr", stderr)
@@ -411,9 +411,9 @@ def run_remote(hosts, command, verbose=True, timeout=120, task_debug=False, stde
     task.set_info("ssh_options", "-oForwardAgent=yes")
     if verbose:
         if timeout is None:
-            logger.debug("Running on %s without a timeout: %s", hosts, command)
+            log.debug("Running on %s without a timeout: %s", hosts, command)
         else:
-            logger.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
@@ -498,6 +498,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, exclude=None, force
             process was killed or no process matching the pattern were found).
 
     """
+    log = getLogger()
     processes_detected = NodeSet()
     processes_running = NodeSet()
     command = f"/usr/bin/pgrep --list-full {pattern}"
@@ -507,10 +508,10 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, exclude=None, force
         pattern_match += " and doesn't match " + str(exclude)
 
     # Search for any active processes
-    logger.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
+    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
     result = run_remote(hosts, command, verbose, timeout)
     if not result.passed_hosts:
-        logger.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
+        log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
         return processes_detected, processes_running
 
     # Indicate on which hosts processes matching the pattern were found running in the return status
@@ -525,7 +526,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, exclude=None, force
         steps = [(" --signal KILL", 5)]
     while steps and result.passed_hosts:
         step = steps.pop(0)
-        logger.debug(
+        log.debug(
             "Killing%s any processes on %s that match %s and then waiting %s seconds",
             step[0], result.passed_hosts, pattern_match, step[1])
         kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
@@ -534,12 +535,11 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, exclude=None, force
         result = run_remote(result.passed_hosts, command, verbose, timeout)
         if not result.passed_hosts:
             # Indicate all running processes matching the pattern were stopped in the return status
-            logger.debug(
+            log.debug(
                 "All processes running on %s that match %s have been stopped.",
                 result.failed_hosts, pattern_match)
         # Update the set of hosts on which the processes matching the pattern are still running
         processes_running.difference_update(result.failed_hosts)
     if processes_running:
-        logger.debug(
-            "Processes still running on %s that match: %s", processes_running, pattern_match)
+        log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
     return processes_detected, processes_running

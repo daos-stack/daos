@@ -9,8 +9,6 @@ import os
 from collection_utils import archive_files
 from run_utils import run_remote
 
-logger = getLogger()
-
 
 class CodeCoverage():
     """Test bullseye code coverage class."""
@@ -30,14 +28,14 @@ class CodeCoverage():
         Args:
             hosts (NodeSet): hosts on which to check for bullseye code coverage source files
         """
-        logger.debug("Checking for bullseye code coverage configuration")
+        log = getLogger()
+        log.debug("Checking for bullseye code coverage configuration")
         result = run_remote(hosts, " ".join(["ls", "-al", self.__test_env.bullseye_src]))
         if not result.passed:
-            logger.info(
-                "Bullseye code coverage collection not configured on %s", result.failed_hosts)
+            log.info("Bullseye code coverage collection not configured on %s", result.failed_hosts)
             self.__hosts = None
         else:
-            logger.info("Bullseye code coverage collection configured on %s", hosts)
+            log.info("Bullseye code coverage collection configured on %s", hosts)
             self.__hosts = hosts
 
     def setup(self, result):
@@ -51,25 +49,25 @@ class CodeCoverage():
 
         """
         if self.__hosts:
-            logger.debug("-" * 80)
-            logger.info("Setting up bullseye code coverage on %s:", self.__hosts)
+            log = getLogger()
+            log.debug("-" * 80)
+            log.info("Setting up bullseye code coverage on %s:", self.__hosts)
 
-            logger.debug("Removing any existing %s file", self.__test_env.bullseye_file)
+            log.debug("Removing any existing %s file", self.__test_env.bullseye_file)
             command = ["rm", "-fr", self.__test_env.bullseye_file]
             if not run_remote(self.__hosts, " ".join(command)).passed:
                 message = "Error removing bullseye code coverage file on at least one host"
                 result.fail_test("Run", message, None)
                 return False
 
-            logger.debug(
-                "Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
+            log.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
             command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
             if not run_remote(self.__hosts, " ".join(command)).passed:
                 message = "Error copying bullseye code coverage file on at least one host"
                 result.fail_test("Run", message, None)
                 return False
 
-            logger.debug(
+            log.debug(
                 "Updating %s bullseye code coverage file permissions",
                 self.__test_env.bullseye_file)
             command = ["chmod", "777", self.__test_env.bullseye_file]
@@ -93,6 +91,7 @@ class CodeCoverage():
         if not self.__hosts:
             return True
 
+        log = getLogger()
         bullseye_path, bullseye_file = os.path.split(self.__test_env.bullseye_file)
         bullseye_dir = os.path.join(job_results_dir, "bullseye_coverage_logs")
         status = archive_files(
@@ -113,6 +112,6 @@ class CodeCoverage():
                             new_name.insert(1, host_ext[-1][1:])
                             new_file_name = ".".join(new_name)
                             new_file = os.path.join(bullseye_dir, new_file_name)
-                            logger.debug("Renaming %s to %s", old_file, new_file)
+                            log.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
         return status == 0

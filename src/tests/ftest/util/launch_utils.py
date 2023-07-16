@@ -19,8 +19,6 @@ from test_env_utils import TestEnvironment
 from user_utils import groupadd, useradd, userdel, get_group_id, get_user_groups
 from yaml_utils import get_yaml_data
 
-logger = getLogger()
-
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""
@@ -33,14 +31,15 @@ def fault_injection_enabled():
         bool: whether or not fault injection is enabled
 
     """
-    logger.debug("Checking for fault injection enablement via 'fault_status':")
+    log = getLogger()
+    log.debug("Checking for fault injection enablement via 'fault_status':")
     try:
         run_local("fault_status", check=True)
-        logger.debug("  Fault injection is enabled")
+        log.debug("  Fault injection is enabled")
         return True
     except RunException:
         # Command failed or yielded a non-zero return status
-        logger.debug("  Fault injection is disabled")
+        log.debug("  Fault injection is disabled")
     return False
 
 
@@ -367,6 +366,7 @@ class TestInfo():
             include_local_host (bool, optional): whether or not the local host be included in the
                 set of client hosts. Defaults to False.
         """
+        log = getLogger()
         self.yaml_info = {"include_local_host": include_local_host}
         yaml_data = get_yaml_data(self.yaml_file)
         info = {}
@@ -377,13 +377,13 @@ class TestInfo():
                 # Use single value if list only contains 1 element
                 info[key] = values if len(values) > 1 else values[0]
 
-        logger.debug("Test yaml information for %s:", self.test_file)
+        log.debug("Test yaml information for %s:", self.test_file)
         for key in self.YAML_INFO_KEYS:
             if key in (self.YAML_INFO_KEYS[0], self.YAML_INFO_KEYS[3]):
                 self.yaml_info[key] = get_node_set(info[key] if key in info else None)
             else:
                 self.yaml_info[key] = info[key] if key in info else None
-            logger.debug("  %-18s = %s", key, self.yaml_info[key])
+            log.debug("  %-18s = %s", key, self.yaml_info[key])
 
     def set_host_info(self, control_node):
         """Set the test host information using the test yaml file.
@@ -396,9 +396,10 @@ class TestInfo():
             setting up a slum partition
 
         """
-        logger.debug("Using %s to define host information", self.yaml_file)
+        log = getLogger()
+        log.debug("Using %s to define host information", self.yaml_file)
         if self.yaml_info["include_local_host"]:
-            logger.debug("  Adding the localhost to the clients: %s", get_local_host())
+            log.debug("  Adding the localhost to the clients: %s", get_local_host())
         try:
             self.host_info.set_hosts(
                 control_node, self.yaml_info[self.YAML_INFO_KEYS[0]],
@@ -470,9 +471,9 @@ class TestRunner():
             int: status code: 0 = success, 128 = failure
 
         """
-        logger.debug("=" * 80)
-        logger.info(
-            "Preparing to run the %s test on repeat %s/%s", test, repeat, self.total_repeats)
+        log = getLogger()
+        log.debug("=" * 80)
+        log.info("Preparing to run the %s test on repeat %s/%s", test, repeat, self.total_repeats)
 
         # Create a new TestResult for this test
         self.test_result = self.launch_result.add_test(
@@ -511,12 +512,14 @@ class TestRunner():
             int: status code: 0 = success, >0 = failure
 
         """
+        log = getLogger()
+
         # Avoid counting the test execution time as part of the processing time of this test
         self.test_result.end()
 
-        logger.debug("=" * 80)
+        log.debug("=" * 80)
         command = self.avocado.get_run_command(test, self.tag_filters, sparse, fail_fast)
-        logger.info(
+        log.info(
             "[Test %s/%s] Running the %s test on repetition %s/%s",
             number, self.total_tests, test, repeat, self.total_repeats)
         start_time = int(time.time())
@@ -524,14 +527,14 @@ class TestRunner():
         try:
             return_code = run_local(" ".join(command), capture_output=False, check=False).returncode
             if return_code == 0:
-                logger.debug("All avocado test variants passed")
+                log.debug("All avocado test variants passed")
             elif return_code & 2 == 2:
-                logger.debug("At least one avocado test variant failed")
+                log.debug("At least one avocado test variant failed")
             elif return_code & 4 == 4:
                 message = "Failed avocado commands detected"
                 self.test_result.fail_test("Execute", message)
             elif return_code & 8 == 8:
-                logger.debug("At least one avocado test variant was interrupted")
+                log.debug("At least one avocado test variant was interrupted")
             if return_code:
                 self._collect_crash_files()
 
@@ -541,7 +544,7 @@ class TestRunner():
             return_code = 1
 
         end_time = int(time.time())
-        logger.info("Total test time: %ss", end_time - start_time)
+        log.info("Total test time: %ss", end_time - start_time)
         return return_code
 
     def process(self, job_results_dir, test, repeat, stop_daos, archive, rename,
@@ -569,11 +572,13 @@ class TestRunner():
             int: status code: 0 = success, >0 = failure
 
         """
+        log = getLogger()
+
         # Mark the continuation of the processing of this test
         self.test_result.start()
 
-        logger.debug("=" * 80)
-        logger.info(
+        log.debug("=" * 80)
+        log.info(
             "Processing the %s test after the run on repeat %s/%s",
             test, repeat, self.total_repeats)
         status = collect_test_result(
@@ -602,20 +607,21 @@ class TestRunner():
             int: status code: 0 = success, 128 = failure
 
         """
-        logger.debug("-" * 80)
-        logger.debug("Setting up host information for %s", test)
+        log = getLogger()
+        log.debug("-" * 80)
+        log.debug("Setting up host information for %s", test)
 
         # Verify any required partitions exist
         if test.yaml_info["client_partition"]:
             partition = test.yaml_info["client_partition"]
-            logger.debug("Determining if the %s client partition exists", partition)
+            log.debug("Determining if the %s client partition exists", partition)
             exists = show_partition(control_host, partition).passed
             if not exists and not slurm_setup:
                 message = f"Error missing {partition} partition"
                 self.test_result.fail_test("Prepare", message, None)
                 return 128
             if slurm_setup and exists:
-                logger.info(
+                log.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(control_host, partition).passed:
                     message = f"Error removing existing {partition} partition"
@@ -623,14 +629,14 @@ class TestRunner():
                     return 128
             if slurm_setup:
                 hosts = partition_hosts.difference(test.yaml_info["test_servers"])
-                logger.debug(
+                log.debug(
                     "Partition hosts from '%s', excluding test servers '%s': %s",
                     partition_hosts, test.yaml_info["test_servers"], hosts)
                 if not hosts:
                     message = "Error no partition hosts exist after removing the test servers"
                     self.test_result.fail_test("Prepare", message, None)
                     return 128
-                logger.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
+                log.info("Creating the '%s' partition with the '%s' hosts", partition, hosts)
                 if not create_partition(control_host, partition, hosts).passed:
                     message = f"Error adding the {partition} partition"
                     self.test_result.fail_test("Prepare", message, None)
@@ -646,11 +652,11 @@ class TestRunner():
 
         # Log the test information
         msg_format = "%3s  %-40s  %-60s  %-20s  %-20s"
-        logger.debug("-" * 80)
-        logger.debug("Test information:")
-        logger.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
-        logger.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
-        logger.debug(
+        log.debug("-" * 80)
+        log.debug("Test information:")
+        log.debug(msg_format, "UID", "Test", "Yaml File", "Servers", "Clients")
+        log.debug(msg_format, "-" * 3, "-" * 40, "-" * 60, "-" * 20, "-" * 20)
+        log.debug(
             msg_format, test.name.order, test.test_file, test.yaml_file,
             test.host_info.servers.hosts, test.host_info.clients.hosts)
         return 0
@@ -665,11 +671,12 @@ class TestRunner():
             int: status code: 0 = success, 128 = failure
 
         """
-        logger.debug("-" * 80)
+        log = getLogger()
+        log.debug("-" * 80)
         test_env = TestEnvironment()
         hosts = test.host_info.all_hosts
         hosts.add(self.local_host)
-        logger.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
+        log.debug("Setting up '%s' on %s:", test_env.log_dir, hosts)
         commands = [
             f"sudo -n rm -fr {test_env.log_dir}",
             f"mkdir -p {test_env.log_dir}",
@@ -698,10 +705,11 @@ class TestRunner():
             int: status code: 0 = success, 128 = failure
 
         """
+        log = getLogger()
         users = test.get_yaml_client_users()
         clients = test.host_info.clients.hosts
         if users:
-            logger.info('Setting up test users on %s', clients)
+            log.info('Setting up test users on %s', clients)
 
         # Keep track of queried groups to avoid redundant work
         group_gid = {}
@@ -744,10 +752,11 @@ class TestRunner():
             str: the group's gid
 
         """
+        log = getLogger()
         # Get the group id on each node
-        logger.info('Querying group %s', group)
+        log.info('Querying group %s', group)
         group_ids = get_group_id(hosts, group).keys()
-        logger.debug('  found group_ids %s', group_ids)
+        log.debug('  found group_ids %s', group_ids)
         group_ids = list(group_ids)
         if len(group_ids) == 1 and group_ids[0] is not None:
             return group_ids[0]
@@ -755,14 +764,14 @@ class TestRunner():
             raise LaunchException(f'Group not setup correctly: {group}')
 
         # Create the group
-        logger.info('Creating group %s', group)
+        log.info('Creating group %s', group)
         if not groupadd(hosts, group, True, True).passed:
             raise LaunchException(f'Error creating group {group}')
 
         # Get the group id on each node
-        logger.info('Querying group %s', group)
+        log.info('Querying group %s', group)
         group_ids = get_group_id(hosts, group).keys()
-        logger.debug('  found group_ids %s', group_ids)
+        log.debug('  found group_ids %s', group_ids)
         group_ids = list(group_ids)
         if len(group_ids) == 1 and group_ids[0] is not None:
             return group_ids[0]
@@ -782,9 +791,10 @@ class TestRunner():
             LaunchException: if there is an error querying or creating the user
 
         """
-        logger.info('Querying user %s', user)
+        log = getLogger()
+        log.info('Querying user %s', user)
         groups = get_user_groups(hosts, user)
-        logger.debug('  found groups %s', groups)
+        log.debug('  found groups %s', groups)
         groups = list(groups)
         if len(groups) == 1 and groups[0] == gid:
             # Exists and in correct group
@@ -793,10 +803,10 @@ class TestRunner():
             raise LaunchException(f'User {user} groups not as expected')
 
         # Delete and ignore errors, in case user account is inconsistent across nodes
-        logger.info('Deleting user %s', user)
+        log.info('Deleting user %s', user)
         _ = userdel(hosts, user, True)
 
-        logger.info('Creating user %s in group %s', user, gid)
+        log.info('Creating user %s in group %s', user, gid)
         test_env = TestEnvironment()
         if not useradd(hosts, user, gid, test_env.user_dir, True).passed:
             raise LaunchException(f'Error creating user {user}')
@@ -808,8 +818,9 @@ class TestRunner():
             int: status code: 0 = success, 128 = failure
 
         """
-        logger.debug("-" * 80)
-        logger.debug("Generating certificates")
+        log = getLogger()
+        log.debug("-" * 80)
+        log.debug("Generating certificates")
         test_env = TestEnvironment()
         certs_dir = os.path.join(test_env.log_dir, "daosCA")
         certgen_dir = os.path.abspath(
@@ -826,6 +837,7 @@ class TestRunner():
 
     def _collect_crash_files(self):
         """Move any avocado crash files into job-results/latest/crashes."""
+        log = getLogger()
         avocado_logs_dir = self.avocado.get_logs_dir()
         crash_dir = os.path.join(avocado_logs_dir.replace("job-results", "data"), "crashes")
         if os.path.isdir(crash_dir):
@@ -844,4 +856,4 @@ class TestRunner():
                     message = "Error collecting crash files"
                     self.test_result.fail_test("Execute", message, sys.exc_info())
             else:
-                logger.debug("No avocado crash files found in %s", crash_dir)
+                log.debug("No avocado crash files found in %s", crash_dir)
