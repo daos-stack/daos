@@ -1117,6 +1117,7 @@ class Launch():
         """
         build_vars_file = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
+        logger.info("build_vars_file = %s", build_vars_file)
         try:
             with open(build_vars_file, encoding="utf-8") as vars_file:
                 return json.load(vars_file)
