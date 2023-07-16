@@ -52,7 +52,7 @@ MAX_CI_REPETITIONS = 10
 # Set up a logger for the console messages. Initially configure the console handler to report debug
 # messages until a file logger can be established to handle the debug messages. After which the
 # console logger will be updated to handle info messages.
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
@@ -216,7 +216,7 @@ class Launch():
             else:
                 set_test_environment(
                     self.test_env, args.test_servers, args.test_clients, args.provider,
-                    args.insecure_mode)
+                    args.insecure_mode, self.details)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -1024,7 +1024,7 @@ def main():
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values() + list(PROVIDER_ALIAS.keys())))}")
+             f"e.g. {', '.join(list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()))}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

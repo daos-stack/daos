@@ -27,6 +27,8 @@ TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 TEST_RESULTS_DIRS = (
     "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
+logger = getLogger()
+
 
 def stop_daos_agent_services(test):
     """Stop any daos_agent.service running on the hosts running servers.
@@ -41,9 +43,8 @@ def stop_daos_agent_services(test):
     service = "daos_agent.service"
     # pylint: disable=unsupported-binary-operation
     hosts = test.host_info.clients.hosts | get_local_host()
-    log = getLogger()
-    log.debug("-" * 80)
-    log.debug("Verifying %s after running '%s'", service, test)
+    logger.debug("-" * 80)
+    logger.debug("Verifying %s after running '%s'", service, test)
     return stop_service(hosts, service)
 
 
@@ -59,9 +60,8 @@ def stop_daos_server_service(test):
     """
     service = "daos_server.service"
     hosts = test.host_info.servers.hosts
-    log = getLogger()
-    log.debug("-" * 80)
-    log.debug("Verifying %s after running '%s'", service, test)
+    logger.debug("-" * 80)
+    logger.debug("Verifying %s after running '%s'", service, test)
     return stop_service(hosts, service)
 
 
@@ -76,7 +76,6 @@ def stop_service(hosts, service):
         bool: True if the service was successfully stopped; False otherwise
 
     """
-    log = getLogger()
     result = {"status": True}
     if hosts:
         status_keys = ["reset-failed", "stop", "disable"]
@@ -94,7 +93,8 @@ def stop_service(hosts, service):
                 if result[key]:
                     if loop == max_loops:
                         # Exit the while loop if the service is still running
-                        log.error(" - Error %s still %s on %s", service, mapping[key], result[key])
+                        logger.error(
+                            " - Error %s still %s on %s", service, mapping[key], result[key])
                         result["status"] = False
                     else:
                         # Issue the appropriate systemctl command to remedy the
@@ -106,7 +106,7 @@ def stop_service(hosts, service):
                         check_hosts.add(result[key])
             loop += 1
     else:
-        log.debug("  Skipping stopping %s service - no hosts", service)
+        logger.debug("  Skipping stopping %s service - no hosts", service)
 
     return result["status"]
 
@@ -126,7 +126,6 @@ def get_service_status(hosts, service):
             - "reset-failed": NodeSet where to reset the daos_server.service
 
     """
-    log = getLogger()
     status = {
         "status": True,
         "stop": NodeSet(),
@@ -144,9 +143,9 @@ def get_service_status(hosts, service):
             status["stop"].add(data.hosts)
             status["disable"].add(data.hosts)
             status["reset-failed"].add(data.hosts)
-            log.debug("  %s: TIMEOUT", data.hosts)
+            logger.debug("  %s: TIMEOUT", data.hosts)
             break
-        log.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
+        logger.debug("  %s: %s", data.hosts, "\n".join(data.stdout))
         for key, state_list in status_states.items():
             for line in data.stdout:
                 if line in state_list:
@@ -169,10 +168,9 @@ def reset_server_storage(test):
         bool: True if the service was successfully stopped; False otherwise
 
     """
-    log = getLogger()
     hosts = test.host_info.servers.hosts
-    log.debug("-" * 80)
-    log.debug("Resetting server storage after running %s", test)
+    logger.debug("-" * 80)
+    logger.debug("Resetting server storage after running %s", test)
     if hosts:
         test_env = TestEnvironment()
         commands = [
@@ -181,12 +179,12 @@ def reset_server_storage(test):
             "daos_server storage prepare -n --reset && "
             "sudo -n rmmod vfio_pci && sudo -n modprobe vfio_pci",
             "fi"]
-        log.info("Resetting server storage on %s after running '%s'", hosts, test)
+        logger.info("Resetting server storage on %s after running '%s'", hosts, test)
         result = run_remote(hosts, f"bash -c '{';'.join(commands)}'", timeout=600)
         if not result.passed:
-            log.debug("Ignoring any errors from these workaround commands")
+            logger.debug("Ignoring any errors from these workaround commands")
     else:
-        log.debug("  Skipping resetting server storage - no server hosts")
+        logger.debug("  Skipping resetting server storage - no server hosts")
     return True
 
 
@@ -202,14 +200,13 @@ def cleanup_processes(test, result):
         int: status code: 0 = success; 4096 if processes were found
 
     """
-    log = getLogger()
     any_found = False
     hosts = test.host_info.all_hosts
-    log.debug("-" * 80)
-    log.debug("Cleaning up running processes after running %s", test)
+    logger.debug("-" * 80)
+    logger.debug("Cleaning up running processes after running %s", test)
 
     proc_pattern = "|".join(CLEANUP_PROCESS_NAMES)
-    log.debug("Looking for running processes: %s", proc_pattern)
+    logger.debug("Looking for running processes: %s", proc_pattern)
     detected, running = stop_processes(hosts, f"'{proc_pattern}'", force=True)
     if running:
         message = f"Failed to kill processes on {running}"
@@ -218,14 +215,14 @@ def cleanup_processes(test, result):
         message = f"Running processes found on {detected}"
         result.warn_test("Process", message)
 
-    log.debug("Looking for mount types: %s", " ".join(CLEANUP_UNMOUNT_TYPES))
+    logger.debug("Looking for mount types: %s", " ".join(CLEANUP_UNMOUNT_TYPES))
     # Use mount | grep instead of mount -t for better logging
     grep_pattern = "|".join(f'type {_type}' for _type in CLEANUP_UNMOUNT_TYPES)
     mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"
     mount_grep_result = run_remote(hosts, mount_grep_cmd)
     if mount_grep_result.passed_hosts:
         any_found = True
-        log.debug("Unmounting: %s", " ".join(CLEANUP_UNMOUNT_TYPES))
+        logger.debug("Unmounting: %s", " ".join(CLEANUP_UNMOUNT_TYPES))
         type_list = ",".join(CLEANUP_UNMOUNT_TYPES)
         umount_cmd = f"sudo -n umount -v --all --force -t '{type_list}'"
         umount_result = run_remote(mount_grep_result.passed_hosts, umount_cmd)
@@ -259,20 +256,19 @@ def archive_files(summary, hosts, source, pattern, destination, depth, threshold
         int: status code: 0 = success, 16 = failure
 
     """
-    log = getLogger()
-    log.debug("=" * 80)
-    log.info(
+    logger.debug("=" * 80)
+    logger.info(
         "Archiving %s from %s:%s to %s%s,",
         summary, hosts, os.path.join(source, pattern), destination,
         f" after running '{str(test)}'" if test else "")
-    log.debug("  Remote hosts: %s", hosts.difference(get_local_host()))
-    log.debug("  Local host:   %s", hosts.intersection(get_local_host()))
+    logger.debug("  Remote hosts: %s", hosts.difference(get_local_host()))
+    logger.debug("  Local host:   %s", hosts.intersection(get_local_host()))
 
     # List any remote files and their sizes and determine which hosts contain these files
     return_code, file_hosts = list_files(hosts, source, pattern, depth, test_result)
     if not file_hosts:
         # If no files are found then there is nothing else to do
-        log.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
+        logger.debug("No %s files found on %s", os.path.join(source, pattern), hosts)
         return return_code
 
     if "log" in pattern:
@@ -319,12 +315,11 @@ def list_files(hosts, source, pattern, depth, test_result):
             NodeSet: hosts with at least one file matching the pattern in the source directory
 
     """
-    log = getLogger()
     status = 0
     hosts_with_files = NodeSet()
     source_files = os.path.join(source, pattern)
-    log.debug("-" * 80)
-    log.debug("Listing any %s files on %s", source_files, hosts)
+    logger.debug("-" * 80)
+    logger.debug("Listing any %s files on %s", source_files, hosts)
     other = ["-printf", "'%M %n %-12u %-12g %12k %t %p\n'"]
     result = run_remote(hosts, find_command(source, pattern, depth, other))
     if not result.passed:
@@ -335,7 +330,7 @@ def list_files(hosts, source, pattern, depth, test_result):
         for data in result.output:
             for line in data.stdout:
                 if source in line:
-                    log.debug("Found at least one file match on %s: %s", data.hosts, line)
+                    logger.debug("Found at least one file match on %s: %s", data.hosts, line)
                     hosts_with_files.add(data.hosts)
                     break
             if re.findall(fr"{FAILURE_TRIGGER}", "\n".join(data.stdout)):
@@ -343,7 +338,7 @@ def list_files(hosts, source, pattern, depth, test_result):
                 # This feature is used by avocado tests to verify that launch.py reports
                 # errors correctly in CI. See test_launch_failures in harness/basic.py for
                 # more details.
-                log.debug(
+                logger.debug(
                     "Found a file matching the '%s' failure trigger on %s",
                     FAILURE_TRIGGER, data.hosts)
                 message = f"Error trigger failure file found in {source} (error handling test)"
@@ -351,7 +346,7 @@ def list_files(hosts, source, pattern, depth, test_result):
                 hosts_with_files.add(data.hosts)
                 status = 16
 
-    log.debug("List files results: status=%s, hosts_with_files=%s", status, hosts_with_files)
+    logger.debug("List files results: status=%s, hosts_with_files=%s", status, hosts_with_files)
     return status, hosts_with_files
 
 
@@ -370,10 +365,9 @@ def check_log_size(hosts, source, pattern, depth, threshold, test_result):
         int: status code: 0 = success, 32 = failure
 
     """
-    log = getLogger()
     source_files = os.path.join(source, pattern)
-    log.debug("-" * 80)
-    log.debug(
+    logger.debug("-" * 80)
+    logger.debug(
         "Checking for any %s files exceeding %s on %s", source_files, threshold, hosts)
     other = ["-size", f"+{threshold}", "-printf", "'%p %k KB'"]
     result = run_remote(hosts, find_command(source, pattern, depth, other))
@@ -389,7 +383,7 @@ def check_log_size(hosts, source, pattern, depth, threshold, test_result):
             test_result.fail_test("Process", message)
             return 32
 
-    log.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
+    logger.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
     return 0
 
 
@@ -407,11 +401,10 @@ def cart_log_test(hosts, source, pattern, depth, test_result):
         int: status code: 0 = success, 16 = failure
 
     """
-    log = getLogger()
     source_files = os.path.join(source, pattern)
     cart_logtest = os.path.abspath(os.path.join("cart", "cart_logtest.py"))
-    log.debug("-" * 80)
-    log.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
+    logger.debug("-" * 80)
+    logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
     other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
              f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
     result = run_remote(hosts, find_command(source, pattern, depth, other), timeout=4800)
@@ -436,9 +429,8 @@ def remove_empty_files(hosts, source, pattern, depth, test_result):
         bint: status code: 0 = success, 16 = failure
 
     """
-    log = getLogger()
-    log.debug("-" * 80)
-    log.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
+    logger.debug("-" * 80)
+    logger.debug("Removing any zero-length %s files in %s on %s", pattern, source, hosts)
     other = ["-empty", "-print", "-delete"]
     if not run_remote(hosts, find_command(source, pattern, depth, other)).passed:
         message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
@@ -461,9 +453,8 @@ def compress_files(hosts, source, pattern, depth, test_result):
         int: status code: 0 = success, 16 = failure
 
     """
-    log = getLogger()
-    log.debug("-" * 80)
-    log.debug("Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
+    logger.debug("-" * 80)
+    logger.debug("Compressing any %s files in %s on %s larger than 1M", pattern, source, hosts)
     other = ["-size", "+1M", "-print0", "|", "sudo", "-n", "xargs", "-0", "-r0", "lbzip2", "-v"]
     result = run_remote(hosts, find_command(source, pattern, depth, other))
     if not result.passed:
@@ -489,9 +480,8 @@ def move_files(hosts, source, pattern, destination, depth, timeout, test_result)
         int: status code: 0 = success, 16 = failure
 
     """
-    log = getLogger()
-    log.debug("-" * 80)
-    log.debug("Moving files from %s to %s on %s", source, destination, hosts)
+    logger.debug("-" * 80)
+    logger.debug("Moving files from %s to %s on %s", source, destination, hosts)
 
     # Core and dump files require a file ownership change before they can be copied
     if "stacktrace" in destination or "daos_dumps" in destination:
@@ -581,8 +571,7 @@ def process_core_files(test_job_results, test, test_result):
         return 256
 
     if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
-        log = getLogger()
-        log.debug(
+        logger.debug(
             "Skipping checking core file detection for %s as it is not supported on this OS",
             str(test))
         return 0
@@ -617,9 +606,8 @@ def rename_avocado_test_dir(test, job_results_dir, test_result, jenkins_xml, tot
     test_logs_lnk = os.path.join(job_results_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
 
-    log = getLogger()
-    log.debug("=" * 80)
-    log.info("Renaming the avocado job-results directory")
+    logger.debug("=" * 80)
+    logger.info("Renaming the avocado job-results directory")
 
     # Create the new avocado job-results test directory name
     new_test_logs_dir = "-".join([test_logs_dir, get_test_category(test.test_file)])
@@ -638,12 +626,12 @@ def rename_avocado_test_dir(test, job_results_dir, test_result, jenkins_xml, tot
             return 1024
 
     # Rename the avocado job-results test directory and update the 'latest' symlink
-    log.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
+    logger.info("Renaming test results from %s to %s", test_logs_dir, new_test_logs_dir)
     try:
         os.rename(test_logs_dir, new_test_logs_dir)
         os.remove(test_logs_lnk)
         os.symlink(new_test_logs_dir, test_logs_lnk)
-        log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
+        logger.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
     except OSError:
         message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
         test_result.fail_test("Process", message, sys.exc_info())
@@ -675,8 +663,7 @@ def update_jenkins_xml(test, logs_dir, test_result):
     Returns:
         bool: True if all the xml updates were successful; False if there was error
     """
-    log = getLogger()
-    log.info("Updating xml files for use in Jenkins")
+    logger.info("Updating xml files for use in Jenkins")
     xml_file = os.path.join(logs_dir, 'results.xml')
     launchable_xml = os.path.join(logs_dir, 'xunit1_results.xml')
 
@@ -688,21 +675,21 @@ def update_jenkins_xml(test, logs_dir, test_result):
     # Extract the test class name from the xml data
     try:
         test_class = re.findall(r'<testcase classname="([A-Za-z0-9_]+)"', xml_data)[0]
-        log.debug("Test class from xml: %s", test_class)
+        logger.debug("Test class from xml: %s", test_class)
     except IndexError:
         message = f"Error obtaining class name from {xml_file}"
         test_result.fail_test("Process", message, sys.exc_info())
         return False
 
     # Update the class name to include the functional test directory
-    log.debug("Updating the xml data in the test %s file", launchable_xml)
+    logger.debug("Updating the xml data in the test %s file", launchable_xml)
     pattern = 'classname="'
     replacement = f'classname="FTEST_{test.directory}.'
     if not update_xml(xml_file, pattern, replacement, xml_data, test_result):
         return False
 
     # Create an copy of the test xml for Launchable processing
-    log.debug("Updating the xml data for the Launchable %s file", launchable_xml)
+    logger.debug("Updating the xml data for the Launchable %s file", launchable_xml)
     pattern = r'(name=")\d+-\.\/.+\.(test_[^;]+);[^"]+(")'
     replacement = rf'\1\2\3 file="{test.test_file}"'
     if not update_xml(launchable_xml, pattern, replacement, xml_data, test_result):
@@ -712,7 +699,7 @@ def update_jenkins_xml(test, logs_dir, test_result):
     # cmocka xml files generated by this test
     status = True
     cmocka_files = glob.glob(f"{logs_dir}/test-results/*-*/data/*.xml")
-    log.debug("Updating %s cmocka xml files for use in Jenkins", len(cmocka_files))
+    logger.debug("Updating %s cmocka xml files for use in Jenkins", len(cmocka_files))
     for cmocka_xml in cmocka_files:
         cmocka_data = get_xml_data(cmocka_xml, test_result)
         if not cmocka_data:
@@ -742,8 +729,7 @@ def get_xml_data(xml_file, test_result):
     Returns:
         str: data from the xml file or None if there was an error
     """
-    log = getLogger()
-    log.debug("Collecting data from the %s", xml_file)
+    logger.debug("Collecting data from the %s", xml_file)
     try:
         with open(xml_file, encoding="utf-8") as xml_buffer:
             return xml_buffer.read()
@@ -766,11 +752,10 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
     Returns:
         bool: True if successful; False if an error was detected
     """
-    log = getLogger()
-    log.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
-    log.debug("************************DEBUG************************")
+    logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
+    logger.debug("************************DEBUG************************")
     run_local(f'cat \'{xml_file}\'')
-    log.debug("************************DEBUG************************")
+    logger.debug("************************DEBUG************************")
     try:
         with open(xml_file, "w", encoding="utf-8") as xml_buffer:
             xml_buffer.write(re.sub(pattern, replacement, xml_data))

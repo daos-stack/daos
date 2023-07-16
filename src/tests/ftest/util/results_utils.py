@@ -8,6 +8,8 @@ from logging import getLogger
 import os
 import time
 
+logger = getLogger()
+
 
 class TestName():
     # pylint: disable=too-few-public-methods
@@ -151,7 +153,7 @@ class TestResult():
             message (str, optional): explanation of test passing. Defaults to None.
         """
         if message is not None:
-            getLogger().debug(message)
+            logger.debug(message)
         self.__set_test_status(TestResult.PASS, None, None)
 
     def warn_test(self, fail_class, fail_reason, exc_info=None):
@@ -162,7 +164,7 @@ class TestResult():
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
-        getLogger().warning(fail_reason)
+        logger.warning(fail_reason)
         self.__set_test_status(TestResult.WARN, fail_class, fail_reason, exc_info)
 
     def fail_test(self, fail_class, fail_reason, exc_info=None):
@@ -173,7 +175,7 @@ class TestResult():
             fail_reason (str): failure description.
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
-        getLogger().error(fail_reason)
+        logger.error(fail_reason)
         self.__set_test_status(TestResult.ERROR, fail_class, fail_reason, exc_info)
 
     def __set_test_status(self, status, fail_class, fail_reason, exc_info=None):
@@ -186,7 +188,7 @@ class TestResult():
             exc_info (OptExcInfo, optional): return value from sys.exc_info(). Defaults to None.
         """
         if exc_info is not None:
-            getLogger().debug("Stacktrace", exc_info=True)
+            logger.debug("Stacktrace", exc_info=True)
 
         if status == TestResult.PASS:
             # Do not override a possible WARN status

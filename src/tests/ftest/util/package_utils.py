@@ -6,6 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from logging import getLogger
 from run_utils import run_remote, command_as_user
 
+logger = getLogger()
+
 
 def find_packages(hosts, pattern, user=None):
     """Get the installed packages on each specified host.
@@ -39,7 +41,7 @@ def install_packages(hosts, packages, user=None, timeout=600):
     Returns:
         RemoteCommandResult: the 'dnf install' command results
     """
-    getLogger().info('Installing packages on %s: %s', hosts, ', '.join(packages))
+    logger.info('Installing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'install', '-y'] + packages), user)
     return run_remote(hosts, command, timeout=timeout)
 
@@ -56,6 +58,6 @@ def remove_packages(hosts, packages, user=None, timeout=600):
     Returns:
         RemoteCommandResult: the 'dnf remove' command results
     """
-    getLogger().info('Removing packages on %s: %s', hosts, ', '.join(packages))
+    logger.info('Removing packages on %s: %s', hosts, ', '.join(packages))
     command = command_as_user(' '.join(['dnf', 'remove', '-y'] + packages), user)
     return run_remote(hosts, command, timeout=timeout)

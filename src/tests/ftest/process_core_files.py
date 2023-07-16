@@ -15,7 +15,7 @@ from util.logger_utils import get_console_handler
 from util.run_utils import run_local, find_command, RunException
 
 # Set up a logger for the console messages
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 

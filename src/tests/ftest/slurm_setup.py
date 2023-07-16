@@ -25,7 +25,7 @@ from package_utils import install_packages, remove_packages             # noqa: 
 from run_utils import get_clush_command, run_remote, command_as_user    # noqa: E402
 
 # Set up a logger for the console messages
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
