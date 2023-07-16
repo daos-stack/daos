@@ -157,7 +157,7 @@ class CartTest(TestWithoutServers):
         negative_filter = r"'\<(grep|defunct)\>'"
         running = True
         for _ in range(2):
-            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
+            _, running = stop_processes(localhost, processes, exclude=negative_filter)
             if not running:
                 break
         if running:

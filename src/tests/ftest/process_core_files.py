@@ -343,9 +343,7 @@ class CoreFileProcessing():
         try:
             # Eventually use python libraries for this rather than exec()ing out to rpm
             output = run_local(
-                self.log,
-                " ".join(
-                    ["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg]),
+                " ".join(["rpm", "-q", "--qf", "'%{name} %{version} %{release} %{epoch}'", pkg]),
                 check=False)
             name, version, release, epoch = output.stdout.split()
 

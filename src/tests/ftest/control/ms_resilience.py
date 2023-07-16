@@ -207,7 +207,7 @@ class ManagementServiceResilience(TestWithServers):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)
         self.log.info("*** stopping leader (%s) + %d others: %s", leader, num_hosts - 1, kill_list)
-        stop_processes(self.log, kill_list, self.server_managers[0].manager.job.command_regex)
+        stop_processes(kill_list, self.server_managers[0].manager.job.command_regex)
 
         kill_ranks = self.server_managers[0].get_host_ranks(kill_list)
         self.assertGreaterEqual(len(kill_ranks), len(kill_list),

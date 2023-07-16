@@ -93,7 +93,7 @@ class ServerRankFailure(IorTestBase):
             engine_kill_host (str): Hostname to kill engine.
         """
         pattern = self.server_managers[0].manager.job.command_regex
-        detected, running = stop_processes(self.log, NodeSet(engine_kill_host), pattern)
+        detected, running = stop_processes(NodeSet(engine_kill_host), pattern)
         if not detected:
             self.log.info("No daos_engine process killed on %s!", engine_kill_host)
         elif running:

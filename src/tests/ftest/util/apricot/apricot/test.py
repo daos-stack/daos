@@ -544,7 +544,7 @@ class TestWithoutServers(Test):
             self.log.info(
                 "Stopping any of the following commands left running on %s: %s",
                 hosts, ",".join(processes))
-            stop_processes(self.log, hosts, "'({})'".format("|".join(processes)))
+            stop_processes(hosts, "'({})'".format("|".join(processes)))
 
     def get_hosts_from_yaml(self, yaml_key, partition_key, reservation_key, namespace):
         """Get a NodeSet for the hosts to use in the test.

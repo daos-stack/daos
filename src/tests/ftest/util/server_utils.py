@@ -374,7 +374,7 @@ class DaosServerManager(SubprocessManager):
         cmd.set_command(("scm", "prepare"), **kwargs)
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
         result = run_remote(
-            self.log, self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
+            self._hosts, cmd.with_exports, timeout=self.storage_prepare_timeout.value)
         if not result.passed:
             # Add some debug due to the failure
             run_remote(self._hosts, "sudo -n ipmctl show -v -dimm")
@@ -959,7 +959,7 @@ class DaosServerManager(SubprocessManager):
     def kill(self):
         """Forcibly terminate any server process running on hosts."""
         regex = self.manager.job.command_regex
-        detected, running = stop_processes(self.log, self._hosts, regex)
+        detected, running = stop_processes(self._hosts, regex)
         if not detected:
             self.log.info(
                 "No remote %s server processes killed on %s (none found), done.",
