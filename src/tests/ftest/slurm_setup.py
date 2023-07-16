@@ -24,11 +24,6 @@ from logger_utils import get_console_handler                            # noqa: 
 from package_utils import install_packages, remove_packages             # noqa: E402
 from run_utils import get_clush_command, run_remote, command_as_user    # noqa: E402
 
-# Set up a logger for the console messages
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
-
 
 class SlurmSetupException(Exception):
     """Exception for SlurmSetup class."""
@@ -48,7 +43,7 @@ class SlurmSetup():
     SLURM_CONF = '/etc/slurm/slurm.conf'
     SLURM_LOG_DIR = '/var/log/slurm'
 
-    def __init__(self, log, nodes, control_node, sudo=False):
+    def __init__(self, nodes, control_node, sudo=False):
         """Initialize a SlurmSetup object.
 
         Args:
@@ -57,7 +52,6 @@ class SlurmSetup():
             control_node (NodeSet): slurm control node
             sudo (bool, optional): whether or not to use sudo with commands. Defaults to False.
         """
-        self.log = log
         self.nodes = NodeSet(nodes)
         self.control = NodeSet(control_node)
         self.root = 'root' if sudo else None
@@ -77,7 +71,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem removing the packages
         """
-        self.log.info("Removing slurm packages")
+        log = logging.getLogger()
+        log.info("Removing slurm packages")
         result = remove_packages(self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
             raise SlurmSetupException(f"Error removing slurm packages on {result.failed_hosts}")
@@ -88,7 +83,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem installing the packages
         """
-        self.log.info("Installing slurm packages")
+        log = logging.getLogger()
+        log.info("Installing slurm packages")
         result = install_packages(self.all_nodes, self.PACKAGE_LIST, self.root)
         if not result.passed:
             raise SlurmSetupException(f"Error installing slurm packages on {result.failed_hosts}")
@@ -103,7 +99,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem
         """
-        self.log.info("Updating slurm config files")
+        log = logging.getLogger()
+        log.info("Updating slurm config files")
 
         # Create the slurm epilog script on the control node
         self._create_epilog_script(self.EPILOG_FILE)
@@ -124,13 +121,14 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting munge
         """
-        self.log.info("Starting munge")
+        log = logging.getLogger()
+        log.info("Starting munge")
 
         # Create munge key only if it does not exist.
         result = run_remote(self.control, command_as_user(f'test -f {self.MUNGE_KEY}', self.root))
         if not result.passed:
             # Create a munge key on the control host
-            self.log.debug('Creating a new munge key on %s', self.control)
+            log.debug('Creating a new munge key on %s', self.control)
             result = run_remote(self.control, command_as_user('create-munge-key', self.root))
             if not result.passed:
                 # Try the other possible munge key creation command:
@@ -146,7 +144,7 @@ class SlurmSetup():
 
         # Copy the munge key from the control node to the non-control nodes
         non_control = self.nodes.difference(self.control)
-        self.log.debug('Copying the munge key to %s', non_control)
+        log.debug('Copying the munge key to %s', non_control)
         command = get_clush_command(
             non_control, args=f"-B -S -v --copy {self.MUNGE_KEY} --dest {self.MUNGE_KEY}")
         result = run_remote(self.control, command)
@@ -170,7 +168,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem starting slurm
         """
-        self.log.info("Starting slurm")
+        log = logging.getLogger()
+        log.info("Starting slurm")
 
         self._mkdir(self.all_nodes, self.SLURM_LOG_DIR)
         self._update_file_ownership(self.all_nodes, self.SLURM_LOG_DIR, user)
@@ -208,7 +207,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem creating the epilog script
         """
-        self.log.debug('Creating the slurm epilog script to run after each job.')
+        log = logging.getLogger()
+        log.debug('Creating the slurm epilog script to run after each job.')
         try:
             with open(script, 'w') as script_file:
                 script_file.write('#!/bin/bash\n#\n')
@@ -218,7 +218,7 @@ class SlurmSetup():
                     'do fusermount3 -uz $dir;rm -rf $dir; done\'\n')
                 script_file.write('exit 0\n')
         except IOError as error:
-            self.log.debug('Error writing %s - verifying file existence:', script)
+            log.debug('Error writing %s - verifying file existence:', script)
             run_remote(self.control, f'ls -al {script}')
             raise SlurmSetupException(f'Error writing slurm epilog script {script}') from error
 
@@ -237,7 +237,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is an error copying the file on any host
         """
-        self.log.debug(f'Copying the {source} file to {destination} on {str(nodes)}')
+        log = logging.getLogger()
+        log.debug(f'Copying the {source} file to {destination} on {str(nodes)}')
         command = command_as_user(f'cp {source} {destination}', self.root)
         result = run_remote(nodes, command)
         if not result.passed:
@@ -308,7 +309,8 @@ class SlurmSetup():
         Returns:
             NodeSet: hosts on which the command succeeded
         """
-        self.log.debug(
+        log = logging.getLogger()
+        log.debug(
             'Updating the %s in the %s config file on %s', description, self.SLURM_CONF, hosts)
         command = command_as_user(f'sed -i -e \'{replacement}\' {self.SLURM_CONF}', user)
         result = run_remote(hosts, command)
@@ -324,7 +326,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem updating the slurm config file
         """
-        self.log.debug('Updating slurm config socket/core/thread information on %s', self.all_nodes)
+        log = logging.getLogger()
+        log.debug('Updating slurm config socket/core/thread information on %s', self.all_nodes)
         command = r"lscpu | grep -E '(Socket|Core|Thread)\(s\)'"
         result = run_remote(self.all_nodes, command)
         for data in result.output:
@@ -351,7 +354,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem updating the slurm config file
         """
-        self.log.debug('Updating slurm config partition information on %s', self.all_nodes)
+        log = logging.getLogger()
+        log.debug('Updating slurm config partition information on %s', self.all_nodes)
         echo_command = (
             f'echo \"PartitionName={partition} Nodes={self.nodes} Default=YES MaxTime=INFINITE '
             'State=UP\"')
@@ -399,7 +403,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there was an error updating the file permissions
         """
-        self.log.debug('Updating file permissions for %s on %s', self.MUNGE_DIR, nodes)
+        log = logging.getLogger()
+        log.debug('Updating file permissions for %s on %s', self.MUNGE_DIR, nodes)
         result = run_remote(nodes, command_as_user(f'chmod -R {permission} {file}', self.root))
         if not result.passed:
             raise SlurmSetupException(
@@ -431,7 +436,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there was an error removing the file
         """
-        self.log.debug('Removing %s on %s', file, nodes)
+        log = logging.getLogger()
+        log.debug('Removing %s on %s', file, nodes)
         result = run_remote(nodes, command_as_user(f'rm -fr {file}', self.root))
         if not result.passed:
             raise SlurmSetupException(f'Error removing {file} on {result.failed_hosts}')
@@ -448,7 +454,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there is a problem restarting the systemctl service
         """
-        self.log.debug('Restarting %s on %s', service, nodes)
+        log = logging.getLogger()
+        log.debug('Restarting %s on %s', service, nodes)
         for action in ('restart', 'enable'):
             command = command_as_user(f'systemctl {action} {service}', self.root)
             result = run_remote(self.all_nodes, command)
@@ -464,12 +471,13 @@ class SlurmSetup():
             debug_log (str, optional): log file to display. Defaults to None.
             debug_config (str, optional): config file to display. Defaults to None.
         """
+        log = logging.getLogger()
         if debug_log:
-            self.log.debug('DEBUG: %s contents:', debug_log)
+            log.debug('DEBUG: %s contents:', debug_log)
             command = command_as_user(f'cat {debug_log}', self.root)
             run_remote(nodes, command)
         if debug_config:
-            self.log.debug('DEBUG: %s contents:', debug_config)
+            log.debug('DEBUG: %s contents:', debug_config)
             command = command_as_user(f'grep -v \"^#\\w\" {debug_config}', self.root)
             run_remote(nodes, command)
 
@@ -483,7 +491,8 @@ class SlurmSetup():
         Raises:
             SlurmSetupException: if there was an error creating the directory
         """
-        self.log.debug('Creating %s on %s', directory, nodes)
+        log = logging.getLogger()
+        log.debug('Creating %s on %s', directory, nodes)
         result = run_remote(nodes, command_as_user(f'mkdir -p {directory}', self.root))
         if not result.passed:
             raise SlurmSetupException(f'Error creating {directory} on {result.failed_hosts}')
@@ -491,8 +500,12 @@ class SlurmSetup():
 
 def main():
     """Set up test env with slurm."""
-    parser = argparse.ArgumentParser(prog="slurm_setup.py")
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+    log.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
+    # Parse the command line arguments
+    parser = argparse.ArgumentParser(prog="slurm_setup.py")
     parser.add_argument(
         "-n", "--nodes",
         default=None,
@@ -525,16 +538,15 @@ def main():
         "-d", "--debug",
         action="store_true",
         help="Run all debug commands")
-
     args = parser.parse_args()
-    logger.info("Arguments: %s", args)
+    log.info("Arguments: %s", args)
 
     # Check params
     if args.nodes is None:
-        logger.error("slurm_nodes: Specify at least one slurm node")
+        log.error("slurm_nodes: Specify at least one slurm node")
         sys.exit(1)
 
-    slurm_setup = SlurmSetup(logger, args.nodes, args.control, args.sudo)
+    slurm_setup = SlurmSetup(args.nodes, args.control, args.sudo)
 
     # Remove packages if specified with --remove and then exit
     if args.remove:
@@ -542,7 +554,7 @@ def main():
             slurm_setup.remove()
             sys.exit(0)
         except SlurmSetupException as error:
-            logger.error(str(error))
+            log.error(str(error))
             sys.exit(1)
 
     # Install packages if specified with --install and continue with setup
@@ -550,28 +562,28 @@ def main():
         try:
             slurm_setup.install()
         except SlurmSetupException as error:
-            logger.error(str(error))
+            log.error(str(error))
             sys.exit(1)
 
     # Edit the slurm conf files
     try:
         slurm_setup.update_config(args.user, args.partition)
     except SlurmSetupException as error:
-        logger.error(str(error))
+        log.error(str(error))
         sys.exit(1)
 
     # Munge Setup
     try:
         slurm_setup.start_munge(args.user)
     except SlurmSetupException as error:
-        logger.error(str(error))
+        log.error(str(error))
         sys.exit(1)
 
     # Slurm Startup
     try:
         slurm_setup.start_slurm(args.user, args.debug)
     except SlurmSetupException as error:
-        logger.error(str(error))
+        log.error(str(error))
         sys.exit(1)
 
     sys.exit(0)

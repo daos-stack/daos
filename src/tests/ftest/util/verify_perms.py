@@ -19,11 +19,6 @@ from logger_utils import get_console_handler
 from user_utils import get_user_uid_gid
 from run_utils import run_local, RunException
 
-# Set up a logger for the console messages
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.INFO))
-
 
 class VerifyPermsError(Exception):
     '''Base Exception class'''
@@ -41,11 +36,12 @@ def create(path, entry_type, owner=None):
         ValueError: on invalid input
 
     '''
+    log = logging.getLogger()
     if entry_type not in ('file', 'dir'):
         raise ValueError(f'Invalid entry_type: {entry_type}')
     if os.path.exists(path):
         raise ValueError(f'Path already exists: {path}')
-    logger.info('Creating %s %s', entry_type, path)
+    log.info('Creating %s %s', entry_type, path)
     if owner:
         owner_uid_gid = get_user_uid_gid(owner)
         _as_user(owner_uid_gid, _create, path, entry_type)
@@ -79,9 +75,10 @@ def delete(path, owner=None):
         owner (str, optional): user to delete as. Defaults to current user
 
     '''
+    log = logging.getLogger()
     if not os.path.exists(path):
         return
-    logger.info('Removing %s', path)
+    log.info('Removing %s', path)
     if owner:
         owner_uid_gid = get_user_uid_gid(owner)
         _as_user(owner_uid_gid, _delete, path)
@@ -124,6 +121,7 @@ def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mod
         VerifyPermsError: if permissions are not as expected
 
     '''
+    log = logging.getLogger()
     owner = owner or getpass.getuser()
     if verify_mode not in ('simple', 'real'):
         raise ValueError(f'Invalid verify_mode: {verify_mode}')
@@ -146,25 +144,25 @@ def verify(path, perms, owner=None, group_user=None, other_user=None, verify_mod
     else:
         raise FileNotFoundError(f'Not found: {path}')
 
-    logger.info('Verifying %s', path)
+    log.info('Verifying %s', path)
     for perm in parsed_perms:
         # chmod as the owner
-        logger.info('  with perms %s', perm)
+        log.info('  with perms %s', perm)
         if do_chmod:
             _as_user(owner_uid_gid, os.chmod, path, int(perm, base=8))
 
         # verify as owner
-        logger.info('    as user %s, perm %s', owner, perm[0])
+        log.info('    as user %s, perm %s', owner, perm[0])
         _as_user(owner_uid_gid, _verify_one, path, entry_type, perm[0], verify_mode)
 
         # Verify as group
         if group_user:
-            logger.info('    as user %s, perm %s', group_user, perm[1])
+            log.info('    as user %s, perm %s', group_user, perm[1])
             _as_user(group_uid_gid, _verify_one, path, entry_type, perm[1], verify_mode)
 
         # Verify as other
         if other_user:
-            logger.info('    as user %s, perm %s', other_user, perm[2])
+            log.info('    as user %s, perm %s', other_user, perm[2])
             _as_user(other_uid_gid, _verify_one, path, entry_type, perm[2], verify_mode)
 
 
@@ -412,6 +410,10 @@ def _rwx_to_oct(perm):
 
 def main():
     '''main execution of this program'''
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+    log.addHandler(get_console_handler("%(message)s", logging.INFO))
+
     parser = ArgumentParser()
     parser.add_argument(
         'path',

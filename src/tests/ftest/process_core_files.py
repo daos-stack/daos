@@ -14,11 +14,6 @@ import sys
 from util.logger_utils import get_console_handler
 from util.run_utils import run_local, find_command, RunException
 
-# Set up a logger for the console messages
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
-
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
 CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
@@ -37,8 +32,6 @@ class CoreFileProcessing():
         """Initialize a CoreFileProcessing object."""
         # pylint: disable=import-outside-toplevel,import-error,no-name-in-module
         from util.distro_utils import detect
-
-        self.log = logging.getLogger()
         self.distro_info = detect()
 
     def process_core_files(self, directory, delete, test=None):
@@ -59,13 +52,14 @@ class CoreFileProcessing():
             int: num of core files processed
 
         """
+        log = logging.getLogger()
         errors = 0
         create_stacktrace = True
         corefiles_processed = 0
-        self.log.debug("-" * 80)
-        self.log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
+        log.debug("-" * 80)
+        log.info("Processing core files in %s", os.path.join(directory, "stacktraces*"))
         if self.is_el7():
-            self.log.info("Generating a stacktrace is currently not supported on EL7")
+            log.info("Generating a stacktrace is currently not supported on EL7")
             create_stacktrace = False
 
         # Create a stacktrace for any core file archived from the hosts under test
@@ -83,13 +77,12 @@ class CoreFileProcessing():
             try:
                 self.install_debuginfo_packages()
             except RunException as error:
-                self.log.error(error)
-                self.log.debug("Stacktrace", exc_info=True)
+                log.error(error)
+                log.debug("Stacktrace", exc_info=True)
                 errors += 1
                 create_stacktrace = False
         else:
-            self.log.debug(
-                "No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
+            log.debug("No core.*[0-9] files found in %s", os.path.join(directory, "stacktraces*"))
 
         # Create a stacktrace from each core file and then remove the core file
         for core_dir, core_name_list in core_files.items():
@@ -105,23 +98,22 @@ class CoreFileProcessing():
                     exe_name = self._get_exe_name(os.path.join(core_dir, core_name))
                     self._create_stacktrace(core_dir, core_name, exe_name)
                     if test in CORE_FILES_IGNORE and exe_name in CORE_FILES_IGNORE[test]:
-                        self.log.debug(
+                        log.debug(
                             'Excluding the %s core file (%s) detected while running %s from '
                             'the processed core count', core_name, exe_name, test)
                     else:
                         corefiles_processed += 1
-                    self.log.debug(
+                    log.debug(
                         "Successfully processed core file '%s'", os.path.join(core_dir, core_name))
                 except Exception as error:      # pylint: disable=broad-except
-                    self.log.error(error)
-                    self.log.debug("Stacktrace", exc_info=True)
-                    self.log.error(
-                        "Failed to process core file '%s'", os.path.join(core_dir, core_name))
+                    log.error(error)
+                    log.debug("Stacktrace", exc_info=True)
+                    log.error("Failed to process core file '%s'", os.path.join(core_dir, core_name))
                     errors += 1
                 finally:
                     if delete:
                         core_file = os.path.join(core_dir, core_name)
-                        self.log.debug("Removing '%s'", core_file)
+                        log.debug("Removing '%s'", core_file)
                         os.remove(core_file)
         # remove any core file generated post core processing on the local node
         errors += self.delete_gdb_core_files()
@@ -141,11 +133,12 @@ class CoreFileProcessing():
             RunException: if there is an error creating a stacktrace
 
         """
+        log = logging.getLogger()
         host = os.path.split(core_dir)[-1].split(".")[-1]
         core_full = os.path.join(core_dir, core_name)
         stack_trace_file = os.path.join(core_dir, f"{core_name}.stacktrace")
 
-        self.log.debug("Generating a stacktrace from the '%s' core file from %s", core_full, host)
+        log.debug("Generating a stacktrace from the '%s' core file from %s", core_full, host)
         run_local(" ".join(['ls', '-l', f"'{core_full}'"]))
 
         try:
@@ -185,20 +178,21 @@ class CoreFileProcessing():
             str: the executable name
 
         """
-        self.log.debug("Extracting the executable name from %s", core_file)
+        log = logging.getLogger()
+        log.debug("Extracting the executable name from %s", core_file)
         command = ["gdb", "-c", f"'{core_file}'", "-ex", "'info proc exe'", "-ex", "quit"]
         result = run_local(" ".join(command), verbose=False)
         last_line = result.stdout.splitlines()[-1]
-        self.log.debug("  last line:       %s", last_line)
+        log.debug("  last line:       %s", last_line)
         cmd = last_line[7:]
-        self.log.debug("  last_line[7:-1]: %s", cmd)
+        log.debug("  last_line[7:-1]: %s", cmd)
         # assume there are no arguments on cmd
         find_char = "'"
         if cmd.find(" ") > -1:
             # there are arguments on cmd
             find_char = " "
         exe_name = cmd[:cmd.find(find_char)]
-        self.log.debug("  executable name: %s", exe_name)
+        log.debug("  executable name: %s", exe_name)
         return exe_name
 
     def install_debuginfo_packages(self):
@@ -215,7 +209,8 @@ class CoreFileProcessing():
             RunException: if there is an error installing debuginfo packages
 
         """
-        self.log.info("Installing debuginfo packages for stacktrace creation")
+        log = logging.getLogger()
+        log.info("Installing debuginfo packages for stacktrace creation")
         install_pkgs = [{'name': 'gdb'}]
         if self.is_el():
             install_pkgs.append({'name': 'python3-debuginfo'})
@@ -292,7 +287,7 @@ class CoreFileProcessing():
                 retry = True
                 break
         if retry:
-            self.log.debug("Going to refresh caches and try again")
+            log.debug("Going to refresh caches and try again")
             cmd_prefix = ["sudo", "dnf"]
             if self.is_el() or "suse" in self.distro_info.name.lower():
                 cmd_prefix.append("--enablerepo=*debug*")
@@ -339,6 +334,7 @@ class CoreFileProcessing():
             dict: dictionary of debug package information
 
         """
+        log = logging.getLogger()
         package_info = None
         try:
             # Eventually use python libraries for this rather than exec()ing out to rpm
@@ -359,7 +355,7 @@ class CoreFileProcessing():
                 "epoch": epoch
             }
         except ValueError:
-            self.log.debug("Package %s not installed, skipping debuginfo", pkg)
+            log.debug("Package %s not installed, skipping debuginfo", pkg)
 
         return package_info
 
@@ -370,27 +366,33 @@ class CoreFileProcessing():
             int: number of errors
 
         """
-        self.log.debug("Checking core files generated by core file processing")
+        log = logging.getLogger()
+        log.debug("Checking core files generated by core file processing")
         try:
             results = run_local("cat /proc/sys/kernel/core_pattern", check=True)
         except RunException:
-            self.log.error("Unable to find local core file pattern")
-            self.log.debug("Stacktrace", exc_info=True)
+            log.error("Unable to find local core file pattern")
+            log.debug("Stacktrace", exc_info=True)
             return 1
         core_path = os.path.split(results.stdout.splitlines()[-1])[0]
 
-        self.log.debug("Deleting core.gdb.*.* core files located in '%s'", core_path)
+        log.debug("Deleting core.gdb.*.* core files located in '%s'", core_path)
         other = ["-printf '%M %n %-12u %-12g %12k %t %p\n' -delete"]
         try:
             run_local(find_command(core_path, "core.gdb.*.*", 1, other), check=True)
         except RunException:
-            self.log.debug("core.gdb.*.* files could not be removed")
+            log.debug("core.gdb.*.* files could not be removed")
             return 1
         return 0
 
 
 def main():
     """Generate a stacktrace for each core file in the provided directory."""
+    log = logging.getLogger()
+    log.setLevel(logging.DEBUG)
+    log.addHandler(get_console_handler("%(message)s", logging.DEBUG))
+
+    # Parse the command line arguments
     parser = ArgumentParser(
         prog="process_core_files.py",
         description="Generate stacktrace files from the core files in the specified directory.")
@@ -409,11 +411,11 @@ def main():
         core_file_processing.process_core_files(args.directory, args.delete)
 
     except CoreFileException as error:
-        logger.error(str(error))
+        log.error(str(error))
         sys.exit(1)
 
     except Exception:       # pylint: disable=broad-except
-        logger.error("Unhandled error processing test core files",)
+        log.error("Unhandled error processing test core files",)
         sys.exit(1)
 
     sys.exit(0)
