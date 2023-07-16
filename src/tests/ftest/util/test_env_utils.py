@@ -34,8 +34,11 @@ class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
 
 
-def get_build_environment():
+def get_build_environment(build_vars_file):
     """Obtain DAOS build environment variables from the .build_vars.json file.
+
+    Args:
+        build_vars_file (str): the full path to the DAOS build_vars.json file
 
     Raises:
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
@@ -45,9 +48,7 @@ def get_build_environment():
 
     """
     log = getLogger()
-    log.debug("Obtaining DAOS build environment PREFIX path")
-    build_vars_file = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
+    log.debug("Obtaining DAOS build environment PREFIX path from %s", build_vars_file)
     try:
         with open(build_vars_file, encoding="utf-8") as vars_file:
             return json.load(vars_file)
@@ -63,13 +64,16 @@ def get_build_environment():
     return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
 
-def set_path():
+def set_path(build_vars_file):
     """Set the PATH environment variable for functional testing.
+
+    Args:
+        build_vars_file (str): the full path to the DAOS build_vars.json file
 
     Raises:
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
-    base_dir = get_build_environment()["PREFIX"]
+    base_dir = get_build_environment(build_vars_file)["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
 
@@ -255,6 +259,10 @@ class TestEnvironment():
             'method': self.__default_provider,
             'kwargs': {'hosts': None}
         }
+        self.__env_map['insecure_mode'] = {
+            'name': 'DAOS_TEST_INSECURE_MODE',
+            'method': self.__default_insecure_mode
+        }
         self.__env_map['bullseye_src'] = {
             'name': 'DAOS_TEST_BULLSEYE_SRC',
             'method': self.__default_bullseye_src
@@ -331,6 +339,24 @@ class TestEnvironment():
             os.environ[self.__env_map['provider']['name']] = alias
         elif value:
             os.environ[self.__env_map['provider']['name']] = value
+
+    @property
+    def insecure_mode(self):
+        """Get the insecure_mode.
+
+        Returns:
+            str: the insecure_mode
+        """
+        return os.environ[self.__env_map['insecure_mode']['name']]
+
+    @insecure_mode.setter
+    def insecure_mode(self, value):
+        """Set the insecure_mode.
+
+        Args:
+            value (str, bool): value to assign to the insecure_mode environment variable
+        """
+        os.environ[self.__env_map['insecure_mode']['name']] = str(value)
 
     @property
     def bullseye_src(self):
@@ -481,6 +507,15 @@ class TestEnvironment():
         return provider
 
     @staticmethod
+    def __default_insecure_mode():
+        """Get the default insecure mode.
+
+        Returns:
+            str: the default insecure mode
+        """
+        return "True"
+
+    @staticmethod
     def __default_bullseye_src():
         """Get the default bullseye source file.
 
@@ -503,8 +538,10 @@ class TestEnvironment():
 
         If a value is not set for the environment variable name set a default value
         """
+        log = getLogger()
         for value in self.__env_map.values():
             if value['name'] not in os.environ:
+                log.debug('Setting the default value for %s', value['name'])
                 if value.get('kwargs', None):
                     env_value = value['method'](**value['kwargs'])
                 else:
@@ -533,11 +570,12 @@ class TestEnvironment():
         self.__set_environment()
 
 
-def set_test_environment(test_env, servers=None, clients=None, provider=None, insecure_mode=False,
-                         details=None):
+def set_test_environment(build_vars_file, test_env=None, servers=None, clients=None, provider=None,
+                         insecure_mode=False, details=None):
     """Set up the test environment.
 
     Args:
+        build_vars_file (str): the full path to the DAOS build_vars.json file
         test_env (TestEnvironment, optional): the current test environment. Defaults to None.
         servers (NodeSet, optional): hosts designated for the server role in testing. Defaults to
             None.
@@ -556,11 +594,12 @@ def set_test_environment(test_env, servers=None, clients=None, provider=None, in
     log = getLogger()
     log.debug("-" * 80)
     log.debug("Setting up the test environment variables")
-    set_path()
+    set_path(build_vars_file)
 
     if test_env:
         # Get the default fabric interface and provider
         test_env.provider = provider
+        test_env.insecure_mode = insecure_mode
         test_env.set_with_hosts(servers, clients)
 
         log.info("Testing with interface:   %s", test_env.interface)
@@ -573,7 +612,6 @@ def set_test_environment(test_env, servers=None, clients=None, provider=None, in
         # Assign additional DAOS environment variables used in functional testing
         os.environ["D_LOG_FILE"] = os.path.join(test_env.log_dir, "daos.log")
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
-        os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
     # Python paths required for functional testing

@@ -210,13 +210,15 @@ class Launch():
         self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
 
         # Setup the user environment
+        build_vars_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
         try:
             if args.list:
-                set_test_environment(None)
+                set_test_environment(build_vars_file)
             else:
                 set_test_environment(
-                    self.test_env, args.test_servers, args.test_clients, args.provider,
-                    args.insecure_mode, self.details)
+                    build_vars_file, self.test_env, args.test_servers, args.test_clients,
+                    args.provider, args.insecure_mode, self.details)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
