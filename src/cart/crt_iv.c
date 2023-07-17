@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2520,14 +2520,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
 			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
 					   iv_info->uci_user_priv);
 
-			child_output->rc = output->rc;
-		} else {
-			child_output->rc = output->rc;
-		}
+		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
 			child_output->rc = cb_info->cci_rc;
