@@ -1275,7 +1275,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry = &prop->dpp_entries[i++];
 		acl = &iv_prop->cip_acl;
 		if (acl->dal_ver != 0) {
-			D_ASSERT(daos_acl_validate(acl) == 0);
+			rc = daos_acl_validate(acl);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out, rc);
 			prop_entry->dpe_val_ptr = daos_acl_dup(acl);
 			if (prop_entry->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
