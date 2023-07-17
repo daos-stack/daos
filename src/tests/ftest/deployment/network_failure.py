@@ -163,6 +163,38 @@ class NetworkFailureTest(IorTestBase):
             self.log.info("One or more servers crashed. Check system query again.")
 
         return False
+    
+    def bring_network_interface_up(self, test_env):
+        """Bring the network interface up.
+        """
+        errors = []
+        if test_env == "ci":
+            # wolf
+            update_network_interface(
+                interface=self.interface, state="up", hosts=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = f"sudo ip link set {self.interface} up"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(30)
+        return errors
+        
+    def bring_network_interface_down(self, test_env):
+        """Bring the network interface down.
+        """
+        errors = []
+        if test_env == "ci":
+            # wolf
+            update_network_interface(
+                interface=self.interface, state="down", hosts=self.network_down_host,
+                errors=errors)
+        else:
+            # Aurora. Manually run the command.
+            command = f"sudo ip link set {self.interface} up"
+            self.log.debug("## Call %s on %s", command, self.network_down_host)
+            time.sleep(30)
+        return errors
 
     def verify_network_failure(self, ior_namespace, container_namespace, with_io=False):
         """Verify network failure can be recovered with some user interventions with
@@ -207,7 +239,7 @@ class NetworkFailureTest(IorTestBase):
 
         # For non-IO testing, bring the network interface down now.
         if with_io is False:
-            self.bring_network_interface_down()
+            errors = self.bring_network_interface_down(self.test_env)
 
         # 3. Run IOR with given object class. It should fail.
         threads = []
@@ -230,7 +262,7 @@ class NetworkFailureTest(IorTestBase):
 
         # For I/O testing, bring the network interface after starting IOR.
         if with_io is True:
-            self.bring_network_interface_down()
+            errors = self.bring_network_interface_down(self.test_env)
 
         # Wait to finish the threads
         for thrd in threads:
@@ -238,16 +270,7 @@ class NetworkFailureTest(IorTestBase):
         self.log.info(ior_results)
 
         # 4. Bring up the network interface.
-        if self.test_env == "ci":
-            # wolf
-            update_network_interface(
-                interface=self.interface, state="up", hosts=self.network_down_host,
-                errors=errors)
-        else:
-            # Aurora. Manually run the command.
-            command = f"sudo ip link set {self.interface} up"
-            self.log.debug("## Call %s on %s", command, self.network_down_host)
-            time.sleep(20)
+        errors = self.bring_network_interface_up(self.test_env)
 
         # 5. Restart DAOS with dmg.
         self.log.info("Wait for 5 sec for the network to come back up")
