@@ -646,7 +646,7 @@ pipeline {
                                        scons_args: sconsFaultsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
                         recordCoverage(tools: [parser: 'COBERTURA', pattern:'nlt-coverage.xml'],
-                                        id: 'tlc', name: 'Test Log Coverage'),
+                                        id: 'tlc', name: 'Test Log Coverage')
                     }
                     post {
                         unsuccessful {
