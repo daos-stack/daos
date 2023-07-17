@@ -108,7 +108,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	biod = vos_ioh2desc(ioh);
 	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, NULL, CRT_BULK_RW);
 	if (rc) {
-		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC ".\n", DP_UOID(oid), DP_RC(rc));
+		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = bio_iod_copy(biod, sgl_recx, nr_iods);
@@ -618,7 +618,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 
 		rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
-			D_ERROR("crt_bulk_create %d error "DF_RC".\n", sgl_idx, DP_RC(rc));
+			D_ERROR("crt_bulk_create %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
 			break;
 		}
 		D_ASSERT(local_bulk != NULL);
@@ -645,7 +645,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 		arg->bulks_inflight++;
 		rc = crt_bulk_transfer(&bulk_desc, pipeline_bulk_comp_cb, arg, &bulk_opid);
 		if (rc < 0) {
-			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n", sgl_idx, DP_RC(rc));
+			D_ERROR("crt_bulk_transfer %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
 			arg->bulks_inflight--;
 			crt_bulk_free(local_bulk);
 			crt_req_decref(rpc);

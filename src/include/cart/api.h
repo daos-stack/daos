@@ -430,6 +430,18 @@ int
 crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
 
 /**
+ * Return source timeout in seconds
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] timeout         Returned timeout
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout);
+
+/**
  * Return reply buffer
  *
  * \param[in] req              pointer to RPC request

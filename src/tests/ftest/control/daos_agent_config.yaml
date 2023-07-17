@@ -32,8 +32,13 @@ agent_config_val: !mux
   name_special_chars:
     config_val:
       - "name"
-      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "! @#$%^&*()_+{}"
       - "PASS"
+  name_exceeds_max_length:
+    config_val:
+      - "name"
+      - "! @#$%^&*()_+{}|:<>?-=[];',./"
+      - "FAIL"
   name_alphanumeric:
     config_val:
       - "name"

@@ -317,6 +317,13 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		goto free_cond;
 	}
 
+	/*
+	 * Let's keep using large cluster size(1GB) for pmem mode, the SPDK blobstore
+	 * loading time is unexpected long for smaller cluster size(32MB), see DAOS-13694.
+	 */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
+
 	D_INFO("MD on SSD is %s\n",
 	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
 
@@ -954,7 +961,7 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
-		D_ERROR("No SPDK bdevs found!");
+		D_ERROR("No SPDK bdevs found!\n");
 		rc = -DER_NONEXIST;
 	}
 
