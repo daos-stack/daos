@@ -717,12 +717,22 @@ def update_jenkins_xml(test, logs_dir, test_result):
         cmocka_data = get_xml_data(cmocka_xml, test_result)
         if not cmocka_data:
             return False
-        # Update the class name to include the functional test directory
-        log.debug("Updating the xml data in the test %s file", cmocka_xml)
-        pattern = 'classname="'
-        replacement = f'classname="FTEST_{test.directory}-{test_class}.'
-        if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
-            return False
+
+        if 'classname' not in cmocka_data:
+            # Update cmocka results that are missing a 'classname' entry for their testsuite entries
+            log.debug("Updating the xml data in the test %s file", cmocka_xml)
+            pattern = '<testsuite name="(.*)"'
+            replacement = f'<testsuite classname="FTEST_{test.directory}-{test_class}.'
+            if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
+                return False
+        else:
+            # Update the class name to include the functional test directory
+            log.debug("Updating the xml data in the test %s file", cmocka_xml)
+            name = re.findall(r'name="([A-Za-z0-9_-]*)"', cmocka_data)[0]
+            pattern = '<testcase name='
+            replacement = f'<testcase classname="FTEST_{test.directory}-{test_class}.{name} name='
+            if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
+                return False
 
         # if '<testcase classname' in cmocka_data:
         #     pattern = 'case classname="'
@@ -775,12 +785,6 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
     """
     log = getLogger()
     log.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
-
-    log.debug("")
-    log.debug("************************ START DEBUG ************************")
-    run_local(f'cat \'{xml_file}\'')
-    log.debug("************************  END DEBUG  ************************")
-    log.debug("")
 
     log.debug("  Contents of %s before replacement", xml_file)
     for line in xml_data.splitlines():
