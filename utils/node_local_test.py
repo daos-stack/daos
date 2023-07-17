@@ -4250,9 +4250,17 @@ def setup_log_test(conf):
 
     nlt_lp = __import__('cart_logparse')
     nlt_lt = __import__('cart_logtest')
-    nlt_ct = __import__('cart_logcoverage')
+    ct_mod = __import__('cart_logcoverage')
+
+    nlt_ct = ct_mod.CoverageTracer('nlt-coverage.xml')
 
     nlt_lt.wf = conf.wf
+
+
+def close_log_test(conf):
+    """Close down the log tracing"""
+    conf.flush_bz2()
+    nlt_ct.report_all()
 
 
 def log_timer(func):
@@ -4317,8 +4325,8 @@ def log_test(conf,
 
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
-    if not quiet:
-        lto.add_tracer(nlt_ct.new, ('dfuse'))
+    # Add the code coverage tracer.
+    lto.add_tracer(nlt_ct, ('dfuse', 'il', 'dfs'))
 
     lto.hide_fi_calls = skip_fi
 
@@ -5913,7 +5921,7 @@ def run(wf, args):
         print("Valgrind errors detected during execution")
 
     wf_server.close()
-    conf.flush_bz2()
+    close_log_test(conf)
     print(f'Total time in log analysis: {conf.log_timer.total:.2f} seconds')
     print(f'Total time in log compression: {conf.compress_timer.total:.2f} seconds')
     return fatal_errors

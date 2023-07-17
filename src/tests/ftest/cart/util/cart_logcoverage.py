@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""Mark code coverage from daos logs"""
+"""Mark code coverage from daos logs
+
+Registered as a callback for all log tracing but saves results across the entire run.
+"""
 
 import os
 
@@ -10,18 +13,28 @@ import os
 class CoverageTracer():
     """Save what lines are executed"""
 
-    def __init__(self):
+    def __init__(self, output_file):
         self._data = {}
         self._files = {}
+        self.outfile = output_file
+
+        # Unlike the xml test results do not keep this up-to-date on a per log basis but rather
+        # remove the old file on start and replace it on close.  This keeps down I/O and the
+        # coverage data wouldn't be useful on failure anyway.
+        try:
+            os.unlink(self.outfile)
+        except FileNotFoundError:
+            pass
 
     def report(self):
-        """Save a report to file"""
-        print('Logs are:')
-        for fname in self._files:
-            print(fname)
+        """Report per log"""
+        return
+
+    def report_all(self):
+        """Report on everything"""
         if not self._files:
             return
-        with open('nlt-coverage.xml', 'w') as fd:
+        with open(self.outfile, 'w') as fd:
             self._save(fd)
 
     def _save(self, fd):
@@ -48,7 +61,7 @@ class CoverageTracer():
             fd.write('  <methods/>\n')
             fd.write('  <lines>\n')
             for lineno in data:
-                fd.write(f'   <line number = "{lineno}" hits="1" branch="false"/>\n')
+                fd.write(f'   <line number = "{lineno}" hits="{data[lineno]}" branch="false"/>\n')
             fd.write(' </lines>\n')
             fd.write(' </class>\n')
         fd.write("""</classes>
@@ -58,16 +71,11 @@ class CoverageTracer():
 
     def add_line(self, line):
         """Register a line"""
+        fname = line.filename
+        if fname not in self._files:
+            self._files[fname] = {}
+        lineno = line.lineno
         try:
-            fname = line.filename
-            if fname not in self._files:
-                self._files[fname] = {}
-            lineno = line.lineno
-            self._files[fname][lineno] = True
-        except AttributeError:
-            pass
-
-
-def new():
-    """Return a new iterator"""
-    return CoverageTracer()
+            self._files[fname][lineno] += 1
+        except KeyError:
+            self._files[fname][lineno] = 1

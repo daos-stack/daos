@@ -354,7 +354,7 @@ class LogTest():
         if not self.quiet:
             cb_list.append((RpcReporting(), ('hg', 'rpc')))
         for tracer in self._tracers:
-            cb_list.append((tracer[0](), tracer[1]))
+            cb_list.append((tracer[0], tracer[1]))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             for (cbe, facs) in cb_list:
