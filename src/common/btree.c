@@ -1337,7 +1337,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	if (btr_root_resize_needed(tcx)) {
 		rc = btr_root_resize(tcx, trace, &node_alloc);
 		if (rc != 0) {
-			D_ERROR("Failed to resize root node: %s", d_errstr(rc));
+			D_ERROR("Failed to resize root node: %s\n", d_errstr(rc));
 			goto done;
 		}
 	}
@@ -1345,8 +1345,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	if (!node_alloc && btr_has_tx(tcx)) {
 		rc = btr_node_tx_add(tcx, trace->tr_node);
 		if (rc != 0) {
-			D_ERROR("Failed to add node to txn record: %s",
-				d_errstr(rc));
+			D_ERROR("Failed to add node to txn record: %s\n", d_errstr(rc));
 			goto done;
 		}
 	}

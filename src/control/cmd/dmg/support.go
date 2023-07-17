@@ -7,15 +7,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
@@ -38,56 +34,19 @@ type collectLogCmd struct {
 	support.CollectLogSubCmd
 }
 
-// Copy Admin logs to TargetHost (central location) if option is provided.
-func (cmd *collectLogCmd) rsyncAdminLog() error {
-
-	runcmd := strings.Join([]string{
-		"rsync",
-		"-av",
-		"--blocking-io",
-		cmd.TargetFolder + "/",
-		cmd.TargetHost + ":" + cmd.TargetFolder}, " ")
-
-	cmd.Debugf("Rsync Admin Log command = %s", runcmd)
-	rsyncCmd := exec.Command("sh", "-c", runcmd)
-	var stdout, stderr bytes.Buffer
-	rsyncCmd.Stdout = &stdout
-	rsyncCmd.Stderr = &stderr
-	err := rsyncCmd.Run()
-	outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
-	if err != nil {
-		return errors.Wrapf(err, "Error running command %s with %s", rsyncCmd, err)
-	}
-	cmd.Debugf("rsyncCmd:= %s stdout:\n%s\nstderr:\n%s\n", rsyncCmd, outStr, errStr)
-
-	return nil
-}
-
-// gRPC call to initiate the rsync and copy the logs to Admin/TargetHost (central location).
+// gRPC call to initiate the rsync and copy the logs to Admin (central location).
 func (cmd *collectLogCmd) rsyncLog() error {
 	hostName, err := support.GetHostName()
 	if err != nil {
 		return err
 	}
 
-	// Admin host will be the central host to collect all the logs from servers.
-	// Logs will be rsync to TargetHost is provided.
-	if cmd.TargetHost == "" {
-		cmd.TargetHost = hostName
-	} else {
-		// initiate the rsync and copy the Admin logs to targetHost
-		err = cmd.rsyncAdminLog()
-		if err != nil && cmd.Stop {
-			return err
-		}
-	}
-
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		TargetHost:   cmd.TargetHost,
+		AdminNode:    hostName,
 		LogFunction:  support.RsyncLogEnum,
 	}
-	cmd.Debugf("Rsync logs from servers to %s:%s ", cmd.TargetHost, cmd.TargetFolder)
+	cmd.Debugf("Rsync logs from servers to %s:%s ", hostName, cmd.TargetFolder)
 	resp, err := control.CollectLog(context.Background(), cmd.ctlInvoker, req)
 	if err != nil && cmd.Stop {
 		return err
@@ -106,9 +65,14 @@ func (cmd *collectLogCmd) rsyncLog() error {
 
 // gRPC call to Archive the logs on individual servers.
 func (cmd *collectLogCmd) archLogsOnServer() error {
+	hostName, err := support.GetHostName()
+	if err != nil {
+		return err
+	}
+
 	req := &control.CollectLogReq{
 		TargetFolder: cmd.TargetFolder,
-		TargetHost:   cmd.TargetHost,
+		AdminNode:    hostName,
 		LogFunction:  support.ArchiveLogsEnum,
 	}
 	cmd.Debugf("Archiving the Log Folder %s", cmd.TargetFolder)
