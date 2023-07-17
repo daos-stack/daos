@@ -35,7 +35,7 @@
 #define DAOS_DMA_CHUNK_CNT_MAX	128	/* Per-xstream max chunks, 1GB */
 #define DAOS_DMA_CHUNK_CNT_MIN	32	/* Per-xstream min chunks, 256MB */
 
-/* Max inflight blob IOs per io channel */
+/* Max in-flight blob IOs per io channel */
 #define BIO_BS_MAX_CHANNEL_OPS	(4096)
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
@@ -316,6 +316,13 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		nvme_glb.bd_nvme_conf = NULL;
 		goto free_cond;
 	}
+
+	/*
+	 * Let's keep using large cluster size(1GB) for pmem mode, the SPDK blobstore
+	 * loading time is unexpected long for smaller cluster size(32MB), see DAOS-13694.
+	 */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
 
 	D_INFO("MD on SSD is %s\n",
 	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
@@ -954,7 +961,7 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
-		D_ERROR("No SPDK bdevs found!");
+		D_ERROR("No SPDK bdevs found!\n");
 		rc = -DER_NONEXIST;
 	}
 

@@ -3901,8 +3901,8 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	csum_buf_len = ci_csums_len(ent->ei_csum);
 
 	if (csum->cs_buf_len < csum_buf_len) {
-		D_ERROR("Issue copying checksum. Source (%d) is "
-			"larger than destination (%"PRIu64")",
+		D_ERROR("Issue copying checksum. Source (%d) is larger than destination (%" PRIu64
+			")\n",
 			csum->cs_buf_len, csum_buf_len);
 	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);

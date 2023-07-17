@@ -85,12 +85,7 @@ func processFabricProvider(cfg *config.Server) {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
-		if rxmProv == provider {
-			return true
-		}
-	}
-	return false
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
@@ -364,7 +359,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig, srv.sysdb.IsLeader)
 	if err != nil {
 		return err
 	}

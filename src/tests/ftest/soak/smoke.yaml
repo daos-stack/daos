@@ -85,7 +85,7 @@ smoke:
     - datamover_smoke
   # num of bytes to write to reserved container
   resv_bytes: 500
-  enable_intercept_lib: false
+  enable_intercept_lib: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -153,7 +153,7 @@ fio_smoke:
       - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: true
+    disable_caching: true
     thread_count: 8
     cores: '0-7'
 daos_racer:
@@ -164,7 +164,7 @@ vpic_smoke:
     - 1
   taskspernode:
     - 1
-  cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
+  cmdline: "${DAOS_TEST_APP_DIR}/vpic-install/bin/harris.Linux"
   api:
     - POSIX
     - POSIX-LIBIOIL
@@ -183,7 +183,7 @@ lammps_smoke:
     - 1
   taskspernode:
     - 1
-  cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj.smoke"
+  cmdline: "${DAOS_TEST_APP_DIR}/lammps/src/lmp_mpi -i ${DAOS_TEST_APP_DIR}/lammps/bench/in.lj.smoke"
   api:
     - POSIX
     - POSIX-LIBIOIL

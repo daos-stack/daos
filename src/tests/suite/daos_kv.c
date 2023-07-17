@@ -35,7 +35,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 	d_sg_list_t	sgl;
 	d_iov_t		sg_iov;
 
-	buf = malloc(ENUM_DESC_BUF);
+	D_ALLOC(buf, ENUM_DESC_BUF);
 	d_iov_set(&sg_iov, buf, ENUM_DESC_BUF);
 	sgl.sg_nr		= 1;
 	sgl.sg_nr_out		= 0;
@@ -67,6 +67,7 @@ list_keys(daos_handle_t oh, int *num_keys)
 #endif
 		key_nr += nr;
 	}
+	D_FREE(buf);
 	*num_keys = key_nr;
 }
 
@@ -286,43 +287,59 @@ kv_cond_ops(void **state)
 	val_out = 5;
 	size = sizeof(int);
 	print_message("Conditional FETCH of non existent Key(should fail)\n");
-	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2",
-			 &size, &val_out, NULL);
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key2", &size, &val_out, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 	assert_int_equal(val_out, 5);
 
 	val = 1;
 	print_message("Conditional UPDATE of non existent Key(should fail)\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_UPDATE, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional INSERT of non existent Key\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, 0);
 
 	val = 2;
 	print_message("Conditional INSERT of existing Key (Should fail)\n");
-	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1",
-			 sizeof(int), &val, NULL);
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Key1", sizeof(int), &val, NULL);
 	assert_rc_equal(rc, -DER_EXIST);
 
 	size = sizeof(int);
 	print_message("Conditional FETCH of existing Key\n");
-	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1",
-			 &size, &val_out, NULL);
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Key1", &size, &val_out, NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(val_out, 1);
 
 	print_message("Conditional Remove non existing Key (should fail)\n");
-	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2",
-			    NULL);
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key2", NULL);
 	assert_rc_equal(rc, -DER_NONEXIST);
 
 	print_message("Conditional Remove existing Key\n");
-	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1",
-			    NULL);
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Key1", NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional INSERT of Key with no value\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Empty_Key", 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional INSERT of existing (but empty) Key (should fail)\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, "Empty_Key", sizeof(int), &val,
+			 NULL);
+	assert_rc_equal(rc, -DER_EXIST);
+
+	size = sizeof(int);
+	print_message("Conditional FETCH of existing but empty Key\n");
+	rc = daos_kv_get(oh, DAOS_TX_NONE, DAOS_COND_KEY_GET, "Empty_Key", &size, &val_out, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(size, 0);
+
+	print_message("Update the empty Key with a no value update\n");
+	rc = daos_kv_put(oh, DAOS_TX_NONE, 0, "Empty_Key", 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Conditional Remove existing but empty Key\n");
+	rc = daos_kv_remove(oh, DAOS_TX_NONE, DAOS_COND_KEY_REMOVE, "Empty_Key", NULL);
 	assert_rc_equal(rc, 0);
 
 	print_message("Destroying KV\n");

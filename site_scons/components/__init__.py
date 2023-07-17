@@ -159,6 +159,7 @@ def define_mercury(reqs):
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
+                build_env={'CFLAGS': '-Wno-error'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
@@ -218,8 +219,6 @@ def define_common(reqs):
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
-    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
-
     reqs.define('event', libs=['event'], package='libevent-devel')
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
@@ -229,6 +228,11 @@ def define_common(reqs):
     reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
+
+    if ARM_PLATFORM:
+        reqs.define('ipmctl', skip_arch=True)
+    else:
+        reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
 
 
 def define_ompi(reqs):

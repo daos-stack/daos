@@ -192,11 +192,8 @@ dss_current_xstream(void)
  * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
  * won't return).
  */
-static inline bool
-dss_srv_shutting_down(void)
-{
-	return dss_get_module_info()->dmi_srv_shutting_down;
-}
+bool
+dss_srv_shutting_down(void);
 
 /**
  * Module facility feature bits
@@ -782,7 +779,7 @@ ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 int
 obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
-		struct daos_obj_md *md, uint32_t *tgt, uint32_t *shard_p);
+		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
@@ -799,9 +796,11 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-/* Notify control-plane of a bio error. */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id);
+/** Call module setup from drpc setup call handler. */
+int dss_module_setup_all(void);
+
+/** Notify control-plane of a bio error. */
+int ds_notify_bio_error(int media_err_type, int tgt_id);
 
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,

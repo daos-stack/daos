@@ -199,7 +199,6 @@ db_fini(void)
 uuid_t	dev_id1;
 uuid_t	dev_id2;
 
-static bool is_lmdb;
 static int
 smd_ut_setup(void **state)
 {
@@ -210,13 +209,8 @@ smd_ut_setup(void **state)
 		print_error("Error initializing the debug instance\n");
 		return rc;
 	}
-	if (is_lmdb) {
-		lmm_db_init_ex(SMD_STORAGE_PATH, "sys_db", true, false);
-		rc = smd_init(lmm_db_get());
-	} else {
-		db_init();
-		rc = smd_init(&ut_db.ud_db);
-	}
+	db_init();
+	rc = smd_init(&ut_db.ud_db);
 
 	if (rc) {
 		print_error("Error initializing SMD store: %d\n", rc);
@@ -230,13 +224,8 @@ smd_ut_setup(void **state)
 static int
 smd_ut_teardown(void **state)
 {
-	if (is_lmdb) {
-		lmm_db_fini();
-		smd_fini();
-	} else {
-		smd_fini();
-		db_fini();
-	}
+	smd_fini();
+	db_fini();
 	daos_debug_fini();
 	return 0;
 }
@@ -552,14 +541,12 @@ print_usage(char *name)
 	print_message(
 		"\n\nCOMMON TESTS\n==========================\n");
 	print_message("%s -h|--help\n", name);
-	print_message("%s -l|--lmdb\n", name);
 }
 
 const char *s_opts = "hl";
 static int idx;
 static struct option l_opts[] = {
 	{"help", no_argument,	NULL, 'h'},
-	{"lmdb", no_argument,	NULL, 'l'},
 };
 
 int main(int argc, char **argv)
@@ -579,9 +566,6 @@ int main(int argc, char **argv)
 			print_usage(argv[0]);
 			rc = 0;
 			goto out;
-		case 'l':
-			is_lmdb = true;
-			break;
 		default:
 			rc = 1;
 			goto out;

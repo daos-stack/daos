@@ -168,7 +168,7 @@ static const ProtobufCFieldDescriptor mgmt__cont_set_owner_req__field_descriptor
     offsetof(Mgmt__ContSetOwnerReq, svc_ranks),
     NULL,
     NULL,
-    0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
+    0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
