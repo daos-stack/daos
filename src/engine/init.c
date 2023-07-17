@@ -274,29 +274,19 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 	}
 
 	if (oversubscribe) {
-		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
-			if (ncores > DAOS_TGT0_OFFSET + tgt_nr)
-				dss_tgt_offload_xs_nr = ncores - DAOS_TGT0_OFFSET - tgt_nr;
-			else
-				dss_tgt_offload_xs_nr = 0;
-
-			D_PRINT("Force to start engine with %d targets on %d cores, #nr_xs_helpers "
-				"set as %d.\n",
-				tgt_nr, ncores, dss_tgt_offload_xs_nr);
-		}
+		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores)
+			D_PRINT("Force to start engine with %d targets %d xs_helpers on %d cores("
+				"%d cores reserved for system service).\n",
+				tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
 		goto out;
 	}
 
 	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
-		if (ncores < DAOS_TGT0_OFFSET + tgt_nr) {
-			D_ERROR("cannot start engine with %d targets on %d cores, may try with "
-				"DAOS_TARGET_OVERSUBSCRIBE=1\n",
-				tgt_nr, ncores);
-			return -DER_INVAL;
-		}
-		dss_tgt_offload_xs_nr = ncores - DAOS_TGT0_OFFSET - tgt_nr;
-		D_PRINT("Start engine with %d targets on %d cores, #nr_xs_helpers set as %d.\n",
-			tgt_nr, ncores, dss_tgt_offload_xs_nr);
+		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
+			"%d cores reserved for system service).\n",
+			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		return -DER_INVAL;
 	}
 
 out:
