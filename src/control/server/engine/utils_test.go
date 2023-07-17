@@ -173,6 +173,10 @@ func Test_MergeLogEnvVars(t *testing.T) {
 			subsystems: "all",
 			expMasks:   "DBUG",
 		},
+		"long mask string": {
+			masks:    "info,dtx=debug,vos=debug,object=debug",
+			expMasks: "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			gotMasks, gotErr := MergeLogEnvVars(tc.masks, tc.subsystems)
