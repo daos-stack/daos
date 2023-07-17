@@ -295,7 +295,7 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			if (acl->dal_len > 0) {
 				rc = daos_acl_validate(acl);
 				if (rc != -DER_SUCCESS)
-					goto out;
+					D_GOTO(out, rc);
 				prop_entry->dpe_val_ptr = daos_acl_dup(acl);
 				if (prop_entry->dpe_val_ptr == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);

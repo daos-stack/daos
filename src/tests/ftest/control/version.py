@@ -7,7 +7,7 @@ import re
 import json
 
 from apricot import TestWithServers
-from general_utils import run_pcmd, report_errors
+from general_utils import run_pcmd, report_errors, append_error
 from server_utils_base import DaosServerCommandRunner
 
 
@@ -27,26 +27,6 @@ class DAOSVersion(TestWithServers):
         self.setup_start_servers = False
         self.setup_start_agents = False
 
-        self.errors = []
-
-    def report_result(self):
-        """Helper printing test result"""
-        self.log.info("###### Test Result ######")
-        report_errors(test=self, errors=self.errors)
-        self.log.info("#########################")
-
-    def append_error(self, title, details):
-        """Helper adding an error to the list of errors
-
-        Args:
-            title (str): Error message title
-            details (list): List of string of the error details
-        """
-        msg = title
-        if details:
-            msg += "\n\t" + "\n\t".join(details)
-        self.errors.append(msg)
-
     def test_version(self):
         """Verify version number for dmg, daos, daos_server, and daos_agent against RPM.
 
@@ -56,15 +36,13 @@ class DAOSVersion(TestWithServers):
         :avocado: tags=DAOSVersion,test_version
         """
         # Get RPM version.
-        rpm_command = "rpm -qa|grep daos-server"
+        rpm_command = "rpm -qa | grep daos-server"
         output = run_pcmd(hosts=self.hostlist_servers, command=rpm_command)
         self.log.debug("RPM output = %s", output)
         rc = output[0]["exit_status"]
         stdout = output[0]["stdout"]
         if rc != 0:
-            msg = "DAOS RPMs not properly installed: rc={}".format(rc)
-            self.append_error(msg, stdout)
-            self.report_result()
+            report_errors(self, ["DAOS RPMs not properly installed: rc={}".format(rc)])
         rpm_version = None
         for rpm in stdout:
             result = re.findall(r"daos-server-[tests-|tests_openmpi-]*([\d.]+)", rpm)
@@ -72,9 +50,7 @@ class DAOSVersion(TestWithServers):
                 rpm_version = result[0]
                 break
         if not result:
-            msg = "RPM version could not be defined"
-            self.append_error(msg, stdout)
-            self.report_result()
+            report_errors(self, ["RPM version could not be defined"])
         self.log.info("RPM version = %s", rpm_version)
 
         # Remove configuration files
@@ -94,6 +70,8 @@ class DAOSVersion(TestWithServers):
         daos_version = self.get_daos_command().version()["response"]["version"]
         self.log.info("daos version = %s", daos_version)
 
+        errors = []
+
         # Get daos_agent version.
         daos_agent_version = None
         daos_agent_cmd = "daos_agent --json version"
@@ -103,7 +81,7 @@ class DAOSVersion(TestWithServers):
         stdout = output[0]["stdout"]
         if rc != 0:
             msg = "DAOS Agent not properly installed: rc={}".format(rc)
-            self.append_error(msg, stdout)
+            append_error(errors, msg, stdout)
         else:
             self.log.info("DAOS Agent stdout = %s", "".join(stdout))
             daos_agent_version = json.loads("".join(stdout))["response"]["version"]
@@ -121,13 +99,13 @@ class DAOSVersion(TestWithServers):
             ("daos_agent", daos_agent_version),
             ("daos_server", daos_server_version)
         ]
-
         for tool_version in tool_versions:
             tool = tool_version[0]
             version = tool_version[1]
             if version != rpm_version:
                 msg = "Unexpected version! {} = {}, RPM = {}".format(
                     tool, version, rpm_version)
-                self.errors.append(msg)
+                append_error(errors, msg)
 
-        self.report_result()
+        report_errors(self, errors)
+        self.log.info("Test passed")
