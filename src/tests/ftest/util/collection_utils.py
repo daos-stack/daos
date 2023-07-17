@@ -720,7 +720,7 @@ def update_jenkins_xml(test, logs_dir, test_result):
         # Update the class name to include the functional test directory
         log.debug("Updating the xml data in the test %s file", cmocka_xml)
         pattern = 'classname="'
-        replacement = f'classname="FTEST_{test.directory}.{test_class}.'
+        replacement = f'classname="FTEST_{test.directory}-{test_class}.'
         if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
             return False
 
@@ -783,7 +783,7 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
     log.debug("")
 
     log.debug("  Contents of %s before replacement", xml_file)
-    for line in xml_data:
+    for line in xml_data.splitlines():
         log.debug("    %s", line)
     log.debug("")
 
@@ -796,7 +796,7 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
         return False
 
     log.debug("  Contents of %s after replacement", xml_file)
-    for line in get_xml_data(xml_file, test_result):
+    for line in get_xml_data(xml_file, test_result).splitlines():
         log.debug("    %s", line)
     log.debug("")
 
