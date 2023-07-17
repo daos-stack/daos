@@ -486,7 +486,7 @@ To create a pool with a custom ACL:
 $ dmg pool create --size <size> --acl-file <path> <pool_label>
 ```
 
-The ACL file format is detailed in [here](https://docs.daos.io/v2.4/overview/security/#acl-file).
+The ACL file format is detailed [here](https://docs.daos.io/v2.4/overview/security/#acl-file).
 
 ### Displaying ACL
 
@@ -629,7 +629,7 @@ operation is ongoing. Drain additionally enables non-replicated data to be
 rebuilt onto another target whereas in a conventional failure scenario non-replicated
 data would not be integrated into a rebuild and would be lost.
 Drain operation is not allowed if there are other ongoing rebuild operations, otherwise
-it will return -DER_BUSY.
+it will return -DER\_BUSY.
 
 To drain a target from a pool:
 
@@ -650,7 +650,7 @@ original state.
 The operator can either reintegrate specific targets for an engine rank by
 supplying a target idx list, or reintegrate an entire engine rank by omitting the list.
 Reintegrate operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 ```
 $ dmg pool reintegrate $DAOS_POOL --rank=${rank} --target-idx=${idx1},${idx2},${idx3}
@@ -702,7 +702,7 @@ pool.
 This will automatically trigger a server rebalance operation where objects
 within the extended pool will be rebalanced across the new storage.
 Extend operation is not allowed if there are other ongoing rebuild operations,
-otherwise it will return -DER_BUSY.
+otherwise it will return -DER\_BUSY.
 
 ```
 $ dmg pool extend $DAOS_POOL --ranks=${rank1},${rank2}...
@@ -717,14 +717,14 @@ small extensions.
 
 ### Resize
 
-Support for quiescent pool resize (changing capacity used on each storage node
-without adding new ones) is currently not supported and is under consideration.
+Support for quiescent pool resize (changing capacity used on each storage engine
+without adding new engines) is currently not supported and is under consideration.
 
 ## Pool Catastrophic Recovery
 
 A DAOS pool is instantiated on each target by a set of pmemobj files
 managed by PMDK and SPDK blobs on SSDs. Tools to verify and repair this
-persistent data is scheduled for DAOS v2.4 and will be documented here
+persistent data are scheduled for DAOS Version 2.6 and will be documented here
 once available.
 
 Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify

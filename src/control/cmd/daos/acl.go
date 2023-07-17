@@ -384,10 +384,16 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 	var user *C.char
 	var group *C.char
 	if cmd.User != "" {
+		if !strings.ContainsRune(cmd.User, '@') {
+			cmd.User += "@"
+		}
 		user = C.CString(cmd.User)
 		defer C.free(unsafe.Pointer(user))
 	}
 	if cmd.Group != "" {
+		if !strings.ContainsRune(cmd.Group, '@') {
+			cmd.Group += "@"
+		}
 		group = C.CString(cmd.Group)
 		defer C.free(unsafe.Pointer(group))
 	}

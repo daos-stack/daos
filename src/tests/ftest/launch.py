@@ -10,6 +10,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
+import getpass
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing, CoreFileException
+from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -47,7 +49,6 @@ from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
-DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
@@ -61,10 +62,14 @@ PROVIDER_KEYS = OrderedDict(
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp"),
+        ("tcp", "ofi+tcp;ofi_rxm"),
         ("opx", "ofi+opx"),
     ]
 )
+# Temporary pipeline-lib workaround until DAOS-13934 is implemented
+PROVIDER_ALIAS = {
+    "ofi+tcp": "ofi+tcp;ofi_rxm"
+}
 PROCS_TO_CLEANUP = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
@@ -586,15 +591,19 @@ class Launch():
     RESULTS_DIRS = (
         "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
-    def __init__(self, name, mode):
+    def __init__(self, name, mode, slurm_install, slurm_setup):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
+            slurm_install (bool): whether or not to install slurm RPMs if needed
+            slurm_setup (bool): whether or not to enable configuring slurm if needed
         """
         self.name = name
         self.mode = mode
+        self.slurm_install = slurm_install
+        self.slurm_setup = slurm_setup
 
         self.avocado = AvocadoInfo()
         self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
@@ -604,6 +613,7 @@ class Launch():
         self.tag_filters = []
         self.repeat = 1
         self.local_host = get_local_host()
+        self.user = getpass.getuser()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -619,7 +629,6 @@ class Launch():
         # Options for creating slurm partitions
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
-        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -945,7 +954,6 @@ class Launch():
             message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
-        self.slurm_add_partition = args.slurm_setup
 
         # Execute the tests
         status = self.run_tests(
@@ -1062,8 +1070,6 @@ class Launch():
 
             # Set the default location for daos log files written during testing
             # if not already defined.
-            if "DAOS_APP_DIR" not in os.environ:
-                os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
             if "DAOS_TEST_USER_DIR" not in os.environ:
@@ -1073,6 +1079,9 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
                 else:
                     os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
+            if "DAOS_TEST_APP_DIR" not in os.environ:
+                os.environ["DAOS_TEST_APP_DIR"] = os.path.join(
+                    os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
@@ -1277,6 +1286,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         # Use the detected provider if one is not set
+        provider = PROVIDER_ALIAS.get(provider, provider)
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
@@ -1808,8 +1818,11 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure slurm if any tests use partitions
+        return_code |= self.setup_slurm()
+
         # Configure hosts to collect code coverage
-        self.setup_bullseye()
+        return_code |= self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -1861,7 +1874,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        self.finalize_bullseye()
+        return_code |= self.finalize_bullseye()
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -1933,6 +1946,80 @@ class Launch():
                             os.rename(old_file, new_file)
         return status
 
+    def setup_slurm(self):
+        """Set up slurm on the hosts if any tests are using partitions.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        status = 0
+        logger.info("Setting up slurm partitions if required by tests")
+        if not any(test.yaml_info["client_partition"] for test in self.tests):
+            logger.debug("  No tests using client partitions detected - skipping slurm setup")
+            return status
+
+        if not self.slurm_setup:
+            logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
+            return status
+
+        status |= self.setup_application_directory()
+
+        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        try:
+            if self.slurm_install:
+                slurm_setup.install()
+            slurm_setup.update_config(self.user, 'daos_client')
+            slurm_setup.start_munge(self.user)
+            slurm_setup.start_slurm(self.user, True)
+        except SlurmSetupException:
+            message = "Error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+        except Exception:       # pylint: disable=broad-except
+            message = "Unknown error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+
+        return status
+
+    def setup_application_directory(self):
+        """Set up the application directory.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        app_dir = os.environ.get('DAOS_TEST_APP_DIR')
+        app_src = os.environ.get('DAOS_TEST_APP_SRC')
+
+        logger.debug("Setting up the '%s' application directory", app_dir)
+        if not os.path.exists(app_dir):
+            # Create the apps directory if it does not already exist
+            try:
+                logger.debug('  Creating the application directory')
+                os.makedirs(app_dir)
+            except OSError:
+                message = 'Error creating the application directory'
+                self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                return 128
+        else:
+            logger.debug('  Using the existing application directory')
+
+        if app_src and os.path.exists(app_src):
+            logger.debug("  Copying applications from the '%s' directory", app_src)
+            run_local(logger, f"ls -al '{app_src}'")
+            for app in os.listdir(app_src):
+                try:
+                    run_local(
+                        logger, f"cp -r '{os.path.join(app_src, app)}' '{app_dir}'", check=True)
+                except RunException:
+                    message = 'Error copying files to the application directory'
+                    self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                    return 128
+
+        logger.debug("  Applications in '%s':", app_dir)
+        run_local(logger, f"ls -al '{app_dir}'")
+        return 0
+
     @staticmethod
     def display_disk_space(path):
         """Display disk space of provided path destination.
@@ -1999,18 +2086,18 @@ class Launch():
             partition = test.yaml_info["client_partition"]
             logger.debug("Determining if the %s client partition exists", partition)
             exists = show_partition(logger, self.slurm_control_node, partition).passed
-            if not exists and not self.slurm_add_partition:
+            if not exists and not self.slurm_setup:
                 message = f"Error missing {partition} partition"
                 self._fail_test(self.result.tests[-1], "Prepare", message, None)
                 return 128
-            if self.slurm_add_partition and exists:
+            if self.slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, self.slurm_control_node, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self._fail_test(self.result.tests[-1], "Prepare", message, None)
                     return 128
-            if self.slurm_add_partition:
+            if self.slurm_setup:
                 hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
                 logger.debug(
                     "Partition hosts from '%s', excluding test servers '%s': %s",
@@ -3131,6 +3218,10 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
+        "-si", "--slurm_install",
+        action="store_true",
+        help="enable installing slurm RPMs if required by the tests")
+    parser.add_argument(
         "--scm_mount",
         action="store",
         default="/mnt/daos",
@@ -3141,7 +3232,7 @@ def main():
     parser.add_argument(
         "-ss", "--slurm_setup",
         action="store_true",
-        help="setup any slurm partitions required by the tests")
+        help="enable setting up slurm partitions if required by the tests")
     parser.add_argument(
         "--scm_size",
         action="store",
@@ -3216,11 +3307,12 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
 
     # Setup the Launch object
-    launch = Launch(args.name, args.mode)
+    launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
 
     # Perform the steps defined by the arguments specified
     try:

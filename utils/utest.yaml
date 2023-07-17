@@ -112,7 +112,7 @@
 - name: VOS_md_on_ssd
   base: "PREFIX"
   sudo: True
-  required_src: ["src/bio/tests/bio_ut.c"]
+  required_src: ["src/vos/tests/bio_ut.c"]
   tests:
     - cmd: ["bin/vos_tests", "-A", "50"]
       aio: "AIO_7"
