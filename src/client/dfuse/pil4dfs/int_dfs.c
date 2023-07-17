@@ -2064,20 +2064,17 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 	   size_t size)
 {
 	ssize_t rc;
-	int     fd_directed;
 
 	if (!hook_enabled)
 		return next_write(fd, buf, size);
 
-	fd_directed = Get_Fd_Redirected(fd);
-
-	if (fd_directed >= FD_FILE_BASE) {
-		rc = pwrite(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
+	if (fd >= FD_FILE_BASE) {
+		rc = pwrite(fd, buf, size, file_list[fd - FD_FILE_BASE]->offset);
 		if (rc >= 0)
-			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
+			file_list[fd - FD_FILE_BASE]->offset += rc;
 		return rc;
 	} else {
-		return next_write(fd_directed, buf, size);
+		return next_write(fd, buf, size);
 	}
 }
 

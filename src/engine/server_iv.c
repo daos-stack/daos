@@ -450,12 +450,6 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
-#if 1
-	if (priv < (void *)4096)
-		return -DER_MISC;
-	D_ASSERT(priv == NULL || priv > (void *)4096); /* DAOS-13906 */
-#endif
-
 	rc = iv_ns_lookup_by_ivns(ivns, &ns);
 	if (rc != 0)
 		return rc;
@@ -652,10 +646,6 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 
 	D_ASSERT(priv_entry != NULL);
 
-#if 1
-	if (priv < (void *)4096)
-		return -DER_MISC;
-#endif
 	entry = priv_entry->entry;
 	D_ASSERT(entry != NULL);
 
