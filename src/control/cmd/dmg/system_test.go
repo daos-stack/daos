@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -21,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestDmg_SystemCommands(t *testing.T) {
@@ -115,7 +115,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query --with-states joined,Excluded",
 			strings.Join([]string{
 				printRequest(t, &control.SystemQueryReq{
-					WantedStates: "joined,Excluded",
+					WantedStates: common.MemberStateJoined | common.MemberStateExcluded,
 				}),
 			}, " "),
 			nil,
@@ -371,13 +371,13 @@ func TestDmg_systemQueryCmd_Errors(t *testing.T) {
 					{
 						Rank:  1,
 						Uuid:  test.MockUUID(1),
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
 					{
 						Rank:  2,
 						Uuid:  test.MockUUID(2),
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 						Addr:  "10.0.0.1:10001",
 					},
 				},
@@ -438,11 +438,11 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "start",
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 					},
 					{
 						Rank: 3, Action: "start",
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 					},
 				},
 			},
@@ -455,7 +455,7 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 					{
 						Rank: 24, Action: "start",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -467,22 +467,22 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "start",
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 					},
 					{
 						Rank: 3, Action: "start",
 						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 5, Action: "start",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 4, Action: "start",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -493,12 +493,12 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "start",
-						State: system.MemberStateReady.String(),
+						State: common.MemberStateReady.String(),
 					},
 					{
 						Rank: 2, Action: "start",
 						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -524,12 +524,12 @@ func TestDmg_systemStartCmd_Errors(t *testing.T) {
 					{
 						Rank: 24, Action: "start",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 25, Action: "start",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -567,11 +567,11 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
+						State: common.MemberStateStopped.String(),
 					},
 					{
 						Rank: 3, Action: "stop",
-						State: system.MemberStateStopped.String(),
+						State: common.MemberStateStopped.String(),
 					},
 				},
 			},
@@ -584,7 +584,7 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 					{
 						Rank: 24, Action: "stop",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -596,22 +596,22 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
+						State: common.MemberStateStopped.String(),
 					},
 					{
 						Rank: 3, Action: "stop",
 						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 5, Action: "stop",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 4, Action: "stop",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -622,12 +622,12 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 				Results: []*sharedpb.RankResult{
 					{
 						Rank: 2, Action: "stop",
-						State: system.MemberStateStopped.String(),
+						State: common.MemberStateStopped.String(),
 					},
 					{
 						Rank: 2, Action: "stop",
 						Errored: true, Msg: "uh oh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},
@@ -653,12 +653,12 @@ func TestDmg_systemStopCmd_Errors(t *testing.T) {
 					{
 						Rank: 24, Action: "stop",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 					{
 						Rank: 25, Action: "stop",
 						Errored: true, Msg: "uh ohh",
-						State: system.MemberStateErrored.String(),
+						State: common.MemberStateErrored.String(),
 					},
 				},
 			},

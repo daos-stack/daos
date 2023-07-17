@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -134,16 +135,16 @@ func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
 
 // LocalState returns local perspective of the current instance state
 // (doesn't consider state info held by the global system membership).
-func (ei *EngineInstance) LocalState() system.MemberState {
+func (ei *EngineInstance) LocalState() common.MemberState {
 	switch {
 	case ei.IsReady():
-		return system.MemberStateReady
+		return common.MemberStateReady
 	case ei.IsStarted():
-		return system.MemberStateStarting
+		return common.MemberStateStarting
 	case ei.isAwaitingFormat():
-		return system.MemberStateAwaitFormat
+		return common.MemberStateAwaitFormat
 	default:
-		return system.MemberStateStopped
+		return common.MemberStateStopped
 	}
 }
 
@@ -203,7 +204,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		return ranklist.NilRank, false, 0, err
 	}
 	switch resp.State {
-	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
+	case common.MemberStateAdminExcluded, common.MemberStateExcluded:
 		return ranklist.NilRank, resp.LocalJoin, 0, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = ranklist.Rank(resp.Rank)

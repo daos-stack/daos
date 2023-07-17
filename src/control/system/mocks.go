@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -32,7 +33,7 @@ func MockControlAddr(t *testing.T, idx uint32) *net.TCPAddr {
 }
 
 // MockMemberFullSpec returns a reference to a new member struct.
-func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.TCPAddr, state common.MemberState) *Member {
 	t.Helper()
 
 	newUUID, err := uuid.Parse(uuidStr)
@@ -52,7 +53,7 @@ func MockMemberFullSpec(t *testing.T, rank Rank, uuidStr, uri string, addr *net.
 }
 
 // MockMember returns a system member with appropriate values.
-func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Member {
+func MockMember(t *testing.T, idx uint32, state common.MemberState, info ...string) *Member {
 	t.Helper()
 
 	addr := MockControlAddr(t, idx)
@@ -66,7 +67,7 @@ func MockMember(t *testing.T, idx uint32, state MemberState, info ...string) *Me
 }
 
 // MockMemberResult return a result from an action on a system member.
-func MockMemberResult(rank Rank, action string, err error, state MemberState) *MemberResult {
+func MockMemberResult(rank Rank, action string, err error, state common.MemberState) *MemberResult {
 	result := NewMemberResult(rank, err, state)
 	result.Action = action
 

@@ -29,8 +29,8 @@ import (
 type TCPResolver func(string, string) (*net.TCPAddr, error)
 
 type MemberStore interface {
-	MemberCount(...MemberState) (int, error)
-	MemberRanks(...MemberState) ([]Rank, error)
+	MemberCount(...common.MemberState) (int, error)
+	MemberRanks(...common.MemberState) ([]Rank, error)
 	FindMemberByRank(rank Rank) (*Member, error)
 	FindMemberByUUID(uuid uuid.UUID) (*Member, error)
 	AllMembers() ([]*Member, error)
@@ -108,7 +108,7 @@ type JoinRequest struct {
 type JoinResponse struct {
 	Member     *Member
 	Created    bool
-	PrevState  MemberState
+	PrevState  common.MemberState
 	MapVersion uint32
 }
 
@@ -136,7 +136,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 			}
 		}
 
-		if curMember.State == MemberStateAdminExcluded {
+		if curMember.State == common.MemberStateAdminExcluded {
 			return nil, ErrAdminExcluded(curMember.UUID, curMember.Rank)
 		}
 		// If the member is already in the membership, don't allow rejoining
@@ -159,7 +159,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		}
 
 		resp.PrevState = curMember.State
-		curMember.State = MemberStateJoined
+		curMember.State = common.MemberStateJoined
 		curMember.Info = ""
 		curMember.Addr = req.ControlAddr
 		curMember.FabricURI = req.FabricURI
@@ -195,7 +195,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		FabricURI:      req.FabricURI,
 		FabricContexts: req.FabricContexts,
 		FaultDomain:    req.FaultDomain,
-		State:          MemberStateJoined,
+		State:          common.MemberStateJoined,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, errors.Wrap(err, "failed to add new member")
@@ -331,14 +331,14 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
 // not in the membership. Optionally filter on desired states.
-func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members, err error) {
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...common.MemberState) (members Members, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
-	mask, _ := MaskFromStates(desiredStates...)
+	mask, _ := common.MemberStates2Mask(desiredStates...)
 
 	if rankSet == nil || rankSet.Count() == 0 {
-		if mask == AllMemberFilter {
+		if mask == common.AllMemberFilter {
 			// No rank or member filtering required so copy database.
 			members, err = m.db.AllMembers()
 			if err != nil {
@@ -369,7 +369,7 @@ func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (me
 	return
 }
 
-func msgBadStateTransition(m *Member, ts MemberState) string {
+func msgBadStateTransition(m *Member, ts common.MemberState) string {
 	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.State, ts)
 }
 
@@ -399,7 +399,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 
 		if result.Errored {
 			// Check state matches errored flag.
-			if result.State != MemberStateErrored && result.State != MemberStateUnresponsive {
+			if result.State != common.MemberStateErrored && result.State != common.MemberStateUnresponsive {
 				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
@@ -410,7 +410,7 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			}
 		}
 
-		if member.State.isTransitionIllegal(result.State) {
+		if member.State.IsTransitionIllegal(result.State) {
 			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
 			continue
 		}
@@ -517,8 +517,8 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
 		return err
 	}
 
-	ns := MemberStateExcluded
-	if member.State.isTransitionIllegal(ns) {
+	ns := common.MemberStateExcluded
+	if member.State.IsTransitionIllegal(ns) {
 		msg := msgBadStateTransition(member, ns)
 		// excluded->excluded transitions expected for multiple swim
 		// notifications, if so return error to skip group update
@@ -529,7 +529,7 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
 		return errors.New(msg)
 	}
 
-	if member.State == MemberStateJoined && member.Incarnation > incarnation {
+	if member.State == common.MemberStateJoined && member.Incarnation > incarnation {
 		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)", rank, incarnation, member.Incarnation)
 		return errors.Errorf("event is for previous incarnation of %d", rank)
 	}
@@ -562,8 +562,8 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	newState := MemberStateErrored
-	if member.State.isTransitionIllegal(newState) {
+	newState := common.MemberStateErrored
+	if member.State.IsTransitionIllegal(newState) {
 		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
 		return
 	}

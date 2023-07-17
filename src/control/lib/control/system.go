@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -138,7 +139,7 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
 	Rank       ranklist.Rank
-	State      system.MemberState
+	State      common.MemberState
 	LocalJoin  bool
 	MapVersion uint32 `json:"map_version"`
 }
@@ -185,34 +186,21 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool   // Fail without retrying if the MS is unavailable
-	NotOK             bool   // Only show engines not in a joined state
-	WantedStates      string // Comma separated list of wanted states
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      common.MemberState // Bitmask of desired states
 }
 
-func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
-	var states []system.MemberState
-
-	for _, tok := range strings.Split(statesStr, ",") {
-		ms := system.MemberStateFromString(strings.TrimSpace(tok))
-		if ms == system.MemberStateUnknown {
-			return 0, errors.Errorf("invalid state name %q", tok)
-		}
-		states = append(states, ms)
-	}
-
-	mask, _ := system.MaskFromStates(states...)
-	return mask, nil
-}
-
-func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+func (req *SystemQueryReq) getStateMask() (common.MemberState, error) {
 	switch {
 	case req.NotOK:
-		return system.AllMemberFilter &^ system.MemberStateJoined, nil
-	case req.WantedStates != "":
-		return memberStateMaskFromStrings(req.WantedStates)
+		return common.AllMemberFilter &^ common.MemberStateJoined, nil
+	case req.WantedStates == 0:
+		return common.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= common.AllMemberFilter:
+		return req.WantedStates, nil
 	default:
-		return system.AllMemberFilter, nil
+		return common.MemberStateUnknown, errors.New("invalid wanted states bitmask")
 	}
 }
 
@@ -570,7 +558,7 @@ func checkSystemErase(ctx context.Context, rpcClient UnaryInvoker) error {
 		return err
 	}
 	for _, member := range resp.Members {
-		if member.State&system.AvailableMemberFilter != 0 {
+		if member.State&common.AvailableMemberFilter != 0 {
 			aliveRanks.Add(member.Rank)
 		}
 	}

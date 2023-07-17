@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -109,7 +110,7 @@ Unknown 3 ranks: 7-9
 		"single response": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
 				},
 			},
 			expPrintStr: `
@@ -122,7 +123,7 @@ Rank State
 		"single response with missing hosts and ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
 				},
 			},
 			absentHosts: "foo[7,8,9]",
@@ -139,7 +140,7 @@ Unknown 3 hosts: foo[7-9]
 		"single response verbose": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
 				},
 			},
 			verbose: true,
@@ -153,7 +154,7 @@ Rank UUID                                 Control Address Fault Domain State  Re
 		"single response verbose with missing hosts and ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
 				},
 			},
 			absentHosts: "foo[7,8,9]",
@@ -171,13 +172,13 @@ Unknown 3 ranks: 7-9
 		"normal response": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			expPrintStr: `
@@ -192,13 +193,13 @@ Rank      State
 		"missing hosts": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			absentHosts: "foo[7,8,9]",
@@ -215,13 +216,13 @@ Unknown 3 hosts: foo[7-9]
 		"missing ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			absentRanks: "7-9",
@@ -238,13 +239,13 @@ Rank      State
 		"missing ranks and hosts": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			absentHosts: "foo[7,8,9]",
@@ -263,13 +264,13 @@ Unknown 3 hosts: foo[7-9]
 		"normal response verbose": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			verbose: true,
@@ -289,13 +290,13 @@ Rank UUID                                 Control Address Fault Domain State    
 		"response verbose with missing hosts and ranks": {
 			resp: &control.SystemQueryResp{
 				Members: Members{
-					MockMember(t, 0, MemberStateJoined),
-					MockMember(t, 1, MemberStateJoined),
-					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateExcluded),
-					MockMember(t, 4, MemberStateStopped),
-					MockMember(t, 5, MemberStateJoined),
-					MockMember(t, 6, MemberStateJoined),
+					MockMember(t, 0, common.MemberStateJoined),
+					MockMember(t, 1, common.MemberStateJoined),
+					MockMember(t, 2, common.MemberStateStopped),
+					MockMember(t, 3, common.MemberStateExcluded),
+					MockMember(t, 4, common.MemberStateStopped),
+					MockMember(t, 5, common.MemberStateJoined),
+					MockMember(t, 6, common.MemberStateJoined),
 				},
 			},
 			absentHosts: "foo[7,8,9]",
@@ -338,16 +339,16 @@ Unknown 3 ranks: 7-9
 
 func TestPretty_PrintSystemStartResp(t *testing.T) {
 	successResults := MemberResults{
-		NewMemberResult(1, nil, MemberStateReady, "start"),
-		NewMemberResult(2, nil, MemberStateReady, "start"),
-		NewMemberResult(0, nil, MemberStateStopped, "start"),
-		NewMemberResult(3, nil, MemberStateStopped, "start"),
+		NewMemberResult(1, nil, common.MemberStateReady, "start"),
+		NewMemberResult(2, nil, common.MemberStateReady, "start"),
+		NewMemberResult(0, nil, common.MemberStateStopped, "start"),
+		NewMemberResult(3, nil, common.MemberStateStopped, "start"),
 	}
 	failedResults := MemberResults{
-		NewMemberResult(1, nil, MemberStateReady, "start"),
-		NewMemberResult(2, errors.New("fail"), MemberStateReady, "start"),
-		NewMemberResult(0, errors.New("failed"), MemberStateStopped, "start"),
-		NewMemberResult(3, nil, MemberStateStopped, "start"),
+		NewMemberResult(1, nil, common.MemberStateReady, "start"),
+		NewMemberResult(2, errors.New("fail"), common.MemberStateReady, "start"),
+		NewMemberResult(0, errors.New("failed"), common.MemberStateStopped, "start"),
+		NewMemberResult(3, nil, common.MemberStateStopped, "start"),
 	}
 
 	for name, tc := range map[string]struct {
@@ -432,16 +433,16 @@ Unknown 3 hosts: foo[7-9]
 
 func TestPretty_PrintSystemStopResp(t *testing.T) {
 	successResults := MemberResults{
-		NewMemberResult(1, nil, MemberStateReady, "stop"),
-		NewMemberResult(2, nil, MemberStateReady, "stop"),
-		NewMemberResult(0, nil, MemberStateStopped, "stop"),
-		NewMemberResult(3, nil, MemberStateStopped, "stop"),
+		NewMemberResult(1, nil, common.MemberStateReady, "stop"),
+		NewMemberResult(2, nil, common.MemberStateReady, "stop"),
+		NewMemberResult(0, nil, common.MemberStateStopped, "stop"),
+		NewMemberResult(3, nil, common.MemberStateStopped, "stop"),
 	}
 	failedResults := MemberResults{
-		NewMemberResult(1, nil, MemberStateReady, "stop"),
-		NewMemberResult(2, errors.New("fail"), MemberStateReady, "stop"),
-		NewMemberResult(0, errors.New("failed"), MemberStateStopped, "stop"),
-		NewMemberResult(3, nil, MemberStateStopped, "stop"),
+		NewMemberResult(1, nil, common.MemberStateReady, "stop"),
+		NewMemberResult(2, errors.New("fail"), common.MemberStateReady, "stop"),
+		NewMemberResult(0, errors.New("failed"), common.MemberStateStopped, "stop"),
+		NewMemberResult(3, nil, common.MemberStateStopped, "stop"),
 	}
 
 	for name, tc := range map[string]struct {

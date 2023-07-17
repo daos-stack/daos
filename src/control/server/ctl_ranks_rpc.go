@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -136,7 +137,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *ControlService) memberStateResults(instances []Engine, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
+func (svc *ControlService) memberStateResults(instances []Engine, tgtState common.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
@@ -148,7 +149,7 @@ func (svc *ControlService) memberStateResults(instances []Engine, tgtState syste
 		state := srv.LocalState()
 		if state != tgtState {
 			results = append(results, system.NewMemberResult(rank, errors.Errorf(failMsg),
-				system.MemberStateErrored))
+				common.MemberStateErrored))
 			continue
 		}
 
@@ -202,7 +203,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, errors.Wrap(err, "waiting for engines to stop")
 	}
 
-	results, err := svc.memberStateResults(instances, system.MemberStateStopped, "system stop",
+	results, err := svc.memberStateResults(instances, common.MemberStateStopped, "system stop",
 		"system stop: rank failed to stop")
 	if err != nil {
 		return nil, err
@@ -318,8 +319,8 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	for _, srv := range instances {
 		var err error
 		state := srv.LocalState()
-		if state != system.MemberStateAwaitFormat {
-			err = errors.Errorf("want %s, got %s", system.MemberStateAwaitFormat, state)
+		if state != common.MemberStateAwaitFormat {
+			err = errors.Errorf("want %s, got %s", common.MemberStateAwaitFormat, state)
 		}
 
 		results = append(results, system.NewMemberResult(savedRanks[srv.Index()], err, state))
@@ -365,7 +366,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 
 	// instances will update state to "Started" through join or
 	// bootstrap in membership, here just make sure instances are "Ready"
-	results, err := svc.memberStateResults(instances, system.MemberStateReady, "system start",
+	results, err := svc.memberStateResults(instances, common.MemberStateReady, "system start",
 		"system start: rank failed to start")
 	if err != nil {
 		return nil, err

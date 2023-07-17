@@ -15,6 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -114,31 +115,31 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 	for name, tc := range map[string]struct {
 		daosResp    *mgmtpb.DaosResp
 		inErr       error
-		targetState MemberState
+		targetState common.MemberState
 		junkRPC     bool
 		expResult   *MemberResult
 	}{
 		"rank success": {
-			expResult: &MemberResult{Rank: dRank, State: MemberStateJoined},
+			expResult: &MemberResult{Rank: dRank, State: common.MemberStateJoined},
 		},
 		"rank failure": {
 			daosResp: &mgmtpb.DaosResp{Status: int32(daos.NoSpace)},
 			expResult: &MemberResult{
-				Rank: dRank, State: MemberStateErrored, Errored: true,
+				Rank: dRank, State: common.MemberStateErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d: %s", dRank, daos.NoSpace),
 			},
 		},
 		"drpc failure": {
 			inErr: errors.New("returned from CallDrpc"),
 			expResult: &MemberResult{
-				Rank: dRank, State: MemberStateErrored, Errored: true,
+				Rank: dRank, State: common.MemberStateErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC failed: returned from CallDrpc", dRank),
 			},
 		},
 		"unmarshal failure": {
 			junkRPC: true,
 			expResult: &MemberResult{
-				Rank: dRank, State: MemberStateErrored, Errored: true,
+				Rank: dRank, State: common.MemberStateErrored, Errored: true,
 				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed", dRank),
 			},
 		},
@@ -150,8 +151,8 @@ func TestEngineInstance_DrespToRankResult(t *testing.T) {
 			if tc.daosResp == nil {
 				tc.daosResp = &mgmtpb.DaosResp{Status: 0}
 			}
-			if tc.targetState == MemberStateUnknown {
-				tc.targetState = MemberStateJoined
+			if tc.targetState == common.MemberStateUnknown {
+				tc.targetState = common.MemberStateJoined
 			}
 
 			// convert input DaosResp to drpcResponse to test

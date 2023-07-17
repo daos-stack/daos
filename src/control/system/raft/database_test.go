@@ -57,10 +57,10 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	defer test.ShowBufferOnFailure(t, buf)
 
 	db := MockDatabase(t, log)
-	memberStates := []MemberState{
-		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
-		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
+	memberStates := []common.MemberState{
+		common.MemberStateUnknown, common.MemberStateAwaitFormat, common.MemberStateStarting,
+		common.MemberStateReady, common.MemberStateJoined, common.MemberStateStopping, common.MemberStateStopped,
+		common.MemberStateExcluded, common.MemberStateErrored, common.MemberStateUnresponsive,
 	}
 
 	for i, ms := range memberStates {
@@ -83,13 +83,13 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 			}
 		},
 		"all members filter": func(t *testing.T) {
-			matchLen := len(db.filterMembers(AllMemberFilter))
+			matchLen := len(db.filterMembers(common.AllMemberFilter))
 			if matchLen != len(memberStates) {
 				t.Fatalf("expected all members to be %d; got %d", len(memberStates), matchLen)
 			}
 		},
 		"subset filter": func(t *testing.T) {
-			filter := []MemberState{memberStates[1], memberStates[2]}
+			filter := []common.MemberState{memberStates[1], memberStates[2]}
 			matches := db.filterMembers(filter...)
 			matchLen := len(matches)
 			if matchLen != 2 {
@@ -243,7 +243,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 				Rank:        Rank(i),
 				UUID:        uuid.New(),
 				Addr:        <-nextAddr,
-				State:       MemberStateJoined,
+				State:       common.MemberStateJoined,
 				FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
 			},
 			NextRank: true,
@@ -419,7 +419,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			Rank:        Rank(i),
 			UUID:        uuid.New(),
 			Addr:        <-nextAddr,
-			State:       MemberStateJoined,
+			State:       common.MemberStateJoined,
 			FaultDomain: MustCreateFaultDomainFromString("/rack0"),
 		})
 	}
@@ -458,7 +458,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				Rank:        testMembers[1].Rank,
 				UUID:        testMembers[1].UUID,
 				Addr:        testMembers[1].Addr,
-				State:       MemberStateStopped,
+				State:       common.MemberStateStopped,
 				FaultDomain: testMembers[1].FaultDomain,
 			},
 			expMembers: []*Member{
@@ -467,7 +467,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 					Rank:        testMembers[1].Rank,
 					UUID:        testMembers[1].UUID,
 					Addr:        testMembers[1].Addr,
-					State:       MemberStateStopped,
+					State:       common.MemberStateStopped,
 					FaultDomain: testMembers[1].FaultDomain,
 				},
 				testMembers[2],
@@ -591,7 +591,7 @@ func TestSystem_Database_memberFaultDomain(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := MockMemberFullSpec(t, tc.rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
-				MemberStateJoined).WithFaultDomain(tc.faultDomain)
+				common.MemberStateJoined).WithFaultDomain(tc.faultDomain)
 			result := MemberFaultDomain(m)
 
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
@@ -876,7 +876,7 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 }
 
 func TestSystem_Database_GroupMap(t *testing.T) {
-	membersWithStates := func(states ...MemberState) []*Member {
+	membersWithStates := func(states ...common.MemberState) []*Member {
 		members := make([]*Member, len(states))
 
 		for i, ms := range states {
@@ -886,7 +886,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		return members
 	}
 	memberWithNoURI := MockMemberFullSpec(t, 2, test.MockUUID(2), "", MockControlAddr(t, 2),
-		MemberStateJoined)
+		common.MemberStateJoined)
 
 	for name, tc := range map[string]struct {
 		members     []*Member
@@ -900,17 +900,17 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			// This is a bit fragile, but I don't see a better way to maintain
 			// this list. We'll just need to keep it updated as the states change.
 			members: membersWithStates(
-				MemberStateUnknown,       // rank 0
-				MemberStateAwaitFormat,   // rank 1, excluded
-				MemberStateStarting,      // rank 2
-				MemberStateReady,         // rank 3
-				MemberStateJoined,        // rank 4
-				MemberStateStopping,      // rank 5
-				MemberStateStopped,       // rank 6
-				MemberStateExcluded,      // rank 7, excluded
-				MemberStateAdminExcluded, // rank 8, excluded
-				MemberStateErrored,       // rank 9
-				MemberStateUnresponsive,  // rank 10
+				common.MemberStateUnknown,       // rank 0
+				common.MemberStateAwaitFormat,   // rank 1, excluded
+				common.MemberStateStarting,      // rank 2
+				common.MemberStateReady,         // rank 3
+				common.MemberStateJoined,        // rank 4
+				common.MemberStateStopping,      // rank 5
+				common.MemberStateStopped,       // rank 6
+				common.MemberStateExcluded,      // rank 7, excluded
+				common.MemberStateAdminExcluded, // rank 8, excluded
+				common.MemberStateErrored,       // rank 9
+				common.MemberStateUnresponsive,  // rank 10
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,
@@ -927,7 +927,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			},
 		},
 		"MS ranks included": {
-			members: membersWithStates(MemberStateJoined, MemberStateJoined),
+			members: membersWithStates(common.MemberStateJoined, common.MemberStateJoined),
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{
@@ -940,7 +940,7 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 		"unset fabric URI skipped": {
 			members: append([]*Member{
 				memberWithNoURI,
-			}, membersWithStates(MemberStateJoined)...),
+			}, membersWithStates(common.MemberStateJoined)...),
 			expGroupMap: &GroupMap{
 				Version: 2,
 				RankEntries: map[Rank]RankEntry{

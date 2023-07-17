@@ -361,7 +361,7 @@ func addUnresponsiveResults(log logging.Logger, hostRanks map[string][]ranklist.
 		for _, addr := range strings.Split(hes.HostSet.DerangedString(), ",") {
 			for _, rank := range hostRanks[addr] {
 				resp.Results = append(resp.Results, system.NewMemberResult(rank,
-					hes.HostError, system.MemberStateUnresponsive))
+					hes.HostError, common.MemberStateUnresponsive))
 			}
 			log.Debugf("harness %s (ranks %v) host error: %s", addr, hostRanks[addr],
 				hes.HostError)
@@ -506,7 +506,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
-	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
+	members, err := svc.membership.Members(hitRanks, common.MemberState(req.StateMask))
 	if err != nil {
 		return nil, errors.Wrap(err, "get membership")
 	}
@@ -727,10 +727,10 @@ func (svc *mgmtSvc) SystemExclude(ctx context.Context, req *mgmtpb.SystemExclude
 			return nil, err
 		}
 		action := "set admin-excluded state"
-		m.State = system.MemberStateAdminExcluded
+		m.State = common.MemberStateAdminExcluded
 		if req.Clear {
 			action = "clear admin-excluded state"
-			m.State = system.MemberStateExcluded // cleared on rejoin
+			m.State = common.MemberStateExcluded // cleared on rejoin
 		}
 		if err := svc.sysdb.UpdateMember(m); err != nil {
 			return nil, err

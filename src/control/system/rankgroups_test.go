@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
@@ -45,28 +46,28 @@ func TestSystem_RankGroupsFromMembers(t *testing.T) {
 		"multiple groups with duplicate": {
 			rankGroups: make(RankGroups),
 			members: Members{
-				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateExcluded),
-				MockMember(t, 4, MemberStateExcluded),
-				MockMember(t, 4, MemberStateExcluded),
-				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, common.MemberStateStopped),
+				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 4, common.MemberStateExcluded),
+				MockMember(t, 4, common.MemberStateExcluded),
+				MockMember(t, 1, common.MemberStateJoined),
 			},
 			expErr: &ErrMemberExists{Rank: ranklist.NewRankPtr(4)},
 		},
 		"multiple groups": {
 			rankGroups: make(RankGroups),
 			members: Members{
-				MockMember(t, 1, MemberStateStopped),
-				MockMember(t, 3, MemberStateJoined),
-				MockMember(t, 5, MemberStateJoined),
-				MockMember(t, 4, MemberStateJoined),
-				MockMember(t, 8, MemberStateJoined),
-				MockMember(t, 2, MemberStateExcluded),
+				MockMember(t, 1, common.MemberStateStopped),
+				MockMember(t, 3, common.MemberStateJoined),
+				MockMember(t, 5, common.MemberStateJoined),
+				MockMember(t, 4, common.MemberStateJoined),
+				MockMember(t, 8, common.MemberStateJoined),
+				MockMember(t, 2, common.MemberStateExcluded),
 			},
 			expStates: []string{
-				MemberStateJoined.String(),
-				MemberStateExcluded.String(),
-				MemberStateStopped.String(),
+				common.MemberStateJoined.String(),
+				common.MemberStateExcluded.String(),
+				common.MemberStateStopped.String(),
 			},
 			expOut: "3-5,8: Joined\n    2: Excluded\n    1: Stopped\n",
 		},
@@ -118,26 +119,26 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 		"results with no action": {
 			rankGroups: make(RankGroups),
 			results: MemberResults{
-				MockMemberResult(4, "ping", nil, MemberStateExcluded),
-				MockMemberResult(5, "", nil, MemberStateExcluded),
+				MockMemberResult(4, "ping", nil, common.MemberStateExcluded),
+				MockMemberResult(5, "", nil, common.MemberStateExcluded),
 			},
 			expErr: errors.New("action field empty for rank 5 result"),
 		},
 		"results with duplicate ranks": {
 			rankGroups: make(RankGroups),
 			results: MemberResults{
-				MockMemberResult(4, "ping", nil, MemberStateExcluded),
-				MockMemberResult(4, "ping", nil, MemberStateExcluded),
+				MockMemberResult(4, "ping", nil, common.MemberStateExcluded),
+				MockMemberResult(4, "ping", nil, common.MemberStateExcluded),
 			},
 			expErr: &ErrMemberExists{Rank: ranklist.NewRankPtr(4)},
 		},
 		"successful results": {
 			rankGroups: make(RankGroups),
 			results: MemberResults{
-				MockMemberResult(2, "ping", nil, MemberStateStopped),
-				MockMemberResult(3, "ping", nil, MemberStateExcluded),
-				MockMemberResult(4, "ping", nil, MemberStateExcluded),
-				MockMemberResult(1, "ping", nil, MemberStateJoined),
+				MockMemberResult(2, "ping", nil, common.MemberStateStopped),
+				MockMemberResult(3, "ping", nil, common.MemberStateExcluded),
+				MockMemberResult(4, "ping", nil, common.MemberStateExcluded),
+				MockMemberResult(1, "ping", nil, common.MemberStateJoined),
 			},
 			expGroups: []string{"ping/OK"},
 			expOut:    "1-4: ping/OK\n",
@@ -145,13 +146,13 @@ func TestSystem_RankGroupsFromMemberResults(t *testing.T) {
 		"mixed results": {
 			rankGroups: make(RankGroups),
 			results: MemberResults{
-				MockMemberResult(2, "ping", nil, MemberStateStopped),
-				MockMemberResult(3, "ping", nil, MemberStateExcluded),
-				MockMemberResult(4, "ping", errors.New("failure 2"), MemberStateExcluded),
-				MockMemberResult(5, "ping", errors.New("failure 2"), MemberStateExcluded),
-				MockMemberResult(7, "ping", errors.New("failure 1"), MemberStateExcluded),
-				MockMemberResult(6, "ping", errors.New("failure 1"), MemberStateExcluded),
-				MockMemberResult(1, "ping", nil, MemberStateJoined),
+				MockMemberResult(2, "ping", nil, common.MemberStateStopped),
+				MockMemberResult(3, "ping", nil, common.MemberStateExcluded),
+				MockMemberResult(4, "ping", errors.New("failure 2"), common.MemberStateExcluded),
+				MockMemberResult(5, "ping", errors.New("failure 2"), common.MemberStateExcluded),
+				MockMemberResult(7, "ping", errors.New("failure 1"), common.MemberStateExcluded),
+				MockMemberResult(6, "ping", errors.New("failure 1"), common.MemberStateExcluded),
+				MockMemberResult(1, "ping", nil, common.MemberStateJoined),
 			},
 			expGroups: []string{"ping/OK", "ping/failure 1", "ping/failure 2"},
 			expOut:    "1-3: ping/OK\n6-7: ping/failure 1\n4-5: ping/failure 2\n",

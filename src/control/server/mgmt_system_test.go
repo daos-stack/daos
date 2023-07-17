@@ -42,17 +42,17 @@ import (
 func act2state(a string) string {
 	switch a {
 	case "prep shutdown":
-		return stateString(system.MemberStateStopping)
+		return stateString(common.MemberStateStopping)
 	case "stop":
-		return stateString(system.MemberStateStopped)
+		return stateString(common.MemberStateStopped)
 	case "start":
-		return stateString(system.MemberStateReady)
+		return stateString(common.MemberStateReady)
 	case "reset format":
-		return stateString(system.MemberStateAwaitFormat)
+		return stateString(common.MemberStateAwaitFormat)
 	case "set admin-excluded state":
-		return stateString(system.MemberStateAdminExcluded)
+		return stateString(common.MemberStateAdminExcluded)
 	case "clear admin-excluded state":
-		return stateString(system.MemberStateExcluded)
+		return stateString(common.MemberStateExcluded)
 	default:
 		return ""
 	}
@@ -61,7 +61,7 @@ func act2state(a string) string {
 func mockRankFail(a string, r uint32, n ...int32) *sharedpb.RankResult {
 	rr := &sharedpb.RankResult{
 		Rank: r, Errored: true, Msg: a + " failed",
-		State:  stateString(system.MemberStateErrored),
+		State:  stateString(common.MemberStateErrored),
 		Action: a,
 	}
 	if len(n) > 0 {
@@ -84,8 +84,8 @@ var defEvtCmpOpts = append(test.DefaultCmpOpts(),
 	cmpopts.IgnoreFields(events.RASEvent{}, "Timestamp"))
 
 func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
-	msReplica := system.MockMember(t, 0, system.MemberStateJoined)
-	nonReplica := system.MockMember(t, 1, system.MemberStateJoined)
+	msReplica := system.MockMember(t, 0, common.MemberStateJoined)
+	nonReplica := system.MockMember(t, 1, common.MemberStateJoined)
 
 	for name, tc := range map[string]struct {
 		svc               *mgmtSvc
@@ -230,7 +230,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	}
 }
 
-func stateString(s system.MemberState) string {
+func stateString(s common.MemberState) string {
 	return strings.ToLower(s.String())
 }
 
@@ -444,21 +444,21 @@ func TestServer_MgmtSvc_getPeerListenAddr(t *testing.T) {
 func mockMember(t *testing.T, r, a int32, s string) *system.Member {
 	t.Helper()
 
-	state := map[string]system.MemberState{
-		"awaitformat":   system.MemberStateAwaitFormat,
-		"errored":       system.MemberStateErrored,
-		"excluded":      system.MemberStateExcluded,
-		"joined":        system.MemberStateJoined,
-		"ready":         system.MemberStateReady,
-		"starting":      system.MemberStateStarting,
-		"stopped":       system.MemberStateStopped,
-		"stopping":      system.MemberStateStopping,
-		"unknown":       system.MemberStateUnknown,
-		"unresponsive":  system.MemberStateUnresponsive,
-		"adminexcluded": system.MemberStateAdminExcluded,
+	state := map[string]common.MemberState{
+		"awaitformat":   common.MemberStateAwaitFormat,
+		"errored":       common.MemberStateErrored,
+		"excluded":      common.MemberStateExcluded,
+		"joined":        common.MemberStateJoined,
+		"ready":         common.MemberStateReady,
+		"starting":      common.MemberStateStarting,
+		"stopped":       common.MemberStateStopped,
+		"stopping":      common.MemberStateStopping,
+		"unknown":       common.MemberStateUnknown,
+		"unresponsive":  common.MemberStateUnresponsive,
+		"adminexcluded": common.MemberStateAdminExcluded,
 	}[s]
 
-	if state == system.MemberStateUnknown && s != "unknown" {
+	if state == common.MemberStateUnknown && s != "unknown" {
 		t.Fatalf("testcase specifies unknown member state %s", s)
 	}
 
@@ -628,9 +628,9 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: stateString(system.MemberStateErrored),
+								State: stateString(common.MemberStateErrored),
 							},
-							{Rank: 3, State: stateString(system.MemberStateJoined)},
+							{Rank: 3, State: stateString(common.MemberStateJoined)},
 						},
 					},
 				},
@@ -640,11 +640,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank:  1,
-								State: stateString(system.MemberStateJoined),
+								State: stateString(common.MemberStateJoined),
 							},
 							{
 								Rank:  2,
-								State: stateString(system.MemberStateJoined),
+								State: stateString(common.MemberStateJoined),
 							},
 						},
 					},
@@ -669,39 +669,39 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
 					Addr:  test.MockHostAddr(1).String(),
-					State: system.MemberStateErrored,
+					State: common.MemberStateErrored,
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(1).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 1, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 				{
 					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
@@ -735,11 +735,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: stateString(system.MemberStateErrored),
+								State: stateString(common.MemberStateErrored),
 							},
 							{
 								Rank:  3,
-								State: stateString(system.MemberStateJoined),
+								State: stateString(common.MemberStateJoined),
 							},
 						},
 					},
@@ -748,8 +748,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 1, State: stateString(system.MemberStateJoined)},
-							{Rank: 2, State: stateString(system.MemberStateJoined)},
+							{Rank: 1, State: stateString(common.MemberStateJoined)},
+							{Rank: 2, State: stateString(common.MemberStateJoined)},
 						},
 					},
 				},
@@ -769,29 +769,29 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
 					Addr:  test.MockHostAddr(1).String(),
-					State: system.MemberStateErrored,
+					State: common.MemberStateErrored,
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(1).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 1, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 6, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 				{
 					Rank: 7, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(4).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
@@ -826,11 +826,11 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Errored: true, Msg: "fatality",
-								State: stateString(system.MemberStateErrored),
+								State: stateString(common.MemberStateErrored),
 							},
 							{
 								Rank:  3,
-								State: stateString(system.MemberStateJoined),
+								State: stateString(common.MemberStateJoined),
 							},
 						},
 					},
@@ -839,8 +839,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStartResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 1, State: stateString(system.MemberStateJoined)},
-							{Rank: 2, State: stateString(system.MemberStateJoined)},
+							{Rank: 1, State: stateString(common.MemberStateJoined)},
+							{Rank: 2, State: stateString(common.MemberStateJoined)},
 						},
 					},
 				},
@@ -860,29 +860,29 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				{
 					Rank: 0, Errored: true, Msg: "fatality",
 					Addr:  test.MockHostAddr(1).String(),
-					State: system.MemberStateErrored,
+					State: common.MemberStateErrored,
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(1).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 1, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateJoined,
+					State: common.MemberStateJoined,
 				},
 				{
 					Rank: 4, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 				{
 					Rank: 5, Msg: "connection refused", Errored: true,
 					Addr:  test.MockHostAddr(3).String(),
-					State: system.MemberStateUnresponsive,
+					State: common.MemberStateUnresponsive,
 				},
 			},
 			expMembers: system.Members{
@@ -917,8 +917,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: test.MockHostAddr(1).String(),
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 0, State: stateString(system.MemberStateStopped)},
-							{Rank: 3, State: stateString(system.MemberStateStopped)},
+							{Rank: 0, State: stateString(common.MemberStateStopped)},
+							{Rank: 3, State: stateString(common.MemberStateStopped)},
 						},
 					},
 				},
@@ -926,8 +926,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: test.MockHostAddr(2).String(),
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 0, State: stateString(system.MemberStateStopped)},
-							{Rank: 3, State: stateString(system.MemberStateStopped)},
+							{Rank: 0, State: stateString(common.MemberStateStopped)},
+							{Rank: 3, State: stateString(common.MemberStateStopped)},
 						},
 					},
 				},
@@ -935,8 +935,8 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 					Addr: test.MockHostAddr(3).String(),
 					Message: &mgmtpb.SystemStopResp{
 						Results: []*sharedpb.RankResult{
-							{Rank: 1, State: stateString(system.MemberStateStopped)},
-							{Rank: 2, State: stateString(system.MemberStateStopped)},
+							{Rank: 1, State: stateString(common.MemberStateStopped)},
+							{Rank: 2, State: stateString(common.MemberStateStopped)},
 						},
 					},
 				},
@@ -949,19 +949,19 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			expResults: system.MemberResults{
 				{
 					Rank: 0, Addr: test.MockHostAddr(1).String(),
-					State: system.MemberStateStopped,
+					State: common.MemberStateStopped,
 				},
 				{
 					Rank: 1, Addr: test.MockHostAddr(3).String(),
-					State: system.MemberStateStopped,
+					State: common.MemberStateStopped,
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(3).String(),
-					State: system.MemberStateStopped,
+					State: common.MemberStateStopped,
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(2).String(),
-					State: system.MemberStateStopped,
+					State: common.MemberStateStopped,
 				},
 			},
 			expMembers: system.Members{
@@ -1071,38 +1071,38 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 0, Addr: test.MockHostAddr(1).String(),
 					Uuid:  test.MockUUID(0),
-					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
+					State: stateString(common.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
 					Rank: 1, Addr: test.MockHostAddr(1).String(),
 					Uuid: test.MockUUID(1),
 					// transition to "ready" illegal
-					State:       stateString(system.MemberStateStopping),
+					State:       stateString(common.MemberStateStopping),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(2),
-					State:       stateString(system.MemberStateUnresponsive),
+					State:       stateString(common.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(3),
-					State:       stateString(system.MemberStateJoined),
+					State:       stateString(common.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: test.MockHostAddr(3).String(),
 					Uuid:        test.MockUUID(4),
-					State:       stateString(system.MemberStateStarting),
+					State:       stateString(common.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: test.MockHostAddr(3).String(),
 					Uuid:        test.MockUUID(5),
-					State:       stateString(system.MemberStateStopped),
+					State:       stateString(common.MemberStateStopped),
 					FaultDomain: "/",
 				},
 			},
@@ -1114,19 +1114,19 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 0, Addr: test.MockHostAddr(1).String(),
 					Uuid:  test.MockUUID(0),
-					State: stateString(system.MemberStateErrored), Info: "couldn't ping",
+					State: stateString(common.MemberStateErrored), Info: "couldn't ping",
 					FaultDomain: "/",
 				},
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(2),
-					State:       stateString(system.MemberStateUnresponsive),
+					State:       stateString(common.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(3),
-					State:       stateString(system.MemberStateJoined),
+					State:       stateString(common.MemberStateJoined),
 					FaultDomain: "/",
 				},
 			},
@@ -1139,25 +1139,25 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				{
 					Rank: 2, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(2),
-					State:       stateString(system.MemberStateUnresponsive),
+					State:       stateString(common.MemberStateUnresponsive),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 3, Addr: test.MockHostAddr(2).String(),
 					Uuid:        test.MockUUID(3),
-					State:       stateString(system.MemberStateJoined),
+					State:       stateString(common.MemberStateJoined),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 4, Addr: test.MockHostAddr(3).String(),
 					Uuid:        test.MockUUID(4),
-					State:       stateString(system.MemberStateStarting),
+					State:       stateString(common.MemberStateStarting),
 					FaultDomain: "/",
 				},
 				{
 					Rank: 5, Addr: test.MockHostAddr(3).String(),
 					Uuid:        test.MockUUID(5),
-					State:       stateString(system.MemberStateStopped),
+					State:       stateString(common.MemberStateStopped),
 					FaultDomain: "/",
 				},
 			},
