@@ -645,7 +645,7 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
-                        recordCoverage(tools: [[parser: 'cobertura']],
+                        recordCoverage(tools: [[parser: 'COBERTURA']],
                             id: 'tlc', name: 'Test Log Coverage')
                     }
                     post {
