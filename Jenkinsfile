@@ -806,6 +806,8 @@ pipeline {
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages()))
+                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nlt-coverage.xml']],
+                                        id: 'tlc', name: 'Test Log Coverage')
                     }
                     post {
                         always {

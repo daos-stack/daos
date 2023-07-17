@@ -4226,6 +4226,7 @@ def check_no_file(dfuse):
 
 nlt_lp = None  # pylint: disable=invalid-name
 nlt_lt = None  # pylint: disable=invalid-name
+nlt_ct = None  # pylint: disable=invalid-name
 
 
 def setup_log_test(conf):
@@ -4245,9 +4246,11 @@ def setup_log_test(conf):
 
     global nlt_lp  # pylint: disable=invalid-name
     global nlt_lt  # pylint: disable=invalid-name
+    global nlt_ct  # pylint: disable=invalid-name
 
     nlt_lp = __import__('cart_logparse')
     nlt_lt = __import__('cart_logtest')
+    nlt_ct = __import__('cart_logcoverage')
 
     nlt_lt.wf = conf.wf
 
@@ -4313,6 +4316,9 @@ def log_test(conf,
     conf.compress_file(filename)
 
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
+
+    if not quiet:
+        lto.add_tracer(nlt_ct.new, ('dfuse'))
 
     lto.hide_fi_calls = skip_fi
 
