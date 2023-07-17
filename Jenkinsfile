@@ -645,6 +645,8 @@ pipeline {
                                        stash_opt: true,
                                        scons_args: sconsFaultsArgs() +
                                                   ' PREFIX=/opt/daos TARGET_TYPE=release'))
+                        recordCoverage(tools: [[parser: 'cobertura']],
+                            id: 'tlc', name: 'Test Log Coverage'
                     }
                     post {
                         unsuccessful {
@@ -1082,7 +1084,7 @@ pipeline {
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
-                            cobertura coberturaReportFile: 'nlt-coverage.xml', enableNewApi: false
+                            // cobertura coberturaReportFile: 'nlt-coverage.xml', enableNewApi: false
                             job_status_update()
                         }
                     }
