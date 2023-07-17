@@ -4556,6 +4556,9 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		}
 	}
 
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
+	D_ASSERT(entry != NULL);
+	entry->dpe_val = DS_POOL_OBJ_VERSION;
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
