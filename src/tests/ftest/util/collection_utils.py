@@ -717,18 +717,25 @@ def update_jenkins_xml(test, logs_dir, test_result):
         cmocka_data = get_xml_data(cmocka_xml, test_result)
         if not cmocka_data:
             return False
-        if '<testcase classname' in cmocka_data:
-            pattern = 'case classname="'
-            replacement = f'case classname="FTEST_{test.directory}.{test_class}-'
-            if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
-                status = False
-        else:
-            for suite in re.findall(r'<testsuite name="(.*)"\s', cmocka_data):
-                pattern = 'case name'
-                replacement = (
-                    f'case classname=\"FTEST_{test.directory}.{test_class}-{suite}\" name')
-                if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
-                    status = False
+        # Update the class name to include the functional test directory
+        log.debug("Updating the xml data in the test %s file", cmocka_xml)
+        pattern = 'classname="'
+        replacement = f'classname="FTEST_{test.directory}.{test_class}.'
+        if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
+            return False
+
+        # if '<testcase classname' in cmocka_data:
+        #     pattern = 'case classname="'
+        #     replacement = f'case classname="FTEST_{test.directory}.{test_class}-'
+        #     if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
+        #         status = False
+        # else:
+        #     for suite in re.findall(r'<testsuite name="(.*)"\s', cmocka_data):
+        #         pattern = 'case name'
+        #         replacement = (
+        #             f'case classname=\"FTEST_{test.directory}.{test_class}-{suite}\" name')
+        #         if not update_xml(cmocka_xml, pattern, replacement, cmocka_data, test_result):
+        #             status = False
     return status
 
 
@@ -769,9 +776,16 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
     log = getLogger()
     log.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
 
-    log.debug("************************DEBUG************************")
+    log.debug("")
+    log.debug("************************ START DEBUG ************************")
     run_local(f'cat \'{xml_file}\'')
-    log.debug("************************DEBUG************************")
+    log.debug("************************  END DEBUG  ************************")
+    log.debug("")
+
+    log.debug("  Contents of %s before replacement", xml_file)
+    for line in xml_data:
+        log.debug("    %s", line)
+    log.debug("")
 
     try:
         with open(xml_file, "w", encoding="utf-8") as xml_buffer:
@@ -780,6 +794,12 @@ def update_xml(xml_file, pattern, replacement, xml_data, test_result):
         message = f"Error writing {xml_file}"
         test_result.fail_test("Process", message, sys.exc_info())
         return False
+
+    log.debug("  Contents of %s after replacement", xml_file)
+    for line in get_xml_data(xml_file, test_result):
+        log.debug("    %s", line)
+    log.debug("")
+
     return True
 
 
