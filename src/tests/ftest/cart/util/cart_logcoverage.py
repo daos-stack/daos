@@ -115,8 +115,6 @@ class CoverageTracer():
         fd.write('<classes>\n')
 
         for (fname, data) in self._files.items():
-            fd.write(
-                f' <class name = "{fname}" filename = "{fname}" ')
             taken = 0
             possible = 0
             xml = ''
