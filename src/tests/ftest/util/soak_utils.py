@@ -705,7 +705,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuselog = os.path.join(
         self.sharedsoaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
-        "" + "${SLURM_JOB_ID}_" + "daos_dfuse_")
+        "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
     module_load = f"module load {self.mpi_module}"
 

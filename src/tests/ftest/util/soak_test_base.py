@@ -15,7 +15,7 @@ from getpass import getuser
 import socket
 
 from apricot import TestWithServers
-
+from ClusterShell.NodeSet import NodeSet
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
 from general_utils import journalctl_time
@@ -181,7 +181,7 @@ class SoakTestBase(TestWithServers):
         cleanup_dfuse(self)
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
-            self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
+            self.hostlist_clients = NodeSet(socket.gethostname().split('.', 1)[0])
         for error in errors:
             self.log.info("<<ERRORS: %s >>\n", error)
         return errors
