@@ -2758,21 +2758,20 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 	if (n <= 0 || names == NULL || ((sizes == NULL
 	    || values == NULL) && !readonly)) {
-		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
-			", sizes = %p", n, names, values, sizes);
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p\n", n,
+			names, values, sizes);
 		return -DER_INVAL;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (names[i] == NULL || *names[i] == '\0') {
-			D_ERROR("Invalid Arguments: names[%d] = %s",
-				i, names[i] == NULL ? "NULL" : "\'\\0\'");
+			D_ERROR("Invalid Arguments: names[%d] = %s\n", i,
+				names[i] == NULL ? "NULL" : "\'\\0\'");
 
 			return -DER_INVAL;
 		}
 		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
-			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
-				i);
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX\n", i);
 			return -DER_INVAL;
 		}
 		if (sizes != NULL) {
@@ -2780,8 +2779,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 				sizes[i] = 0;
 			else if (values[i] == NULL || sizes[i] == 0) {
 				if (!readonly) {
-					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
-						i, values[i], i, sizes[i]);
+					D_ERROR(
+					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu\n",
+					    i, values[i], i, sizes[i]);
 					return -DER_INVAL;
 				}
 				sizes[i] = 0;

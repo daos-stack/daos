@@ -32,33 +32,33 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 
 	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(daos_obj_id_t));
 	if (attr_dtype < 0) {
-		D_ERROR("failed to create attribute datatype");
+		D_ERROR("failed to create attribute datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "lo", HOFFSET(daos_obj_id_t, lo), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid low");
+		D_ERROR("failed to insert oid low\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "hi", HOFFSET(daos_obj_id_t, hi), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid high");
+		D_ERROR("failed to insert oid high\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create attribute dataspace");
+		D_ERROR("failed to create attribute dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute");
+		D_ERROR("failed to create attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
-		D_ERROR("failed to write attribute");
+		D_ERROR("failed to write attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 out:
