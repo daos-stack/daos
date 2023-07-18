@@ -55,7 +55,7 @@ open_retry:
 		D_GOTO(unlock, rc = -DER_NONEXIST);
 	}
 
-	D_DEBUG(DB_TRACE, "Open object shard %d\n", shard);
+	D_DEBUG(DB_TRACE, "Open object shard %d layout %u\n", shard, obj->cob_layout_version);
 
 	if (obj_shard->do_obj == NULL) {
 		daos_unit_oid_t	 oid;
@@ -1441,6 +1441,7 @@ dc_obj_open(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
+	D_DEBUG(DB_TRACE, "object version %u\n", obj->cob_layout_version);
 	rc = obj_layout_create(obj, obj->cob_mode, false);
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);

@@ -1280,6 +1280,7 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	hdl->sph_sec_capas = pic->pic_capas;
 	hdl->sph_global_ver = pic->pic_global_ver;
 	hdl->sph_obj_ver = pic->pic_obj_ver;
+	D_DEBUG(DB_TRACE, "sph obj ver %u\n", hdl->sph_obj_ver);
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 

@@ -739,13 +739,17 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 
 	/* inherit global version from pool*/
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_GLOBAL_VERSION);
-	if (entry_def)
+	if (entry_def) {
 		entry_def->dpe_val = pool_hdl->sph_global_ver;
+		D_DEBUG(DB_TRACE, "sph global ver %u\n", pool_hdl->sph_global_ver);
+	}
 
 	/* inherit object version from pool*/
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_OBJ_VERSION);
-	if (entry_def)
+	if (entry_def) {
 		entry_def->dpe_val = pool_hdl->sph_obj_ver;
+		D_DEBUG(DB_TRACE, "sph obj ver %u\n", pool_hdl->sph_obj_ver);
+	}
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
@@ -3065,6 +3069,7 @@ cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 			negative_nr++;
 			rc = 0;
 		}
+		D_DEBUG(DB_TRACE, "layout ver %u\n", obj_ver);
 		idx++;
 	}
 

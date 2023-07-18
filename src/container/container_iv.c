@@ -641,6 +641,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		    entry->ns->iv_master_rank == dss_self_rank())
 			goto out;
 
+		D_DEBUG(DB_TRACE, "update %u\n", entry->iv_class->iv_class_id);
 		/* Put it to IV tree */
 		d_iov_set(&val_iov, iv_entry, src->sg_iovs[0].iov_len);
 		rc = dbtree_update(root_hdl, &key_iov, &val_iov);
@@ -1270,6 +1271,7 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_obj_version;
 		prop_entry->dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+		D_DEBUG(DB_TRACE, "obj version %u\n", (uint32_t)prop_entry->dpe_val);
 	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
 		prop_entry = &prop->dpp_entries[i++];

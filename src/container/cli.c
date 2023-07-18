@@ -795,8 +795,8 @@ cont_open_complete(tse_task_t *task, void *data)
 	dc_cont2hdl(cont, arg->hdlp); /* +1 ref */
 
 	D_DEBUG(DB_MD, DF_CONT": opened: cookie="DF_X64" hdl="DF_UUID
-		" master\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
-		arg->hdlp->cookie, DP_UUID(cont->dc_cont_hdl));
+		" master layout %u\n", DP_CONT(pool->dp_pool, cont->dc_uuid),
+		arg->hdlp->cookie, DP_UUID(cont->dc_cont_hdl), cont->dc_props.dcp_obj_version);
 
 	if (arg->coa_info == NULL)
 		D_GOTO(out, rc = 0);

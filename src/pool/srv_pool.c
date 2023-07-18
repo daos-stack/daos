@@ -595,6 +595,7 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			}
 			val32 = entry->dpe_val;
 			d_iov_set(&value, &val32, sizeof(val32));
+			D_DEBUG(DB_TRACE, "set obj version %u\n", val32);
 			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_obj_version, &value);
 			break;
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
@@ -2961,6 +2962,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc, int handler_version)
 		}
 	}
 
+	D_DEBUG(DB_TRACE, "global ver %u obj layout ver %u\n", global_ver, obj_layout_ver);
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
 				  sec_capas, &in->pci_cred, global_ver, obj_layout_ver);
 	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
@@ -4980,6 +4982,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 			obj_version = DS_POOL_OBJ_VERSION;
 		}
 
+		D_DEBUG(DB_TRACE, "upgrade version %u\n", obj_version);
 		d_iov_set(&value, &obj_version, sizeof(obj_version));
 		rc1 = rdb_tx_update(&tx, &svc->ps_root,
 				    &ds_pool_prop_obj_version, &value);
@@ -5041,6 +5044,7 @@ pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
 	else if (rc == -DER_NONEXIST)
 		current_layout_ver = 0;
 
+	D_DEBUG(DB_TRACE, "current layout ver %u\n", current_layout_ver);
 	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
 		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
 					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,

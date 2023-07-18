@@ -854,6 +854,7 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
+	D_DEBUG(DB_TRACE, "cont prop layout ver %u\n", arg->co_props.dcp_obj_version);
 	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
 	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
