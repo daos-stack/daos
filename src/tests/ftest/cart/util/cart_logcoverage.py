@@ -10,6 +10,66 @@ Registered as a callback for all log tracing but saves results across the entire
 import os
 
 
+class CodeLoc():
+    """Logging data for single code location"""
+
+    # pylint: disable=too-few-public-methods
+    def __init__(self, line):
+        self.lineno = line.lineno
+        self.count = 0
+        self.allocation = (line.is_calloc() or line.is_realloc())
+        self.fault_injected = False
+        self.no_fault = False
+        self.add(line)
+
+    def add(self, line):
+        """Record an extra logging instance for this location"""
+        self.count += 1
+        if line.is_fi_site():
+            self.fault_injected = True
+        else:
+            self.no_fault = True
+
+    def is_fi_location(self):
+        """Return true if a possible fault injection site"""
+        return (self.allocation or self.fault_injected)
+
+    def counts(self):
+        """Return a tuple of (count, possible-count)"""
+        if not self.is_fi_location():
+            return (1, 1)
+        count = 0
+        if self.no_fault:
+            count += 1
+        if self.fault_injected:
+            count += 1
+        return (count, 2)
+
+    def xml_str(self):
+        """Return a xml string for this line"""
+        if not self.is_fi_location():
+            return f'   <line number="{self.lineno}" hits="{self.count}" branch="false"/>\n'
+
+        condc = 'condition-coverage="50% (1/2)"'
+
+        taken = '0%'
+        not_taken = '0%'
+        if self.no_fault:
+            taken = '100%'
+        if self.fault_injected:
+            not_taken = '100%'
+            if self.no_fault:
+                condc = 'condition-coverage="100% (2/2)"'
+
+        return f"""   <line number="{self.lineno}" hits="{self.count}" branch="true" {condc}>
+      <conditions>
+        <condition number="0" type="jump" coverage="{taken}"/>
+        <condition number="1" type="jump" coverage="{not_taken}"/>
+      </conditions>
+    </line>
+"""
+
+
 class CoverageTracer():
     """Save what lines are executed"""
 
@@ -44,24 +104,31 @@ class CoverageTracer():
         fd.write("'http://cobertura.sourceforge.net/xml/coverage-04.dtd'>\n")
         fd.write('<coverage line-rate="0.8571428571428571" branch-rate="0.5" lines-covered="6" ')
         fd.write('lines-valid="7" branches-covered="1" branches-valid="2" complexity="0.0" ')
-        fd.write('timestamp="1678315055" version="gcovr 6.0">\n')
+        fd.write('timestamp="1678315055" version="daos 0.1">\n')
         fd.write("""<sources>
 <source>.</source>
 </sources>
 <packages>\n""")
-        fd.write('<package name="NLT Log coverage" ')
+        fd.write('<package name="Fault injection reach" ')
         fd.write('line-rate="0.8571428571428571" branch-rate="0.5" complexity="0.0">\n')
         fd.write('<classes>\n')
 
         for (fname, data) in self._files.items():
-            shortname = os.path.basename(fname)
             fd.write(
-                f' <class name = "{shortname}" filename = "{fname}" ')
-            fd.write('line-rate = "0.8571428571428571" branch-rate="0.5" complexity="0.0">\n')
+                f' <class name = "{fname}" filename = "{fname}" ')
+            taken = 0
+            possible = 0
+            for (lineno, loc) in data.items():
+                (t, p) = loc.counts()
+                taken += t
+                possible += p
+            rate = taken / possible
+            fd.write(
+                f'line-rate = "0.8571428571428571" branch-rate="{rate:.2f}" complexity="0.0">\n')
             fd.write('  <methods/>\n')
             fd.write('  <lines>\n')
-            for lineno in data:
-                fd.write(f'   <line number = "{lineno}" hits="{data[lineno]}" branch="false"/>\n')
+            for (lineno, loc) in data.items():
+                fd.write(loc.xml_str())
             fd.write(' </lines>\n')
             fd.write(' </class>\n')
         fd.write("""</classes>
@@ -75,7 +142,7 @@ class CoverageTracer():
         if fname not in self._files:
             self._files[fname] = {}
         lineno = line.lineno
-        try:
-            self._files[fname][lineno] += 1
-        except KeyError:
-            self._files[fname][lineno] = 1
+        if lineno in self._files[fname]:
+            self._files[fname][lineno].add(line)
+        else:
+            self._files[fname][lineno] = CodeLoc(line)
