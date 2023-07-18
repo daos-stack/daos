@@ -31,14 +31,15 @@ import (
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 var (
 	// test aliases for member states
-	msReady      = stateString(common.MemberStateReady)
-	msWaitFormat = stateString(common.MemberStateAwaitFormat)
-	msStopped    = stateString(common.MemberStateStopped)
-	msErrored    = stateString(common.MemberStateErrored)
+	msReady      = stateString(system.MemberStateReady)
+	msWaitFormat = stateString(system.MemberStateAwaitFormat)
+	msStopped    = stateString(system.MemberStateStopped)
+	msErrored    = stateString(system.MemberStateErrored)
 
 	defRankCmpOpts = append(test.DefaultCmpOpts(),
 		protocmp.IgnoreFields(&sharedpb.RankResult{}, "msg"),
@@ -167,8 +168,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				&mgmtpb.DaosResp{Status: 0},
 			},
 			expResults: []*sharedpb.RankResult{
-				{Rank: 1, State: stateString(common.MemberStateStopping)},
-				{Rank: 2, State: stateString(common.MemberStateStopping)},
+				{Rank: 1, State: stateString(system.MemberStateStopping)},
+				{Rank: 2, State: stateString(system.MemberStateStopping)},
 			},
 		},
 	} {

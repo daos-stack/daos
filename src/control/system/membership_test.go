@@ -59,7 +59,7 @@ func mockStoppedRankOnHost1(t *testing.T, rID int32) *Member {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return MockMemberFullSpec(t, Rank(rID), MockUUID(rID), "", addr1, common.MemberStateStopped)
+	return MockMemberFullSpec(t, Rank(rID), MockUUID(rID), "", addr1, MemberStateStopped)
 }
 
 func TestSystem_Membership_Get(t *testing.T) {
@@ -70,15 +70,15 @@ func TestSystem_Membership_Get(t *testing.T) {
 		expErr      error
 	}{
 		"exists": {
-			MockMember(t, 1, common.MemberStateUnknown),
+			MockMember(t, 1, MemberStateUnknown),
 			Rank(1),
-			MockMember(t, 1, common.MemberStateUnknown),
+			MockMember(t, 1, MemberStateUnknown),
 			nil,
 		},
 		"absent": {
-			MockMember(t, 1, common.MemberStateUnknown),
+			MockMember(t, 1, MemberStateUnknown),
 			Rank(2),
-			MockMember(t, 1, common.MemberStateUnknown),
+			MockMember(t, 1, MemberStateUnknown),
 			ErrMemberRankNotFound(2),
 		},
 	} {
@@ -102,9 +102,9 @@ func TestSystem_Membership_Get(t *testing.T) {
 }
 
 func TestSystem_Membership_AddRemove(t *testing.T) {
-	dupeRankMember := MockMember(t, 1, common.MemberStateUnknown)
+	dupeRankMember := MockMember(t, 1, MemberStateUnknown)
 	dupeRankMember.UUID = uuid.MustParse(MockUUID(2))
-	dupeUUIDMember := MockMember(t, 1, common.MemberStateUnknown)
+	dupeUUIDMember := MockMember(t, 1, MemberStateUnknown)
 	dupeUUIDMember.Rank = 2
 
 	for name, tc := range map[string]struct {
@@ -115,8 +115,8 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 	}{
 		"add remove success": {
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
-				MockMember(t, 2, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]Rank{1, 2},
 			Members{},
@@ -124,7 +124,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 		},
 		"add failure duplicate rank": {
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
 				dupeRankMember,
 			},
 			nil,
@@ -133,7 +133,7 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 		},
 		"add failure duplicate UUID": {
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
 				dupeUUIDMember,
 			},
 			nil,
@@ -142,13 +142,13 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 		},
 		"remove non-existent": {
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
-				MockMember(t, 2, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]Rank{3},
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
-				MockMember(t, 2, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			[]error{nil, nil},
 		},
@@ -185,21 +185,21 @@ func TestSystem_Membership_AddRemove(t *testing.T) {
 }
 
 func TestSystem_Membership_Add(t *testing.T) {
-	m0a := *MockMember(t, 0, common.MemberStateStopped)
-	m1a := *MockMember(t, 1, common.MemberStateStopped)
-	m2a := *MockMember(t, 2, common.MemberStateStopped)
+	m0a := *MockMember(t, 0, MemberStateStopped)
+	m1a := *MockMember(t, 1, MemberStateStopped)
+	m2a := *MockMember(t, 2, MemberStateStopped)
 	m0b := m0a
 	m0b.UUID = uuid.MustParse(MockUUID(4)) // uuid changes after reformat
-	m0b.State = common.MemberStateJoined
+	m0b.State = MemberStateJoined
 	m1b := m1a
 	m1b.Addr = m0a.Addr // rank allocated differently between hosts after reformat
 	m1b.UUID = uuid.MustParse(MockUUID(5))
-	m1b.State = common.MemberStateJoined
+	m1b.State = MemberStateJoined
 	m2b := m2a
 	m2a.Addr = m0a.Addr // ranks 0,2 on same host before reformat
 	m2b.Addr = m1a.Addr // ranks 0,1 on same host after reformat
 	m2b.UUID = uuid.MustParse(MockUUID(6))
-	m2b.State = common.MemberStateJoined
+	m2b.State = MemberStateJoined
 
 	for name, tc := range map[string]struct {
 		membersToAddOrReplace Members
@@ -207,19 +207,19 @@ func TestSystem_Membership_Add(t *testing.T) {
 	}{
 		"add then update": {
 			Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 1, common.MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 1, MemberStateStopped),
 			},
-			Members{MockMember(t, 1, common.MemberStateStopped)},
+			Members{MockMember(t, 1, MemberStateStopped)},
 		},
 		"add multiple": {
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
-				MockMember(t, 2, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 			Members{
-				MockMember(t, 1, common.MemberStateUnknown),
-				MockMember(t, 2, common.MemberStateUnknown),
+				MockMember(t, 1, MemberStateUnknown),
+				MockMember(t, 2, MemberStateUnknown),
 			},
 		},
 	} {
@@ -256,16 +256,16 @@ func TestSystem_Membership_Add(t *testing.T) {
 
 func TestSystem_Membership_RankList_Members(t *testing.T) {
 	members := Members{
-		MockMember(t, 1, common.MemberStateJoined),
-		MockMember(t, 2, common.MemberStateStopped),
-		MockMember(t, 3, common.MemberStateExcluded),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateExcluded),
 		mockStoppedRankOnHost1(t, 4),
 	}
 
 	for name, tc := range map[string]struct {
 		members       Members
 		ranks         string
-		desiredStates []common.MemberState
+		desiredStates []MemberState
 		expRanks      []Rank
 		expHostRanks  map[string][]Rank
 		expHosts      []string
@@ -292,8 +292,8 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 			},
 			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001"},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
 			},
 		},
 		"distinct rank list": {
@@ -317,7 +317,7 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 		},
 		"distinct desired states": {
 			members:       members,
-			desiredStates: []common.MemberState{common.MemberStateJoined, common.MemberStateExcluded},
+			desiredStates: []MemberState{MemberStateJoined, MemberStateExcluded},
 			expRanks:      []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1), Rank(4)},
@@ -326,13 +326,13 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 			},
 			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 		},
 		"combined desired states": {
 			members:       members,
-			desiredStates: []common.MemberState{common.MemberStateJoined | common.MemberStateExcluded},
+			desiredStates: []MemberState{MemberStateJoined | MemberStateExcluded},
 			expRanks:      []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1), Rank(4)},
@@ -341,16 +341,14 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 			},
 			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 		},
 		"desired states; not joined": {
-			members: members,
-			desiredStates: []common.MemberState{
-				common.AllMemberFilter &^ common.MemberStateJoined,
-			},
-			expRanks: []Rank{1, 2, 3, 4},
+			members:       members,
+			desiredStates: []MemberState{AllMemberFilter &^ MemberStateJoined},
+			expRanks:      []Rank{1, 2, 3, 4},
 			expHostRanks: map[string][]Rank{
 				"127.0.0.1:10001": {Rank(1), Rank(4)},
 				"127.0.0.2:10001": {Rank(2)},
@@ -358,8 +356,8 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 			},
 			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: Members{
-				MockMember(t, 2, common.MemberStateStopped),
-				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
 				mockStoppedRankOnHost1(t, 4),
 			},
 		},
@@ -398,10 +396,10 @@ func TestSystem_Membership_RankList_Members(t *testing.T) {
 
 func TestSystem_Membership_CheckRanklist(t *testing.T) {
 	members := Members{
-		MockMember(t, 0, common.MemberStateJoined),
-		MockMember(t, 1, common.MemberStateJoined),
-		MockMember(t, 2, common.MemberStateStopped),
-		MockMember(t, 3, common.MemberStateExcluded),
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateExcluded),
 		mockStoppedRankOnHost1(t, 4),
 	}
 
@@ -483,11 +481,11 @@ func mockResolveFn(netString string, address string) (*net.TCPAddr, error) {
 
 func TestSystem_Membership_CheckHostlist(t *testing.T) {
 	members := Members{
-		MockMember(t, 1, common.MemberStateJoined),
-		MockMember(t, 2, common.MemberStateStopped),
-		MockMember(t, 3, common.MemberStateExcluded),
-		MockMember(t, 4, common.MemberStateJoined),
-		MockMember(t, 5, common.MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateExcluded),
+		MockMember(t, 4, MemberStateJoined),
+		MockMember(t, 5, MemberStateJoined),
 		mockStoppedRankOnHost1(t, 6),
 	}
 
@@ -601,10 +599,10 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 
 func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 	// blank host address should get updated to that of member
-	mrDiffAddr1 := NewMemberResult(1, nil, common.MemberStateReady)
+	mrDiffAddr1 := NewMemberResult(1, nil, MemberStateReady)
 	mrDiffAddr1.Addr = ""
 	// existing host address should not get updated to that of member
-	mrDiffAddr2 := NewMemberResult(2, errors.New("can't stop"), common.MemberStateErrored)
+	mrDiffAddr2 := NewMemberResult(2, errors.New("can't stop"), MemberStateErrored)
 	mrDiffAddr2.Addr = "10.0.0.1"
 	expMrDiffAddr1 := mrDiffAddr1
 	expMrDiffAddr1.Addr = "192.168.1.1:10001"
@@ -620,16 +618,16 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 	}{
 		"update result address from member": {
 			members: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
 			},
 			results: MemberResults{
 				mrDiffAddr1,
 				mrDiffAddr2,
 			},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateErrored, "can't stop"),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateErrored, "can't stop"),
 			},
 			expResults: MemberResults{
 				expMrDiffAddr1,
@@ -639,64 +637,64 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 		"ignore errored results": {
 			ignoreErrs: true,
 			members: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateStopped),
-				MockMember(t, 3, common.MemberStateExcluded),
-				MockMember(t, 4, common.MemberStateStopped),
-				MockMember(t, 5, common.MemberStateJoined),
-				MockMember(t, 6, common.MemberStateJoined),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
+				MockMember(t, 4, MemberStateStopped),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateJoined),
 			},
 			results: MemberResults{
-				NewMemberResult(1, nil, common.MemberStateStopped),
-				NewMemberResult(2, errors.New("can't stop"), common.MemberStateErrored),
-				NewMemberResult(4, nil, common.MemberStateReady),
-				NewMemberResult(5, nil, common.MemberStateReady),
-				&MemberResult{Rank: 6, Msg: "exit 1", State: common.MemberStateStopped},
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, nil, MemberStateReady),
+				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateStopped),
-				MockMember(t, 2, common.MemberStateStopped), // errored results don't change member state
-				MockMember(t, 3, common.MemberStateExcluded),
-				MockMember(t, 4, common.MemberStateReady),
-				MockMember(t, 5, common.MemberStateJoined), // "Joined" will not be updated to "Ready"
-				MockMember(t, 6, common.MemberStateStopped, "exit 1"),
+				MockMember(t, 1, MemberStateStopped),
+				MockMember(t, 2, MemberStateStopped), // errored results don't change member state
+				MockMember(t, 3, MemberStateExcluded),
+				MockMember(t, 4, MemberStateReady),
+				MockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
+				MockMember(t, 6, MemberStateStopped, "exit 1"),
 			},
 		},
 		"don't ignore errored results": {
 			members: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateStopped),
-				MockMember(t, 3, common.MemberStateExcluded),
-				MockMember(t, 4, common.MemberStateStopped),
-				MockMember(t, 5, common.MemberStateJoined),
-				MockMember(t, 6, common.MemberStateStopped),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
+				MockMember(t, 4, MemberStateStopped),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateStopped),
 			},
 			results: MemberResults{
-				NewMemberResult(1, nil, common.MemberStateStopped),
-				NewMemberResult(2, errors.New("can't stop"), common.MemberStateErrored),
-				NewMemberResult(4, nil, common.MemberStateReady),
-				NewMemberResult(5, nil, common.MemberStateReady),
-				&MemberResult{Rank: 6, Msg: "exit 1", State: common.MemberStateStopped},
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(4, nil, MemberStateReady),
+				NewMemberResult(5, nil, MemberStateReady),
+				&MemberResult{Rank: 6, Msg: "exit 1", State: MemberStateStopped},
 			},
 			expMembers: Members{
-				MockMember(t, 1, common.MemberStateStopped),
-				MockMember(t, 2, common.MemberStateErrored, "can't stop"),
-				MockMember(t, 3, common.MemberStateExcluded),
-				MockMember(t, 4, common.MemberStateReady),
-				MockMember(t, 5, common.MemberStateJoined),
-				MockMember(t, 6, common.MemberStateStopped),
+				MockMember(t, 1, MemberStateStopped),
+				MockMember(t, 2, MemberStateErrored, "can't stop"),
+				MockMember(t, 3, MemberStateExcluded),
+				MockMember(t, 4, MemberStateReady),
+				MockMember(t, 5, MemberStateJoined),
+				MockMember(t, 6, MemberStateStopped),
 			},
 		},
 		"errored result with nonerrored state": {
 			members: Members{
-				MockMember(t, 1, common.MemberStateJoined),
-				MockMember(t, 2, common.MemberStateStopped),
-				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 			results: MemberResults{
-				NewMemberResult(1, nil, common.MemberStateStopped),
-				NewMemberResult(2, errors.New("can't stop"), common.MemberStateErrored),
-				NewMemberResult(3, errors.New("can't stop"), common.MemberStateJoined),
+				NewMemberResult(1, nil, MemberStateStopped),
+				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
+				NewMemberResult(3, errors.New("can't stop"), MemberStateJoined),
 			},
 			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
 		},
@@ -744,12 +742,12 @@ func TestSystem_Membership_Join(t *testing.T) {
 
 	defaultCurMembers := make([]*Member, 2)
 	for i := range defaultCurMembers {
-		defaultCurMembers[i] = MockMember(t, uint32(i), common.MemberStateJoined).WithFaultDomain(fd1)
+		defaultCurMembers[i] = MockMember(t, uint32(i), MemberStateJoined).WithFaultDomain(fd1)
 	}
 	curMember := defaultCurMembers[0]
 	newUUID := uuid.New()
-	newMember := MockMember(t, 2, common.MemberStateJoined).WithFaultDomain(fd2)
-	newMemberShallowFD := MockMember(t, 3, common.MemberStateJoined).WithFaultDomain(shallowFD)
+	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
+	newMemberShallowFD := MockMember(t, 3, MemberStateJoined).WithFaultDomain(shallowFD)
 
 	expMapVer := uint32(len(defaultCurMembers) + 1)
 
@@ -790,7 +788,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FaultDomain: fd2,
 			},
 			expResp: &JoinResponse{
-				Member:     MockMember(t, 0, common.MemberStateJoined).WithFaultDomain(fd2),
+				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd2),
 				PrevState:  curMember.State,
 				MapVersion: expMapVer,
 			},
@@ -827,7 +825,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 			expResp: &JoinResponse{
 				Created:    true,
 				Member:     newMember,
-				PrevState:  common.MemberStateUnknown,
+				PrevState:  MemberStateUnknown,
 				MapVersion: expMapVer,
 			},
 		},
@@ -880,7 +878,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 				FaultDomain: shallowFD,
 			},
 			expResp: &JoinResponse{
-				Member:     MockMember(t, 0, common.MemberStateJoined).WithFaultDomain(shallowFD),
+				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(shallowFD),
 				PrevState:  curMember.State,
 				MapVersion: 2,
 			},
@@ -921,10 +919,10 @@ func TestSystem_Membership_Join(t *testing.T) {
 
 func TestSystem_Membership_OnEvent(t *testing.T) {
 	members := Members{
-		MockMember(t, 0, common.MemberStateJoined),
-		MockMember(t, 1, common.MemberStateJoined),
-		MockMember(t, 2, common.MemberStateStopped),
-		MockMember(t, 3, common.MemberStateExcluded),
+		MockMember(t, 0, MemberStateJoined),
+		MockMember(t, 1, MemberStateJoined),
+		MockMember(t, 2, MemberStateStopped),
+		MockMember(t, 3, MemberStateExcluded),
 	}
 
 	for name, tc := range map[string]struct {
@@ -946,12 +944,12 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			members: members,
 			event:   mockEvtEngineDied(t, 1),
 			expMembers: Members{
-				MockMember(t, 0, common.MemberStateJoined),
-				MockMember(t, 1, common.MemberStateErrored).WithInfo(
+				MockMember(t, 0, MemberStateJoined),
+				MockMember(t, 1, MemberStateErrored).WithInfo(
 					errors.Wrap(common.NormalExit,
 						"DAOS engine 0 exited unexpectedly").Error()),
-				MockMember(t, 2, common.MemberStateStopped),
-				MockMember(t, 3, common.MemberStateExcluded),
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 		},
 	} {
@@ -1017,16 +1015,16 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			mock := func(rank uint32, inc uint64, state common.MemberState) *Member {
+			mock := func(rank uint32, inc uint64, state MemberState) *Member {
 				m := MockMember(t, rank, state)
 				m.Incarnation = inc
 				return m
 			}
 
 			ms := populateMembership(t, log,
-				mock(0, 2, common.MemberStateJoined),
-				mock(1, 2, common.MemberStateStopped),
-				mock(2, 2, common.MemberStateExcluded),
+				mock(0, 2, MemberStateJoined),
+				mock(1, 2, MemberStateStopped),
+				mock(2, 2, MemberStateExcluded),
 			)
 
 			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)

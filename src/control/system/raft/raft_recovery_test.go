@@ -106,7 +106,7 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 			Rank:        NilRank,
 			UUID:        uuid.New(),
 			Addr:        <-nextAddr,
-			State:       common.MemberStateJoined,
+			State:       MemberStateJoined,
 			FaultDomain: MustCreateFaultDomainFromString("/my/test/domain"),
 		}
 

@@ -18,7 +18,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -190,7 +189,7 @@ type (
 		Index               uint32
 		Started             atm.Bool
 		Ready               atm.Bool
-		LocalState          common.MemberState
+		LocalState          system.MemberState
 		RemoveSuperblockErr error
 		SetupRankErr        error
 		StopErr             error
@@ -241,7 +240,7 @@ func (mi *MockInstance) IsReady() bool {
 	return mi.cfg.Ready.Load()
 }
 
-func (mi *MockInstance) LocalState() common.MemberState {
+func (mi *MockInstance) LocalState() system.MemberState {
 	return mi.cfg.LocalState
 }
 

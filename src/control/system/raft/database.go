@@ -568,7 +568,7 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 		// excluded should be omitted from the group map. If a member
 		// is actually down, it will be marked dead by swim and moved
 		// into the excluded state eventually.
-		if srv.State&common.ExcludedMemberFilter != 0 {
+		if srv.State&system.ExcludedMemberFilter != 0 {
 			continue
 		}
 		// Quick sanity-check: Don't include members that somehow have
@@ -637,13 +637,13 @@ func (db *Database) AllMembers() ([]*system.Member, error) {
 // NB: If the returned members will be used outside of the database,
 // they should be copied using the copyMember() helper in order to
 // allow them to be safely modified.
-func (db *Database) filterMembers(desiredStates ...common.MemberState) (result []*system.Member) {
+func (db *Database) filterMembers(desiredStates ...system.MemberState) (result []*system.Member) {
 	// NB: Must be done under a lock!
 
-	stateMask, includeUnknown := common.MemberStates2Mask(desiredStates...)
+	stateMask, includeUnknown := system.MaskFromStates(desiredStates...)
 
 	for _, m := range db.data.Members.Ranks {
-		if m.State == common.MemberStateUnknown && includeUnknown || m.State&stateMask != 0 {
+		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask != 0 {
 			result = append(result, m)
 		}
 	}
@@ -652,7 +652,7 @@ func (db *Database) filterMembers(desiredStates ...common.MemberState) (result [
 }
 
 // MemberRanks returns a slice of all the ranks in the membership.
-func (db *Database) MemberRanks(desiredStates ...common.MemberState) ([]ranklist.Rank, error) {
+func (db *Database) MemberRanks(desiredStates ...system.MemberState) ([]ranklist.Rank, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -670,7 +670,7 @@ func (db *Database) MemberRanks(desiredStates ...common.MemberState) ([]ranklist
 }
 
 // MemberCount returns the number of members in the system.
-func (db *Database) MemberCount(desiredStates ...common.MemberState) (int, error) {
+func (db *Database) MemberCount(desiredStates ...system.MemberState) (int, error) {
 	if err := db.CheckReplica(); err != nil {
 		return -1, err
 	}

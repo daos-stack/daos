@@ -16,7 +16,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -131,7 +130,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error
 		if err != nil {
 			return nil, err
 		}
-		if m.State&common.AvailableMemberFilter == 0 {
+		if m.State&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)
@@ -329,7 +328,7 @@ func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		return nil, FaultPoolNoLabel
 	}
 
-	allRanks, err := svc.sysdb.MemberRanks(common.AvailableMemberFilter)
+	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
 	if err != nil {
 		return nil, err
 	}

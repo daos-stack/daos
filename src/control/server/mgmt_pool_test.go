@@ -21,7 +21,6 @@ import (
 	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -63,7 +62,7 @@ func addTestPoolService(t *testing.T, sysdb *raft.Database, ps *system.PoolServi
 			t.Fatal(err)
 		}
 
-		if err := sysdb.AddMember(system.MockMember(t, i, common.MemberStateJoined)); err != nil {
+		if err := sysdb.AddMember(system.MockMember(t, i, system.MemberStateJoined)); err != nil {
 			t.Fatal(err)
 		}
 
@@ -145,7 +144,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 
 			svc := newTestMgmtSvc(t, log)
 			setupMockDrpcClient(svc, tc.queryResp, tc.queryErr)
-			if _, err := svc.membership.Add(system.MockMember(t, 1, common.MemberStateJoined)); err != nil {
+			if _, err := svc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -513,7 +512,7 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				numMembers = 2
 			}
 			for i := 0; i < numMembers; i++ {
-				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), common.MemberStateJoined)); err != nil {
+				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -567,10 +566,10 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	mgmtSvc.harness.instances[0].(*EngineInstance)._drpcClient = dc
 
 	for _, m := range []*system.Member{
-		system.MockMember(t, 0, common.MemberStateJoined),
-		system.MockMember(t, 1, common.MemberStateStopped),
-		system.MockMember(t, 2, common.MemberStateJoined),
-		system.MockMember(t, 3, common.MemberStateJoined),
+		system.MockMember(t, 0, system.MemberStateJoined),
+		system.MockMember(t, 1, system.MemberStateStopped),
+		system.MockMember(t, 2, system.MemberStateJoined),
+		system.MockMember(t, 3, system.MemberStateJoined),
 	} {
 		if err := mgmtSvc.sysdb.AddMember(m); err != nil {
 			t.Fatal(err)
@@ -935,7 +934,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 
 			numMembers := 8
 			for i := 0; i < numMembers; i++ {
-				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), common.MemberStateJoined)); err != nil {
+				if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, uint32(i), system.MemberStateJoined)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -1108,7 +1107,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, 1, common.MemberStateJoined)); err != nil {
+			if _, err := tc.mgmtSvc.membership.Add(system.MockMember(t, 1, system.MemberStateJoined)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1747,7 +1746,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	if err := allRanksDown.membership.UpdateMemberStates(system.MemberResults{
 		&system.MemberResult{
 			Rank:  0,
-			State: common.MemberStateStopped,
+			State: system.MemberStateStopped,
 		},
 	}, true); err != nil {
 		t.Fatal(err)

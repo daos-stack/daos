@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2023 Intel Corporation.
+// (C) Copyright 2020-2022 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,7 +15,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -89,11 +88,11 @@ func TestControl_StartRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "start",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 1, Action: "start",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 						},
 					},
@@ -104,12 +103,12 @@ func TestControl_StartRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "start",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 3, Action: "start",
 								Errored: true, Msg: "uh oh",
-								State: common.MemberStateStopped.String(),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -121,10 +120,10 @@ func TestControl_StartRanks(t *testing.T) {
 			},
 			expResp: &RanksResp{
 				RankResults: system.MemberResults{
-					{Rank: 0, Action: "start", State: common.MemberStateReady},
-					{Rank: 1, Action: "start", State: common.MemberStateReady},
-					{Rank: 2, Action: "start", State: common.MemberStateReady},
-					{Rank: 3, Action: "start", Errored: true, Msg: "uh oh", State: common.MemberStateStopped},
+					{Rank: 0, Action: "start", State: system.MemberStateReady},
+					{Rank: 1, Action: "start", State: system.MemberStateReady},
+					{Rank: 2, Action: "start", State: system.MemberStateReady},
+					{Rank: 3, Action: "start", Errored: true, Msg: "uh oh", State: system.MemberStateStopped},
 				},
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
@@ -191,11 +190,11 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "prep shutdown",
-								State: common.MemberStateStopping.String(),
+								State: system.MemberStateStopping.String(),
 							},
 							{
 								Rank: 1, Action: "prep shutdown",
-								State: common.MemberStateStopping.String(),
+								State: system.MemberStateStopping.String(),
 							},
 						},
 					},
@@ -206,12 +205,12 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "prep shutdown",
-								State: common.MemberStateStopping.String(),
+								State: system.MemberStateStopping.String(),
 							},
 							{
 								Rank: 3, Action: "prep shutdown",
 								Errored: true, Msg: "uh oh",
-								State: common.MemberStateStopped.String(),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -223,10 +222,10 @@ func TestControl_PrepShutdownRanks(t *testing.T) {
 			},
 			expResp: &RanksResp{
 				RankResults: system.MemberResults{
-					{Rank: 0, Action: "prep shutdown", State: common.MemberStateStopping},
-					{Rank: 1, Action: "prep shutdown", State: common.MemberStateStopping},
-					{Rank: 2, Action: "prep shutdown", State: common.MemberStateStopping},
-					{Rank: 3, Action: "prep shutdown", Errored: true, Msg: "uh oh", State: common.MemberStateStopped},
+					{Rank: 0, Action: "prep shutdown", State: system.MemberStateStopping},
+					{Rank: 1, Action: "prep shutdown", State: system.MemberStateStopping},
+					{Rank: 2, Action: "prep shutdown", State: system.MemberStateStopping},
+					{Rank: 3, Action: "prep shutdown", Errored: true, Msg: "uh oh", State: system.MemberStateStopped},
 				},
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
@@ -293,11 +292,11 @@ func TestControl_StopRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "stop",
-								State: common.MemberStateStopped.String(),
+								State: system.MemberStateStopped.String(),
 							},
 							{
 								Rank: 1, Action: "stop",
-								State: common.MemberStateStopped.String(),
+								State: system.MemberStateStopped.String(),
 							},
 						},
 					},
@@ -308,12 +307,12 @@ func TestControl_StopRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "stop",
-								State: common.MemberStateStopped.String(),
+								State: system.MemberStateStopped.String(),
 							},
 							{
 								Rank: 3, Action: "stop",
 								Errored: true, Msg: "uh oh",
-								State: common.MemberStateErrored.String(),
+								State: system.MemberStateErrored.String(),
 							},
 						},
 					},
@@ -325,10 +324,10 @@ func TestControl_StopRanks(t *testing.T) {
 			},
 			expResp: &RanksResp{
 				RankResults: system.MemberResults{
-					{Rank: 0, Action: "stop", State: common.MemberStateStopped},
-					{Rank: 1, Action: "stop", State: common.MemberStateStopped},
-					{Rank: 2, Action: "stop", State: common.MemberStateStopped},
-					{Rank: 3, Action: "stop", Errored: true, Msg: "uh oh", State: common.MemberStateErrored},
+					{Rank: 0, Action: "stop", State: system.MemberStateStopped},
+					{Rank: 1, Action: "stop", State: system.MemberStateStopped},
+					{Rank: 2, Action: "stop", State: system.MemberStateStopped},
+					{Rank: 3, Action: "stop", Errored: true, Msg: "uh oh", State: system.MemberStateErrored},
 				},
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
@@ -395,11 +394,11 @@ func TestControl_PingRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 0, Action: "ping",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 1, Action: "ping",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 						},
 					},
@@ -410,12 +409,12 @@ func TestControl_PingRanks(t *testing.T) {
 						Results: []*sharedpb.RankResult{
 							{
 								Rank: 2, Action: "ping",
-								State: common.MemberStateReady.String(),
+								State: system.MemberStateReady.String(),
 							},
 							{
 								Rank: 3, Action: "ping",
 								Errored: true, Msg: "uh oh",
-								State: common.MemberStateUnresponsive.String(),
+								State: system.MemberStateUnresponsive.String(),
 							},
 						},
 					},
@@ -427,10 +426,10 @@ func TestControl_PingRanks(t *testing.T) {
 			},
 			expResp: &RanksResp{
 				RankResults: system.MemberResults{
-					{Rank: 0, Action: "ping", State: common.MemberStateReady},
-					{Rank: 1, Action: "ping", State: common.MemberStateReady},
-					{Rank: 2, Action: "ping", State: common.MemberStateReady},
-					{Rank: 3, Action: "ping", Errored: true, Msg: "uh oh", State: common.MemberStateUnresponsive},
+					{Rank: 0, Action: "ping", State: system.MemberStateReady},
+					{Rank: 1, Action: "ping", State: system.MemberStateReady},
+					{Rank: 2, Action: "ping", State: system.MemberStateReady},
+					{Rank: 3, Action: "ping", Errored: true, Msg: "uh oh", State: system.MemberStateUnresponsive},
 				},
 				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
 			},
@@ -556,30 +555,30 @@ func TestControl_getResetRankErrors(t *testing.T) {
 func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req     *SystemQueryReq
-		expMask common.MemberState
+		expMask system.MemberState
 		expErr  error
 	}{
 		"not-ok": {
 			req: &SystemQueryReq{
 				NotOK: true,
 			},
-			expMask: common.AllMemberFilter &^ common.MemberStateJoined,
+			expMask: system.AllMemberFilter &^ system.MemberStateJoined,
 		},
 		"with-states": {
 			req: &SystemQueryReq{
-				WantedStates: common.MemberStateJoined | common.MemberStateExcluded,
+				WantedStates: "joined,excluded",
 			},
-			expMask: common.MemberStateJoined | common.MemberStateExcluded,
+			expMask: system.MemberStateJoined | system.MemberStateExcluded,
 		},
 		"with-states; bad state": {
 			req: &SystemQueryReq{
-				WantedStates: -1,
+				WantedStates: "joined,excluded,unknown",
 			},
-			expErr: errors.New("invalid wanted states bitmask"),
+			expErr: errors.New("invalid state name"),
 		},
 		"vanilla": {
 			req:     &SystemQueryReq{},
-			expMask: common.AllMemberFilter,
+			expMask: system.AllMemberFilter,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -658,28 +657,28 @@ func TestControl_SystemQuery(t *testing.T) {
 						{
 							Rank:        1,
 							Uuid:        test.MockUUID(1),
-							State:       common.MemberStateReady.String(),
+							State:       system.MemberStateReady.String(),
 							Addr:        "10.0.0.1:10001",
 							FaultDomain: fdStrs[1],
 						},
 						{
 							Rank:        2,
 							Uuid:        test.MockUUID(2),
-							State:       common.MemberStateReady.String(),
+							State:       system.MemberStateReady.String(),
 							Addr:        "10.0.0.1:10001",
 							FaultDomain: fdStrs[2],
 						},
 						{
 							Rank:        0,
 							Uuid:        test.MockUUID(0),
-							State:       common.MemberStateStopped.String(),
+							State:       system.MemberStateStopped.String(),
 							Addr:        "10.0.0.2:10001",
 							FaultDomain: fdStrs[0],
 						},
 						{
 							Rank:        3,
 							Uuid:        test.MockUUID(3),
-							State:       common.MemberStateStopped.String(),
+							State:       system.MemberStateStopped.String(),
 							Addr:        "10.0.0.2:10001",
 							FaultDomain: fdStrs[3],
 						},
@@ -689,16 +688,16 @@ func TestControl_SystemQuery(t *testing.T) {
 			expResp: &SystemQueryResp{
 				Members: system.Members{
 					system.MockMemberFullSpec(t, 1, test.MockUUID(1), "",
-						test.MockHostAddr(1), common.MemberStateReady).
+						test.MockHostAddr(1), system.MemberStateReady).
 						WithFaultDomain(fds[1]),
 					system.MockMemberFullSpec(t, 2, test.MockUUID(2), "",
-						test.MockHostAddr(1), common.MemberStateReady).
+						test.MockHostAddr(1), system.MemberStateReady).
 						WithFaultDomain(fds[2]),
 					system.MockMemberFullSpec(t, 0, test.MockUUID(0), "",
-						test.MockHostAddr(2), common.MemberStateStopped).
+						test.MockHostAddr(2), system.MemberStateStopped).
 						WithFaultDomain(fds[0]),
 					system.MockMemberFullSpec(t, 3, test.MockUUID(3), "",
-						test.MockHostAddr(2), common.MemberStateStopped).
+						test.MockHostAddr(2), system.MemberStateStopped).
 						WithFaultDomain(fds[3]),
 				},
 			},
@@ -826,29 +825,29 @@ func TestControl_SystemStart(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  2,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  0,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 						{
 							Rank:  3,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 					},
 				},
 			),
 			expResp: &SystemStartResp{
 				Results: system.MemberResults{
-					system.NewMemberResult(1, nil, common.MemberStateReady),
-					system.NewMemberResult(2, nil, common.MemberStateReady),
-					system.NewMemberResult(0, nil, common.MemberStateStopped),
-					system.NewMemberResult(3, nil, common.MemberStateStopped),
+					system.NewMemberResult(1, nil, system.MemberStateReady),
+					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(0, nil, system.MemberStateStopped),
+					system.NewMemberResult(3, nil, system.MemberStateStopped),
 				},
 			},
 		},
@@ -884,16 +883,16 @@ func TestControl_SystemStart(t *testing.T) {
 
 func TestControl_SystemStartRespErrors(t *testing.T) {
 	successResults := system.MemberResults{
-		system.NewMemberResult(1, nil, common.MemberStateReady),
-		system.NewMemberResult(2, nil, common.MemberStateReady),
-		system.NewMemberResult(0, nil, common.MemberStateStopped),
-		system.NewMemberResult(3, nil, common.MemberStateStopped),
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
 	}
 	failedResults := system.MemberResults{
-		system.NewMemberResult(1, nil, common.MemberStateReady),
-		system.NewMemberResult(2, errors.New("fail"), common.MemberStateReady),
-		system.NewMemberResult(0, errors.New("failed"), common.MemberStateStopped),
-		system.NewMemberResult(3, nil, common.MemberStateStopped),
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
 	}
 
 	for name, tc := range map[string]struct {
@@ -997,29 +996,29 @@ func TestControl_SystemStop(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  2,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  0,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 						{
 							Rank:  3,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 					},
 				},
 			),
 			expResp: &SystemStopResp{
 				Results: system.MemberResults{
-					system.NewMemberResult(1, nil, common.MemberStateReady),
-					system.NewMemberResult(2, nil, common.MemberStateReady),
-					system.NewMemberResult(0, nil, common.MemberStateStopped),
-					system.NewMemberResult(3, nil, common.MemberStateStopped),
+					system.NewMemberResult(1, nil, system.MemberStateReady),
+					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(0, nil, system.MemberStateStopped),
+					system.NewMemberResult(3, nil, system.MemberStateStopped),
 				},
 			},
 		},
@@ -1055,16 +1054,16 @@ func TestControl_SystemStop(t *testing.T) {
 
 func TestControl_SystemStopRespErrors(t *testing.T) {
 	successResults := system.MemberResults{
-		system.NewMemberResult(1, nil, common.MemberStateReady),
-		system.NewMemberResult(2, nil, common.MemberStateReady),
-		system.NewMemberResult(0, nil, common.MemberStateStopped),
-		system.NewMemberResult(3, nil, common.MemberStateStopped),
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, nil, system.MemberStateReady),
+		system.NewMemberResult(0, nil, system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
 	}
 	failedResults := system.MemberResults{
-		system.NewMemberResult(1, nil, common.MemberStateReady),
-		system.NewMemberResult(2, errors.New("fail"), common.MemberStateReady),
-		system.NewMemberResult(0, errors.New("failed"), common.MemberStateStopped),
-		system.NewMemberResult(3, nil, common.MemberStateStopped),
+		system.NewMemberResult(1, nil, system.MemberStateReady),
+		system.NewMemberResult(2, errors.New("fail"), system.MemberStateReady),
+		system.NewMemberResult(0, errors.New("failed"), system.MemberStateStopped),
+		system.NewMemberResult(3, nil, system.MemberStateStopped),
 	}
 
 	for name, tc := range map[string]struct {
@@ -1140,29 +1139,29 @@ func TestControl_SystemExclude(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank:  1,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  2,
-							State: common.MemberStateReady.String(),
+							State: system.MemberStateReady.String(),
 						},
 						{
 							Rank:  0,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 						{
 							Rank:  3,
-							State: common.MemberStateStopped.String(),
+							State: system.MemberStateStopped.String(),
 						},
 					},
 				},
 			),
 			expResp: &SystemExcludeResp{
 				Results: system.MemberResults{
-					system.NewMemberResult(1, nil, common.MemberStateReady),
-					system.NewMemberResult(2, nil, common.MemberStateReady),
-					system.NewMemberResult(0, nil, common.MemberStateStopped),
-					system.NewMemberResult(3, nil, common.MemberStateStopped),
+					system.NewMemberResult(1, nil, system.MemberStateReady),
+					system.NewMemberResult(2, nil, system.MemberStateReady),
+					system.NewMemberResult(0, nil, system.MemberStateStopped),
+					system.NewMemberResult(3, nil, system.MemberStateStopped),
 				},
 			},
 		},
@@ -1208,20 +1207,20 @@ func TestDmg_System_checkSystemErase(t *testing.T) {
 		"empty membership": {},
 		"rank not stopped": {
 			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: common.MemberStateStopped.String()},
-				{Rank: 1, State: common.MemberStateJoined.String()},
+				{Rank: 0, State: system.MemberStateStopped.String()},
+				{Rank: 1, State: system.MemberStateJoined.String()},
 			},
 			expErr: errors.New("system erase requires the following 1 rank to be stopped: 1"),
 		},
 		"ranks not stopped": {
 			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: common.MemberStateJoined.String()},
-				{Rank: 1, State: common.MemberStateStopped.String()},
-				{Rank: 5, State: common.MemberStateJoined.String()},
-				{Rank: 2, State: common.MemberStateJoined.String()},
-				{Rank: 4, State: common.MemberStateJoined.String()},
-				{Rank: 3, State: common.MemberStateJoined.String()},
-				{Rank: 6, State: common.MemberStateStopped.String()},
+				{Rank: 0, State: system.MemberStateJoined.String()},
+				{Rank: 1, State: system.MemberStateStopped.String()},
+				{Rank: 5, State: system.MemberStateJoined.String()},
+				{Rank: 2, State: system.MemberStateJoined.String()},
+				{Rank: 4, State: system.MemberStateJoined.String()},
+				{Rank: 3, State: system.MemberStateJoined.String()},
+				{Rank: 6, State: system.MemberStateStopped.String()},
 			},
 			expErr: errors.New("system erase requires the following 5 ranks to be stopped: 0,2-5"),
 		},
@@ -1243,19 +1242,19 @@ func TestDmg_System_checkSystemErase(t *testing.T) {
 }
 
 func TestControl_SystemErase(t *testing.T) {
-	member1 := system.MockMember(t, 1, common.MemberStateAwaitFormat)
-	member3 := system.MockMember(t, 3, common.MemberStateAwaitFormat)
+	member1 := system.MockMember(t, 1, system.MemberStateAwaitFormat)
+	member3 := system.MockMember(t, 3, system.MemberStateAwaitFormat)
 	member3.Addr = member1.Addr
-	member2 := system.MockMember(t, 2, common.MemberStateAwaitFormat)
-	member4 := system.MockMember(t, 4, common.MemberStateAwaitFormat)
+	member2 := system.MockMember(t, 2, system.MemberStateAwaitFormat)
+	member4 := system.MockMember(t, 4, system.MemberStateAwaitFormat)
 	member4.Addr = member2.Addr
-	member5 := system.MockMember(t, 5, common.MemberStateAwaitFormat)
-	member6 := system.MockMember(t, 6, common.MemberStateAwaitFormat)
+	member5 := system.MockMember(t, 5, system.MemberStateAwaitFormat)
+	member6 := system.MockMember(t, 6, system.MemberStateAwaitFormat)
 	member6.Addr = member5.Addr
-	member7 := system.MockMember(t, 7, common.MemberStateAwaitFormat)
-	member8 := system.MockMember(t, 8, common.MemberStateAwaitFormat)
+	member7 := system.MockMember(t, 7, system.MemberStateAwaitFormat)
+	member8 := system.MockMember(t, 8, system.MemberStateAwaitFormat)
 	member8.Addr = member7.Addr
-	mockMemberResult := func(m *system.Member, action string, err error, state common.MemberState) *system.MemberResult {
+	mockMemberResult := func(m *system.Member, action string, err error, state system.MemberState) *system.MemberResult {
 		mr := system.NewMemberResult(m.Rank, err, state, action)
 		mr.Addr = m.Addr.String()
 		return mr
@@ -1294,12 +1293,12 @@ func TestControl_SystemErase(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member1.Addr.String(),
 						},
 						{
 							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member2.Addr.String(),
 						},
 					},
@@ -1307,8 +1306,8 @@ func TestControl_SystemErase(t *testing.T) {
 			),
 			expResp: &SystemEraseResp{
 				Results: system.MemberResults{
-					mockMemberResult(member1, "system erase", nil, common.MemberStateAwaitFormat),
-					mockMemberResult(member2, "system erase", nil, common.MemberStateAwaitFormat),
+					mockMemberResult(member1, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
 				},
 			},
 		},
@@ -1319,13 +1318,13 @@ func TestControl_SystemErase(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateStopped.String(),
+							State:   system.MemberStateStopped.String(),
 							Addr:    member1.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member2.Addr.String(),
 						},
 					},
@@ -1339,8 +1338,8 @@ func TestControl_SystemErase(t *testing.T) {
 					},
 				),
 				Results: system.MemberResults{
-					mockMemberResult(member1, "system erase", errors.New("erase failed"), common.MemberStateStopped),
-					mockMemberResult(member2, "system erase", nil, common.MemberStateAwaitFormat),
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
 				},
 			},
 		},
@@ -1351,46 +1350,46 @@ func TestControl_SystemErase(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateStopped.String(),
+							State:   system.MemberStateStopped.String(),
 							Addr:    member1.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member2.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member2.Addr.String(),
 						},
 						{
 							Rank: member3.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member3.Addr.String(),
 						},
 						{
 							Rank: member4.Rank.Uint32(), Action: "system erase",
-							State: common.MemberStateAwaitFormat.String(),
+							State: system.MemberStateAwaitFormat.String(),
 							Addr:  member4.Addr.String(),
 						},
 						{
 							Rank: member5.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateStopped.String(),
+							State:   system.MemberStateStopped.String(),
 							Addr:    member5.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member6.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateErrored.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member6.Addr.String(),
 							Errored: true, Msg: "something bad",
 						},
 						{
 							Rank: member7.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateStopped.String(),
+							State:   system.MemberStateStopped.String(),
 							Addr:    member7.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
 						{
 							Rank: member8.Rank.Uint32(), Action: "system erase",
-							State:   common.MemberStateErrored.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member8.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
@@ -1415,14 +1414,14 @@ func TestControl_SystemErase(t *testing.T) {
 					},
 				),
 				Results: system.MemberResults{
-					mockMemberResult(member1, "system erase", errors.New("erase failed"), common.MemberStateStopped),
-					mockMemberResult(member2, "system erase", nil, common.MemberStateAwaitFormat),
-					mockMemberResult(member3, "system erase", nil, common.MemberStateAwaitFormat),
-					mockMemberResult(member4, "system erase", nil, common.MemberStateAwaitFormat),
-					mockMemberResult(member5, "system erase", errors.New("erase failed"), common.MemberStateStopped),
-					mockMemberResult(member6, "system erase", errors.New("something bad"), common.MemberStateErrored),
-					mockMemberResult(member7, "system erase", errors.New("erase failed"), common.MemberStateStopped),
-					mockMemberResult(member8, "system erase", errors.New("erase failed"), common.MemberStateErrored),
+					mockMemberResult(member1, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member2, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member3, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member4, "system erase", nil, system.MemberStateAwaitFormat),
+					mockMemberResult(member5, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member6, "system erase", errors.New("something bad"), system.MemberStateErrored),
+					mockMemberResult(member7, "system erase", errors.New("erase failed"), system.MemberStateStopped),
+					mockMemberResult(member8, "system erase", errors.New("erase failed"), system.MemberStateErrored),
 				},
 			},
 		},

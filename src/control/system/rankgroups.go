@@ -14,7 +14,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -70,7 +69,7 @@ func (rgs RankGroups) FromMembers(members Members) error {
 		return errors.New("expecting non-nil empty rank groups")
 	}
 
-	ranksInState := make(map[common.MemberState]*bytes.Buffer)
+	ranksInState := make(map[MemberState]*bytes.Buffer)
 	ranksSeen := make(map[ranklist.Rank]struct{})
 
 	for _, m := range members {

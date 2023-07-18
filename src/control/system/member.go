@@ -17,23 +17,161 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
+
+// MemberState represents the activity state of DAOS system members.
+type MemberState int
+
+const (
+	// MemberStateUnknown is the default invalid state.
+	MemberStateUnknown MemberState = 0x0000
+	// MemberStateAwaitFormat indicates the member is waiting for format.
+	MemberStateAwaitFormat MemberState = 0x0001
+	// MemberStateStarting indicates the member has started but is not
+	// ready.
+	MemberStateStarting MemberState = 0x0002
+	// MemberStateReady indicates the member has setup successfully.
+	MemberStateReady MemberState = 0x0004
+	// MemberStateJoined indicates the member has joined the system.
+	MemberStateJoined MemberState = 0x0008
+	// MemberStateStopping indicates prep-shutdown successfully run.
+	MemberStateStopping MemberState = 0x0010
+	// MemberStateStopped indicates process has been stopped.
+	MemberStateStopped MemberState = 0x0020
+	// MemberStateExcluded indicates rank has been automatically excluded from DAOS system.
+	MemberStateExcluded MemberState = 0x0040
+	// MemberStateErrored indicates the process stopped with errors.
+	MemberStateErrored MemberState = 0x0080
+	// MemberStateUnresponsive indicates the process is not responding.
+	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
+	MemberStateAdminExcluded MemberState = 0x0200
+
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateExcluded | MemberStateAdminExcluded
+	// AvailableMemberFilter defines the state(s) to be used when determining
+	// whether or not a member is available for the purposes of pool creation, etc.
+	AvailableMemberFilter = MemberStateReady | MemberStateJoined
+	// AllMemberFilter will match all valid member states.
+	AllMemberFilter = MemberState(0xFFFF)
+)
+
+func (ms MemberState) String() string {
+	switch ms {
+	case MemberStateAwaitFormat:
+		return "AwaitFormat"
+	case MemberStateStarting:
+		return "Starting"
+	case MemberStateReady:
+		return "Ready"
+	case MemberStateJoined:
+		return "Joined"
+	case MemberStateStopping:
+		return "Stopping"
+	case MemberStateStopped:
+		return "Stopped"
+	case MemberStateExcluded:
+		return "Excluded"
+	case MemberStateAdminExcluded:
+		return "AdminExcluded"
+	case MemberStateErrored:
+		return "Errored"
+	case MemberStateUnresponsive:
+		return "Unresponsive"
+	default:
+		return "Unknown"
+	}
+}
+
+func MemberStateFromString(in string) MemberState {
+	switch strings.ToLower(in) {
+	case "awaitformat":
+		return MemberStateAwaitFormat
+	case "starting":
+		return MemberStateStarting
+	case "ready":
+		return MemberStateReady
+	case "joined":
+		return MemberStateJoined
+	case "stopping":
+		return MemberStateStopping
+	case "stopped":
+		return MemberStateStopped
+	case "excluded":
+		return MemberStateExcluded
+	case "adminexcluded":
+		return MemberStateAdminExcluded
+	case "errored":
+		return MemberStateErrored
+	case "unresponsive":
+		return MemberStateUnresponsive
+	default:
+		return MemberStateUnknown
+	}
+}
+
+// isTransitionIllegal indicates if given state transitions is legal.
+//
+// Map state combinations to true (illegal) or false (legal) and return negated
+// value.
+func (ms MemberState) isTransitionIllegal(to MemberState) bool {
+	if ms == MemberStateUnknown || ms == MemberStateAdminExcluded {
+		return true // no legal transitions
+	}
+	if ms == to {
+		return true // identical state
+	}
+
+	return map[MemberState]map[MemberState]bool{
+		MemberStateAwaitFormat: {
+			MemberStateExcluded: true,
+		},
+		MemberStateStarting: {
+			MemberStateExcluded: true,
+		},
+		MemberStateReady: {
+			MemberStateExcluded: true,
+		},
+		MemberStateJoined: {
+			MemberStateReady: true,
+		},
+		MemberStateStopping: {
+			MemberStateReady: true,
+		},
+		MemberStateExcluded: {
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+			MemberStateErrored:  true,
+		},
+		MemberStateErrored: {
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+		},
+		MemberStateUnresponsive: {
+			MemberStateReady:    true,
+			MemberStateJoined:   true,
+			MemberStateStopping: true,
+		},
+	}[ms][to]
+}
 
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank           ranklist.Rank      `json:"rank"`
-	Incarnation    uint64             `json:"incarnation"`
-	UUID           uuid.UUID          `json:"uuid"`
-	Addr           *net.TCPAddr       `json:"addr"`
-	FabricURI      string             `json:"fabric_uri"`
-	FabricContexts uint32             `json:"fabric_contexts"`
-	State          common.MemberState `json:"-"`
-	Info           string             `json:"info"`
-	FaultDomain    *FaultDomain       `json:"fault_domain"`
-	LastUpdate     time.Time          `json:"last_update"`
+	Rank           ranklist.Rank `json:"rank"`
+	Incarnation    uint64        `json:"incarnation"`
+	UUID           uuid.UUID     `json:"uuid"`
+	Addr           *net.TCPAddr  `json:"addr"`
+	FabricURI      string        `json:"fabric_uri"`
+	FabricContexts uint32        `json:"fabric_contexts"`
+	State          MemberState   `json:"-"`
+	Info           string        `json:"info"`
+	FaultDomain    *FaultDomain  `json:"fault_domain"`
+	LastUpdate     time.Time     `json:"last_update"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -86,7 +224,7 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	}
 	sm.Addr = addr
 
-	sm.State = common.MemberStateFromString(from.State)
+	sm.State = MemberStateFromString(from.State)
 
 	fd, err := NewFaultDomainFromString(from.FaultDomain)
 	if err != nil {
@@ -123,7 +261,7 @@ type MemberResult struct {
 	Action  string
 	Errored bool
 	Msg     string
-	State   common.MemberState `json:"state"`
+	State   MemberState `json:"state"`
 }
 
 // MarshalJSON marshals system.MemberResult to JSON.
@@ -160,7 +298,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	mr.State = common.MemberStateFromString(from.State)
+	mr.State = MemberStateFromString(from.State)
 
 	return nil
 }
@@ -179,7 +317,7 @@ func (mr *MemberResult) Equals(other *MemberResult) bool {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank ranklist.Rank, err error, state common.MemberState, action ...string) *MemberResult {
+func NewMemberResult(rank ranklist.Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
@@ -215,4 +353,26 @@ func (mrs MemberResults) Errors() error {
 	}
 
 	return nil
+}
+
+// MaskFromStates returns a state bitmask and a flag indicating whether to include the "Unknown"
+// state from an input list of desired member states.
+func MaskFromStates(desiredStates ...MemberState) (MemberState, bool) {
+	var includeUnknown bool
+	stateMask := AllMemberFilter
+
+	if len(desiredStates) > 0 {
+		stateMask = 0
+		for _, s := range desiredStates {
+			if s == MemberStateUnknown {
+				includeUnknown = true
+			}
+			stateMask |= s
+		}
+	}
+	if stateMask == AllMemberFilter {
+		includeUnknown = true
+	}
+
+	return stateMask, includeUnknown
 }

@@ -12,25 +12,24 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
 func TestSystem_Member_Stringify(t *testing.T) {
-	states := []common.MemberState{
-		common.MemberStateUnknown,
-		common.MemberStateAwaitFormat,
-		common.MemberStateStarting,
-		common.MemberStateReady,
-		common.MemberStateJoined,
-		common.MemberStateStopping,
-		common.MemberStateStopped,
-		common.MemberStateExcluded,
-		common.MemberStateErrored,
-		common.MemberStateUnresponsive,
-		common.MemberStateAdminExcluded,
+	states := []MemberState{
+		MemberStateUnknown,
+		MemberStateAwaitFormat,
+		MemberStateStarting,
+		MemberStateReady,
+		MemberStateJoined,
+		MemberStateStopping,
+		MemberStateStopped,
+		MemberStateExcluded,
+		MemberStateErrored,
+		MemberStateUnresponsive,
+		MemberStateAdminExcluded,
 	}
 
 	strs := []string{
@@ -66,13 +65,13 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 			expUnmarshalErr: errors.New("address <nil>: missing port in address"),
 		},
 		"success": {
-			member: MockMember(t, 1, common.MemberStateReady),
+			member: MockMember(t, 1, MemberStateReady),
 		},
 		"with info": {
-			member: MockMember(t, 2, common.MemberStateJoined, "info"),
+			member: MockMember(t, 2, MemberStateJoined, "info"),
 		},
 		"with fault domain": {
-			member: MockMember(t, 3, common.MemberStateStopped, "info").
+			member: MockMember(t, 3, MemberStateStopped, "info").
 				WithFaultDomain(MustCreateFaultDomainFromString("/test/fault/domain")),
 		},
 	} {
@@ -98,7 +97,7 @@ func TestSystem_Member_MarshalUnmarshalJSON(t *testing.T) {
 }
 
 func TestSystem_Member_Convert(t *testing.T) {
-	membersIn := Members{MockMember(t, 1, common.MemberStateJoined)}
+	membersIn := Members{MockMember(t, 1, MemberStateJoined)}
 	membersOut := Members{}
 	if err := convert.Types(membersIn, &membersOut); err != nil {
 		t.Fatal(err)
@@ -111,9 +110,9 @@ func TestSystem_Member_Convert(t *testing.T) {
 
 func TestSystem_MemberResult_Convert(t *testing.T) {
 	mrsIn := MemberResults{
-		NewMemberResult(1, nil, common.MemberStateStopped),
-		NewMemberResult(2, errors.New("can't stop"), common.MemberStateUnknown),
-		MockMemberResult(1, "ping", errors.New("foobar"), common.MemberStateErrored),
+		NewMemberResult(1, nil, MemberStateStopped),
+		NewMemberResult(2, errors.New("can't stop"), MemberStateUnknown),
+		MockMemberResult(1, "ping", errors.New("foobar"), MemberStateErrored),
 	}
 	mrsOut := MemberResults{}
 

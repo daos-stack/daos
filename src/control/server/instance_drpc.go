@@ -16,7 +16,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -103,23 +102,23 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 //
 // MemberResult is populated with rank, state and error dependent on processing
 // dRPC response. Target state param is populated on success, Errored otherwise.
-func drespToMemberResult(rank ranklist.Rank, dresp *drpc.Response, err error, tState common.MemberState) *system.MemberResult {
+func drespToMemberResult(rank ranklist.Rank, dresp *drpc.Response, err error, tState system.MemberState) *system.MemberResult {
 	if err != nil {
 		return system.NewMemberResult(rank,
 			errors.WithMessagef(err, "rank %s dRPC failed", &rank),
-			common.MemberStateErrored)
+			system.MemberStateErrored)
 	}
 
 	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return system.NewMemberResult(rank,
 			errors.Errorf("rank %s dRPC unmarshal failed", &rank),
-			common.MemberStateErrored)
+			system.MemberStateErrored)
 	}
 	if resp.GetStatus() != 0 {
 		return system.NewMemberResult(rank,
 			errors.Errorf("rank %s: %s", &rank, daos.Status(resp.GetStatus()).Error()),
-			common.MemberStateErrored)
+			system.MemberStateErrored)
 	}
 
 	return system.NewMemberResult(rank, nil, tState)
@@ -134,26 +133,26 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 
 	localState := ei.LocalState()
-	if localState != common.MemberStateReady {
+	if localState != system.MemberStateReady {
 		// member not ready for dRPC comms, annotate result with last error if stopped
 		var err error
-		if localState == common.MemberStateStopped && ei._lastErr != nil {
+		if localState == system.MemberStateStopped && ei._lastErr != nil {
 			err = ei._lastErr
 		}
 		return system.NewMemberResult(rank, err, localState)
 	}
 
 	// system member state that should be set on dRPC success
-	targetState := common.MemberStateUnknown
+	targetState := system.MemberStateUnknown
 	switch method {
 	case drpc.MethodPrepShutdown:
-		targetState = common.MemberStateStopping
+		targetState = system.MemberStateStopping
 	case drpc.MethodPingRank:
-		targetState = common.MemberStateReady
+		targetState = system.MemberStateReady
 	default:
 		return system.NewMemberResult(rank,
 			errors.Errorf("unsupported dRPC method (%s) for fanout", method),
-			common.MemberStateErrored)
+			system.MemberStateErrored)
 	}
 
 	resChan := make(chan *system.MemberResult)
@@ -168,7 +167,7 @@ func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *syst
 	select {
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			return system.NewMemberResult(rank, ctx.Err(), common.MemberStateUnresponsive)
+			return system.NewMemberResult(rank, ctx.Err(), system.MemberStateUnresponsive)
 		}
 		return nil // shutdown
 	case result := <-resChan:

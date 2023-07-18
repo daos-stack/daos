@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -60,7 +59,7 @@ type Engine interface {
 	Index() uint32
 	IsStarted() bool
 	IsReady() bool
-	LocalState() common.MemberState
+	LocalState() system.MemberState
 	RemoveSuperblock() error
 	Run(context.Context, bool)
 	SetupRank(context.Context, ranklist.Rank, uint32) error
