@@ -760,6 +760,12 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 			      DAOS_TX_NONE, &req);
 	}
 
+	if (!wait_rebuild) {
+		rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
+					"no_data_sync");
+		assert_success(rc);
+	}
+
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
 	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
@@ -809,13 +815,6 @@ rebuild_xsf_object(void **state)
 static void
 rebuild_sx_object_no_data_sync(void **state)
 {
-	int		 rc;
-	test_arg_t	*arg = *state;
-
-	rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
-				"no_data_sync");
-	assert_success(rc);
-
 	rebuild_sx_object_internal(state, OC_SX, false, false);
 }
 

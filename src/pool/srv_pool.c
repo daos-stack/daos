@@ -4493,6 +4493,25 @@ out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
+	if (rc == 0) {
+		uint64_t		 status;
+		struct daos_prop_entry	*entry = NULL;
+
+		entry = daos_prop_entry_get(in->psi_prop, DAOS_PROP_PO_REINT_MODE);
+		if (entry != NULL) {
+			if (entry->dpe_val == DAOS_REINT_MODE_NO_DATA_SYNC &&
+			    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
+				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN, 0,
+							ds_pool_get_version(svc->ps_pool));
+				rc = ds_cont_set_status(in->psi_op.pi_uuid, status);
+			} else if (entry->dpe_val == DAOS_REINT_MODE_DATA_SYNC &&
+				   svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CO_CLEAR,
+							ds_pool_get_version(svc->ps_pool));
+				rc = ds_cont_set_status(in->psi_op.pi_uuid, status);
+			}
+		}
+	}
 	out->pso_op.po_rc = rc;
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->psi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
@@ -6150,9 +6169,18 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 
 	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD) ||
-	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD)) {
 		D_DEBUG(DB_MD, "self healing is disabled\n");
+		D_GOTO(out, rc);
+	}
+
+	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
+		rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
+		if (rc)
+			D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
+				target_list.pti_ids[0].pti_id, DP_UUID(svc->ps_pool->sp_uuid),
+				DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

@@ -451,8 +451,9 @@ This property controls how reintegration will recover data. Two options are supp
 discard pool data and trigger rebuild to sync data. While with "no_data_sync", reintegration
 only updates pool map to include rank.
 
-NB: with "no_data_sync" enabled, daos won't trigger rebuild to restore the pool data
-redundancy on the surviving storage engines if there are dead rank events.
+NB: with "no_data_sync" enabled, containers will be turned to read-only, daos won't trigger
+rebuild to restore the pool data redundancy on the surviving storage engines if there are
+dead rank events.
 
 ## Access Control Lists
 
