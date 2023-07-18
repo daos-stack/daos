@@ -387,14 +387,14 @@ out:
 	return mst.log_size + mst.log_buf_nob >= mst.log_size_max;
 }
 
+/* exceeds the size threshold, rename the current log file
+ * as backup, create a new log file.
+ */
 static int
 log_rotate(void)
 {
 	int rc = 0;
 
-	/* exceeds the size threshold, rename the current log file
-	 * as backup, create a new log file.
-	 */
 	if (!mst.log_old) {
 		rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
 		if (rc < 0) {
@@ -406,13 +406,6 @@ log_rotate(void)
 	if (mst.log_old_fd >= 0) {
 		close(mst.log_old_fd);
 		mst.log_old_fd = -1;
-	}
-
-	/* remove the backup log file */
-	rc = unlink(mst.log_old);
-	if (rc && errno != ENOENT) {
-		dlog_print_err(errno, "failed to unlink old file\n");
-		return -1;
 	}
 
 	/* rename the current log file as a backup */
