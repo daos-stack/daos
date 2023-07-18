@@ -4326,7 +4326,7 @@ def log_test(conf,
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
     # Add the code coverage tracer.
-    lto.add_tracer(nlt_ct, ('dfuse', 'il', 'dfs'))
+    lto.add_tracer(nlt_ct, None)
 
     lto.hide_fi_calls = skip_fi
 

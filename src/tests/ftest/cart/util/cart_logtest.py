@@ -358,7 +358,7 @@ class LogTest():
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             for (cbe, facs) in cb_list:
-                if line.fac in facs:
+                if facs is None or line.fac in facs:
                     cbe.add_line(line)
             self.save_log_line(line)
             try:
