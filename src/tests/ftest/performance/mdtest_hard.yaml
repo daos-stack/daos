@@ -56,15 +56,27 @@ mdtest_dfs_ec_16p2g1:
   dfs_oclass: EC_16P2G1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB
-mdtest_pil4dfs_s1:
+mdtest_dfuse_il_s1:
   <<: *mdtest_base
-  api: "POSIX"
+  api: POSIX+IL
   dfs_oclass: S1
   dfs_dir_oclass: SX
   dfs_chunk: 1MiB
-mdtest_pil4dfs_ec_16p2g1:
+mdtest_dfuse_pil4dfs_s1:
   <<: *mdtest_base
-  api: "POSIX"
+  api: POSIX+PIL4DFS
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_chunk: 1MiB
+mdtest_dfuse_il_ec_16p2g1:
+  <<: *mdtest_base
+  api: POSIX+IL
+  dfs_oclass: EC_16P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 16MiB
+mdtest_dfuse_pil4dfs_ec_16p2g1:
+  <<: *mdtest_base
+  api: POSIX+PIL4DFS
   dfs_oclass: EC_16P2G1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB

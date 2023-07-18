@@ -63,15 +63,27 @@ ior_dfs_ec_16p2gx:
   dfs_oclass: EC_16P2GX
   dfs_chunk: 16MiB
   transfer_size: 16MiB
-ior_dfuse_sx:
+ior_dfuse_il_sx:
   <<: *ior_base
-  api: POSIX
+  api: POSIX+IL
   dfs_oclass: SX # dfs params are translated to container params
   dfs_chunk: 1MiB
   transfer_size: 1MiB
-ior_dfuse_ec_16p2gx:
+ior_dfuse_pil4dfs_sx:
   <<: *ior_base
-  api: POSIX
+  api: POSIX+PIL4DFS
+  dfs_oclass: SX # dfs params are translated to container params
+  dfs_chunk: 1MiB
+  transfer_size: 1MiB
+ior_dfuse_il_ec_16p2gx:
+  <<: *ior_base
+  api: POSIX+IL
+  dfs_oclass: EC_16P2GX # dfs params are translated to container params
+  dfs_chunk: 16MiB
+  transfer_size: 16MiB
+ior_dfuse_pil4dfs_ec_16p2gx:
+  <<: *ior_base
+  api: POSIX+PIL4DFS
   dfs_oclass: EC_16P2GX # dfs params are translated to container params
   dfs_chunk: 16MiB
   transfer_size: 16MiB
