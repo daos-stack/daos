@@ -167,7 +167,7 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		}
 		// Don't trigger callbacks for these errors which can happen when
 		// things are still starting up.
-		if err == FaultHarnessNotStarted || err == errInstanceNotReady {
+		if err == FaultHarnessNotStarted || err == errEngineNotReady {
 			return
 		}
 
@@ -187,22 +187,10 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	// the first one that is available to service the request.
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
-		if !i.IsReady() {
-			if i.IsStarted() {
-				if err == nil {
-					err = errInstanceNotReady
-				}
-			} else {
-				if err == nil {
-					err = FaultDataPlaneNotStarted
-				}
-			}
-			continue
-		}
 		resp, err = i.CallDrpc(ctx, method, body)
 
 		switch errors.Cause(err) {
-		case errDRPCNotReady, FaultDataPlaneNotStarted:
+		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
 			continue
 		default:
 			return

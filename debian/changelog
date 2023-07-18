@@ -1,3 +1,21 @@
+daos (2.5.100-7) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 07 Jul 2023 16:05:01 -0400
+
+daos (2.5.100-6) unstable; urgency=medium
+  [Michael MacDonald]
+  * Add golang-go as a tests dependency for dfuse/daos_build.py
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com> Thu, 29 Jun 2023 10:10:00 -0400
+
+daos (2.5.100-5) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to 0.10.1-1408.g9524cdb
+
+ -- Li Wei <wei.g.li@intel.com>  Thu, 22 Jun 2023 09:00:00 +0900
+
 daos (2.5.100-4) unstable; urgency=medium
   [ Mohamad Chaarawi ]
   * Add pipeline lib

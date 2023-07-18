@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -476,6 +476,12 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 void
 dss_init_state_set(enum dss_init_state state)
 {
+}
+
+int
+dss_module_setup_all()
+{
+	return 0;
 }
 
 size_t

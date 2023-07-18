@@ -718,6 +718,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
+	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
@@ -738,7 +739,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_UPGRADE:
 		if (oid.id_layout_ver < rpt->rt_new_layout_ver) {
 			rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
-					     arg->co_props.dcp_obj_version, &md, tgts, shards);
+					     arg->co_props.dcp_obj_version, &md,
+					     tgts, shards, LOCAL_ARRAY_SIZE);
 			/* Then only upgrade the layout version */
 			if (rc == 0) {
 				rc = vos_obj_layout_upgrade(param->ip_hdl, oid,
@@ -758,6 +760,7 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
@@ -862,6 +865,22 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			return rc;
 		}
 		cont_child->sc_discarding = 1;
+		while (cont_child->sc_ec_agg_active) {
+			D_ASSERTF(rpt->rt_pool->sp_reintegrating >= 0, DF_UUID" reintegrating %d\n",
+				  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_reintegrating);
+			/* Wait for EC aggregation to abort before discard the object */
+			D_DEBUG(DB_REBUILD, DF_UUID" wait for ec agg abort.\n",
+				DP_UUID(entry->ie_couuid));
+			dss_sleep(1000);
+			if (rpt->rt_abort || rpt->rt_finishing) {
+				D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
+					DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+					RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_rebuild_ver,
+					rpt->rt_abort, rpt->rt_finishing);
+				*acts |= VOS_ITER_CB_ABORT;
+				D_GOTO(close, rc);
+			}
+		}
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
@@ -887,6 +906,9 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
 	dtx_end(dth, NULL, rc);
 
+	*acts |= VOS_ITER_CB_YIELD;
+
+close:
 	vos_cont_close(coh);
 
 	if (cont_child != NULL) {
@@ -894,7 +916,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		ds_cont_child_put(cont_child);
 	}
 
-	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
@@ -1154,7 +1175,8 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT)
+	if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
 		rpt->rt_pool->sp_reintegrating++; /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
