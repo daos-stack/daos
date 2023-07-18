@@ -596,8 +596,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, &key,
-							  iv_value);
+		rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
 		if (rc)
 			D_GOTO(out, rc);
 	}

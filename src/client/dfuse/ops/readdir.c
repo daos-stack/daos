@@ -551,22 +551,24 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
 				offset, hdl->drh_dre_index);
 
-		num = (uint32_t)offset - OFFSET_BASE;
-		while (num) {
-			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
-					 (NAME_MAX + 1) * num, NULL, NULL);
-			if (rc)
-				D_GOTO(out_reset, rc);
+		if (offset != 0) {
+			num = (uint32_t)offset - OFFSET_BASE;
+			while (num) {
+				rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor,
+						 &num, (NAME_MAX + 1) * num, NULL, NULL);
+				if (rc)
+					D_GOTO(out_reset, rc);
 
-			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
-				dfuse_readdir_reset(hdl);
-				oh->doh_rd_offset = 0;
-				D_GOTO(reply, rc = 0);
+				if (daos_anchor_is_eof(&hdl->drh_anchor)) {
+					dfuse_readdir_reset(hdl);
+					oh->doh_rd_offset = 0;
+					D_GOTO(reply, rc = 0);
+				}
+
+				hdl->drh_anchor_index += num;
+
+				num = offset - OFFSET_BASE - hdl->drh_anchor_index;
 			}
-
-			hdl->drh_anchor_index += num;
-
-			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
 		}
 		large_fetch = false;
 	}
@@ -802,6 +804,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		size = 0;
 		D_GOTO(out, rc = 0);
 	}
+
+	if ((offset > 0 && offset < OFFSET_BASE) || offset < 0)
+		D_GOTO(out, rc = EINVAL);
 
 	/* Alignment is important for the buffer, the packing function will align up so a badly
 	 * allocated buffer will need to be padded at the start, to avoid that then align here.
