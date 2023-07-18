@@ -18,7 +18,7 @@ from apricot import TestWithServers
 
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
-from general_utils import run_command, DaosTestError, journalctl_time
+from general_utils import journalctl_time
 from host_utils import get_local_host
 import slurm_utils
 from run_utils import run_local, RunException
@@ -129,7 +129,7 @@ class SoakTestBase(TestWithServers):
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
             self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
             cmd = "scancel --partition {} -u {} {}".format(
-                        self.host_info.clients.partition.name, self.username, job_id)
+                self.host_info.clients.partition.name, self.username, job_id)
             try:
                 run_local(self.log, cmd, timeout=120)
             except RunException as error:
