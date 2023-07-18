@@ -7,7 +7,7 @@ import re
 import json
 
 from apricot import TestWithServers, skipForTicket
-from apricot import TestWithServers
+from general_utils import run_pcmd, report_errors, append_error
 from server_utils_base import DaosServerCommandRunner
 
 
