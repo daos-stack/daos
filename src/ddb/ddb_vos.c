@@ -20,6 +20,8 @@
 int
 dv_pool_open(char *path, daos_handle_t *poh)
 {
+	D_INFO("Open Path: %s\n", path);
+
 	struct vos_file_parts	path_parts = {0};
 	uint32_t		flags = 0; /* Will need to be a flag to ignore uuid check */
 	int			rc;
@@ -33,15 +35,21 @@ dv_pool_open(char *path, daos_handle_t *poh)
 	rc = vos_path_parse(path, &path_parts);
 	if (!SUCCESS(rc))
 		return rc;
-
+	D_INFO("Initialize VOS self: '%s', target_idx: %d\n", path_parts.vf_db_path,
+	       path_parts.vf_target_idx);
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
+	D_INFO("VOS self initialized: '%s', target_idx: %d\n", path_parts.vf_db_path,
+	       path_parts.vf_target_idx);
+
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
 			path_parts.vf_db_path, DP_RC(rc));
 		return rc;
 	}
 
+	D_INFO("Open Pool " DF_UUID "\n", DP_UUID(path_parts.vf_pool_uuid));
 	rc = vos_pool_open(path, path_parts.vf_pool_uuid, flags, poh);
+	D_INFO("Pool Opened " DF_UUID "\n", DP_UUID(path_parts.vf_pool_uuid));
 	if (!SUCCESS(rc)) {
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
@@ -55,7 +63,9 @@ dv_pool_close(daos_handle_t poh)
 {
 	int rc;
 
+	D_INFO("Before close\n");
 	rc = vos_pool_close(poh);
+	D_INFO("After close\n");
 	vos_self_fini();
 
 	return rc;
