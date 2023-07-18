@@ -38,7 +38,7 @@ type cliOptions struct {
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
-	Json      bool   `short:"j" long:"json" description:"JSON output for not interactive mode"`
+	JSON      bool   `short:"j" long:"json" description:"JSON output for not interactive mode"`
 	Args      struct {
 		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
 		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
@@ -69,7 +69,7 @@ func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
 		return
 	}
 	defer cleanup()
-	cmdCtx := CommandContext{CContext: ctx, jsonOutput: false, jsonOutputHandled: false}
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: false, jsonOutputHandled: false}
 	app := createGrumbleApp(&cmdCtx)
 	for _, cmd := range app.Commands().All() {
 		if match == "" || strings.HasPrefix(cmd.Name, match) {
@@ -143,13 +143,9 @@ the first positional parameter will be opened before commands are executed.`
 		log.Debug("debug output enabled")
 	}
 
-	if opts.Json {
-		log.Debug("json output enabled")
-	}
-
 	ctx, cleanup, err := InitDdb()
 
-	cmdCtx := CommandContext{CContext: ctx, jsonOutput: opts.Json, jsonOutputHandled: false}
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: opts.JSON, jsonOutputHandled: false}
 
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
@@ -190,15 +186,15 @@ the first positional parameter will be opened before commands are executed.`
 		}
 
 		if cmdCtx.jsonOutput && !cmdCtx.jsonOutputHandled {
-			log.Notice("Command does not support json output\n")
+			log.Notice("Command does not support json output")
 		}
 
 		return err
 	}
 
 	// Interactive mode
-	if opts.Json {
-		log.Notice("Interactive mode does not support json output\n")
+	if opts.JSON {
+		log.Notice("Interactive mode does not support json output")
 	}
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)

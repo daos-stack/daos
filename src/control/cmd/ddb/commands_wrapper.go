@@ -7,9 +7,10 @@
 package main
 
 import (
-	"github.com/google/uuid"
 	"runtime"
 	"unsafe"
+
+	"github.com/google/uuid"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
 )
@@ -56,7 +57,7 @@ func InitDdb() (*DdbContext, func(), error) {
 
 // DdbContext structure for wrapping the C code context structure
 type DdbContext struct {
-	ctx C.struct_ddb_ctx /* c structure used for the commands */
+	ctx C.struct_ddb_ctx
 }
 
 func ddbPoolIsOpen(ctx *DdbContext) bool {
@@ -105,11 +106,14 @@ func ddbSuperblockDump(ctx *DdbContext) (*SuperBlock, error) {
 	/* Convert C uuit_t into a go UUID */
 	var goUuid uuid.UUID
 	cUUIDBytes := (*[16]byte)(unsafe.Pointer(&cSb.dsb_id))[:]
-	copy(goUuid[:], cUUIDBytes)
+	goUuid, err = uuid.FromBytes(cUUIDBytes)
+	if err != nil {
+		return nil, err
+	}
 
 	/* convert the c struct to the go struct */
 	sb := SuperBlock{
-		PoolUuid:             goUuid.String(),
+		PoolUuid:             goUuid,
 		ScmSize:              uint64(cSb.dsb_scm_sz),
 		ContCount:            int(cSb.dsb_cont_nr),
 		NvmeSize:             uint64(cSb.dsb_nvme_sz),
