@@ -1428,6 +1428,58 @@ class DFuse():
         assert ret.returncode == 0, ret
         return ret
 
+    def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
+        """Query and verify the dfuse statistics.
+
+        Returns the raw numbers in a dict.
+        """
+        cmd = ['filesystem', 'query', self.dir]
+
+        if ino is not None:
+            cmd.extend(['--inode', str(ino)])
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        if inodes:
+            assert rc.json['response']['inodes'] == inodes, rc
+        if open_files:
+            assert rc.json['response']['open_files'] == open_files, rc
+        if pools:
+            assert rc.json['response']['pools'] == pools, rc
+        if containers:
+            assert rc.json['response']['containers'] == containers, rc
+        return rc.json['response']
+
+    def _evict_path(self, path):
+        """Evict a path from dfuse"""
+        cmd = ['filesystem', 'evict', path]
+        rc = run_daos_cmd(self.conf, cmd, use_json=True)
+        print(rc)
+        assert rc.returncode == 0
+
+        return rc.json['response']
+
+    def evict_and_wait(self, paths):
+        """Evict a number of paths from dfuse"""
+        inodes = []
+        for path in paths:
+            rc = self._evict_path(path)
+            inodes.append(rc['inode'])
+
+        sleeps = 0
+
+        for inode in inodes:
+            found = True
+            while found:
+                rc = self.check_usage(inode)
+                print(rc)
+                found = rc['resident']
+                if not found:
+                    sleeps += 1
+                    assert sleeps < 10, 'Path still present 10 seconds after eviction'
+                    time.sleep(1)
+
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
@@ -1974,8 +2026,12 @@ class PosixTests():
         _check_cmd(child_path_cwd)
         _check_cmd(self.dfuse.dir)
 
-        # Do not destroy the new containers at this point as dfuse will be holding references.
-        # new_cont.destroy()
+        # Now evict the new containers
+
+        self.dfuse.evict_and_wait([child_path, child_path_cwd])
+        # Destroy the new containers at this point as dfuse will have dropped references.
+        new_cont1.destroy()
+        new_cont_cwd.destroy()
 
     @needs_dfuse
     def test_read(self):
@@ -2476,6 +2532,23 @@ class PosixTests():
                 print(f'xattr is {key}:{value}')
 
     @needs_dfuse
+    def test_evict(self):
+        """Evict a file from dfuse"""
+        new_file = join(self.dfuse.dir, 'e_file')
+        with open(new_file, 'w'):
+            pass
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', new_file])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+        rc = run_daos_cmd(self.conf, ['filesystem', 'evict', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0, rc
+        time.sleep(5)
+
+    @needs_dfuse
     def test_list_xattr(self):
         """Perform tests with listing extended attributes.
 
@@ -2563,6 +2636,12 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir])
+        print(rc)
+        assert rc.returncode == 0
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir], use_json=True)
+        print(rc)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_uns_link(self):
@@ -2596,8 +2675,11 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+        self.dfuse.check_usage(inodes=2, open_files=1, containers=2, pools=1)
         cmd = ['cont', 'destroy', '--path', path]
         rc = run_daos_cmd(self.conf, cmd)
+        assert rc.returncode == 0
+        rc = self.dfuse.check_usage(inodes=1, open_files=1, containers=1, pools=1)
 
     @needs_dfuse
     def test_rename_clobber(self):
@@ -3816,15 +3898,10 @@ class PosixTests():
         print(rc.stdout)
         assert rc.stdout == b'sh\n', rc
 
+    @needs_dfuse
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-        dfuse = DFuse(self.server,
-                      self.conf,
-                      pool=self.pool.id(),
-                      container=self.container,
-                      caching=False)
-        dfuse.start(v_hint='pil4dfs')
-        path = dfuse.dir
+        path = self.dfuse.dir
 
         # Create a file natively.
         file1 = join(path, 'file1')
@@ -3868,8 +3945,10 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
         self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
-        if dfuse.stop():
-            self.fatal_errors = True
+        # dd to write a file
+        file5 = join(path, 'newfile')
+        self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
+                                                'count=1'])
 
 
 class NltStdoutWrapper():
@@ -4863,6 +4942,10 @@ class AllocFailTestRun():
         self.stdout = None
         self.returncode = None
 
+        # Set this to disable memory leak checking if the command outputs a DER_BUSY message.  This
+        # is to allow tests to leak memory if there are errors during shutdown.
+        self.ignore_busy = False
+
         # The subprocess handle and other private data.
         self._sp = None
         self._cmd = cmd
@@ -4890,10 +4973,10 @@ class AllocFailTestRun():
         res += f'Fault injection location {self.loc}\n'
         if self.valgrind_hdl:
             res += 'Valgrind enabled for this test\n'
-        if self.returncode:
-            res += f'Returncode was {self.returncode}'
-        else:
+        if self.returncode is None:
             res += 'Process not completed'
+        else:
+            res += f'Returncode was {self.returncode}'
 
         if self.stdout:
             res += f'\nSTDOUT:{self.stdout.decode("utf-8").strip()}'
@@ -4994,14 +5077,22 @@ class AllocFailTestRun():
             show_memleaks = False
             fi_signal = -rc
 
+        if self._aft.ignore_busy and self._aft.check_daos_stderr:
+            stderr = self._stderr.decode('utf-8').rstrip()
+            for line in stderr.splitlines():
+                if line.endswith(': Device or resource busy (-1012)'):
+                    show_memleaks = False
+
         try:
             if self.loc:
                 wf = self._aft.wf
             else:
                 wf = None
+
             self._fi_loc = log_test(self._aft.conf,
                                     self.log_file,
                                     show_memleaks=show_memleaks,
+                                    ignore_busy=self._aft.ignore_busy,
                                     quiet=True,
                                     skip_fi=True,
                                     leak_wf=wf)
@@ -5062,6 +5153,9 @@ class AllocFailTestRun():
                 if line.endswith(': Cannot allocate memory (12)'):
                     continue
 
+                if self._aft.ignore_busy and line.endswith(': Device or resource busy (-1012)'):
+                    continue
+
                 if 'DER_UNKNOWN' in line:
                     self._aft.wf.add(self._fi_loc,
                                      'HIGH',
@@ -5116,6 +5210,7 @@ class AllocFailTest():
         self.check_daos_stderr = False
         self.check_stderr = True
         self.expected_stdout = None
+        self.ignore_busy = False
         self.use_il = False
         self._use_pil4dfs = None
         self.wf = conf.wf
@@ -5191,6 +5286,7 @@ class AllocFailTest():
                 if not ret.has_finished():
                     continue
                 active.remove(ret)
+                print()
                 print(ret)
                 if ret.returncode < 0:
                     fatal_errors = True
@@ -5252,7 +5348,7 @@ class AllocFailTest():
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
-            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}.')
+            aftf.valgrind_hdl = ValgrindHelper(self.conf, logid=f'fi_{self.description}_{loc}')
             # Turn off leak checking in this case, as we're just interested in why it crashed.
             aftf.valgrind_hdl.full_check = False
 
@@ -5301,14 +5397,7 @@ def test_alloc_fail_copy(server, conf, wf):
 
     Create an initial container to copy from so this is testing reading as well as writing
 
-    Note this test will run without the destination containers existing but afterwards they
-    might with various stages of completion, running just this test in a loop without wiping
-    the containers between runs will exercise different code-paths and probably fail at some
-    point due to the destination container existing but being invalid.  A longer term aim
-    would be to run this test with the destination containers existing but valid (which tests
-    punch) or to have it check that if a test failed then new container was removed as part
-    of the command.  Checking for existing but invalid containers is not covered but this test
-    is probably not the best place for that.
+    see also test_alloc_fail_copy_trunc() which is similar but truncates existing files.
     """
 
     def get_cmd(cont_id):
@@ -5340,8 +5429,56 @@ def test_alloc_fail_copy(server, conf, wf):
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
+    # Set the ignore_busy flag so that memory leaks on shutdown are ignored in some cases.
+    test_cmd.ignore_busy = True
 
     return test_cmd.launch()
+
+
+def test_alloc_fail_copy_trunc(server, conf, wf):
+    """Run container (filesystem) copy under fault injection.
+
+    Use filesystem copy to truncate a file.
+
+    Create an initial container to modify, pre-populate it with a number of files of known length
+    then have each iteration of the test truncate one file.
+    """
+    # The number of files to pre-create.  This just needs to be bigger than the iteration count
+    # however too many will consume extra resources.
+    files_needed = 4000
+
+    def get_cmd(_):
+        cmd = [join(conf['PREFIX'], 'bin', 'daos'), 'filesystem', 'copy', '--src', src_file.name,
+               '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{get_cmd.idx}']
+        get_cmd.idx += 1
+        assert get_cmd.idx <= files_needed
+        return cmd
+
+    get_cmd.idx = 0  # pylint: disable=invalid-name
+
+    pool = server.get_test_pool_obj()
+    with tempfile.TemporaryDirectory(prefix='copy_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(files_needed):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', sub_dir,
+                                 '--dst', f'daos://{pool.id()}/aftc'])
+        assert rc.returncode == 0, rc
+
+    with tempfile.NamedTemporaryFile() as src_file:
+
+        test_cmd = AllocFailTest(conf, 'filesystem-copy-trunc', get_cmd)
+        test_cmd.wf = wf
+        test_cmd.check_daos_stderr = True
+        test_cmd.check_post_stdout = False
+        # Set the ignore_busy flag so that memory leaks on shutdown are ignored in some cases.
+        test_cmd.ignore_busy = True
+
+        return test_cmd.launch()
 
 
 def test_alloc_pil4dfs_ls(server, conf, wf):
@@ -5729,8 +5866,9 @@ def run(wf, args):
 
                 fatal_errors.add_result(test_fi_get_prop(server, conf, wf_client))
 
-                # filesystem copy test.
+                # filesystem copy tests.
                 fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+                fatal_errors.add_result(test_alloc_fail_copy_trunc(server, conf, wf_client))
 
                 # container create with properties test.
                 fatal_errors.add_result(test_alloc_cont_create(server, conf, wf_client))

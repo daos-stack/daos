@@ -1028,7 +1028,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
 		if (rc) {
-			daos_obj_close(oh, NULL);
+			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
 		}
 
@@ -3156,7 +3156,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update object class ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update object class: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -3206,7 +3206,7 @@ set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update chunk size ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update chunk size: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 

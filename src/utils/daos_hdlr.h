@@ -9,6 +9,8 @@
 
 #include <daos_fs.h>
 
+#include <dfuse_ioctl.h>
+
 #define OID_ARR_SIZE 8
 
 enum fs_op {
@@ -159,19 +161,11 @@ struct cmd_args_s {
 	char			*group;		/* --group name */
 	bool			verbose;	/* --verbose mode */
 	char			*entry;		/* --entry for ACL */
-	char			*principal;	/* --principal for ACL */
+	char                    *principal;     /* --principal for ACL */
+
+	/* DFuse related */
+	struct dfuse_mem_query   dfuse_mem; /* --memquery */
 };
-
-#define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
-	do {								\
-		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKNOWN)) {	\
-			fprintf(stderr, "create by --path : must also "	\
-					"specify --type\n");		\
-			D_GOTO(label, (rcexpr));			\
-		}							\
-	} while (0)
-
-typedef int (*command_hdlr_t)(struct cmd_args_s *ap);
 
 int pool_autotest_hdlr(struct cmd_args_s *ap);
 /* TODO: implement these pool op functions
@@ -179,25 +173,42 @@ int pool_autotest_hdlr(struct cmd_args_s *ap);
  */
 
 /* general datamover operations */
-void dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes);
-int dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
-			  void ***_buffers, size_t **_sizes);
-int dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
-			  bool get_oid, bool get_label, bool get_roots);
-int dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh);
+void
+dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes);
+int
+dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
+		      void ***_buffers, size_t **_sizes);
+int
+dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props, bool get_oid,
+		      bool get_label, bool get_roots);
+int
+dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh);
 
 /* DAOS filesystem operations */
-int fs_copy_hdlr(struct cmd_args_s *ap);
-int fs_dfs_hdlr(struct cmd_args_s *ap);
-int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
-int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
-int fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
-int fs_recreate_sb_hdlr(struct cmd_args_s *ap);
-int fs_relink_root_hdlr(struct cmd_args_s *ap);
+int
+fs_copy_hdlr(struct cmd_args_s *ap);
+int
+fs_dfs_hdlr(struct cmd_args_s *ap);
+int
+fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
+int
+parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
+int
+fs_fix_entry_hdlr(struct cmd_args_s *ap, bool fix_entry);
+int
+fs_recreate_sb_hdlr(struct cmd_args_s *ap);
+int
+fs_relink_root_hdlr(struct cmd_args_s *ap);
 
 /* Container operations */
-int cont_check_hdlr(struct cmd_args_s *ap);
-int cont_clone_hdlr(struct cmd_args_s *ap);
+int
+cont_check_hdlr(struct cmd_args_s *ap);
+int
+cont_clone_hdlr(struct cmd_args_s *ap);
+
+/* Dfuse operations */
+int
+dfuse_evict(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
@@ -206,5 +217,9 @@ int cont_clone_hdlr(struct cmd_args_s *ap);
  * int cont_stat_hdlr()
  * int cont_rollback_hdlr()
  */
+
+/* Dfuse operations, mostly handled through ioctls */
+int
+dfuse_count_query(struct cmd_args_s *ap);
 
 #endif /* __DAOS_HDLR_H__ */

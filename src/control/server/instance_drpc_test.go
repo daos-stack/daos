@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -61,13 +62,23 @@ func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 
 func TestEngineInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		notReady bool
-		resp     *drpc.Response
-		expErr   error
+		notStarted bool
+		notReady   bool
+		noClient   bool
+		resp       *drpc.Response
+		expErr     error
 	}{
+		"not started": {
+			notStarted: true,
+			expErr:     FaultDataPlaneNotStarted,
+		},
 		"not ready": {
 			notReady: true,
-			expErr:   errors.New("no dRPC client set"),
+			expErr:   errEngineNotReady,
+		},
+		"no client configured": {
+			noClient: true,
+			expErr:   errDRPCNotReady,
 		},
 		"success": {
 			resp: &drpc.Response{},
@@ -76,8 +87,14 @@ func TestEngineInstance_CallDrpc(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
-			instance := getTestEngineInstance(log)
-			if !tc.notReady {
+
+			trc := engine.TestRunnerConfig{}
+			trc.Running.Store(!tc.notStarted)
+			runner := engine.NewTestRunner(&trc, engine.MockConfig())
+			instance := NewEngineInstance(log, nil, nil, runner)
+			instance.ready.Store(!tc.notReady)
+
+			if !tc.noClient {
 				cfg := &mockDrpcClientConfig{
 					SendMsgResponse: tc.resp,
 				}

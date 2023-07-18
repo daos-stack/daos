@@ -162,10 +162,8 @@ struct vos_agg_param {
 	/* Boundary for aggregatable write filter */
 	daos_epoch_t		ap_filter_epoch;
 	uint32_t		ap_flags;
-	unsigned int		ap_discard:1,
-				ap_csum_err:1,
-				ap_nospc_err:1,
-				ap_discard_obj:1;
+	unsigned int ap_discard : 1, ap_csum_err : 1, ap_nospc_err : 1, ap_in_progress : 1,
+	    ap_discard_obj : 1;
 	struct umem_instance	*ap_umm;
 	int			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -1204,9 +1202,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
 	bio_iov_set(&bsgl_dst.bs_iovs[0], ent_in->ei_addr, seg_size);
 
-	copy_desc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst);
-	if (copy_desc == NULL) {
-		D_ERROR("Failed to Prepare source & target SGLs for copy.\n");
+	rc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst, &copy_desc);
+	if (rc) {
+		D_ERROR("Failed to Prepare source & target SGLs for copy. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
@@ -2326,7 +2324,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 			*acts |= VOS_ITER_CB_ABORT;
 			if (rc == -DER_CSUM) {
-				agg_param->ap_csum_err = true;
+				agg_param->ap_csum_err = 1;
 				if (vam && vam->vam_csum_errs)
 					d_tm_inc_counter(vam->vam_csum_errs, 1);
 			} else if (rc == -DER_NOSPACE) {
@@ -2336,6 +2334,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				 *  this entry to avoid orphaned tree
 				 *  assertion
 				 */
+				agg_param->ap_in_progress = 1;
 				agg_param->ap_skip_akey = true;
 				agg_param->ap_skip_dkey = true;
 				agg_param->ap_skip_obj = true;
@@ -2439,6 +2438,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc == -DER_TX_BUSY) {
 			struct vos_agg_metrics	*vam = agg_cont2metrics(cont);
 
+			agg_param->ap_in_progress = 1;
 			rc = 0;
 			switch (type) {
 			default:
@@ -2691,6 +2691,15 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 		rc = -DER_CSUM;	/* Inform caller the csum error */
 		close_merge_window(&ad->ad_agg_param.ap_window, rc);
 		/* HAE needs be updated for csum error case */
+	} else if (ad->ad_agg_param.ap_in_progress) {
+		/* Don't update HAE when there were in-progress entries. Otherwise,
+		 * we will never aggregate anything in those subtrees until there is
+		 * a new write.
+		 *
+		 * NB: We may be able to improve this by tracking the lowest epoch
+		 * of such  entries and updating the HAE to that value - 1.
+		 */
+		goto exit;
 	}
 
 update_hae:

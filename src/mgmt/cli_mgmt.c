@@ -477,7 +477,7 @@ int dc_mgmt_net_cfg(const char *name)
 
 			rc = _split_env(env, &v_name, &v_value);
 			if (rc != 0) {
-				D_ERROR("invalid client env var: %s", env);
+				D_ERROR("invalid client env var: %s\n", env);
 				continue;
 			}
 

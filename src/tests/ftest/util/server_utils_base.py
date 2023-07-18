@@ -59,6 +59,7 @@ class DaosServerCommand(YamlCommand):
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
         self.json_logs = FormattedParameter("--json-logging", False)
+        self.json = FormattedParameter("--json", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
         # Additional daos_server command line parameters:
         #     --allow-proxy  Allow proxy configuration via environment
@@ -930,11 +931,10 @@ class DaosServerCommandRunner(DaosServerCommand):
         """Call daos_server version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the daos_server command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos_server version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
