@@ -1696,6 +1696,83 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				NvmeBytes: uint64(1) * uint64(humanize.TByte),
 			},
 		},
+		"single MD-on-SSD server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleData),
+								},
+							},
+							Rank: 0,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(2) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleWAL | storage.BdevRoleMeta),
+								},
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"single Ephemeral server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole:    &storage.BdevRoles{storage.OptionBits(0)},
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
 		"double server": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
