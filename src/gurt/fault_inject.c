@@ -733,28 +733,28 @@ out:
 int
 d_fault_inject_init(void)
 {
-	D_INFO("Fault Injection not initialized feature not included in build");
+	D_INFO("Fault Injection not initialized feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_fini(void)
 {
-	D_INFO("Fault Injection not finalized feature not included in build");
+	D_INFO("Fault Injection not finalized feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_enable(void)
 {
-	D_INFO("Fault Injection not enabled feature not included in build");
+	D_INFO("Fault Injection not enabled feature not included in build\n");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_disable(void)
 {
-	D_INFO("Fault Injection not disabled feature not included in build");
+	D_INFO("Fault Injection not disabled feature not included in build\n");
 	return -DER_NOSYS;
 }
 
@@ -773,7 +773,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 int
 d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
 {
-	D_INFO("Fault Injection attr not set feature not included in build");
+	D_INFO("Fault Injection attr not set feature not included in build\n");
 	return 0;
 }
 

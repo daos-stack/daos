@@ -1022,7 +1022,7 @@ cleanup:
 	g_shutdown_flag = 1;
 
 	if (pthread_join(tid, NULL)) {
-		D_ERROR("Could not join progress thread");
+		D_ERROR("Could not join progress thread\n");
 		ret = -1;
 	}
 
