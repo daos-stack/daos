@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -115,7 +115,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system query --with-states joined,Excluded",
 			strings.Join([]string{
 				printRequest(t, &control.SystemQueryReq{
-					WantedStates: "joined,Excluded",
+					WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
 				}),
 			}, " "),
 			nil,

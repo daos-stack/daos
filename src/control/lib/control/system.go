@@ -185,34 +185,21 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool   // Fail without retrying if the MS is unavailable
-	NotOK             bool   // Only show engines not in a joined state
-	WantedStates      string // Comma separated list of wanted states
-}
-
-func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
-	var states []system.MemberState
-
-	for _, tok := range strings.Split(statesStr, ",") {
-		ms := system.MemberStateFromString(strings.TrimSpace(tok))
-		if ms == system.MemberStateUnknown {
-			return 0, errors.Errorf("invalid state name %q", tok)
-		}
-		states = append(states, ms)
-	}
-
-	mask, _ := system.MaskFromStates(states...)
-	return mask, nil
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      system.MemberState // Bitmask of desired states
 }
 
 func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 	switch {
 	case req.NotOK:
 		return system.AllMemberFilter &^ system.MemberStateJoined, nil
-	case req.WantedStates != "":
-		return memberStateMaskFromStrings(req.WantedStates)
-	default:
+	case req.WantedStates == 0:
 		return system.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
+		return req.WantedStates, nil
+	default:
+		return system.MemberStateUnknown, errors.New("invalid member states bitmask")
 	}
 }
 

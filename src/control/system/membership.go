@@ -335,7 +335,7 @@ func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (me
 	m.RLock()
 	defer m.RUnlock()
 
-	mask, _ := MaskFromStates(desiredStates...)
+	mask, _ := MemberStates2Mask(desiredStates...)
 
 	if rankSet == nil || rankSet.Count() == 0 {
 		if mask == AllMemberFilter {

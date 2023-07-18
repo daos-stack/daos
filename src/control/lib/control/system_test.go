@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -566,15 +566,15 @@ func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 		},
 		"with-states": {
 			req: &SystemQueryReq{
-				WantedStates: "joined,excluded",
+				WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
 			},
 			expMask: system.MemberStateJoined | system.MemberStateExcluded,
 		},
 		"with-states; bad state": {
 			req: &SystemQueryReq{
-				WantedStates: "joined,excluded,unknown",
+				WantedStates: -1,
 			},
-			expErr: errors.New("invalid state name"),
+			expErr: errors.New("invalid member states bitmask"),
 		},
 		"vanilla": {
 			req:     &SystemQueryReq{},

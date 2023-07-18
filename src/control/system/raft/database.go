@@ -640,7 +640,7 @@ func (db *Database) AllMembers() ([]*system.Member, error) {
 func (db *Database) filterMembers(desiredStates ...system.MemberState) (result []*system.Member) {
 	// NB: Must be done under a lock!
 
-	stateMask, includeUnknown := system.MaskFromStates(desiredStates...)
+	stateMask, includeUnknown := system.MemberStates2Mask(desiredStates...)
 
 	for _, m := range db.data.Members.Ranks {
 		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask != 0 {

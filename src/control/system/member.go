@@ -47,6 +47,8 @@ const (
 	MemberStateUnresponsive MemberState = 0x0100
 	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
 	MemberStateAdminExcluded MemberState = 0x0200
+	// MemberStateMax is the last entry indicating end of list.
+	MemberStateMax MemberState = 0x0400
 
 	// ExcludedMemberFilter defines the state(s) to be used when determining
 	// whether or not a member should be excluded from CaRT group map updates.
@@ -157,6 +159,28 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 			MemberStateStopping: true,
 		},
 	}[ms][to]
+}
+
+// MemberStates2Mask returns a state bitmask and a flag indicating whether to include the "Unknown"
+// state from an input list of desired member states.
+func MemberStates2Mask(desiredStates ...MemberState) (MemberState, bool) {
+	var includeUnknown bool
+	stateMask := AllMemberFilter
+
+	if len(desiredStates) > 0 {
+		stateMask = 0
+		for _, s := range desiredStates {
+			if s == MemberStateUnknown {
+				includeUnknown = true
+			}
+			stateMask |= s
+		}
+	}
+	if stateMask == AllMemberFilter {
+		includeUnknown = true
+	}
+
+	return stateMask, includeUnknown
 }
 
 // Member refers to a data-plane instance that is a member of this DAOS
@@ -353,26 +377,4 @@ func (mrs MemberResults) Errors() error {
 	}
 
 	return nil
-}
-
-// MaskFromStates returns a state bitmask and a flag indicating whether to include the "Unknown"
-// state from an input list of desired member states.
-func MaskFromStates(desiredStates ...MemberState) (MemberState, bool) {
-	var includeUnknown bool
-	stateMask := AllMemberFilter
-
-	if len(desiredStates) > 0 {
-		stateMask = 0
-		for _, s := range desiredStates {
-			if s == MemberStateUnknown {
-				includeUnknown = true
-			}
-			stateMask |= s
-		}
-	}
-	if stateMask == AllMemberFilter {
-		includeUnknown = true
-	}
-
-	return stateMask, includeUnknown
 }
