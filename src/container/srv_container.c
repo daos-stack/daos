@@ -78,8 +78,8 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	if (num_allowed_failures >= num_failed)
 		return 0;
 
-	D_ERROR("Domain contains %d failed components, allows at most %d",
-		num_failed, num_allowed_failures);
+	D_ERROR("Domain contains %d failed components, allows at most %d\n", num_failed,
+		num_allowed_failures);
 	return -DER_INVAL;
 }
 

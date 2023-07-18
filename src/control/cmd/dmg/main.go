@@ -223,6 +223,12 @@ and access control settings, along with system wide operations.`
 			logCmd.SetLog(log)
 		}
 
+		switch cmd.(type) {
+		case *versionCmd:
+			// this command don't need the rest of the setup
+			return cmd.Execute(args)
+		}
+
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)
 		if err != nil {
 			if errors.Cause(err) != control.ErrNoConfigFile {

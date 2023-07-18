@@ -123,12 +123,7 @@ func processFabricProvider(cfg *config.Server) error {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
-		if rxmProv == provider {
-			return true
-		}
-	}
-	return false
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
