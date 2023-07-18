@@ -141,7 +141,10 @@ class CoverageTracer():
 
     def add_line(self, line):
         """Register a line"""
-        fname = line.filename
+        try:
+            fname = line.filename
+        except AttributeError:
+            return
         if fname not in self._files:
             self._files[fname] = {}
         lineno = line.lineno
