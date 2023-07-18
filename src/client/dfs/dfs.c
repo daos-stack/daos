@@ -1028,7 +1028,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
 		if (rc) {
-			daos_obj_close(oh, NULL);
+			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
 		}
 
@@ -1063,6 +1063,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		} else {
 			daos_handle_t	file_oh;
 
+			/* Added to avoid issues in daos_hhash_link_lookup due to uninitialized
+			 * file_oh in NLT fault injection test */
+			memset(&file_oh, 0, sizeof(daos_handle_t));
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
 						       entry.chunk_size ? entry.chunk_size :
 						       dfs->attr.da_chunk_size, &file_oh, NULL);
@@ -1078,6 +1081,10 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			}
 
 			rc = daos_array_close(file_oh, NULL);
+			/* Try again in case of out of memory. Needed to avoid memory leak in
+			 * NLT fault injection */
+			if (rc == -DER_NOMEM)
+				rc = daos_array_close(file_oh, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		}

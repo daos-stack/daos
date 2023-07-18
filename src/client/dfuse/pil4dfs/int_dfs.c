@@ -274,9 +274,7 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	rc = dfs_release(hdl->oh);
 	if (rc == ENOMEM)
-		rc = dfs_release(hdl->oh);
-	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		dfs_release(hdl->oh);
 	D_FREE(hdl);
 }
 
@@ -315,7 +313,7 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	dfs_obj_t      *oh;
 	d_list_t       *rlink;
 	mode_t          mode;
-	int             rc;
+	int             rc, rc2;
 
 	/* TODO: Remove this after testing. */
 	D_ASSERT(strlen(name) == len);
@@ -333,7 +331,9 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 
 	if (!S_ISDIR(mode)) {
 		/* Not a directory, return ENOENT*/
-		dfs_release(oh);
+		rc = dfs_release(oh);
+		if (rc == ENOMEM)
+			dfs_release(oh);
 		return ENOTDIR;
 	}
 
@@ -357,7 +357,9 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 	return 0;
 
 out_release:
-	dfs_release(oh);
+	rc2 = dfs_release(oh);
+	if (rc2 == ENOMEM)
+		dfs_release(oh);
 	D_FREE(hdl);
 	return rc;
 }
@@ -619,8 +621,10 @@ discover_daos_mount_with_env(void)
 		D_FATAL("DAOS_CONTAINER is not set.\n");
 		D_GOTO(out, rc = EINVAL);
 	}
-
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
+	/* Added to avoid issues due to fault injection. Try again in case of ENOMEM */
+	if (dfs_list[num_dfs].fs_root == NULL)
+		D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
@@ -680,6 +684,8 @@ discover_dfuse_mounts(void)
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
+			if (pt_dfs_mt->fs_root == NULL)
+				D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
 			if (pt_dfs_mt->fs_root == NULL)
 				D_GOTO(out, rc = ENOMEM);
 			num_dfs++;
@@ -1381,6 +1387,8 @@ free_fd(int idx)
 
 	if (saved_obj) {
 		rc = dfs_release(saved_obj->file);
+		if (rc == ENOMEM)
+			dfs_release(saved_obj->file);
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct file_obj. struct file_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -1391,8 +1399,6 @@ free_fd(int idx)
 		 */
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
-		if (rc)
-			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	}
 }
 
@@ -1429,8 +1435,8 @@ free_dirfd(int idx)
 		D_FREE(saved_obj->path);
 		D_FREE(saved_obj->ents);
 		rc = dfs_release(saved_obj->dir);
-		if (rc)
-			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		if (rc == ENOMEM)
+			dfs_release(saved_obj->dir);
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct dir_obj. struct dir_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -2641,19 +2647,19 @@ opendir(const char *path)
 	D_ALLOC_ARRAY(dir_list[idx_dirfd]->ents, READ_DIR_BATCH_SIZE);
 	if (dir_list[idx_dirfd]->ents == NULL) {
 		free_dirfd(idx_dirfd);
-		D_GOTO(out_err, rc = ENOMEM);
+		D_GOTO(out_err_ret, rc = ENOMEM);
 	}
 	/* allocate memory for path[]. */
 	D_ASPRINTF(dir_list[idx_dirfd]->path, "%s%s", dfs_mt->fs_root, full_path);
 	if (dir_list[idx_dirfd]->path == NULL) {
 		free_dirfd(idx_dirfd);
-		D_GOTO(out_err, rc = ENOMEM);
+		D_GOTO(out_err_ret, rc = ENOMEM);
 	}
 	if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
 		D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
 			strerror(ENAMETOOLONG));
 		free_dirfd(idx_dirfd);
-		D_GOTO(out_err, rc = ENAMETOOLONG);
+		D_GOTO(out_err_ret, rc = ENAMETOOLONG);
 	}
 
 	FREE(parent_dir);
@@ -3197,6 +3203,8 @@ readlink(const char *path, char *buf, size_t size)
 	if (rc)
 		goto out_release;
 	rc = dfs_release(obj);
+	if (rc == ENOMEM)
+		rc = dfs_release(obj);
 	if (rc)
 		goto out_err;
 	/* The NULL at the end should not be included in the length */
@@ -3209,8 +3217,8 @@ out_org:
 
 out_release:
 	rc2 = dfs_release(obj);
-	if (rc2)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc2, strerror(rc2));
+	if (rc2 == ENOMEM)
+		dfs_release(obj);
 
 out_err:
 	FREE(parent_dir);
@@ -3627,8 +3635,8 @@ out_old:
 	D_FREE(buff);
 	errno_save = rc;
 	rc = dfs_release(obj_old);
-	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+	if (rc == ENOMEM)
+		dfs_release(obj_old);
 	errno = errno_save;
 	return (-1);
 
@@ -3639,8 +3647,8 @@ out_new:
 	fclose(fIn);
 	errno_save = rc;
 	rc = dfs_release(obj_new);
-	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+	if (rc == ENOMEM)
+		dfs_release(obj_new);
 	errno = errno_save;
 	return (-1);
 
@@ -5492,13 +5500,17 @@ finalize_dfs(void)
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
+		if (rc == -DER_NOMEM)
+			rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
 			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[i].fs_root,
 				DP_RC(rc));
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
-		if (rc != 0) {
+		if (rc == -DER_NOMEM)
+			rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
+		if (rc != -DER_SUCCESS) {
 			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
 				dfs_list[i].fs_root, DP_RC(rc));
 			continue;
