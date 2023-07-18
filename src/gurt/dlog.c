@@ -473,6 +473,8 @@ d_log_write(char *msg, int len, bool flush)
 					mst.log_file, strerror(errno));
 				return -1;
 			}
+
+			mst.log_fd = fileno(stderr);
 		} else {
 			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
 			if (mst.log_fd < 0) {
