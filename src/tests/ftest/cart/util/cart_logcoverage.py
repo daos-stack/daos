@@ -102,16 +102,12 @@ class CoverageTracer():
         fd.write("<?xml version='1.0' encoding='UTF-8'?>\n")
         fd.write('<!DOCTYPE coverage SYSTEM ')
         fd.write("'http://cobertura.sourceforge.net/xml/coverage-04.dtd'>\n")
-        # fd.write('<coverage line-rate="0.8571428571428571" branch-rate="0.5" lines-covered="6" ')
-        # fd.write('lines-valid="7" branches-covered="1" branches-valid="2" complexity="0.0" ')
-        # fd.write('timestamp="1678315055" version="daos 0.1">\n')
         fd.write('<coverage version="daos 0.1">\n')
         fd.write("""<sources>
 <source>.</source>
 </sources>
 <packages>\n""")
         fd.write('<package name="Fault injection reach">\n')
-        # fd.write('line-rate="0.8571428571428571" branch-rate="0.5" complexity="0.0">\n')
         fd.write('<classes>\n')
 
         for (fname, data) in self._files.items():
@@ -124,9 +120,8 @@ class CoverageTracer():
                 possible += ptt
                 xml += loc.xml_str()
             rate = taken / possible
-#            fd.write(
-#                f'line-rate = "0.8571428571428571" branch-rate="{rate:.2f}" complexity="0.0">\n')
-            fd.write(f' <class name = "{fname}" filename = "{fname}" branch-rate="{rate:.2f}">\n')
+            fname_clean = fname.replace('/', '_')
+            fd.write(f' <class name="{fname_clean}" filename="{fname}" branch-rate="{rate:.2f}">\n')
             fd.write('  <methods/>\n')
             fd.write('  <lines>\n')
             fd.write(xml)
