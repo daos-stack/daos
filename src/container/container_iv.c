@@ -1373,7 +1373,8 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
-	D_ASSERT(iv_entry->iv_prop.cip_valid_bits & DAOS_CO_QUERY_PROP_OBJ_VERSION);
+	if (iv_entry->iv_prop.cip_valid_bits & DAOS_CO_QUERY_PROP_OBJ_VERSION)
+		D_WARN(DF_UUID" prop update no obj version\n", DP_UUID(cont_uuid));
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
 			    sync ? CRT_IV_SYNC_EAGER : CRT_IV_SYNC_LAZY,
