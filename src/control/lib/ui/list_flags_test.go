@@ -254,12 +254,7 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 				}
 			}
 
-			cmpOpts := []cmp.Option{
-				//				cmpopts.IgnoreUnexported(
-				//					ui.MemberStateSetFlag{},
-				//				),
-			}
-			if diff := cmp.Diff(expComps, gotComps, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(expComps, gotComps); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
 			}
 		})

@@ -7,7 +7,6 @@
 package ui
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 
@@ -94,17 +93,16 @@ func (f *MemberStateSetFlag) Empty() bool {
 // States are specified as a comma separated list of AwaitFormat Starting Ready Joined Stopping
 // Stopped Excluded AdminExcluded Errored Unresponsive
 func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
-	var states []system.MemberState
+	var mask system.MemberState
 
 	for _, tok := range strings.Split(statesStr, memberStateSetSep) {
 		ms := system.MemberStateFromString(strings.TrimSpace(tok))
 		if ms == system.MemberStateUnknown {
 			return 0, errors.Errorf("invalid state name %q", tok)
 		}
-		states = append(states, ms)
+		mask |= ms
 	}
 
-	mask, _ := system.MemberStates2Mask(states...)
 	return mask, nil
 }
 
@@ -121,11 +119,6 @@ func (f *MemberStateSetFlag) UnmarshalFlag(fv string) error {
 	f.States = mask
 
 	return nil
-}
-
-// MarshalJSON implements the json.Marshaler interface.
-func (f *MemberStateSetFlag) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf("%d", f.States)), nil
 }
 
 // Complete implements the go-flags.Completer interface and is used to suggest possible completions

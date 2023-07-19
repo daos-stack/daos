@@ -199,7 +199,8 @@ func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
 	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
 		return req.WantedStates, nil
 	default:
-		return system.MemberStateUnknown, errors.New("invalid member states bitmask")
+		return system.MemberStateUnknown, errors.Errorf("invalid member states bitmask %x",
+			int(req.WantedStates))
 	}
 }
 

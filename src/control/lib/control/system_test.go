@@ -574,7 +574,7 @@ func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
 			req: &SystemQueryReq{
 				WantedStates: -1,
 			},
-			expErr: errors.New("invalid member states bitmask"),
+			expErr: errors.New("invalid member states bitmask -1"),
 		},
 		"vanilla": {
 			req:     &SystemQueryReq{},
