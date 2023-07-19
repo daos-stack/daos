@@ -203,6 +203,13 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 		expComplStrs []string
 		expErr       error
 	}{
+		"empty string; suggest all": {
+			expComplStrs: []string{
+				"AdminExcluded", "AwaitFormat", "Errored", "Excluded",
+				"Joined", "Ready", "Starting", "Stopped", "Stopping",
+				"Unresponsive",
+			},
+		},
 		"single suggestion": {
 			arg:          "Excl",
 			expComplStrs: []string{"Excluded"},
@@ -214,6 +221,26 @@ func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
 		"multiple suggestions; case insensitive": {
 			arg:          "s",
 			expComplStrs: []string{"Starting", "Stopped", "Stopping"},
+		},
+		"suggestions after prefix; empty string; suggest remainder": {
+			arg: "Starting,",
+			expComplStrs: []string{
+				"Starting,AdminExcluded", "Starting,AwaitFormat",
+				"Starting,Errored", "Starting,Excluded", "Starting,Joined",
+				"Starting,Ready", "Starting,Stopped", "Starting,Stopping",
+				"Starting,Unresponsive",
+			},
+		},
+		"suggestions after prefix; partial match": {
+			arg:          "Starting,S",
+			expComplStrs: []string{"Starting,Stopped", "Starting,Stopping"},
+		},
+		"suggestions after multiple states in prefix; partial match": {
+			arg: "Starting,Stopped,Stopping,Unresponsive,AwaitFormat,E",
+			expComplStrs: []string{
+				"Starting,Stopped,Stopping,Unresponsive,AwaitFormat,Errored",
+				"Starting,Stopped,Stopping,Unresponsive,AwaitFormat,Excluded",
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

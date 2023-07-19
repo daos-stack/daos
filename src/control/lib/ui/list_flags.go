@@ -78,6 +78,8 @@ func (f *HostSetFlag) MarshalJSON() ([]byte, error) {
 	return []byte(f.String()), nil
 }
 
+var memberStateSetSep = ","
+
 // MemberStateSetFlag is a go-flags compatible flag type for handling inputs that can be converted
 // to a system.MemberState slice.
 type MemberStateSetFlag struct {
@@ -94,7 +96,7 @@ func (f *MemberStateSetFlag) Empty() bool {
 func memberStateMaskFromStrings(statesStr string) (system.MemberState, error) {
 	var states []system.MemberState
 
-	for _, tok := range strings.Split(statesStr, ",") {
+	for _, tok := range strings.Split(statesStr, memberStateSetSep) {
 		ms := system.MemberStateFromString(strings.TrimSpace(tok))
 		if ms == system.MemberStateUnknown {
 			return 0, errors.Errorf("invalid state name %q", tok)
@@ -127,15 +129,28 @@ func (f *MemberStateSetFlag) MarshalJSON() ([]byte, error) {
 }
 
 // Complete implements the go-flags.Completer interface and is used to suggest possible completions
-// for the supplied input string.
+// for the supplied input string. Handle multiple member state,... completions.
 func (f *MemberStateSetFlag) Complete(match string) (comps []flags.Completion) {
+	var prefix string
+	stateStrs := strings.Split(match, memberStateSetSep)
+	if len(stateStrs) > 1 {
+		match = stateStrs[len(stateStrs)-1]
+		prefix = strings.Join(stateStrs[0:len(stateStrs)-1], memberStateSetSep)
+		prefix += memberStateSetSep
+	}
+
 	s := system.MemberState(1)
 	for s != system.MemberStateMax {
-		if strings.HasPrefix(strings.ToLower(s.String()), strings.ToLower(match)) {
+		hasMatch := strings.HasPrefix(strings.ToLower(s.String()), strings.ToLower(match))
+		stateNotInPrefix := !strings.Contains(prefix, s.String())
+
+		// If state has already been supplied, don't suggest it again.
+		if hasMatch && stateNotInPrefix {
 			comps = append(comps, flags.Completion{
-				Item: s.String(),
+				Item: prefix + s.String(),
 			})
 		}
+
 		s = system.MemberState(int(s) << 1)
 	}
 
