@@ -2,6 +2,7 @@ hosts:
   test_servers: 1
 timeout: 250
 server_config:
+  system_ram_reserved: 16
   engines_per_host: 1
   engines:
     0:

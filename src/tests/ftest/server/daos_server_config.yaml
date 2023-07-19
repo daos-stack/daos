@@ -6,6 +6,7 @@ timeout: 130
 server_config:
   name: daos_server
   engines_per_host: 1
+  system_ram_reserved: 16
   engines:
     0:
       storage:
