@@ -221,19 +221,24 @@ class AvocadoInfo():
 
         return default
 
-    def get_logs_dir(self):
+    def get_logs_dir(self, log):
         """Get the avocado directory in which the test results are stored.
+
+        Args:
+            log (logger): logger for the messages produced by this method
 
         Returns:
             str: the directory used by avocado to log test results
         """
         default_base_dir = os.path.join("~", "avocado", "job-results")
-        return os.path.expanduser(self.get_setting("datadir.paths", "logs_dir", default_base_dir))
+        return os.path.expanduser(
+            self.get_setting(log, "datadir.paths", "logs_dir", default_base_dir))
 
-    def get_directory(self, directory, create=True):
+    def get_directory(self, log, directory, create=True):
         """Get the avocado test directory for the test.
 
         Args:
+            log (logger): logger for the messages produced by this method
             directory (str): name of the sub directory to add to the logs directory
             create (bool, optional): whether or not to create the directory if it doesn't exist.
                 Defaults to True.
@@ -241,7 +246,7 @@ class AvocadoInfo():
         Returns:
             str: the directory used by avocado to log test results
         """
-        logs_dir = self.get_logs_dir()
+        logs_dir = self.get_logs_dir(log)
         test_dir = os.path.join(logs_dir, directory)
         if create:
             os.makedirs(test_dir, exist_ok=True)
@@ -824,7 +829,7 @@ class TestRunner():
         Args:
             log (logger): logger for the messages produced by this method
         """
-        avocado_logs_dir = self.avocado.get_logs_dir()
+        avocado_logs_dir = self.avocado.get_logs_dir(log)
         crash_dir = os.path.join(avocado_logs_dir.replace("job-results", "data"), "crashes")
         if os.path.isdir(crash_dir):
             crash_files = [

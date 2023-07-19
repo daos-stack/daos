@@ -321,7 +321,8 @@ class Launch():
 
         # Configure the logfile
         self.avocado.set_version(logger)
-        self.logdir = self.avocado.get_directory(os.path.join("launch", self.name.lower()), False)
+        self.logdir = self.avocado.get_directory(
+            logger, os.path.join("launch", self.name.lower()), False)
         self.logfile = os.path.join(self.logdir, "job.log")
 
         # Rename the launch log directory if one exists
@@ -344,7 +345,7 @@ class Launch():
         logger.info("-" * 80)
 
         # Results tracking settings
-        self.job_results_dir = self.avocado.get_logs_dir()
+        self.job_results_dir = self.avocado.get_logs_dir(logger)
         max_chars = self.avocado.get_setting(logger, "job.run.result.xunit", "max_test_log_chars")
         self.job = Job(
             self.name, xml_enabled="on", html_enabled="on", log_dir=self.logdir,
