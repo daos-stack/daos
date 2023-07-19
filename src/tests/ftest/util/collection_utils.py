@@ -958,7 +958,7 @@ def collect_test_result(log, test, test_result, job_results_dir, stop_daos, arch
             if not data["hosts"]:
                 continue
             return_code |= archive_files(
-                summary, data["hosts"].copy(), data["source"], data["pattern"],
+                log, summary, data["hosts"].copy(), data["source"], data["pattern"],
                 data["destination"], data["depth"], threshold, data["timeout"],
                 test_result, test)
 
