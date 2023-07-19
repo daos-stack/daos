@@ -739,7 +739,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_PERF_DOMAIN);
-	if (pool_hdl->sph_global_ver > 0)
+	if (pool_hdl->sph_global_ver > 2)
 		D_ASSERT(entry_def != NULL);
 	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified perf_domain from container, inherit from pool */
