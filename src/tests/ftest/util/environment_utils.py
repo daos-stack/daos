@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from collections import OrderedDict, defaultdict
-import errno
 import json
 import os
 import site
@@ -52,15 +51,8 @@ def get_build_environment(log, build_vars_file):
         with open(build_vars_file, encoding="utf-8") as vars_file:
             return json.load(vars_file)
 
-    except ValueError as error:
+    except Exception as error:      # pylint: disable=broad-except
         raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
-
-    except IOError as error:
-        if error.errno == errno.ENOENT:
-            raise TestEnvironmentException(
-                "Error obtaining build environment:", str(error)) from error
-
-    return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
 
 def update_path(log, build_vars_file):
@@ -293,7 +285,7 @@ class TestEnvironment():
         """
         if value is not None:
             os.environ[self.__ENV_VAR_MAP[key]] = str(value)
-        else:
+        elif os.environ.get(self.__ENV_VAR_MAP[key]):
             os.environ.pop(self.__ENV_VAR_MAP[key])
 
     @property
@@ -303,7 +295,7 @@ class TestEnvironment():
         Returns:
             str: the application directory path
         """
-        return os.environ[self.__ENV_VAR_MAP['app_dir']]
+        return os.environ.get(self.__ENV_VAR_MAP['app_dir'])
 
     @app_dir.setter
     def app_dir(self, value):
@@ -320,7 +312,7 @@ class TestEnvironment():
         Returns:
             str: the default application directory path
         """
-        return os.path.join(self.app_dir, "daos_test", "apps")
+        return os.path.join(self.shared_dir, "daos_test", "apps")
 
     @property
     def app_src(self):
@@ -329,7 +321,7 @@ class TestEnvironment():
         Returns:
             str: the location from which to copy test applications
         """
-        return os.environ[self.__ENV_VAR_MAP['app_src']]
+        return os.environ.get(self.__ENV_VAR_MAP['app_src'])
 
     @app_src.setter
     def app_src(self, value):
@@ -347,7 +339,7 @@ class TestEnvironment():
         Returns:
             str: the local log directory path
         """
-        return os.environ[self.__ENV_VAR_MAP['log_dir']]
+        return os.environ.get(self.__ENV_VAR_MAP['log_dir'])
 
     @log_dir.setter
     def log_dir(self, value):
@@ -374,7 +366,7 @@ class TestEnvironment():
         Returns:
             str: the shared log directory path
         """
-        return os.environ[self.__ENV_VAR_MAP['shared_dir']]
+        return os.environ.get(self.__ENV_VAR_MAP['shared_dir'])
 
     @shared_dir.setter
     def shared_dir(self, value):
@@ -401,7 +393,7 @@ class TestEnvironment():
         Returns:
             str: the user directory path
         """
-        return os.environ[self.__ENV_VAR_MAP['user_dir']]
+        return os.environ.get(self.__ENV_VAR_MAP['user_dir'])
 
     @user_dir.setter
     def user_dir(self, value):
@@ -427,7 +419,7 @@ class TestEnvironment():
         Returns:
             str: the interface device
         """
-        return os.environ[self.__ENV_VAR_MAP['interface']]
+        return os.environ.get(self.__ENV_VAR_MAP['interface'])
 
     @interface.setter
     def interface(self, value):
@@ -472,7 +464,7 @@ class TestEnvironment():
         Returns:
             str: the provider
         """
-        return os.environ[self.__ENV_VAR_MAP['provider']]
+        return os.environ.get(self.__ENV_VAR_MAP['provider'])
 
     @provider.setter
     def provider(self, value):
@@ -561,7 +553,7 @@ class TestEnvironment():
         Returns:
             str: the insecure_mode
         """
-        return os.environ[self.__ENV_VAR_MAP['interface']]
+        return os.environ.get(self.__ENV_VAR_MAP['interface'])
 
     @insecure_mode.setter
     def insecure_mode(self, value):
@@ -588,7 +580,7 @@ class TestEnvironment():
         Returns:
             str: the bullseye source file
         """
-        return os.environ[self.__ENV_VAR_MAP['bullseye_src']]
+        return os.environ.get(self.__ENV_VAR_MAP['bullseye_src'])
 
     @bullseye_src.setter
     def bullseye_src(self, value):
@@ -615,7 +607,7 @@ class TestEnvironment():
         Returns:
             str: the bullseye file
         """
-        return os.environ[self.__ENV_VAR_MAP['bullseye_file']]
+        return os.environ.get(self.__ENV_VAR_MAP['bullseye_file'])
 
     @bullseye_file.setter
     def bullseye_file(self, value):

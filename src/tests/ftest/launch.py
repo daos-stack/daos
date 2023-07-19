@@ -50,14 +50,6 @@ LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
 
 
-# Set up a logger for the console messages. Initially configure the console handler to report debug
-# messages until a file logger can be established to handle the debug messages. After which the
-# console logger will be updated to handle info messages.
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
-
-
 class Launch():
     """Class to launch avocado tests."""
 
@@ -202,10 +194,10 @@ class Launch():
         self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
 
         # Setup the user environment
-        test_env = TestEnvironment()
-        build_vars_file = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
         try:
+            test_env = TestEnvironment()
+            build_vars_file = os.path.join(
+                os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
             if args.list:
                 set_test_environment(logger, build_vars_file)
             else:
@@ -317,7 +309,7 @@ class Launch():
             LaunchException: if there are any issues obtaining data from avocado commands
         """
         # Setup the avocado config files to ensure these files are read by avocado
-        self.avocado.set_config(self.name, overwrite_config)
+        self.avocado.set_config(overwrite_config)
 
         # Configure the logfile
         self.avocado.set_version(logger)
@@ -516,6 +508,7 @@ class Launch():
 
         # Replace any placeholders in the extra yaml file, if provided
         if args.extra_yaml:
+            logger.debug("Updating placeholders in extra yaml files: %s", args.extra_yaml)
             common_extra_yaml = [
                 updater.update(extra, yaml_dir) or extra for extra in args.extra_yaml]
             for test in self.tests:
@@ -543,7 +536,7 @@ class Launch():
             run_local(logger, " ".join(command))
 
             # Collect the host information from the updated test yaml
-            test.set_yaml_info(args.include_localhost)
+            test.set_yaml_info(logger, args.include_localhost)
 
     def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
                                max_nvme_tiers, control_metadata):
@@ -695,7 +688,7 @@ class Launch():
         return_code |= self.setup_slurm(test_env)
 
         # Configure hosts to collect code coverage
-        if not code_coverage.setup(self.result.tests[0]):
+        if not code_coverage.setup(logger, self.result.tests[0]):
             return_code |= 128
 
         # Run each test for as many repetitions as requested
@@ -735,7 +728,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        if not code_coverage.finalize(self.job_results_dir, self.result.tests[0]):
+        if not code_coverage.finalize(logger, self.job_results_dir, self.result.tests[0]):
             return_code |= 16
 
         # Summarize the run
@@ -1150,11 +1143,19 @@ def main():
     # Perform the steps defined by the arguments specified
     try:
         status = launch.run(args)
-    except Exception:       # pylint: disable=broad-except
-        message = "Unknown exception raised during launch.py execution"
+    except Exception as error:      # pylint: disable=broad-except
+        message = f"Unknown exception raised during launch.py execution: {str(error)}"
         status = launch.get_exit_status(1, message, "Unknown", sys.exc_info())
     sys.exit(status)
 
 
 if __name__ == "__main__":
+    # Set up a logger for the console messages. Initially configure the console handler to report
+    # debug messages until a file logger can be established to handle the debug messages. After
+    # which the console logger will be updated to handle info messages.
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
     main()
+else:
+    logger = logging.getLogger()

@@ -418,7 +418,7 @@ class Job():
 
         Args:
             log (logger): logger for the messages produced by this method
-            results (_type_): _description_
+            results (Results): the test results to use to generate the files
         """
         for key, create_method in {"results.xml": create_xml, "results.html": create_html}.items():
             output = os.path.join(self.logdir, key)
@@ -426,7 +426,7 @@ class Job():
                 log.debug("Creating %s: %s", key, output)
                 create_method(self, results)
             except Exception as error:      # pylint: disable=broad-except
-                log.error("Unable to create %s file: %s", key, str(error))
+                log.error("Unable to create %s file: %s", key, error)
             else:
                 if not os.path.exists(output):
                     log.error("The %s does not exist: %s", key, output)

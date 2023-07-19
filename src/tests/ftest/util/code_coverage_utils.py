@@ -48,32 +48,34 @@ class CodeCoverage():
             bool: False if there is a problem setting up bullseye code coverage; True otherwise
 
         """
-        if self.__hosts:
-            log.debug("-" * 80)
-            log.info("Setting up bullseye code coverage on %s:", self.__hosts)
+        if not self.__hosts:
+            return True
 
-            log.debug("Removing any existing %s file", self.__test_env.bullseye_file)
-            command = ["rm", "-fr", self.__test_env.bullseye_file]
-            if not run_remote(log, self.__hosts, " ".join(command)).passed:
-                message = "Error removing bullseye code coverage file on at least one host"
-                result.fail_test(log, "Run", message, None)
-                return False
+        log.debug("-" * 80)
+        log.info("Setting up bullseye code coverage on %s:", self.__hosts)
 
-            log.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
-            command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
-            if not run_remote(log, self.__hosts, " ".join(command)).passed:
-                message = "Error copying bullseye code coverage file on at least one host"
-                result.fail_test(log, "Run", message, None)
-                return False
+        log.debug("Removing any existing %s file", self.__test_env.bullseye_file)
+        command = ["rm", "-fr", self.__test_env.bullseye_file]
+        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+            message = "Error removing bullseye code coverage file on at least one host"
+            result.fail_test(log, "Run", message, None)
+            return False
 
-            log.debug(
-                "Updating %s bullseye code coverage file permissions",
-                self.__test_env.bullseye_file)
-            command = ["chmod", "777", self.__test_env.bullseye_file]
-            if not run_remote(log, self.__hosts, " ".join(command)).passed:
-                message = "Error updating bullseye code coverage file on at least one host"
-                result.fail_test(log, "Run", message, None)
-                return False
+        log.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
+        command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
+        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+            message = "Error copying bullseye code coverage file on at least one host"
+            result.fail_test(log, "Run", message, None)
+            return False
+
+        log.debug(
+            "Updating %s bullseye code coverage file permissions", self.__test_env.bullseye_file)
+        command = ["chmod", "777", self.__test_env.bullseye_file]
+        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+            message = "Error updating bullseye code coverage file on at least one host"
+            result.fail_test(log, "Run", message, None)
+            return False
+
         return True
 
     def finalize(self, log, job_results_dir, result):
