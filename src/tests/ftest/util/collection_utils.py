@@ -212,7 +212,7 @@ def cleanup_processes(log, test, result):
     detected, running = stop_processes(log, hosts, f"'{proc_pattern}'", force=True)
     if running:
         message = f"Failed to kill processes on {running}"
-        result.fail_test("Process", message)
+        result.fail_test(log, "Process", message)
     elif detected:
         message = f"Running processes found on {detected}"
         result.warn_test(log, "Process", message)
@@ -240,6 +240,7 @@ def cleanup_processes(log, test, result):
 
 def archive_files(log, summary, hosts, source, pattern, destination, depth, threshold, timeout,
                   test_result, test=None):
+    # pylint: disable=too-many-arguments
     """Archive the files from the source to the destination.
 
     Args:
@@ -329,7 +330,7 @@ def list_files(log, hosts, source, pattern, depth, test_result):
     result = run_remote(log, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = f"Error determining if {source_files} files exist on {hosts}"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         status = 16
     else:
         for data in result.output:
@@ -347,7 +348,7 @@ def list_files(log, hosts, source, pattern, depth, test_result):
                     "Found a file matching the '%s' failure trigger on %s",
                     FAILURE_TRIGGER, data.hosts)
                 message = f"Error trigger failure file found in {source} (error handling test)"
-                test_result.fail_test("Process", message)
+                test_result.fail_test(log, "Process", message)
                 hosts_with_files.add(data.hosts)
                 status = 16
 
@@ -379,14 +380,14 @@ def check_log_size(log, hosts, source, pattern, depth, threshold, test_result):
     result = run_remote(log, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = f"Error checking for {source_files} files exceeding the {threshold} threshold"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 32
 
     # The command output will include the source path if the threshold has been exceeded
     for data in result.output:
         if source in "\n".join(data.stdout):
             message = f"One or more {source_files} files exceeded the {threshold} threshold"
-            test_result.fail_test("Process", message)
+            test_result.fail_test(log, "Process", message)
             return 32
 
     log.debug("No %s file sizes found exceeding the %s threshold", source_files, threshold)
@@ -417,7 +418,7 @@ def cart_log_test(log, hosts, source, pattern, depth, test_result):
     result = run_remote(log, hosts, find_command(source, pattern, depth, other), timeout=4800)
     if not result.passed:
         message = f"Error running {cart_logtest} on the {source_files} files"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 16
     return 0
 
@@ -442,7 +443,7 @@ def remove_empty_files(log, hosts, source, pattern, depth, test_result):
     other = ["-empty", "-print", "-delete"]
     if not run_remote(log, hosts, find_command(source, pattern, depth, other)).passed:
         message = f"Error removing any zero-length {os.path.join(source, pattern)} files"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 16
     return 0
 
@@ -468,7 +469,7 @@ def compress_files(log, hosts, source, pattern, depth, test_result):
     result = run_remote(log, hosts, find_command(source, pattern, depth, other))
     if not result.passed:
         message = f"Error compressing {os.path.join(source, pattern)} files larger than 1M"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 16
     return 0
 
@@ -499,7 +500,7 @@ def move_files(log, hosts, source, pattern, destination, depth, timeout, test_re
         other = ["-print0", "|", "xargs", "-0", "-r0", "sudo", "-n", get_chown_command()]
         if not run_remote(log, hosts, find_command(source, pattern, depth, other)).passed:
             message = f"Error changing {os.path.join(source, pattern)} file permissions"
-            test_result.fail_test("Process", message)
+            test_result.fail_test(log, "Process", message)
             return 16
 
     # Use the last directory in the destination path to create a temporary sub-directory on the
@@ -520,14 +521,14 @@ def move_files(log, hosts, source, pattern, destination, depth, timeout, test_re
     command = f"mkdir -p '{tmp_copy_dir}'"
     if not run_remote(log, hosts, command).passed:
         message = f"Error creating temporary remote copy directory '{tmp_copy_dir}'"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 16
 
     # Move all the source files matching the pattern into the temporary remote directory
     other = f"-print0 | xargs -0 -r0 -I '{{}}' {sudo_command}mv '{{}}' '{tmp_copy_dir}'/"
     if not run_remote(log, hosts, find_command(source, pattern, depth, other)).passed:
         message = f"Error moving files to temporary remote copy directory '{tmp_copy_dir}'"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 16
 
     # Clush -rcopy the temporary remote directory to this host
@@ -539,7 +540,7 @@ def move_files(log, hosts, source, pattern, destination, depth, timeout, test_re
 
     except RunException:
         message = f"Error copying remote files to {destination}"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return_code = 16
 
     finally:
@@ -547,7 +548,7 @@ def move_files(log, hosts, source, pattern, destination, depth, timeout, test_re
         command = f"{sudo_command}rm -fr '{tmp_copy_dir}'"
         if not run_remote(log, hosts, command).passed:
             message = f"Error removing temporary remote copy directory '{tmp_copy_dir}'"
-            test_result.fail_test("Process", message)
+            test_result.fail_test(log, "Process", message)
             return_code = 16
 
     return return_code
@@ -573,12 +574,12 @@ def process_core_files(log, test_job_results, test, test_result):
 
     except CoreFileException:
         message = "Errors detected processing test core files"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return 256
 
     except Exception:       # pylint: disable=broad-except
         message = "Unhandled error processing test core files"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return 256
 
     if core_file_processing.is_el7() and str(test) in TEST_EXPECT_CORE_FILES:
@@ -589,12 +590,12 @@ def process_core_files(log, test_job_results, test, test_result):
 
     if core_files_processed > 0 and str(test) not in TEST_EXPECT_CORE_FILES:
         message = "One or more core files detected after test execution"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 2048
 
     if core_files_processed == 0 and str(test) in TEST_EXPECT_CORE_FILES:
         message = "No core files detected when expected"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return 256
 
     return 0
@@ -634,7 +635,7 @@ def rename_avocado_test_dir(log, test, job_results_dir, test_result, jenkins_xml
             os.makedirs(new_test_logs_dir)
         except OSError:
             message = f"Error creating {new_test_logs_dir}"
-            test_result.fail_test("Process", message, sys.exc_info())
+            test_result.fail_test(log, "Process", message, sys.exc_info())
             return 1024
 
     # Rename the avocado job-results test directory and update the 'latest' symlink
@@ -646,7 +647,7 @@ def rename_avocado_test_dir(log, test, job_results_dir, test_result, jenkins_xml
         log.debug("Renamed %s to %s", test_logs_dir, new_test_logs_dir)
     except OSError:
         message = f"Error renaming {test_logs_dir} to {new_test_logs_dir}"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return 1024
 
     # Update the results.xml file with the new functional test class name
@@ -658,7 +659,7 @@ def rename_avocado_test_dir(log, test, job_results_dir, test_result, jenkins_xml
         run_local(log, f"rm -fr '{test_logs_lnk}'")
     except RunException:
         message = f"Error removing {test_logs_lnk}"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return 1024
 
     return 0
@@ -699,7 +700,7 @@ def update_jenkins_xml(log, test, logs_dir, test_result):
             log.debug("Test class from xml: %s", test_class)
         except IndexError:
             message = f"Error obtaining class name from {xml_file}"
-            test_result.fail_test("Process", message, sys.exc_info())
+            test_result.fail_test(log, "Process", message, sys.exc_info())
             return False
         for cmocka_xml in cmocka_files:
             # Read the cmocka xml file
@@ -714,7 +715,7 @@ def update_jenkins_xml(log, test, logs_dir, test_result):
 
 
 def update_test_xml(log, test, xml_file, xml_data, launchable_xml, test_result):
-    """Update the classname the avocado test results xml file.
+    """Update the class name the avocado test results xml file.
 
     Also create a launchable xml file from the original avocado test results.xml file data where
     the 'name' entry is replaced by the functional test method name and a 'file' entry is added for
@@ -747,7 +748,7 @@ def update_test_xml(log, test, xml_file, xml_data, launchable_xml, test_result):
 
 
 def update_cmocka_xml(log, test, cmocka_xml, cmocka_data, test_class, test_result):
-    """Update the classname in the cmocka test result xml file.
+    """Update the class name in the cmocka test result xml file.
 
     Args:
         log (logger): logger for the messages produced by this method
@@ -763,13 +764,13 @@ def update_cmocka_xml(log, test, cmocka_xml, cmocka_data, test_class, test_resul
     log.debug("Updating the xml data in the test %s file", cmocka_xml)
 
     if 'classname' not in cmocka_data:
-        # Update cmocka results that are missing a 'classname' entry for their test suite entries
+        # Update cmocka results that are missing a class name entry for their test suite entries
         try:
             name = re.findall(r'<testsuite name="([A-Za-z0-9_-]*)"', cmocka_data)[0]
             log.debug("Cmocka test name from xml: %s", name)
         except IndexError:
             message = f"Error obtaining cmocka test name from {cmocka_xml}"
-            test_result.fail_test("Process", message, sys.exc_info())
+            test_result.fail_test(log, "Process", message, sys.exc_info())
             return False
         pattern = '<testcase name='
         replacement = f'<testcase classname="FTEST_{test.directory}-{test_class}.{name} name='
@@ -798,7 +799,7 @@ def get_xml_data(log, xml_file, test_result):
             return xml_buffer.read()
     except OSError:
         message = f"Error reading {xml_file}"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return None
 
 
@@ -828,7 +829,7 @@ def update_xml(log, xml_file, pattern, replacement, xml_data, test_result):
             xml_buffer.write(re.sub(pattern, replacement, xml_data))
     except OSError:
         message = f"Error writing {xml_file}"
-        test_result.fail_test("Process", message, sys.exc_info())
+        test_result.fail_test(log, "Process", message, sys.exc_info())
         return False
 
     log.debug("  Contents of %s after replacement", xml_file)
@@ -841,6 +842,7 @@ def update_xml(log, xml_file, pattern, replacement, xml_data, test_result):
 
 def collect_test_result(log, test, test_result, job_results_dir, stop_daos, archive, rename,
                         jenkins_xml, core_files, threshold, total_repeats):
+    # pylint: disable=too-many-arguments
     """Process the test results.
 
     This may include (depending upon argument values):
@@ -886,7 +888,7 @@ def collect_test_result(log, test, test_result, job_results_dir, stop_daos, arch
     results_xml = os.path.join(test_logs_dir, "results.xml")
     if not os.path.exists(results_xml):
         message = f"Missing a '{results_xml}' file for {str(test)}"
-        test_result.fail_test("Process", message)
+        test_result.fail_test(log, "Process", message)
         return_code = 16
 
     # Optionally store all of the server and client config files and remote logs along with

@@ -234,6 +234,7 @@ junit
 kds
 kv
 kwargs
+launchable
 ldflags
 len
 libaio

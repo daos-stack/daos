@@ -538,6 +538,7 @@ class TestRunner():
 
     def process(self, log, job_results_dir, test, repeat, stop_daos, archive, rename,
                 jenkins_xml, core_files, threshold):
+        # pylint: disable=too-many-arguments
         """Process the test results.
 
         This may include (depending upon argument values):
