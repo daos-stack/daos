@@ -19,3 +19,4 @@ else
     echo "No avocado job-results found!"
     ls -al install/lib/daos/TESTING/ftest/avocado/job-results
     exit 1
+fi
