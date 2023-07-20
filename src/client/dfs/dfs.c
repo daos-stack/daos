@@ -127,7 +127,10 @@ struct dfs_obj {
 	/** DAOS object ID of the parent of the object */
 	daos_obj_id_t		parent_oid;
 	/** entry name of the object in the parent */
-	char			name[DFS_MAX_NAME + 1];
+	union {
+		char     name[DFS_MAX_NAME + 1];
+		d_list_t free_list;
+	};
 	union {
 		/** Symlink value if object is a symbolic link */
 		char	*value;
@@ -138,6 +141,7 @@ struct dfs_obj {
 			daos_size_t             chunk_size;
 		} d;
 	};
+	dfs_t *dfs;
 };
 
 enum {
@@ -193,6 +197,7 @@ struct dfs {
 	struct dfs_mnt_hdls	*cont_hdl;
 	/** the root dir stat buf */
 	struct stat		root_stbuf;
+	d_list_t                 orphans;
 };
 
 struct dfs_entry {
@@ -2317,6 +2322,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->coh = coh;
 	dfs->amode = amode;
 
+	D_INIT_LIST_HEAD(&dfs->orphans);
 	rc = D_MUTEX_INIT(&dfs->lock, NULL);
 	if (rc != 0)
 		D_GOTO(err_dfs, rc = daos_der2errno(rc));
@@ -2458,6 +2464,17 @@ err_prop:
 	return rc;
 }
 
+static void
+dfs_drop_orhphans(dfs_t *dfs)
+{
+	dfs_obj_t *obj;
+	dfs_obj_t *next;
+
+	d_list_for_each_entry_safe(obj, next, &dfs->orphans, free_list) {
+		dfs_release(obj);
+	}
+}
+
 int
 dfs_umount(dfs_t *dfs)
 {
@@ -2469,6 +2486,8 @@ dfs_umount(dfs_t *dfs)
 	}
 
 	D_MUTEX_LOCK(&dfs->lock);
+	dfs_drop_orhphans(dfs);
+
 	if (dfs->poh_refcount != 0) {
 		D_ERROR("Pool open handle refcount not 0\n");
 		D_MUTEX_UNLOCK(&dfs->lock);
@@ -2747,6 +2766,8 @@ dfs_global2local(daos_handle_t poh, daos_handle_t coh, int flags, d_iov_t glob,
 	dfs->attr.da_oclass_id = dfs_params->oclass;
 	dfs->attr.da_dir_oclass_id = dfs_params->dir_oclass;
 	dfs->attr.da_file_oclass_id = dfs_params->file_oclass;
+
+	D_INIT_LIST_HEAD(&dfs->orphans);
 
 	dfs->super_oid = dfs_params->super_oid;
 	dfs->root.oid = dfs_params->root_oid;
@@ -3525,6 +3546,7 @@ lookup_rel_path(dfs_t *dfs, dfs_obj_t *root, const char *path, int flags,
 	oid_cp(&obj->parent_oid, root->parent_oid);
 	obj->d.oclass = root->d.oclass;
 	obj->d.chunk_size = root->d.chunk_size;
+	obj->dfs          = dfs;
 	obj->mode = root->mode;
 	strncpy(obj->name, root->name, DFS_MAX_NAME + 1);
 
@@ -4044,6 +4066,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	oid_cp(&obj->parent_oid, parent->oid);
 	oid_cp(&obj->oid, entry.oid);
 	obj->mode = entry.mode;
+	obj->dfs  = dfs;
 
 	/** if entry is a file, open the array object and return */
 	switch (entry.mode & S_IFMT) {
@@ -4256,8 +4279,9 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	}
 
 	strncpy(obj->name, name, len + 1);
-	obj->mode = mode;
+	obj->mode  = mode;
 	obj->flags = flags;
+	obj->dfs   = dfs;
 	oid_cp(&obj->parent_oid, parent->oid);
 
 	switch (mode & S_IFMT) {
@@ -4378,7 +4402,8 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 	}
 
 	strncpy(new_obj->name, obj->name, DFS_MAX_NAME + 1);
-	new_obj->mode = obj->mode;
+	new_obj->dfs   = dfs;
+	new_obj->mode  = obj->mode;
 	new_obj->flags = flags;
 	oid_cp(&new_obj->parent_oid, obj->parent_oid);
 	oid_cp(&new_obj->oid, obj->oid);
@@ -4539,6 +4564,7 @@ dfs_obj_global2local(dfs_t *dfs, int flags, d_iov_t glob, dfs_obj_t **_obj)
 	oid_cp(&obj->parent_oid, obj_glob->parent_oid);
 	strncpy(obj->name, obj_glob->name, DFS_MAX_NAME + 1);
 	obj->name[DFS_MAX_NAME] = '\0';
+	obj->dfs                = dfs;
 	obj->mode = obj_glob->mode;
 	obj->flags = flags ? flags : obj_glob->flags;
 
@@ -4581,10 +4607,17 @@ dfs_release(dfs_obj_t *obj)
 		rc = -DER_IO_INVAL;
 	}
 
-	if (rc)
+	D_ASSERTF(obj->dfs, "dfs is NULL %p", obj);
+
+	if (rc) {
 		D_ERROR("Failed to close DFS object, "DF_RC"\n", DP_RC(rc));
-	else
+		D_MUTEX_LOCK(&obj->dfs->lock);
+		d_list_add_tail(&obj->free_list, &obj->dfs->orphans);
+		D_MUTEX_UNLOCK(&obj->dfs->lock);
+		rc = 0;
+	} else {
 		D_FREE(obj);
+	}
 	return daos_der2errno(rc);
 }
 

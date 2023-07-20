@@ -1001,7 +1001,6 @@ dfuse_dcache_get_valid(struct dfuse_inode_entry *ie, double max_age)
 
 		DFUSE_TRA_DEBUG(ie, "Allowing cache use");
 	}
-
 	return use;
 }
 
@@ -1136,11 +1135,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
-		if (rc == ENOMEM)
-			rc = dfs_release(ie->ie_obj);
-		if (rc) {
+		if (rc)
 			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
-		}
 	}
 
 	if (ie->ie_root) {
@@ -1482,6 +1478,10 @@ dfuse_fs_stop(struct dfuse_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: "DF_RC, DP_RC(rc));
 
+	/* TODO: Note this isn't safe, inodes are flushed in order but that may mean that the
+	 * dfs is unmounted before all objects are closed.  Inodes should probably hold a reference
+	 * on their parent container.
+	 */
 	DFUSE_TRA_INFO(fs_handle, "Draining inode table");
 	do {
 		struct dfuse_inode_entry *ie;
