@@ -3232,6 +3232,7 @@ fetch_replica_unavail(void **state)
 	const char		 akey[] = "test_update akey";
 	const char		 rec[]  = "test_update record";
 	uint32_t		 size = 64;
+	size_t                   memsize;
 	d_rank_t		 rank = 2;
 	char			*buf;
 	int			 rc = 0;
@@ -3265,11 +3266,15 @@ fetch_replica_unavail(void **state)
 
 	/** Lookup */
 	buf = calloc(size, 1);
+	memsize = malloc_usable_size(buf);
+	assert_int_equal(memsize, size);
 	assert_non_null(buf);
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
 	arg->expect_result = -DER_NONEXIST;
 	lookup_single(dkey, akey, 0, buf, size, DAOS_TX_NONE, &req);
+	memsize = malloc_usable_size(buf);
+	assert_int_equal(memsize, size);
 
 	if (arg->myrank == 0) {
 		/* wait until rebuild done */
@@ -3284,6 +3289,8 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 		daos_cont_status_clear(arg->coh, NULL);
 	}
+	memsize = malloc_usable_size(buf);
+	assert_int_equal(memsize, size);
 	D_FREE(buf);
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
