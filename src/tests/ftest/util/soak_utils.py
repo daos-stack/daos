@@ -68,7 +68,9 @@ def add_pools(self, pool_names, ranks=None):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(namespace=path, connect=False, target_list=target_list))
+        self.pool.append(
+            self.get_pool(
+                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 

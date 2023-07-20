@@ -21,6 +21,7 @@ from exception_utils import CommandFailure
 from general_utils import journalctl_time
 from host_utils import get_local_host
 import slurm_utils
+from dmg_utils import DmgCommand
 from run_utils import run_local, RunException
 from soak_utils import ddhhmmss_format, add_pools, \
     launch_snapshot, launch_exclude_reintegrate, launch_extend, \
@@ -88,7 +89,8 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = self.get_dmg_command()
+        # self.dmg_command = self.get_dmg_command()
+        self.dmg_command = DmgCommand(self.bin)
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
