@@ -349,6 +349,8 @@ show_help(char *name)
 	    name, DAOS_VERSION);
 }
 
+#include <malloc.h>
+
 int
 main(int argc, char **argv)
 {
@@ -365,6 +367,19 @@ main(int argc, char **argv)
 	char              *path              = NULL;
 	bool               have_thread_count = false;
 	int                pos_index         = 0;
+	char              *buf;
+	size_t             size;
+
+	buf  = d_malloc(64);
+	size = malloc_usable_size(buf);
+	printf("Size is %zi\n", size);
+	size = __builtin_object_size(buf, 1);
+	printf("Size is %zi\n", size);
+	size = 64;
+	printf("Size is %zi\n", size);
+	size = malloc_usable_size(buf);
+	memset(buf, 0x42, size);
+	exit(0);
 
 	struct option      long_options[] = {{"mountpoint", required_argument, 0, 'm'},
 					     {"multi-user", no_argument, 0, 'M'},

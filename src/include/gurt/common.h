@@ -78,15 +78,22 @@ void d_srand(long int);
 long int d_rand(void);
 
 /* memory allocating macros */
-void  d_free(void *);
-void *d_calloc(size_t, size_t);
-void *d_malloc(size_t);
-void *d_realloc(void *, size_t);
-char *d_strndup(const char *s, size_t n);
-int d_asprintf(char **strp, const char *fmt, ...);
-void       *
+void
+d_free(void *ptr);
+void *
+d_calloc(size_t nmemb, size_t size) __attribute__((alloc_size(1, 2)));
+void *
+d_malloc(size_t size) __attribute__((malloc, alloc_size(1)));
+void *
+d_realloc(void *, size_t);
+char *
+d_strndup(const char *s, size_t n);
+int
+d_asprintf(char **strp, const char *fmt, ...);
+void *
 d_aligned_alloc(size_t alignment, size_t size, bool zero);
-char *d_realpath(const char *path, char *resolved_path);
+char *
+d_realpath(const char *path, char *resolved_path);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -119,11 +126,10 @@ char *d_realpath(const char *path, char *resolved_path);
 				(int)(size));				\
 	} while (0)
 
-#define D_ALLOC_CORE(ptr, size, count)					\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
-		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
-			      count, #count, 0);			\
+#define D_ALLOC_CORE(ptr, size, count)                                                             \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_calloc((count), (size));                                \
+		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size, count, #count, 0);                    \
 	} while (0)
 
 #define D_ALLOC_CORE_NZ(ptr, size, count)				\
@@ -277,11 +283,16 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
+/* TODO: Check for __builtin_dynamic_object_size at compile time */
+
 /* Free a pointer. Only logs if the pointer is non-NULL. */
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
-			size_t _frs = malloc_usable_size(ptr);                                     \
+			size_t _fra = malloc_usable_size(ptr);                                     \
+			size_t _frb = __builtin_object_size(ptr, 1);                               \
+			if (frb != -1 && frb < fra)                                                \
+				fra = frb;                                                         \
 			memset(ptr, 0x42, _frs);                                                   \
 			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
 			d_free(ptr);                                                               \
