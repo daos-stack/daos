@@ -109,6 +109,16 @@ class CoverageTracer():
 <packages>\n""")
 
         for (dname, bname) in self._files.items():
+            # Patch up two areas of logging in the go code that mis-report source code names.
+            if not dname.startswith('src'):
+                if dname == '':
+                    dname = 'src/control/cmd/daos'
+                else:
+                    parts = dname.split('/')
+                    while parts[0] != 'src':
+                        parts.pop(0)
+                    dname = '/'.join(parts)
+
             fd.write(f'<package name="{dname}">\n')
             fd.write('<classes>\n')
 
