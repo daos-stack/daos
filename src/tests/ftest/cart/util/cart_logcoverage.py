@@ -107,30 +107,34 @@ class CoverageTracer():
 <source>.</source>
 </sources>
 <packages>\n""")
-        fd.write('<package name="Fault injection reach">\n')
-        fd.write('<classes>\n')
 
-        for (fname, data) in self._files.items():
-            taken = 0
-            possible = 0
-            xml = ''
-            for (_, loc) in data.items():
-                (ttt, ptt) = loc.counts()
-                taken += ttt
-                possible += ptt
-                xml += loc.xml_str()
-            rate = taken / possible
-            fname_clean = fname.replace('/', '_')
-            fd.write(f' <class name="{fname_clean}" filename="{fname}" branch-rate="{rate:.2f}">\n')
-            fd.write('  <methods/>\n')
-            fd.write('  <lines>\n')
-            fd.write(xml)
-            fd.write(' </lines>\n')
-            fd.write(' </class>\n')
-        fd.write("""</classes>
-</package>
-</packages>
-</coverage>\n""")
+        for (dname, bname) in self._files.items():
+            fd.write(f'<package name="{dname}">\n')
+            fd.write('<classes>\n')
+
+            for data in bname:
+                taken = 0
+                possible = 0
+                xml = ''
+                for loc in bname[data].values():
+                    print(bname)
+                    print(data)
+                    print(loc)
+                    (ttt, ptt) = loc.counts()
+                    taken += ttt
+                    possible += ptt
+                    xml += loc.xml_str()
+                rate = taken / possible
+                fd.write(
+                    f' <class name="{data}" filename="{dname}/{data}" branch-rate="{rate:.2f}">\n')
+                fd.write('  <methods/>\n')
+                fd.write('  <lines>\n')
+                fd.write(xml)
+                fd.write('  </lines>\n')
+                fd.write(' </class>\n')
+            fd.write('</classes></package>\n')
+        fd.write('</packages>\n')
+        fd.write('</coverage>\n')
 
     def add_line(self, line):
         """Register a line"""
@@ -138,10 +142,15 @@ class CoverageTracer():
             fname = line.filename
         except AttributeError:
             return
-        if fname not in self._files:
-            self._files[fname] = {}
+
+        dname = os.path.dirname(fname)
+        bname = os.path.basename(fname)
+        if dname not in self._files:
+            self._files[dname] = {}
+        if bname not in self._files[dname]:
+            self._files[dname][bname] = {}
         lineno = line.lineno
-        if lineno in self._files[fname]:
-            self._files[fname][lineno].add(line)
+        if lineno in self._files[dname][bname]:
+            self._files[dname][bname][lineno].add(line)
         else:
-            self._files[fname][lineno] = CodeLoc(line)
+            self._files[dname][bname][lineno] = CodeLoc(line)
