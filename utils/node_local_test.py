@@ -3898,15 +3898,10 @@ class PosixTests():
         print(rc.stdout)
         assert rc.stdout == b'sh\n', rc
 
+    @needs_dfuse
     def test_pil4dfs(self):
         """Test interception library libpil4dfs.so"""
-        dfuse = DFuse(self.server,
-                      self.conf,
-                      pool=self.pool.id(),
-                      container=self.container,
-                      caching=False)
-        dfuse.start(v_hint='pil4dfs')
-        path = dfuse.dir
+        path = self.dfuse.dir
 
         # Create a file natively.
         file1 = join(path, 'file1')
@@ -3950,8 +3945,10 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
         self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
-        if dfuse.stop():
-            self.fatal_errors = True
+        # dd to write a file
+        file5 = join(path, 'newfile')
+        self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
+                                                'count=1'])
 
 
 class NltStdoutWrapper():
