@@ -2,6 +2,7 @@
 
 """Git hook to copy forward commit message metadata to new commits."""
 
+import os
 import sys
 import subprocess  # nosec
 from collections import OrderedDict
@@ -13,17 +14,58 @@ class NotTag(Exception):
 # TODO: Call get_tag_kv function from main and check https: links.
 
 
+class FoungGitArg(Exception):
+    """Escape helper for git args"""
+
+
+def check_for_git_args():
+    """Check for git command line options
+
+    Returns true if hook launched by Cherry-pick or merge command
+    """
+
+    def _check_pid(pid):
+
+        bin_cmd = os.path.basename(os.readlink(f'/proc/{pid}/exe'))
+
+        if bin_cmd == 'git':
+            with open(f'/proc/{pid}/cmdline', 'r') as fd:
+                cmd = fd.read()
+                for arg in cmd.split('\0'):
+                    if arg in ('cherry-pick', 'merge'):
+                        raise FoungGitArg
+
+        with open(f'/proc/{pid}/status', 'r') as fd:
+            for line in fd.readlines():
+                (key, value) = line.split(':')
+                if key.strip() == 'PPid':
+                    return value.strip()
+        return 1
+
+    pid = 'self'
+    while pid != 1:
+        try:
+            pid = _check_pid(pid)
+        except PermissionError:
+            return False
+        except FoungGitArg:
+            return True
+    return False
+
+
 def main():
     """Run the check"""
-
     print(f'copy-tags args are {sys.argv}')
     # Will be unset for a regular commit, 'commit' and amend.
     if len(sys.argv) > 2 and sys.argv[2] not in ('message', 'template'):
         return
 
+    if check_for_git_args():
+        print('Disabling copy-commit-tags-hook based on git options')
+        return
+
     def get_tag_kv(line):
         """Convert a line of test to a key/value"""
-
         if ':' not in line:
             raise NotTag
         (raw_key, value) = line.split(':', maxsplit=1)
