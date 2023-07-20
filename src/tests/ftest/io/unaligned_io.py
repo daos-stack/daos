@@ -11,7 +11,6 @@ class DaosRunIoConf(IoConfTestBase):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
     def test_unaligned_io(self):
         """Jira ID: DAOS-3151.
 
@@ -27,8 +26,8 @@ class DaosRunIoConf(IoConfTestBase):
             read through
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=io
-        :avocado: tags=unaligned_io,test_unaligned_io
+        :avocado: tags=DaosRunIoConf,test_unaligned_io
         """
         self.unaligned_io()

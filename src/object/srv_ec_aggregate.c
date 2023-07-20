@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -306,12 +306,23 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			carry_is_hole = true;
 
 		d_list_del(&extent->ae_link);
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt > 0);
 		entry->ae_cur_stripe.as_extent_cnt--;
 		D_FREE(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
-	D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	if (entry->ae_cur_stripe.as_extent_cnt > 0) {
+		D_ERROR(DF_UOID" extent cnt %u\n", DP_UOID(entry->ae_oid),
+			entry->ae_cur_stripe.as_extent_cnt);
+		d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
+				      ae_link) {
+			D_ERROR("recx "DF_RECX" eph "DF_X64"\n", DP_RECX(extent->ae_recx),
+				extent->ae_epoch);
+		}
+
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	}
 	entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	entry->ae_cur_stripe.as_stripe_fill = 0;
 	entry->ae_cur_stripe.as_has_holes = carry_is_hole ? true : false;
@@ -360,7 +371,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	int	 rc = 0;
 
 	if (align_data) {
-		D_ALIGNED_ALLOC(buf, 32, ent_buf_len);
+		D_ALIGNED_ALLOC_NZ(buf, 32, ent_buf_len);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -961,8 +972,8 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, DF_UOID
-			 " fetch parity from peer shard %d, "DF_RC".\n",
+		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
+			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
 			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
 		if (rc)
 			goto out;
@@ -1786,7 +1797,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_hdl		= agg_param->ap_cont_handle;
 	/* set epr_lo as zero to pass-through possibly existed snapshot
 	 * between agg_param->ap_epr.epr_lo and .epr_hi.
 	 */
@@ -2079,11 +2090,13 @@ agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 static void
 agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
 {
+	agg_clear_extents(agg_entry);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 
 	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_has_holes = false;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
@@ -2313,7 +2326,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
-	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, -1, NULL,
+	md.omd_pda = props.dcp_ec_pda;
+	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
 out:

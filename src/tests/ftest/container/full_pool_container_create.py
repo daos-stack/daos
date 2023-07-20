@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -38,7 +38,6 @@ class FullPoolContainerCreate(TestWithServers):
         :avocado: tags=container
         :avocado: tags=FullPoolContainerCreate,test_no_space_cont_create
         """
-
         # full storage rc
         err = "-1007"
 
@@ -51,8 +50,7 @@ class FullPoolContainerCreate(TestWithServers):
         # query the pool
         self.log.info("Pool Query before write")
         self.pool.set_query_data()
-        self.log.info(
-            "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # create a container
         self.add_container(self.pool)
@@ -89,7 +87,7 @@ class FullPoolContainerCreate(TestWithServers):
         # query the pool
         self.log.info("Pool Query after filling")
         self.pool.set_query_data()
-        self.log.info("Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # destroy container
         self.container.destroy()

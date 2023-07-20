@@ -8,6 +8,7 @@ package raft
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -99,7 +100,7 @@ func IsRaftLeadershipError(err error) bool {
 // leadership state. No-op if there is only one replica configured
 // or the cause is a raft leadership error.
 func (db *Database) ResignLeadership(cause error) error {
-	if IsRaftLeadershipError(cause) {
+	if system.IsNotLeader(cause) || IsRaftLeadershipError(cause) {
 		// no-op
 		return nil
 	}
@@ -109,6 +110,13 @@ func (db *Database) ResignLeadership(cause error) error {
 	}
 	db.log.Errorf("resigning leadership (%s)", cause)
 	return db.raft.withReadLock(func(svc raftService) error {
+		// One more belt-and-suspenders check to make sure we're
+		// actually the leader before we try to transfer leadership.
+		// This is important because trying to transfer leadership
+		// if we're not the leader will result in a blocked channel, i.e. hang.
+		if svc.State() != raft.Leader {
+			return nil
+		}
 		return svc.LeadershipTransfer().Error()
 	})
 }
@@ -117,13 +125,19 @@ func (db *Database) ResignLeadership(cause error) error {
 // outstanding log entries.
 func (db *Database) Barrier() error {
 	return db.raft.withReadLock(func(svc raftService) error {
+		barrierStart := time.Now()
 		err := svc.Barrier(0).Error()
+		barrierElapsed := time.Since(barrierStart)
+		if barrierElapsed > 100*time.Millisecond {
+			var errMsg string
+			if err != nil {
+				errMsg = fmt.Sprintf("; err: %s", err)
+			}
+			db.log.Debugf("raft Barrier() complete after %s%s", barrierElapsed, errMsg)
+		}
 		if IsRaftLeadershipError(err) {
 			db.log.Errorf("lost leadership during Barrier(): %s", err)
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return err
 	})
@@ -456,10 +470,7 @@ func (db *Database) submitRaftUpdate(data []byte) error {
 		// signal some callers to retry the operation on the
 		// new leader.
 		if IsRaftLeadershipError(err) {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 
 		return err

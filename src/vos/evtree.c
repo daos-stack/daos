@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1102,7 +1102,8 @@ evt_tcx_set_trace(struct evt_context *tcx, int level, umem_off_t nd_off, int at,
 {
 	struct evt_trace *trace;
 
-	D_ASSERT(at >= 0 && at < tcx->tc_order);
+	D_ASSERTF(at >= 0 && at < tcx->tc_order, "at=%d, tcx->tc_order=%d, level=%d\n", at,
+		  tcx->tc_order, level);
 
 	V_TRACE(DB_TRACE, "set trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
@@ -1165,7 +1166,13 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	if (feats != -1) { /* tree creation */
 		tcx->tc_feats	= feats;
-		tcx->tc_order	= order;
+		if (feats & EVT_FEAT_DYNAMIC_ROOT) {
+			tcx->tc_order     = 1;
+			tcx->tc_max_order = order;
+		} else {
+			tcx->tc_order     = order;
+			tcx->tc_max_order = order;
+		}
 		depth		= 0;
 		V_TRACE(DB_TRACE, "Create context for a new tree\n");
 
@@ -1178,12 +1185,16 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 		tcx->tc_feats	= root->tr_feats;
 		tcx->tc_order	= root->tr_order;
+		if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+			tcx->tc_max_order = root->tr_max_order;
+		else
+			tcx->tc_max_order = root->tr_order;
 		tcx->tc_inob	= root->tr_inob;
 		depth		= root->tr_depth;
 		V_TRACE(DB_TRACE, "Load tree context from %p\n", root);
 	}
 
-	policy = tcx->tc_feats & EVT_FEATS_SUPPORTED;
+	policy = tcx->tc_feats & EVT_POLICY_MASK;
 	switch (policy) {
 	case EVT_FEAT_SORT_SOFF:
 		tcx->tc_ops = evt_policies[0];
@@ -1309,7 +1320,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	return 0;
 out:
-	D_ERROR("Failed to release entry: %s\n", d_errstr(rc));
+	D_ERROR("Failed to release entry: " DF_RC "\n", DP_RC(rc));
 	return rc;
 }
 
@@ -1317,7 +1328,7 @@ out:
 static bool
 evt_node_is_full(struct evt_context *tcx, struct evt_node *nd)
 {
-	D_ASSERT(nd->tn_nr <= tcx->tc_order);
+	D_ASSERTF(nd->tn_nr <= tcx->tc_order, "tn_nr=%d tc_order=%d\n", nd->tn_nr, tcx->tc_order);
 	return nd->tn_nr == tcx->tc_order;
 }
 
@@ -1388,18 +1399,24 @@ evt_node_mbr_update(struct evt_context *tcx, struct evt_node *node,
 	return changed;
 }
 
-/**
- * Return the size of evtree node, leaf node has different size with internal
- * node.
- */
-static int
-evt_node_size(struct evt_context *tcx, bool leaf)
+static inline int
+evt_order2size(int order, bool leaf)
 {
 	size_t entry_size;
 
 	entry_size = leaf ? sizeof(struct evt_node_entry) : sizeof(uint64_t);
 
-	return sizeof(struct evt_node) + entry_size * tcx->tc_order;
+	return sizeof(struct evt_node) + entry_size * order;
+}
+
+/**
+ * Return the size of evtree node, leaf node has different size with internal
+ * node.
+ */
+static inline int
+evt_node_size(struct evt_context *tcx, bool leaf)
+{
+	return evt_order2size(tcx->tc_order, leaf);
 }
 
 /** Allocate a evtree node */
@@ -1407,12 +1424,11 @@ static int
 evt_node_alloc(struct evt_context *tcx, unsigned int flags,
 	       umem_off_t *nd_off_p)
 {
-	struct evt_node		*nd;
+	struct evt_node         *nd;
 	umem_off_t		 nd_off;
-	bool			 leaf = (flags & EVT_NODE_LEAF);
+	bool                     leaf = (flags & EVT_NODE_LEAF);
 
-	nd_off = vos_slab_alloc(evt_umm(tcx), evt_node_size(tcx, leaf),
-			leaf ? VOS_SLAB_EVT_NODE : VOS_SLAB_EVT_NODE_SM);
+	nd_off = umem_zalloc(evt_umm(tcx), evt_node_size(tcx, leaf));
 	if (UMOFF_IS_NULL(nd_off))
 		return -DER_NOSPACE;
 
@@ -1485,7 +1501,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
-				D_ERROR("destroy failed: %s\n", d_errstr(rc));
+				D_ERROR("destroy failed: " DF_RC "\n", DP_RC(rc));
 				goto out;
 			}
 
@@ -1659,6 +1675,10 @@ evt_root_init(struct evt_context *tcx)
 
 	root->tr_feats = tcx->tc_feats;
 	root->tr_order = tcx->tc_order;
+	if (tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT)
+		root->tr_max_order = tcx->tc_max_order;
+	else
+		root->tr_max_order = 0; /** For backward compatibility */
 	root->tr_node  = UMOFF_NULL;
 	root->tr_pool_uuid = umem_get_uuid(evt_umm(tcx));
 
@@ -1823,6 +1843,76 @@ evt_select_node(struct evt_context *tcx, const struct evt_rect *rect,
 	return rc < 0 ? nd1 : nd2;
 }
 
+/** Maximum dynamic root size before switching to user-specified order */
+#define MAX_DYN_ROOT 7
+static inline int
+evt_new_order(int order, int max_order)
+{
+	if (order == MAX_DYN_ROOT)
+		return max_order;
+
+	return ((order + 1) << 1) - 1;
+}
+
+/** Expand the dynamic tree root node if it is currently full and not
+ *  already at full size
+ */
+static inline int
+evt_node_extend(struct evt_context *tcx, struct evt_trace *trace)
+{
+	struct evt_node *nd_cur;
+	int              rc;
+	uint8_t          old_order;
+	void            *new_node;
+	int              old_size;
+	umem_off_t       new_off;
+
+	if (tcx->tc_order == tcx->tc_max_order)
+		return 0;
+
+	nd_cur = evt_off2node(tcx, trace->tr_node);
+	D_ASSERT(evt_node_is_leaf(tcx, nd_cur));
+	D_ASSERT(tcx->tc_depth == 1);
+	D_ASSERT(tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT);
+
+	if (!evt_node_is_full(tcx, nd_cur))
+		return 0;
+
+	old_order = tcx->tc_order;
+	old_size  = evt_node_size(tcx, true);
+
+	tcx->tc_order = evt_new_order(tcx->tc_order, tcx->tc_max_order);
+
+	if (tcx->tc_order > tcx->tc_max_order)
+		tcx->tc_order = tcx->tc_max_order;
+
+	rc = evt_node_alloc(tcx, true, &new_off);
+	if (rc != 0)
+		goto failed;
+
+	new_node = umem_off2ptr(evt_umm(tcx), new_off);
+	memcpy(new_node, nd_cur, old_size);
+	rc = umem_free(evt_umm(tcx), trace->tr_node);
+	if (rc != 0)
+		goto failed;
+
+	rc = evt_root_tx_add(tcx);
+	if (rc != 0)
+		goto failed;
+
+	tcx->tc_root->tr_order = tcx->tc_order;
+	tcx->tc_root->tr_node  = new_off;
+
+	trace->tr_node     = new_off;
+	trace->tr_tx_added = true;
+
+	return 0;
+
+failed:
+	tcx->tc_order = old_order;
+	return rc;
+}
+
 /**
  * Insert an entry \a entry to the leaf node located by the trace of \a tcx.
  * If the leaf node is full it will be split. The split will bubble up if its
@@ -1848,10 +1938,22 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		umem_off_t		 nm_cur;
 		umem_off_t		 nm_new;
 		bool			 leaf;
+		bool                     changed;
 
 		trace	= &tcx->tc_trace[level];
+		if (tcx->tc_depth > 1) {
+			D_ASSERTF(tcx->tc_order == tcx->tc_max_order,
+				  "Dynamic ordering for root only. order=%d != max_order=%d\n",
+				  tcx->tc_order, tcx->tc_max_order);
+		} else {
+			rc = evt_node_extend(tcx, trace);
+			if (rc != 0)
+				goto failed;
+		}
+
 		nm_cur	= trace->tr_node;
 		nd_cur = evt_off2node(tcx, nm_cur);
+
 		if (!trace->tr_tx_added) {
 			rc = evt_node_tx_add(tcx, nd_cur);
 			if (rc != 0)
@@ -1883,8 +1985,6 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 		}
 
 		if (!evt_node_is_full(tcx, nd_cur)) {
-			bool	changed;
-
 			rc = evt_node_insert(tcx, nd_cur, nm_save,
 					     &entry, &changed, csum_bufp);
 			if (rc != 0)
@@ -1902,6 +2002,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
 			level--;
 			continue;
 		}
+
 		/* Try to split */
 
 		V_TRACE(DB_TRACE, "Split node at level %d\n", level);
@@ -2490,6 +2591,10 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
 
+	/** On re-probe, the tree order may have changed */
+	if (tcx->tc_root->tr_order != tcx->tc_order)
+		tcx->tc_order = tcx->tc_root->tr_order;
+
 	D_INIT_LIST_HEAD(&data_loss_list);
 
 	evt_tcx_reset_trace(tcx);
@@ -2616,7 +2721,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 						DF_RECT" overlaps with "DF_RECT
 						"\n", DP_RECT(rect),
 						DP_RECT(&rtmp));
-					rc = -DER_NO_PERM;
+					rc = -DER_VOS_PARTIAL_UPDATE;
 					goto out;
 				}
 				break; /* we can update the record in place */
@@ -3020,8 +3125,9 @@ evt_debug(daos_handle_t toh, int debug_level)
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	D_PRINT("Tree depth=%d, order=%d, feats="DF_X64"\n",
-		tcx->tc_depth, tcx->tc_order, tcx->tc_feats);
+	D_PRINT("Tree depth=%d, order=%d, max=%d, feats=" DF_X64 "\n", tcx->tc_depth, tcx->tc_order,
+		tcx->tc_feats & EVT_FEAT_DYNAMIC_ROOT ? tcx->tc_max_order : tcx->tc_order,
+		tcx->tc_feats);
 
 	if (tcx->tc_root->tr_node != 0)
 		evt_node_debug(tcx, tcx->tc_root->tr_node, 0, debug_level);
@@ -3150,11 +3256,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		if (csum_buf_size > 0) {
 			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
 						"for checksum", csum_buf_size);
-			desc_off = umem_zalloc(evt_umm(tcx), desc_size);
-		} else {
-			desc_off = vos_slab_alloc(evt_umm(tcx), desc_size,
-							VOS_SLAB_EVT_DESC);
 		}
+		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
 			return -DER_NOSPACE;
 
@@ -3798,8 +3901,8 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 	csum_buf_len = ci_csums_len(ent->ei_csum);
 
 	if (csum->cs_buf_len < csum_buf_len) {
-		D_ERROR("Issue copying checksum. Source (%d) is "
-			"larger than destination (%"PRIu64")",
+		D_ERROR("Issue copying checksum. Source (%d) is larger than destination (%" PRIu64
+			")\n",
 			csum->cs_buf_len, csum_buf_len);
 	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
@@ -3882,20 +3985,29 @@ int
 evt_overhead_get(int alloc_overhead, int tree_order,
 		 struct daos_tree_overhead *ovhd)
 {
+	int order;
+	int order_idx;
+
 	if (ovhd == NULL) {
 		D_ERROR("Invalid ovhd argument\n");
 		return -DER_INVAL;
 	}
 
-	ovhd->to_dyn_count = 0;
 	ovhd->to_record_msize = alloc_overhead + sizeof(struct evt_desc);
 	ovhd->to_node_rec_msize = sizeof(struct evt_node_entry);
-	ovhd->to_leaf_overhead.no_size = alloc_overhead +
-		sizeof(struct evt_node) +
-		(tree_order * sizeof(struct evt_node_entry));
+	ovhd->to_leaf_overhead.no_size  = alloc_overhead + evt_order2size(tree_order, true);
 	ovhd->to_leaf_overhead.no_order = tree_order;
-	ovhd->to_int_node_size = alloc_overhead + sizeof(struct evt_node) +
-		(tree_order * sizeof(uint64_t));
+	ovhd->to_int_node_size          = alloc_overhead + evt_order2size(tree_order, false);
+
+	order_idx = 0;
+	order     = 1;
+	while (order != tree_order) {
+		ovhd->to_dyn_overhead[order_idx].no_order = order;
+		ovhd->to_dyn_overhead[order_idx].no_size  = evt_order2size(order, true);
+		order_idx++;
+		order = evt_new_order(order, tree_order);
+	}
+	ovhd->to_dyn_count = order_idx;
 
 	return 0;
 }
@@ -3941,6 +4053,7 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 
 {
 	int			 rc = 0;
+	bool                     end = false;
 
 	if (root->tr_feats == feats)
 		return 0;
@@ -3950,18 +4063,18 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 		return -DER_INVAL;
 	}
 
-	if (DAOS_ON_VALGRIND) {
+	if (!umem_tx_inprogress(umm)) {
 		rc = umem_tx_begin(umm, NULL);
 		if (rc != 0)
 			return rc;
-		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
-				      POBJ_XADD_NO_SNAPSHOT);
+		end = true;
 	}
+	rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats), UMEM_XADD_NO_SNAPSHOT);
 
 	if (rc == 0)
 		root->tr_feats = feats;
 
-	if (DAOS_ON_VALGRIND)
+	if (end)
 		rc = umem_tx_end(umm, rc);
 
 	return rc;

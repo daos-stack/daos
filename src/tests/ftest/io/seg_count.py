@@ -1,12 +1,10 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from ior_test_base import IorTestBase
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class SegCount(IorTestBase):
@@ -15,7 +13,6 @@ class SegCount(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-7258")
     def test_segcount(self):
         """JIRA ID: DAOS-1782.
 
@@ -29,7 +26,7 @@ class SegCount(IorTestBase):
         :avocado: tags=all
         :avocado: tags=hw,large
         :avocado: tags=mpiio
-        :avocado: tags=ior_segcount
+        :avocado: tags=ior_segcount,test_segcount
         """
         # Update the hostfile with the requested number of slots per host
         self.hostfile_clients = write_host_file(

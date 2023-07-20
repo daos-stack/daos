@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -413,7 +413,7 @@ uuid_t  ds_mgmt_target_update_uuid;
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				 struct pool_target_addr_list *target_addrs,
-				 pool_comp_state_t state)
+				 pool_comp_state_t state, size_t scm_size, size_t nvme_size)
 {
 	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
 	return ds_mgmt_target_update_return;
@@ -468,7 +468,7 @@ mock_ds_mgmt_pool_evict_setup(void)
  * TODO: Implement mocks when there is a test that uses these
  */
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	return 0;
 }
@@ -476,6 +476,12 @@ crt_rank_self_set(d_rank_t rank)
 void
 dss_init_state_set(enum dss_init_state state)
 {
+}
+
+int
+dss_module_setup_all()
+{
+	return 0;
 }
 
 size_t
@@ -519,8 +525,7 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks)
 }
 
 int
-ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
-			 char *tgt_id)
+ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid)
 {
 	return 0;
 }
@@ -609,4 +614,3 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 	ds_mgmt_dev_set_faulty_return = 0;
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
-

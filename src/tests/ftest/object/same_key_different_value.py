@@ -1,12 +1,11 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
+from pydaos.raw import DaosApiError
 
 from apricot import TestWithServers
-from pydaos.raw import DaosApiError
 
 
 class SameKeyDifferentValue(TestWithServers):
@@ -42,7 +41,7 @@ class SameKeyDifferentValue(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=samekeydifferentvalue,singletoarray,test_single_to_array_value
+        :avocado: tags=SameKeyDifferentValue,test_single_to_array_value
         """
 
         # define akey,dkey, single value data and array value data
@@ -57,7 +56,7 @@ class SameKeyDifferentValue(TestWithServers):
 
         aggregation = False
 
-        for i in range(3):
+        for index in range(3):
             try:
                 # create an object and write single value data into it
                 obj = self.container.container.write_an_obj(
@@ -72,7 +71,7 @@ class SameKeyDifferentValue(TestWithServers):
                     self.fail("Write data, read it back, didn't match\n")
 
                 # test case 1
-                if i == 0:
+                if index == 0:
                     try:
                         # write array value data to same keys, expected to fail
                         self.container.container.write_an_array_value(
@@ -142,7 +141,7 @@ class SameKeyDifferentValue(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=samekeydifferentvalue,arraytosingle,test_array_to_single_value
+        :avocado: tags=SameKeyDifferentValue,test_array_to_single_value
         """
 
         # define akey,dkey, single value data and array value data
@@ -157,7 +156,7 @@ class SameKeyDifferentValue(TestWithServers):
 
         aggregation = False
 
-        for i in range(3):
+        for index in range(3):
             try:
                 # create an object and write array value data into it
                 obj = self.container.container.write_an_array_value(
@@ -167,13 +166,14 @@ class SameKeyDifferentValue(TestWithServers):
                 read_back_data = self.container.container.read_an_array(
                     len(array_value_data), length + 1, dkey, akey, obj)
 
-                for j in range(3):
-                    if array_value_data[j][0:length - 1] != read_back_data[j][0:length - 1]:
-                        self.log.info("Written Data: %s", array_value_data[j])
-                        self.log.info("Read Data:    %s", read_back_data[j])
+                for data_index in range(3):
+                    if array_value_data[data_index][0:length - 1] \
+                            != read_back_data[data_index][0:length - 1]:
+                        self.log.info("Written Data: %s", array_value_data[data_index])
+                        self.log.info("Read Data:    %s", read_back_data[data_index])
                         self.fail("Data mismatch")
                 # test case 1
-                if i == 0:
+                if index == 0:
                     try:
                         # write single value data to same keys, expected to fail
                         self.container.container.write_an_obj(

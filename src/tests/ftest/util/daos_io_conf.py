@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -43,8 +42,13 @@ class IoConfGen(ExecutableCommand):
         self.filename = BasicParameter(None, filename)
         self.mpi_type = mpi_type
 
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the command.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
@@ -54,7 +58,7 @@ class IoConfGen(ExecutableCommand):
         if not load_mpi(self.mpi_type):
             raise MPILoadError(self.mpi_type)
 
-        return super().run()
+        return super().run(raise_exception)
 
     def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.

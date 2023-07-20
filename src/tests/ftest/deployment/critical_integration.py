@@ -1,13 +1,12 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from datetime import datetime
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import run_command, DaosTestError, get_journalctl
+from general_utils import run_command, DaosTestError, get_journalctl, journalctl_time
 from ior_test_base import IorTestBase
 from exception_utils import CommandFailure
 
@@ -16,6 +15,7 @@ from apricot import TestWithServers
 from apricot import TestWithoutServers
 
 
+# pylint: disable-next=fixme
 # TODO Provision all daos nodes using provisioning tool provided by HPCM
 
 
@@ -46,11 +46,12 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         Test Description: Verify password-less ssh amongst the server
                           server nodes available and verify all server
                           and client nodes have same daos versions.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,passwdlessssh_versioncheck
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithoutServers,test_passwdlessssh_versioncheck
+        """
         check_remote_root_access = self.params.get("check_remote_root_access", "/run/*")
         libfabric_path = self.params.get("libfabric_path", "/run/*")
         daos_server_version_list = []
@@ -135,11 +136,12 @@ class CriticalIntegrationWithServers(TestWithServers):
         """
         Test Description: Verify RAS event on all server nodes from testrunner.
                           Verify network scan and storage scan for server nodes.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=criticalintegration,ras
-        """
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,critical_integration
+        :avocado: tags=CriticalIntegrationWithServers,test_ras
+        """
         dmg = self.get_dmg_command()
         rank_list = self.server_managers[0].get_host_ranks(self.hostlist_servers)
         self.log.info("rank_list: %s", rank_list)
@@ -149,7 +151,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         self.log.info("sub_rank_list: %s", sub_rank_list)
 
         # stop ranks, verify they stopped successfully and restart the stopped ranks
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
             self.log.info("Ranks to stop: %s", ranks_to_stop)
@@ -168,7 +170,7 @@ class CriticalIntegrationWithServers(TestWithServers):
             if check_started_ranks:
                 self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
 
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,

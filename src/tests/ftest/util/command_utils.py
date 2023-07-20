@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -24,6 +24,7 @@ from general_utils import check_file_exists, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
     get_subprocess_stdout
 from user_utils import get_primary_group
+from run_utils import command_as_user
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -42,13 +43,11 @@ class ExecutableCommand(CommandWithParameters):
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
-            check_results (list, optional): list of words used to mark the
-                command as failed if any are found in the command output.
-                Defaults to None.
+            path (str, optional): path to location of command binary file. Defaults to "".
+            subprocess (bool, optional): whether the command is run as a subprocess.
+                Defaults to False.
+            check_results (list, optional): list of words used to mark the command as failed if
+                any are found in the command output. Defaults to None.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -58,7 +57,12 @@ class ExecutableCommand(CommandWithParameters):
         self.output_check = "both"
         self.verbose = True
         self.env = EnvironmentVariables()
-        self.sudo = False
+
+        # User to run the command as. "root" is equivalent to sudo
+        self.run_user = None
+
+        # List of CPU cores to pass to taskset
+        self.bind_cores = None
 
         # Define a list of executable names associated with the command. This
         # list is used to generate the 'command_regex' property, which can be
@@ -91,10 +95,27 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        value = super().__str__()
-        if self.sudo:
-            value = " ".join(["sudo -n", value])
-        return value
+        return self.with_sudo
+
+    @property
+    def sudo(self):
+        """Get the sudo flag.
+
+        Returns:
+            bool: whether to run as sudo/root
+
+        """
+        return self.run_user == 'root'
+
+    @sudo.setter
+    def sudo(self, value):
+        """Set the sudo flag.
+
+        Args:
+            value (bool): whether to run as sudo
+
+        """
+        self.run_user = 'root' if value else None
 
     @property
     def process(self):
@@ -105,8 +126,7 @@ class ExecutableCommand(CommandWithParameters):
     def command_regex(self):
         """Get the regular expression to use to search for the command.
 
-        Typical use would include combining with pgrep to verify a subprocess
-        is running.
+        Typical use would include combining with pgrep to verify a subprocess is running.
 
         Returns:
             str: regular expression to use to search for the command
@@ -115,14 +135,37 @@ class ExecutableCommand(CommandWithParameters):
         return "'({})'".format("|".join(self._exe_names))
 
     @property
-    def with_exports(self):
-        """Get the command string with any environment variable exports.
+    def with_bind(self):
+        """Get the command string with bind_cores.
 
         Returns:
-            str: the command string with any environment variable exports
+            str: the command string with bind_cores
 
         """
-        return " ".join([self.env.to_export_str(), str(self)]).strip()
+        command = super().__str__()
+        if self.bind_cores:
+            command = ' '.join(['taskset', '-c', self.bind_cores, command])
+        return command
+
+    @property
+    def with_sudo(self):
+        """Get the command string with bind_cores and sudo, but not env exports.
+
+        Returns:
+            str: the command string with bind_cores and sudo
+
+        """
+        return command_as_user(self.with_bind, self.run_user)
+
+    @property
+    def with_exports(self):
+        """Get the command string with bind_cores, sudo, and env exports.
+
+        Returns:
+            str: the command string with bind_cores, sudo, and env exports
+
+        """
+        return command_as_user(self.with_bind, self.run_user, self.env)
 
     def run(self, raise_exception=None):
         """Run the command.
@@ -176,8 +219,7 @@ class ExecutableCommand(CommandWithParameters):
         if raise_exception and not self.check_results():
             # Command failed if its output contains bad keywords
             raise CommandFailure(
-                "<{}> command failed: Error messages detected in output".format(
-                    self.command))
+                "<{}> command failed: Error messages detected in output".format(self.command))
 
         return self.result
 
@@ -211,9 +253,13 @@ class ExecutableCommand(CommandWithParameters):
 
         Raises:
             CommandFailure: if there is an error running the command
+            ValueError: if a param is invalid
 
         """
         if self._process is None:
+            if self.run_user not in (None, "root"):
+                # SubProcess only supports the current user or sudo (root)
+                raise ValueError("Invalid run_user for subprocess: {}".format(self.run_user))
             # Start the job manager command as a subprocess
             kwargs = {
                 "cmd": str(self),
@@ -248,9 +294,7 @@ class ExecutableCommand(CommandWithParameters):
             bool: whether or not the command progress has been detected
 
         """
-        self.log.info(
-            "Checking status of the %s command in %s",
-            self._command, sub_process)
+        self.log.info("Checking status of the %s command in %s", self._command, sub_process)
         return True
 
     def stop(self):
@@ -288,8 +332,7 @@ class ExecutableCommand(CommandWithParameters):
                     while self._process._popen.poll() is None and elapsed < 5:
                         time.sleep(0.01)
                         elapsed = time.time() - start
-                    self.log.info(
-                        "Waited %.2f, saved %.2f", elapsed, 5 - elapsed)
+                    self.log.info("Waited %.2f, saved %.2f", elapsed, 5 - elapsed)
 
             if not signal_list:
                 if state and (len(state) > 1 or state[0] not in ("D", "Z")):
@@ -367,14 +410,12 @@ class ExecutableCommand(CommandWithParameters):
         # Get the method to call to obtain the CmdResult
         method = getattr(self, method_name)
         if method is None:
-            raise CommandFailure(
-                "No '{}()' method defined for this class".format(method_name))
+            raise CommandFailure("No '{}()' method defined for this class".format(method_name))
 
         # Run the command
         result = method(**kwargs)
         if not isinstance(result, process.CmdResult):
-            raise CommandFailure(
-                "{}() did not return a CmdResult".format(method_name))
+            raise CommandFailure("{}() did not return a CmdResult".format(method_name))
 
         # Parse the output and return
         if not regex_method:
@@ -389,17 +430,14 @@ class ExecutableCommand(CommandWithParameters):
             regex_method (str): name of the method regex to use
 
         Raises:
-            CommandFailure: if there is an error finding the method's regex
-                pattern.
+            CommandFailure: if there is an error finding the method's regex pattern.
 
         Returns:
-            list: a list of strings obtained from the method's output parsed
-                through its regex
+            list: a list of strings obtained from the method's output parsed through its regex
 
         """
         if regex_method not in self.METHOD_REGEX:
-            raise CommandFailure(
-                "No pattern regex defined for '{}()'".format(regex_method))
+            raise CommandFailure("No pattern regex defined for '{}()'".format(regex_method))
         return re.findall(self.METHOD_REGEX[regex_method], stdout)
 
     def get_params(self, test):
@@ -409,11 +447,22 @@ class ExecutableCommand(CommandWithParameters):
 
         Args:
             test (Test): avocado Test object
+
         """
         super().get_params(test)
         for namespace in ['/run/client/*', self.namespace]:
             if namespace is not None:
                 self.env.update_from_list(test.params.get("env_vars", namespace, []))
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            ExecutableCommand: a new ExecutableCommand object
+        """
+        return ExecutableCommand(
+            self.namespace, self._command, self._path, self.run_as_subprocess,
+            self.check_results_list)
 
 
 class CommandWithSubCommand(ExecutableCommand):
@@ -425,10 +474,10 @@ class CommandWithSubCommand(ExecutableCommand):
         Args:
             namespace (str): yaml namespace (path to parameters)
             command (str): string of the command to be executed.
-            path (str, optional): path to location of command binary file.
-                Defaults to "".
-            subprocess (bool, optional): whether the command is run as a
-                subprocess. Defaults to False.
+            path (str, optional): path to location of command binary file. Defaults to "".
+            subprocess (bool, optional): whether the command is run as a subprocess.
+                Defaults to False.
+
         """
         super().__init__(namespace, command, path)
 
@@ -442,8 +491,7 @@ class CommandWithSubCommand(ExecutableCommand):
         #       <sub_command>:
         #           <sub_command>_sub_command: <sub_command_sub_command>
         #
-        self.sub_command = BasicParameter(
-            None, yaml_key="{}_sub_command".format(self._command))
+        self.sub_command = BasicParameter(None, yaml_key="{}_sub_command".format(self._command))
 
         # Define the class to represent the active sub-command and it's specific
         # parameters.  Multiple sub-commands may be available, but only one can
@@ -549,9 +597,30 @@ class CommandWithSubCommand(ExecutableCommand):
             super().run(raise_exception)
         except CommandFailure as error:
             raise CommandFailure(
-                "<{}> command failed: {}".format(
-                    self.command, error)) from error
+                "<{}> command failed: {}".format(self.command, error)) from error
         return self.result
+
+    def set_command(self, sub_command_list=None, **kwargs):
+        """Set the command and its arguments.
+
+        Args:
+            sub_command_list (list, optional): a list of sub commands used to
+                define the command to execute. Defaults to None, which will run
+                the command as it is currently defined.
+
+        Raises:
+            CommandFailure: if an unknown parameter is provided for the full command
+
+        """
+        # Set up the full command by setting each specified sub-command
+        full_command = self
+        if sub_command_list is not None:
+            for sub_command in sub_command_list:
+                full_command.set_sub_command(sub_command)
+                full_command = full_command.sub_command_class
+
+        # Update any argument values for the full command
+        full_command.update_params(**kwargs)
 
     def _get_result(self, sub_command_list=None, raise_exception=None, **kwargs):
         """Get the result from running the command with the defined arguments.
@@ -581,16 +650,8 @@ class CommandWithSubCommand(ExecutableCommand):
                 execution.
 
         """
-        # Set the subcommands
-        this_command = self
-        if sub_command_list is not None:
-            for sub_command in sub_command_list:
-                this_command.set_sub_command(sub_command)
-                this_command = this_command.sub_command_class
-
-        # Set the sub-command arguments
-        for name, value in list(kwargs.items()):
-            getattr(this_command, name).value = value
+        # Setup the command and its arguments
+        self.set_command(sub_command_list, **kwargs)
 
         # Issue the command and store the command result
         return self.run(raise_exception)
@@ -608,7 +669,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 setting if defined. Defaults to None.
             kwargs (dict): Parameters for the command.
         """
-
         if self.json is None:
             raise CommandFailure(
                 f"The {self.command} command doesn't have json option defined!")
@@ -628,6 +688,14 @@ class CommandWithSubCommand(ExecutableCommand):
             if json_err:
                 self.exit_status_exception = prev_exit_exception
         return json.loads(self.result.stdout)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommandWithSubCommand: a new CommandWithSubCommand object
+        """
+        return CommandWithSubCommand(self.namespace, self._command, self._path)
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -750,6 +818,15 @@ class SubProcessCommand(CommandWithSubCommand):
         else:
             # Report the successful start
             self.log.info("%s subprocess startup detected - %s %s", self._command, msg, runtime)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            SubProcessCommand: a new SubProcessCommand object
+        """
+        return SubProcessCommand(
+            self.namespace, self._command, self._path, self.pattern_timeout.value)
 
 
 class YamlCommand(SubProcessCommand):
@@ -991,6 +1068,15 @@ class YamlCommand(SubProcessCommand):
 
         """
         return self.get_config_value("socket_dir")
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            YamlCommand: a new YamlCommand object
+        """
+        return YamlCommand(
+            self.namespace, self._command, self._path, self.yaml, self.pattern_timeout.value)
 
 
 class SubprocessManager(ObjectWithParameters):
@@ -1367,8 +1453,7 @@ class SystemctlCommand(ExecutableCommand):
 
     def __init__(self):
         """Create a SystemctlCommand object."""
-        super().__init__(
-            "/run/systemctl/*", "systemctl", subprocess=False)
+        super().__init__("/run/systemctl/*", "systemctl", subprocess=False)
         self.sudo = True
 
         self.unit_command = BasicParameter(None)

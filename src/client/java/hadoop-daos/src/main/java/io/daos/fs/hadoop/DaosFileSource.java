@@ -38,7 +38,7 @@ public abstract class DaosFileSource {
 
   private static final Logger LOG = LoggerFactory.getLogger(DaosFileSource.class);
 
-  protected DaosFileSource(DaosFile daosFile, int bufCapacity, long fileLen,
+  protected DaosFileSource(DaosFile daosFile, int bufCapacity, long fileLen, boolean append,
                            FileSystem.Statistics stats) {
     this.daosFile = daosFile;
     this.buffer = BufferAllocator.directNettyBuf(bufCapacity);
@@ -46,9 +46,12 @@ public abstract class DaosFileSource {
     this.bufCapacity = buffer.capacity();
     this.fileLen = fileLen;
     this.stats = stats;
+    if (append) {
+      nextWritePos = fileLen;
+    }
   }
 
-  protected DaosFileSource(DaosFile daosFile, ByteBuf buffer, long fileLen,
+  protected DaosFileSource(DaosFile daosFile, ByteBuf buffer, long fileLen, boolean append,
                            FileSystem.Statistics stats) {
     this.daosFile = daosFile;
     this.buffer = buffer;
@@ -56,6 +59,9 @@ public abstract class DaosFileSource {
     this.bufCapacity = buffer.capacity();
     this.fileLen = fileLen;
     this.stats = stats;
+    if (append) {
+      nextWritePos = fileLen;
+    }
   }
 
   public void setReadSize(int readSize) {

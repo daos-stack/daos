@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,10 @@ import (
 const (
 	// CurrentSchemaVersion indicates the current db schema version.
 	CurrentSchemaVersion = 0
+)
+
+var (
+	dbgUuidStr = logging.ShortUUID
 )
 
 type (
@@ -349,6 +353,15 @@ func (db *Database) CheckReplica() error {
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
+// errNotSysLeader returns an error indicating that the node is not
+// the current system leader.
+func errNotSysLeader(svc raftService, db *Database) error {
+	return &system.ErrNotLeader{
+		LeaderHint: string(svc.Leader()),
+		Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+	}
+}
+
 // CheckLeader returns an error if the node is not a replica
 // or is not the current system leader. The error can be inspected
 // for hints about where to find the current leader.
@@ -359,10 +372,7 @@ func (db *Database) CheckLeader() error {
 
 	if err := db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return nil
 	}); err != nil {
@@ -478,6 +488,8 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 
 	for {
+		db.log.Debug("(re-)starting leadership monitoring loop")
+
 		select {
 		case <-parent.Done():
 			if cancelGainedCtx != nil {
@@ -485,7 +497,10 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 			runOnLeadershipLost()
 
-			db.shutdownErrCh <- db.ShutdownRaft()
+			select {
+			case <-parent.Done():
+			case db.shutdownErrCh <- db.ShutdownRaft():
+			}
 			close(db.shutdownErrCh)
 			return
 		case isLeader := <-db.raftLeaderNotifyCh:
@@ -499,7 +514,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
 				if err = db.ResignLeadership(err); err != nil {
@@ -507,7 +521,6 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 				}
 				continue // restart the monitoring loop
 			}
-			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
@@ -1051,20 +1064,7 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 
-	ps, err := db.FindPoolServiceByUUID(poolUUID)
-	if err != nil {
-		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
-		return
-	}
-
-	// If the pool service is not in the Ready state, ignore the update.
-	if ps.State != system.PoolServiceStateReady {
-		return
-	}
-
-	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
-		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
-
+	// Attempt to take the lock first, to cut down on log spam.
 	ctx := context.Background()
 	lock, err := db.TakePoolLock(ctx, poolUUID)
 	if err != nil {
@@ -1072,6 +1072,26 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		return
 	}
 	defer lock.Release()
+
+	ps, err := db.FindPoolServiceByUUID(poolUUID)
+	if err != nil {
+		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
+		return
+	}
+
+	// If the pool service is in the Creating state, set it to Ready, as
+	// we know that it's ready if it's sending us a RAS event. The pool
+	// create may have completed on a previous MS leader.
+	if ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("automatically moving pool %s from Creating to Ready due to svc update", dbgUuidStr(ps.PoolUUID))
+		ps.State = system.PoolServiceStateReady
+	} else if ps.State == system.PoolServiceStateDestroying {
+		// Don't update the pool service if it's being destroyed.
+		return
+	}
+
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
 
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
 		dbgUuidStr(ps.PoolUUID), ps.State, ps.Replicas, ei.SvcReplicas)
@@ -1081,6 +1101,9 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 	if err := db.UpdatePoolService(lock.InContext(ctx), ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)
 	}
+
+	newRanks := ranklist.RankSetFromRanks(ps.Replicas)
+	db.log.Infof("pool %s: service ranks set to %s", ps.PoolLabel, newRanks)
 }
 
 // OnEvent handles events and updates system database accordingly.
@@ -1137,8 +1160,4 @@ func (db *Database) GetSystemAttrs(keys []string, filterFn func(string) bool) (m
 		return nil, system.ErrSystemAttrNotFound(k)
 	}
 	return out, nil
-}
-
-func dbgUuidStr(u uuid.UUID) string {
-	return u.String()[0:8]
 }

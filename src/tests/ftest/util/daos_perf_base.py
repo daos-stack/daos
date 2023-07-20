@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -54,3 +53,5 @@ class DaosPerfBase(TestWithServers):
         except CommandFailure as error:
             self.log.error("DAOS PERF Failed: %s", str(error))
             self.fail("Test was expected to pass but it failed.\n")
+
+        return None

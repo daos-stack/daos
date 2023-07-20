@@ -39,12 +39,11 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
-		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-						      ie->ie_parent,
+		rc = fuse_lowlevel_notify_inval_entry(fs_handle->di_session, ie->ie_parent,
 						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 
 		if (rc && rc != -ENOENT)
-			DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+			DFUSE_TRA_ERROR(ie, "inval_entry() returned: %d (%s)", rc, strerror(-rc));
 	}
 
 	/* Update the inode entry data */

@@ -30,7 +30,7 @@ class DaosRacerTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=io,daosracer
-        :avocado: tags=daos_racer_parallel
+        :avocado: tags=daos_racer,DaosRacerTest,test_parallel
         """
         # Create the dmg command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())

@@ -1698,7 +1698,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor =
   (ProtobufCMessageInit) mgmt__pool_create_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[5] =
 {
   {
     "status",
@@ -1713,8 +1713,20 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "svc_reps",
+    "leader",
     2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolCreateResp, leader),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "svc_reps",
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__PoolCreateResp, n_svc_reps),
@@ -1726,7 +1738,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   },
   {
     "tgt_ranks",
-    3,
+    4,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__PoolCreateResp, n_tgt_ranks),
@@ -1738,7 +1750,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   },
   {
     "tier_bytes",
-    4,
+    5,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT64,
     offsetof(Mgmt__PoolCreateResp, n_tier_bytes),
@@ -1750,15 +1762,16 @@ static const ProtobufCFieldDescriptor mgmt__pool_create_resp__field_descriptors[
   },
 };
 static const unsigned mgmt__pool_create_resp__field_indices_by_name[] = {
+  1,   /* field[1] = leader */
   0,   /* field[0] = status */
-  1,   /* field[1] = svc_reps */
-  2,   /* field[2] = tgt_ranks */
-  3,   /* field[3] = tier_bytes */
+  2,   /* field[2] = svc_reps */
+  3,   /* field[3] = tgt_ranks */
+  4,   /* field[4] = tier_bytes */
 };
 static const ProtobufCIntRange mgmt__pool_create_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 5 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
 {
@@ -1768,7 +1781,7 @@ const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor =
   "Mgmt__PoolCreateResp",
   "mgmt",
   sizeof(Mgmt__PoolCreateResp),
-  4,
+  5,
   mgmt__pool_create_resp__field_descriptors,
   mgmt__pool_create_resp__field_indices_by_name,
   1,  mgmt__pool_create_resp__number_ranges,
@@ -2480,7 +2493,7 @@ const ProtobufCMessageDescriptor mgmt__pool_extend_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_extend_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descriptors[6] =
 {
   {
     "sys",
@@ -2542,6 +2555,18 @@ static const ProtobufCFieldDescriptor mgmt__pool_reintegrate_req__field_descript
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "tierbytes",
+    6,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_UINT64,
+    offsetof(Mgmt__PoolReintegrateReq, n_tierbytes),
+    offsetof(Mgmt__PoolReintegrateReq, tierbytes),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
   1,   /* field[1] = id */
@@ -2549,11 +2574,12 @@ static const unsigned mgmt__pool_reintegrate_req__field_indices_by_name[] = {
   4,   /* field[4] = svc_ranks */
   0,   /* field[0] = sys */
   3,   /* field[3] = targetidx */
+  5,   /* field[5] = tierbytes */
 };
 static const ProtobufCIntRange mgmt__pool_reintegrate_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
 {
@@ -2563,7 +2589,7 @@ const ProtobufCMessageDescriptor mgmt__pool_reintegrate_req__descriptor =
   "Mgmt__PoolReintegrateReq",
   "mgmt",
   sizeof(Mgmt__PoolReintegrateReq),
-  5,
+  6,
   mgmt__pool_reintegrate_req__field_descriptors,
   mgmt__pool_reintegrate_req__field_indices_by_name,
   1,  mgmt__pool_reintegrate_req__number_ranges,

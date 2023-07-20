@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -212,6 +212,28 @@ int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
 			 struct swim_member_update **pupds, size_t *pnupds);
 
 /**
+ * Parse a SWIM message from other group member and prepare a reply, shorting
+ * the local SWIM state. This is a special API for handling incoming RPCs when
+ * the self ID in \a ctx is SWIM_ID_INVALID.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  self_id	Self member ID to used instead of the one in \a ctx
+ * @param[in]  self_incarnation
+ *			Self incarnation to used instead of the one in \a ctx
+ * @param[in]  from_id	IDs where message is from
+ * @param[in]  id	IDs of selected target for message
+ * @param[in]  upds_in	SWIM updates from other group member
+ * @param[in]  nupds_in	the count of SWIM updates in \a upds_in
+ * @param[out] upds_out	Pointer to SWIM updates for other group member
+ * @param[out] nupds_out
+ *			Pointer to the count of SWIM updates in \a upds_out
+ * @returns		0 on success, negative error ID otherwise
+ */
+int swim_updates_short(struct swim_context *ctx, swim_id_t self_id, uint64_t self_incarnation,
+		       swim_id_t from_id, swim_id_t id, struct swim_member_update *upds_in,
+		       size_t nupds_in, struct swim_member_update **upds_out, size_t *nupds_out);
+
+/**
  * Send a SWIM message for other group member.
  *
  * @param[in]  ctx	SWIM context pointer from swim_init()
@@ -266,6 +288,14 @@ int swim_progress(struct swim_context *ctx, int64_t timeout);
  */
 int swim_net_glitch_update(struct swim_context *ctx, swim_id_t id,
 			   uint64_t delay);
+
+/**
+ * Delete a SWIM member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of member to delete
+ */
+void swim_member_del(struct swim_context *ctx, swim_id_t id);
 
 /** @} */
 

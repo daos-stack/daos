@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2019-2022 Intel Corporation.
+(C) Copyright 2019-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -50,9 +49,9 @@ def create_partition(log, control, name, hosts, default='yes', max_time='UNLIMIT
         control (NodeSet): slurm control host
         name (str): slurm partition name
         hosts (NodeSet): hosts to include in the partition
-        default (str, optional): _description_. Defaults to 'yes'.
-        max_time (str, optional): _description_. Defaults to 'UNLIMITED'.
-        state (str, optional): _description_. Defaults to 'up'.
+        default (str, optional): whether this partition should be the default. Defaults to 'yes'.
+        max_time (str, optional): maximum run time for jobs. Defaults to 'UNLIMITED'.
+        state (str, optional): state of jobs that can be allocated. Defaults to 'up'.
 
     Returns:
         RemoteCommandResult: results from the scontrol command
@@ -130,24 +129,23 @@ def sinfo(log, control):
     return run_remote(log, control, 'sinfo')
 
 
-def sbatch(log, control, script, log_file=None):
+def sbatch(log, script, log_file=None):
     """Run the specified script with the sbatch command.
 
     Args:
         log (logger): logger for the messages produced by this method
-        control (NodeSet): slurm control host
         script (str): script file suitable to by run by slurm
         log_file (str, optional): logfile to generate. Defaults to None.
 
     Returns:
-        RemoteCommandResult: results from the sbatch command
+        CommandResult: results from the sbatch command
 
     """
     command = ['sbatch']
     if log_file:
         command.extend(['-o', str(log_file)])
     command.append(script)
-    return run_remote(log, control, ' '.join(command))
+    return run_local(log, ' '.join(command))
 
 
 def get_partition_hosts(log, control, partition):
@@ -272,12 +270,11 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch_params=
     return scriptfile
 
 
-def run_slurm_script(log, control, script, logfile=None):
+def run_slurm_script(log, script, logfile=None):
     """Run slurm script.
 
     Args:
         log (logger): logger for the messages produced by this method
-        control (NodeSet): slurm control host
         script (str): script file suitable to by run by slurm
         logfile (str, optional): logfile to generate. Defaults to None.
 
@@ -289,11 +286,10 @@ def run_slurm_script(log, control, script, logfile=None):
 
     """
     job_id = None
-    result = sbatch(log, control, script, logfile)
-    if result.passed:
-        match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", "\n".join(result.all_stdout.values()))
-        if match is not None:
-            job_id = match.group(1)
+    result = sbatch(log, script, logfile)
+    match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", result.stdout)
+    if match is not None:
+        job_id = match.group(1)
     else:
         raise SlurmFailed("Error running sbatch")
     return job_id
@@ -314,7 +310,7 @@ def check_slurm_job(log, handle):
     state = "UNKNOWN"
     command = ["scontrol", "show", "job", handle]
     try:
-        result = run_local(log, command, verbose=False, check=True)
+        result = run_local(log, ' '.join(command), verbose=False, check=True)
         match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
         if match is not None:
             state = match.group(1)

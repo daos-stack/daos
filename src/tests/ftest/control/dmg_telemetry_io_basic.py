@@ -11,7 +11,6 @@ from telemetry_utils import TelemetryUtils
 
 
 class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 
@@ -70,8 +69,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
         """Display metrics_data.
 
         Args:
-            metrics_data (dict): a dictionary of host keys linked to a
-                                 list of io metric names.
+            metrics_data (dict): a dictionary of host keys linked to a list of io metric names.
         """
         for key in sorted(metrics_data):
             self.log.info(

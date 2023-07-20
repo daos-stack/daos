@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -24,8 +23,8 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// TestBackend_createEmptyFile verifies empty files are created as expected.
-func TestBackend_createEmptyFile(t *testing.T) {
+// TestBackend_createAioFile verifies AIO files are created (or not) as expected.
+func TestBackend_createAioFile(t *testing.T) {
 	tests := map[string]struct {
 		path          string
 		pathImmutable bool // avoid adjusting path in test if set
@@ -64,10 +63,28 @@ func TestBackend_createEmptyFile(t *testing.T) {
 				tc.path = filepath.Join(testDir, tc.path)
 			}
 
-			gotErr := createEmptyFile(log, tc.path, tc.size)
-			test.CmpErr(t, tc.expErr, gotErr)
+			req := &storage.BdevFormatRequest{
+				OwnerUID: os.Getuid(),
+				OwnerGID: os.Getgid(),
+				Properties: storage.BdevTierProperties{
+					DeviceFileSize: tc.size,
+				},
+			}
+
+			gotResp := createAioFile(log, tc.path, req)
 			if tc.expErr != nil {
+				if gotResp.Error == nil {
+					t.Fatal("expected non-nil error in response")
+				}
+				test.CmpErr(t, tc.expErr, gotResp.Error)
+				if _, err := os.Stat(tc.path); err == nil {
+					t.Fatalf("%s file was not removed on error", tc.path)
+				}
+
 				return
+			}
+			if gotResp.Error != nil {
+				t.Fatal("expected nil error in response")
 			}
 
 			expSize := (tc.size / aioBlockSize) * aioBlockSize
@@ -145,7 +162,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -162,6 +179,9 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				Class: storage.ClassNvme,
 				Bdev: storage.BdevConfig{
 					DeviceList: storage.MustNewBdevDeviceList(test.MockPCIAddrs(1, 2)...),
+					DeviceRoles: storage.BdevRoles{
+						OptionBits: storage.OptionBits(storage.BdevRoleAll),
+					},
 				},
 			},
 			expOut: `
@@ -200,7 +220,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_7",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -208,7 +228,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_7",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -265,7 +285,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -273,7 +293,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -347,7 +367,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -355,7 +375,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -420,7 +440,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -428,7 +448,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1_84_0",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -495,7 +515,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -552,7 +572,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -626,7 +646,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0_84_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -664,7 +684,7 @@ func TestBackend_writeJSONFile(t *testing.T) {
 				WithStorageAccelProps(tc.accelEngine, tc.accelOptMask).
 				WithStorageSpdkRpcSrvProps(tc.rpcSrvEnable, tc.rpcSrvSockAddr)
 
-			req, err := storage.BdevWriteConfigRequestFromConfig(context.TODO(), log,
+			req, err := storage.BdevWriteConfigRequestFromConfig(test.Context(t), log,
 				&engineConfig.Storage, tc.enableVmd, storage.MockGetTopology)
 			if err != nil {
 				t.Fatal(err)

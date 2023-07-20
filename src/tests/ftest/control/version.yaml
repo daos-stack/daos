@@ -11,4 +11,14 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
+  transport_config:
+    allow_insecure: true
+
+agent_config:
+  transport_config:
+    allow_insecure: true
+
+dmg:
+  transport_config:
+    allow_insecure: true

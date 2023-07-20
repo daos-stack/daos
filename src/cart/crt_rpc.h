@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -65,21 +65,22 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
-	uint32_t	cch_dst_tag;
+	/* destination tag */
+	uint16_t	cch_dst_tag;
+	/* source timeout, to be replaced by deadline eventually */
+	uint16_t	cch_src_timeout;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
 	RPC_STATE_QUEUED, /* queued for flow controlling */
 	RPC_STATE_REQ_SENT,
-	RPC_STATE_REPLY_RECVED,
 	RPC_STATE_COMPLETED,
 	RPC_STATE_CANCELED,
 	RPC_STATE_TIMEOUT,
-	RPC_STATE_ADDR_LOOKUP,
 	RPC_STATE_URI_LOOKUP,
 	RPC_STATE_FWD_UNREACH,
 } crt_rpc_state_t;
@@ -135,7 +136,7 @@ struct crt_rpc_priv {
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
-	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
 
 	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */
@@ -172,8 +173,6 @@ struct crt_rpc_priv {
 				crp_have_ep:1,
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
-				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1,
 				/* 1 if RPC fails HLC epsilon check */
 				crp_fail_hlc:1,
 				/* RPC completed flag */
@@ -185,10 +184,33 @@ struct crt_rpc_priv {
 	/* corpc info, only valid when (crp_coll == 1) */
 	struct crt_corpc_info	*crp_corpc_info;
 	pthread_spinlock_t	crp_lock;
+	/*
+	 * Prevent data races on most crt_rpc_priv fields from crt_req_send,
+	 * crt_hg_req_send_cb, uri_lookup_cb, and crt_req_timeout_hdlr. The
+	 * following fine-to-coarse lock order shall be followed:
+	 *
+	 *   crt_rpc_priv.crp_mutex
+	 *   crt_ep_inflight.epi_mutex
+	 *   crt_context.cc_mutex
+	 *   crt_gdata.cg_rwlock
+	 */
+	pthread_mutex_t		crp_mutex;
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
+
+static inline void
+crt_rpc_lock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_LOCK(&rpc_priv->crp_mutex);
+}
+
+static inline void
+crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
+{
+	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
+}
 
 #define CRT_PROTO_INTERNAL_VERSION 4
 #define CRT_PROTO_FI_VERSION 3
@@ -626,8 +648,7 @@ crt_rpc_cb_customized(struct crt_context *crt_ctx,
 int crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		       bool forward);
 void crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv);
-int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
-		      bool srv_flag);
+void crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx, bool srv_flag);
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
@@ -640,7 +661,6 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 {
 	return (rpc_priv->crp_state == RPC_STATE_REQ_SENT ||
 		rpc_priv->crp_state == RPC_STATE_URI_LOOKUP ||
-		rpc_priv->crp_state == RPC_STATE_ADDR_LOOKUP ||
 		rpc_priv->crp_state == RPC_STATE_TIMEOUT ||
 		rpc_priv->crp_state == RPC_STATE_FWD_UNREACH) &&
 	       !rpc_priv->crp_in_binheap;

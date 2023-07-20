@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2021 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,7 +33,7 @@ func SeededSigner() *TokenSigner {
 
 func SignTestSetup(t *testing.T) (rsaKey, ecdsaKey crypto.PrivateKey, source []byte) {
 	keyPath := "testdata/certs/daosCA.key"
-	if err := os.Chmod(keyPath, MaxKeyPerm); err != nil {
+	if err := os.Chmod(keyPath, MaxUserOnlyKeyPerm); err != nil {
 		t.Fatal(err)
 	}
 	rsaKey, err := LoadPrivateKey(keyPath)

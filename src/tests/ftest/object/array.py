@@ -1,16 +1,15 @@
 '''
-  (C) Copyright 2017-2022 Intel Corporation.
+  (C) Copyright 2017-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import time
 import traceback
 import logging
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+
+from apricot import TestWithServers
 
 
 class ArrayObjTest(TestWithServers):

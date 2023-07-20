@@ -20,6 +20,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/system"
@@ -232,6 +234,7 @@ func isTimeout(err error) bool {
 	cause := errors.Cause(err)
 	return cause == context.DeadlineExceeded ||
 		cause == os.ErrDeadlineExceeded ||
+		fault.IsFaultCode(cause, code.ClientConnectionTimedOut) ||
 		status.Code(cause) == codes.DeadlineExceeded
 }
 

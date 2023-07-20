@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -57,34 +56,27 @@ class DmvrPosixSubsets(DataMoverTestBase):
         # create dfuse containers to test copying to dfuse subdirectories
         dfuse_cont1 = self.get_container(pool1)
         dfuse_cont2 = self.get_container(pool1)
-        dfuse_cont1_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
-        # destination directory should be created by program
-        dfuse_cont2_dir = self.new_posix_test_path(
-            create=False,
-            parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
+        dfuse_src_dir = join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont1.uuid)
         # Create a special container to hold UNS entries
         uns_cont = self.get_container(pool1)
 
-        # Create a testing container
-        container1_path = join(self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
+        # Create two test containers
+        container1_path = join(
+            self.dfuse.mount_dir.value, pool1.uuid, uns_cont.uuid, 'uns1')
         container1 = self.get_container(pool1, path=container1_path)
+        container2 = self.get_container(pool1)
 
         # Create some source directories in the container
         sub_dir = self.new_daos_test_path(False)
         sub_sub_dir = self.new_daos_test_path(True, container1, sub_dir)
 
         # Create initial test files
+        self.write_location("DAOS_UUID", '/', pool1, container1)
         self.write_location("DAOS_UUID", sub_dir, pool1, container1)
         self.write_location("DAOS_UUID", sub_sub_dir, pool1, container1)
-        self.write_location("POSIX", dfuse_cont1_dir)
+        self.write_location("POSIX", dfuse_src_dir)
 
         copy_list = []
-
-        if self.tool == "FS_COPY":
-            copy_list.append(
-                ["dfuse copy (dfuse cont1 dir to dfuse cont2 dir that doesn't exist)",
-                    ["POSIX", dfuse_cont1_dir, None, None],
-                    ["POSIX", dfuse_cont2_dir, None, None]])
 
         # For each copy, use a new destination directory.
         # This ensures that the source directory is copied
@@ -126,6 +118,20 @@ class DmvrPosixSubsets(DataMoverTestBase):
                 "copy_subsets (uns sub_sub_dir to uuid sub_sub_dir)",
                 ["DAOS_UNS", sub_sub_dir, pool1, container1],
                 ["DAOS_UUID", sub_sub_dir2, pool1, container1]])
+
+            sub_dir3 = self.new_daos_test_path(False)
+            copy_list.append([
+                "copy_subsets (uuid root to new uuid sub_dir)",
+                ["DAOS_UUID", '/', pool1, container1],
+                ["DAOS_UUID", sub_dir3, pool1, container2]])
+
+            dfuse_dst_dir = self.new_posix_test_path(
+                create=False,
+                parent=join(self.dfuse.mount_dir.value, pool1.uuid, dfuse_cont2.uuid))
+            copy_list.append([
+                "copy_subsets (dfuse root to new dfuse dir)",
+                ["POSIX", dfuse_src_dir, None, None],
+                ["POSIX", dfuse_dst_dir, None, None]])
 
         # Run and verify each copy.
         # Each src or dst is a list of params:
@@ -170,7 +176,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
             DAOS-6752: daos fs copy improvements
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior
+        :avocado: tags=datamover,daos_fs_copy,dfuse,dfs,ior,daos_cmd
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         :avocado: tags=test_dm_posix_subsets_fs_copy
         """

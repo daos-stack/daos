@@ -14,7 +14,7 @@
 #include "daos_iotest.h"
 #include <daos/dtx.h>
 
-#define MUST(rc)		assert_int_equal(rc, 0)
+#define MUST(rc)                assert_success(rc)
 #define	DTX_TEST_SUB_REQS	32
 #define DTX_IO_SMALL		32
 #define DTX_NC_CNT		10
@@ -1683,11 +1683,10 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort,
 			 *  the other is -DER_TX_UNCERTAIN.
 			 */
 			if (rc == 0) {
-				assert_int_equal(reqs[i].result,
-						 -DER_TX_UNCERTAIN);
+				assert_rc_equal(reqs[i].result, -DER_TX_UNCERTAIN);
 			} else {
-				assert_int_equal(rc, -DER_TX_UNCERTAIN);
-				assert_int_equal(reqs[i].result, 0);
+				assert_rc_equal(rc, -DER_TX_UNCERTAIN);
+				assert_success(reqs[i].result);
 			}
 
 			ioreq_fini(&reqs[i]);
@@ -2885,7 +2884,7 @@ dtx_38(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	rebuild_single_pool_rank(arg, kill_ranks[0], false);
-
+	daos_cont_status_clear(arg->coh, NULL);
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		print_message("Verifying data after rebuild...\n");
@@ -3052,8 +3051,38 @@ dtx_sub_setup(void **state)
 
 	saved_dtx_arg = *state;
 	*state = NULL;
-	rc = test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE,
-			0, NULL);
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF2);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf0_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF0);
+
+	return rc;
+}
+
+static int
+dtx_sub_rf1_setup(void **state)
+{
+	int	rc;
+
+	saved_dtx_arg = *state;
+	*state = NULL;
+
+	rc = rebuild_sub_setup_common(state, SMALL_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF1);
+
 	return rc;
 }
 
@@ -3151,9 +3180,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX37: resync - leader failed during prepare",
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
-	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_38, dtx_sub_rf0_setup, dtx_sub_teardown},
 	{"DTX39: not restart the transaction with fixed epoch",
-	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+	 dtx_39, dtx_sub_rf1_setup, dtx_sub_teardown},
 
 	{"DTX40: uncertain check - miss commit with delay",
 	 dtx_40, NULL, test_case_teardown},

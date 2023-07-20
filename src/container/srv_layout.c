@@ -16,6 +16,7 @@
 RDB_STRING_KEY(ds_cont_prop_, cuuids);
 RDB_STRING_KEY(ds_cont_prop_, conts);
 RDB_STRING_KEY(ds_cont_prop_, cont_handles);
+RDB_STRING_KEY(ds_cont_prop_, oit_oids);
 
 /* Container properties KVS */
 RDB_STRING_KEY(ds_cont_prop_, ghce);
@@ -61,7 +62,7 @@ static struct daos_prop_co_roots dummy_roots;
 struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container_label_not_set",
+		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
@@ -127,7 +128,7 @@ struct daos_prop_entry cont_prop_entries_default_v0[CONT_PROP_NUM_V0] = {
 struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	{
 		.dpe_type	= DAOS_PROP_CO_LABEL,
-		.dpe_str	= "container_label_not_set",
+		.dpe_str	= DAOS_PROP_CO_LABEL_DEFAULT,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
 		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,

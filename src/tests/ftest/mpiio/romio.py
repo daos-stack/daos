@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,7 +7,6 @@
 from mpiio_test_base import MpiioTests
 
 
-# pylint: disable=too-many-ancestors
 class Romio(MpiioTests):
     """Run the Romio test.
 

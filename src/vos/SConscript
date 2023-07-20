@@ -56,10 +56,9 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc', 'hwloc')
+    denv.require('pmdk', 'argobots', 'protobufc')
 
     # Compiler options
-    denv.Append(CPPPATH=[Dir('.').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     build_vos(denv, False)
     build_vos(denv, True)

@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -22,58 +22,62 @@ class ConfigGenerateOutput(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a ConfigGenerateOutput object."""
         super().__init__(*args, **kwargs)
-        # Data structure that store expected values.
-        self.nvme_socket_to_addrs = defaultdict(list)
-        self.scm_socket_to_namespaces = defaultdict(list)
-        self.pci_address_set = set()
-        self.scm_namespace_set = set()
 
-        self.interface_to_providers = defaultdict(list)
+        self.def_provider = "ofi+tcp;ofi_rxm"
+
+        # Data structure that store expected values.
+        self.numa_node_to_pci_addrs = defaultdict(set)
+        self.numa_node_to_blockdev = defaultdict(set)
+        self.numa_node_to_interfaces = defaultdict(set)
+        self.interface_to_providers = defaultdict(set)
         self.interface_set = set()
 
     def prepare_expected_data(self):
         """Prepare expected values.
 
-        Call dmg storage scan and network scan to collect expected values.
+        Call dmg storage scan and network scan to collect expected values for NVMe, PMEM,
+        and networking and create the following 4 dictionaries and 1 set.
+
+        1. Create numa_node_to_pci_addrs. Key is socket_id from the output and value is a
+        set of pci_addr(s) from the output.
+        2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
+        set of blockdev(s) from the output. (In the current CI env, there's only one
+        blockdev per numa_node. However, dmg config generate output supports multiple
+        SCM devices per engine, so make this as a set to support multiple blockdev(s) per
+        numa_node.)
+        3. Create numa_node_to_interfaces. Key is NumaNode from the output and value is a
+        set of Device(s) from the output.
+        4. Create interface_to_providers. Key is Device from the output and value is a
+        set of Provider(s) from the output.
+        5. Create interface_set. Set of Device(s) from the output.
         """
         dmg = self.get_dmg_command()
 
-        # Call dmg storage scan --json.
+        # Call dmg storage scan.
         storage_out = dmg.storage_scan()
 
-        # Check the status.
-        if storage_out["status"] != 0:
-            self.log.error(storage_out["error"])
-            self.fail("dmg storage scan failed!")
-
-        # Get nvme_devices and scm_namespaces list that are buried. There's a
-        # uint64 hash of the strcut under HostStorage.
+        # Get nvme_devices and scm_namespaces list that are buried. There's a uint64 hash
+        # of the struct under HostStorage.
         temp_dict = storage_out["response"]["HostStorage"]
         struct_hash = list(temp_dict.keys())[0]
         nvme_devices = temp_dict[struct_hash]["storage"]["nvme_devices"]
         scm_namespaces = temp_dict[struct_hash]["storage"]["scm_namespaces"]
 
-        # Fill in the dictionary and the set for NVMe.
+        # 1. Create numa_node_to_pci_addrs. Key is socket_id from the output and value is
+        # a set of pci_addr(s) from the output.
         for nvme_device in nvme_devices:
             socket_id = nvme_device["socket_id"]
             pci_addr = nvme_device["pci_addr"]
-            self.nvme_socket_to_addrs[socket_id].append(pci_addr)
-            self.pci_address_set.add(pci_addr)
+            self.numa_node_to_pci_addrs[socket_id].add(pci_addr)
 
-        self.log.info("nvme_socket_to_addrs = %s", self.nvme_socket_to_addrs)
-        self.log.info("pci_address_set = %s", self.pci_address_set)
-
-        # Fill in the dictionary and the set for SCM.
+        # 2. Create numa_node_to_blockdev. Key is numa_node from the output and value is a
+        # set of blockdev(s) from the output.
         for scm_namespace in scm_namespaces:
             numa_node = scm_namespace["numa_node"]
             blockdev = scm_namespace["blockdev"]
-            self.scm_socket_to_namespaces[numa_node].append(blockdev)
-            self.scm_namespace_set.add(blockdev)
+            self.numa_node_to_blockdev[numa_node].add(blockdev)
 
-        self.log.info("scm_socket_to_namespaces = %s", self.scm_socket_to_namespaces)
-        self.log.info("scm_namespace_set = %s", self.scm_namespace_set)
-
-        # Call dmg network scan --provider=all --json.
+        # Call dmg network scan --provider=all --json for step 3, 4, and 5.
         network_out = dmg.network_scan(provider="all")
 
         # Check the status.
@@ -86,13 +90,23 @@ class ConfigGenerateOutput(TestWithServers):
         struct_hash = list(temp_dict.keys())[0]
         interfaces = temp_dict[struct_hash]["HostFabric"]["Interfaces"]
 
-        # Fill in the dictionary and the set for interface.
+        # Fill in the dictionary and the set of interfaces.
         for interface in interfaces:
-            provider = interface["Provider"]
+            numa_node = interface["NumaNode"]
             device = interface["Device"]
-            self.interface_to_providers[device].append(provider)
+            provider = interface["Provider"]
+            # 3. Create numa_node_to_interfaces. Key is NumaNode from the output and value
+            # is a set of Device(s) from the output.
+            self.numa_node_to_interfaces[numa_node].add(device)
+            # 4. Create interface_to_providers. Key is Device from the output and value is
+            # a set of Provider(s) from the output.
+            self.interface_to_providers[device].add(provider)
+            # 5. Create interface_set. Set of Device(s) from the output.
             self.interface_set.add(device)
 
+        self.log.info("numa_node_to_pci_addrs = %s", self.numa_node_to_pci_addrs)
+        self.log.info("numa_node_to_blockdev = %s", self.numa_node_to_blockdev)
+        self.log.info("numa_node_to_interfaces = %s", self.numa_node_to_interfaces)
         self.log.info("interface_to_providers = %s", self.interface_to_providers)
         self.log.info("interface_set = %s", self.interface_set)
 
@@ -132,7 +146,8 @@ class ConfigGenerateOutput(TestWithServers):
         dmg.exit_status_exception = False
 
         try:
-            result = dmg.config_generate(access_points=host_port_input)
+            result = dmg.config_generate(
+                access_points=host_port_input, net_provider=self.def_provider)
         except CommandFailure as err:
             errors.append("Unexpected failure! {}".format(err))
 
@@ -163,54 +178,60 @@ class ConfigGenerateOutput(TestWithServers):
         Sanity check for the default arguments.
 
         1. Call dmg config generate (using default values)
-        2. Verify the last scm_list value is in the SCM Namespace set.
-        e.g., /dev/pmem0 -> Verify that pmem0 is in the set.
-        3. Iterate bdev_list address list and verify that it's in the NVMe PCI
-        address set.
-        4. Get fabric_iface and verify that it's in the interface set.
+        2. Verify scm_list value is in the SCM Namespace set of the correct numa node.
+        e.g., /dev/pmem0 is in pinned_numa_node: 0 -> Verify that pmem0 is in the set of
+        numa node 0.
+        3. Verify bdev_list is in the NVMe PCI address set of correct socket ID.
+        4. Verify fabric_iface is in the interface set of the correct numa node.
         5. Repeat for all engines.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_basic_config
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
 
-        # Call dmg config generate.
-        result = self.get_dmg_command().config_generate(access_points="wolf-a")
+        # 1. Call dmg config generate.
+        result = self.get_dmg_command().config_generate(
+            access_points="wolf-a", net_provider=self.def_provider)
         generated_yaml = yaml.safe_load(result.stdout)
 
         errors = []
 
-        scm_found = False
-        nvme_found = False
-
         # Iterate engines and verify scm_list, bdev_list, and fabric_iface.
         engines = generated_yaml["engines"]
         for engine in engines:
+            scm_found = False
+            nvme_found = False
+            pinned_numa_node = engine["pinned_numa_node"]
+
             for storage in engine["storage"]:
                 if storage["class"] == "dcpm":
-                    # Verify the scm_list value is in the SCM Namespace set. e.g.,
-                    # if the value is /dev/pmem0, check pmem0 is in the set.
+                    # 2. Verify the scm_list value is in the SCM Namespace set of the
+                    # correct pinned numa node. e.g., If the value is /dev/pmem0 with
+                    # pinned_numa_node: 0, check pmem0 is in the set for numa node 0.
                     scm_list = storage["scm_list"]
                     for scm_dev in scm_list:
                         device_name = scm_dev.split("/")[-1]
-                        if device_name not in self.scm_namespace_set:
-                            errors.append(
-                                "Cannot find SCM device name {} in expected set {}".format(
-                                    device_name, self.scm_namespace_set))
+                        if device_name not in self.numa_node_to_blockdev[pinned_numa_node]:
+                            msg = ("Cannot find SCM device name {} "
+                                   "in expected list {}").format(
+                                device_name, self.numa_node_to_blockdev[pinned_numa_node])
+                            errors.append(msg)
                         scm_found = True
 
-                # Verify the bdev_list values are in the NVMe PCI address set.
+                # 3. Verify the bdev_list values are in the NVMe PCI address set of the
+                # correct pinned numa node.
                 if storage["class"] == "nvme":
                     bdev_list = storage["bdev_list"]
                     for pci_addr in bdev_list:
-                        if pci_addr not in self.pci_address_set:
-                            errors.append(
-                                "Cannot find PCI address {} in expected set {}".format(
-                                    pci_addr, self.pci_address_set))
+                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
+                            msg = ("Cannot find PCI address {} "
+                                   "in expected set {}").format(
+                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
+                            errors.append(msg)
                         nvme_found = True
 
             if not scm_found:
@@ -218,12 +239,92 @@ class ConfigGenerateOutput(TestWithServers):
             if not nvme_found:
                 errors.append("No NVMe devices found")
 
-            # Verify fabric interface values are in the interface set.
+            # Verify fabric interface is in the interface set of the correct numa node.
             fabric_iface = engine["fabric_iface"]
-            if fabric_iface not in self.interface_set:
+            if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
                 errors.append(
                     "Cannot find fabric interface {} in expected set {}".format(
-                        fabric_iface, self.interface_set))
+                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
+
+        self.check_errors(errors)
+
+    def test_tmpfs_scm_config(self):
+        """Test tmpfs scm configuration.
+
+        Sanity check for tmpfs scm parameters generated in config file when --use-tmpfs-scm flag
+        is set.
+
+        1. Call dmg config generate (using --use-tmpfs-scm flag)
+        2. Verify class value is set to ram.
+        3. Verify the scm_list value is not set.
+        4. Verify the scm_size value is set.
+        5. Iterate bdev_list address list and verify that it's in the NVMe PCI address set
+        of the correct numa node.
+        6. Get fabric_iface and verify that it's in the interface set.
+        7. Repeat for all engines.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateOutput,test_tmpfs_scm_config
+        """
+        # Get necessary storage and network info.
+        self.prepare_expected_data()
+
+        errors = []
+
+        # Call dmg config generate.
+        result = self.get_dmg_command().config_generate(
+            access_points="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
+            control_metadata_path=self.test_dir)
+        if result.exit_status != 0:
+            errors.append("Config generate failed with use_tmpfs_scm = True!")
+        generated_yaml = yaml.safe_load(result.stdout)
+
+        # Iterate engines and verify class, scm_size, bdev_list, and fabric_iface.
+        engines = generated_yaml["engines"]
+        for engine in engines:
+            scm_found = False
+            nvme_found = False
+            pinned_numa_node = engine["pinned_numa_node"]
+
+            for storage in engine["storage"]:
+                if storage["class"] == "ram":
+                    scm_found = True
+                    # Verify scm_list value is not set:
+                    if "scm_list" in storage:
+                        errors.append("unexpected scm_list field exists in ram tier")
+                    # Verify scm_size value is set:
+                    if "scm_size" not in storage:
+                        errors.append("Expected scm_size field does not exist in ram tier")
+                elif storage["class"] == "dcpm":
+                    scm_found = True
+                    errors.append("Unexpected storage tier class dcpm, want ram")
+
+                # Verify the bdev_list values are in the NVMe PCI address set of the
+                # correct numa node.
+                if storage["class"] == "nvme":
+                    bdev_list = storage["bdev_list"]
+                    for pci_addr in bdev_list:
+                        if pci_addr not in self.numa_node_to_pci_addrs[pinned_numa_node]:
+                            msg = ("Cannot find PCI address {} "
+                                   "in expected set {}").format(
+                                pci_addr, self.numa_node_to_pci_addrs[pinned_numa_node])
+                            errors.append(msg)
+                        nvme_found = True
+
+            if not scm_found:
+                errors.append("No SCM devices found")
+            if not nvme_found:
+                errors.append("No NVMe devices found")
+
+            # Verify fabric interface values are in the interface set of the correct numa
+            # node.
+            fabric_iface = engine["fabric_iface"]
+            if fabric_iface not in self.numa_node_to_interfaces[pinned_numa_node]:
+                errors.append(
+                    "Cannot find fabric interface {} in expected set {}".format(
+                        fabric_iface, self.numa_node_to_interfaces[pinned_numa_node]))
 
         self.check_errors(errors)
 
@@ -232,7 +333,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_single
         """
         errors = []
@@ -250,7 +351,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_odd
         """
         errors = []
@@ -268,7 +369,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_invalid
         """
         errors = []
@@ -277,8 +378,7 @@ class ConfigGenerateOutput(TestWithServers):
         errors.extend(self.verify_access_point("wolf-a,wolf-b", "non-odd"))
 
         # Single AP with an invalid port.
-        errors.extend(
-            self.verify_access_point("wolf-a:abcd", "invalid access point port"))
+        errors.extend(self.verify_access_point("wolf-a:abcd", "invalid access point port"))
 
         # Odd AP with both valid and invalid port.
         errors.extend(
@@ -292,13 +392,12 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries,access_points
+        :avocado: tags=control,dmg_config_generate,access_points
         :avocado: tags=ConfigGenerateOutput,test_access_points_same_ap_repeated
         """
         errors = []
 
-        errors.extend(
-            self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
+        errors.extend(self.verify_access_point("wolf-a,wolf-a,wolf-a", "duplicate access points"))
 
         self.check_errors(errors)
 
@@ -313,7 +412,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_num_engines
         """
         # Get necessary storage and network info.
@@ -323,7 +422,7 @@ class ConfigGenerateOutput(TestWithServers):
         # sockets in NVMe. However, I'm not sure if we need to have the same
         # number of interfaces. Go over this step if we have issue with the
         # max_engine assumption.
-        max_engine = len(list(self.nvme_socket_to_addrs.keys()))
+        max_engine = len(list(self.numa_node_to_pci_addrs.keys()))
         self.log.info("max_engine threshold = %s", max_engine)
 
         dmg = DmgCommand(self.bin)
@@ -332,7 +431,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate --num-engines=<1 to max_engine>
         for num_engines in range(1, max_engine + 1):
-            result = dmg.config_generate(access_points="wolf-a", num_engines=num_engines)
+            result = dmg.config_generate(
+                access_points="wolf-a", num_engines=num_engines, net_provider=self.def_provider)
             generated_yaml = yaml.safe_load(result.stdout)
             actual_num_engines = len(generated_yaml["engines"])
 
@@ -343,69 +443,66 @@ class ConfigGenerateOutput(TestWithServers):
                 errors.append(msg)
 
         # Verify that max_engine + 1 fails.
-        result = dmg.config_generate(access_points="wolf-a", num_engines=max_engine + 1)
+        result = dmg.config_generate(
+            access_points="wolf-a", num_engines=max_engine + 1, net_provider=self.def_provider)
         if result.exit_status == 0:
             errors.append("Host + invalid num engines succeeded with {}!".format(max_engine + 1))
 
         self.check_errors(errors)
 
-    def test_min_ssds(self):
-        """Test --min-ssds.
+    def test_scm_only(self):
+        """Test --scm-only.
 
-        1. Iterate the NVMe PCI dictionary and find the key that has the
-        shortest list. This would be our min_ssd engine count threshold.
-        2. Call dmg config generate --min-ssds=<1 to min_ssd>. Should pass.
-        3. Call dmg config generate --min-ssds=<min_ssd + 1>. Should fail.
-        4. Call dmg config generate --min-ssds=0. Iterate the engines field and
+        1. Call dmg config generate --scm-only=False. Iterate the engines field and
+        verify that there's a bdev_list field.
+        2. Call dmg config generate --scm-only=True. Iterate the engines field and
         verify that there's no bdev_list field.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
-        :avocado: tags=ConfigGenerateOutput,test_min_ssds
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateOutput,test_scm_only
         """
         # Get necessary storage and network info.
         self.prepare_expected_data()
-
-        # Iterate the NVMe PCI dictionary and find the key that has the shortest
-        # list. This would be our min_ssd engine count threshold.
-        socket_ids = list(self.nvme_socket_to_addrs.keys())
-        shortest_id = socket_ids[0]
-        shortest = len(self.nvme_socket_to_addrs[shortest_id])
-        for socket_id in socket_ids:
-            if len(self.nvme_socket_to_addrs[socket_id]) < shortest:
-                shortest = len(self.nvme_socket_to_addrs[socket_id])
-                shortest_id = socket_id
-
-        min_ssd = len(self.nvme_socket_to_addrs[shortest_id])
-        self.log.info("Maximum --min-ssds threshold = %d", min_ssd)
 
         dmg = DmgCommand(self.bin)
         dmg.exit_status_exception = False
 
         errors = []
 
-        # Call dmg config generate --min-ssds=<1 to min_ssd>. Should pass.
-        for num_ssd in range(1, min_ssd + 1):
-            result = dmg.config_generate(
-                access_points="wolf-a", min_ssds=num_ssd)
-            if result.exit_status != 0:
-                errors.append("config generate failed with min_ssd = {}!".format(num_ssd))
-
-        # Call dmg config generate --min_ssds=<min_ssd + 1>. Should fail.
+        # Call dmg config generate with --scm-only=False
         result = dmg.config_generate(
-            access_points="wolf-a", min_ssds=min_ssd + 1)
-        if result.exit_status == 0:
-            errors.append("config generate succeeded with min_ssd + 1 = {}!".format(min_ssd + 1))
-
-        # Call dmg config generate --min-ssds=0
-        result = dmg.config_generate(access_points="wolf-a", min_ssds=0)
+            access_points="wolf-a", scm_only=False, net_provider=self.def_provider)
+        if result.exit_status != 0:
+            errors.append("config generate failed with scm_only = False!")
         generated_yaml = yaml.safe_load(result.stdout)
-        # Iterate the engines and verify that there's no bdev_list field.
+
+        # Iterate the engines and verify that there is a bdev_list field in each nvme tier.
         engines = generated_yaml["engines"]
         for engine in engines:
-            if "bdev_list" in engine["storage"]:
-                errors.append("bdev_list field exists with --min-ssds=0!")
+            nvme_found = False
+            for tier in engine["storage"]:
+                if tier["class"] == "nvme":
+                    nvme_found = True
+                    if "bdev_list" not in tier:
+                        errors.append("no bdev_list field exists with --scm-only=False!")
+            if not nvme_found:
+                errors.append("no nvme tier exists with --scm-only=False!")
+
+        # Call dmg config generate with --scm-only=True
+        result = dmg.config_generate(
+            access_points="wolf-a", scm_only=True, net_provider=self.def_provider)
+        if result.exit_status != 0:
+            errors.append("config generate failed with scm_only = True!")
+        generated_yaml = yaml.safe_load(result.stdout)
+
+        # Iterate the engines and verify that there is no nvme tier.
+        engines = generated_yaml["engines"]
+        for engine in engines:
+            for tier in engine["storage"]:
+                if tier["class"] == "nvme":
+                    errors.append("nvme tier exists with --scm-only=True!")
 
         self.check_errors(errors)
 
@@ -429,7 +526,7 @@ class ConfigGenerateOutput(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=control,config_generate_entries
+        :avocado: tags=control,dmg_config_generate
         :avocado: tags=ConfigGenerateOutput,test_net_class
         """
         # Get necessary storage and network info.
@@ -451,7 +548,8 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, ib_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="infiniband")
+                access_points="wolf-a", num_engines=num_engines, net_class="infiniband",
+                net_provider=self.def_provider)
 
             if result.exit_status != 0:
                 msg = "config generate failed with --net-class=infiniband "\
@@ -476,10 +574,11 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<ib_count + 1>
         # --net-class=infiniband. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband")
+            access_points="wolf-a", num_engines=ib_count + 1, net_class="infiniband",
+            net_provider=self.def_provider)
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=infiniband "\
-                "num_engines = {}!".format(ib_count + 1)
+            msg = "config generate succeeded with --net-class=infiniband num_engines = {}!".format(
+                ib_count + 1)
             errors.append(msg)
 
         # Get eth_count threshold.
@@ -494,11 +593,12 @@ class ConfigGenerateOutput(TestWithServers):
         for num_engines in range(1, eth_count + 1):
             # dmg config generate should pass.
             result = dmg.config_generate(
-                access_points="wolf-a", num_engines=num_engines, net_class="ethernet")
+                access_points="wolf-a", num_engines=num_engines, net_class="ethernet",
+                net_provider=self.def_provider)
 
             if result.exit_status != 0:
-                msg = "config generate failed with --net-class=ethernet "\
-                    "--num-engines = {}!".format(num_engines)
+                msg = "config generate failed with --net-class=ethernet --num-engines = {}!".format(
+                    num_engines)
                 errors.append(msg)
             else:
                 generated_config = yaml.safe_load(result.stdout)
@@ -519,10 +619,11 @@ class ConfigGenerateOutput(TestWithServers):
         # Call dmg config generate --num-engines=<eth_count + 1>
         # --net-class=ethernet. Too many engines. Should fail.
         result = dmg.config_generate(
-            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet")
+            access_points="wolf-a", num_engines=eth_count + 1, net_class="ethernet",
+            net_provider=self.def_provider)
         if result.exit_status == 0:
-            msg = "config generate succeeded with --net-class=ethernet, "\
-                "num_engines = {}!".format(eth_count + 1)
+            msg = "config generate succeeded with --net-class=ethernet, num_engines = {}!".format(
+                eth_count + 1)
             errors.append(msg)
 
         self.check_errors(errors)

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +11,7 @@ from dbench_utils import Dbench
 
 
 class DbenchTest(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
+    # pylint: disable=too-few-public-methods
     """Base Dbench test class.
 
     :avocado: recursive
@@ -31,8 +31,9 @@ class DbenchTest(DfuseTestBase):
             Run dbench on top of mount point.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=dbench,dfuse
+        :avocado: tags=DbenchTest,test_dbench
         """
 
         self.add_pool(connect=False)

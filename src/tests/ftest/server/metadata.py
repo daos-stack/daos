@@ -1,12 +1,10 @@
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import shutil
-from tempfile import mkdtemp
 import traceback
-import uuid
+import time
 
 from avocado.core.exceptions import TestFail
 
@@ -17,13 +15,13 @@ from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
 
-def run_ior_loop(manager, uuids, tmpdir_base):
-    """IOR run for each UUID provided.
+def run_ior_loop(test, manager, loops):
+    """Run IOR multiple times.
 
     Args:
+        test (Test): the test object
         manager (str): mpi job manager command
-        uuids (list): list of container UUIDs
-        tmpdir_base (str): base directory for the mpi orte_tmpdir_base mca parameter
+        loops (int): number of times to run IOR
 
     Returns:
         list: a list of CmdResults from each ior command run
@@ -31,12 +29,11 @@ def run_ior_loop(manager, uuids, tmpdir_base):
     """
     results = []
     errors = []
-    for index, cont_uuid in enumerate(uuids):
-        manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
+    for index in range(loops):
+        cont = test.label_generator.get_label('cont')
+        manager.job.dfs_cont.update(cont, "ior.dfs_cont")
 
-        # Create a unique temporary directory for the the manager command
-        tmp_dir = mkdtemp(dir=tmpdir_base)
-        manager.tmpdir_base.update(tmp_dir, "tmpdir_base")
+        t_start = time.time()
 
         try:
             results.append(manager.run())
@@ -44,14 +41,15 @@ def run_ior_loop(manager, uuids, tmpdir_base):
             ior_mode = "read" if "-r" in manager.job.flags.value else "write"
             errors.append(
                 "IOR {} Loop {}/{} failed for container {}: {}".format(
-                    ior_mode, index, len(uuids), cont_uuid, error))
+                    ior_mode, index, loops, cont, error))
         finally:
-            # Remove the unique temporary directory and its contents to avoid conflicts
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+            t_end = time.time()
+            ior_cmd_time = t_end - t_start
+            results.append("ior_cmd_time = {}".format(ior_cmd_time))
 
     if errors:
         raise CommandFailure(
-            "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
+            "IOR failed in {}/{} loops: {}".format(len(errors), loops, "\n".join(errors)))
     return results
 
 
@@ -65,7 +63,7 @@ class ObjectMetadata(TestWithServers):
     """
 
     # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 2500
+    CREATED_CONTAINERS_MIN = 2900
 
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
@@ -209,7 +207,7 @@ class ObjectMetadata(TestWithServers):
         #
         # Phase 2: if Phase 1 passed:
         #          clean up all containers created (prove "critical" destroy
-        #          in rdb (and vos) works without cascading nospace errors
+        #          in rdb (and vos) works without cascading no space errors
         #
         # Phase 3: if Phase 2 passed:
         #          Sustained container create loop, eventually encountering
@@ -233,12 +231,12 @@ class ObjectMetadata(TestWithServers):
             self.fail("Phase 2: fail (unexpected container destroy error)")
         self.log.info("Phase 2: passed")
 
-        # Phase 3 sustained container creates even after nospace error
-        # Due to rdb log compaction after initial nospace errors, some brief
+        # Phase 3 sustained container creates even after no space error
+        # Due to rdb log compaction after initial no space errors, some brief
         # periods of available space will occur, allowing a few container
         # creates to succeed in the interim.
         self.log.info(
-            "Phase 3: sustained container creates: to nospace and beyond")
+            "Phase 3: sustained container creates: to no space and beyond")
         self.container = []
         sequential_fail_counter = 0
         sequential_fail_max = 1000
@@ -262,13 +260,13 @@ class ObjectMetadata(TestWithServers):
 
                 if status and in_failure:
                     self.log.info(
-                        "Phase 3: container: %d - nospace -> available "
+                        "Phase 3: container: %d - no space -> available "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
-                        "Phase 3: container: %d - available -> nospace "
+                        "Phase 3: container: %d - available -> no space "
                         "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = True
@@ -374,10 +372,6 @@ class ObjectMetadata(TestWithServers):
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
-        list_of_uuid_lists = [
-            [str(uuid.uuid4()) for _ in range(files_per_thread)]
-            for _ in range(total_ior_threads)]
-
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
@@ -389,12 +383,12 @@ class ObjectMetadata(TestWithServers):
                 # Define the arguments for the run_ior_loop method
                 ior_cmd = IorCommand()
                 ior_cmd.get_params(self)
-                ior_cmd.set_daos_params(self.server_group, self.pool)
+                ior_cmd.set_daos_params(self.server_group, self.pool, None)
                 ior_cmd.flags.value = self.params.get("ior{}flags".format(operation), "/run/ior/*")
 
                 # Define the job manager for the IOR command
                 self.ior_managers.append(
-                    get_job_manager(self, "Orterun", ior_cmd, mpi_type="openmpi"))
+                    get_job_manager(self, "Clush", ior_cmd))
                 env = ior_cmd.get_default_env(str(self.ior_managers[-1]))
                 self.ior_managers[-1].assign_hosts(self.hostlist_clients, self.workdir, None)
                 self.ior_managers[-1].assign_processes(processes)
@@ -403,15 +397,13 @@ class ObjectMetadata(TestWithServers):
 
                 # Add a thread for these IOR arguments
                 thread_manager.add(
-                    manager=self.ior_managers[-1], uuids=list_of_uuid_lists[index],
-                    tmpdir_base=self.test_dir)
-                self.log.info(
-                    "Created %s thread %s with container uuids %s", operation,
-                    index, list_of_uuid_lists[index])
+                    test=self, manager=self.ior_managers[-1], loops=files_per_thread)
+                self.log.info("Created %s thread %s", operation, index)
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
             failed_thread_count = thread_manager.check_run()
+            self.log.info("Done %d IOR %s threads", thread_manager.qty, operation)
             if failed_thread_count > 0:
                 msg = "{} FAILED IOR {} Thread(s)".format(failed_thread_count, operation)
                 self.d_log.error(msg)

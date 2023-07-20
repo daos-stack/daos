@@ -1,28 +1,29 @@
-#!/usr/bin/python3
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from logging import getLogger
 
 from avocado.utils.process import CmdResult
 
 
 class ThreadResult():
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Class containing the results of a method executed by the ThreadManager class."""
 
-    def __init__(self, id, passed, args, result):
+    def __init__(self, thread_id, passed, args, result):
         """Initialize a ThreadResult object.
 
         Args:
-            id (int): the thread id for this result
+            thread_id (int): the thread id for this result
             passed (bool): whether the thread completed or raised an exception
             args (dict): the arguments passed to the thread method
             result (object): the object returned by the thread method
         """
-        self.id = id
+        self.thread_id = thread_id
         self.passed = passed
         self.args = args
         self.result = result
@@ -61,7 +62,8 @@ class ThreadResult():
                     data.append("    {}".format(line))
             return data
 
-        info = ["Thread {} results:".format(self.id), "  args: {}".format(self.args), "  result:"]
+        info = ["Thread {} results:".format(self.thread_id),
+                "  args: {}".format(self.args), "  result:"]
         if isinstance(self.result, list):
             for this_result in self.result:
                 info.extend(get_result(this_result))
@@ -71,6 +73,7 @@ class ThreadResult():
 
 
 class ThreadManager():
+    # pylint: disable=too-many-ancestors,too-few-public-methods
     """Class to manage running any method as multiple threads."""
 
     def __init__(self, method, timeout=None):
@@ -116,15 +119,17 @@ class ThreadManager():
                 for index, kwargs in enumerate(self.job_kwargs)}
             try:
                 for future in as_completed(futures, self.timeout):
-                    id = futures[future]
+                    thread_id = futures[future]
                     try:
                         results.append(
-                            ThreadResult(id, True, self.job_kwargs[id], future.result()))
-                        self.log.info("Thread %d passed: %s", id, results[-1])
-                    except Exception as error:
-                        results.append(ThreadResult(id, False, self.job_kwargs[id], str(error)))
-                        self.log.info("Thread %d failed: %s", id, results[-1])
-            except TimeoutError as error:
+                            ThreadResult(
+                                thread_id, True, self.job_kwargs[thread_id], future.result()))
+                        self.log.info("Thread %d passed: %s", thread_id, results[-1])
+                    except Exception as error:  # pylint: disable=broad-except
+                        results.append(ThreadResult(
+                            thread_id, False, self.job_kwargs[thread_id], str(error)))
+                        self.log.info("Thread %d failed: %s", thread_id, results[-1])
+            except FuturesTimeoutError as error:
                 for future in futures:
                     if not future.done():
                         # pylint: disable-next=invalid-sequence-index

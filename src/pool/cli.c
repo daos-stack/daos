@@ -30,45 +30,7 @@ struct rsvc_client_state {
 	struct dc_mgmt_sys *scs_sys;
 };
 
-struct pool_proto {
-	struct rsvc_client	cli;
-	crt_endpoint_t		ep;
-	int			version;
-	int			rc;
-	bool			completed;
-};
-
 int	dc_pool_proto_version;
-
-static void
-query_cb(struct crt_proto_query_cb_info *cb_info)
-{
-	struct pool_proto *pproto = (struct pool_proto *)cb_info->pq_arg;
-
-	if (daos_rpc_retryable_rc(cb_info->pq_rc)) {
-		uint32_t	ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
-		int		rc;
-
-		rc = rsvc_client_choose(&pproto->cli, &pproto->ep);
-		if (rc) {
-			D_ERROR("rsvc_client_choose() failed: "DF_RC"\n", DP_RC(rc));
-			pproto->rc = rc;
-			pproto->completed = true;
-		}
-
-		rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base, ver_array, 2,
-					      query_cb, pproto, daos_get_crt_ctx());
-		if (rc) {
-			D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
-			pproto->rc = rc;
-			pproto->completed = true;
-		}
-	} else {
-		pproto->rc = cb_info->pq_rc;
-		pproto->version = cb_info->pq_ver;
-		pproto->completed = true;
-	}
-}
 
 /**
  * Initialize pool interface
@@ -77,85 +39,27 @@ int
 dc_pool_init(void)
 {
 	uint32_t		ver_array[2] = {DAOS_POOL_VERSION - 1, DAOS_POOL_VERSION};
-	struct dc_mgmt_sys	*sys;
-	struct pool_proto	*pproto = NULL;
-	crt_context_t		ctx = daos_get_crt_ctx();
 	int			rc;
-	int			num_ranks;
 
 	dc_pool_proto_version = 0;
-
-	rc = dc_mgmt_sys_attach(NULL, &sys);
-	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
+	rc = daos_rpc_proto_query(pool_proto_fmt_v4.cpf_base, ver_array, 2, &dc_pool_proto_version);
+	if (rc)
 		return rc;
-	}
-
-	D_ALLOC_PTR(pproto);
-	if (pproto == NULL)
-		D_GOTO(out_detach, rc = -DER_NOMEM);
-
-	rc = rsvc_client_init(&pproto->cli, sys->sy_info.ms_ranks);
-	if (rc) {
-		D_ERROR("rsvc_client_init() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_free, rc);
-	}
-
-	pproto->ep.ep_grp = sys->sy_group;
-	pproto->ep.ep_tag = 0;
-
-	num_ranks = dc_mgmt_net_get_num_srv_ranks();
-	pproto->ep.ep_rank = rand() % num_ranks;
-
-	rc = crt_proto_query_with_ctx(&pproto->ep, pool_proto_fmt_v4.cpf_base,
-				      ver_array, 2, query_cb, pproto, ctx);
-	if (rc) {
-		D_ERROR("crt_proto_query_with_ctx() failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
-	}
-
-	while (!pproto->completed) {
-		rc = crt_progress(ctx, 0);
-		if (rc && rc != -DER_TIMEDOUT) {
-			D_ERROR("failed to progress CART context: %d\n", rc);
-			D_GOTO(out_rsvc, rc);
-		}
-	}
-
-	if (pproto->rc != -DER_SUCCESS) {
-		rc = pproto->rc;
-		D_ERROR("crt_proto_query()failed: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_rsvc, rc);
-	}
-
-	dc_pool_proto_version = pproto->version;
-	if (dc_pool_proto_version != DAOS_POOL_VERSION &&
-	    dc_pool_proto_version != DAOS_POOL_VERSION - 1) {
-		D_ERROR("Invalid object protocol version %d\n", dc_pool_proto_version);
-		D_GOTO(out_rsvc, rc = -DER_PROTO);
-	}
 
 	if (dc_pool_proto_version == DAOS_POOL_VERSION - 1) {
 		rc = daos_rpc_register(&pool_proto_fmt_v4, POOL_PROTO_CLI_COUNT,
 				       NULL, DAOS_POOL_MODULE);
-		if (rc) {
-			D_ERROR("failed to register daos obj RPCs: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_rsvc, rc);
-		}
 	} else if (dc_pool_proto_version == DAOS_POOL_VERSION) {
 		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
-		if (rc) {
-			D_ERROR("failed to register pool RPCs: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_rsvc, rc);
-		}
+	} else {
+		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
+		rc = -DER_PROTO;
 	}
-out_rsvc:
-	rsvc_client_fini(&pproto->cli);
-out_free:
-	D_FREE(pproto);
-out_detach:
-	dc_mgmt_sys_detach(sys);
+
+	if (rc)
+		D_ERROR("failed to register daos %d version pool RPCs: "DF_RC"\n",
+			dc_pool_proto_version, DP_RC(rc));
 
 	return rc;
 }
@@ -183,10 +87,14 @@ pool_free(struct d_hlink *hlink)
 
 	pool = container_of(hlink, struct dc_pool, dp_hlink);
 	D_ASSERT(daos_hhash_link_empty(&pool->dp_hlink));
+
+	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
+	D_ASSERT(d_list_empty(&pool->dp_co_list));
+	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+
 	D_RWLOCK_DESTROY(&pool->dp_map_lock);
 	D_MUTEX_DESTROY(&pool->dp_client_lock);
 	D_RWLOCK_DESTROY(&pool->dp_co_list_lock);
-	D_ASSERT(d_list_empty(&pool->dp_co_list));
 
 	if (pool->dp_map != NULL)
 		pool_map_decref(pool->dp_map);
@@ -439,14 +347,13 @@ err:
  */
 static int
 process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
-		    uint32_t map_version, uint32_t rebuild_ver, uint32_t leader_rank,
+		    uint32_t map_version, uint32_t leader_rank,
 		    struct daos_pool_space *ps, struct daos_rebuild_status *rs,
 		    d_rank_list_t **ranks, daos_pool_info_t *info,
 		    daos_prop_t *prop_req, daos_prop_t *prop_reply,
 		    bool connect)
 {
 	struct pool_map	       *map;
-	unsigned int		up_tgt_cnt = 0;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
@@ -459,18 +366,6 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	}
 
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
-	pool_map_find_up_tgts(map, NULL, &up_tgt_cnt);
-	if (up_tgt_cnt > 0 && rebuild_ver == 0) {
-		/* There are UP targets, but no rebuild/reintegration now, let's retry
-		 * until rebuild or reintegration start, so we know the upper version
-		 * to create the object layout.
-		 */
-		D_DEBUG(DB_MD, DF_UUID": UP targets %u, but no rebuild job yet.\n",
-			DP_UUID(pool->dp_pool), up_tgt_cnt);
-		D_GOTO(out_unlock, rc = -DER_AGAIN);
-	}
-
-	pool->dp_rebuild_version = rebuild_ver;
 	rc = dc_pool_map_update(pool, map, connect);
 	if (rc)
 		goto out_unlock;
@@ -604,7 +499,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	rc = process_query_reply(pool, map_buf, pco->pco_op.po_map_version,
-				 pco->pco_rebuild_ver, pco->pco_op.po_hint.sh_rank,
+				 pco->pco_op.po_hint.sh_rank,
 				 &pco->pco_space, &pco->pco_rebuild_st,
 				 NULL /* tgts */, info, NULL, NULL, true);
 	if (rc != 0) {
@@ -879,6 +774,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		 */
 		D_ERROR("failed to notify agent of pool disconnect: "DF_RC"\n",
 			DP_RC(rc));
+		rc = 0;
 	}
 
 	/* remove pool from hhash */
@@ -990,8 +886,6 @@ struct dc_pool_glob {
 	uuid_t		dpg_pool;
 	uuid_t		dpg_pool_hdl;
 	uint64_t	dpg_capas;
-	/* rebuild version */
-	uint32_t	dpg_rebuild_version;
 	/* poolmap version */
 	uint32_t	dpg_map_version;
 	/* number of component of poolbuf, same as pool_buf::pb_nr */
@@ -1097,11 +991,12 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 		D_GOTO(out_client_buf, rc = 0);
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
-		D_ERROR("Larger glob buffer needed ("DF_U64" bytes provided, "
-			""DF_U64" required).\n", glob->iov_buf_len,
-			glob_buf_size);
+		rc = -DER_TRUNC;
+		D_ERROR("Larger glob buffer needed (" DF_U64 " bytes provided, " DF_U64
+			" required) " DF_RC "\n",
+			glob->iov_buf_len, glob_buf_size, DP_RC(rc));
 		glob->iov_buf_len = glob_buf_size;
-		D_GOTO(out_client_buf, rc = -DER_TRUNC);
+		D_GOTO(out_client_buf, rc);
 	}
 	glob->iov_len = glob_buf_size;
 
@@ -1111,7 +1006,6 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	uuid_copy(pool_glob->dpg_pool, pool->dp_pool);
 	uuid_copy(pool_glob->dpg_pool_hdl, pool->dp_pool_hdl);
 	pool_glob->dpg_capas = pool->dp_capas;
-	pool_glob->dpg_rebuild_version = pool->dp_rebuild_version;
 	pool_glob->dpg_map_version = map_version;
 	pool_glob->dpg_map_pb_nr = pb_nr;
 	memcpy(pool_glob->dpg_map_buf, map_buf, pool_buf_size(pb_nr));
@@ -1184,7 +1078,6 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	pool->dp_capas = pool_glob->dpg_capas;
 	/* set slave flag to avoid export it again */
 	pool->dp_slave = 1;
-	pool->dp_rebuild_version = pool_glob->dpg_rebuild_version;
 	p = (void *)map_buf + pool_buf_size(map_buf->pb_nr);
 	rc = rsvc_client_decode(p, len - (p - (void *)pool_glob),
 				&pool->dp_client);
@@ -1482,7 +1375,6 @@ pool_query_cb(tse_task_t *task, void *data)
 	struct pool_query_v5_out       *out_v5 = crt_reply_get(arg->rpc);
 	d_rank_list_t		       *ranks = NULL;
 	d_rank_list_t		      **ranks_arg;
-	uint32_t			rebuild_ver = -1;
 	int				rc = task->dt_result;
 
 	/* NB: out_v4 and out_v5 share the same fields of v4, so it can use
@@ -1522,12 +1414,10 @@ pool_query_cb(tse_task_t *task, void *data)
 	}
 
 	ranks_arg = arg->dqa_ranks ? arg->dqa_ranks : &ranks;
-	if (dc_pool_proto_version >= 5)
-		rebuild_ver = out_v5->pqo_rebuild_ver;
 
 	rc = process_query_reply(arg->dqa_pool, map_buf,
 				 out_v5->pqo_op.po_map_version,
-				 rebuild_ver, out_v5->pqo_op.po_hint.sh_rank,
+				 out_v5->pqo_op.po_hint.sh_rank,
 				 &out_v5->pqo_space, &out_v5->pqo_rebuild_st,
 				 ranks_arg, arg->dqa_info,
 				 arg->dqa_prop, out_v5->pqo_prop, false);
@@ -1800,7 +1690,6 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	unsigned int			version_cached;
 	struct pool_map		       *map;
 	bool				reinit = false;
-	unsigned int			up_tgt_cnt = 0;
 	int				rc = task->dt_result;
 
 	/*
@@ -1891,20 +1780,6 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
-	pool_map_find_up_tgts(map, NULL, &up_tgt_cnt);
-	if (up_tgt_cnt > 0 && out->tmo_rebuild_ver == 0) {
-		/* There are UP targets, but no rebuild/reintegration now, let's retry
-		 * until rebuild or reintegration start, so we know the upper version
-		 * to create the object layout.
-		 */
-		D_DEBUG(DB_MD, DF_UUID": UP targets %u, but no rebuild job yet.\n",
-			DP_UUID(pool->dp_pool), up_tgt_cnt);
-		D_FREE(map);
-		reinit = true;
-		goto out;
-	}
-
-	pool->dp_rebuild_version = out->tmo_rebuild_ver;
 	rc = dc_pool_map_update(pool, map, false /* connect */);
 	pool_map_decref(map);
 
@@ -2883,21 +2758,20 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 	if (n <= 0 || names == NULL || ((sizes == NULL
 	    || values == NULL) && !readonly)) {
-		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
-			", sizes = %p", n, names, values, sizes);
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p\n", n,
+			names, values, sizes);
 		return -DER_INVAL;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (names[i] == NULL || *names[i] == '\0') {
-			D_ERROR("Invalid Arguments: names[%d] = %s",
-				i, names[i] == NULL ? "NULL" : "\'\\0\'");
+			D_ERROR("Invalid Arguments: names[%d] = %s\n", i,
+				names[i] == NULL ? "NULL" : "\'\\0\'");
 
 			return -DER_INVAL;
 		}
 		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
-			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
-				i);
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX\n", i);
 			return -DER_INVAL;
 		}
 		if (sizes != NULL) {
@@ -2905,8 +2779,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 				sizes[i] = 0;
 			else if (values[i] == NULL || sizes[i] == 0) {
 				if (!readonly) {
-					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
-						i, values[i], i, sizes[i]);
+					D_ERROR(
+					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu\n",
+					    i, values[i], i, sizes[i]);
 					return -DER_INVAL;
 				}
 				sizes[i] = 0;

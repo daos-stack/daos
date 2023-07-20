@@ -13,6 +13,7 @@ set -e
 dnf --nodocs install \
     boost-python3-devel \
     bzip2 \
+    capstone-devel \
     clang \
     clang-tools-extra \
     cmake \
@@ -53,6 +54,7 @@ dnf --nodocs install \
     openssl-devel \
     patch \
     patchelf \
+    protobuf-c-devel \
     python3-devel \
     python3-pip \
     sg3_utils \

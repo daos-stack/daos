@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,8 +14,8 @@
 /**
  * Release a line buffer returned by readline
  */
-void
-static freeline(char *line)
+static void
+freeline(char *line)
 {
 	D_FREE(line);
 }
@@ -80,10 +80,11 @@ cmd_parser(struct option *opts, const char *prompt,
 	int	 rc;
 
 	for (rc = 0; rc == 0;) {
-		char	*args = NULL;
-		char	*cmd;
-		char	 opc;
-		int	 i;
+		char *args = NULL;
+		char *cmd;
+		char  opc;
+		int   i;
+		bool  eoo = false;
 
 		if (line)
 			freeline(line);
@@ -102,7 +103,7 @@ cmd_parser(struct option *opts, const char *prompt,
 
 			opt = &opts[i];
 			if (opt->name == NULL) {
-				opc = -1;
+				eoo = true;
 				break;
 			}
 
@@ -120,9 +121,8 @@ cmd_parser(struct option *opts, const char *prompt,
 			break;
 		}
 
-		if (opc == -1) {
-			D_PRINT("Unknown command string %s, try \"help\"\n",
-				cmd);
+		if (eoo) {
+			D_PRINT("Unknown command string %s, try \"help\"\n", cmd);
 			continue;
 		}
 

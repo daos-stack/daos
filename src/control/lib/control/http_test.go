@@ -75,7 +75,7 @@ func TestControl_httpReq_canRetry(t *testing.T) {
 
 func TestControl_httpReq_onRetry(t *testing.T) {
 	req := &httpReq{}
-	err := req.onRetry(context.TODO(), 0)
+	err := req.onRetry(test.Context(t), 0)
 	if err != nil {
 		t.Fatalf("expected nil, got: %s", err.Error())
 	}
@@ -216,7 +216,7 @@ func TestControl_httpGetBody(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := test.Context(t)
 			var cancel func()
 			if tc.cancelCtx {
 				ctx, cancel = context.WithCancel(ctx)
@@ -330,7 +330,7 @@ func TestControl_httpGetBodyRetry(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := httpGetBodyRetry(context.TODO(), tc.req)
+			result, err := httpGetBodyRetry(test.Context(t), tc.req)
 
 			test.CmpErr(t, tc.expErr, err)
 			test.AssertEqual(t, bytes.Compare(tc.expResult, result), 0, "")

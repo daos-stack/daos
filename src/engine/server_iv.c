@@ -470,6 +470,11 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 				      priv_entry ? priv_entry->priv : NULL);
 	} else {
 		D_ASSERT(iv_value != NULL);
+		if (ns->iv_master_rank != key.rank) {
+			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
+				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
+			D_GOTO(output, rc = -DER_GRPVER);
+		}
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
@@ -591,8 +596,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, &key,
-							  iv_value);
+		rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -604,7 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	priv_entry->priv = entry_priv_val;
@@ -821,12 +825,16 @@ free:
 
 /* Update iv namespace */
 void
-ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank)
+ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term)
 {
-	D_INFO("update iv_ns %u master rank %u new master rank %u "
-	       "myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-	       master_rank, dss_self_rank(), ns);
+	if (term <= ns->iv_master_term)
+		return;
+
+	D_INFO("update iv_ns %u master rank %u->%u term "DF_U64"->"DF_U64
+	       " myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
+	       master_rank,  ns->iv_master_term, term, dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
+	ns->iv_master_term = term;
 }
 
 void
@@ -1054,12 +1062,11 @@ retry:
 
 		/* otherwise retry and wait for others to update the ns. */
 		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
-		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry upon %d for class %d opc %d rank %u/%u\n",
-		       ns->iv_ns_id, rc, key->class_id, opc, key->rank,
-		       ns->iv_master_rank);
+		D_WARN("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
+		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
 		goto retry;

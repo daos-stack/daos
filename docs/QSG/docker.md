@@ -22,9 +22,9 @@ At this time only emulated hardware storage are supported by this Docker platfor
 
 ## Prerequisites
 
-To build and deploy the Docker images, `docker` and optionally `docker-compose` shall be available.
-The docker host should have access to the [Docker Hub](https://hub.docker.com/) and
-[Rocky Linux](https://rockylinux.org/) official repositories.  Finally,
+To build and deploy the Docker images, `docker` cli shall be available.  The docker host should have
+access to the [Docker Hub](https://hub.docker.com/) and [Rocky Linux](https://rockylinux.org/)
+official repositories.  Finally,
 [hugepages](https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt) linux kernel feature shall
 be enabled on the docker host.  At least, 4096 pages of 2048kB should be available.  The number of
 huge pages allocated could be checked with the following command:
@@ -40,16 +40,13 @@ following command:
 $ cat /proc/meminfo | grep -e "^Huge"
 ```
 
-The platform was tested and validated with the
-[rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux) official docker images.
-However other RHEL-like distributions should be supported.
-
-!!! warning
-    Some distributions are not yet well supported such as
-    [rockylinux/rockylinux:8.5](https://hub.docker.com/r/rockylinux/rockylinux): issue with the
-    management of hugepages with the [spdk](https://spdk.io/) library.
-
-
+The platform was tested and validated with the following dependencies:
+- [Docker CE](https://docs.docker.com/engine/install/centos/) latest
+  [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
+- [DAOS 2.6](https://docs.daos.io/v2.6/) local RPMS builds from [DAOS master
+  branch](https://github.com/daos-stack/daos/tree/master)
+- [rockylinux/rockylinux:8.6](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
+  images.
 
 ### Configuring HugePages
 
@@ -82,37 +79,47 @@ a base image for building the other three daos images.  This first image could b
 from GitHub with the following command:
 
 ```bash
-$ docker build --tag daos-base:rocky8.4 \
+$ docker build --tag daos-base:rocky8.6 \
 	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
 This Docker file accept the following arguments:
 
 - `RHEL_BASE_IMAGE`: Base docker image to use (default "rockylinux/rockylinux")
-- `RHEL_BASE_VERSION`: Version of the base docker image to use (default "8.4")
-- `BUST_CACHE`: Manage docker building cache (default undefined).  To invalidate the cache, a random
-	value such as the date of the day shall be given.
+- `RHEL_BASE_VERSION`: Version of the base docker image to use (default "8.6")
+- `BUST_CACHE`: Manage docker building cache (default "").  To invalidate the cache, a random value
+  such as the date of the day shall be given.
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_REPOS`: Space separated list of repos needed to install DAOS (default
-	"https://packages.daos.io/v2.0/EL8/packages/x86_64/")
+  "https://packages.daos.io/v2.2/EL8/packages/x86\_64/")
 - `DAOS_GPG_KEYS`: Space separated list of GPG keys associated with DAOS repos (default
-	"https://packages.daos.io/RPM-GPG-KEY")
+  "https://packages.daos.io/RPM-GPG-KEY")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
-	(default "")
+  (default "")
 
 For example, building a DAOS base image, with authentication disabled, could be done with the
 following command:
 
 ```bash
-$ docker build --tag daos-base:rocky8.4 --build-arg DAOS_AUTH=no \
+$ docker build --tag daos-base:rocky8.6 --build-arg DAOS_AUTH=no \
 	https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/daos-base/el8
 ```
 
 It is also possible to build the `daos-base` image from a local tree with the following command:
 
 ```bash
-$ docker build --tag daos-base:rocky8.4 utils/docker/vcluster/daos-base/el8
+$ docker build --tag daos-base:rocky8.6 utils/docker/vcluster/daos-base/el8
 ```
+
+From a local tree, a more straightforward way to build these images could be done with
+`docker compose`:
+
+```bash
+$ docker compose --file utils/docker/vcluster/docker-compose.yml build daos_base
+```
+
+The same arguments are accepted but they have to be defined in the Docker Compose environment file
+`utils/docker/vcluster/.env`.
 
 ### DAOS Nodes Images
 
@@ -122,7 +129,7 @@ to build directly the three images from GitHub:
 
 ```bash
 $ for image in daos-server daos-admin daos-client ; do \
-	docker build --tag "$image:rocky8.4" \
+	docker build --tag "$image:rocky8.6" \
 		"https://github.com/daos-stack/daos.git#master:utils/docker/vcluster/$image/el8"; \
   done
 ```
@@ -130,7 +137,7 @@ $ for image in daos-server daos-admin daos-client ; do \
 The Docker file of the `daos-server` image accept the following arguments:
 
 - `DAOS_BASE_IMAGE`: Base docker image to use (default "daos-base")
-- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.4")
+- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.6")
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_HUGEPAGES_NBR`: Number of huge pages to allocate for SPDK (default 4096)
 - `DAOS_SCM_SIZE`: Size in GB of the RAM emulating SCM devices (default 4)
@@ -144,16 +151,35 @@ The Docker file of the `daos-server` image accept the following arguments:
 The Dockerfile of the `daos-client` and `daos-admin` images accept the following arguments:
 
 - `DAOS_BASE_IMAGE`: Base docker image to use (default "daos-base")
-- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.4")
+- `DAOS_BASE_VERSION`: Version of the base docker image to use (default "rocky8.6")
 - `DAOS_AUTH`: Enable DAOS authentication when set to "yes" (default "yes")
 - `DAOS_ADMIN_USER`: Name or uid of the daos administrattor user (default "root")
 - `DAOS_ADMIN_GROUP`: Name or gid of the daos administrattor group (default "root")
 
+!!! warning
+    For working properly, the DAOS authentication have to be enabled in all the images (i.e. nodes
+    images and base image).
+
+The Dockerfile of the `daos-client` image accept the following arguments:
+
+- `DAOS_AGENT_IFACE_CFG`: Enable manual configuration of the interface to use by the agent (default
+  "yes")
+- `DAOS_AGENT_IFACE_NUMA_NODE`: Numa node of the interface to use by the agent (default "0").
+  Defining this variable is mandatory when `DAOS_AGENT_IFACE_CFG` is equal to "yes".
+- `DAOS_AGENT_IFACE_NAME`: Name of the interface to use by the agent (default "eth0").  Defining this
+  variable is mandatory when `DAOS_IFACE_CFG` is equal to "yes".
+- `DAOS_AGENT_IFACE_DOMAIN_NAME`: Domain name of the interface to use by the agent (default "eth0").
+  Defining this variable is mandatory when `DAOS_IFACE_CFG` is equal to "yes".
+
+!!! warning
+    On most of the system the`DAOS_IFACE_CFG` should be enabled: The DAOS Network Interface
+    auto-detection could not yet be properly done inside a DAOS Agent Docker container.
+
 From a local tree, a more straightforward way to build these images could be done with
-`docker-compose` and the following commands:
+`docker compose`:
 
 ```bash
-$ docker-compose --file utils/docker/vcluster/docker-compose.yml -- build
+$ docker compose --file utils/docker/vcluster/docker-compose.yml build daos_server daos_admin daos_client
 ```
 
 The same arguments are accepted but they have to be defined in the Docker Compose environment file
@@ -176,15 +202,15 @@ $ docker run --detach --privileged --name=daos-server --hostname=daos-server \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
 	--volume=/dev/hugepages:/dev/hugepages  --tmpfs=/run --network=host \
-	daos-server:rocky8.4
+	daos-server:rocky8.6
 $ docker run --detach --privileged --name=daos-agent --hostname=daos-agent \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-agent:rocky8.4
+	--tmpfs=/run --network=host daos-agent:rocky8.6
 $ docker run --detach --privileged --name=daos-client --hostname=daos-client \
 	--add-host "daos-server:$DAOS_IFACE_IP" --add-host "daos-admin:$DAOS_IFACE_IP" \
 	--add-host "daos-client:$DAOS_IFACE_IP" --volume=/sys/fs/cgroup:/sys/fs/cgroup:ro \
-	--tmpfs=/run --network=host daos-client:rocky8.4
+	--tmpfs=/run --network=host daos-client:rocky8.6
 ```
 
 The value of the `DAOS_IFACE_IP` shall be replaced with the one of the network interface which was
@@ -198,20 +224,21 @@ $ docker exec daos-admin dmg -i storage format
 ```
 
 Upon successful completion of the format, the storage engine is started, and pools
-can be created using the daos admin tool.
+can be created using the daos admin tool.  For more advanced configurations and usage refer to the
+section [DAOS Tour](https://docs.daos.io/v2.6/QSG/tour/).
 
 
-### Via docker-compose
+### Via Docker Compose
 
 From a local tree, a more straightforward way to start the containers could be done with
-`docker-compose` and the following commands:
+`docker compose`:
 
 ```bash
-$ docker-compose --file utils/docker/vcluster/docker-compose.yml -- up --detach
+$ docker compose --file utils/docker/vcluster/docker-compose.yml up --detach
 ```
 
 !!! note
-    Before starting the containers with `docker-compose`, the IP address of the network interface,
+    Before starting the containers with `docker compose`, the IP address of the network interface,
     which was provided when the images have been built, shall be defined in the Docker
     Compose environment file `utils/docker/vcluster/.env`.
 

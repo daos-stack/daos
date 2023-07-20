@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,25 +14,21 @@
 #include <daos/object.h>
 #include <daos/credit.h>
 
-#define assert_success(r)						\
-	do {								\
-		int __rc = (r);						\
-		if (__rc != 0)						\
-			fail_msg("Not successful!! Error code: "	\
-				 DF_RC, DP_RC(__rc));			\
+#define assert_rc_equal(rc, expected_rc)                                                           \
+	do {                                                                                       \
+		int __rc = (rc);                                                                   \
+		if (__rc == (expected_rc))                                                         \
+			break;                                                                     \
+		print_message("Failure assert_rc_equal %s:%d "                                     \
+			      "%s(%d) != %s(%d)\n",                                                \
+			      __FILE__, __LINE__, d_errstr(__rc), __rc, d_errstr(expected_rc),     \
+			      expected_rc);                                                        \
+		assert_string_equal(d_errstr(__rc), d_errstr(expected_rc));                        \
+		assert_int_equal(__rc, expected_rc);                                               \
 	} while (0)
 
-#define assert_rc_equal(rc, expected_rc)				\
-	do {								\
-		if ((rc) == (expected_rc))				\
-			break;						\
-		print_message("Failure assert_rc_equal %s:%d "		\
-			      "%s(%d) != %s(%d)\n", __FILE__, __LINE__, \
-			      d_errstr(rc), rc,				\
-			      d_errstr(expected_rc), expected_rc);	\
-		assert_string_equal(d_errstr(rc), d_errstr(expected_rc)); \
-		assert_int_equal(rc, expected_rc);			\
-	} while (0)
+/** Just use assert_rc_equal since it will ensure the problem is reported in the Jenkins output */
+#define assert_success(r) assert_rc_equal(r, 0)
 
 #define DTS_OCLASS_DEF OC_RP_XSF
 
@@ -132,6 +128,17 @@ dts_sgl_init_with_strings_repeat(d_sg_list_t *sgl, uint32_t repeat,
 
 void
 dts_sgl_alloc_single_iov(d_sg_list_t *sgl, daos_size_t size);
+
+void
+dts_sgl_generate(d_sg_list_t *sgl, uint32_t iov_nr, daos_size_t data_size, uint8_t value);
+
+/** easily setup an iov with a string */
+static inline void
+dts_iov_alloc_str(d_iov_t *iov, const char *str)
+{
+	daos_iov_alloc(iov, strlen(str) + 1, true);
+	strcpy(iov->iov_buf, str);
+}
 
 #define DTS_CFG_MAX 256
 __attribute__ ((__format__(__printf__, 2, 3)))
@@ -242,6 +249,58 @@ int dmg_pool_destroy(const char *dmg_config_file,
 		     const uuid_t uuid, const char *grp, int force);
 
 /**
+ * Exclude an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for exclusion
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to exclude (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to exclude (ignored if -1)
+ */
+int dmg_pool_exclude(const char *dmg_config_file, const uuid_t uuid,
+		     const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Reintegrate an entire rank or a target on that rank to a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to reintegrate (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to reintegrate (ignored if -1)
+ */
+int dmg_pool_reintegrate(const char *dmg_config_file, const uuid_t uuid,
+			 const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Drain an entire rank or a target on that rank from a pool.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param rank		[IN]	Rank to drain (all targets if no tgt_idx set)
+ * \param tgt_idx	[IN]	Target index to drain (ignored if -1)
+ */
+int dmg_pool_drain(const char *dmg_config_file, const uuid_t uuid,
+		   const char *grp, d_rank_t rank, int tgt_idx);
+
+/**
+ * Extend a pool by adding ranks.
+ *
+ * \param dmg_config_file
+ *			[IN]	DMG config file
+ * \param uuid		[IN]	UUID of the pool for reintegration
+ * \param grp		[IN]	Process set name of the DAOS servers managing the pool
+ * \param ranks		[IN]	Ranks to add to the pool
+ * \param ranks_nr	[IN]	Number of ranks to add to the pool
+ */
+int dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
+		    const char *grp, d_rank_t *ranks, int ranks_nr);
+
+/**
  * Set property of the pool with \a pool_uuid.
  *
  * \param dmg_config_file	[IN] DMG config file.
@@ -309,6 +368,47 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
  */
 int verify_blobstore_state(int state, const char *state_str);
 
+/**
+ * Stop a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to stop.
+ * \param force	[IN]	Terminate with extreme prejudice.
+ */
+int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force);
+
+/**
+ * Start a rank.
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param rank	[IN]	Rank to start.
+ */
+int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank);
+
 const char *daos_target_state_enum_to_str(int state);
+
+/* Used to easily setup data needed for tests */
+struct test_data {
+	d_sg_list_t		*td_sgls;
+	daos_iod_t		*td_iods;
+	daos_iom_t		*td_maps;
+	uint64_t		*td_sizes;
+	uint32_t		 td_iods_nr;
+	daos_key_t		 dkey;
+};
+
+struct td_init_args {
+	daos_iod_type_t ca_iod_types[10];
+	uint32_t        ca_recx_nr[10];
+	uint32_t        ca_data_size;
+};
+
+void td_init(struct test_data *td, uint32_t iod_nr, struct td_init_args args);
+void td_init_single_values(struct test_data *td, uint32_t iod_nr);
+void td_init_array_values(struct test_data *td, uint32_t iod_nr, uint32_t recx_nr,
+			  uint32_t data_size, uint32_t chunksize);
+void td_destroy(struct test_data *td);
 
 #endif /* __DAOS_TESTS_LIB_H__ */

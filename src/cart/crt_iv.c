@@ -923,8 +923,12 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	crt_rpc_t			*rpc;
 	int				rc = 0;
 
-	/* Something is really bad if info is NULL */
 	D_ASSERT(info != NULL);
+
+	/* Keep freeing things even if something fails */
+	rc = crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
+	if (rc != 0)
+		D_ERROR("crt_bulk_free(): "DF_RC"\n", DP_RC(rc));
 
 	cb_info = info->bci_arg;
 	rpc = info->bci_bulk_desc->bd_rpc;
@@ -942,14 +946,9 @@ crt_ivf_bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	if (rc != 0)
 		D_ERROR("ivo_on_put(): "DF_RC"\n", DP_RC(rc));
 
-	/* Keep freeing things even if something fails */
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("crt_reply_send(): "DF_RC"\n", DP_RC(rc));
-
-	rc = crt_bulk_free(info->bci_bulk_desc->bd_local_hdl);
-	if (rc != 0)
-		D_ERROR("crt_bulk_free(): "DF_RC"\n", DP_RC(rc));
 
 	RPC_PUB_DECREF(rpc);
 
@@ -1918,7 +1917,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 		break;
 
 	default:
-		D_ERROR("Unknown event type %#x", sync_type->ivs_event);
+		D_ERROR("Unknown event type %#x\n", sync_type->ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
 		break;
 	}
@@ -2420,9 +2419,10 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 			   cb_info->uci_user_priv);
 
 	crt_reply_send(cb_info->uci_child_rpc);
+
 	/* ADDREF done in crt_hdlr_iv_update */
-	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 
 	/* addref in transfer_back_to_child() */
 	IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2551,8 +2551,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* Respond back to child; might fail if child is not alive */
 		if (crt_reply_send(iv_info->uci_child_rpc) != DER_SUCCESS)
-			D_ERROR("Failed to respond on rpc: %p",
-				iv_info->uci_child_rpc);
+			D_ERROR("Failed to respond on rpc: %p\n", iv_info->uci_child_rpc);
 
 		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
@@ -2735,6 +2734,14 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	struct crt_rpc_priv	*rpc_priv;
 	struct crt_context	*crt_ctx;
 
+	/* handle locally generated errors during IV operations synchronously to ensure unregister
+	 * of bulk buffer will occur before freeing it, just in case peer will finally make it
+	 * unexpectedly
+	 */
+	if (cb_info->cci_rc == -DER_TIMEDOUT || cb_info->cci_rc == -DER_EXCLUDED ||
+	    cb_info->cci_rc == -DER_CANCELED)
+		goto callback;
+
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
@@ -2755,6 +2762,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
+
 		rc = crt_ctx->cc_iv_resp_cb((crt_context_t)crt_ctx,
 					    info,
 					    handle_response_cb_internal,
@@ -2812,6 +2820,11 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 	output = crt_reply_get(info->bci_bulk_desc->bd_rpc);
 	D_ASSERT(output != NULL);
+
+	if (info->bci_rc != 0) {
+		D_ERROR("bulk update transfer failed; "DF_RC"\n", DP_RC(info->bci_rc));
+		D_GOTO(send_error, rc = info->bci_rc);
+	}
 
 	update_rc = iv_ops->ivo_on_update(ivns_internal,
 					  &input->ivu_key, 0, false,
@@ -3292,8 +3305,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc);
 	}
 
-	rc = iv_ops->ivo_on_get(ivns, iv_key,
-				0, CRT_IV_PERM_WRITE, NULL, &priv);
+	rc = iv_ops->ivo_on_get(ivns, iv_key, 0, CRT_IV_PERM_WRITE, NULL, &priv);
+	if (rc != 0) {
+		D_ERROR("ivo_on_get(): " DF_RC, DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	if (iv_value != NULL)
 		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,

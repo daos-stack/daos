@@ -7,7 +7,6 @@
 package server
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -613,103 +612,6 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			},
 			expErr: daos.FreeMemError,
 		},
-		"target-health": {
-			req: &ctlpb.SmdQueryReq{
-				OmitPools:        true,
-				Rank:             1,
-				Target:           "0",
-				IncludeBioHealth: true,
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
-						},
-					},
-				},
-				1: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(1),
-									TgtIds:   []int32{0},
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-							},
-						},
-					},
-					{
-						Message: &ctlpb.BioHealthResp{
-							Temperature: 1000000,
-							TempWarn:    true,
-						},
-					},
-				},
-			},
-			expResp: &ctlpb.SmdQueryResp{
-				Ranks: []*ctlpb.SmdQueryResp_RankResp{
-					{
-						Rank: 1,
-						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-							{
-								Details: &ctlpb.SmdDevice{
-									Uuid:     test.MockUUID(1),
-									TgtIds:   []int32{0},
-									DevState: devStateFaulty,
-									LedState: ledStateFault,
-								},
-								Health: &ctlpb.BioHealthResp{
-									Temperature: 1000000,
-									TempWarn:    true,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		"target-health; bad target": {
-			req: &ctlpb.SmdQueryReq{
-				OmitPools:        true,
-				Rank:             0,
-				Target:           "eleventy",
-				IncludeBioHealth: true,
-			},
-			drpcResps: map[int][]*mockDrpcResponse{
-				0: {
-					{
-						Message: &ctlpb.SmdDevResp{
-							Devices: []*ctlpb.SmdDevice{
-								{
-									Uuid:     test.MockUUID(0),
-									DevState: devStateNormal,
-									LedState: ledStateNormal,
-								},
-							},
-						},
-					},
-				},
-			},
-			expErr: errors.New("invalid"),
-		},
-		"target-health; missing rank": {
-			req: &ctlpb.SmdQueryReq{
-				OmitPools:        true,
-				Rank:             uint32(ranklist.NilRank),
-				Target:           "0",
-				IncludeBioHealth: true,
-			},
-			expErr: errors.New("invalid"),
-		},
 		"ambiguous UUID": {
 			req: &ctlpb.SmdQueryReq{
 				Rank: uint32(ranklist.NilRank),
@@ -739,7 +641,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 
 			cfg := config.DefaultServer()
 			for i := 0; i < engineCount; i++ {
-				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1).WithRank(uint32(i)))
+				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1))
 			}
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()
@@ -766,7 +668,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				}
 			}
 
-			gotResp, gotErr := svc.SmdQuery(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdQuery(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1383,7 +1285,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 
 			cfg := config.DefaultServer()
 			for i := 0; i < engineCount; i++ {
-				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1).WithRank(uint32(i)))
+				cfg.Engines = append(cfg.Engines, engine.MockConfig().WithTargetCount(1))
 			}
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()
@@ -1411,7 +1313,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			}
 
 			t.Log(tc.req)
-			gotResp, gotErr := svc.SmdManage(context.TODO(), tc.req)
+			gotResp, gotErr := svc.SmdManage(test.Context(t), tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

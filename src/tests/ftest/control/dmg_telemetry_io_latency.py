@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -8,8 +7,8 @@
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
-from test_utils_container import TestContainer
 from oclass_utils import extract_redundancy_factor
+from general_utils import report_errors
 
 
 def convert_to_number(size):
@@ -23,57 +22,44 @@ def convert_to_number(size):
 
     """
     num = 0
-    SIZE_DICT = {"B": 1,
+    size_dict = {"B": 1,
                  "K": 1024,
                  "M": 1024 * 1024,
                  "G": 1024 * 1024 * 1024,
                  "T": 1024 * 1024 * 1024 * 1024}
     # Convert string to bytes
     suffix = str(size)[-1]
-    for key, value in SIZE_DICT.items():
+    for key, value in size_dict.items():
         if suffix == key:
             num = int(value) * int(size[:-1])
     return int(num)
 
 
 class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a Test object."""
-        super().__init__(*args, **kwargs)
-        self.rpc_latency = {}
-        self.iterations = 1
-
-    def add_containers(self, pool, oclass=None, path="/run/container/*"):
+    def add_containers(self, pool, oclass, path="/run/container/*"):
         """Create a list of containers that the various jobs use for storage.
 
         Args:
-            pool: pool to create container
-            oclass: object class of container
-
+            pool (TestPool): pool to create container
+            oclass (str): object class of container
+            path (str): container namespace path
 
         """
-        rd_fac = None
         # Create a container and add it to the overall list of containers
-        self.container.append(
-            TestContainer(pool, daos_command=self.get_daos_command()))
-        self.container[-1].namespace = path
-        self.container[-1].get_params(self)
+        self.container.append(self.get_container(pool, namespace=path, create=False))
         # include rd_fac based on the class
-        if oclass:
-            self.container[-1].oclass.update(oclass)
-            redundancy_factor = extract_redundancy_factor(oclass)
-            rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
+        self.container[-1].oclass.update(oclass)
+        redundancy_factor = extract_redundancy_factor(oclass)
+        rd_fac = 'rd_fac:{}'.format(str(redundancy_factor))
         properties = self.container[-1].properties.value
-        cont_properties = (",").join(filter(None, [properties, rd_fac]))
-        if cont_properties is not None:
-            self.container[-1].properties.update(cont_properties)
+        cont_properties = ",".join(filter(None, [properties, rd_fac]))
+        self.container[-1].properties.update(cont_properties)
         self.container[-1].create()
 
     def get_ior_latency(self, cmdresult):
@@ -97,7 +83,7 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         idx = messages.index(ior_metric_summary)
         # idx + 1, idx + 2  and idx + 3  are headers.
         # idx + 4 will give ior perf info.
-        for iteration in range(self.iterations):
+        for iteration in range(self.ior_cmd.repetitions.value):
             ior_results = (" ".join(messages[idx + 4 + iteration].split())).split()
             # Latency will not include open and close time in order to compare to the
             # IO rpc latency reported by daos metrics
@@ -163,13 +149,11 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
             DAOS engine IO latency telemetry metrics min, max, mean and stddev.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry
-        :avocado: tags=test_io_latency_telemetry
-
+        :avocado: tags=hw,medium
+        :avocado: tags=control,telemetry,daos_cmd
+        :avocado: tags=TestWithTelemetryIOLatency,test_io_latency_telmetry_metrics
         """
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
-        self.iterations = self.params.get("repetitions", "/run/*")
         self.container = []
         verification_results = []
         metrics_data = {}
@@ -182,17 +166,14 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
         for transfer_size in transfer_sizes:
             ior_latency[transfer_size] = {}
             self.add_pool(connect=False)
-            oclass = self.ior_cmd.dfs_oclass.value
-            self.add_containers(self.pool, oclass)
+            self.add_containers(self.pool, oclass=self.ior_cmd.dfs_oclass.value)
             for operation in ["update", "fetch"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info(
-                    "<<< Start ior %s transfer_size=%s", operation, transfer_size)
+                flags = self.params.get("F", "/run/ior/ior{}flags/".format(operation))
+                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
                 self.ior_cmd.transfer_size.update(transfer_size)
                 self.ior_cmd.flags.update(flags)
                 self.ior_cmd.set_daos_params(
-                    self.server_group, self.pool, self.container[-1].uuid)
+                    self.server_group, self.pool, self.container[-1].identifier)
                 # Run ior command
                 ior_results = self.run_ior_with_pool(
                     timeout=200, create_pool=False, create_cont=False)
@@ -217,179 +198,11 @@ class TestWithTelemetryIOLatency(IorTestBase, TestWithTelemetry):
                 else:
                     verification_results.append(
                         ["FAILED", "engine_io_latency_" + operation, transfer_size])
-        errors = False
-        self.log.error("Summary of io latency min, max, mean and stddev comparison results:")
+        errors = []
+        self.log.info("Summary of io latency min, max, mean and stddev comparison results:")
         for item in verification_results:
-            self.log.info("  %s  %s  %s", item[0], item[1], item[2])
+            msg = "  {} {} {}".format(item[0], item[1], item[2])
+            self.log.info(msg)
             if item[0] == "FAILED":
-                errors = True
-        if errors:
-            self.fail("Test FAILED")
-
-    def get_initial_io_dtx_committed_metrics(self, metrics_data, test_metrics,
-                                             transfer_size):
-        """Get baseline IO dtx metrics before running IOR.
-
-        Args:
-            metrics_data (dict): dictionary of io dtx "committed" metrics
-            test_metrics (dict): io dtx "committed" telemetry metrics
-            transfer_size(str): transfer_size used with ior
-
-        Returns:
-            status: (bool) True if metrics are verified for transfer size
-
-        """
-        metrics = {}
-        for test_metric in test_metrics:
-            metrics[test_metric] = 0
-            for host in self.hostlist_servers:
-                # test assumes one engine per host
-                for rank in self.server_managers[-1].get_host_ranks([host]):
-                    for target in range(self.server_managers[-1].get_config_value("targets")):
-                        value = metrics_data[test_metric][host][str(rank)][str(target)]["-"]
-                        metrics[test_metric] = metrics[test_metric] + value
-        dtx_value = metrics["engine_io_dtx_committed"]
-        min_value = metrics["engine_io_dtx_committed_min"]
-        max_value = metrics["engine_io_dtx_committed_max"]
-        mean_value = metrics["engine_io_dtx_committed_mean"]
-        stddev_value = metrics["engine_io_dtx_committed_stddev"]
-
-        self.log.info("Initial baseline stats for DTX for transfer size %s", transfer_size)
-        self.log.info("engine_io_dtx_committed = %s", dtx_value)
-        self.log.info("engine_io_dtx_committed_min = %s", min_value)
-        self.log.info("engine_io_dtx_committed_max = %s", max_value)
-        self.log.info("engine_io_dtx_committed_mean = %s", mean_value)
-        self.log.info("engine_io_dtx_committed_stddev = %s", stddev_value)
-
-        return metrics
-
-    def verify_io_dtx_committed_metrics(self, baseline_data, metrics_data, test_metrics,
-                                        transfer_size):
-        """Verify IO dtx metrics after running IOR.
-
-        Args:
-            baseline_data (dict): dictionary of the initial io dtx "committed" metrics
-                                  before IOR run
-            metrics_data (dict): dictionary of io dtx "committed" metrics
-            test_metrics (dict): io dtx "committed" telemetry metrics
-            transfer_size(str): transfer_size used with ior
-
-        Returns:
-            status: (bool) True if metrics are verified for transfer size
-
-        """
-        block_size = self.params.get("block_size", "/run/*")
-        repetitions = self.params.get("repetitions", "/run/*")
-        test_ops = 3
-        status = True
-
-        metrics = {}
-        for test_metric in test_metrics:
-            metrics[test_metric] = 0
-            for host in self.hostlist_servers:
-                # test assumes one engine per host
-                for rank in self.server_managers[-1].get_host_ranks([host]):
-                    for target in range(self.server_managers[-1].get_config_value("targets")):
-                        value = metrics_data[test_metric][host][str(rank)][str(target)]["-"]
-                        metrics[test_metric] = metrics[test_metric] + value
-
-        # calculate diff from initial baseline test value for committed and max metrics
-        dtx_value = metrics["engine_io_dtx_committed"]
-        dtx_value -= baseline_data["engine_io_dtx_committed"]
-        max_value = metrics["engine_io_dtx_committed_max"]
-        max_value -= baseline_data["engine_io_dtx_committed_max"]
-        # expected min value after the test should be 1
-        min_value = metrics["engine_io_dtx_committed_min"]
-        # TODO: Validate stddev and mean value metrics
-        # mean and std dev metrics only rely on the after test values
-        # mean_value = metrics["engine_io_dtx_committed_mean"]
-        # stddev_value = metrics["engine_io_dtx_committed_stddev"]
-
-        # DTX committed value should be equal to the number of transactions.
-        if transfer_size == "512":
-            transfer_size = "512B"
-
-        # num operations = (blocksize / xfersize) * repetitions + ops for create/remove
-        num_operations = convert_to_number(block_size) / convert_to_number(transfer_size)
-        num_operations *= repetitions
-        # test ops = (create dir + punch obj + punch dir) * repetitions
-        test_ops *= repetitions
-        num_operations += test_ops
-
-        if dtx_value != num_operations:
-            self.log.error("engine_io_dtx_committed NOT verified, %s != %s",
-                           dtx_value, num_operations)
-            status = False
-        if min_value != 1:
-            self.log.error("engine_io_dtx_committed_min != 1")
-            status = False
-        if not max_value >= dtx_value >= min_value:
-            status = False
-
-        return status
-
-    def test_ior_dtx_telemetry_metrics(self):
-        """JIRA ID: DAOS-8973.
-
-            Create files with transfers sizes 512 to 4M to verify the
-            DAOS engine IO DTX telemetry metrics infrastructure and
-            verify values using IOR.
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=telemetry,control
-        :avocado: tags=test_ior_dtx_telemetry
-
-        """
-        transfer_sizes = self.params.get("transfer_sizes", "/run/*")
-        self.iterations = self.params.get("repetitions", "/run/*")
-        self.container = []
-        metrics_data = {}
-        baseline_data = {}
-        # disable verbosity
-        self.telemetry.dmg.verbose = False
-        committed_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS
-        # TODO: DAOS-9564: Verify I/O dtx committable metrics
-        # committable_test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTABLE_METRICS
-
-        for transfer_size in transfer_sizes:
-            # Get the initial IO dtx metrics before running
-            metrics_data.update(self.telemetry.get_io_metrics(
-                TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS))
-            baseline_data = self.get_initial_io_dtx_committed_metrics(metrics_data,
-                                                                      committed_test_metrics,
-                                                                      str(transfer_size))
-            self.add_pool(connect=False)
-            oclass = self.ior_cmd.dfs_oclass.value
-            self.add_containers(self.pool, oclass)
-            for operation in ["rw"]:
-                flags = self.params.get("F", "/run/ior/ior{}flags/".format(
-                    operation))
-                self.log.info("<<< Start ior %s transfer_size=%s", operation, transfer_size)
-                self.ior_cmd.transfer_size.update(transfer_size)
-                self.ior_cmd.flags.update(flags)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container[-1].uuid)
-                # Run ior command to populate IO dtx metrics
-                _ = self.run_ior_with_pool(timeout=200, create_pool=False, create_cont=False)
-                # _ = self.ior_with_transfer_size(transfer_size, operation)
-                # Get IO dtx telemetry metrics
-                metrics_data.update(self.telemetry.get_io_metrics(
-                    TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS))
-
-                errors = False
-                # Verify IO dtx committed metrics
-                if self.verify_io_dtx_committed_metrics(baseline_data, metrics_data,
-                                                        committed_test_metrics,
-                                                        str(transfer_size)):
-                    self.log.info("IO dtx committed metrics verified for xfer size %s",
-                                  transfer_size)
-                else:
-                    self.log.error("IO dtx committed metrics failed verification for xfer size %s",
-                                   transfer_size)
-                    errors = True
-            # Destroy the container and the pool.
-            self.destroy_containers(containers=self.container[-1])
-            self.destroy_pools(pools=self.pool)
-
-        if errors:
-            self.fail("Test FAILED")
+                errors.append(msg)
+        report_errors(self, errors)

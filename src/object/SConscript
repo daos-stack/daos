@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+    denv.require('argobots', 'protobufc')
 
     # Common object code
     common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
@@ -18,7 +18,7 @@ def scons():
 
     # Object client library
     dc_obj_tgts = denv.SharedObject(['cli_obj.c', 'cli_shard.c',
-                                     'cli_mod.c', 'cli_ec.c',
+                                     'cli_mod.c', 'cli_ec.c', 'cli_csum.c',
                                      'obj_verify.c'])
     libdaos_tgts.extend(dc_obj_tgts + common_tgts)
 
@@ -27,7 +27,7 @@ def scons():
 
     # generate server module
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', headers_only=True)
+    senv.require('pmdk', headers_only=True)
 
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srv = senv.d_library('obj',

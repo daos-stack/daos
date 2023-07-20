@@ -1,12 +1,11 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
 import os
 import grp
+
 import security_test_base as secTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
@@ -18,7 +17,6 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
 
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
 
     def test_daos_pool_acl_groups(self):
         '''
@@ -42,7 +40,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,pool
-        :avocado: tags=pool_acl,sec_acl_groups,test_daos_pool_acl_groups
+        :avocado: tags=DaosRunPoolSecurityTest,pool_acl,sec_acl_groups,test_daos_pool_acl_groups
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]

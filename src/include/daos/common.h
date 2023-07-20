@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -66,11 +66,11 @@ struct daos_tree_overhead {
 	/** Overhead for dynamic tree nodes */
 	struct daos_node_overhead	to_dyn_overhead[MAX_TREE_ORDER_INC];
 	/** Number of dynamic tree node sizes */
-	int				to_dyn_count;
+	int                             to_dyn_count;
 	/** Inline metadata size for each record */
-	int				to_node_rec_msize;
+	int                             to_node_rec_msize;
 	/** Dynamic metadata size of an allocated record. */
-	int				to_record_msize;
+	int                             to_record_msize;
 };
 
 /** Points to a byte in an iov, in an sgl */
@@ -195,6 +195,18 @@ isset_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	return 1;
 }
 
+static inline uint8_t
+isclr_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		if (isset(bitmap, index))
+			return 0;
+
+	return 1;
+}
+
 static inline void
 clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 {
@@ -202,6 +214,15 @@ clrbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 
 	for (index = start; index <= end; ++index)
 		clrbit(bitmap, index);
+}
+
+static inline void
+setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
+{
+	uint32_t index;
+
+	for (index = start; index <= end; ++index)
+		setbit(bitmap, index);
 }
 
 static inline unsigned int
@@ -779,6 +800,8 @@ enum {
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
 #define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
+#define DAOS_NVME_ALLOCBUF_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x53)
+#define DAOS_NVME_WAL_TX_LOST		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x54)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -878,17 +901,40 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 #define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
 #define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
 
+/** check if recx_1 is covered by recx_2 */
+#define DAOS_RECX_COVERED(recx_1, recx_2)				\
+	(((recx_1).rx_idx >= (recx_2).rx_idx) &&			\
+	 (DAOS_RECX_END(recx_1) <= DAOS_RECX_END(recx_2)))
+
 /**
  * Merge \a src recx to \a dst recx.
  */
 static inline void
+daos_recx_merge_with_offset_size(daos_recx_t *dst, uint64_t offset, uint64_t size)
+{
+	uint64_t end;
+
+	end = max(offset + size, DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(offset, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
+static inline void
 daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 {
-	uint64_t	end;
+	daos_recx_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
+}
 
-	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
-	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
-	dst->rx_nr = end - dst->rx_idx;
+static inline bool
+daos_recx_can_merge_with_offset_size(daos_recx_t *recx, uint64_t offset, uint64_t size)
+{
+	return max(recx->rx_idx, offset) <= min(DAOS_RECX_END(*recx), offset + size);
+}
+
+static inline bool
+daos_recx_can_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	return daos_recx_can_merge_with_offset_size(dst, src->rx_idx, src->rx_nr);
 }
 
 /* NVMe shared constants */

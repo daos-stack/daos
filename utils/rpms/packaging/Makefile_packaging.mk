@@ -271,6 +271,9 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	cd $(DEB_BUILD); dpkg-buildpackage -S --no-sign --no-check-builddeps
 
 $(SRPM): $(SPEC) $(SOURCES)
+	if [ -f bz-1955184_find-requires ]; then \
+	    chmod 755 bz-1955184_find-requires;  \
+	fi
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
 
 srpm: $(SRPM)

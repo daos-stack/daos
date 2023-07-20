@@ -34,6 +34,20 @@ def get_primary_group(user=None):
         return user or getuser()
 
 
+def get_user_uid_gid(user):
+    """Get a user's uid and gid
+
+    Args:
+        user (str, optional): the user account name. Defaults to None, which uses the current user.
+
+    Returns:
+        (str, str): the uid and gid
+
+    """
+    pwd = getpwnam(user or getuser())
+    return pwd.pw_uid, pwd.pw_gid
+
+
 def get_chown_command(user=None, group=None, options=None, file=None):
     """Get the chown command.
 

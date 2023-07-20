@@ -3,20 +3,32 @@
 import subprocess  # nosec B404
 import os
 import re
+import json
 
 from SCons.Script import Configure, GetOption, Scanner, Glob, Exit, File
 
 GO_COMPILER = 'go'
-MIN_GO_VERSION = '1.16.0'
+MIN_GO_VERSION = '1.18.0'
 include_re = re.compile(r'\#include [<"](\S+[>"])', re.M)
-GOINC_PREFIX = '"github.com/daos-stack/daos/src/'
 
 
-def _scan_go_file(node, _env, _path):
+def _scan_go_file(node, env, _path):
     """Scanner for go code"""
-    contents = node.get_contents()
     src_dir = os.path.dirname(str(node))
     includes = []
+    path_name = str(node)[12:]
+    rc = subprocess.run([env.d_go_bin, 'list', '--json', '-mod=vendor', path_name],
+                        cwd='src/control', stdout=subprocess.PIPE, check=True)
+    data = json.loads(rc.stdout.decode('utf-8'))
+    for dep in data['Deps']:
+        if not dep.startswith('github.com/daos-stack/daos'):
+            continue
+
+        deps_dir = dep[31:]
+        includes.extend(Glob(f'src/{deps_dir}/*.go'))
+
+    contents = node.get_contents()
+    src_dir = os.path.dirname(str(node))
     for my_line in contents.splitlines():
         line = my_line.decode('utf-8')
         if line == 'import "C"':
@@ -33,14 +45,11 @@ def _scan_go_file(node, _env, _path):
                     includes.append(File(os.path.join(src_dir, header)))
                 else:
                     includes.append(f'../../../include/{header}')
-        elif line.strip().startswith(GOINC_PREFIX):
-            deps_dir = line[len(GOINC_PREFIX) + 1:-1]
-            includes.extend(Glob(f'src/{deps_dir}/*.go'))
 
     return includes
 
 
-def _setup_go(env):
+def generate(env):
     """Setup the go compiler"""
 
     def _check_go_version(context):
@@ -85,12 +94,16 @@ def _setup_go(env):
     if 'GOCACHE' in os.environ:
         env['ENV']['GOCACHE'] = os.environ['GOCACHE']
 
+    # Multiple go jobs can be running at once in scons via the -j option, there is no way to reserve
+    # a number of scons job slots for a single command so if jobs is 1 then use that else use a
+    # small number to allow progress without overloading the system.
+    jobs = GetOption('num_jobs')
+    if jobs == 1:
+        env["ENV"]["GOMAXPROCS"] = '1'
+    else:
+        env["ENV"]["GOMAXPROCS"] = '5'
+
     env.Append(SCANNERS=Scanner(function=_scan_go_file, skeys=['.go']))
-
-
-def generate(env):
-    """Add daos specific methods to environment"""
-    env.AddMethod(_setup_go, 'd_setup_go')
 
 
 def exists(_env):

@@ -10,8 +10,8 @@ from control_test_base import ControlTestBase
 
 
 class DmgStorageScanSCMTest(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
+
     This test partially covers the following requirement.
     (TR-1.0.34) admin can use daos_shell to collect information and create yaml
     file by himself. This means that daos_shell allows to list:
@@ -23,6 +23,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
     verifies the SCM Namespaces exist in /dev. Second, it verifies the namespace
     count by comparing against the number of namespace rows obtained with
     --verbose.
+
     :avocado: recursive
     """
 
@@ -34,9 +35,9 @@ class DmgStorageScanSCMTest(ControlTestBase):
 
         Returns:
             list: List of errors.
+
         """
         errors = []
-        RC_SUCCESS = 0
 
         for scm_namespace in storage_dict["scm_namespaces"]:
             # Verify that all namespaces exist under /dev.
@@ -45,7 +46,7 @@ class DmgStorageScanSCMTest(ControlTestBase):
             # rc is a dictionary where return code is the key.
             rc = pcmd(hosts=self.hostlist_servers, command=lscmd)
 
-            if RC_SUCCESS not in rc:
+            if 0 not in rc:
                 errors.append("{} didn't exist under /dev!".format(pmem_name))
 
             # Verify the Socket ID.

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -95,7 +95,12 @@ enum daos_otype_t {
 	/** Byte Array with no metadata (eg DFS/POSIX) */
 	DAOS_OT_ARRAY_BYTE	= 13,
 
-	DAOS_OT_MAX		= 13,
+	/**
+	 * Second version of Object ID table.
+	 */
+	DAOS_OT_OIT_V2		= 14,
+
+	DAOS_OT_MAX		= 14,
 
 	/**
 	 * reserved: Multi Dimensional Array
@@ -477,13 +482,19 @@ typedef struct {
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
+static enum daos_obj_redun
+daos_obj_id2ord(daos_obj_id_t oid)
+{
+	return (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
+}
+
 static inline daos_oclass_id_t
 daos_obj_id2class(daos_obj_id_t oid)
 {
 	enum daos_obj_redun ord;
 	uint32_t nr_grps;
 
-	ord = (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
+	ord = daos_obj_id2ord(oid);
 	nr_grps = (oid.hi & OID_FMT_META_MASK) >> OID_FMT_META_SHIFT;
 
 	return (ord << OC_REDUN_SHIFT) | nr_grps;

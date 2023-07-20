@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -15,9 +15,9 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 )
 
@@ -251,7 +251,7 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 		return nil, err
 	}
 
-	ur.debugf("%s: %s", msr.Addr, mgmtpb.Debug(msr.Message))
+	ur.debugf("%s: %s", msr.Addr, pbUtil.Debug(msr.Message))
 	return msr.Message, nil
 }
 
@@ -262,7 +262,7 @@ func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
 		if IsConnErr(err) {
-			return errMSConnectionFailure
+			return errors.Wrap(errMSConnectionFailure, err.Error())
 		}
 		return err
 	}

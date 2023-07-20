@@ -203,6 +203,10 @@ struct  _Mgmt__PoolCreateResp
    */
   int32_t status;
   /*
+   * Current service leader
+   */
+  uint32_t leader;
+  /*
    * pool service replica ranks
    */
   size_t n_svc_reps;
@@ -220,7 +224,7 @@ struct  _Mgmt__PoolCreateResp
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0,NULL }
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*
@@ -523,10 +527,15 @@ struct  _Mgmt__PoolReintegrateReq
    */
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
+  /*
+   * Size in bytes of storage tiers
+   */
+  size_t n_tierbytes;
+  uint64_t *tierbytes;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*

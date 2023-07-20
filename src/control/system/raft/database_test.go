@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,6 +32,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 	. "github.com/daos-stack/daos/src/control/system"
 )
 
@@ -116,8 +117,7 @@ func TestSystem_Database_LeadershipCallbacks(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := test.Context(t)
 	dbCtx, dbCancel := context.WithCancel(ctx)
 
 	db, cleanup := TestDatabase(t, log, localhost)
@@ -230,8 +230,7 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer test.ShowBufferOnFailure(t, buf)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := test.Context(t)
 
 	db0, cleanup0 := TestDatabase(t, log)
 	defer cleanup0()
@@ -411,8 +410,7 @@ func ignoreFaultDomainIDOption() cmp.Option {
 }
 
 func TestSystem_Database_memberRaftOps(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := test.Context(t)
 
 	testMembers := make([]*Member, 0)
 	nextAddr := ctrlAddrGen(ctx, net.IPv4(127, 0, 0, 1), 4)
@@ -758,7 +756,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			ctx, cancel := context.WithTimeout(test.Context(t), 50*time.Millisecond)
 			defer cancel()
 
 			db := MockDatabase(t, log)
@@ -844,7 +842,7 @@ func TestSystemDatabase_PoolServiceList(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.Background()
+			ctx := test.Context(t)
 			db := MockDatabase(t, log)
 			for _, ps := range tc.poolSvcs {
 				lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
@@ -998,6 +996,10 @@ func Test_Database_ResignLeadership(t *testing.T) {
 			cause:     raft.ErrLeadershipTransferInProgress,
 			expLeader: true,
 		},
+		"cause: system.ErrNotLeader": {
+			cause:     &system.ErrNotLeader{},
+			expLeader: true,
+		},
 		// Also check to see what happens if we get a raft error during
 		// leadership transfer.
 		"leadership transfer fails": {
@@ -1044,33 +1046,33 @@ func TestDatabase_TakePoolLock(t *testing.T) {
 			expErr:   errors.New("nil context"),
 		},
 		"empty pool UUID": {
-			ctx:    context.Background(),
+			ctx:    test.Context(t),
 			expErr: errors.New("nil pool UUID"),
 		},
 		"already-released parent lock": {
-			ctx:      parentLock.InContext(context.Background()),
+			ctx:      parentLock.InContext(test.Context(t)),
 			poolUUID: mockUUID,
 			expErr:   errors.New("lock not found"),
 		},
 		"parent lock wrong id": {
-			ctx:          parentLock.InContext(context.Background()),
+			ctx:          parentLock.InContext(test.Context(t)),
 			existingLock: wrongIdLock,
 			poolUUID:     mockUUID,
 			expErr:       errors.New("is locked"),
 		},
 		"parent lock for wrong pool": {
-			ctx:          wrongPoolLock.InContext(context.Background()),
+			ctx:          wrongPoolLock.InContext(test.Context(t)),
 			existingLock: wrongPoolLock,
 			poolUUID:     mockUUID,
 			expErr:       errors.New("different pool"),
 		},
 		"successful new lock": {
-			ctx:        context.Background(),
+			ctx:        test.Context(t),
 			poolUUID:   mockUUID,
 			expNewLock: true,
 		},
 		"successful parent lock": {
-			ctx:          parentLock.InContext(context.Background()),
+			ctx:          parentLock.InContext(test.Context(t)),
 			existingLock: parentLock,
 			poolUUID:     mockUUID,
 		},

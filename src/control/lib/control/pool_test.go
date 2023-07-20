@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -141,7 +140,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolDestroy(ctx, mi, tc.req)
@@ -219,7 +218,7 @@ func TestControl_PoolUpgrade(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolUpgrade(ctx, mi, tc.req)
@@ -281,7 +280,7 @@ func TestControl_PoolDrain(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolDrain(ctx, mi, tc.req)
@@ -337,7 +336,7 @@ func TestControl_PoolEvict(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolEvict(ctx, mi, tc.req)
@@ -491,7 +490,7 @@ func TestControl_PoolCreate(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolCreate(ctx, mi, tc.req)
@@ -881,7 +880,7 @@ func TestControl_PoolQuery(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolQuery(ctx, mi, req)
@@ -982,7 +981,7 @@ func TestPoolSetProp(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := PoolSetProp(ctx, mi, req)
@@ -1118,6 +1117,10 @@ func TestPoolGetProp(t *testing.T) {
 							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
 						},
 						{
+							Number: propWithVal("perf_domain", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{255},
+						},
+						{
 							Number: propWithVal("scrub", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
 						},
@@ -1137,6 +1140,18 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("svc_list", "").Number,
 							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
 						},
+						{
+							Number: propWithVal("checkpoint", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
+						},
+						{
+							Number: propWithVal("checkpoint_freq", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{10000},
+						},
+						{
+							Number: propWithVal("checkpoint_thresh", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{20},
+						},
 					},
 				}),
 			},
@@ -1144,10 +1159,14 @@ func TestPoolGetProp(t *testing.T) {
 				ID: test.MockUUID(),
 			},
 			expResp: []*daos.PoolProperty{
+				propWithVal("checkpoint", "timed"),
+				propWithVal("checkpoint_freq", "10000"),
+				propWithVal("checkpoint_thresh", "20"),
 				propWithVal("ec_cell_sz", "4096"),
 				propWithVal("ec_pda", "1"),
 				propWithVal("global_version", "1"),
 				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
@@ -1207,7 +1226,7 @@ func TestPoolGetProp(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := PoolGetProp(ctx, mi, req)
@@ -1615,7 +1634,7 @@ func TestControl_ListPools(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := ListPools(ctx, mi, req)
@@ -1634,10 +1653,11 @@ func TestControl_ListPools(t *testing.T) {
 func TestControl_GetMaxPoolSize(t *testing.T) {
 	devStateFaulty := storage.NvmeStateFaulty
 	type ExpectedOutput struct {
-		ScmBytes  uint64
-		NvmeBytes uint64
-		Error     error
-		Debug     string
+		ScmBytes   uint64
+		NvmeBytes  uint64
+		Error      error
+		QueryError error
+		Debug      string
 	}
 
 	for name, tc := range map[string]struct {
@@ -1652,8 +1672,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -1661,8 +1682,86 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"single MD-on-SSD server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleData),
+								},
+							},
+							Rank: 0,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(2) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleWAL | storage.BdevRoleMeta),
+								},
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"single Ephemeral server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole:    &storage.BdevRoles{storage.OptionBits(0)},
 							},
 							Rank: 0,
 						},
@@ -1681,8 +1780,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -1690,8 +1790,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -1702,22 +1803,25 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(50) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(50) * uint64(humanize.GByte),
+								UsableBytes: uint64(50) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
@@ -1725,29 +1829,33 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(400) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(400) * uint64(humanize.GByte),
+								UsableBytes: uint64(400) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(300) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(300) * uint64(humanize.GByte),
+								UsableBytes: uint64(300) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 3,
 						},
@@ -1766,8 +1874,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -1775,8 +1884,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -1787,36 +1897,41 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(50) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(50) * uint64(humanize.GByte),
+								UsableBytes: uint64(50) * uint64(humanize.GByte),
 							},
 							Rank: 4,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 5,
 						},
@@ -1824,43 +1939,49 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(400) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(400) * uint64(humanize.GByte),
+								UsableBytes: uint64(400) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(300) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(300) * uint64(humanize.GByte),
+								UsableBytes: uint64(300) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 4,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 5,
 						},
@@ -1880,8 +2001,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -1901,8 +2023,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -1910,8 +2033,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -1922,36 +2046,41 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(50) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(50) * uint64(humanize.GByte),
+								UsableBytes: uint64(50) * uint64(humanize.GByte),
 							},
 							Rank: 4,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 5,
 						},
@@ -1959,36 +2088,41 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(400) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(400) * uint64(humanize.GByte),
+								UsableBytes: uint64(400) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(300) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(300) * uint64(humanize.GByte),
+								UsableBytes: uint64(300) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.GByte),
-								AvailBytes: uint64(1) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.GByte),
+								AvailBytes:  uint64(1) * uint64(humanize.GByte),
+								UsableBytes: uint64(1) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 4,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 5,
 						},
@@ -2008,8 +2142,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -2017,8 +2152,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.TByte),
-								AvailBytes: uint64(100) * uint64(humanize.TByte),
+								TotalBytes:  uint64(100) * uint64(humanize.TByte),
+								AvailBytes:  uint64(100) * uint64(humanize.TByte),
+								UsableBytes: uint64(100) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -2042,6 +2178,13 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				Error: errors.New("host storage response"),
 			},
 		},
+		"query fails": {
+			HostsConfigArray: []MockHostStorageConfig{},
+			ExpectedOutput: ExpectedOutput{
+				QueryError: errors.New("query whoops"),
+				Error:      errors.New("query whoops"),
+			},
+		},
 		"No SCM storage": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
@@ -2061,15 +2204,17 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -2088,8 +2233,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -2097,9 +2243,10 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
-								NvmeState:  &devStateFaulty,
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeState:   &devStateFaulty,
 							},
 							Rank: 0,
 						},
@@ -2119,8 +2266,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -2128,8 +2276,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -2140,28 +2289,32 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(0),
-								AvailBytes: uint64(0),
+								TotalBytes:  uint64(0),
+								AvailBytes:  uint64(0),
+								UsableBytes: uint64(0),
 							},
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(50) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(50) * uint64(humanize.GByte),
+								UsableBytes: uint64(50) * uint64(humanize.GByte),
 							},
 							Rank: 3,
 						},
@@ -2169,29 +2322,33 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(400) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(400) * uint64(humanize.GByte),
+								UsableBytes: uint64(400) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(300) * uint64(humanize.GByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(300) * uint64(humanize.GByte),
+								UsableBytes: uint64(300) * uint64(humanize.GByte),
 							},
 							Rank: 2,
 						},
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(3) * uint64(humanize.TByte),
-								AvailBytes: uint64(2) * uint64(humanize.TByte),
+								TotalBytes:  uint64(3) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
 							},
 							Rank: 3,
 						},
@@ -2209,8 +2366,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -2218,8 +2376,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 1,
 						},
@@ -2237,8 +2396,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					ScmConfig: []MockScmConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(100) * uint64(humanize.GByte),
-								AvailBytes: uint64(100) * uint64(humanize.GByte),
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
 							},
 							Rank: 0,
 						},
@@ -2246,8 +2406,9 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 					NvmeConfig: []MockNvmeConfig{
 						{
 							MockStorageConfig: MockStorageConfig{
-								TotalBytes: uint64(1) * uint64(humanize.TByte),
-								AvailBytes: uint64(1) * uint64(humanize.TByte),
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
 							},
 							Rank: 0,
 						},
@@ -2265,8 +2426,19 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			mockInvokerConfig := &MockInvokerConfig{
-				UnaryResponse: &UnaryResponse{
-					Responses: []*HostResponse{},
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						Responses: []*HostResponse{
+							{
+								Addr:    "foo",
+								Message: &mgmtpb.SystemQueryResp{},
+								Error:   tc.ExpectedOutput.QueryError,
+							},
+						},
+					},
+					{
+						Responses: []*HostResponse{},
+					},
 				},
 			}
 			for _, hostStorageConfig := range tc.HostsConfigArray {
@@ -2282,11 +2454,12 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 						Message: storageScanResp,
 					}
 				}
-				mockInvokerConfig.UnaryResponse.Responses = append(mockInvokerConfig.UnaryResponse.Responses, hostResponse)
+				scanResp := mockInvokerConfig.UnaryResponseSet[1]
+				scanResp.Responses = append(scanResp.Responses, hostResponse)
 			}
 			mockInvoker := NewMockInvoker(log, mockInvokerConfig)
 
-			scmBytes, nvmeBytes, err := GetMaxPoolSize(context.TODO(), log, mockInvoker, tc.TgtRanks)
+			scmBytes, nvmeBytes, err := GetMaxPoolSize(test.Context(t), log, mockInvoker, tc.TgtRanks)
 
 			if tc.ExpectedOutput.Error != nil {
 				test.AssertTrue(t, err != nil, "Expected error")
