@@ -63,7 +63,7 @@ def _base_setup(env):
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
 
         env.AppendUnique(CCFLAGS=['-O2'])
-        env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
+    env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})

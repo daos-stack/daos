@@ -291,9 +291,9 @@ d_realpath(const char *path, char *resolved_path);
 		if ((ptr) != NULL) {                                                               \
 			size_t _fra = malloc_usable_size(ptr);                                     \
 			size_t _frb = __builtin_object_size(ptr, 1);                               \
-			if (frb != -1 && frb < fra)                                                \
-				fra = frb;                                                         \
-			memset(ptr, 0x42, _frs);                                                   \
+			if (_frb != -1 && _frb < _fra)                                             \
+				_fra = _frb;                                                       \
+			memset(ptr, 0x42, _fra);                                                   \
 			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
 			d_free(ptr);                                                               \
 			(ptr) = NULL;                                                              \
