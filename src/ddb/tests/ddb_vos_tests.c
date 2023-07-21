@@ -862,7 +862,7 @@ assert_update_new_path(daos_handle_t poh, struct dv_tree_path *vtp)
 	/* First check that the value doesn't exist */
 	memset(fake_dump_value_cb_value_buf, 0, ARRAY_SIZE(fake_dump_value_cb_value_buf));
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
-	assert_string_equal("", fake_dump_value_cb_value_buf);
+	assert_int_equal(0, fake_dump_value_cb_value_buf[0]);
 
 	d_iov_set(&value_iov, value_buf, strlen(value_buf));
 
