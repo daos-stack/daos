@@ -3282,7 +3282,7 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 		daos_cont_status_clear(arg->coh, NULL);
 	}
-	d_free(buf);
+	free(buf);
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
