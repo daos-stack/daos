@@ -3282,7 +3282,7 @@ fetch_replica_unavail(void **state)
 		test_rebuild_wait(&arg, 1);
 		daos_cont_status_clear(arg->coh, NULL);
 	}
-	D_FREE(buf);
+	d_free(buf);
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
 }
@@ -3809,8 +3809,8 @@ split_sgl_internal(void **state, int size)
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	D_FREE(sbuf1);
-	D_FREE(sbuf2);
+	free(sbuf1);
+	free(sbuf2);
 }
 
 static void
