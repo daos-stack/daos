@@ -79,7 +79,7 @@ long int d_rand(void);
 
 #if HAVE_DEALLOC
 
-#define _d_free_attr __attribute__((malloc(d_free))
+#define _d_free_attr __attribute__((malloc(d_free)))
 
 #else
 
