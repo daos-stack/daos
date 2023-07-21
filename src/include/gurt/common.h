@@ -79,7 +79,7 @@ long int d_rand(void);
 
 #if HAVE_DEALLOC
 
-#define _d_free_attr __attribute__((malloc(d_free,))
+#define _d_free_attr __attribute__((malloc(d_free))
 
 #else
 
@@ -308,18 +308,36 @@ d_realpath(const char *path, char *resolved_path);
 	} while (0)
 
 #else
+
 /* Developer/debug version, poison memory on free.
  * This tries several ways to access the buffer size however none of them are perfect so for now
  * this is no in release builds.
  */
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
-			size_t _fra = malloc_usable_size(ptr);                                     \
-			size_t _frb = __builtin_object_size(ptr, 1);                               \
-			if (_frb != -1 && _frb < _fra)                                             \
-				_fra = _frb;                                                       \
-			memset(ptr, 0x42, _fra);                                                   \
+			size_t _frs = _f_get_alloc_size(ptr);                                      \
+			memset(ptr, 0x42, _frs);                                                   \
 			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
 			d_free(ptr);                                                               \
 			(ptr) = NULL;                                                              \
