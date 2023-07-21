@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -414,9 +413,6 @@ func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 		}
 	}
 
-	sort.Slice(choices, func(i, j int) bool {
-		return choices[i].Action < choices[j].Action
-	})
 	return choices
 }
 
