@@ -327,7 +327,7 @@ _f_get_alloc_size(void *ptr)
 		size = obs;
 
 #if __USE_FORTIFY_LEVEL > 2
-	obs = __builtin_object_size(ptr, 0);
+	obs = __builtin_dynamic_object_size(ptr, 0);
 	if (obs != -1 && obs < size)
 		size = obs;
 #endif

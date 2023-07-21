@@ -137,7 +137,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || {                                        \
-        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER WARNING_LEVEL=warn    \
+        scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER     \
               BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
         ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build) &&           \
         go clean -cache &&                                                 \
