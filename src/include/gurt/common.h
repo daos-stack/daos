@@ -81,17 +81,18 @@ long int d_rand(void);
 void
 d_free(void *ptr);
 void *
-d_calloc(size_t nmemb, size_t size) __attribute__((alloc_size(1, 2)));
+d_calloc(size_t nmemb, size_t size) __attribute__((malloc, alloc_size(1, 2)));
 void *
 d_malloc(size_t size) __attribute__((malloc, alloc_size(1)));
 void *
-d_realloc(void *, size_t);
+d_realloc(void *, size_t) __attribute__((malloc, alloc_size(2)));
 char *
 d_strndup(const char *s, size_t n);
 int
-d_asprintf(char **strp, const char *fmt, ...);
+d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void *
-d_aligned_alloc(size_t alignment, size_t size, bool zero);
+d_aligned_alloc(size_t alignment, size_t size, bool zero) __attribute__((malloc, alloc_size(2)));
+
 char *
 d_realpath(const char *path, char *resolved_path);
 
@@ -286,6 +287,21 @@ d_realpath(const char *path, char *resolved_path);
 /* TODO: Check for __builtin_dynamic_object_size at compile time */
 
 /* Free a pointer. Only logs if the pointer is non-NULL. */
+#ifdef DAOS_BUILD_RELEASE
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
+	} while (0)
+
+#else
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
@@ -299,6 +315,7 @@ d_realpath(const char *path, char *resolved_path);
 			(ptr) = NULL;                                                              \
 		}                                                                                  \
 	} while (0)
+#endif
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))

@@ -38,7 +38,7 @@ insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 	daos_obj_id_t		oid;
 	struct ioreq		req;
 	int			i;
-	int			g_dkeys_strlen = 8; /* "999999" */
+	int                      g_dkeys_strlen = 9; /* "-999999" */
 	const char		*dkey_fmt = "degraded dkey%d";
 	const char		akey[] = "degraded akey";
 	char			*dkey[g_dkeys], *buf, *ptr;

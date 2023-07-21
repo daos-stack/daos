@@ -13,6 +13,8 @@ DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
+                 '-Wmismatched-dealloc',
+                 '-Wfree-nonheap-object',
                  '-Wframe-larger-than=4096']
 
 # Compiler flags to prevent optimizing out security checks
@@ -63,7 +65,7 @@ def _base_setup(env):
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
 
         env.AppendUnique(CCFLAGS=['-O2'])
-    env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': '2'})
+        _set_fortify_level(env)
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION': '1'})
@@ -103,9 +105,11 @@ def _check_flag_helper(context, compiler, ext, flag):
         flags = ["-Werror", test_flag]
     else:
         flags = ["-Werror", flag]
+    flags.append('-O1')
     context.Message(f'Checking {compiler} {flag} ')
     context.env.Replace(CCFLAGS=flags)
     ret = context.TryCompile("""
+# include <features.h>
 int main() {
     return 0;
 }
@@ -159,6 +163,22 @@ def _append_if_supported(env, **kwargs):
         _check_flags(env, config, key, value)
 
     config.Finish()
+
+
+def _set_fortify_level(env):
+    """Check what level of _FORTIFY_SOURCE is supported"""
+    cenv = env.Clone()
+    config = Configure(cenv, custom_tests={'CheckFlag': _check_flag})
+
+    level = 3
+    while level >= 2:
+        if config.CheckFlag(f'-D_FORTIFY_SOURCE={level}'):
+            env.AppendUnique(CPPDEFINES={'_FORTIFY_SOURCE': level})
+            config.Finish()
+            return
+        level -= 1
+    print('Could not determine level of FORTIFY_SOURCE to use')
+    Exit(1)
 
 
 def generate(env):
