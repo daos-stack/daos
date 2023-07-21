@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,7 +84,9 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 	}
 
 	rc = ds_pool_svc_load(&tx, uuid, &root, &global_version, &map_buf, &clue.psc_map_version);
-	if (rc == DER_UNINIT) {
+	if (rc == 0) {
+		D_FREE(map_buf);
+	} else if (rc == DER_UNINIT) {
 		clue.psc_map_version = 0;
 		rc = 0;
 	} else if (rc != 0) {
@@ -92,7 +94,6 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 	}
 
 	memcpy(clue_out->pc_svc_clue, &clue, sizeof(clue));
-	D_FREE(map_buf);
 out_label:
 	if (rc != 0) {
 		D_FREE(clue_out->pc_label);
