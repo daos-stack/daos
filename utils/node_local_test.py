@@ -5516,6 +5516,7 @@ def test_alloc_pil4dfs_ls(server, conf, wf):
     test_cmd.use_pil4dfs(container)
     test_cmd.check_daos_stderr = False
     test_cmd.check_post_stdout = False
+    test_cmd.ignore_busy = True
 
     return test_cmd.launch()
 

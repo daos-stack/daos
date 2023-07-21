@@ -1063,9 +1063,6 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 		} else {
 			daos_handle_t	file_oh;
 
-			/* Added to avoid issues in daos_hhash_link_lookup due to uninitialized
-			 * file_oh in NLT fault injection test */
-			memset(&file_oh, 0, sizeof(daos_handle_t));
 			rc = daos_array_open_with_attr(dfs->coh, entry.oid, th, DAOS_OO_RO, 1,
 						       entry.chunk_size ? entry.chunk_size :
 						       dfs->attr.da_chunk_size, &file_oh, NULL);

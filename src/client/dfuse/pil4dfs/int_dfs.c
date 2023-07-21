@@ -275,6 +275,8 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	rc = dfs_release(hdl->oh);
 	if (rc == ENOMEM)
 		dfs_release(hdl->oh);
+	if (rc)
+		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
 	D_FREE(hdl);
 }
 
@@ -684,8 +686,6 @@ discover_dfuse_mounts(void)
 			atomic_init(&pt_dfs_mt->inited, 0);
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
-			if (pt_dfs_mt->fs_root == NULL)
-				D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
 			if (pt_dfs_mt->fs_root == NULL)
 				D_GOTO(out, rc = ENOMEM);
 			num_dfs++;
@@ -5500,16 +5500,12 @@ finalize_dfs(void)
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
-		if (rc == -DER_NOMEM)
-			rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
 			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[i].fs_root,
 				DP_RC(rc));
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
-		if (rc == -DER_NOMEM)
-			rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != -DER_SUCCESS) {
 			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
 				dfs_list[i].fs_root, DP_RC(rc));

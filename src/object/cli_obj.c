@@ -1414,6 +1414,8 @@ dc_obj_open(tse_task_t *task)
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
+	/* initialize with an invalid handle */
+	(*args->oh).cookie = 0;
 
 	obj = obj_alloc();
 	if (obj == NULL)
