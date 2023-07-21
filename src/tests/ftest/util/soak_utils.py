@@ -421,7 +421,7 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, timeout=5, reset=True)
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
         time.sleep(2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)

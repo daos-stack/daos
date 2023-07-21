@@ -89,7 +89,6 @@ class SoakTestBase(TestWithServers):
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        # self.dmg_command = self.get_dmg_command()
         self.dmg_command = DmgCommand(self.bin)
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
