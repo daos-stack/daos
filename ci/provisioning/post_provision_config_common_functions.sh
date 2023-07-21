@@ -196,6 +196,13 @@ set_local_repo() {
         dnf -y config-manager \
             --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
     fi
+
+    if [ "$repo_server" = "artifactory" ]; then
+        # Disable module filtering for our deps repo
+	deps_repo="daos-stack-deps-${DISTRO_GENERIC}-$version-x86_64-stable-local-artifactory"
+	dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
+    fi
+
     dnf repolist
 }
 

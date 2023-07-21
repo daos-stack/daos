@@ -8,7 +8,6 @@ package hwprov
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 
 	"github.com/pkg/errors"
@@ -20,9 +19,9 @@ import (
 // DumpTopologyCmd implements a go-flags Commander that dumps
 // the system topology to stdout or to a file.
 type DumpTopologyCmd struct {
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
-	JSON   bool   `short:"j" long:"json" description:"Enable JSON output"`
 }
 
 func (cmd *DumpTopologyCmd) Execute(_ []string) error {
@@ -42,14 +41,9 @@ func (cmd *DumpTopologyCmd) Execute(_ []string) error {
 		return err
 	}
 
-	if !cmd.JSON {
-		return hardware.PrintTopology(topo, out)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(topo, err)
 	}
 
-	data, err := json.MarshalIndent(topo, "", "  ")
-	if err != nil {
-		return err
-	}
-	_, err = out.Write(append(data, []byte("\n")...))
-	return err
+	return hardware.PrintTopology(topo, out)
 }
