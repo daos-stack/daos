@@ -151,9 +151,19 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
-	// SCM tmpfs 5GiB size calculated after subtracting reservations from MemTotalKiB.
+	// Nr hugepages expected with 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512
+	// pages-per-target.
+	tmpfsNrHugepages := 19 * 2 * 512
+	tmpfsHugeMemGiB := (humanize.MiByte * 2 * tmpfsNrHugepages) / humanize.GiByte
+	tmpfsEngRsvdGiB := 2 /* calculated based on 18 targets */
+	tmpfsSysRsvdGiB := storage.DefaultSysMemRsvd / humanize.GiByte
+	tmpfsRamdiskGiB := storage.MinRamdiskMem / humanize.GiByte
+	// Total mem to meet requirements 39GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
+	// per engine RAM-disk.
+	tmpfsMemTotalGiB := humanize.GiByte * (tmpfsHugeMemGiB + (2 * tmpfsEngRsvdGiB) + tmpfsSysRsvdGiB +
+		(2 * tmpfsRamdiskGiB) + 1 /* add 1GiB buffer */)
 	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, 5,
+		control.MockEngineCfgTmpfs(0, tmpfsRamdiskGiB,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -161,7 +171,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
 			).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, 5,
+		control.MockEngineCfgTmpfs(1, tmpfsRamdiskGiB,
 			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
 			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -368,12 +378,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
-				MemInfo: &common.MemInfo{
-					HugepageSizeKiB: 2048,
-					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
-					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.
-					MemTotalKiB: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
-				},
+				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
 					storage.MockNvmeController(2),
@@ -428,9 +433,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					// Total mem to meet requirements 39GiB hugeMem, 1GiB per
-					// engine rsvd, 6GiB sys rsvd, 5GiB per engine for tmpfs.
-					MemTotalKiB: (humanize.GiByte * (39 + 2 + 6 + 10)) / humanize.KiByte,
+					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -440,8 +443,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				// 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512 pages
-				WithNrHugepages(19 * 2 * 512).
+				WithNrHugepages(tmpfsNrHugepages).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),

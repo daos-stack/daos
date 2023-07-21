@@ -124,7 +124,9 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 
 	/* Inherit a timeout from a source */
 	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
-	rpc_priv->crp_timeout_sec = src_timeout;
+
+	if (src_timeout != 0)
+		rpc_priv->crp_timeout_sec = src_timeout;
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
 				 co_hdr->coh_filter_ranks,
