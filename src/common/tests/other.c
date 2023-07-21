@@ -73,7 +73,7 @@ comb_sort_test(int num)
 		D_PRINT("%d ", arr[i]);
 
 	D_PRINT("\n");
-	D_FREE(arr);
+	free(arr);
 	return 0;
 }
 

@@ -252,7 +252,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	/* No flags */
 	assert_int_equal(sendmsg_flags, 0);
 
-	D_FREE(expected_msg);
+	free(expected_msg);
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
 	free_drpc(ctx);
