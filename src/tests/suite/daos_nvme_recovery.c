@@ -745,7 +745,7 @@ nvme_test_simulate_IO_error(void **state)
 	D_FREE(fbuf);
 	D_FREE(devices);
 	free(write_errors);
-	D_FREE(read_errors);
+	free(read_errors);
 	free(check_errors);
 	D_FREE(control_log_file);
 	ioreq_fini(&req);
