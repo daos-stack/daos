@@ -1351,7 +1351,7 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
 		if (rc) {
-			D_FREE(expected_state_dup);
+			free(expected_state_dup);
 			return rc;
 		}
 
@@ -1359,7 +1359,7 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 		if (state == NULL) {
 			if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 				   expected_state) == 0) {
-				D_FREE(expected_state_dup);
+				free(expected_state_dup);
 				return 0;
 			}
 		/* multiple states separated by a '|' in expected_state str */
@@ -1367,7 +1367,7 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 			while (state != NULL) {
 				if (strcmp(daos_target_state_enum_to_str(tgt_info.ta_state),
 					   state) == 0) {
-					D_FREE(expected_state_dup);
+					free(expected_state_dup);
 					return 0;
 				}
 				state = strtok(NULL, "|");
@@ -1376,7 +1376,7 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 		sleep(MAX_POOL_TGT_STATE_WAIT);
 		retry_cnt++;
-		D_FREE(expected_state_dup);
+		free(expected_state_dup);
 	};
 
 	return -DER_TIMEDOUT;
