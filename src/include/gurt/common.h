@@ -97,9 +97,13 @@ d_malloc(size_t size) _d_free_attr __attribute__((malloc, alloc_size(1)));
 void *
 d_realloc(void *, size_t) _d_free_attr __attribute__((malloc, alloc_size(2)));
 char *
-d_strndup(const char *s, size_t n) _d_free_attr;
+d_strndup(const char *s, size_t n) _d_free_attr __attribute__((malloc));
 int
 d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+/* Use a non-standard asprintf interface to allow is to enable compiler checks.*/
+char *
+d_asprintf2(int *rc, const char *fmt, ...) _d_free_attr
+    __attribute__((malloc, format(printf, 2, 3)));
 void *
 d_aligned_alloc(size_t alignment, size_t size, bool zero) _d_free_attr
     __attribute__((malloc, alloc_size(2)));
@@ -174,13 +178,11 @@ d_realpath(const char *path, char *resolved_path);
 			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
-#define D_ASPRINTF(ptr, ...)						\
-	do {								\
-		int _rc;						\
-		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, _rc != -1,			\
-			      ptr, #ptr, _rc + 1, 0, #ptr,		\
-			      (ptr) = NULL);				\
+#define D_ASPRINTF(ptr, ...)                                                                       \
+	do {                                                                                       \
+		int _rc;                                                                           \
+		(ptr) = d_asprintf2(&_rc, __VA_ARGS__);                                            \
+		D_CHECK_ALLOC(asprintf, (ptr) != NULL, ptr, #ptr, _rc + 1, 0, #ptr, (ptr) = NULL); \
 	} while (0)
 
 /* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
