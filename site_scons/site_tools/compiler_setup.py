@@ -55,6 +55,9 @@ def _base_setup(env):
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 
+    if '-Wmismatched-dealloc' in env['CCFLAGS']:
+        env.AppendUnique(CPPDEFINES={'HAVE_DEALLOC': '1'})
+
     if build_type == 'debug':
         if compiler == 'gcc':
             env.AppendUnique(CCFLAGS=['-Og'])

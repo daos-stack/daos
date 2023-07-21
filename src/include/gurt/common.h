@@ -77,22 +77,32 @@ extern "C" {
 void d_srand(long int);
 long int d_rand(void);
 
+#if HAVE_DEALLOC
+
+#define _d_free_attr __attribute__((malloc(d_free,))
+
+#else
+
+#define _d_free_attr
+
+#endif
+
 /* memory allocating macros */
 void
 d_free(void *ptr);
 void *
-d_calloc(size_t nmemb, size_t size) __attribute__((malloc, alloc_size(1, 2)));
+d_calloc(size_t nmemb, size_t size) _d_free_attr __attribute__((malloc, alloc_size(1, 2)));
 void *
-d_malloc(size_t size) __attribute__((malloc, alloc_size(1)));
+d_malloc(size_t size) _d_free_attr __attribute__((malloc, alloc_size(1)));
 void *
-d_realloc(void *, size_t) __attribute__((malloc, alloc_size(2)));
+d_realloc(void *, size_t) _d_free_attr __attribute__((malloc, alloc_size(2)));
 char *
-d_strndup(const char *s, size_t n);
+d_strndup(const char *s, size_t n) _d_free_attr;
 int
 d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 void *
-d_aligned_alloc(size_t alignment, size_t size, bool zero) __attribute__((malloc, alloc_size(2)));
-
+d_aligned_alloc(size_t alignment, size_t size, bool zero) _d_free_attr
+    __attribute__((malloc, alloc_size(2)));
 char *
 d_realpath(const char *path, char *resolved_path);
 
