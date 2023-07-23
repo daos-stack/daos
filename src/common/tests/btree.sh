@@ -5,7 +5,8 @@ DAOS_DIR=${DAOS_DIR:-$(cd "$cwd/../../.." && echo "$PWD")}
 source "${DAOS_DIR}/.build_vars.sh"
 BTR=${SL_BUILD_DIR}/src/common/tests/btree
 VCMD=()
-BAT_NUM=${BAT_NUM:-"20000"}
+BAT_NUM=${BAT_NUM:-"1200000"}
+#BAT_NUM=${BAT_NUM:-"18"}
 if [ "$USE_VALGRIND" = "memcheck" ]; then
     BAT_NUM="200"
     VCMD="valgrind --leak-check=full --show-reachable=yes --error-limit=no \
@@ -37,6 +38,7 @@ EOF
 }
 
 PERF=""
+RPC=""
 UINT=""
 test_conf_pre=""
 while [ $# -gt 0 ]; do
@@ -73,6 +75,11 @@ while [ $# -gt 0 ]; do
         shift
         test_conf_pre="${test_conf_pre} direct"
         ;;
+    rpc)
+        RPC="on"
+        BTR=${SL_BUILD_DIR}/src/common/tests/btree_direct_rpc
+        shift
+	;;
     *)
         echo "Unknown option $1"
         print_help
@@ -96,7 +103,24 @@ run_test()
     printf "\nOptions: IPL='%s' IDIR='%s' PMEM='%s'\n" "$IPL" "$IDIR" "$PMEM"
     test_conf=$(gen_test_conf_string "${IPL}" "${PMEM}")
 
-    if [ -z ${PERF} ]; then
+    if [ "${RPC}" != "" ]; then
+        echo "B+tree RPC tracking emulation functional test..."
+        DAOS_DEBUG="$DDEBUG"                        \
+        eval "${VCMD[@]}" "$BTR" --start-test \
+        "btree RPC tracking emulation functional test" \
+        -C "o:$ORDER" \
+        -D
+
+        echo "B+tree batch operations test..."
+        eval "${VCMD[@]}" "$BTR" \
+        --start-test "B+tree RPC tracking emulation batch operations test..." \
+        -C "o:$ORDER" \
+        -c                                          \
+        -o                                          \
+        -b "$BAT_NUM"                               \
+        -D
+
+    elif [ -z ${PERF} ]; then
 
         echo "B+tree functional test..."
         DAOS_DEBUG="$DDEBUG"                        \
@@ -144,10 +168,14 @@ run_test()
     fi
 }
 
-for IPL in "i," ""; do
-    for IDIR in "f" "b"; do
-        for PMEM in "-m" ""; do
-            run_test
-        done
+if [ -z "$RPC" ]; then
+    for IPL in "i," ""; do
+	for IDIR in "f" "b"; do
+            for PMEM in "-m" ""; do
+		run_test
+            done
+	done
     done
-done
+else
+    run_test
+fi

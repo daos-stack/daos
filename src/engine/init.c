@@ -170,8 +170,7 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -185,16 +184,14 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -202,8 +199,7 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
-			DP_RC(rc));
+		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 

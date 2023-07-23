@@ -130,13 +130,17 @@ extern struct crt_proto_format cont_proto_fmt_v7;
 extern struct crt_proto_format cont_proto_fmt_v6;
 extern int dc_cont_proto_version;
 
+/* TODO: define a version 8 (for the cont_op ci_cli_id, ci_time items) */
+
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
 	((uuid_t)		(ci_pool_hdl)		CRT_VAR) \
 				/* container UUID */		 \
 	((uuid_t)		(ci_uuid)		CRT_VAR) \
 				/* container handle UUID */	 \
-	((uuid_t)		(ci_hdl)		CRT_VAR)
+	((uuid_t)		(ci_hdl)		CRT_VAR) \
+	((uuid_t)		(ci_cli_id)		CRT_VAR) \
+	((uint64_t)		(ci_time)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_OP	/* output fields */		 \
 				/* operation return code */	 \
@@ -502,14 +506,26 @@ static inline int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		crt_rpc_t **req)
 {
-	crt_opcode_t opcode;
+	int				rc;
+	struct cont_op_in	       *in;
+	crt_opcode_t			opcode;
+	static __thread uuid_t		cli_id;
+
+	if (uuid_is_null(cli_id))
+		uuid_generate(cli_id);
 
 	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, dc_cont_proto_version ?
 				 dc_cont_proto_version : DAOS_CONT_VERSION);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
 
-	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
+	rc = crt_req_create(crt_ctx, tgt_ep, opcode, req);
+	if (rc != 0)
+		return rc;
+
+	in = crt_req_get(*req);
+	uuid_copy(in->ci_cli_id, cli_id);
+	return rc;
 }
 
 #endif /* __CONTAINER_RPC_H__ */

@@ -653,6 +653,8 @@ enum {
 	DBTREE_DSM_END		= DBTREE_DSM_BEGIN + 9,
 	DBTREE_SMD_BEGIN	= 30,
 	DBTREE_SMD_END		= DBTREE_SMD_BEGIN + 9,
+	DBTREE_MD_RPC_BEGIN	= 40,
+	DBTREE_MD_RPC_END	= DBTREE_MD_RPC_BEGIN + 9,
 };
 
 /** Get overhead constants for a given tree class

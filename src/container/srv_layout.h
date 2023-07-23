@@ -15,6 +15,7 @@
  * for ds_cont:
  *
  *   Root KVS (GENERIC):
+ *     Container UUIDs KVS (GENERIC):
  *     Container KVS (GENERIC):
  *       Container property KVS (GENERIC):
  *         Snapshot KVS (INTEGER)
@@ -22,6 +23,7 @@
  *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
+ *     Metadata RPCs KVS (GENERIC)
  *
  * The version of the whole layout is defined by ds_pool_prop_global_version.
  */
@@ -30,6 +32,10 @@
 #define __CONTAINER_SRV_LAYOUT_H__
 
 #include <daos_types.h>
+
+/* TODO: add ds_cont_prop_nrpcs at root KVS level to track number of items in md_rpcs
+ * (and compare/assert against the number of records in DRAM B+ tree).
+ */
 
 /*
  * Root KVS (RDB_KVS_GENERIC)
@@ -51,6 +57,7 @@
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+extern d_iov_t ds_cont_prop_md_rpcs;		/* metadata RPCs KVS */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -153,6 +160,28 @@ struct container_hdl {
 	uint64_t	ch_hce;
 	uint64_t	ch_flags;
 	uint64_t	ch_sec_capas;
+};
+
+/*
+ * Metadata RPCs KVS (RDB_KVS_GENERIC)
+ *
+ * Each key is a client UUID and HLC timestamp, defined in struct md_rpc_key.
+ * Each value represents the result of handling that RPC, defined in struct md_rpc_val.
+ */
+struct md_rpc_key {
+	/* TODO: add a (cart) opcode to the key? */
+	uuid_t		mdk_client_id;
+	uint64_t	mdk_client_time;
+};
+
+struct md_rpc_val {
+	int		mdv_rc;
+	char		mdv_resvd[62];
+};
+
+struct md_rpc_rec {
+	struct md_rpc_key	mdr_key;
+	struct md_rpc_val	mdr_val;
 };
 
 extern daos_prop_t cont_prop_default;
