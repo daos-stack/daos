@@ -459,3 +459,18 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=DaosCoreTest,test_daos_pipeline
         """
         self.run_subtest()
+
+    def test_daos_cat_recovery(self):
+        """Jira ID: DAOS-13047
+
+        Test Description:
+            Run daos_test -F
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test,test_daos_cat_recovery
+        """
+        self.run_subtest()
