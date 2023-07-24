@@ -176,6 +176,11 @@ class PoolMembershipTest(TestWithServers):
         # 6. Enable and start the checker.
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable()
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
         dmg_command.check_start()
 
         # 7. Query the checker and verify that the issue was fixed.
@@ -250,35 +255,29 @@ class PoolMembershipTest(TestWithServers):
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable(stop=False)
 
-        errors = []
-        query_msg = ""
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
 
-        # If we start the checker right after enabling it, the checker may not detect any
-        # fault (can't reproduce manually). If it happens, stop and restart the checker.
-        repair_reports = None
-        restart_count = 0
-        while restart_count < 5:
-            # Start checker.
-            dmg_command.check_start()
+        # Start checker.
+        dmg_command.check_start()
 
-            # 5. Query the checker and verify that the issue was fixed.
-            for _ in range(8):
-                check_query_out = dmg_command.check_query()
-                if check_query_out["response"]["status"] == "COMPLETED":
-                    repair_reports = check_query_out["response"]["reports"]
-                    break
-                time.sleep(5)
-
-            if repair_reports:
+        # 5. Query the checker and verify that the issue was fixed.
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                repair_reports = check_query_out["response"]["reports"]
                 break
+            time.sleep(5)
 
-            self.log.info("Checker didn't detect fault. Restart %d", restart_count)
-            dmg_command.check_stop()
-            restart_count += 1
+        self.log.info("Checker didn't detect fault. Restart %d", restart_count)
+        dmg_command.check_stop()
+        restart_count += 1
 
         if not repair_reports:
             self.fail("Checker didn't detect or repair any inconsistency!")
 
+        errors = []
         query_msg = repair_reports[0]["msg"]
         if "dangling target" not in query_msg:
             errors.append(
