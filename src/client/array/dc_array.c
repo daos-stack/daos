@@ -829,6 +829,30 @@ err_ptask:
 }
 
 int
+dc_array_close_direct(daos_handle_t oh)
+{
+	struct dc_array		*array;
+	int			rc;
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	rc = daos_obj_close(array->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		array_decref(array);
+		return rc;
+	}
+
+	/* -1 for ref taken here */
+	array_decref(array);
+	/* -1 for array handle */
+	array_decref(array);
+	return 0;
+}
+
+int
 dc_array_close(tse_task_t *task)
 {
 	daos_array_close_t	*args = daos_task_get_args(task);
