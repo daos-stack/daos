@@ -46,10 +46,10 @@ func (p poolIDSet) List() (ids []string) {
 }
 
 type checkCmdBase struct {
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
 }
 
 func (c *checkCmdBase) Execute(_ []string) error {
@@ -221,8 +221,8 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 	req.Uuids = cmd.Args.Pools.List()
 
 	resp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 	if err != nil {
 		return err
@@ -315,8 +315,8 @@ func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
 	req := new(control.SystemCheckGetPolicyReq)
 	req.SetClasses(cmd.Args.Classes.ReqClasses)
 	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 	if err != nil {
 		return err

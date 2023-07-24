@@ -78,8 +78,8 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	if (num_allowed_failures >= num_failed)
 		return 0;
 
-	D_ERROR("Domain contains %d failed components, allows at most %d",
-		num_failed, num_allowed_failures);
+	D_ERROR("Domain contains %d failed components, allows at most %d\n", num_failed,
+		num_allowed_failures);
 	return -DER_INVAL;
 }
 
@@ -4251,6 +4251,13 @@ cont_filter_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_t 
 	bool		whole_match = true;
 	uint32_t	combine_op = filt->pcf_combine_func;
 	int		rc = 0;
+
+	/* defensive, partially redundant with pool_cont_filter_is_valid() from top-level handler */
+	if ((filt->pcf_nparts > 0) && (filt->pcf_parts == NULL)) {
+		D_ERROR(DF_CONT": filter has %u parts but pcf_parts is NULL\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), filt->pcf_nparts);
+		return -DER_INVAL;
+	}
 
 	/* logical OR combining: start with false result, transition to true on first match */
 	if ((filt->pcf_parts != NULL) && (combine_op == PCF_COMBINE_LOGICAL_OR))

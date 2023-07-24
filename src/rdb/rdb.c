@@ -97,6 +97,8 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	if (rc != 0)
 		goto out_mc_hdl;
 
+	db->d_new = true;
+
 	*storagep = rdb_to_storage(db);
 out_mc_hdl:
 	if (rc != 0)
@@ -485,6 +487,16 @@ rdb_close(struct rdb_storage *storage)
 	D_FREE(db);
 }
 
+static bool
+rdb_get_use_leases(void)
+{
+	char   *name = "RDB_USE_LEASES";
+	bool	value = true;
+
+	d_getenv_bool(name, &value);
+	return value;
+}
+
 /**
  * Glance at \a storage and return \a clue. Callers are responsible for freeing
  * \a clue->bcl_replicas with d_rank_list_free.
@@ -605,7 +617,9 @@ rdb_start(struct rdb_storage *storage, struct rdb **dbp)
 		return rc;
 	}
 
-	D_DEBUG(DB_MD, DF_DB": started db %p\n", DP_DB(db), db);
+	db->d_use_leases = rdb_get_use_leases();
+
+	D_DEBUG(DB_MD, DF_DB": started db %p: use_leases=%d\n", DP_DB(db), db, db->d_use_leases);
 	*dbp = db;
 	return 0;
 }

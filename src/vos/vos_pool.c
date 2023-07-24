@@ -173,7 +173,7 @@ vos_meta_load(struct umem_store *store, char *start)
 	rc = ABT_cond_create(&mlc.mlc_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to create ABT cond: %d", rc);
+		D_ERROR("Failed to create ABT cond: %d\n", rc);
 		goto destroy_lock;
 	}
 

@@ -208,6 +208,7 @@ func TestDmg_SystemCommands(t *testing.T) {
 			"system leader-query",
 			strings.Join([]string{
 				printRequest(t, &control.LeaderQueryReq{}),
+				printRequest(t, &control.LeaderQueryReq{}),
 			}, " "),
 			nil,
 		},

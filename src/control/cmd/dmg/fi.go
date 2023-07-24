@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	chkpb "github.com/daos-stack/daos/src/control/common/proto/chk"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
@@ -62,9 +63,9 @@ func (c chkRptCls) ToProto() chkpb.CheckInconsistClass {
 }
 
 type addCheckerReportCmd struct {
+	cmdutil.JSONOutputCmd
 	baseCmd
 	ctlInvokerCmd
-	jsonOutputCmd
 
 	File  string    `short:"f" long:"file" description:"File containing checker report in JSON format"`
 	Class chkRptCls `short:"c" long:"class" description:"Checker report class (canned reports)"`
@@ -128,8 +129,8 @@ func (cmd *addCheckerReportCmd) Execute(_ []string) (errOut error) {
 		},
 	)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	if err != nil {
@@ -189,8 +190,8 @@ func (cmd *mgmtSvcPoolFaultCmd) Execute([]string) (errOut error) {
 		},
 	)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	if err != nil {
@@ -219,8 +220,8 @@ func (cmd *poolSvcFaultCmd) Execute([]string) (errOut error) {
 		},
 	)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	if err != nil {
