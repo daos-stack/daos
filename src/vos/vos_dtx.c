@@ -16,6 +16,8 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
+/* Only for test. */
+
 /* 128 KB per SCM blob */
 #define DTX_BLOB_SIZE		(1 << 17)
 /** Ensure 16-bit signed int is sufficient to store record index */
