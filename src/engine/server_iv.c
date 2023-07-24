@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1114,7 +1114,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
 		if (rc) {
 			D_FREE(ult_arg);
-			return -DER_NOMEM;
+			return rc;
 		}
 	}
 
