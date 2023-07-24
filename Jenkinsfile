@@ -1027,8 +1027,6 @@ pipeline {
                                     ignore_failure: true,
                                     description: env.STAGE_NAME,
                                     context: 'test/' + env.STAGE_NAME))
-                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nlt-coverage.xml']],
-                                        id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {
@@ -1062,6 +1060,8 @@ pipeline {
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
                         job_step_update(nlt_test())
+                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nlt-coverage.xml']],
+                                        id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {

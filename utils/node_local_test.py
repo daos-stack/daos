@@ -4249,7 +4249,10 @@ def setup_log_test(conf):
     nlt_lt = __import__('cart_logtest')
     ct_mod = __import__('cart_logcoverage')
 
-    nlt_ct = ct_mod.CoverageTracer('nlt-coverage.xml')
+    nlt_ct = ct_mod.CoverageTracer()
+
+    if conf.args.log_usage_import:
+        nlt_ct.load(conf.args.log_usage_import)
 
     nlt_lt.wf = conf.wf
 
@@ -4257,7 +4260,12 @@ def setup_log_test(conf):
 def close_log_test(conf):
     """Close down the log tracing"""
     conf.flush_bz2()
-    nlt_ct.report_all()
+
+    if conf.args.log_usage_save:
+        nlt_ct.report_all(conf.args.log_usage_save)
+
+    if conf.args.log_usage_export:
+        nlt_ct.save(conf.args.log_usage_export)
 
 
 def log_timer(func):
@@ -5943,6 +5951,9 @@ def main():
     parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
+    parser.add_argument('--log-usage-import')
+    parser.add_argument('--log-usage-export')
+    parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')

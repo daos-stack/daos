@@ -8,19 +8,23 @@ Registered as a callback for all log tracing but saves results across the entire
 """
 
 import os
+import json
 
 
 class CodeLoc():
     """Logging data for single code location"""
 
     # pylint: disable=too-few-public-methods
-    def __init__(self, line):
-        self.lineno = line.lineno
+    def __init__(self, line=None):
+        self.lineno = 0
         self.count = 0
-        self.allocation = (line.is_calloc() or line.is_realloc())
         self.fault_injected = False
         self.no_fault = False
-        self.add(line)
+        self.allocation = False
+        if line:
+            self.lineno = line.lineno
+            self.allocation = (line.is_calloc() or line.is_realloc())
+            self.add(line)
 
     def add(self, line):
         """Record an extra logging instance for this location"""
@@ -73,28 +77,58 @@ class CodeLoc():
 class CoverageTracer():
     """Save what lines are executed"""
 
-    def __init__(self, output_file):
-        self._data = {}
+    def __init__(self):
         self._files = {}
-        self.outfile = output_file
-
-        # Unlike the xml test results do not keep this up-to-date on a per log basis but rather
-        # remove the old file on start and replace it on close.  This keeps down I/O and the
-        # coverage data wouldn't be useful on failure anyway.
-        try:
-            os.unlink(self.outfile)
-        except FileNotFoundError:
-            pass
 
     def report(self):
         """Report per log"""
         return
 
-    def report_all(self):
+    def load(self, fname):
+        """Load intermediate data from file"""
+        with open(fname, 'r') as fd:
+            idata = json.load(fd)
+
+        data = {}
+        for (key, value) in idata.items():
+            data[key] = {}
+            # Iterate over files.
+            for (key2, value2) in value.items():
+                data[key][key2] = {}
+                # Iterate over line numbers.
+                for (key3, value3) in value2.items():
+                    new_obj = CodeLoc()
+                    new_obj.lineno = key3
+                    new_obj.count = value3[0]
+                    new_obj.allocation = value3[1]
+                    new_obj.fault_injected = value3[2]
+                    new_obj.no_fault = value3[3]
+                    new_obj.lineno = key3
+                    data[key][key2][key3] = new_obj
+        self._files = data
+
+    def save(self, fname):
+        """Save intermediate data to file"""
+        data = {}
+        # Iterate over directories.
+        for (key, value) in self._files.items():
+            data[key] = {}
+            # Iterate over files.
+            for (key2, value2) in value.items():
+                data[key][key2] = {}
+                # Iterate over line numbers.
+                for (key3, value3) in value2.items():
+                    data[key][key2][key3] = [value3.count, value3.allocation,
+                                             value3.fault_injected, value3.no_fault]
+
+        with open(fname, 'w') as fd:
+            json.dump(data, fd)
+
+    def report_all(self, fname):
         """Report on everything"""
         if not self._files:
             return
-        with open(self.outfile, 'w') as fd:
+        with open(fname, 'w') as fd:
             self._save(fd)
 
     def _save(self, fd):
@@ -127,9 +161,6 @@ class CoverageTracer():
                 possible = 0
                 xml = ''
                 for loc in bname[data].values():
-                    print(bname)
-                    print(data)
-                    print(loc)
                     (ttt, ptt) = loc.counts()
                     taken += ttt
                     possible += ptt
@@ -163,4 +194,4 @@ class CoverageTracer():
         if lineno in self._files[dname][bname]:
             self._files[dname][bname][lineno].add(line)
         else:
-            self._files[dname][bname][lineno] = CodeLoc(line)
+            self._files[dname][bname][lineno] = CodeLoc(line=line)

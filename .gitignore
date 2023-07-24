@@ -2,7 +2,6 @@
 .sconf_temp
 .build_vars.json
 .build_vars.sh
-nlt-coverage.xml
 .vagrant/
 utils/rpms/_topdir/
 /build/
