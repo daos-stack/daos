@@ -68,6 +68,8 @@ struct d_log_state {
 	int		 log_old_fd;
 	/** current size of log file */
 	uint64_t	 log_size;
+	/** log size of last time check */
+	uint64_t         log_last_check_size;
 	/** max size of log file */
 	uint64_t	 log_size_max;
 	/** Callback to get thread id and ULT id */
