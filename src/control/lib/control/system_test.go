@@ -1455,7 +1455,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 		},
 		"inner context is canceled; request is retried": {
 			mic: &MockInvokerConfig{
-				ReqTimeout:   100 * time.Millisecond, // outer timeout
+				ReqTimeout:   500 * time.Millisecond, // outer timeout
 				RetryTimeout: 10 * time.Millisecond,  // inner timeout
 				UnaryResponseSet: []*UnaryResponse{
 					{

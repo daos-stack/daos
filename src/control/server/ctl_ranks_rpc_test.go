@@ -918,7 +918,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			expMasks:   "ERR,MISC=DBUG",
 			expStreams: "MGMT",
 		},
-		"all values specified in config": {
+		"reset all masks; simple": {
 			req: ctlpb.SetLogMasksReq{
 				Masks:           "DEBUG",
 				Streams:         "MGMT",
@@ -932,6 +932,17 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			cfgSubsystems: "misc",
 			expMasks:      "ERR",
 			expStreams:    "md",
+		},
+		"reset all masks; complex": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
+			cfgStreams: "io,epc",
+			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expStreams: "io,epc",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -958,6 +969,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 		})
 	}
 }
+
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingRank      bool
@@ -991,8 +1003,8 @@ func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 			instancesStopped: true,
 			expResp: &ctlpb.SetLogMasksResp{
 				Errors: []string{
-					"not ready",
-					"not ready",
+					FaultDataPlaneNotStarted.Error(),
+					FaultDataPlaneNotStarted.Error(),
 				},
 			},
 		},

@@ -1360,14 +1360,13 @@ class DmgCommand(DmgCommandBase):
         """Call dmg version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
 
     def check_enable(self, pool=None, stop=True):
         """Call dmg check enable.

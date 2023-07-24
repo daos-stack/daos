@@ -369,7 +369,7 @@ struct bio_blobstore {
 
 /* Per-xstream blobstore */
 struct bio_xs_blobstore {
-	/* Inflight blob read/write */
+	/* In-flight blob read/write */
 	unsigned int		 bxb_blob_rw;
 	/* spdk io channel */
 	struct spdk_io_channel	*bxb_io_channel;
@@ -443,7 +443,7 @@ struct bio_desc {
 	struct bio_rsrvd_dma	 bd_rsrvd;
 	/* Report blob i/o completion */
 	ABT_eventual		 bd_dma_done;
-	/* Inflight SPDK DMA transfers */
+	/* In-flight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
 	unsigned int		 bd_chk_type;

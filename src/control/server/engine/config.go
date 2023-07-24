@@ -275,10 +275,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = common.MergeEnvVars(env, sEnv)
+		env = common.MergeKeyValues(env, sEnv)
 	}
 
-	return common.MergeEnvVars(c.EnvVars, env), nil
+	return common.MergeKeyValues(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -300,16 +300,16 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		return "", err
 	}
 
-	env = common.MergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
-	return common.FindEnvValue(env, name)
+	return common.FindKeyValue(env, name)
 }
 
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = common.MergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeKeyValues(c.EnvVars, newVars)
 
 	return c
 }

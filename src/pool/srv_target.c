@@ -2069,6 +2069,8 @@ ds_pool_tgt_discard_ult(void *data)
 		 DP_UUID(arg->pool_uuid), DP_RC(rc));
 put:
 	pool->sp_need_discard = 0;
+	pool->sp_discard_status = rc;
+
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
@@ -2103,6 +2105,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 
 	pool->sp_need_discard = 1;
+	pool->sp_discard_status = 0;
 	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
 
 	ds_pool_put(pool);

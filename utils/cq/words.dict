@@ -394,7 +394,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src

@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       4%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -72,7 +72,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-1.408.g9524cdb%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -216,6 +216,7 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: go >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -557,6 +558,15 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
+- Fix golang daos-client-tests dependency to be go instead
+
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
 * Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
 - Add pipeline lib
 
