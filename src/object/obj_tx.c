@@ -31,6 +31,9 @@
 #define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
 #define DTX_SUB_REQ_DEF		16
 
+/* Whether check redundancy group validation when DTX resync. */
+bool tx_verify_rdg;
+
 enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
@@ -1905,7 +1908,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * are in the same redundancy group, be as optimization, we will
 	 * not store modification group information inside 'dm_data'.
 	 */
-	if (act_grp_cnt == 1)
+	if (act_grp_cnt == 1 || !tx_verify_rdg)
 		size = 0;
 
 	size += sizeof(*ddt) * act_tgt_cnt;
@@ -1989,7 +1992,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	mbs->dm_tgt_cnt = act_tgt_cnt;
-	mbs->dm_grp_cnt = act_grp_cnt;
+	if (!tx_verify_rdg)
+		/* Set dm_grp_cnt as 1 to bypass redundancy group check. */
+		mbs->dm_grp_cnt = 1;
+	else
+		mbs->dm_grp_cnt = act_grp_cnt;
 	mbs->dm_data_size = size;
 
 	ddt = &mbs->dm_tgts[0];
@@ -2035,6 +2042,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		 */
 		dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link);
 		D_FREE(dtr);
+	} else if (!tx_verify_rdg) {
+		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link)) != NULL)
+			D_FREE(dtr);
 	} else {
 		ptr = ddt;
 		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg,
