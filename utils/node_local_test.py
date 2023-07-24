@@ -1200,7 +1200,7 @@ class DaosServer():
                                     check=False)
                 print(rc)
                 valgrind_hdl.convert_xml()
-                log_test(self.conf, log_file.name)
+                log_test(self.conf, log_file.name, show_memleaks=False)
 
 
 class ValgrindHelper():

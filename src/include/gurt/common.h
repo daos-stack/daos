@@ -429,6 +429,26 @@ d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_lis
 char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
 void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
+#ifdef FAULT_INJECTION
+
+/* Define as a macro to improve failure logging */
+
+#define d_sgl_init(_SGL, _NR)                                                                      \
+	({                                                                                         \
+		int _rc           = -DER_SUCCESS;                                                  \
+		(_SGL)->sg_nr_out = 0;                                                             \
+		(_SGL)->sg_nr     = (_NR);                                                         \
+		if (unlikely((_NR) == 0)) {                                                        \
+			(_SGL)->sg_iovs = NULL;                                                    \
+		} else {                                                                           \
+			D_ALLOC_ARRAY((_SGL)->sg_iovs, (_NR));                                     \
+			if ((_SGL)->sg_iovs == NULL)                                               \
+				_rc = -DER_NOMEM;                                                  \
+		}                                                                                  \
+		_rc;                                                                               \
+	})
+
+#else
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
@@ -444,6 +464,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
+#endif
 
 static inline void
 d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)

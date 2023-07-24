@@ -309,8 +309,6 @@ void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
-void ds_iv_ns_get(struct ds_iv_ns *ns);
-void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 
