@@ -772,9 +772,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			ent->ie_vis_flags & VOS_VIS_FLAG_COVERED ? "no" : "yes");
 
 		/* Ignore the shard if it is not in the same group of failure shard */
-		if (oid.id_shard / grp_size != shards[i] / grp_size) {
-			D_DEBUG(DB_REBUILD, "stale object "DF_UOID" shards %u grp_size %u\n",
-				DP_UOID(oid), shards[i], grp_size);
+		if ((int)tgts[i] == -1 || oid.id_shard / grp_size != shards[i] / grp_size) {
+			D_DEBUG(DB_REBUILD, "i %d stale object "DF_UOID" shards %u grp_size %u tgt %d\n",
+				i, DP_UOID(oid), shards[i], grp_size, (int)tgts[i]);
 			continue;
 		}
 

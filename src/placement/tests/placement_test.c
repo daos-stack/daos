@@ -15,11 +15,12 @@
 #include <daos/tests_lib.h>
 
 
-const char *s_opts = "he:f:vpmdn:l:";
+const char *s_opts = "he:f:vpmdn:l:o";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
 	{"filter",  required_argument, NULL, 'f'},
+	{"nlvl",    no_argument,	NULL, 'o'},
 	{"help",    no_argument,       NULL, 'h'},
 	{"verbose", no_argument,       NULL, 'v'},
 	{"pda",     no_argument,       NULL, 'p'},
@@ -61,6 +62,7 @@ print_usage(char *name)
 	print_message("%s -p|--pda <TESTS>\n", name);
 	print_message("%s -m|--pda_layout <TESTS>\n", name);
 	print_message("%s -d|--distribut [-n num_objs] [-l obj_class] <TESTS>\n", name);
+	print_message("%s -o|--nlvl failure domain as node, engine by default\n", name);
 	print_message("%s -h|--help\n", name);
 	print_message("%s -v|--verbose\n", name);
 }
@@ -83,6 +85,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+	fail_domain_node = false;
 	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) != -1) {
 		switch (opt) {
 		case 'h':
@@ -129,6 +132,9 @@ int main(int argc, char *argv[])
 				D_ERROR("invalid obj class %s\n", optarg);
 				return -1;
 			}
+		case 'o':
+			fail_domain_node = true;
+			D_PRINT("run test as node failure domain");
 			break;
 		default:
 			break;
