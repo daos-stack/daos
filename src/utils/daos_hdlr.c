@@ -2439,7 +2439,8 @@ dfuse_count_query(struct cmd_args_s *ap)
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
 		return daos_errno2der(rc);
 	}
 
@@ -2448,8 +2449,12 @@ dfuse_count_query(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 
@@ -2540,8 +2545,12 @@ dfuse_evict(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 
