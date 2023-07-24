@@ -13,6 +13,7 @@
 #include <daos.h>
 
 #define PLT_LAYOUT_VERSION	1
+extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);
 

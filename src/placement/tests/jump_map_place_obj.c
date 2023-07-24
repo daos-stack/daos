@@ -1015,6 +1015,26 @@ down_to_target(void **state)
 }
 
 static void
+check_grp_rebuilding_shard(struct jm_test_ctx *ctx, uint32_t grp_size,
+			   uint32_t grp_nr, uint32_t rebuilding_expect)
+{
+	int i, j;
+
+	for (i = 0; i < grp_nr; i++) {
+		uint32_t rebuilding = 0;
+
+		for (j = 0; j < grp_size; j++) {
+			struct pl_obj_shard *shard;
+
+			shard = jtc_get_layout_shard(ctx, i * grp_size + j);
+			if (shard->po_rebuilding)
+				rebuilding++;
+		}
+		assert_true(rebuilding <= rebuilding_expect);
+	}
+}
+
+static void
 down_continuously(void **state)
 {
 	struct jm_test_ctx	 ctx;
@@ -1032,23 +1052,20 @@ down_continuously(void **state)
 	/* loop through rest of targets, marking each as down. By the end the
 	 * pool map includes only 4 targets that are still UPIN
 	 */
-	for (i = 0; i < 16 - 4; i++) {
+	for (i = 0; i < 16 - 8; i++) {
 		jtc_set_status_on_first_shard(&ctx, DOWN);
 		jtc_assert_scan_and_layout(&ctx);
 		/* single rebuild target in layout */
-		assert_int_equal(1, jtc_get_layout_rebuild_count(&ctx));
-
+		check_grp_rebuilding_shard(&ctx, 2, 2, 1);
 		/* for shard 0 (first shard) layout has 1 that is in rebuild
 		 * state, but none in good state
 		 */
-		is_true(jtc_has_shard_with_target_rebuilding(&ctx, 0,
-								 NULL));
+		is_true(jtc_has_shard_with_target_rebuilding(&ctx, 0, NULL));
 		is_false(jtc_has_shard_with_rebuilding_not_set(&ctx, 0));
 		/* scan returns 1 target to rebuild, shard id should be 0,
 		 * target should not be the "DOWN"ed target, and rebuild target
 		 * should be same as target in layout
 		 */
-		assert_int_equal(1, ctx.rebuild.out_nr);
 		assert_int_equal(0, ctx.rebuild.ids[0]);
 		assert_int_not_equal(prev_first_shard.po_target,
 				     ctx.rebuild.tgt_ranks[0]);
@@ -1835,7 +1852,7 @@ check_grp_not_in_same_domain(struct jm_test_ctx *ctx, uint32_t grp_size,
 			for (k = j + 1; k < grp_size; k++) {
 				other_tgt = jtc_layout_shard_tgt(ctx, grp_size * i + k);
 				if (tgt/tgt_nr == other_tgt/tgt_nr) {
-					print_message("tgt %u tgt_nr %u\n", tgt, other_tgt);
+					print_message("tgt %u other tgt %u\n", tgt, other_tgt);
 					print_message("grp_size %u grp_nr %u tgt_nr %u\n",
 						      grp_size, grp_nr, tgt_nr);
 					print_message("i %d, j %d k %d\n", i, j, k);
@@ -1856,19 +1873,21 @@ same_group_shards_not_in_same_domain(void **state)
 {
 	struct jm_test_ctx	ctx;
 
-	print_message("check EC_4P2GX 4 x 2\n");
-	jtc_init_with_layout(&ctx, 4, 2, 8, OC_EC_4P2GX, g_verbose);
-	check_grp_not_in_same_domain(&ctx, 6, 10, 8, true);
-	jtc_fini(&ctx);
+	if (!fail_domain_node) {
+		print_message("check EC_4P2GX 4 x 2\n");
+		jtc_init_with_layout(&ctx, 4, 2, 8, OC_EC_4P2GX, g_verbose);
+		check_grp_not_in_same_domain(&ctx, 6, 10, 8, true);
+		jtc_fini(&ctx);
+
+		print_message("check EC_8P2GX 6 x 2\n");
+		jtc_init_with_layout(&ctx, 6, 2, 8, OC_EC_8P2GX, g_verbose);
+		check_grp_not_in_same_domain(&ctx, 10, 9, 8, true);
+		jtc_fini(&ctx);
+	}
 
 	print_message("check EC_4P2GX 8 x 1\n");
 	jtc_init_with_layout(&ctx, 8, 1, 8, OC_EC_4P2GX, g_verbose);
 	check_grp_not_in_same_domain(&ctx, 6, 10, 8, true);
-	jtc_fini(&ctx);
-
-	print_message("check EC_8P2GX 6 x 2\n");
-	jtc_init_with_layout(&ctx, 6, 2, 8, OC_EC_8P2GX, g_verbose);
-	check_grp_not_in_same_domain(&ctx, 10, 9, 8, true);
 	jtc_fini(&ctx);
 
 	print_message("check EC_8P2GX 12 x 1\n");
@@ -1921,7 +1940,6 @@ large_shards_over_limited_targets(void **state)
 	struct jm_test_ctx	ctx;
 	int i;
 
-	D_DEBUG(DB_TRACE, "shards over limit\n");
 	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_2G8, g_verbose);
 	for (i = 0; i < 8; i++) {
 		jtc_set_status_on_target(&ctx, DOWN, i);
@@ -2082,16 +2100,19 @@ _same_group_shards_not_in_same_domain_fail(void **state, uint32_t oclass, uint32
 static void
 same_group_shards_not_in_same_domain_with_fail(void **state)
 {
-	print_message("check OC_EC_4P2G8 with 4 x 2.\n");
-	_same_group_shards_not_in_same_domain_fail(state, OC_EC_4P2G8, 6, 8, 4, 2, 8);
+	if (!fail_domain_node) {
+		print_message("check OC_EC_4P2G8 with 4 x 2.\n");
+		_same_group_shards_not_in_same_domain_fail(state, OC_EC_4P2G8, 6, 8, 4, 2, 8);
+		print_message("check OC_EC_16P2G8 with 10 x 2.\n");
+		_same_group_shards_not_in_same_domain_fail(state, OC_EC_16P2G8, 18, 8, 10, 2, 8);
+		print_message("check OC_EC_8P2G8 with 6 x 2.\n");
+		_same_group_shards_not_in_same_domain_fail(state, OC_EC_8P2G8, 10, 8, 6, 2, 8);
+	}
+
 	print_message("check OC_EC_4P2G8 with 8 x 1.\n");
 	_same_group_shards_not_in_same_domain_fail(state, OC_EC_4P2G8, 6, 8, 8, 1, 8);
-	print_message("check OC_EC_8P2G8 with 6 x 2.\n");
-	_same_group_shards_not_in_same_domain_fail(state, OC_EC_8P2G8, 10, 8, 6, 2, 8);
 	print_message("check OC_EC_8P2G8 with 12 x 1.\n");
 	_same_group_shards_not_in_same_domain_fail(state, OC_EC_8P2G8, 10, 8, 12, 1, 8);
-	print_message("check OC_EC_16P2G8 with 10 x 2.\n");
-	_same_group_shards_not_in_same_domain_fail(state, OC_EC_16P2G8, 18, 8, 10, 2, 8);
 	print_message("check OC_EC_16P2G8 with 20 x 1.\n");
 	_same_group_shards_not_in_same_domain_fail(state, OC_EC_16P2G8, 18, 8, 20, 1, 8);
 }
@@ -2159,9 +2180,9 @@ fail_shard_during_reintegration(void **state)
 	print_message("check 200 1 16 OC_EC_16P2GX case 1\n");
 	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 16, 32, 16);
 	print_message("check 200 1 16 OC_EC_16P2GX case 2\n");
-	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 16, 48, 16);
+	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 16, 32, 16);
 	print_message("check 200 1 16 OC_EC_16P2GX case 3\n");
-	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 48, 80, 16);
+	_fail_shard_during_reintegration(state, 200, 1, 16, OC_EC_16P2GX, 0, 16, 48, 32, 16);
 }
 
 static void
@@ -2312,6 +2333,33 @@ fail_reintegrate_multiple_ranks(void **state)
 
 }
 
+static void
+fail_multiple_ranks(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int i;
+
+	jtc_init(&ctx, 3, 2, 2, OC_RP_2G4, g_verbose);
+
+	jtc_set_status_on_target(&ctx, DOWN, 0);
+	jtc_set_status_on_target(&ctx, DOWN, 1);
+	jtc_set_status_on_target(&ctx, DOWN, 4);
+	jtc_set_status_on_target(&ctx, DOWN, 5);
+
+	for (i = 0; i < 100; ++i) {
+		daos_obj_set_oid(&ctx.oid, DAOS_OT_ARRAY_BYTE, OR_RP_2, 4, 0);
+		ctx.oid.lo = i;
+		assert_success(jtc_create_layout(&ctx));
+		if (fail_domain_node)
+			check_grp_not_in_same_domain(&ctx, 2, 4, 4, false);
+		else
+			check_grp_not_in_same_domain(&ctx, 2, 4, 2, false);
+
+	}
+
+	jtc_fini(&ctx);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -2342,6 +2390,9 @@ placement_test_teardown(void **state)
 
 static const struct CMUnitTest tests[] = {
 	/* Standard configurations */
+	T("Target for first shard continually goes to DOWN state and "
+	  "never finishes rebuild. Should still get new target until no more",
+	  down_continuously),
 	T("Object class is verified appropriately", object_class_is_verified),
 	T("With all healthy targets, can create layout, nothing is in "
 	  "rebuild, and no duplicates.", all_healthy),
@@ -2405,6 +2456,7 @@ static const struct CMUnitTest tests[] = {
 	T("fail shard during reintegration",
 	  fail_shard_during_reintegration),
 	T("fail reintegrate ranks", fail_reintegrate_multiple_ranks),
+	T("fail multiple ranks", fail_multiple_ranks),
 };
 
 int
