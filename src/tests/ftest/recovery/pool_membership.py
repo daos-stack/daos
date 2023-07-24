@@ -263,16 +263,13 @@ class PoolMembershipTest(TestWithServers):
         dmg_command.check_start()
 
         # 5. Query the checker and verify that the issue was fixed.
+        repair_reports = None
         for _ in range(8):
             check_query_out = dmg_command.check_query()
             if check_query_out["response"]["status"] == "COMPLETED":
                 repair_reports = check_query_out["response"]["reports"]
                 break
             time.sleep(5)
-
-        self.log.info("Checker didn't detect fault. Restart %d", restart_count)
-        dmg_command.check_stop()
-        restart_count += 1
 
         if not repair_reports:
             self.fail("Checker didn't detect or repair any inconsistency!")
