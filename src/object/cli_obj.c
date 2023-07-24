@@ -1461,23 +1461,27 @@ fail:
 }
 
 int
+dc_obj_close_direct(daos_handle_t oh)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+	obj_hdl_unlink(obj);
+	obj_decref(obj);
+	return 0;
+}
+
+int
 dc_obj_close(tse_task_t *task)
 {
 	daos_obj_close_t	*args;
-	struct dc_object	*obj;
 	int			 rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	obj = obj_hdl2ptr(args->oh);
-	if (obj == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	obj_hdl_unlink(obj);
-	obj_decref(obj);
-
-out:
+	rc = dc_obj_close_direct(args->oh);
 	tse_task_complete(task, rc);
 	return 0;
 }
