@@ -79,11 +79,11 @@ long int d_rand(void);
 
 #if HAVE_DEALLOC
 
-#define _d_free_attr __attribute__((malloc(d_free)))
+#define _d_free_attr __attribute__((malloc, malloc(d_free)))
 
 #else
 
-#define _d_free_attr
+#define _d_free_attr __attribute__((malloc))
 
 #endif
 
@@ -91,22 +91,21 @@ long int d_rand(void);
 void
 d_free(void *ptr);
 void *
-d_calloc(size_t nmemb, size_t size) _d_free_attr __attribute__((malloc, alloc_size(1, 2)));
+d_calloc(size_t nmemb, size_t size) _d_free_attr __attribute__((alloc_size(1, 2)));
 void *
-d_malloc(size_t size) _d_free_attr __attribute__((malloc, alloc_size(1)));
+d_malloc(size_t size) _d_free_attr __attribute__((alloc_size(1)));
 void *
-d_realloc(void *, size_t) _d_free_attr __attribute__((malloc, alloc_size(2)));
+d_realloc(void *, size_t) _d_free_attr __attribute__((alloc_size(2)));
 char *
-d_strndup(const char *s, size_t n) _d_free_attr __attribute__((malloc));
+d_strndup(const char *s, size_t n) _d_free_attr;
 int
 d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 /* Use a non-standard asprintf interface to allow is to enable compiler checks.*/
 char *
-d_asprintf2(int *rc, const char *fmt, ...) _d_free_attr
-    __attribute__((malloc, format(printf, 2, 3)));
+d_asprintf2(int *rc, const char *fmt, ...) _d_free_attr __attribute__((format(printf, 2, 3)));
 void *
 d_aligned_alloc(size_t alignment, size_t size, bool zero) _d_free_attr
-    __attribute__((malloc, alloc_size(2)));
+    __attribute__((alloc_size(2)));
 char *
 d_realpath(const char *path, char *resolved_path);
 

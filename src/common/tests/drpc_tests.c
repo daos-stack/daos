@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -235,7 +235,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 
 	/* Packed message is the call struct updated by drpc_call */
 	expected_msg_size = drpc__call__get_packed_size(call);
-	expected_msg = calloc(1, expected_msg_size);
+	D_ALLOC(expected_msg, expected_msg_size);
 	drpc__call__pack(call, expected_msg);
 
 	/* Sent to the proper socket */
@@ -252,7 +252,7 @@ test_drpc_call_sends_call_as_mesg(void **state)
 	/* No flags */
 	assert_int_equal(sendmsg_flags, 0);
 
-	free(expected_msg);
+	D_FREE(expected_msg);
 	drpc__response__free_unpacked(resp, NULL);
 	drpc__call__free_unpacked(call, NULL);
 	free_drpc(ctx);
