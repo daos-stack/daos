@@ -130,7 +130,8 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
 	uint32_t                  oldref;
-	off_t                     expected_offset = 2;
+	off_t                     expected_offset;
+	bool                      bad_offset = false;
 
 	DFUSE_TRA_DEBUG(oh, "Dropping ref on %p", oh->doh_rd);
 
@@ -157,10 +158,27 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	if (hdl == oh->doh_ie->ie_rd_hdl)
 		oh->doh_ie->ie_rd_hdl = NULL;
 
+	/* DAOS-13938: Check on close that the cache entries are as expected, however if they are
+	 * not then do not assert, rather warn and log the entire directory contents.
+	 */
+	expected_offset = 2;
+	d_list_for_each_entry(drc, &hdl->drh_cache_list, drc_list) {
+		if (drc->drc_next_offset != expected_offset + 1 &&
+		    drc->drc_next_offset != READDIR_EOD)
+			bad_offset = true;
+		expected_offset = drc->drc_next_offset;
+	}
+
+	if (bad_offset)
+		DFUSE_TRA_ERROR(hdl, "Cache offsets incorrect on close");
+
+	expected_offset = 2;
 	d_list_for_each_entry_safe(drc, next, &hdl->drh_cache_list, drc_list) {
 		D_ASSERT(drc->drc_offset == expected_offset);
-		D_ASSERT(drc->drc_next_offset == expected_offset + 1 ||
-			 drc->drc_next_offset == READDIR_EOD);
+		if (bad_offset) {
+			DFUSE_TRA_WARNING(hdl, "Bad offset next %ld expected %ld",
+					  drc->drc_next_offset, expected_offset);
+		}
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
 			d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
