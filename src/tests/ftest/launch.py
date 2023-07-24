@@ -3191,7 +3191,7 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()),
+        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "

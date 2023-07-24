@@ -601,6 +601,7 @@ type (
 		AvailBytes  uint64 // Available raw storage
 		UsableBytes uint64 // Effective storage available for data
 		NvmeState   *storage.NvmeDevState
+		NvmeRole    *storage.BdevRoles
 	}
 
 	MockScmConfig struct {
@@ -672,6 +673,9 @@ func MockStorageScanResp(t *testing.T,
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
 		if mockNvmeConfig.NvmeState != nil {
 			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+		}
+		if mockNvmeConfig.NvmeRole != nil {
+			smdDevice.Roles = *mockNvmeConfig.NvmeRole
 		}
 		smdDevice.Rank = mockNvmeConfig.Rank
 		nvmeControllers = append(nvmeControllers, nvmeController)
