@@ -221,6 +221,11 @@ func extractLabels(in string) (labels labelMap, name string) {
 	}
 
 	switch comps[compsIdx] {
+	case "errors":
+		name = "errors"
+		compsIdx++
+		labels["facility"] = comps[compsIdx]
+		compsIdx++
 	case "pool":
 		name = "pool"
 		compsIdx++

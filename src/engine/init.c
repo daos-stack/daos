@@ -681,6 +681,10 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
+	rc = d_log_tm_init();
+	if (rc != 0)
+		goto exit_metrics_init;
+
 	rc = dss_engine_metrics_init();
 	if (rc != 0)
 		D_WARN("Unable to initialize engine metrics, " DF_RC "\n",

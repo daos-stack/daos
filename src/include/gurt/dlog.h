@@ -446,6 +446,11 @@ void d_log_add_cache(int *cache, int nr);
  */
 void d_log_sync(void);
 
+/**
+ * initialize logging telemetry
+*/
+int d_log_tm_init(void);
+
 #if defined(__cplusplus)
 }
 #endif
