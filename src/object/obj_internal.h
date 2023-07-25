@@ -42,6 +42,9 @@ extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
 
+/* Whether check redundancy group validation when DTX resync. */
+extern bool	tx_verify_rdg;
+
 /** client object shard */
 struct dc_obj_shard {
 	/** refcount */
