@@ -1569,7 +1569,10 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			var engineCfgs []*engine.Config
 			for i, sc := range tc.storageCfgs {
 				log.Debugf("storage cfg contains bdevs %v for engine %d", sc.Bdevs(), i)
-				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
+				engineCfgs = append(engineCfgs,
+					engine.MockConfig().
+						WithStorage(sc...).
+						WithTargetCount(tc.engineTargetCount[i]))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, csbmbc, tc.smbc, tc.smsc)
@@ -1625,7 +1628,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				}
 				te.setDrpcClient(newMockDrpcClient(dcc))
 				te._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
-				te.setTargetCount(tc.engineTargetCount[idx])
 				for _, tc := range te.storage.GetBdevConfigs() {
 					tc.Bdev.DeviceRoles.OptionBits = storage.OptionBits(storage.BdevRoleAll)
 				}

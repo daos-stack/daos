@@ -37,8 +37,7 @@
 static char		modules[MAX_MODULE_OPTIONS + 1];
 
 /**
- * Number of target threads the user would like to start
- * 0 means default value, see dss_tgt_nr_get();
+ * Number of target threads the user would like to start.
  */
 static unsigned int	nr_threads;
 
@@ -72,15 +71,18 @@ hwloc_topology_t	dss_topo;
 int			dss_core_depth;
 /** number of physical cores, w/o hyperthreading */
 int			dss_core_nr;
-/** start offset index of the first core for service XS */
-unsigned int		dss_core_offset;
+/** start offset index of the first core for service XS.  Init to -1 so we can
+ * detect when it is explicitly set and disable multi-socket mode.
+ */
+unsigned int            dss_core_offset = -1;
 /** NUMA node to bind to */
 int			dss_numa_node = -1;
-hwloc_bitmap_t	core_allocation_bitmap;
-/** a copy of the NUMA node object in the topology */
-hwloc_obj_t		numa_obj;
-/** number of cores in the given NUMA node */
-int			dss_num_cores_numa_node;
+/** Forward I/O work to neighbor */
+bool                    dss_forward_neighbor;
+/** Cached numa information */
+struct dss_numa_info   *dss_numa;
+/** Number of active numa nodes, multi-socket mode only */
+int                     dss_numa_nr = 1;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 /** Number of storage tiers: 2 for SCM and NVMe */
@@ -247,68 +249,112 @@ modules_load(void)
 	return rc;
 }
 
+static unsigned int
+ncores_needed(unsigned int tgt_nr, unsigned int nr_helpers)
+{
+	return DAOS_TGT0_OFFSET + tgt_nr + nr_helpers;
+}
+
 /**
- * Get the appropriate number of main XS based on the number of cores and
- * passed in preferred number of threads.
+ * Check if the #targets and #nr_xs_helpers is valid to start server, the #nr_xs_helpers possibly
+ * be reduced.
  */
 static int
-dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
+dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 {
-	int tgt_nr;
-
 	D_ASSERT(ncores >= 1);
 
 	/* at most 2 helper XS per target */
-	if (dss_tgt_offload_xs_nr > 2 * nr)
-		dss_tgt_offload_xs_nr = 2 * nr;
-	else if (dss_tgt_offload_xs_nr == 0)
+	if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
+		D_PRINT("#nr_xs_helpers(%d) cannot exceed 2 times #targets (2 x %d = %d).\n",
+			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
+		dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr == 0) {
 		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
-
-	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
-	 * offload XS. Calculate the tgt_nr as the number of main XS based
-	 * on number of cores.
-	 */
-retry:
-	tgt_nr = ncores - DAOS_TGT0_OFFSET - dss_tgt_offload_xs_nr;
-	if (tgt_nr <= 0)
-		tgt_nr = 1;
-
-	/* If user requires less target threads then set it as dss_tgt_nr,
-	 * if user oversubscribes, then:
-	 *      . if oversubscribe is enabled, use the required number
-	 *      . if oversubscribe is disabled(default),
-	 *        use the number calculated above
-	 * Note: oversubscribing  may hurt performance.
-	 */
-	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
-		tgt_nr = nr;
-		if (dss_tgt_offload_xs_nr > 2 * tgt_nr)
-			dss_tgt_offload_xs_nr = 2 * tgt_nr;
-	} else if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
-		dss_tgt_offload_xs_nr--;
-		goto retry;
 	}
 
-	if (tgt_nr != nr)
-		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, tgt_nr);
+	if (oversubscribe) {
+		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores)
+			D_PRINT("Force to start engine with %d targets %d xs_helpers on %d cores("
+				"%d cores reserved for system service).\n",
+				tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		goto out;
+	}
 
+	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
+		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
+			"%d cores reserved for system service).\n",
+			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		return -DER_INVAL;
+	}
+
+out:
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
 		dss_helper_pool = true;
 
-	return tgt_nr;
+	return 0;
+}
+
+static bool
+dss_multi_socket_check(bool oversub, int numa_nr)
+{
+	/** Keep this simple and disallow some configurations */
+	if (oversub) {
+		D_INFO("Oversubscription requested, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if (dss_numa_node != -1) {
+		D_INFO("Numa node specified, running in single socket mode\n");
+		return false;
+	}
+
+	if (numa_nr < 2) {
+		D_INFO("No NUMA found, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if ((dss_tgt_offload_xs_nr % numa_nr) != 0) {
+		D_INFO("Uneven split of helpers on sockets, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	if ((dss_tgt_nr % numa_nr) != 0) {
+		D_INFO("Uneven split of targets on sockets, bypassing multi-socket mode\n");
+		return false;
+	}
+
+	return true;
 }
 
 static int
-dss_topo_init()
+dss_legacy_mode(bool oversub)
+{
+	D_PRINT("Using legacy core allocation algorithm\n");
+	if (dss_core_offset >= dss_core_nr) {
+		D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+			"range [0, %u]\n",
+			dss_core_offset, dss_core_nr - 1);
+		return -DER_INVAL;
+	}
+
+	return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, oversub);
+}
+
+static int
+dss_topo_init(void)
 {
 	int		depth;
 	int		numa_node_nr;
-	int		num_cores_visited;
-	char		*cpuset;
+	int             num_cores_visited;
 	int		k;
+	int             numa_node;
+	int             rc = 0;
+	hwloc_obj_t     numa_obj;
 	hwloc_obj_t	corenode;
 	bool            tgt_oversub = false;
+	bool            multi_socket = false;
 
 	hwloc_topology_init(&dss_topo);
 	hwloc_topology_load(dss_topo);
@@ -318,23 +364,25 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool("DAOS_FORWARD_NEIGHBOR", &dss_forward_neighbor);
+	dss_tgt_nr = nr_threads;
 
-	/* if no NUMA node was specified, or NUMA data unavailable */
-	/* fall back to the legacy core allocation algorithm */
-	if (dss_numa_node == -1 || numa_node_nr <= 0) {
-		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
-					    tgt_oversub);
-
-		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
-				"(set by \"-f\" option),"
-				" should within range [0, %u]",
-				dss_core_offset, dss_core_nr - 1);
-			return -DER_INVAL;
-		}
-		return 0;
+	/** Set to -1 initially so we can detect when it's set explicitly to
+	 * maintain mode consistency between engines where one sets it to 0.
+	 */
+	if (dss_core_offset == -1) {
+		dss_core_offset = 0;
+		if (dss_multi_socket_check(tgt_oversub, numa_node_nr))
+			multi_socket = true;
+	} else {
+		D_INFO("Core offset specified, running in single socket mode\n");
 	}
+
+	/* Fall back to legacy mode if no socket was specified and
+	 * multi-socket mode is not possible or NUMA data is unavailable
+	 */
+	if ((!multi_socket && dss_numa_node == -1) || numa_node_nr <= 0)
+		return dss_legacy_mode(tgt_oversub);
 
 	if (dss_numa_node > numa_node_nr) {
 		D_ERROR("Invalid NUMA node selected. "
@@ -343,52 +391,76 @@ dss_topo_init()
 		return -DER_INVAL;
 	}
 
-	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
-	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
-		return -DER_INVAL;
-	}
+	D_ALLOC_ARRAY(dss_numa, numa_node_nr);
+	if (dss_numa == NULL)
+		return -DER_NOMEM;
 
-	/* create an empty bitmap, then set each bit as we */
-	/* find a core that matches */
-	core_allocation_bitmap = hwloc_bitmap_alloc();
-	if (core_allocation_bitmap == NULL) {
-		D_ERROR("Unable to allocate core allocation bitmap\n");
-		return -DER_INVAL;
-	}
+	for (numa_node = 0; numa_node < numa_node_nr; numa_node++) {
+		dss_numa[numa_node].ni_idx = numa_node;
+		numa_obj                   = hwloc_get_obj_by_depth(dss_topo, depth, numa_node);
+		if (numa_obj == NULL) {
+			D_ERROR("NUMA node %d was not found in the topology\n", numa_node);
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	dss_num_cores_numa_node = 0;
-	num_cores_visited = 0;
+		/* create an empty bitmap, then set each bit as we */
+		/* find a core that matches */
+		dss_numa[numa_node].ni_coremap = hwloc_bitmap_alloc();
+		if (dss_numa[numa_node].ni_coremap == NULL) {
+			D_ERROR("Unable to allocate core allocation bitmap\n");
+			D_GOTO(failed, rc = -DER_INVAL);
+		}
 
-	for (k = 0; k < dss_core_nr; k++) {
-		corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
-		if (corenode == NULL)
-			continue;
-		if (hwloc_bitmap_isincluded(corenode->cpuset,
-					    numa_obj->cpuset) != 0) {
-			if (num_cores_visited++ >= dss_core_offset) {
-				hwloc_bitmap_set(core_allocation_bitmap, k);
-				hwloc_bitmap_asprintf(&cpuset,
-						      corenode->cpuset);
+		dss_numa[numa_node].ni_core_nr = 0;
+		num_cores_visited              = 0;
+
+		for (k = 0; k < dss_core_nr; k++) {
+			corenode = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, k);
+			if (corenode == NULL)
+				continue;
+			if (hwloc_bitmap_isincluded(corenode->cpuset, numa_obj->cpuset) != 0) {
+				if (num_cores_visited++ >= dss_core_offset)
+					hwloc_bitmap_set(dss_numa[numa_node].ni_coremap, k);
+				dss_numa[numa_node].ni_core_nr++;
 			}
-			dss_num_cores_numa_node++;
+		}
+		if (multi_socket && numa_node > 0 &&
+		    dss_numa[numa_node].ni_core_nr != dss_numa[numa_node - 1].ni_core_nr) {
+			D_INFO("Non-uniform numa nodes, bypassing multi-socket mode\n");
+			D_FREE(dss_numa);
+			return dss_legacy_mode(false);
 		}
 	}
-	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
-	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    tgt_oversub);
-	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
-		return -DER_INVAL;
+	if (multi_socket) {
+		/** In this mode, we simply save the topology for later use but
+		 * still use all of the cores.
+		 */
+		D_PRINT("Using Multi-socket NUMA core allocation algorithm\n");
+		dss_numa_nr             = numa_node_nr;
+		dss_offload_per_numa_nr = dss_tgt_offload_xs_nr / dss_numa_nr;
+		dss_tgt_per_numa_nr     = dss_tgt_nr / dss_numa_nr;
+		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
 	}
 
+	if (dss_core_offset >= dss_numa[dss_numa_node].ni_core_nr) {
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
+			"[0, %d]\n",
+			dss_core_offset, dss_numa[dss_numa_node].ni_core_nr - 1);
+		return -DER_INVAL;
+	}
 	D_PRINT("Using NUMA core allocation algorithm\n");
-	return 0;
+
+	return dss_tgt_nr_check(dss_numa[dss_numa_node].ni_core_nr, dss_tgt_nr, tgt_oversub);
+failed:
+	D_FREE(dss_numa);
+	return rc;
+}
+
+static void
+dss_topo_fini(void)
+{
+	D_FREE(dss_numa);
 }
 
 static ABT_mutex		server_init_state_mutex;
@@ -826,7 +898,7 @@ server_init(int argc, char *argv[])
 		DAOS_VERSION, getpid(), dss_self_rank(), dss_tgt_nr,
 		dss_tgt_offload_xs_nr, dss_core_offset, dss_hostname);
 
-	if (numa_obj)
+	if (dss_numa && dss_numa_node != -1)
 		D_PRINT("Using NUMA node: %d", dss_numa_node);
 
 	return 0;
@@ -857,6 +929,7 @@ exit_drpc_fini:
 exit_metrics_init:
 	dss_engine_metrics_fini();
 	d_tm_fini();
+	/* dss_topo_fini cleans itself if it fails */
 exit_debug_init:
 	daos_debug_fini();
 	return rc;
@@ -918,6 +991,8 @@ server_fini(bool force)
 	D_INFO("dss_engine_metrics_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
+	dss_topo_fini();
+	D_INFO("dss_top_fini() done\n");
 	daos_debug_fini();
 	D_INFO("daos_debug_fini() done\n");
 }
