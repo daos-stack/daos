@@ -218,15 +218,17 @@ class AllChecks():
             return
 
         count = code.count('\\n')
-        if count < expected_newlines:
-            parts = code.split('"')
-            if len(parts) == 3 and 'DF_RC' not in code:
-                new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
-                line.fix(new_line)
-                line.warning("Line does not contain newline (autofixable)")
-            else:
-                line.warning("Line does not contain newline")
-        elif count > expected_newlines:
+        # Upon further checking newlines are optional for daos logging so do not check for zero
+        # or one new-line.
+        # if count < expected_newlines:
+        #    parts = code.split('"')
+        #    if len(parts) == 3 and 'DF_RC' not in code:
+        #        new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
+        #        line.fix(new_line)
+        #        line.warning("Line does not contain newline (autofixable)")
+        #    else:
+        #        line.warning("Line does not contain newline")
+        if count > expected_newlines:
             if count == 1:
                 line.warning("Line contains too many newlines")
             else:
