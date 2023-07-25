@@ -99,7 +99,7 @@ char *
 d_strndup(const char *s, size_t n) _dalloc_;
 int
 d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-/* Use a non-standard asprintf interface to allow is to enable compiler checks.*/
+/* Use a non-standard asprintf interface to enable compiler checks. */
 char *
 d_asprintf2(int *rc, const char *fmt, ...) _dalloc_ __attribute__((format(printf, 2, 3)));
 void *
