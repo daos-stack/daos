@@ -77,37 +77,35 @@ extern "C" {
 void d_srand(long int);
 long int d_rand(void);
 
+/* Instruct the compiler these are allocation functions that return a pointer, and if possible
+ * which function needs to be used to free them.
+ */
 #if HAVE_DEALLOC
-
-#define _d_free_attr __attribute__((malloc, malloc(d_free)))
-
+#define _dalloc_ __attribute__((malloc, malloc(d_free)))
 #else
-
-#define _d_free_attr __attribute__((malloc))
-
+#define _dalloc_ __attribute__((malloc))
 #endif
 
 /* memory allocating macros */
 void
 d_free(void *ptr);
 void *
-d_calloc(size_t nmemb, size_t size) _d_free_attr __attribute__((alloc_size(1, 2)));
+d_calloc(size_t nmemb, size_t size) _dalloc_ __attribute__((alloc_size(1, 2)));
 void *
-d_malloc(size_t size) _d_free_attr __attribute__((alloc_size(1)));
+d_malloc(size_t size) _dalloc_ __attribute__((alloc_size(1)));
 void *
-d_realloc(void *, size_t) _d_free_attr __attribute__((alloc_size(2)));
+d_realloc(void *, size_t) _dalloc_ __attribute__((alloc_size(2)));
 char *
-d_strndup(const char *s, size_t n) _d_free_attr;
+d_strndup(const char *s, size_t n) _dalloc_;
 int
 d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 /* Use a non-standard asprintf interface to allow is to enable compiler checks.*/
 char *
-d_asprintf2(int *rc, const char *fmt, ...) _d_free_attr __attribute__((format(printf, 2, 3)));
+d_asprintf2(int *rc, const char *fmt, ...) _dalloc_ __attribute__((format(printf, 2, 3)));
 void *
-d_aligned_alloc(size_t alignment, size_t size, bool zero) _d_free_attr
-    __attribute__((alloc_size(2)));
+d_aligned_alloc(size_t alignment, size_t size, bool zero) _dalloc_ __attribute__((alloc_size(2)));
 char *
-d_realpath(const char *path, char *resolved_path);
+d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
