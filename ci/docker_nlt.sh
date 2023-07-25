@@ -23,7 +23,7 @@ set +e
 
 sudo --preserve-env=VIRTUAL_ENV,PATH ./node_local_test.py \
     --no-root --memcheck no --system-ram-reserved 48 --server-debug WARN \
-    --log-usage-save nlt-coverage.xml "$@"
+    --log-usage-import nltr.json --log-usage-save nltr.xml "$@"
 
 RC=$?
 set -e

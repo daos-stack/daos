@@ -25,4 +25,4 @@ sudo bash -c ". ./utils/sl/setup_local.sh; ./utils/setup_daos_server_helper.sh"
 #			   --server-valgrind all
 
 ./utils/node_local_test.py --max-log-size 1500MiB --dfuse-dir /localhome/jenkins/ \
-    --log-usage-save nlt-coverage.xml --log-usage-export nltr.json all
+    --log-usage-save nltir.xml --log-usage-export nltr.json all

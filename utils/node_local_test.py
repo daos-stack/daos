@@ -4252,7 +4252,10 @@ def setup_log_test(conf):
     nlt_ct = ct_mod.CoverageTracer()
 
     if conf.args.log_usage_import:
-        nlt_ct.load(conf.args.log_usage_import)
+        if os.path.exists(conf.args.log_usage_import):
+            nlt_ct.load(conf.args.log_usage_import)
+        else:
+            print(f'Unable to load log-usage input file {conf.args.log_usage_import}')
 
     nlt_lt.wf = conf.wf
 
