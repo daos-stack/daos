@@ -2203,7 +2203,9 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 /* Helper function to issue update sync
  * Important note: iv_key and iv_value are destroyed right after this call,
  * as such they need to be copied over
- **/
+ *
+ * TODO: This is leaking memory on failure.
+ */
 static int
 crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,

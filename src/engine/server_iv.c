@@ -608,6 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (rc)
 		D_GOTO(out, rc);
 
+	/* A failure here appears to leak the memory from ivc_value_alloc() above for pools */
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);

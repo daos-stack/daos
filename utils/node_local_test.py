@@ -1081,7 +1081,7 @@ class DaosServer():
 
         cmd_env = get_base_env()
 
-        with tempfile.NamedTemporaryFile(prefix=f'dnt_cmd_{get_inc_id()}_{cmd[0]}_',
+        with tempfile.NamedTemporaryFile(prefix=f'dnt_pil4dfs_{cmd[0]}_{get_inc_id()}_',
                                          suffix='.log',
                                          dir=self.conf.tmp_dir,
                                          delete=False) as log_file:

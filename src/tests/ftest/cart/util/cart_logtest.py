@@ -176,7 +176,7 @@ class HwmCounter():
     def __init__(self):
         self.__val = 0
         self.__hwm = 0
-        self.__acount = 0
+        self.count = 0
         self.__fcount = 0
 
     def has_data(self):
@@ -186,12 +186,12 @@ class HwmCounter():
     def __str__(self):
         return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
                                                              self.__hwm,
-                                                             self.__acount) + \
-            '{} frees {} possible leaks'.format(self.__fcount, self.__acount - self.__fcount)
+                                                             self.count) + \
+            '{} frees {} possible leaks'.format(self.__fcount, self.count - self.__fcount)
 
     def add(self, val):
         """Add a value"""
-        self.__acount += 1
+        self.count += 1
         if val < 0:
             return
         self.__val += val
@@ -330,6 +330,7 @@ class LogTest():
         # Dict of active RPCs
         active_rpcs = OrderedDict()
 
+        fi_count = 0
         err_count = 0
         warnings_strict = False
         warnings_mode = False
@@ -378,10 +379,12 @@ class LogTest():
                     if self.hide_fi_calls and line.fac != 'external':
                         if line.is_fi_site():
                             show = False
+                            fi_count += 1
                         elif line.is_fi_alloc_fail():
                             show = False
                             self.fi_triggered = True
                             self.fi_location = line
+                            fi_count += 1
                         elif '-1009' in line.get_msg():
 
                             src_offset = line.lineno - self.fi_location.lineno
@@ -554,6 +557,9 @@ class LogTest():
         if not self.quiet:
             print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
                 pid, total_lines, trace_lines, p_trace))
+            if fi_count and memsize.count:
+                print("Number of faults injected {} {:.2f}%".format(
+                    fi_count, (fi_count / memsize.count) * 100))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
