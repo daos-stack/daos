@@ -38,12 +38,12 @@ dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inod
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 	if (ie->ie_rd_hdl) {
 		DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
 		ie->ie_rd_hdl->drh_valid = false;
 	}
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 
 	dfuse_cache_evict(ie);
 }
@@ -143,7 +143,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	oh->doh_rd_nextc = NULL;
 
 	/* Lock is to protect oh->doh_ie->ie_rd_hdl between readdir/closedir calls */
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
@@ -168,7 +168,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	}
 	D_FREE(hdl);
 unlock:
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 }
 
 static int
@@ -188,7 +188,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(fs_handle, ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = *stbuf;
 
@@ -295,7 +295,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	if (oh->doh_rd != NULL)
 		return 0;
 
-	D_SPIN_LOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_LOCK(&fs_handle->di_lock);
 
 	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
@@ -304,7 +304,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
-			D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+			D_SPIN_UNLOCK(&fs_handle->di_lock);
 			return ENOMEM;
 		}
 
@@ -315,7 +315,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 			oh->doh_ie->ie_rd_hdl   = oh->doh_rd;
 		}
 	}
-	D_SPIN_UNLOCK(&fs_handle->dpi_info->di_lock);
+	D_SPIN_UNLOCK(&fs_handle->di_lock);
 	return 0;
 }
 
@@ -539,9 +539,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
 			dfuse_dre_drop(fs_handle, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
+			hdl        = oh->doh_rd;
 			if (oh->doh_rd == NULL)
 				D_GOTO(out_reset, rc = ENOMEM);
-			hdl = oh->doh_rd;
 			DFUSE_TRA_UP(oh->doh_rd, oh, "readdir");
 		} else {
 			dfuse_readdir_reset(hdl);
@@ -551,22 +551,24 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				hdl->drh_dre[hdl->drh_dre_index].dre_offset, hdl->drh_anchor_index,
 				offset, hdl->drh_dre_index);
 
-		num = (uint32_t)offset - OFFSET_BASE;
-		while (num) {
-			rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor, &num,
-					 (NAME_MAX + 1) * num, NULL, NULL);
-			if (rc)
-				D_GOTO(out_reset, rc);
+		if (offset != 0) {
+			num = (uint32_t)offset - OFFSET_BASE;
+			while (num) {
+				rc = dfs_iterate(oh->doh_dfs, oh->doh_ie->ie_obj, &hdl->drh_anchor,
+						 &num, (NAME_MAX + 1) * num, NULL, NULL);
+				if (rc)
+					D_GOTO(out_reset, rc);
 
-			if (daos_anchor_is_eof(&hdl->drh_anchor)) {
-				dfuse_readdir_reset(hdl);
-				oh->doh_rd_offset = 0;
-				D_GOTO(reply, rc = 0);
+				if (daos_anchor_is_eof(&hdl->drh_anchor)) {
+					dfuse_readdir_reset(hdl);
+					oh->doh_rd_offset = 0;
+					D_GOTO(reply, rc = 0);
+				}
+
+				hdl->drh_anchor_index += num;
+
+				num = offset - OFFSET_BASE - hdl->drh_anchor_index;
 			}
-
-			hdl->drh_anchor_index += num;
-
-			num = offset - OFFSET_BASE - hdl->drh_anchor_index;
 		}
 		large_fetch = false;
 	}
@@ -647,9 +649,11 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 						    NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
+				D_FREE(drc);
 				continue;
 			} else if (rc != 0) {
 				DFUSE_TRA_DEBUG(oh, "Problem finding file %d", rc);
+				D_FREE(drc);
 				D_GOTO(reply, rc);
 			}
 
@@ -665,6 +669,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
 						  out, attr_len, &rlink);
 				if (rc != 0) {
+					dfs_release(obj);
+					D_FREE(drc);
 					D_GOTO(reply, rc);
 				}
 
@@ -769,7 +775,8 @@ reply:
 	return 0;
 
 out_reset:
-	dfuse_readdir_reset(hdl);
+	if (hdl)
+		dfuse_readdir_reset(hdl);
 	D_ASSERT(rc != 0);
 	return rc;
 }
@@ -797,6 +804,9 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 		size = 0;
 		D_GOTO(out, rc = 0);
 	}
+
+	if ((offset > 0 && offset < OFFSET_BASE) || offset < 0)
+		D_GOTO(out, rc = EINVAL);
 
 	/* Alignment is important for the buffer, the packing function will align up so a badly
 	 * allocated buffer will need to be padded at the start, to avoid that then align here.

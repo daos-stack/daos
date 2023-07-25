@@ -1291,7 +1291,6 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 {
 	/* Only be called if rebuild task failed */
 
-	D_ASSERT(error != 0);
 	/* retry with network error, since the pool map will be changed accordingly, so
 	 * rebuild job can be fixed by the new pool map anyway.
 	 */
@@ -1326,16 +1325,39 @@ retry_rebuild_task(struct rebuild_task *task, int error, daos_rebuild_opc_t *opc
 
 static int
 rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
-			       struct rebuild_global_pool_tracker *rgt)
+			       struct rebuild_global_pool_tracker *rgt, int ret)
 {
 	int rc = 0;
 	int rc1;
 
+	/* The original job is not being started correctly, let's give another chance */
 	if (rgt == NULL) {
+		/* ret = 0, it do not need any rebuild, only update target status */
+		if (ret == 0) {
+			D_INFO(DF_UUID"opc %u/%u only update tgt status: %d\n",
+			       DP_UUID(task->dst_pool_uuid), task->dst_rebuild_op,
+			       task->dst_map_ver, ret);
+			return 0;
+		}
+
+		D_INFO(DF_UUID"retry opc %u/%u: %d\n", DP_UUID(task->dst_pool_uuid),
+		       task->dst_rebuild_op, task->dst_map_ver, ret);
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, task->dst_reclaim_eph,
 					 task->dst_new_layout_version,
 					 &task->dst_tgts, task->dst_rebuild_op, 5);
 		return rc;
+	}
+
+	/* Do not need reschedule for upgrade, let's mark the upgrade as complete */
+	if (task->dst_rebuild_op == RB_OP_UPGRADE) {
+		rc1 = ret;
+
+		if (rgt != NULL && rgt->rgt_status.rs_errno != 0)
+			rc1 = rgt->rgt_status.rs_errno;
+
+		rc = ds_pool_mark_upgrade_completed(pool->sp_uuid, rc1);
+
+		D_INFO("Mark upgraded complete "DF_UUID": %d\n", DP_UUID(task->dst_pool_uuid), rc1);
 	}
 
 	if (!is_rebuild_global_done(rgt) || rgt->rgt_status.rs_errno != 0) {
@@ -1357,7 +1379,7 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 		if (rgt->rgt_init_scan) {
 			/* NB: dst_reclaim_ver is the minimum rebuild target version, once rebuild
 			 * fails, it will be used to discard all of the previous rebuild data
-			 * (reclaim - 1 see obj_reclaim()), but keep the inflight I/O data.
+			 * (reclaim - 1 see obj_reclaim()), but keep the in-flight I/O data.
 			 */
 			rc = ds_rebuild_schedule(pool, task->dst_reclaim_ver - 1,
 						 rgt->rgt_stable_epoch,
@@ -1542,29 +1564,22 @@ done:
 		}
 	} else if (rgt->rgt_status.rs_errno == 0) {
 update_tgts:
-		if (task->dst_rebuild_op == RB_OP_UPGRADE) {
-			rc = ds_pool_mark_upgrade_completed(pool->sp_uuid,
-							    rgt->rgt_status.rs_errno);
-			D_INFO("Mark upgraded complete "DF_UUID": %d\n",
-			       DP_UUID(task->dst_pool_uuid), rc);
-		} else {
-			if (task->dst_tgts.pti_number <= 0)
-				goto iv_stop;
+		if (task->dst_tgts.pti_number <= 0 || task->dst_rebuild_op == RB_OP_UPGRADE)
+			goto iv_stop;
 
-			if (task->dst_rebuild_op == RB_OP_EXCLUDE ||
-			    task->dst_rebuild_op == RB_OP_DRAIN) {
-				rc = ds_pool_tgt_exclude_out(pool->sp_uuid, &task->dst_tgts);
-				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
-				       task->dst_tgts.pti_ids[0].pti_id,
-				       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-			} else if (task->dst_rebuild_op == RB_OP_REINT ||
-				   task->dst_rebuild_op == RB_OP_EXTEND) {
-				rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
-				D_INFO("mark added target %d of "DF_UUID " UPIN: "DF_RC"\n",
-				       task->dst_tgts.pti_ids[0].pti_id,
-				       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
-			}
-		} /* No change needed for RB_OP_RECLAIM */
+		if (task->dst_rebuild_op == RB_OP_EXCLUDE ||
+		    task->dst_rebuild_op == RB_OP_DRAIN) {
+			rc = ds_pool_tgt_exclude_out(pool->sp_uuid, &task->dst_tgts);
+			D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
+			       task->dst_tgts.pti_ids[0].pti_id,
+			       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+		} else if (task->dst_rebuild_op == RB_OP_REINT ||
+			   task->dst_rebuild_op == RB_OP_EXTEND) {
+			rc = ds_pool_tgt_add_in(pool->sp_uuid, &task->dst_tgts);
+			D_INFO("mark added target %d of "DF_UUID " UPIN: "DF_RC"\n",
+			       task->dst_tgts.pti_ids[0].pti_id,
+			       DP_UUID(task->dst_pool_uuid), DP_RC(rc));
+		}
 	}
 iv_stop:
 	/* NB: even if there are some failures, the leader should
@@ -1586,8 +1601,7 @@ iv_stop:
 	}
 
 try_reschedule:
-	if (rgt != NULL || rc != 0)
-		rebuild_task_complete_schedule(task, pool, rgt);
+	rebuild_task_complete_schedule(task, pool, rgt, rc);
 output:
 	rc = rebuild_notify_ras_end(&task->dst_pool_uuid, task->dst_map_ver,
 				    RB_OP_STR(task->dst_rebuild_op),
@@ -1863,6 +1877,7 @@ ds_rebuild_schedule(struct ds_pool *pool, uint32_t map_ver,
 
 	new_task->dst_schedule_time = cur_ts + delay_sec;
 	new_task->dst_map_ver = map_ver;
+	new_task->dst_reclaim_ver = map_ver;
 	new_task->dst_rebuild_op = rebuild_op;
 	new_task->dst_reclaim_eph = reclaim_eph;
 	new_task->dst_new_layout_version = layout_version;
@@ -2092,7 +2107,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT) {
+	if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
 		rpt->rt_pool->sp_reintegrating--;
 	}
@@ -2557,15 +2573,15 @@ rebuild_cleanup(void)
 }
 
 struct dss_module rebuild_module = {
-	.sm_name	= "rebuild",
-	.sm_mod_id	= DAOS_REBUILD_MODULE,
-	.sm_ver		= DAOS_REBUILD_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= init,
-	.sm_fini	= fini,
-	.sm_cleanup	= rebuild_cleanup,
-	.sm_proto_fmt	= &rebuild_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= rebuild_handlers,
-	.sm_key		= &rebuild_module_key,
+    .sm_name        = "rebuild",
+    .sm_mod_id      = DAOS_REBUILD_MODULE,
+    .sm_ver         = DAOS_REBUILD_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = init,
+    .sm_fini        = fini,
+    .sm_cleanup     = rebuild_cleanup,
+    .sm_proto_fmt   = {&rebuild_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {rebuild_handlers},
+    .sm_key         = &rebuild_module_key,
 };

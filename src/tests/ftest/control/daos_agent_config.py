@@ -3,8 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from apricot import TestWithServers
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
@@ -35,7 +33,7 @@ class DaosAgentConfigTest(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=control,basic
-        :avocado: tags=agent_start,daos_agent_config_test,test_daos_agent_config_basic
+        :avocado: tags=DaosAgentConfigTest,test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()

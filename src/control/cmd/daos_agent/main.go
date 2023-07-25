@@ -9,7 +9,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path"
 
@@ -19,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -38,6 +38,7 @@ type cliOptions struct {
 	DumpInfo   dumpAttachInfoCmd      `command:"dump-attachinfo" description:"Dump system attachinfo"`
 	DumpTopo   hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
 	NetScan    netScanCmd             `command:"net-scan" description:"Perform local network fabric scan"`
+	Support    supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
 }
 
 type (
@@ -68,43 +69,23 @@ func (cmd *configCmd) setConfig(cfg *Config) {
 	cmd.cfg = cfg
 }
 
-type (
-	jsonOutputter interface {
-		enableJsonOutput(bool)
-		jsonOutputEnabled() bool
-		outputJSON(io.Writer, interface{}) error
-	}
-
-	jsonOutputCmd struct {
-		shouldEmitJSON bool
-	}
-)
-
-func (cmd *jsonOutputCmd) enableJsonOutput(emitJson bool) {
-	cmd.shouldEmitJSON = emitJson
-}
-
-func (cmd *jsonOutputCmd) jsonOutputEnabled() bool {
-	return cmd.shouldEmitJSON
-}
-
-func (cmd *jsonOutputCmd) outputJSON(out io.Writer, in interface{}) error {
-	data, err := json.MarshalIndent(in, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	_, err = out.Write(append(data, []byte("\n")...))
-	return err
-}
-
 func versionString() string {
-	return fmt.Sprintf("%s v%s", build.AgentName, build.DaosVersion)
+	return build.String(build.AgentName)
 }
 
-type versionCmd struct{}
+type versionCmd struct {
+	cmdutil.JSONOutputCmd
+}
 
 func (cmd *versionCmd) Execute(_ []string) error {
+	if cmd.JSONOutputEnabled() {
+		buf, err := build.MarshalJSON(build.AgentName)
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
 	_, err := fmt.Println(versionString())
 	return err
 }
@@ -114,11 +95,30 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
+type (
+	supportAgentConfig interface {
+		setSupportConf(string)
+		getSupportConf() string
+	}
+
+	supportAgentConfigCmd struct {
+		supportCfgPath string
+	}
+)
+
+func (cmd *supportAgentConfigCmd) setSupportConf(cfgPath string) {
+	cmd.supportCfgPath = cfgPath
+}
+
+func (cmd *supportAgentConfigCmd) getSupportConf() string {
+	return cmd.supportCfgPath
+}
+
 func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
+	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.SubcommandsOptional = true
-
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if len(args) > 0 {
 			exitWithError(log, errors.Errorf("unknown command %q", args[0]))
@@ -132,8 +132,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			logCmd.SetLog(log)
 		}
 
-		if jsonCmd, ok := cmd.(jsonOutputter); ok {
-			jsonCmd.enableJsonOutput(opts.JSON)
+		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
+			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+			// disable output on stdout other than JSON
+			log.ClearLevel(logging.LogLevelInfo)
 		}
 
 		if opts.Debug {
@@ -174,6 +176,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 				log.WithLogLevel(logging.LogLevel(cfg.LogLevel))
 			}
 			log.Debugf("agent config loaded from %s", cfgPath)
+		}
+
+		if suppCmd, ok := cmd.(supportAgentConfig); ok {
+			suppCmd.setSupportConf(cfgPath)
 		}
 
 		if opts.RuntimeDir != "" {
@@ -233,11 +239,12 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 			ctlCmd.setInvoker(invoker)
 		}
 
-		if err := cmd.Execute(args); err != nil {
-			return err
+		err = cmd.Execute(args)
+		if opts.JSON && wroteJSON.IsFalse() {
+			cmdutil.OutputJSON(os.Stdout, nil, err)
 		}
 
-		return nil
+		return err
 	}
 
 	_, err := p.Parse()

@@ -235,13 +235,16 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, vmdDetect vmdDete
 }
 
 // reset receives function pointers for external interfaces.
-func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) error {
+func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (*storage.BdevPrepareResponse, error) {
+	resp := &storage.BdevPrepareResponse{}
+
 	// Update request if VMD has been explicitly enabled and there are VMD endpoints configured.
 	if err := updatePrepareRequest(sb.log, &req, vmdDetect); err != nil {
-		return errors.Wrapf(err, "update prepare request")
+		return resp, errors.Wrapf(err, "update prepare request")
 	}
+	resp.VMDPrepared = req.EnableVMD
 
-	return errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
+	return resp, errors.Wrap(sb.script.Reset(&req), "unbinding nvme devices from userspace drivers")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
@@ -251,7 +254,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // devs specified in bdev_list and bdev_exclude provided in the server config file.
-func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
+func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, DetectVMD)
 }

@@ -38,9 +38,13 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
+		.nad_type	= CRT_PROV_OFI_TCP,
+		.nad_str	= "ofi+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
+	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
-		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -655,7 +659,7 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	strcpy(domain_name, domain);
+	strncpy(domain_name, domain, sizeof(domain_name) - 1);
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
 	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
