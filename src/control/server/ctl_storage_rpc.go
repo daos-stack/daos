@@ -355,6 +355,15 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 		for idx, dev := range ctlr.GetSmdDevices() {
 			rank := dev.GetRank()
 
+			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
+				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
+					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
+				dev.TotalBytes = 0
+				dev.AvailBytes = 0
+				dev.UsableBytes = 0
+				continue
+			}
+
 			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not usable: device state %q",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
@@ -366,14 +375,6 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
 				c.log.Noticef("SMD device %s (rank %d,  ctlr %s) not usable: missing storage info",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
-				dev.AvailBytes = 0
-				dev.UsableBytes = 0
-				continue
-			}
-
-			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
-				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
-					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
 				dev.AvailBytes = 0
 				dev.UsableBytes = 0
 				continue
@@ -506,12 +507,38 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 	}
 }
 
+func checkEnginesReady(instances []Engine) error {
+	for _, inst := range instances {
+		if !inst.IsReady() {
+			var err error = FaultDataPlaneNotStarted
+			if inst.IsStarted() {
+				err = errEngineNotReady
+			}
+
+			return errors.Wrapf(err, "instance %d", inst.Index())
+		}
+	}
+
+	return nil
+}
+
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 	resp := new(ctlpb.StorageScanResp)
+
+	// In the case that usage stats are being requested, relevant flags for both SCM and NVMe
+	// will be set and so fail if engines are not ready for comms. This restriction should not
+	// be applied if only the Meta flag is set in the NVMe component of the request to continue
+	// to support off-line storage scan functionality which uses cached stats (e.g. dmg storage
+	// scan --nvme-meta).
+	if req.Scm.Usage && req.Nvme.Meta {
+		if err := checkEnginesReady(c.harness.Instances()); err != nil {
+			return nil, err
+		}
+	}
 
 	respScm, err := c.scanScm(ctx, req.Scm)
 	if err != nil {

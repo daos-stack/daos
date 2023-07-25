@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,21 +31,12 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 9
+#define DAOS_OBJ_VERSION 8
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
 
-#define QUERY_KEY_0							\
-	X(DAOS_OBJ_RPC_QUERY_KEY,					\
-		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler_0, NULL, "key_query")
-#define QUERY_KEY_1							\
-	X(DAOS_OBJ_RPC_QUERY_KEY,					\
-		0, &CQF_obj_query_key,					\
-		ds_obj_query_key_handler_1, NULL, "key_query")
-
-#define OBJ_PROTO_CLI_RPC_LIST(ver)					\
+#define OBJ_PROTO_CLI_RPC_LIST						\
 	X(DAOS_OBJ_RPC_UPDATE,						\
 		0, &CQF_obj_rw,						\
 		ds_obj_rw_handler, NULL, "update")			\
@@ -74,9 +65,8 @@
 		0, &CQF_obj_punch,					\
 		ds_obj_punch_handler, NULL, "akey_punch")		\
 	X(DAOS_OBJ_RPC_QUERY_KEY,					\
-	  0, ver == 0 ? &CQF_obj_query_key_0 : &CQF_obj_query_key_1,	\
-	  ver == 0 ? ds_obj_query_key_handler_0 :			\
-	  ds_obj_query_key_handler_1, NULL, "key_query")		\
+		0, &CQF_obj_query_key,					\
+		ds_obj_query_key_handler, NULL, "key_query")		\
 	X(DAOS_OBJ_RPC_SYNC,						\
 		0, &CQF_obj_sync,					\
 		ds_obj_sync_handler, NULL, "obj_sync")			\
@@ -111,14 +101,13 @@
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e, f) a,
 enum obj_rpc_opc {
-	OBJ_PROTO_CLI_RPC_LIST(1)
+	OBJ_PROTO_CLI_RPC_LIST
 	OBJ_PROTO_CLI_COUNT,
 	OBJ_PROTO_CLI_LAST = OBJ_PROTO_CLI_COUNT - 1,
 };
 #undef X
 
-extern struct crt_proto_format obj_proto_fmt_0;
-extern struct crt_proto_format obj_proto_fmt_1;
+extern struct crt_proto_format obj_proto_fmt;
 extern int dc_obj_proto_version;
 
 /* Helper function to convert opc to name */
@@ -127,7 +116,7 @@ obj_opc_to_str(crt_opcode_t opc)
 {
 	switch (opc) {
 #define X(a, b, c, d, e, f) case a: return f;
-		OBJ_PROTO_CLI_RPC_LIST(1)
+		OBJ_PROTO_CLI_RPC_LIST
 #undef X
 	}
 	return "unknown";
@@ -306,7 +295,7 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((daos_key_t)		(okqi_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqi_akey)		CRT_VAR)
 
-#define DAOS_OSEQ_OBJ_QUERY_KEY_0	/* output fields */	 \
+#define DAOS_OSEQ_OBJ_QUERY_KEY		/* output fields */	 \
 	((int32_t)		(okqo_ret)		CRT_VAR) \
 	((uint32_t)		(okqo_map_version)	CRT_VAR) \
 	((uint64_t)		(okqo_epoch)		CRT_VAR) \
@@ -320,27 +309,11 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	/* recx for EC parity space */				 \
 	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
 	/* recx for punched EC extents */			 \
-	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR)
-
-#define DAOS_OSEQ_OBJ_QUERY_KEY_1	/* output fields */	 \
-	((int32_t)		(okqo_ret)		CRT_VAR) \
-	((uint32_t)		(okqo_map_version)	CRT_VAR) \
-	((uint64_t)		(okqo_epoch)		CRT_VAR) \
-	((uint32_t)		(okqo_flags)		CRT_VAR) \
-	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
-	((daos_key_t)		(okqo_dkey)		CRT_VAR) \
-	((daos_key_t)		(okqo_akey)		CRT_VAR) \
-	/* recx for visible extent */				 \
-	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
-	/* recx for EC parity space */				 \
-	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
-	/* recx for punched EC extents */			 \
 	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR) \
 	/* epoch for max write */				 \
 	((uint64_t)		(okqo_max_epoch)	CRT_VAR)
 
-CRT_RPC_DECLARE(obj_query_key_0, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_0)
-CRT_RPC_DECLARE(obj_query_key_1, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY_1)
+CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
 #define DAOS_ISEQ_OBJ_SYNC /* input fields */			 \
 	((uuid_t)		(osi_co_hdl)		CRT_VAR) \

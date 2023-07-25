@@ -1797,7 +1797,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_hdl		= agg_param->ap_cont_handle;
 	/* set epr_lo as zero to pass-through possibly existed snapshot
 	 * between agg_param->ap_epr.epr_lo and .epr_hi.
 	 */
@@ -2326,6 +2326,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
+	md.omd_pda = props.dcp_ec_pda;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 

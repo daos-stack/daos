@@ -117,11 +117,11 @@ crt_hdlr_ctl_get_uri_cache(crt_rpc_t *rpc_req)
 	out_args->cguc_grp_cache.ca_count  = uri_cache.idx; /* actual count */
 	rc = 0;
 out:
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	out_args->cguc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 	D_DEBUG(DB_TRACE, "sent reply to get uri cache request\n");
-	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 	D_FREE(uri_cache.grp_cache);
 }
 

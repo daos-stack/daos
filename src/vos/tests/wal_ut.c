@@ -7,7 +7,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "bio_ut.h"
-#include "../bio_wal.h"
+#include "../../bio/bio_wal.h"
 
 static void
 ut_mc_fini(struct bio_ut_args *args)

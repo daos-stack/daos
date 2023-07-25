@@ -141,6 +141,8 @@ struct daos_obj_md {
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
 	uint32_t		omd_fdom_lvl;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
 };
 
 /** object shard metadata stored in each container shard */
@@ -479,6 +481,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);
@@ -497,6 +500,7 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
 
@@ -517,6 +521,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void
@@ -768,16 +774,14 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
-			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
-		D_ERROR("\n");
 	}
 }
 

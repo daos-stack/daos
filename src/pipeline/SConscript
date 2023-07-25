@@ -1,0 +1,35 @@
+"""Build objects"""
+
+
+def scons():
+    """Execute build"""
+    Import('env', 'prereqs', 'libdaos_tgts')
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+
+    # Common pipeline code
+    common_tgts = denv.SharedObject(['pipeline_rpc.c', 'common_pipeline.c'])
+
+    # Pipeline client library
+    dc_pipeline_tgts = denv.SharedObject(['cli_pipeline.c', 'pipeline_task.c',
+                                          'cli_mod.c'])
+    libdaos_tgts.extend(dc_pipeline_tgts + common_tgts)
+
+    if not prereqs.server_requested():
+        return
+
+    # generate server module
+    senv = denv.Clone()
+    srv = senv.d_library('pipeline',
+                         common_tgts + ['srv_pipeline.c', 'srv_mod.c',
+                                        'filter.c', 'filter_funcs.c',
+                                        'aggr_funcs.c', 'getdata_funcs.c'],
+                         install_off="../..")
+    senv.Install('$PREFIX/lib64/daos_srv', srv)
+
+
+if __name__ == "SCons.Script":
+    scons()
