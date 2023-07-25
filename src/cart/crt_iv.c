@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2291,7 +2291,6 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	D_ALLOC_PTR(iv_sync_cb);
 	if (iv_sync_cb == NULL) {
-		/* Avoid checkpatch warning */
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 

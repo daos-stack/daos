@@ -776,7 +776,7 @@ class DaosServer():
                      '--runtime_dir', self.agent_dir,
                      '--logfile', self.agent_log.name]
 
-        if not self.conf.args.server_debug:
+        if not self.conf.args.server_debug and not self.conf.args.client_debug:
             agent_cmd.append('--debug')
 
         self._agent = subprocess.Popen(agent_cmd)
@@ -5824,11 +5824,14 @@ def server_fi(args):
         cont = create_cont(conf, pool=pool, ctype='POSIX', label='server_test')
 
         # Instruct the server to fail a % of allocations.
-        server.set_fi(probability=5)
+        server.set_fi(probability=1)
 
         for idx in range(100):
             server.run_daos_client_cmd_pil4dfs(
                 ['touch', f'file.{idx}'], container=cont, check=False, report=False)
+            server.run_daos_client_cmd_pil4dfs(
+                ['dd', 'if=/dev/zero', f'of=file.{idx}', 'bs=1', 'count=1024'],
+                container=cont, check=False, report=False)
             server.run_daos_client_cmd_pil4dfs(
                 ['rm', '-f', f'file.{idx}'], container=cont, check=False, report=False)
 

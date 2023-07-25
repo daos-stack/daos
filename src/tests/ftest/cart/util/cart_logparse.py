@@ -313,7 +313,7 @@ class LogLine():
         return self.get_field(2) == 'realloc'
 
     def realloc_pointers(self):
-        """Returns a tuple of old and new memory addresses"""
+        """Returns a tuple of new and old memory addresses"""
         old_pointer = self.get_field(-1).rstrip('.')
 
         # Working out the old pointer is tricky, realloc will have two or three
