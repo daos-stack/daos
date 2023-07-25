@@ -1111,7 +1111,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
 		if (rc) {
 			D_FREE(ult_arg);
-			return -DER_NOMEM;
+			return rc;
 		}
 	}
 
