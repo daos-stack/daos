@@ -845,6 +845,7 @@ exit_drpc_fini:
 	drpc_fini();
 exit_metrics_init:
 	dss_engine_metrics_fini();
+	d_log_tm_fini();
 	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
@@ -905,6 +906,8 @@ server_fini(bool force)
 	D_INFO("drpc_fini() done\n");
 	dss_engine_metrics_fini();
 	D_INFO("dss_engine_metrics_fini() done\n");
+	d_log_tm_fini();
+	D_INFO("d_log_tm_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();

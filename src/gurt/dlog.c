@@ -175,13 +175,31 @@ d_log_tm_init()
 				     "Facility error counter", NULL, "errors/%s",
 				     d_log_xst.dlog_facs[i].fac_aname);
 		if (rc != 0)
-			D_GOTO(unlock, rc);
+			D_GOTO(free_nctrs, rc);
 	}
 	dlog_facs_err_ctrs = nctrs;
+	goto unlock;
 
+free_nctrs:
+	free(nctrs);
 unlock:
 	clog_unlock();
 	return rc;
+}
+
+/**
+ * d_log_tm_fini: Finalize logging telemetry.
+*/
+void
+d_log_tm_fini()
+{
+	clog_lock();
+
+	if (dlog_facs_err_ctrs)
+		/* counters freed by d_tm_fini() */
+		free(dlog_facs_err_ctrs);
+
+	clog_unlock();
 }
 
 /**
@@ -685,8 +703,6 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * If logging an error or higher, increment the error counter for
 	 * the facility. This can be used by monitoring solutions to detect
 	 * increased error rates.
-	 * 
-	 * TODO: Count by errno too? Might be too expensive.
 	 */
 	if (lvl >= DLOG_ERR && dlog_facs_err_ctrs && dlog_facs_err_ctrs[fac])
 		d_tm_inc_counter(dlog_facs_err_ctrs[fac], 1);
