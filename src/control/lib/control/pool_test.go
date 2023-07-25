@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -349,6 +350,7 @@ func TestControl_PoolEvict(t *testing.T) {
 }
 
 func TestControl_PoolCreate(t *testing.T) {
+	mockExt := auth.NewMockExtWithUser("poolTest", 0, 0)
 	strVal := func(s string) daos.PoolPropertyValue {
 		v := daos.PoolPropertyValue{}
 		v.SetString(s)
@@ -493,6 +495,9 @@ func TestControl_PoolCreate(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
+			if tc.req.userExt == nil {
+				tc.req.userExt = mockExt
+			}
 			gotResp, gotErr := PoolCreate(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

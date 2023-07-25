@@ -153,8 +153,11 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
 	if err != nil {
 		return
 	}
@@ -232,6 +235,7 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		userExt    auth.UserExt
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList `json:"-"`
