@@ -833,7 +833,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
 	}
 
-	resp := req.Properties
 	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
 	for _, prop := range pbResp.GetProperties() {
 		if _, found := pbMap[prop.GetNumber()]; found {
@@ -842,11 +841,12 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
-	for _, prop := range resp {
+	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
+	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
-			// ??? remove prop entry in resp otherwise marsha fails later ???
+			// Properties can be missing due to DAOS-11418 and DAOS-13919
+			rpcClient.Debugf("can't find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -857,6 +857,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		default:
 			return nil, errors.Errorf("unable to represent response value %+v", v)
 		}
+		resp = append(resp, prop)
 	}
 
 	return resp, nil
