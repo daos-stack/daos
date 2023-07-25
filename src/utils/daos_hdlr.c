@@ -53,14 +53,12 @@ struct file_dfs {
 #define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
 	do {                                                                                       \
 		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
-		fflush((AP)->errstream);                                                           \
 	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
 #define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
 	do {                                                                                       \
 		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
-		fflush((AP)->errstream);                                                           \
 	} while (0)
 
 static int
@@ -2441,7 +2439,8 @@ dfuse_count_query(struct cmd_args_s *ap)
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
 		return daos_errno2der(rc);
 	}
 
@@ -2450,8 +2449,12 @@ dfuse_count_query(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 
@@ -2542,8 +2545,12 @@ dfuse_evict(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 

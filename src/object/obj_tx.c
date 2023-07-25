@@ -31,6 +31,9 @@
 #define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
 #define DTX_SUB_REQ_DEF		16
 
+/* Whether check redundancy group validation when DTX resync. */
+bool tx_verify_rdg;
+
 enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
@@ -83,6 +86,7 @@ struct dc_tx {
 				 tx_for_convert:1,
 				 tx_has_cond:1,
 				 tx_renew:1,
+				 tx_closed:1,
 				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -1904,7 +1908,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * are in the same redundancy group, be as optimization, we will
 	 * not store modification group information inside 'dm_data'.
 	 */
-	if (act_grp_cnt == 1)
+	if (act_grp_cnt == 1 || !tx_verify_rdg)
 		size = 0;
 
 	size += sizeof(*ddt) * act_tgt_cnt;
@@ -1988,7 +1992,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	mbs->dm_tgt_cnt = act_tgt_cnt;
-	mbs->dm_grp_cnt = act_grp_cnt;
+	if (!tx_verify_rdg)
+		/* Set dm_grp_cnt as 1 to bypass redundancy group check. */
+		mbs->dm_grp_cnt = 1;
+	else
+		mbs->dm_grp_cnt = act_grp_cnt;
 	mbs->dm_data_size = size;
 
 	ddt = &mbs->dm_tgts[0];
@@ -2034,6 +2042,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		 */
 		dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link);
 		D_FREE(dtr);
+	} else if (!tx_verify_rdg) {
+		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link)) != NULL)
+			D_FREE(dtr);
 	} else {
 		ptr = ddt;
 		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg,
@@ -2463,6 +2474,9 @@ out:
 static void
 dc_tx_close_internal(struct dc_tx *tx)
 {
+	D_ASSERT(tx->tx_closed == 0);
+
+	tx->tx_closed = 1;
 	dc_tx_cleanup(tx);
 	dc_tx_hdl_unlink(tx);
 	dc_tx_decref(tx);
@@ -3575,9 +3589,6 @@ again:
 		goto again;
 
 out:
-	if (rc != 0 && tx->tx_has_cond)
-		dc_tx_close_internal(tx);
-
 	return rc;
 }
 
@@ -3588,9 +3599,7 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 	struct dc_tx			*tx = conv->conv_tx;
 	struct dc_object		*obj = conv->conv_obj;
 	enum obj_rpc_opc		 opc = conv->conv_opc;
-	uint32_t			 backoff = 0;
 	int				 rc = task->dt_result;
-	bool				 tx_need_close = true;
 
 	D_DEBUG(DB_IO, "Convert task %p/%p with DTX " DF_DTI ", pm_ver %u: %d\n", task,
 		tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, rc);
@@ -3602,15 +3611,11 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 		 * dc_tx_convert_post().
 		 */
 		task->dt_result = 0;
-		tx_need_close = false;
 
-		rc = dc_tx_convert_restart(tx, obj, opc, &backoff);
-		if (!tx->tx_has_cond)
-			rc = dc_tx_convert_post(tx, obj, opc, rc, backoff);
-	}
-
-	if (tx_need_close)
+		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
+	} else {
 		dc_tx_close_internal(tx);
+	}
 
 	/* Drop object reference held via dc_tx_convert_post(). */
 	obj_decref(obj);
@@ -3630,7 +3635,14 @@ dc_tx_convert_post(struct dc_tx *tx, struct dc_object *obj, enum obj_rpc_opc opc
 	int				 rc = 0;
 	bool				 tx_need_close = true;
 
-	D_ASSERT(result != -DER_TX_RESTART);
+	if (unlikely(result == -DER_TX_RESTART)) {
+		result = dc_tx_convert_restart(tx, obj, opc, &backoff);
+		/* For condition case, dc_tx_convert_post() will be triggered by dc_tx_post() some
+		 * time later after being re-attached.
+		 */
+		if (result == 0 && tx->tx_has_cond)
+			return 0;
+	}
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
@@ -3687,7 +3699,6 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc = 0;
-	uint32_t	 backoff = 0;
 	daos_handle_t	 coh;
 
 	D_ASSERT(obj != NULL);
@@ -3709,15 +3720,13 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	tx->tx_for_convert = 1;
 	tx->tx_orig_task = task;
 	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task, 0, false);
-	if (unlikely(rc == -DER_TX_RESTART))
-		rc = dc_tx_convert_restart(tx, obj, opc, &backoff);
 
 	/* The 'task' will be completed via dc_tx_convert_post(). For condition case,
 	 * dc_tx_convert_post() will be triggered via condition callback; otherwise,
 	 * call dc_tx_convert_post() directly.
 	 */
-	if (!tx->tx_has_cond)
-		rc = dc_tx_convert_post(tx, obj, opc, rc, backoff);
+	if (!tx->tx_has_cond || rc != 0)
+		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
 
 out:
 	if (tx != NULL)
