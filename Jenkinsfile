@@ -1056,11 +1056,11 @@ pipeline {
                         }
                     }
                     steps {
-                        unstash('nltr')
                         job_step_update(
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
+                        unstash('nltr')
                         job_step_update(nlt_test())
                         recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
                                         id: 'fir', name: 'Fault Injection Report')
