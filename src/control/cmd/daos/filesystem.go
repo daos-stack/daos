@@ -499,9 +499,9 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
 	if cmd.Ino != 0 {
 		if ap.dfuse_mem.found {
-			cmd.Infof(" Inode %#lx resident", cmd.Ino)
+			cmd.Infof(" Inode %d resident", cmd.Ino)
 		} else {
-			cmd.Infof(" Inode %#lx not resident", cmd.Ino)
+			cmd.Infof(" Inode %d not resident", cmd.Ino)
 		}
 	}
 

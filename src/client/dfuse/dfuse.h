@@ -43,6 +43,9 @@ struct dfuse_info {
 	 */
 	pthread_spinlock_t   di_lock;
 
+	/* RW lock used for force filesystem query ioctl to block for pending forget calls. */
+	pthread_rwlock_t     di_forget_lock;
+
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
