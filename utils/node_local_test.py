@@ -1121,6 +1121,11 @@ class DaosServer():
             print('Stdout from command')
             print(rc.stdout.decode('utf-8').strip())
 
+        # if cwd and os.listdir(tmp_dir.name):
+        #    print('Temporary directory is not empty')
+        #    print(os.listdir(tmp_dir.name))
+        #    assert False, 'Files left in tmp dir by pil4dfs'
+
         # Run log_test before other checks so this can warn for errors.
         log_test(self.conf, log_name)
 
