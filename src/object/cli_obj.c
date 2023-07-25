@@ -1484,23 +1484,27 @@ fail:
 }
 
 int
+dc_obj_close_direct(daos_handle_t oh)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+	obj_hdl_unlink(obj);
+	obj_decref(obj);
+	return 0;
+}
+
+int
 dc_obj_close(tse_task_t *task)
 {
 	daos_obj_close_t	*args;
-	struct dc_object	*obj;
 	int			 rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	obj = obj_hdl2ptr(args->oh);
-	if (obj == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	obj_hdl_unlink(obj);
-	obj_decref(obj);
-
-out:
+	rc = dc_obj_close_direct(args->oh);
 	tse_task_complete(task, rc);
 	return 0;
 }
@@ -5738,6 +5742,8 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 		}
 
 		if (daos_anchor_is_eof(&sub_anchor->ssa_anchor)) {
+			int j;
+
 			if (sub_anchor->ssa_sgl.sg_iovs)
 				d_sgl_fini(&sub_anchor->ssa_sgl, true);
 			if (sub_anchor->ssa_recxs != NULL)
@@ -5747,7 +5753,13 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 			D_DEBUG(DB_IO, DF_OID" anchor eof %d/%d/%u\n",
 				DP_OID(obj_auxi->obj->cob_md.omd_id), i, shards_nr,
 				sub_anchor->ssa_shard);
-			shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
+			/* Set the target to IGNORE to skip the shard RPC */
+			for (j = 0; j < tgt_nr; j++) {
+				if (shard_tgts[j].st_shard == sub_anchor->ssa_shard) {
+					shard_tgts[j].st_rank = DAOS_TGT_IGNORE;
+					break;
+				}
+			}
 			continue;
 		}
 	}
