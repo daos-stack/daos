@@ -907,7 +907,7 @@ func propWithVal(key, val string) *daos.PoolProperty {
 	return prop
 }
 
-func TestPoolSetProp(t *testing.T) {
+func TestControl_PoolSetProp(t *testing.T) {
 	defaultReq := &PoolSetPropReq{
 		ID:         test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
@@ -993,12 +993,102 @@ func TestPoolSetProp(t *testing.T) {
 	}
 }
 
-func TestPoolGetProp(t *testing.T) {
+func propWithNoVal(s string) *daos.PoolProperty {
+	p := propWithVal(s, "")
+	p.Value = daos.PoolPropertyValue{}
+	return p
+}
+
+func TestControl_PoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
 		ID: test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", ""),
 			propWithVal("policy", "type=io_size")},
 	}
+	props2_2 := []*mgmtpb.PoolProperty{
+		{
+			Number: propWithVal("label", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+		},
+		{
+			Number: propWithVal("space_rb", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{42},
+		},
+		{
+			Number: propWithVal("upgrade_status", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("reclaim", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
+		},
+		{
+			Number: propWithVal("self_heal", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSelfHealingAutoExclude},
+		},
+		{
+			Number: propWithVal("ec_cell_sz", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{4096},
+		},
+		{
+			Number: propWithVal("rd_fac", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("ec_pda", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("global_version", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("rp_pda", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{2},
+		},
+		{
+			Number: propWithVal("policy", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
+		},
+		{
+			Number: propWithVal("perf_domain", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{255},
+		},
+		{
+			Number: propWithVal("svc_list", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
+		},
+	}
+	props2_4 := append(props2_2, []*mgmtpb.PoolProperty{
+		{
+			Number: propWithVal("scrub", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
+		},
+		{
+			Number: propWithVal("scrub-freq", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1024},
+		},
+		{
+			Number: propWithVal("scrub-thresh", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{0},
+		},
+		{
+			Number: propWithVal("svc_rf", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{3},
+		},
+		{
+			Number: propWithVal("checkpoint", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
+		},
+		{
+			Number: propWithVal("checkpoint_freq", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{10000},
+		},
+		{
+			Number: propWithVal("checkpoint_thresh", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{20},
+		},
+	}...)
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -1071,88 +1161,7 @@ func TestPoolGetProp(t *testing.T) {
 		"all props requested": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
-					Properties: []*mgmtpb.PoolProperty{
-						{
-							Number: propWithVal("label", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
-						},
-						{
-							Number: propWithVal("space_rb", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{42},
-						},
-						{
-							Number: propWithVal("upgrade_status", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("reclaim", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
-						},
-						{
-							Number: propWithVal("self_heal", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSelfHealingAutoExclude},
-						},
-						{
-							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{4096},
-						},
-						{
-							Number: propWithVal("rd_fac", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("ec_pda", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("global_version", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("rp_pda", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{2},
-						},
-						{
-							Number: propWithVal("policy", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
-						},
-						{
-							Number: propWithVal("perf_domain", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{255},
-						},
-						{
-							Number: propWithVal("scrub", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
-						},
-						{
-							Number: propWithVal("scrub-freq", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
-						},
-						{
-							Number: propWithVal("scrub-thresh", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{0},
-						},
-						{
-							Number: propWithVal("svc_rf", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{3},
-						},
-						{
-							Number: propWithVal("svc_list", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
-						},
-						{
-							Number: propWithVal("checkpoint", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
-						},
-						{
-							Number: propWithVal("checkpoint_freq", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{10000},
-						},
-						{
-							Number: propWithVal("checkpoint_thresh", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{20},
-						},
-					},
+					Properties: props2_4,
 				}),
 			},
 			req: &PoolGetPropReq{
@@ -1212,6 +1221,42 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("space_rb", "42"),
 			},
 		},
+		"missing props in response; compatibility with old pool": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: props2_2,
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: test.MockUUID(),
+			},
+			expResp: []*daos.PoolProperty{
+				propWithNoVal("checkpoint"),
+				propWithNoVal("checkpoint_freq"),
+				propWithNoVal("checkpoint_thresh"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
+				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
+				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("rp_pda", "2"),
+				propWithNoVal("scrub"),
+				propWithNoVal("scrub-freq"),
+				propWithNoVal("scrub-thresh"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
+				propWithNoVal("svc_rf"),
+				propWithVal("upgrade_status", "in progress"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1243,6 +1288,56 @@ func TestPoolGetProp(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp []*daos.PoolProperty
+		exp  string
+	}{
+		"nil": {
+			exp: "null",
+		},
+		"missing props; compatibility with old pool": {
+			resp: []*daos.PoolProperty{
+				propWithNoVal("checkpoint"),
+				propWithNoVal("checkpoint_freq"),
+				propWithNoVal("checkpoint_thresh"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
+				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
+				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("rp_pda", "2"),
+				propWithNoVal("scrub"),
+				propWithNoVal("scrub-freq"),
+				propWithNoVal("scrub-thresh"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
+				propWithNoVal("svc_rf"),
+				propWithVal("upgrade_status", "in progress"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := json.Marshal(tc.resp)
+			if err != nil {
+				t.Fatalf("Unexpected error: %s\n", err.Error())
+			}
+
+			if diff := cmp.Diff(tc.exp, string(got)); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

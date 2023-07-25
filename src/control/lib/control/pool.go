@@ -846,6 +846,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbProp, found := pbMap[prop.Number]
 		if !found {
 			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			// ??? remove prop entry in resp otherwise marsha fails later ???
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
