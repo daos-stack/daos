@@ -481,6 +481,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);

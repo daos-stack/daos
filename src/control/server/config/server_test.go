@@ -1009,7 +1009,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				c.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.RamdiskSize = 11
 				return c.WithNrHugepages(16896)
 			},
-			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*10, 0),
+			expErr: FaultConfigRamdiskOverMaxMem(humanize.GiByte*11, humanize.GiByte*9, 0),
 		},
 		"low mem": {
 			// 46 total - 40 reserved = 6 for tmpfs (3 gib per engine - too low)
@@ -1019,7 +1019,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			},
 			// error indicates min RAM needed = 40 + 4 gib per engine
 			expErr: storage.FaultRamdiskLowMem("Total", storage.MinRamdiskMem,
-				humanize.GiByte*48, humanize.GiByte*46),
+				humanize.GiByte*50, humanize.GiByte*46),
 		},
 		"custom value set": {
 			memTotBytes: humanize.GiByte * 60,
@@ -1036,7 +1036,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithNrHugepages(16896)
 			},
-			expRamdiskSize: 10,
+			expRamdiskSize: 9,
 		},
 		"custom system_ram_reserved value set": {
 			// 33 huge mem + 2 sys rsv + 2 engine rsv = 37 gib reserved mem
@@ -1046,7 +1046,7 @@ func TestServerConfig_SetRamdiskSize(t *testing.T) {
 				c.SystemRamReserved = 2
 				return c.WithNrHugepages(16896)
 			},
-			expRamdiskSize: 11,
+			expRamdiskSize: 10,
 		},
 		"no scm configured on second engine": {
 			memTotBytes: humanize.GiByte * 80,
