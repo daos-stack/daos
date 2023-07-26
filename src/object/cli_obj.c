@@ -5840,6 +5840,8 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 		}
 
 		if (daos_anchor_is_eof(&sub_anchor->ssa_anchor)) {
+			int j;
+
 			if (sub_anchor->ssa_sgl.sg_iovs)
 				d_sgl_fini(&sub_anchor->ssa_sgl, true);
 			if (sub_anchor->ssa_recxs != NULL)
@@ -5849,7 +5851,13 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 			D_DEBUG(DB_IO, DF_OID" anchor eof %d/%d/%u\n",
 				DP_OID(obj_auxi->obj->cob_md.omd_id), i, shards_nr,
 				sub_anchor->ssa_shard);
-			shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
+			/* Set the target to IGNORE to skip the shard RPC */
+			for (j = 0; j < tgt_nr; j++) {
+				if (shard_tgts[j].st_shard == sub_anchor->ssa_shard) {
+					shard_tgts[j].st_rank = DAOS_TGT_IGNORE;
+					break;
+				}
+			}
 			continue;
 		}
 	}
