@@ -16,6 +16,10 @@ TMP_DIR=$(mktemp -d)
 
 cp utils/node_local_test.py utils/nlt_server.yaml .build_vars.json "$TMP_DIR"
 cp src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py "$TMP_DIR"
+if [ -e nltr.json ]
+then
+  cp nltr.json "$TMP_DIR"
+fi
 
 pushd "$TMP_DIR"
 
