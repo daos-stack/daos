@@ -615,7 +615,7 @@ open_handle_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_obj, rc);
+		return rc;
 	}
 
 	/** check and set array metadata in case of array_open */
