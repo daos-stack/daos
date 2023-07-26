@@ -7,6 +7,9 @@ server_config:
   system_ram_reserved: 6
   engines:
     0:
+      targets: 4
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       storage:
         0:
           class: ram

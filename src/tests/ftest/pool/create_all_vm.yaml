@@ -33,7 +33,7 @@ server_config:
   system_ram_reserved: 6
   engines:
     0:
-      targets: 5
+      targets: 4
       nr_xs_helpers: 0
       storage:
         0:

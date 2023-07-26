@@ -5421,7 +5421,7 @@ def test_alloc_fail_copy(server, conf, wf):
         os.symlink('broken', join(sub_dir, 'broken_s'))
         os.symlink('file.0', join(sub_dir, 'link'))
 
-        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', src_dir,
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', sub_dir,
                                  '--dst', f'daos://{pool.id()}/aft_base'])
         assert rc.returncode == 0, rc
 
