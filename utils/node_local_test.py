@@ -5865,7 +5865,8 @@ def run(wf, args):
     if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
-        args.dfuse_debug = 'WARN'
+        # Turn back on logging for this.
+        # args.dfuse_debug = 'WARN'
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
             if fi_test:
