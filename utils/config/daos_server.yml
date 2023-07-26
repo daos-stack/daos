@@ -238,7 +238,7 @@
 ## minimum of 4gib. Increasing the value may help avoid the potential of OOM killer terminating
 ## engine processes but could also result in stopping DAOS from using available memory resources.
 #
-## default: 8
+## default: 16
 #system_ram_reserved: 5
 #
 #

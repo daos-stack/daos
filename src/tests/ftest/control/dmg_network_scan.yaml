@@ -8,7 +8,6 @@ server_config:
   port: 10001
   control_log_mask: TRACE
   engines_per_host: 1
-  system_ram_reserved: 16
   engines:
     0:
       storage:
