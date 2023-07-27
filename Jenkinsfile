@@ -807,6 +807,7 @@ pipeline {
                                      unstash_tests: false,
                                      inst_rpms: unitPackages()))
                         // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
                         //                 id: 'tlc', name: 'Fault Injection Interim Report')
                         stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
                     }
@@ -1063,7 +1064,8 @@ pipeline {
                         unstash('nltr')
                         job_step_update(nlt_test())
                         recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                                        id: 'fir', name: 'Fault Injection Report')
+                                       skipPublishingChecks: true,
+                                       id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {
