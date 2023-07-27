@@ -223,7 +223,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 
 	/* Workaround for DAOS-13900, make probability be a percentage */
 	if (fi_attr_in->fa_probability_x != 0)
-		fi_attr_in->fa_probability_y = 100;
+		fi_attr_in->fa_probability_y = 1000;
 
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)

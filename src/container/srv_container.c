@@ -2388,7 +2388,8 @@ out:
 		 * ds_cont_op_handler.
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop, true);
-		out->coo_prop = prop;
+		if (rc == -DER_SUCCESS)
+			out->coo_prop = prop;
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
