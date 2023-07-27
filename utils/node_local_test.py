@@ -4247,9 +4247,9 @@ def setup_log_test(conf):
 
     nlt_lp = __import__('cart_logparse')
     nlt_lt = __import__('cart_logtest')
-    ct_mod = __import__('cart_logcoverage')
+    ct_mod = __import__('cart_logusage')
 
-    nlt_ct = ct_mod.CoverageTracer()
+    nlt_ct = ct_mod.UsageTracer()
 
     if conf.args.log_usage_import:
         if os.path.exists(conf.args.log_usage_import):

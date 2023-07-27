@@ -2,7 +2,10 @@
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""Mark code coverage from daos logs
+"""Mark code usage from daos logs
+
+Track what lines of code has caused logging and use this to generate xml 'coverage' data which
+can be rendered in Jenkins and used to identify areas which are not exercised.
 
 Registered as a callback for all log tracing but saves results across the entire run.
 """
@@ -14,7 +17,6 @@ import json
 class CodeLoc():
     """Logging data for single code location"""
 
-    # pylint: disable=too-few-public-methods
     def __init__(self, line=None):
         self.lineno = 0
         self.count = 0
@@ -74,7 +76,7 @@ class CodeLoc():
 """
 
 
-class CoverageTracer():
+class UsageTracer():
     """Save what lines are executed"""
 
     def __init__(self):
