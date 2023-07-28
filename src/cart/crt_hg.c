@@ -1285,6 +1285,8 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	crt_rpc_lock(rpc_priv);
 
 	rpc_pub = &rpc_priv->crp_pub;
+
+	GUARD_CHECK(rpc_priv);
 	if (crt_rpc_completed(rpc_priv)) {
 		crt_rpc_unlock(rpc_priv);
 		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
@@ -1388,6 +1390,7 @@ crt_hg_req_send(struct crt_rpc_priv *rpc_priv)
 
 	hg_ret = HG_Forward(rpc_priv->crp_hg_hdl, crt_hg_req_send_cb, rpc_priv,
 			    &rpc_priv->crp_pub.cr_input);
+	GUARD_CHECK(rpc_priv);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv,
 			  "HG_Forward failed, hg_ret: " DF_HG_RC "\n",
@@ -1854,3 +1857,73 @@ crt_hg_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 out:
 	return rc;
 }
+
+
+
+#define GUARD_PRE_PATTERN 0xE1
+#define GUARD_POST_PATTERN 0x5A
+#define GUARD_SIZE 64
+
+unsigned char *GUARD_PRE_ALLOC(void)
+{
+	unsigned char *pre_buff;
+
+	if (crt_is_service())
+		return NULL;
+
+	D_ALLOC(pre_buff, GUARD_SIZE);
+
+	if (pre_buff)
+		memset(pre_buff, GUARD_PRE_PATTERN, GUARD_SIZE);
+
+	return pre_buff;
+}
+
+void GUARD_POST_ALLOC(struct crt_rpc_priv *rpc_priv, unsigned char *pre_buff)
+{
+	unsigned char *post_buff;
+
+	if (crt_is_service())
+		return;
+
+	D_ALLOC(post_buff, GUARD_SIZE);
+
+	if (post_buff)
+		memset(post_buff, GUARD_POST_PATTERN, GUARD_SIZE);
+
+	rpc_priv->guard_pre_alloc_buff = pre_buff;
+	rpc_priv->guard_post_alloc_buff = post_buff;
+}
+
+void GUARD_FREE(struct crt_rpc_priv *rpc_priv)
+{
+	if (crt_is_service())
+		return;
+	D_FREE(rpc_priv->guard_post_alloc_buff);
+	D_FREE(rpc_priv->guard_pre_alloc_buff);
+}
+
+void guard_check(struct crt_rpc_priv *rpc_priv, const char *name, int line)
+{
+	int i;
+
+	if (crt_is_service())
+		return;
+
+	for (i = 0; i < GUARD_SIZE; i++) {
+		if (rpc_priv->guard_pre_alloc_buff[i] != GUARD_PRE_PATTERN) {
+			D_ERROR(":%s:%d: GUARD_PRE[%d] expected 0x%x got 0x%x\n",
+				name, line,
+				i, GUARD_PRE_PATTERN, rpc_priv->guard_pre_alloc_buff[i]);
+			break;
+		}
+
+		if (rpc_priv->guard_post_alloc_buff[i] != GUARD_POST_PATTERN) {
+			D_ERROR(":%s:%d: GUARD_POST[%d] expected 0x%x got 0x%x\n",
+				name, line,
+				i, GUARD_POST_PATTERN, rpc_priv->guard_post_alloc_buff[i]);
+			break;
+		}
+	}
+}
+

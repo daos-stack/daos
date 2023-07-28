@@ -202,6 +202,8 @@ struct crt_rpc_priv {
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
+	unsigned char		*guard_pre_alloc_buff;
+	unsigned char		*guard_post_alloc_buff;
 };
 
 static inline void
@@ -612,6 +614,7 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 #define RPC_ADDREF(RPC) do {						\
 		int __ref;						\
 		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);	\
+		GUARD_CHECK(RPC);					\
 		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));	\
 		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
 	} while (0)
@@ -619,6 +622,7 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 #define RPC_DECREF(RPC) do {						\
 		int __ref;						\
 		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
+		GUARD_CHECK(RPC);					\
 		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
 		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
 		if (__ref == 1)						\
