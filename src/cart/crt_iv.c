@@ -3282,8 +3282,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc);
 	}
 
-	rc = iv_ops->ivo_on_get(ivns, iv_key,
-				0, CRT_IV_PERM_WRITE, NULL, &priv);
+	rc = iv_ops->ivo_on_get(ivns, iv_key, 0, CRT_IV_PERM_WRITE, NULL, &priv);
+	if (rc != 0) {
+		D_ERROR("ivo_on_get(): " DF_RC, DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	if (iv_value != NULL)
 		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,

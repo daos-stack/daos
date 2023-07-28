@@ -245,7 +245,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 			cmd:       "hostnamefoo",
 			option:    "",
 			expResult: "",
-			expErr:    errors.New("sh: hostnamefoo: command not found"),
+			expErr:    errors.New("command not found"),
 		},
 		"Check valid Command with invalid target directory": {
 			target:    targetTestDir + "/dir1",

@@ -448,6 +448,10 @@ func getAccessPointAddrWithPort(log logging.Logger, addr string, portDefault int
 	return addr, nil
 }
 
+func hugePageBytes(hpNr, hpSz int) uint64 {
+	return uint64(hpNr*hpSz) * humanize.KiByte
+}
+
 // SetNrHugepages calculates minimum based on total target count if using nvme.
 func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error {
 	var cfgTargetCount int
@@ -492,6 +496,8 @@ func (cfg *Server) SetNrHugepages(log logging.Logger, mi *common.MemInfo) error 
 		log.Debugf("calculated nr_hugepages: %d for %d targets%s", minHugepages,
 			cfgTargetCount, msgSysXS)
 		cfg.NrHugepages = minHugepages
+		log.Infof("hugepage count automatically set to %d (%s)", minHugepages,
+			humanize.IBytes(hugePageBytes(minHugepages, mi.HugepageSizeKiB)))
 	}
 
 	if cfg.NrHugepages < minHugepages {
@@ -510,13 +516,17 @@ func (cfg *Server) CalcRamdiskSize(log logging.Logger, hpSizeKiB, memKiB int) (u
 	memTotal := uint64(memKiB * humanize.KiByte)
 
 	// Calculate assigned hugepage memory in bytes.
-	memHuge := uint64(cfg.NrHugepages * hpSizeKiB * humanize.KiByte)
+	memHuge := hugePageBytes(cfg.NrHugepages, hpSizeKiB)
 
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
-	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
+	return storage.CalcRamdiskSize(log, memTotal, memHuge, memSys, cfg.Engines[0].TargetCount,
+		len(cfg.Engines))
 }
 
 // CalcMemForRamdiskSize calculates minimum memory needed for a given RAM-disk size.
@@ -527,8 +537,12 @@ func (cfg *Server) CalcMemForRamdiskSize(log logging.Logger, hpSizeKiB int, ramd
 	// Calculate reserved system memory in bytes.
 	memSys := uint64(cfg.SystemRamReserved * humanize.GiByte)
 
+	if len(cfg.Engines) == 0 {
+		return 0, errors.New("no engines in config")
+	}
+
 	return storage.CalcMemForRamdiskSize(log, ramdiskSize, memHuge, memSys,
-		storage.DefaultEngineMemRsvd, len(cfg.Engines))
+		cfg.Engines[0].TargetCount, len(cfg.Engines))
 }
 
 // SetRamdiskSize calculates maximum RAM-disk size using total memory as reported by /proc/meminfo.
@@ -582,6 +596,8 @@ func (cfg *Server) SetRamdiskSize(log logging.Logger, mi *common.MemInfo) error 
 			// Apply calculated size in config as not already set.
 			log.Debugf("%s: auto-sized ram-disk in engine-%d config", msg, idx)
 			scs[0].WithScmRamdiskSize(uint(maxRamdiskSize / humanize.GiByte))
+			log.Infof("engine-%d: ramdisk size automatically set to %s", idx,
+				humanize.IBytes(maxRamdiskSize))
 		} else if confSize > maxRamdiskSize {
 			// Total RAM is not enough to meet tmpfs size requested in config.
 			log.Errorf("%s: engine-%d config size too large for total memory", msg,
