@@ -2728,6 +2728,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 		}
 	} else {
 		tse_task_schedule(task, true);
+
 		sched_arg->tsa_scheded = true;
 	}
 
