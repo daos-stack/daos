@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,11 +13,13 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/jessevdk/go-flags"
 
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestUI_RankSetFlag(t *testing.T) {
@@ -123,6 +125,136 @@ func TestUI_HostSetFlag(t *testing.T) {
 				),
 			}
 			if diff := cmp.Diff(tc.expFlag, &f, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestUI_MemberStateSetFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg     string
+		isEmpty bool
+		expFlag *ui.MemberStateSetFlag
+		expErr  error
+	}{
+		"unset": {
+			isEmpty: true,
+			expFlag: &ui.MemberStateSetFlag{},
+		},
+		"bad state": {
+			arg:    "Borked",
+			expErr: errors.New("invalid state name"),
+		},
+		"invalid unknown state": {
+			arg:    "Unknown",
+			expErr: errors.New("invalid state name"),
+		},
+		"good list": {
+			arg: "Joined,Excluded",
+			expFlag: &ui.MemberStateSetFlag{
+				States: system.MemberStateJoined | system.MemberStateExcluded,
+			},
+		},
+		"good list; caps insensitive": {
+			arg: "JOINED,excluded",
+			expFlag: &ui.MemberStateSetFlag{
+				States: system.MemberStateJoined | system.MemberStateExcluded,
+			},
+		},
+		"good list; with spaces": {
+			arg: "Joined, Excluded",
+			expFlag: &ui.MemberStateSetFlag{
+				States: system.MemberStateJoined | system.MemberStateExcluded,
+			},
+		},
+		"full list": {
+			arg: "Joined,Excluded,Stopped,Stopping,Ready,Starting,AwaitFormat,AdminExcluded,Errored,Unresponsive",
+			expFlag: &ui.MemberStateSetFlag{
+				States: system.MemberState(int(system.MemberStateMax) - 1),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := ui.MemberStateSetFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.isEmpty, f.Empty(), "unexpected Empty()")
+
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(
+					ui.MemberStateSetFlag{},
+				),
+			}
+			if diff := cmp.Diff(tc.expFlag, &f, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestUI_MemberStateSetFlag_Complete(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg          string
+		expComplStrs []string
+		expErr       error
+	}{
+		"empty string; suggest all": {
+			expComplStrs: []string{
+				"AdminExcluded", "AwaitFormat", "Errored", "Excluded",
+				"Joined", "Ready", "Starting", "Stopped", "Stopping",
+				"Unresponsive",
+			},
+		},
+		"single suggestion": {
+			arg:          "Excl",
+			expComplStrs: []string{"Excluded"},
+		},
+		"multiple suggestions": {
+			arg:          "S",
+			expComplStrs: []string{"Starting", "Stopped", "Stopping"},
+		},
+		"multiple suggestions; case insensitive": {
+			arg:          "s",
+			expComplStrs: []string{"Starting", "Stopped", "Stopping"},
+		},
+		"suggestions after prefix; empty string; suggest remainder": {
+			arg: "Starting,",
+			expComplStrs: []string{
+				"Starting,AdminExcluded", "Starting,AwaitFormat",
+				"Starting,Errored", "Starting,Excluded", "Starting,Joined",
+				"Starting,Ready", "Starting,Stopped", "Starting,Stopping",
+				"Starting,Unresponsive",
+			},
+		},
+		"suggestions after prefix; partial match": {
+			arg:          "Starting,S",
+			expComplStrs: []string{"Starting,Stopped", "Starting,Stopping"},
+		},
+		"suggestions after multiple states in prefix; partial match": {
+			arg: "Starting,Stopped,Stopping,Unresponsive,AwaitFormat,E",
+			expComplStrs: []string{
+				"Starting,Stopped,Stopping,Unresponsive,AwaitFormat,Errored",
+				"Starting,Stopped,Stopping,Unresponsive,AwaitFormat,Excluded",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := ui.MemberStateSetFlag{}
+			gotComps := f.Complete(tc.arg)
+
+			expComps := make([]flags.Completion, len(tc.expComplStrs))
+			for i, s := range tc.expComplStrs {
+				expComps[i] = flags.Completion{
+					Item: s,
+				}
+			}
+
+			if diff := cmp.Diff(expComps, gotComps); diff != "" {
 				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
 			}
 		})
