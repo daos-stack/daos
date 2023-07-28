@@ -31,6 +31,7 @@ obj_shard_decref(struct dc_obj_shard *shard)
 	struct dc_obj_layout	*layout;
 	struct dc_object	*obj;
 	bool			 release = false;
+	bool			 decref = false;
 
 	D_ASSERT(shard != NULL);
 	D_ASSERT(shard->do_ref > 0);
@@ -45,8 +46,12 @@ obj_shard_decref(struct dc_obj_shard *shard)
 		if (layout->do_open_count == 0 && layout != obj->cob_shards)
 			release = true;
 		shard->do_obj = NULL;
+		decref = true;
 	}
 	D_SPIN_UNLOCK(&obj->cob_spin);
+
+	if (decref)
+		obj_decref(obj);
 
 	if (release)
 		D_FREE(layout);
@@ -57,6 +62,8 @@ obj_shard_addref(struct dc_obj_shard *shard)
 {
 	D_ASSERT(shard->do_obj != NULL);
 	D_SPIN_LOCK(&shard->do_obj->cob_spin);
+	if (shard->do_ref == 0)
+		obj_addref(shard->do_obj);
 	shard->do_ref++;
 	D_SPIN_UNLOCK(&shard->do_obj->cob_spin);
 }
