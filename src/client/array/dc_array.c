@@ -845,6 +845,7 @@ dc_array_close_direct(daos_handle_t oh)
 		return rc;
 	}
 
+	array_hdl_unlink(array);
 	/* -1 for ref taken here */
 	array_decref(array);
 	/* -1 for array handle */
