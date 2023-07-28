@@ -168,4 +168,4 @@ server_config_val: !mux
     config_val:
       - "targets"
       - "ABDCD"
-      - "FAIL"
+      - "PASS"
