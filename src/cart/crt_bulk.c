@@ -183,7 +183,7 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_transfer() failed, rc: %d.\n", rc);
+		D_ERROR("crt_hg_bulk_transfer() failed, rc: " DF_RC ".\n", DP_RC(rc));
 
 out:
 	return rc;

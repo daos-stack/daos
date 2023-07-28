@@ -96,7 +96,7 @@ crt_hdlr_ctl_fi_attr_set(crt_rpc_t *rpc_req)
 
 	rc = d_fault_attr_set(in_args_fi_attr->fa_fault_id, fa_in);
 	if (rc != 0)
-		D_ERROR("d_fault_attr_set() failed. rc: %d\n", rc);
+		D_ERROR("d_fault_attr_set() failed. rc: " DF_RC "\n", DP_RC(rc));
 
 	out_args_fi_attr->fa_ret = rc;
 	rc = crt_reply_send(rpc_req);
@@ -482,6 +482,8 @@ crt_rpc_priv_free(struct crt_rpc_priv *rpc_priv)
 
 	D_MUTEX_DESTROY(&rpc_priv->crp_mutex);
 	D_SPIN_DESTROY(&rpc_priv->crp_lock);
+
+	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	D_FREE(rpc_priv);
 }

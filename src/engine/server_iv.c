@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -162,13 +162,16 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	return rc;
 }
 
-void
+static void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
+
+static void
+ds_iv_ns_destroy(void *ns);
 
 void
 ds_iv_ns_put(struct ds_iv_ns *ns)
@@ -605,6 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (rc)
 		D_GOTO(out, rc);
 
+	/* A failure here appears to leak the memory from ivc_value_alloc() above for pools */
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
@@ -783,7 +787,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 }
 
 /* Destroy iv ns. */
-void
+static void
 ds_iv_ns_destroy(void *ns)
 {
 	struct ds_iv_ns *iv_ns = ns;
