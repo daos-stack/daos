@@ -481,6 +481,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);
@@ -773,16 +774,14 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
-			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
-		D_ERROR("\n");
 	}
 }
 
