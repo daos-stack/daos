@@ -748,7 +748,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
-		D_ERROR("Reset action is not supported");
+		D_ERROR("Reset action is not supported\n");
 		opts->status = -DER_INVAL;
 		return;
 	default:

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1917,7 +1917,7 @@ crt_hdlr_iv_sync_aux(void *arg)
 		break;
 
 	default:
-		D_ERROR("Unknown event type %#x", sync_type->ivs_event);
+		D_ERROR("Unknown event type %#x\n", sync_type->ivs_event);
 		D_GOTO(exit, rc = -DER_INVAL);
 		break;
 	}
@@ -2203,7 +2203,9 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 /* Helper function to issue update sync
  * Important note: iv_key and iv_value are destroyed right after this call,
  * as such they need to be copied over
- **/
+ *
+ * TODO: This is leaking memory on failure.
+ */
 static int
 crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     crt_iv_key_t *iv_key, crt_iv_ver_t *iv_ver,
@@ -2291,7 +2293,6 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 	D_ALLOC_PTR(iv_sync_cb);
 	if (iv_sync_cb == NULL) {
-		/* Avoid checkpatch warning */
 		D_GOTO(exit, rc = -DER_NOMEM);
 	}
 
@@ -2551,8 +2552,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* Respond back to child; might fail if child is not alive */
 		if (crt_reply_send(iv_info->uci_child_rpc) != DER_SUCCESS)
-			D_ERROR("Failed to respond on rpc: %p",
-				iv_info->uci_child_rpc);
+			D_ERROR("Failed to respond on rpc: %p\n", iv_info->uci_child_rpc);
 
 		/* ADDREF done in crt_hdlr_iv_update */
 		RPC_PUB_DECREF(iv_info->uci_child_rpc);
@@ -3306,8 +3306,11 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		D_GOTO(exit, rc);
 	}
 
-	rc = iv_ops->ivo_on_get(ivns, iv_key,
-				0, CRT_IV_PERM_WRITE, NULL, &priv);
+	rc = iv_ops->ivo_on_get(ivns, iv_key, 0, CRT_IV_PERM_WRITE, NULL, &priv);
+	if (rc != 0) {
+		D_ERROR("ivo_on_get(): " DF_RC, DP_RC(rc));
+		D_GOTO(exit, rc);
+	}
 
 	if (iv_value != NULL)
 		rc = iv_ops->ivo_on_update(ivns, iv_key, 0,
@@ -3424,11 +3427,11 @@ crt_iv_update(crt_iv_namespace_t ivns, uint32_t class_id,
 	* All other checks are performed inside of crt_iv_update_interna.
 	*/
 	if (iv_value == NULL) {
-		D_ERROR("iv_value is NULL\n");
-
 		rc = -DER_INVAL;
-		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value,
-			       rc, cb_arg);
+
+		D_ERROR("iv_value is NULL " DF_RC "\n", DP_RC(rc));
+
+		update_comp_cb(ivns, class_id, iv_key, NULL, iv_value, rc, cb_arg);
 
 		D_GOTO(exit, rc);
 	}

@@ -80,6 +80,74 @@ drain_dkeys(void **state)
 	ioreq_fini(&req);
 }
 
+static int
+cont_open_and_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	int		 rc;
+
+	assert_int_equal(arg->setup_state, SETUP_CONT_CREATE);
+	rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
+	assert_int_equal(arg->setup_state, SETUP_CONT_CONNECT);
+
+	return reintegrate_inflight_io(data);
+}
+
+static void
+cont_open_in_drain(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	int			tgt = DEFAULT_FAIL_TGT;
+	int			i;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R1S_SPEC_RANK, 0, 0,
+				arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	oid = dts_oid_set_tgt(oid, tgt);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	/** Insert 1000 records */
+	print_message("Insert %d kv record in object "DF_OID"\n",
+		      KEY_NR, DP_OID(oid));
+	for (i = 0; i < KEY_NR; i++) {
+		char	key[32] = {0};
+
+		sprintf(key, "dkey_0_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+	ioreq_fini(&req);
+
+	test_teardown_cont_hdl(arg);
+	arg->rebuild_cb = cont_open_and_inflight_io;
+	arg->rebuild_cb_arg = &oid;
+	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < KEY_NR; i++) {
+		char key[32] = {0};
+		char buf[16] = {0};
+
+		sprintf(key, "dkey_0_%d", i);
+		/** Lookup */
+		memset(buf, 0, 10);
+		lookup_single(key, "a_key", 0, buf, 10, DAOS_TX_NONE, &req);
+		assert_int_equal(req.iod[0].iod_size, strlen("data") + 1);
+
+		/** Verify data consistency */
+		assert_string_equal(buf, "data");
+	}
+
+	reintegrate_inflight_io_verify(arg);
+	ioreq_fini(&req);
+}
+
 static void
 drain_akeys(void **state)
 {
@@ -891,8 +959,10 @@ dfs_drain_writeloop(void **state)
 
 /** create a new pool/container for each test */
 static const struct CMUnitTest drain_tests[] = {
-	{"DRAIN1: drain small rec multiple dkeys",
+	{"DRAIN0: drain small rec multiple dkeys",
 	 drain_dkeys, rebuild_small_sub_rf0_setup, test_teardown},
+	{"DRAIN1: cont open and update during drain",
+	 cont_open_in_drain, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN2: drain small rec multiple akeys",
 	 drain_akeys, rebuild_small_sub_rf0_setup, test_teardown},
 	{"DRAIN3: drain small rec multiple indexes",

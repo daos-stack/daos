@@ -115,6 +115,9 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev)
 	tse_task_t		*task;
 	int			 rc;
 
+	if (ev == NULL)
+		return dc_array_close_direct(oh);
+
 	rc = dc_task_create(dc_array_close, NULL, ev, &task);
 	if (rc)
 		return rc;

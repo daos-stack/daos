@@ -62,10 +62,14 @@ PROVIDER_KEYS = OrderedDict(
         ("cxi", "ofi+cxi"),
         ("verbs", "ofi+verbs"),
         ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp"),
+        ("tcp", "ofi+tcp;ofi_rxm"),
         ("opx", "ofi+opx"),
     ]
 )
+# Temporary pipeline-lib workaround until DAOS-13934 is implemented
+PROVIDER_ALIAS = {
+    "ofi+tcp": "ofi+tcp;ofi_rxm"
+}
 PROCS_TO_CLEANUP = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
@@ -1282,6 +1286,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         # Use the detected provider if one is not set
+        provider = PROVIDER_ALIAS.get(provider, provider)
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
@@ -3186,7 +3191,7 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()),
+        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "

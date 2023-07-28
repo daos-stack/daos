@@ -91,6 +91,15 @@ unlock:
 	return rc;
 }
 
+static int
+close_shard_cb(tse_task_t *task, void *data)
+{
+	struct dc_obj_shard *obj_shard = *((struct dc_obj_shard **)data);
+
+	obj_shard_close(obj_shard);
+	return 0;
+}
+
 static void
 obj_layout_free(struct dc_object *obj)
 {
@@ -226,6 +235,12 @@ dc_obj_hdl2layout_ver(daos_handle_t oh)
 
 }
 
+static uint32_t
+dc_obj_get_pda(struct dc_object *obj)
+{
+	return daos_cont_props2pda(&obj->cob_co->dc_props, obj_is_ec(obj));
+}
+
 static int
 obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 {
@@ -247,6 +262,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
+	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
 			  NULL, &layout);
 	pl_map_decref(map);
@@ -1477,23 +1493,27 @@ fail:
 }
 
 int
+dc_obj_close_direct(daos_handle_t oh)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+	obj_hdl_unlink(obj);
+	obj_decref(obj);
+	return 0;
+}
+
+int
 dc_obj_close(tse_task_t *task)
 {
 	daos_obj_close_t	*args;
-	struct dc_object	*obj;
 	int			 rc = 0;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
-
-	obj = obj_hdl2ptr(args->oh);
-	if (obj == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
-
-	obj_hdl_unlink(obj);
-	obj_decref(obj);
-
-out:
+	rc = dc_obj_close_direct(args->oh);
 	tse_task_complete(task, rc);
 	return 0;
 }
@@ -1504,8 +1524,9 @@ dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md)
 	/* For predefined object classes, do nothing at here. But for those
 	 * customized classes, we need to fetch for the remote OI table.
 	 */
-	md->omd_id      = oid;
-	md->omd_ver     = 0;
+	md->omd_id	= oid;
+	md->omd_ver	= 0;
+	md->omd_pda	= 0;
 	return 0;
 }
 
@@ -2797,6 +2818,13 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 		return rc;
 	}
 
+	rc = tse_task_register_comp_cb(task, close_shard_cb, &obj_shard, sizeof(obj_shard));
+	if (rc != 0) {
+		obj_shard_close(obj_shard);
+		obj_task_complete(task, rc);
+		return rc;
+	}
+
 	shard_auxi->flags = shard_auxi->obj_auxi->flags;
 	req_tgts = &shard_auxi->obj_auxi->req_tgts;
 	D_ASSERT(shard_auxi->grp_idx < req_tgts->ort_grp_nr);
@@ -2816,8 +2844,6 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 
 	rc = shard_auxi->shard_io_cb(obj_shard, obj_auxi->opc, shard_auxi,
 				     fw_shard_tgts, fw_cnt, task);
-	obj_shard_close(obj_shard);
-
 	return rc;
 }
 
@@ -5730,6 +5756,8 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 		}
 
 		if (daos_anchor_is_eof(&sub_anchor->ssa_anchor)) {
+			int j;
+
 			if (sub_anchor->ssa_sgl.sg_iovs)
 				d_sgl_fini(&sub_anchor->ssa_sgl, true);
 			if (sub_anchor->ssa_recxs != NULL)
@@ -5739,7 +5767,13 @@ shard_anchors_eof_check(struct obj_auxi_args *obj_auxi, struct shard_anchors *su
 			D_DEBUG(DB_IO, DF_OID" anchor eof %d/%d/%u\n",
 				DP_OID(obj_auxi->obj->cob_md.omd_id), i, shards_nr,
 				sub_anchor->ssa_shard);
-			shard_tgts[i].st_rank = DAOS_TGT_IGNORE;
+			/* Set the target to IGNORE to skip the shard RPC */
+			for (j = 0; j < tgt_nr; j++) {
+				if (shard_tgts[j].st_shard == sub_anchor->ssa_shard) {
+					shard_tgts[j].st_rank = DAOS_TGT_IGNORE;
+					break;
+				}
+			}
 			continue;
 		}
 	}
@@ -6679,6 +6713,13 @@ shard_query_key_task(tse_task_t *task)
 		return rc;
 	}
 
+	rc = tse_task_register_comp_cb(task, close_shard_cb, &obj_shard, sizeof(obj_shard));
+	if (rc != 0) {
+		obj_shard_close(obj_shard);
+		obj_task_complete(task, rc);
+		return rc;
+	}
+
 	api_args = dc_task_get_args(args->kqa_auxi.obj_auxi->obj_task);
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
 				    args->kqa_auxi.obj_auxi->map_ver_req, obj,
@@ -6687,7 +6728,6 @@ shard_query_key_task(tse_task_t *task)
 				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
 
-	obj_shard_close(obj_shard);
 	return rc;
 }
 
