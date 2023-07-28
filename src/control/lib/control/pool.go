@@ -428,9 +428,9 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32  `json:"status"`
-		State  string `json:"state"`
-		UUID   string `json:"uuid"`
+		Status int32                   `json:"status"`
+		State  system.PoolServiceState `json:"state"`
+		UUID   string                  `json:"uuid"`
 		PoolInfo
 	}
 
@@ -623,19 +623,19 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 
 // Update the pool state
 func (pqr *PoolQueryResp) UpdateState() error {
-	// Pool state is unknown as default, if TotalTargets is 0.
-	if pqr.TotalTargets == 0 {
-		pqr.State = system.PoolServiceStateUnknown.String()
+	// Update the state as Ready if DAOS return code is 0.
+	if pqr.Status == 0 {
+		pqr.State = system.PoolServiceStateReady
 	}
 
-	// Update the state output for `daos pool query` command to aligned with dmg output.
-	if pqr.State == "" {
-		pqr.State = system.PoolServiceStateReady.String()
+	// Pool state is unknown, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = system.PoolServiceStateUnknown
 	}
 
 	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
-	if pqr.State == system.PoolServiceStateReady.String() && pqr.DisabledTargets > 0 {
-		pqr.State = system.PoolServiceStateDegraded.String()
+	if pqr.State == system.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+		pqr.State = system.PoolServiceStateDegraded
 	}
 
 	return nil
@@ -1229,7 +1229,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
-		p.State = resp.State
+		p.State = resp.State.String()
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer

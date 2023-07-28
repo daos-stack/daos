@@ -1803,7 +1803,7 @@ func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 				Id: mockUUID,
 			},
 			expResp: &mgmtpb.PoolQueryResp{
-				State: system.PoolServiceStateReady.String(),
+				State: int32(system.PoolServiceStateReady),
 				Uuid:  mockUUID,
 			},
 		},

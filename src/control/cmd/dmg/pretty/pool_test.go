@@ -38,7 +38,7 @@ Pool space info:
 		"normal response": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded.String(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -81,7 +81,7 @@ Rebuild busy, 42 objs, 21 recs
 		"normal response; enabled ranks": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded.String(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -126,7 +126,7 @@ Rebuild busy, 42 objs, 21 recs
 		"normal response; disabled ranks": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded.String(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -171,7 +171,7 @@ Rebuild busy, 42 objs, 21 recs
 		"unknown/invalid rebuild state response": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded.String(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -216,7 +216,7 @@ Rebuild unknown, 42 objs, 21 recs
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
 				UUID:  test.MockUUID(),
-				State: system.PoolServiceStateDegraded.String(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
