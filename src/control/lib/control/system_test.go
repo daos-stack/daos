@@ -15,7 +15,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -343,108 +342,6 @@ func TestControl_StopRanks(t *testing.T) {
 			})
 
 			gotResp, gotErr := StopRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3", Force: true})
-			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
-				t.Fatalf("unexpected results (-want, +got)\n%s\n", diff)
-			}
-		})
-	}
-}
-
-func TestControl_PingRanks(t *testing.T) {
-	for name, tc := range map[string]struct {
-		uErr    error
-		uResps  []*HostResponse
-		expResp *RanksResp
-		expErr  error
-	}{
-		"local failure": {
-			uErr:   errors.New("local failed"),
-			expErr: errors.New("local failed"),
-		},
-		"remote failure": {
-			uResps: []*HostResponse{
-				{
-					Addr:  "host1",
-					Error: errors.New("remote failed"),
-				},
-			},
-			expResp: &RanksResp{
-				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
-			},
-		},
-		"no results": {
-			uResps: []*HostResponse{
-				{
-					Addr:    "host1",
-					Message: &ctlpb.RanksResp{},
-				},
-			},
-			expResp: &RanksResp{},
-		},
-		"mixed results": {
-			uResps: []*HostResponse{
-				{
-					Addr: "host1",
-					Message: &ctlpb.RanksResp{
-						Results: []*sharedpb.RankResult{
-							{
-								Rank: 0, Action: "ping",
-								State: system.MemberStateReady.String(),
-							},
-							{
-								Rank: 1, Action: "ping",
-								State: system.MemberStateReady.String(),
-							},
-						},
-					},
-				},
-				{
-					Addr: "host2",
-					Message: &ctlpb.RanksResp{
-						Results: []*sharedpb.RankResult{
-							{
-								Rank: 2, Action: "ping",
-								State: system.MemberStateReady.String(),
-							},
-							{
-								Rank: 3, Action: "ping",
-								Errored: true, Msg: "uh oh",
-								State: system.MemberStateUnresponsive.String(),
-							},
-						},
-					},
-				},
-				{
-					Addr:  "host3",
-					Error: errors.New("connection refused"),
-				},
-			},
-			expResp: &RanksResp{
-				RankResults: system.MemberResults{
-					{Rank: 0, Action: "ping", State: system.MemberStateReady},
-					{Rank: 1, Action: "ping", State: system.MemberStateReady},
-					{Rank: 2, Action: "ping", State: system.MemberStateReady},
-					{Rank: 3, Action: "ping", Errored: true, Msg: "uh oh", State: system.MemberStateUnresponsive},
-				},
-				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host3", "connection refused"}),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			mi := NewMockInvoker(log, &MockInvokerConfig{
-				UnaryError:    tc.uErr,
-				UnaryResponse: &UnaryResponse{Responses: tc.uResps},
-			})
-
-			gotResp, gotErr := PingRanks(test.Context(t), mi, &RanksReq{Ranks: "0-3"})
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
