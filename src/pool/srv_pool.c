@@ -1540,8 +1540,6 @@ check_map:
 	*global_version_out = global_version;
 	*map_buf_out = map_buf;
 	*map_version_out = map_version;
-	if (rc != 0)
-		D_FREE(map_buf);
 out:
 	return rc;
 }
