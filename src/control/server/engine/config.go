@@ -165,7 +165,7 @@ func (c *Config) Validate() error {
 	}
 
 	errNegative := func(s string) error {
-		return errors.New("memory size must not be negative")
+		return errors.Errorf("%s must not be negative", s)
 	}
 	if c.TargetCount < 0 {
 		return errNegative("target count")
