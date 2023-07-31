@@ -10,8 +10,8 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-from exception_utils import CommandFailure
 from general_utils import run_task, display_task, run_pcmd
+from run_utils import run_remote
 
 SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x", "ofi+cxi")
 
@@ -245,13 +245,16 @@ def get_interface_device_name(hosts, interface, verbose=True):
     return device_names
 
 
-def get_ofi_info(hosts, supported=None, verbose=True):
-    """Get the OFI provider information from the specified hosts.
+def get_hg_info(log, hosts, filter_provider=None, filter_device=None, verbose=True):
+    """Get the HG provider information from the specified hosts.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts from which to gather the information
-        supported (list, optional): list of supported providers when if provided will limit the
-            inclusion to only those providers specified. Defaults to None.
+        filter_provider (list, optional): list of supported providers to filter by.
+            Defaults to None.
+        filter_device (list, optional): list of supported devices to filter by.
+            Defaults to None.
         verbose (bool, optional): display command details. Defaults to True.
 
     Returns:
@@ -259,53 +262,40 @@ def get_ofi_info(hosts, supported=None, verbose=True):
             providers key with a NodeSet value where the providers where detected.
 
     """
-    task = run_task(hosts, "fi_info", verbose=verbose)
-    if verbose:
-        display_task(task)
-
-    # Populate a dictionary of interfaces with a list of provider lists and NodSet of hosts on which
-    # the providers were detected.
+    command = "hg_info"
+    result = run_remote(log, hosts, command, verbose=verbose, stderr=True)
     providers = {}
-    results = dict(task.iter_retcodes())
-    if 0 in results:
-        for output, nodelist in task.iter_buffers(results[0]):
-            output_lines = [line.decode("utf-8").rstrip(os.linesep) for line in output]
-            nodeset = NodeSet.fromlist(nodelist)
+    if result.passed:
+        # Find all supported providers
+        for data in result.output:
+            if not data.stdout:
+                continue
+            # Skip over the header
+            without_header = re.findall(
+                r'^-+\n^.*\n^-+\n(.*)', '\n'.join(data.stdout), re.MULTILINE | re.DOTALL)[0]
+            # Convert:
+            # <Class>  <Protocol>  <Device>
+            # To {device: set(providers)}
+            device_providers = {}
+            class_protocol_device = re.findall(
+                r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
+            for _class, protocol, device in class_protocol_device:
+                if filter_device and device not in filter_device:
+                    continue
+                provider = f"{_class}+{protocol}"
+                if filter_provider and provider not in filter_provider:
+                    continue
+                if device not in device_providers:
+                    device_providers[device] = set()
+                device_providers[device].add(provider)
 
-            # Find all the provider and domain pairings. The fi_info output reports these on
-            # separate lines when processing the re matches ensure each domain is preceded by a
-            # provider.
-            interface_providers = {}
-            data = re.findall(r"(provider|domain):\s+([A-Za-z0-9;_+]+)", "\n".join(output_lines))
-            while data:
-                provider = list(data.pop(0))
-                if provider[0] == "provider" and data[0][0] == "domain":
-                    provider.pop(0)
-                    domain = list(data.pop(0))
-                    domain.pop(0)
-
-                    # A provider and domain must be specified
-                    if not provider or not domain:
-                        continue
-
-                    # Add 'ofi+' to the provider
-                    provider = ["+".join(["ofi", item]) for item in provider]
-
-                    # Only include supported providers if a supported list is provided
-                    if supported and provider[0] not in supported:
-                        continue
-
-                    if domain[0] not in interface_providers:
-                        interface_providers[domain[0]] = set()
-                    interface_providers[domain[0]].update(provider)
-
-            for interface, provider_set in interface_providers.items():
-                if interface not in providers:
-                    providers[interface] = {}
-                provider_key = ",".join(list(provider_set))
-                if provider_key not in providers[interface]:
-                    providers[interface][provider_key] = NodeSet()
-                providers[interface][provider_key].update(nodeset)
+            for device, provider_set in device_providers.items():
+                if device not in providers:
+                    providers[device] = {}
+                provider_key = ",".join(provider_set)
+                if provider_key not in providers[device]:
+                    providers[device][provider_key] = NodeSet()
+                providers[device][provider_key].update(data.hosts)
 
     return providers
 
@@ -381,7 +371,7 @@ def get_interface_providers(interface, provider_data):
 
     Args:
         interface (str): interface for which to obtain the InfiniBand name
-        provider_data (dict): output from get_ofi_info() or get_ucx_info()
+        provider_data (dict): output from get_hg_info() or get_ucx_info()
 
     Returns:
         dict: a dictionary of comma-separated strings of providers keys and NodeSet values on which
@@ -444,10 +434,11 @@ def get_fastest_interface(hosts, verbose=True):
     return interface
 
 
-def get_common_provider(hosts, interface, supported=None, verbose=True):
+def get_common_provider(log, hosts, interface, supported=None, verbose=True):
     """Get the list of providers supported by the interface on every host.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to find the provider information
         interface (str): interface for which to obtain the providers
         supported (list, optional): list of supported providers when if provided will limit the
@@ -458,10 +449,10 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
         list: a list of providers supported by the interface on every host
 
     """
-    ofi_info = get_ofi_info(hosts, supported, verbose)
-    providers = get_interface_providers(interface, ofi_info)
+    hg_info = get_hg_info(log, hosts, filter_provider=supported, verbose=verbose)
+    providers = get_interface_providers(interface, hg_info)
     for dev_name in get_interface_device_name(hosts, interface, verbose):
-        providers.update(get_interface_providers(dev_name, ofi_info))
+        providers.update(get_interface_providers(dev_name, hg_info))
 
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)
@@ -479,10 +470,11 @@ def get_common_provider(hosts, interface, supported=None, verbose=True):
     return list(common_providers)
 
 
-def get_network_information(hosts, supported=None, verbose=True):
+def get_network_information(log, hosts, supported=None, verbose=True):
     """Get the network device information on the hosts specified.
 
     Args:
+        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to find the network information
         supported (list, optional): list of supported providers when if provided will limit the
             inclusion to only those providers specified. Defaults to None.
@@ -494,7 +486,7 @@ def get_network_information(hosts, supported=None, verbose=True):
     """
     network_devices = []
 
-    ofi_info = get_ofi_info(hosts, supported, verbose)
+    ofi_info = get_hg_info(log, hosts, filter_provider=supported, verbose=verbose)
     ucx_info = get_ucx_info(hosts, supported, verbose)
 
     interfaces = get_active_network_interfaces(hosts, verbose)
@@ -528,37 +520,6 @@ def get_network_information(hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
-
-    return network_devices
-
-
-def get_dmg_network_information(dmg_network_scan):
-    """Get the network device information from the dmg network scan output.
-
-    Args:
-        dmg_network_scan (dict): the dmg network scan json command output
-
-    Raises:
-        CommandFailure: if there was an error processing the dmg network scan output
-
-    Returns:
-        list: a list of NetworkDevice objects identifying the network devices on each host
-
-    """
-    network_devices = []
-
-    try:
-        for host_fabric in dmg_network_scan["response"]["HostFabrics"].values():
-            for host in NodeSet(host_fabric["HostSet"].split(":")[0]):
-                for interface in host_fabric["HostFabric"]["Interfaces"]:
-                    network_devices.append(
-                        NetworkDevice(
-                            host, interface["Device"], None, 1, interface["Provider"],
-                            interface["NumaNode"])
-                    )
-    except KeyError as error:
-        raise CommandFailure(
-            f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices
 
