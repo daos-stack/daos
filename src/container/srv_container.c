@@ -2388,7 +2388,8 @@ out:
 		 * ds_cont_op_handler.
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop, true);
-		out->coo_prop = prop;
+		if (rc == -DER_SUCCESS)
+			out->coo_prop = prop;
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
@@ -4789,8 +4790,8 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 	pool = svc->cs_pool;
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to read prop for cont, rc=%d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		D_ERROR(DF_CONT ": failed to read prop for cont: " DF_RC "\n",
+			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 

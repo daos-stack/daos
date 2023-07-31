@@ -1265,8 +1265,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 
 mem_free:
 
-	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
-
 	crt_rpc_priv_free(rpc_priv);
 }
 
