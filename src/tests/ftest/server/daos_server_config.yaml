@@ -169,7 +169,7 @@ server_config_val: !mux
       - "targets"
       - "ABCD"
       - "FAIL"
-  targets_str:
+  targets_str_negative:
     config_val:
       - "targets"
       - -1
