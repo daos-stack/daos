@@ -7,7 +7,7 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from tempfile import TemporaryDirectory
 import errno
 import getpass
@@ -46,6 +46,8 @@ from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_
 from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
     YamlException    # noqa: E402
 from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
+from network_utils import get_common_provider  # noqa: E402
+
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -57,17 +59,16 @@ FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp;ofi_rxm"),
-        ("opx", "ofi+opx"),
-    ]
-)
+SUPPORTED_PROVIDERS = [
+    "ofi+cxi",
+    "ofi+verbs;ofi_rxm",
+    "ucx+dc_x",
+    "ofi+tcp;ofi_rxm",
+    "ofi+opx",
+]
 # Temporary pipeline-lib workaround until DAOS-13934 is implemented
 PROVIDER_ALIAS = {
+    "ofi+verbs": "ofi+verbs;ofi_rxm",
     "ofi+tcp": "ofi+tcp;ofi_rxm"
 }
 PROCS_TO_CLEANUP = [
@@ -1299,41 +1300,27 @@ class Launch():
             if result.passed:
                 # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
                 logger.debug("  Excluding verbs provider for Omni-Path adapters")
-                PROVIDER_KEYS.pop("verbs")
+                for index, _provider in enumerate(SUPPORTED_PROVIDERS.copy()):
+                    if "verbs" in _provider:
+                        SUPPORTED_PROVIDERS.pop(index)
 
-            # Detect all supported providers
-            command = f"fi_info -d {interface} -l | grep -v 'version:'"
-            result = run_remote(logger, servers, command)
-            if result.passed:
-                # Find all supported providers
-                keys_found = defaultdict(NodeSet)
-                for data in result.output:
-                    for line in data.stdout:
-                        provider_name = line.replace(":", "")
-                        if provider_name in PROVIDER_KEYS:
-                            keys_found[provider_name].update(data.hosts)
+            # Get the common supported providers on all servers
+            common_providers = get_common_provider(
+                logger, servers, interface,
+                supported=SUPPORTED_PROVIDERS)
 
-                # Only use providers available on all the server hosts
-                if keys_found:
-                    logger.debug("Detected supported providers:")
-                provider_name_keys = list(keys_found)
-                for provider_name in provider_name_keys:
-                    logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                    if keys_found[provider_name] != servers:
-                        keys_found.pop(provider_name)
-
-                # Select the preferred found provider based upon PROVIDER_KEYS order
-                logger.debug("Supported providers detected: %s", list(keys_found))
-                for key in PROVIDER_KEYS:
-                    if key in keys_found:
-                        provider = PROVIDER_KEYS[key]
-                        break
+            # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
+            logger.debug("Supported providers detected for %s: %s", interface, common_providers)
+            for _provider in SUPPORTED_PROVIDERS:
+                if _provider in common_providers:
+                    provider = _provider
+                    break
 
             # Report an error if a provider cannot be found
             if not provider:
                 raise LaunchException(
                     f"Error obtaining a supported provider for {interface} "
-                    f"from: {list(PROVIDER_KEYS)}")
+                    f"from: {SUPPORTED_PROVIDERS}")
 
             logger.debug("  Found %s provider for %s", provider, interface)
 
@@ -3191,11 +3178,11 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
+        choices=[None] + SUPPORTED_PROVIDERS + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values()))}")
+             f"e.g. {', '.join(SUPPORTED_PROVIDERS)}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
