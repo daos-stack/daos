@@ -468,11 +468,10 @@ def get_common_provider(log, hosts, interface, supported=None, verbose=True):
     return list(common_providers)
 
 
-def get_network_information(log, hosts, supported=None, verbose=True):
+def get_network_information(hosts, supported=None, verbose=True):
     """Get the network device information on the hosts specified.
 
     Args:
-        log (logger): logger for the messages produced by this method
         hosts (NodeSet): hosts on which to find the network information
         supported (list, optional): list of supported providers when if provided will limit the
             inclusion to only those providers specified. Defaults to None.
@@ -484,7 +483,7 @@ def get_network_information(log, hosts, supported=None, verbose=True):
     """
     network_devices = []
 
-    ofi_info = get_hg_info(log, hosts, filter_provider=supported, verbose=verbose)
+    ofi_info = get_hg_info(hosts, filter_provider=supported, verbose=verbose)
     ucx_info = get_ucx_info(hosts, supported, verbose)
 
     interfaces = get_active_network_interfaces(hosts, verbose)
