@@ -4830,7 +4830,7 @@ set_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			if (rc)
 				goto out_free_prop;
 			rdb_tx_end(ap->tx);
-			ABT_thread_yield();
+			dss_sleep(0);
 			rc = rdb_tx_begin(ap->svc->cs_rsvc->s_db,
 					  ap->svc->cs_rsvc->s_term, ap->tx);
 			if (rc)
