@@ -269,6 +269,8 @@ def get_hg_info(log, hosts, filter_provider=None, filter_device=None, verbose=Tr
     if result.passed:
         # Find all supported providers
         for data in result.output:
+            if not data.stdout:
+                continue
             # Convert:
             # <Class>  <Protocol>  <Device>
             # To {device: set(providers)}
