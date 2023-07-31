@@ -46,6 +46,8 @@ from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_
 from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
     YamlException    # noqa: E402
 from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
+from network_utils import get_common_provider  # noqa: E402
+
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -1302,58 +1304,17 @@ class Launch():
                     if "verbs" in _provider:
                         SUPPORTED_PROVIDERS.pop(index)
 
-            # Get all domains for the interface.
-            # Include the interface as a domain in case of tcp.
-            # TODO use get_interface_device_name()
-            # TODO add new function to network_utils for hg_info()
-            # TODO ci_wolf-52 OR ci_ofed5
-            # TODO verify test_dmg_network_scan_basic
-            # TODO verify against Jerome's libfabric changes
-            all_domains_found = set([interface])
-            for device_type in ["infiniband", "cxi"]:
-                command = f"find /sys/class/net/{interface}/device/{device_type}/* " \
-                    f"-maxdepth 0 -printf '%f\\n' 2>/dev/null"
-                result = run_remote(logger, servers, command)
-                if result.passed:
-                    for data in result.output:
-                        if data.stdout:
-                            all_domains_found.update(domain.strip() for domain in data.stdout)
-            logger.debug("Detected supported domains for %s:", interface)
-            logger.debug("  %s", ", ".join(all_domains_found))
+            # Get the common supported providers on all servers
+            common_providers = get_common_provider(
+                logger, servers, interface,
+                supported=SUPPORTED_PROVIDERS)
 
-            # Detect all supported providers
-            command = "hg_info"
-            result = run_remote(logger, servers, command)
-            if result.passed:
-                # Find all supported providers
-                providers_found = defaultdict(NodeSet)
-                for data in result.output:
-                    # Output as:
-                    # <Class>  <Protocol>  <Device>
-                    # Filter by supported domains/devices
-                    domain_re = '|'.join(all_domains_found)
-                    class_protocol_device = re.findall(
-                        fr'(\S+) +([\S]+) +({domain_re})$', '\n'.join(data.stdout), re.MULTILINE)
-                    for _class, _protocol, _ in class_protocol_device:
-                        _provider = f"{_class}+{_protocol}"
-                        if _provider in SUPPORTED_PROVIDERS:
-                            providers_found[_provider].update(data.hosts)
-
-                # Only use providers available on all the server hosts
-                if providers_found:
-                    logger.debug("Detected supported providers for %s:", interface)
-                for _provider, hosts in providers_found.items():
-                    logger.debug("  %4s: %s", _provider, str(hosts))
-                    if hosts != servers:
-                        providers_found.pop(_provider)
-
-                # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
-                logger.debug(
-                    "Supported providers detected for %s: %s", interface, list(providers_found))
-                for _provider in SUPPORTED_PROVIDERS:
-                    if _provider in providers_found:
-                        provider = _provider
-                        break
+            # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
+            logger.debug("Supported providers detected for %s: %s", interface, common_providers)
+            for _provider in SUPPORTED_PROVIDERS:
+                if _provider in common_providers:
+                    provider = _provider
+                    break
 
             # Report an error if a provider cannot be found
             if not provider:
