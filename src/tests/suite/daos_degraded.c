@@ -1,16 +1,14 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
  *
- * tests/suite/daos_replicated.c
- *
  * Replication tests need external interaction, to
  * kill servers and update pool map.
-*/
+ */
 #define D_LOGFAC	DD_FAC(tests)
 #include "daos_iotest.h"
 
@@ -35,30 +33,30 @@ enum {
 static void
 insert_lookup_enum_with_ops(test_arg_t *arg, int op_kill)
 {
-	daos_obj_id_t		oid;
-	struct ioreq		req;
-	int			i;
-	int			g_dkeys_strlen = 8; /* "999999" */
-	const char		*dkey_fmt = "degraded dkey%d";
-	const char		akey[] = "degraded akey";
-	char			*dkey[g_dkeys], *buf, *ptr;
-	char			*dkey_enum;
-	char			*rec[g_dkeys];
-	char			*val[g_dkeys];
-	daos_key_desc_t		kds[g_dkeys];
-	daos_anchor_t		anchor_out;
-	daos_size_t		rec_size[g_dkeys];
-	daos_off_t		offset[g_dkeys];
-	const char		*val_fmt = "degraded val%d";
-	daos_size_t		val_size[g_dkeys];
-	char			*rec_verify;
-	uint32_t		number;
-	int			rank, key_nr;
-	int			enum_op = 1;
-	int			size;
-	int			rc;
-	daos_pool_info_t	info = {0};
-	int			enumed = 1;
+	daos_obj_id_t    oid;
+	struct ioreq     req;
+	int              i;
+	int              g_dkeys_strlen = 9; /* "-999999" */
+	const char      *dkey_fmt       = "degraded dkey%d";
+	const char       akey[]         = "degraded akey";
+	char            *dkey[g_dkeys], *buf, *ptr;
+	char            *dkey_enum;
+	char            *rec[g_dkeys];
+	char            *val[g_dkeys];
+	daos_key_desc_t  kds[g_dkeys];
+	daos_anchor_t    anchor_out;
+	daos_size_t      rec_size[g_dkeys];
+	daos_off_t       offset[g_dkeys];
+	const char      *val_fmt = "degraded val%d";
+	daos_size_t      val_size[g_dkeys];
+	char            *rec_verify;
+	uint32_t         number;
+	int              rank, key_nr;
+	int              enum_op = 1;
+	int              size;
+	int              rc;
+	daos_pool_info_t info   = {0};
+	int              enumed = 1;
 
 	par_rank(PAR_COMM_WORLD, &rank);
 	par_size(PAR_COMM_WORLD, &size);
