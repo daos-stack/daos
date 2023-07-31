@@ -450,8 +450,7 @@ def get_common_provider(log, hosts, interface, supported=None, verbose=True):
     hg_info = get_hg_info(log, hosts, filter_provider=supported, verbose=verbose)
     providers = get_interface_providers(interface, hg_info)
     for dev_name in get_interface_device_name(hosts, interface, verbose):
-        interface_providers = get_interface_providers(dev_name, hg_info)
-        providers.update(interface_providers)
+        providers.update(get_interface_providers(dev_name, hg_info))
 
     if not supported or "ucx" in supported:
         ucx_info = get_ucx_info(hosts, supported, verbose)

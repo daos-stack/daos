@@ -7,7 +7,7 @@
 # pylint: disable=too-many-lines
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from tempfile import TemporaryDirectory
 import errno
 import getpass
