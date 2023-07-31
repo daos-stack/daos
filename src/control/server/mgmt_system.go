@@ -251,7 +251,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
-		if err == errInstanceNotReady {
+		if err == errEngineNotReady {
 			return err
 		}
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
@@ -506,7 +506,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
-	members := svc.membership.Members(hitRanks)
+	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
+	if err != nil {
+		return nil, errors.Wrap(err, "get membership")
+	}
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}

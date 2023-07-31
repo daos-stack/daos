@@ -119,7 +119,7 @@ dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *io
 	 * fault injection - corrupt keys after calculating checksum -
 	 * simulates corruption over network
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY))
+	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_DKEY) && (*dkey_csum) != NULL)
 		(*dkey_csum)->cs_csum[0]++;
 	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH_AKEY))
 		(*iod_csums)[0].ic_akey.cs_csum[0]++;

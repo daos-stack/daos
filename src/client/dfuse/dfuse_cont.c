@@ -78,7 +78,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(dfuse_info, ie);
 
 	rc = dfs_lookup(dfc->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
@@ -98,7 +98,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	dfuse_reply_entry(dfuse_info, ie, NULL, true, req);
 	return;
 close:
-	D_FREE(ie);
+	dfuse_ie_free(dfuse_info, ie);
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:

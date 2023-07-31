@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,9 +15,7 @@
 
 #define DFUSE_IOCTL_REPLY_CORE   (DFUSE_IOCTL_REPLY_BASE)
 
-/* (DFUSE_IOCTL_REPLY_BASE + 1) is reserved by an older version of
- * IOCTL_REPLY_SIZE
- */
+/* (DFUSE_IOCTL_REPLY_BASE + 1) is reserved by an older version of IOCTL_REPLY_SIZE */
 
 #define DFUSE_IOCTL_REPLY_POH    (DFUSE_IOCTL_REPLY_BASE + 2)
 #define DFUSE_IOCTL_REPLY_COH    (DFUSE_IOCTL_REPLY_BASE + 3)
@@ -28,6 +26,8 @@
 #define DFUSE_IOCTL_REPLY_PFILE  (DFUSE_IOCTL_REPLY_BASE + 8)
 
 #define DFUSE_IOCTL_R_DFUSE_USER (DFUSE_IOCTL_REPLY_BASE + 9)
+#define DFUSE_COUNT_QUERY_CMD    (DFUSE_IOCTL_REPLY_BASE + 10)
+#define DFUSE_IOCTL_EVICT_NR     (DFUSE_IOCTL_REPLY_BASE + 11)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
@@ -60,6 +60,15 @@ struct dfuse_user_reply {
 	gid_t gid;
 };
 
+struct dfuse_mem_query {
+	uint64_t inode_count;
+	uint64_t fh_count;
+	uint64_t pool_count;
+	uint64_t container_count;
+	ino_t    ino;
+	bool     found;
+};
+
 /* Defines the IOCTL command to get the object ID for a open file */
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, struct dfuse_il_reply))
 
@@ -75,5 +84,11 @@ struct dfuse_user_reply {
 /* Return the user running dfuse */
 #define DFUSE_IOCTL_DFUSE_USER                                                                     \
 	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_R_DFUSE_USER, struct dfuse_user_reply))
+
+#define DFUSE_IOCTL_COUNT_QUERY                                                                    \
+	((int)_IOWR(DFUSE_IOCTL_TYPE, DFUSE_COUNT_QUERY_CMD, struct dfuse_mem_query))
+
+#define DFUSE_IOCTL_DFUSE_EVICT                                                                    \
+	((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_EVICT_NR, struct dfuse_mem_query))
 
 #endif /* __DFUSE_IOCTL_H__ */

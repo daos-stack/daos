@@ -159,13 +159,14 @@ def show_line(line, sev, msg, custom=None):
                                         msg,
                                         line.get_anon_msg())
     if log in shown_logs:
-        return
+        return False
     print(log)
     if custom:
         custom.add(line, sev, msg)
     elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
+    return True
 
 
 class HwmCounter():
@@ -175,7 +176,7 @@ class HwmCounter():
     def __init__(self):
         self.__val = 0
         self.__hwm = 0
-        self.__acount = 0
+        self.count = 0
         self.__fcount = 0
 
     def has_data(self):
@@ -185,12 +186,12 @@ class HwmCounter():
     def __str__(self):
         return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
                                                              self.__hwm,
-                                                             self.__acount) + \
-            '{} frees {} possible leaks'.format(self.__fcount, self.__acount - self.__fcount)
+                                                             self.count) + \
+            '{} frees {} possible leaks'.format(self.__fcount, self.count - self.__fcount)
 
     def add(self, val):
         """Add a value"""
-        self.__acount += 1
+        self.count += 1
         if val < 0:
             return
         self.__val += val
@@ -329,6 +330,7 @@ class LogTest():
         # Dict of active RPCs
         active_rpcs = OrderedDict()
 
+        fi_count = 0
         err_count = 0
         warnings_strict = False
         warnings_mode = False
@@ -357,6 +359,9 @@ class LogTest():
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
+
+                if 'DER_UNKNOWN' in msg:
+                    show_line(line, 'NORMAL', 'Use of DER_UNKNOWN')
                 # Warn if a line references the name of the function it was in,
                 # but skip short function names or _internal suffixes.
                 if line.function in msg and len(line.function) > 6 and \
@@ -374,10 +379,12 @@ class LogTest():
                     if self.hide_fi_calls and line.fac != 'external':
                         if line.is_fi_site():
                             show = False
+                            fi_count += 1
                         elif line.is_fi_alloc_fail():
                             show = False
                             self.fi_triggered = True
                             self.fi_location = line
+                            fi_count += 1
                         elif '-1009' in line.get_msg():
 
                             src_offset = line.lineno - self.fi_location.lineno
@@ -504,8 +511,10 @@ class LogTest():
                         # Logs no longer contain free(NULL) however old logs might so continue
                         # to handle this case.
                         if pointer in old_regions:
-                            show_line(old_regions[pointer][0], 'ERROR',
-                                      'double-free allocation point')
+                            if show_line(old_regions[pointer][0], 'ERROR',
+                                         'double-free allocation point'):
+                                print(f'Memory address is {pointer}')
+
                             show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
                             show_line(line, 'ERROR', '2nd double-free location')
                         else:
@@ -548,6 +557,9 @@ class LogTest():
         if not self.quiet:
             print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
                 pid, total_lines, trace_lines, p_trace))
+            if fi_count and memsize.count:
+                print("Number of faults injected {} {:.2f}%".format(
+                    fi_count, (fi_count / memsize.count) * 100))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
@@ -559,12 +571,18 @@ class LogTest():
         lost_memory = False
         if show_memleaks:
             for (_, line) in list(regions.items()):
-                pointer = line.get_field(-1).rstrip('.')
+                if line.is_calloc():
+                    pointer = line.calloc_pointer()
+                else:
+                    assert line.is_realloc()
+                    (pointer, _) = line.realloc_pointers()
                 if pointer in active_desc:
-                    show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf)
+                    if show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf):
+                        print(f'Memory address is {pointer}')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf)
+                    if show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf):
+                        print(f'Memory address is {pointer}')
                 lost_memory = True
 
         if active_desc:

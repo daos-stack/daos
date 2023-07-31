@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -548,6 +548,47 @@ func TestControl_getResetRankErrors(t *testing.T) {
 
 			test.AssertEqual(t, tc.expRankErrs, rankErrs, name)
 			test.AssertStringsEqual(t, tc.expHosts, hosts, "host list")
+		})
+	}
+}
+
+func TestControl_SystemQueryReq_getStateMask(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req     *SystemQueryReq
+		expMask system.MemberState
+		expErr  error
+	}{
+		"not-ok": {
+			req: &SystemQueryReq{
+				NotOK: true,
+			},
+			expMask: system.AllMemberFilter &^ system.MemberStateJoined,
+		},
+		"with-states": {
+			req: &SystemQueryReq{
+				WantedStates: system.MemberStateJoined | system.MemberStateExcluded,
+			},
+			expMask: system.MemberStateJoined | system.MemberStateExcluded,
+		},
+		"with-states; bad state": {
+			req: &SystemQueryReq{
+				WantedStates: -1,
+			},
+			expErr: errors.New("invalid member states bitmask -1"),
+		},
+		"vanilla": {
+			req:     &SystemQueryReq{},
+			expMask: system.AllMemberFilter,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotMask, gotErr := tc.req.getStateMask()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			test.AssertEqual(t, tc.expMask, gotMask, name)
 		})
 	}
 }
@@ -1455,7 +1496,7 @@ func TestControl_SystemJoin_Timeouts(t *testing.T) {
 		},
 		"inner context is canceled; request is retried": {
 			mic: &MockInvokerConfig{
-				ReqTimeout:   100 * time.Millisecond, // outer timeout
+				ReqTimeout:   500 * time.Millisecond, // outer timeout
 				RetryTimeout: 10 * time.Millisecond,  // inner timeout
 				UnaryResponseSet: []*UnaryResponse{
 					{

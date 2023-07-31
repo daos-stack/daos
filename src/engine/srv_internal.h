@@ -139,7 +139,6 @@ int dss_module_load(const char *modname);
 int dss_module_init_all(uint64_t *mod_fac);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
-int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
@@ -252,7 +251,8 @@ static inline void
 dss_free_stack_cb(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	struct dss_xstream *dx = dss_current_xstream();
+	/* main thread doesn't have TLS and XS */
+	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
 
 	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
 	if (dx != NULL)
