@@ -1586,10 +1586,12 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 2)
+	if (pool->sp_global_version >= 3)
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
+	else if (pool->sp_global_version == 2)
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	else if (pool->sp_global_version == 1)
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	else
+		D_ASSERT(0); /** Should never happen as we could never open the pool */
 
 	if (pool->sp_checkpoint_props_changed) {
 		pool->sp_checkpoint_props_changed = 0;

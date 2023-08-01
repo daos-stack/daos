@@ -65,9 +65,11 @@
 	 DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH)
 
 /*
- * Aggregation of pool/container/object/keys disk format change.
+ * Version 1 corresponds to 2.2 (aggregation optimizations)
+ * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
+ * Version 3 corresponds to 2.6 (root embedded values)
  */
-#define DAOS_POOL_GLOBAL_VERSION		2
+#define DAOS_POOL_GLOBAL_VERSION 3
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
