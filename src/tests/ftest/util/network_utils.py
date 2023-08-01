@@ -10,7 +10,6 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-from exception_utils import CommandFailure
 from general_utils import run_task, display_task, run_pcmd
 from run_utils import run_remote
 
@@ -518,37 +517,6 @@ def get_network_information(log, hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
-
-    return network_devices
-
-
-def get_dmg_network_information(dmg_network_scan):
-    """Get the network device information from the dmg network scan output.
-
-    Args:
-        dmg_network_scan (dict): the dmg network scan json command output
-
-    Raises:
-        CommandFailure: if there was an error processing the dmg network scan output
-
-    Returns:
-        list: a list of NetworkDevice objects identifying the network devices on each host
-
-    """
-    network_devices = []
-
-    try:
-        for host_fabric in dmg_network_scan["response"]["HostFabrics"].values():
-            for host in NodeSet(host_fabric["HostSet"].split(":")[0]):
-                for interface in host_fabric["HostFabric"]["Interfaces"]:
-                    network_devices.append(
-                        NetworkDevice(
-                            host, interface["Device"], None, 1, interface["Provider"],
-                            interface["NumaNode"])
-                    )
-    except KeyError as error:
-        raise CommandFailure(
-            f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices
 
