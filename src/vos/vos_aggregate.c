@@ -1202,9 +1202,9 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
 	bio_iov_set(&bsgl_dst.bs_iovs[0], ent_in->ei_addr, seg_size);
 
-	copy_desc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst);
-	if (copy_desc == NULL) {
-		D_ERROR("Failed to Prepare source & target SGLs for copy.\n");
+	rc = bio_copy_prep(bio_ctxt, umem, &bsgl, &bsgl_dst, &copy_desc);
+	if (rc) {
+		D_ERROR("Failed to Prepare source & target SGLs for copy. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 

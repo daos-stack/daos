@@ -777,11 +777,10 @@ rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */,
-			   key, value);
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		D_ERROR(DF_DB ": failed to update KVS " DF_X64 ": " DF_RC "\n", DP_DB(db), kvs,
+			DP_RC(rc));
 	return rc;
 }
 
@@ -972,9 +971,9 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
-				D_ERROR(DF_DB": failed to apply entry "DF_U64
-					" op %u <%td, %zd>: %d\n", DP_DB(db),
-					index, op.dto_opc, p - buf, n, rc);
+				D_ERROR(DF_DB ": failed to apply entry " DF_U64
+					      " op %u <%td, %zd>: " DF_RC "\n",
+					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
 			break;
 		}
 		p += n;
@@ -994,8 +993,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		rdb_kvs_cache_evict(db->d_kvss);
 		rc_tmp = rdb_lc_discard(db->d_lc, index, index);
 		if (rc_tmp != 0) {
-			D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
-				DP_DB(db), index, rc_tmp);
+			D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n",
+				DP_DB(db), index, DP_RC(rc_tmp));
 			if (rdb_tx_deterministic_error(rc))
 				return rc_tmp;
 			else

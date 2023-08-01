@@ -1859,16 +1859,19 @@ free:
 	return NULL;
 }
 
-struct bio_copy_desc *
+int
 bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
+	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	      struct bio_copy_desc **desc)
 {
 	struct bio_copy_desc	*copy_desc;
-	int			 rc;
+	int			 rc, ret;
 
 	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return NULL;
+	if (copy_desc == NULL) {
+		*desc = NULL;
+		return -DER_NOMEM;
+	}
 
 	rc = bio_iod_prep(copy_desc->bcd_iod_src, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
@@ -1877,15 +1880,17 @@ bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	copy_desc->bcd_iod_dst->bd_copy_dst = 1;
 	rc = bio_iod_prep(copy_desc->bcd_iod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		rc = bio_iod_post(copy_desc->bcd_iod_src, 0);
-		D_ASSERT(rc == 0);
+		ret = bio_iod_post(copy_desc->bcd_iod_src, 0);
+		D_ASSERT(ret == 0);
 		goto free;
 	}
 
-	return copy_desc;
+	*desc = copy_desc;
+	return 0;
 free:
 	free_copy_desc(copy_desc);
-	return NULL;
+	*desc = NULL;
+	return rc;
 }
 
 int
@@ -1950,9 +1955,9 @@ bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	copy_desc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return -DER_NOMEM;
+	rc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst, &copy_desc);
+	if (rc)
+		return rc;
 
 	rc = bio_copy_run(copy_desc, copy_size, csum_desc);
 	rc = bio_copy_post(copy_desc, rc);

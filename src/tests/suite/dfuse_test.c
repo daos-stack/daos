@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,15 +27,14 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <dirent.h>
 
 #include "dfuse_ioctl.h"
 
-/**
- * Tests can be run by specifying the appropriate argument for a test or
- * all will be run if no test is specified.
+/* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
+ * is specified.
  */
-#define TESTS "ims"
-static const char *all_tests = TESTS;
+static const char *all_tests = "ismd";
 
 static void
 print_usage()
@@ -47,15 +46,12 @@ print_usage()
 	print_message("dfuse_test -i|--io\n");
 	print_message("dfuse_test -s|--stream\n");
 	print_message("dfuse_test -m|--metadata\n");
+	print_message("dfuse_test -d|--directory\n");
 	print_message("Default <dfuse_test> runs all tests\n=============\n");
 	print_message("\n=============================\n");
 }
 
 char *test_dir;
-
-#ifndef O_PATH
-#define O_PATH 0
-#endif
 
 void
 do_openat(void **state)
@@ -414,6 +410,90 @@ do_mtime(void **state)
 	assert_return_code(rc, errno);
 }
 
+/*
+ * Check readdir for issues.
+ *
+ * Create a directory
+ * Populate it
+ * Check the file count
+ * Rewind the directory handle
+ * Re-check the file count.
+ *
+ * In order for this test to be idempotent and because it takes time to create the files then
+ * ignore errors about file exists when creating.
+ */
+void
+do_directory(void **state)
+{
+	int            root;
+	int            dfd;
+	int            rc;
+	int            i;
+	DIR           *dirp;
+	struct dirent *ent;
+	long           pos;
+
+	printf("Creating dir and files\n");
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	rc = mkdirat(root, "wide_dir", S_IWUSR | S_IRUSR | S_IXUSR);
+	if (rc != 0 && errno != EEXIST)
+		assert_return_code(rc, errno);
+
+	dfd = openat(root, "wide_dir", O_RDONLY | O_DIRECTORY);
+	assert_return_code(dfd, errno);
+
+	for (i = 0; i < 100; i++) {
+		char fname[17];
+		int  fd;
+
+		rc = snprintf(fname, 17, "file %d", i);
+		assert_in_range(rc, 0, 16);
+
+		fd = openat(dfd, fname, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+		assert_return_code(fd, errno);
+		rc = close(fd);
+		assert_return_code(rc, errno);
+	}
+
+	printf("Checking file count\n");
+	dirp = fdopendir(dfd);
+	if (dirp == NULL)
+		assert_return_code(-1, errno);
+
+	pos = telldir(dirp);
+
+	i     = 0;
+	errno = 0;
+	while ((ent = readdir(dirp)) != NULL) {
+		i++;
+	}
+	if (errno != 0)
+		assert_return_code(-1, errno);
+	printf("File count is %d\n", i);
+	assert_int_equal(i, 100);
+
+	printf("Rewinding and rechecking file count\n");
+	seekdir(dirp, pos);
+
+	i     = 0;
+	errno = 0;
+	while ((ent = readdir(dirp)) != NULL) {
+		i++;
+	}
+	if (errno != 0)
+		assert_return_code(-1, errno);
+	printf("File count is %d\n", i);
+	assert_int_equal(i, 100);
+
+	rc = close(dfd);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -454,6 +534,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(metadata_tests, NULL, NULL);
 			break;
 
+		case 'd':
+			printf("\n\n=================");
+			printf("dfuse directory tests");
+			printf("=====================\n");
+			const struct CMUnitTest readdir_tests[] = {
+			    cmocka_unit_test(do_directory),
+			};
+			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -467,8 +557,8 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 int
 main(int argc, char **argv)
 {
-	char                 tests[64];
-	int                  ntests = 0;
+	char                 tests[64] = {};
+	int                  ntests    = 0;
 	int                  nr_failed = 0;
 	int                  opt = 0, index = 0;
 
@@ -477,11 +567,10 @@ main(int argc, char **argv)
 					       {"io", no_argument, NULL, 'i'},
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
+					       {"directory", no_argument, NULL, 'd'},
 					       {NULL, 0, NULL, 0}};
 
-	memset(tests, 0, sizeof(tests));
-
-	while ((opt = getopt_long(argc, argv, "aM:ims", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsd", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;

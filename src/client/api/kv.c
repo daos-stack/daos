@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,6 +42,9 @@ daos_kv_close(daos_handle_t oh, daos_event_t *ev)
 	daos_kv_close_t	*args;
 	tse_task_t	*task;
 	int		rc;
+
+	if (ev == NULL)
+		return dc_kv_close_direct(oh);
 
 	rc = dc_task_create(dc_kv_close, NULL, ev, &task);
 	if (rc)

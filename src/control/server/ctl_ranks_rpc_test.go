@@ -102,9 +102,13 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			// no results as rank cannot be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		"instances stopped": {
+		"instances stopped already": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
@@ -918,7 +922,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			expMasks:   "ERR,MISC=DBUG",
 			expStreams: "MGMT",
 		},
-		"all values specified in config": {
+		"reset all masks; simple": {
 			req: ctlpb.SetLogMasksReq{
 				Masks:           "DEBUG",
 				Streams:         "MGMT",
@@ -932,6 +936,17 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 			cfgSubsystems: "misc",
 			expMasks:      "ERR",
 			expStreams:    "md",
+		},
+		"reset all masks; complex": {
+			req: ctlpb.SetLogMasksReq{
+				ResetMasks:      true,
+				ResetStreams:    true,
+				ResetSubsystems: true,
+			},
+			cfgMasks:   "info,dtx=debug,vos=debug,object=debug",
+			cfgStreams: "io,epc",
+			expMasks:   "INFO,dtx=DBUG,vos=DBUG,object=DBUG",
+			expStreams: "io,epc",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -958,6 +973,7 @@ func TestServer_updateSetEngineLogMasksReq(t *testing.T) {
 		})
 	}
 }
+
 func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
 	for name, tc := range map[string]struct {
 		missingRank      bool
