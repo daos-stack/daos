@@ -10,7 +10,6 @@ import re
 
 from ClusterShell.NodeSet import NodeSet
 
-from exception_utils import CommandFailure
 from general_utils import run_task, display_task, run_pcmd
 from run_utils import run_remote
 
@@ -271,12 +270,15 @@ def get_hg_info(log, hosts, filter_provider=None, filter_device=None, verbose=Tr
         for data in result.output:
             if not data.stdout:
                 continue
+            # Skip over the header
+            without_header = re.findall(
+                r'^-+\n^.*\n^-+\n(.*)', '\n'.join(data.stdout), re.MULTILINE | re.DOTALL)[0]
             # Convert:
             # <Class>  <Protocol>  <Device>
             # To {device: set(providers)}
             device_providers = {}
             class_protocol_device = re.findall(
-                r'(\S+) +([\S]+) +([\S]+)$', '\n'.join(data.stdout[4:]), re.MULTILINE)
+                r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
                 if filter_device and device not in filter_device:
                     continue
@@ -518,37 +520,6 @@ def get_network_information(log, hosts, supported=None, verbose=True):
                     these_kwargs = kwargs.copy()
                     these_kwargs["provider"] = item
                     network_devices.append(NetworkDevice(**these_kwargs))
-
-    return network_devices
-
-
-def get_dmg_network_information(dmg_network_scan):
-    """Get the network device information from the dmg network scan output.
-
-    Args:
-        dmg_network_scan (dict): the dmg network scan json command output
-
-    Raises:
-        CommandFailure: if there was an error processing the dmg network scan output
-
-    Returns:
-        list: a list of NetworkDevice objects identifying the network devices on each host
-
-    """
-    network_devices = []
-
-    try:
-        for host_fabric in dmg_network_scan["response"]["HostFabrics"].values():
-            for host in NodeSet(host_fabric["HostSet"].split(":")[0]):
-                for interface in host_fabric["HostFabric"]["Interfaces"]:
-                    network_devices.append(
-                        NetworkDevice(
-                            host, interface["Device"], None, 1, interface["Provider"],
-                            interface["NumaNode"])
-                    )
-    except KeyError as error:
-        raise CommandFailure(
-            f"Error processing dmg network scan json output: {dmg_network_scan}") from error
 
     return network_devices
 
