@@ -270,12 +270,15 @@ def get_hg_info(log, hosts, filter_provider=None, filter_device=None, verbose=Tr
         for data in result.output:
             if not data.stdout:
                 continue
+            # Skip over the header
+            without_header = re.findall(
+                r'^-+\n^.*\n^-+\n(.*)', '\n'.join(data.stdout), re.MULTILINE | re.DOTALL)[0]
             # Convert:
             # <Class>  <Protocol>  <Device>
             # To {device: set(providers)}
             device_providers = {}
             class_protocol_device = re.findall(
-                r'(\S+) +([\S]+) +([\S]+)$', '\n'.join(data.stdout[4:]), re.MULTILINE)
+                r'(\S+) +([\S]+) +([\S]+)$', without_header, re.MULTILINE)
             for _class, protocol, device in class_protocol_device:
                 if filter_device and device not in filter_device:
                     continue

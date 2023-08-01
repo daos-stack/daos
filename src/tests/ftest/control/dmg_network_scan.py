@@ -3,9 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 
-from network_utils import get_network_information, get_dmg_network_information, SUPPORTED_PROVIDERS
+from apricot import TestWithServers
+from network_utils import get_network_information, SUPPORTED_PROVIDERS, NetworkDevice
 from exception_utils import CommandFailure
 
 
@@ -73,6 +74,7 @@ class DmgNetworkScanTest(TestWithServers):
         self.log.info("-" * 100)
         msg = f"\nDmg Info:\n{dmg_info} \n\nSysInfo:\n{sys_info}"
         self.assertEqual(sys_info, dmg_info, msg)
+
 
 def get_dmg_network_information(dmg_network_scan):
     """Get the network device information from the dmg network scan output.
