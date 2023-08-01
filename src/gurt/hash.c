@@ -1174,8 +1174,14 @@ out:
 void
 d_hhash_destroy(struct d_hhash *hhash)
 {
+	int rc;
 	d_hash_table_debug(&hhash->ch_htable);
-	d_hash_table_destroy_inplace(&hhash->ch_htable, true);
+
+	rc = d_hash_table_destroy_inplace(&hhash->ch_htable, false);
+
+	if (rc == -DER_BUSY)
+		d_hash_table_destroy_inplace(&hhash->ch_htable, true);
+
 	D_FREE(hhash);
 }
 
