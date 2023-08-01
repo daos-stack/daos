@@ -235,9 +235,10 @@
 ## of RAM resulting in MemAvailable value being too low to support the calculated RAM-disk size
 ## increasing the value will reduce the calculate size. Alternatively in situations where total
 ## RAM is low, reducing the value may prevent problems where RAM-disk size calculated is below the
-## minimum of 4gib.
+## minimum of 4gib. Increasing the value may help avoid the potential of OOM killer terminating
+## engine processes but could also result in stopping DAOS from using available memory resources.
 #
-## default: 6
+## default: 16
 #system_ram_reserved: 5
 #
 #
