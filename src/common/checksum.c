@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1155,7 +1155,11 @@ ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
 
-	D_ASSERT(dcb != NULL);
+	if (dcb == NULL) {
+		D_WARN("Trying to insert a csum (%p) into a NULL dcb\n", csum_buf);
+		return;
+	}
+
 	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
 		  idx, dcb->cs_nr);
 	D_ASSERT(len <= dcb->cs_buf_len - idx * dcb->cs_len);
