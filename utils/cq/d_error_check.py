@@ -208,31 +208,18 @@ class AllChecks():
 
     def check_return(self, line):
         """Check for one return character"""
-        expected_newlines = 1
+        max_newlines = 1
         code = line.raw()
         if any(map(code.startswith, PREFIXES_NNL)):
-            expected_newlines = 0
+            max_newlines = 0
 
         if '"%s",' in code:
             line.note('Use of %s at end of log-line, unable to check')
             return
 
         count = code.count('\\n')
-        # Upon further checking newlines are optional for daos logging so do not check for zero
-        # or one new-line.
-        # if count < expected_newlines:
-        #    parts = code.split('"')
-        #    if len(parts) == 3 and 'DF_RC' not in code:
-        #        new_line = f'{parts[0]}"{parts[1]}\\n"{parts[2]}'
-        #        line.fix(new_line)
-        #        line.warning("Line does not contain newline (autofixable)")
-        #    else:
-        #        line.warning("Line does not contain newline")
-        if count > expected_newlines:
-            if count == 1:
-                line.warning("Line contains too many newlines")
-            else:
-                line.note("More than one newline")
+        if count > max_newlines:
+            line.warning("Line contains too many newlines")
 
     def check_df_rc_dot(self, line):
         """Check there is no . after DF_RC"""
@@ -249,8 +236,9 @@ class AllChecks():
     def check_df_rc(self, line):
         r"""Check for text before DF_RC macro
 
-        Re-flow lines that use DF_RC so that they are of the form '...: " DF_RC "\n",'
+        Re-flow lines that use DF_RC so that they are of the form '...: " DF_RC,'
         There should be a ": " before the DF_RC.
+        There should not be a space before the :
         There should not be other special characters used.
         The variable name should not be printed
 
@@ -276,13 +264,12 @@ class AllChecks():
 
         # Check that DF_RC is at the end of the line, it should be.
 
-        # no return code, check for a ,
-        if any(map(code.startswith, PREFIXES_NNL)):
-            if 'DF_RC,' not in code:
+        if '\\n' in code:
+            if 'DF_RC"\\n"' not in code:
                 line.note('DF_RC is not at end of line')
                 return
         else:
-            if 'DF_RC"\\n"' not in code:
+            if 'DF_RC,' not in code:
                 line.note('DF_RC is not at end of line')
                 return
 
