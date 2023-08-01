@@ -3061,7 +3061,8 @@ echo_fetch_update(void **state)
 static void
 tgt_idx_change_retry(void **state)
 {
-	test_arg_t		*arg = *state;
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
 	struct ioreq		 req;
 	const char		 dkey[] = "tgt_change dkey";
@@ -3078,10 +3079,16 @@ tgt_idx_change_retry(void **state)
 	int			 i;
 	int			 rc;
 
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_success(rc);
+	dt_redun_fac = 0;
+
 	/* create a 3 replica small object, to test the case that:
 	 * update:
 	 * 1) shard 0 IO finished, then the target x of shard 0 dead/excluded
-	 * 2) shard 1 and shard 2 IO still inflight (not scheduled)
+	 * 2) shard 1 and shard 2 IO still in-flight (not scheduled)
 	 * 3) obj IO retry, shard 0 goes to new target y
 	 *
 	 * Then fetch and verify the data.
@@ -3091,16 +3098,12 @@ tgt_idx_change_retry(void **state)
 	if (!test_runable(arg, 4))
 		skip();
 
-	if (1) {
-		print_message("Temporary disable IO30\n");
-		skip();
-	}
-
-	if (!arg->async) {
+	if (!arg0->async) {
 		if (arg->myrank == 0)
 			print_message("this test can-only run in async mode\n");
 		skip();
 	}
+	async_enable((void **)&arg);
 
 	oid = daos_test_oid_gen(arg->coh, DAOS_OC_R3S_SPEC_RANK, 0, 0,
 				arg->myrank);
@@ -3216,6 +3219,7 @@ tgt_idx_change_retry(void **state)
 	}
 	par_barrier(PAR_COMM_WORLD);
 	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 static void
@@ -3258,7 +3262,7 @@ fetch_replica_unavail(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** Lookup */
-	buf = calloc(size, 1);
+	D_ALLOC(buf, size);
 	assert_non_null(buf);
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
@@ -3744,8 +3748,8 @@ split_sgl_internal(void **state, int size)
 	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	sbuf1 = calloc(size/2, 1);
-	sbuf2 = calloc(size/2, 1);
+	D_ALLOC(sbuf1, size / 2);
+	D_ALLOC(sbuf2, size / 2);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));

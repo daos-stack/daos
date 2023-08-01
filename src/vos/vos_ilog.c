@@ -44,8 +44,9 @@ static int
 vos_ilog_is_same_tx(struct umem_instance *umm, uint32_t tx_id,
 		    daos_epoch_t epoch, bool *same, void *args)
 {
-	struct dtx_handle	*dth = vos_dth_get();
-	uint32_t		 dtx = vos_dtx_get();
+	bool			 standalone = umm->umm_pool->up_store.store_standalone;
+	struct dtx_handle	*dth = vos_dth_get(standalone);
+	uint32_t		 dtx = vos_dtx_get(standalone);
 	daos_handle_t		 coh;
 
 	coh.cookie = (unsigned long)args;
@@ -372,7 +373,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -459,7 +460,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		struct vos_ts_set *ts_set, bool leaf, bool replay)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -658,17 +659,17 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog)
 }
 
 void
-vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type)
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone)
 {
 	uint32_t	*idx;
 
 	idx = ilog_ts_idx_get(ilog);
 
-	return vos_ts_evict(idx, type);
+	return vos_ts_evict(idx, type, standalone);
 }
 
 void
-vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc, bool standalone)
 {
 	struct vos_ts_entry	*se_entry = NULL;
 	struct vos_wts_cache	*wcache;
@@ -679,7 +680,7 @@ vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc)
 	D_ASSERT(epc != NULL);
 	idx = ilog_ts_idx_get(ilog);
 
-	found = vos_ts_peek_entry(idx, type, &se_entry);
+	found = vos_ts_peek_entry(idx, type, &se_entry, standalone);
 	if (found) {
 		D_ASSERT(se_entry != NULL);
 		wcache = &se_entry->te_w_cache;

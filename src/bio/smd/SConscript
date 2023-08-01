@@ -11,7 +11,7 @@ def scons():
 
     denv.AppendUnique(CPPPATH=[Dir('../../include/internal').srcnode()])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
+    denv.require('pmdk', 'argobots', 'protobufc')
 
     denv.d_static_library('smd', FILES, LIBS=[])
 

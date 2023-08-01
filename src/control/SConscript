@@ -18,6 +18,8 @@ def get_build_tags(benv):
         tags.append("firmware")
     if not is_release_build(benv):
         tags.append("pprof")
+    else:
+        tags.append("release")
     return f"-tags {','.join(tags)}"
 
 

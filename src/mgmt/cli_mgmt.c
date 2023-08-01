@@ -349,7 +349,7 @@ alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
 	for (i = 0; i < resp->n_rank_uris; i++) {
 		uris[i].dru_rank = resp->rank_uris[i]->rank;
 
-		D_ASPRINTF(uris[i].dru_uri, resp->rank_uris[i]->uri);
+		D_STRNDUP(uris[i].dru_uri, resp->rank_uris[i]->uri, CRT_ADDR_STR_MAX_LEN - 1);
 		if (uris[i].dru_uri == NULL) {
 			free_rank_uris(uris, i);
 			return -DER_NOMEM;
@@ -477,7 +477,7 @@ int dc_mgmt_net_cfg(const char *name)
 
 			rc = _split_env(env, &v_name, &v_value);
 			if (rc != 0) {
-				D_ERROR("invalid client env var: %s", env);
+				D_ERROR("invalid client env var: %s\n", env);
 				continue;
 			}
 

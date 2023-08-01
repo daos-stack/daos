@@ -30,8 +30,8 @@
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
 #endif
 
-/* Max inflight data size per xstream */
-/* Set the total inflight size to be 25% of MAX DMA size for
+/* Max in-flight data size per xstream */
+/* Set the total in-flight size to be 25% of MAX DMA size for
  * the moment, will adjust it later if needed.
  */
 #define MIGRATE_MAX_SIZE	(1 << 28)
@@ -1350,6 +1350,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 			  struct ds_cont_child *ds_cont)
 {
 	int i;
+	int j;
 	int rc = 0;
 
 	if (!daos_oclass_is_ec(&mrone->mo_oca))
@@ -1368,9 +1369,17 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	 */
 
 	if (mrone->mo_iods_num_from_parity > 0) {
+		daos_epoch_t min_eph = DAOS_EPOCH_MAX;
+
+		for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
+			for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++)
+				min_eph = min(min_eph,
+					      mrone->mo_iods_update_ephs_from_parity[i][j]);
+		}
+
 		rc = __migrate_fetch_update_bulk(mrone, oh, mrone->mo_iods_from_parity,
 						 mrone->mo_iods_num_from_parity,
-						 mrone->mo_min_epoch,
+						 min_eph,
 						 DIOF_FOR_MIGRATION | DIOF_EC_RECOV_FROM_PARITY,
 						 ds_cont);
 		if (rc > 0)
@@ -1384,7 +1393,6 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	 */
 	for (i = 0; i < mrone->mo_iod_num; i++) {
 		daos_iod_t	iod;
-		int		j;
 
 		for (j = 0; j < mrone->mo_iods[i].iod_nr; j++) {
 			iod = mrone->mo_iods[i];
@@ -1688,7 +1696,7 @@ migrate_one_ult(void *arg)
 		mrone, data_size, mrone->mo_iod_num, mrone->mo_iods_num_from_parity);
 
 	D_ASSERT(data_size != (daos_size_t)-1);
-	D_DEBUG(DB_REBUILD, "mrone %p inflight size "DF_U64" max "DF_U64"\n",
+	D_DEBUG(DB_REBUILD, "mrone %p inflight_size "DF_U64" max "DF_U64"\n",
 		mrone, tls->mpt_inflight_size, tls->mpt_inflight_max_size);
 
 	while (tls->mpt_inflight_size + data_size >=
@@ -1712,7 +1720,7 @@ migrate_one_ult(void *arg)
 	ABT_cond_broadcast(tls->mpt_inflight_cond);
 	ABT_mutex_unlock(tls->mpt_inflight_mutex);
 
-	D_DEBUG(DB_REBUILD, DF_UOID" layout %u migrate dkey "DF_KEY" inflight "DF_U64": "
+	D_DEBUG(DB_REBUILD, DF_UOID" layout %u migrate dkey "DF_KEY" inflight_size "DF_U64": "
 		DF_RC"\n", DP_UOID(mrone->mo_oid), mrone->mo_oid.id_layout_ver,
 		DP_KEY(&mrone->mo_dkey), tls->mpt_inflight_size, DP_RC(rc));
 
@@ -2580,19 +2588,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	memset(&anchor, 0, sizeof(anchor));
 	memset(&akey_anchor, 0, sizeof(akey_anchor));
 	memset(&dkey_anchor, 0, sizeof(dkey_anchor));
-	if (tls->mpt_opc == RB_OP_UPGRADE) {
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_FOR_MIGRATION;
+	if (tls->mpt_opc == RB_OP_UPGRADE)
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
-		if (!daos_oclass_is_ec(&unpack_arg.oc_attr)) {
-			dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-			enum_flags |= DIOF_TO_SPEC_GROUP;
-		}
-	} else {
-		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
-		enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-			     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
-	}
+
+	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+	enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
+		     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
 
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
@@ -2876,13 +2877,21 @@ migrate_obj_ult(void *data)
 	 * discard, or discard has been done. spc_discard_done means
 	 * discarding has been done in the current VOS target.
 	 */
-	while (tls->mpt_pool->spc_pool->sp_need_discard &&
-	       !tls->mpt_pool->spc_discard_done) {
-		D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
-			DP_UUID(arg->pool_uuid));
-		dss_sleep(2 * 1000);
-		if (tls->mpt_fini)
+	if (tls->mpt_pool->spc_pool->sp_need_discard) {
+		while(!tls->mpt_pool->spc_discard_done) {
+			D_DEBUG(DB_REBUILD, DF_UUID" wait for discard to finish.\n",
+				DP_UUID(arg->pool_uuid));
+			dss_sleep(2 * 1000);
+			if (tls->mpt_fini)
+				D_GOTO(free_notls, rc);
+		}
+		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
+		if (tls->mpt_pool->spc_pool->sp_discard_status) {
+			rc = tls->mpt_pool->spc_pool->sp_discard_status;
+			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
+				DP_UUID(arg->pool_uuid), DP_RC(rc));
 			D_GOTO(free_notls, rc);
+		}
 	}
 
 	for (i = 0; i < arg->snap_cnt; i++) {

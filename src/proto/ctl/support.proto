@@ -1,0 +1,25 @@
+//
+// (C) Copyright 2022-2023 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package ctl;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+// Management Service Protobuf Definitions related to collect-log for support purpose.
+
+message CollectLogReq {
+  string TargetFolder = 1;
+  string ExtraLogsDir = 2;
+  string AdminNode = 3;
+  bool JsonOutput = 4;
+  int32 LogFunction = 5;
+  string LogCmd = 6;
+}
+
+message CollectLogResp {
+  int32 status = 1; // DAOS error code
+}

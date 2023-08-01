@@ -397,40 +397,25 @@ debug_prio_err_load_env(void)
 		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
 }
 
-/** Load the debug mask from the environment variable. */
-static void
-debug_mask_load_env(void)
+void
+d_log_sync_mask_ex(const char *log_mask, const char *dd_mask)
 {
-	char	*mask_env;
+	D_MUTEX_LOCK(&d_log_lock);
 
-	mask_env = getenv(DD_MASK_ENV);
-	if (mask_env == NULL)
-		return;
+	if (dd_mask != NULL)
+		debug_mask_load(dd_mask);
 
-	debug_mask_load(mask_env);
+	if (log_mask != NULL)
+		d_log_setmasks(log_mask, -1);
+
+	D_MUTEX_UNLOCK(&d_log_lock);
 }
 
+/** Load the debug mask from the environment variable. */
 void
 d_log_sync_mask(void)
 {
-	static char *log_mask;
-
-	D_MUTEX_LOCK(&d_log_lock);
-
-	/* Load debug mask environment (DD_MASK); only the facility log mask
-	 * will be returned and debug mask will be set if fac mask = DEBUG
-	 * and dd_mask is not 0.
-	 */
-	debug_mask_load_env();
-
-	/* load facility mask environment (D_LOG_MASK) */
-	log_mask = getenv(D_LOG_MASK_ENV);
-	if (log_mask != NULL) {
-		/* Prevent checkpatch warning */
-		d_log_setmasks(log_mask, -1);
-	}
-
-	D_MUTEX_UNLOCK(&d_log_lock);
+	d_log_sync_mask_ex(getenv(D_LOG_MASK_ENV), getenv(DD_MASK_ENV));
 }
 
 /**
@@ -575,9 +560,8 @@ out:
 
 void d_log_fini(void)
 {
-	D_ASSERT(d_log_refcount > 0);
-
 	D_MUTEX_LOCK(&d_log_lock);
+	D_ASSERT(d_log_refcount > 0);
 	d_log_refcount--;
 	if (d_log_refcount == 0) {
 		cleanup_dbg_namebit();

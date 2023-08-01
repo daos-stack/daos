@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -126,8 +126,8 @@ daos_prop_free(daos_prop_t *prop)
 	D_FREE(prop);
 }
 
-daos_prop_t *
-daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+int
+daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out_prop)
 {
 	daos_prop_t		*result;
 	int			rc;
@@ -137,27 +137,26 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 
 	if (old_prop == NULL || new_prop == NULL) {
 		D_ERROR("NULL input\n");
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	/*
-	 * We might override some values in the old prop. Need to account for
-	 * that in the final prop count.
+	 * We might override some values in the old prop. Need to account for that in the final prop
+	 * count.
 	 */
 	result_nr = old_prop->dpp_nr;
 	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(old_prop,
-					    new_prop->dpp_entries[i].dpe_type);
+		entry = daos_prop_entry_get(old_prop, new_prop->dpp_entries[i].dpe_type);
 		if (entry == NULL) /* New entry isn't a duplicate of old */
 			result_nr++;
 	}
 
 	result = daos_prop_alloc(result_nr);
 	if (result == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
 	if (result->dpp_nr == 0) /* Nothing more to do */
-		return result;
+		D_GOTO(out, rc = -DER_SUCCESS);
 
 	result_i = 0;
 	for (i = 0; i < old_prop->dpp_nr; i++, result_i++) {
@@ -167,12 +166,9 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 			goto err;
 	}
 
-	/*
-	 * Either add or update based on the values of the new prop entries
-	 */
+	/*  Either add or update based on the values of the new prop entries */
 	for (i = 0; i < new_prop->dpp_nr; i++) {
-		entry = daos_prop_entry_get(result,
-					    new_prop->dpp_entries[i].dpe_type);
+		entry = daos_prop_entry_get(result, new_prop->dpp_entries[i].dpe_type);
 		if (entry == NULL) {
 			D_ASSERT(result_i < result_nr);
 			entry = &result->dpp_entries[result_i];
@@ -182,11 +178,24 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 		if (rc != 0)
 			goto err;
 	}
-
-	return result;
+out:
+	*out_prop = result;
+	return 0;
 
 err:
 	daos_prop_free(result);
+	return rc;
+}
+
+daos_prop_t *
+daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
+{
+	daos_prop_t *out_prop;
+	int          rc;
+
+	rc = daos_prop_merge2(old_prop, new_prop, &out_prop);
+	if (rc == -DER_SUCCESS)
+		return out_prop;
 	return NULL;
 }
 
@@ -266,7 +275,8 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
-		struct daos_co_status	co_status;
+		struct daos_co_status co_status;
+		int                   rc;
 
 		type = prop->dpp_entries[i].dpe_type;
 		if (pool) {
@@ -303,7 +313,11 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
 			acl_ptr = prop->dpp_entries[i].dpe_val_ptr;
-			if (daos_acl_validate(acl_ptr) != 0)
+			/* This can fail with out of memory errors */
+			rc = daos_acl_validate(acl_ptr);
+			if (rc == -DER_NOMEM)
+				rc = daos_acl_validate(acl_ptr);
+			if (rc != 0)
 				return false;
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -507,6 +521,15 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val > DAOS_CHECKPOINT_LAZY) {
+				D_ERROR("invalid checkpoint mode: " DF_U64 "\n", val);
+				return false;
+			}
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:

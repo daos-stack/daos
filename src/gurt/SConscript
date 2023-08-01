@@ -18,7 +18,7 @@ def scons():
 
     denv = env.Clone()
 
-    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm'])
+    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm', 'dl'])
     denv.require('uuid')
 
     gurt_targets = denv.SharedObject(SRC)

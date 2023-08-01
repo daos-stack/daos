@@ -275,7 +275,8 @@ class ConfigGenerateOutput(TestWithServers):
 
         # Call dmg config generate.
         result = self.get_dmg_command().config_generate(
-            access_points="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True)
+            access_points="wolf-a", net_provider=self.def_provider, use_tmpfs_scm=True,
+            control_metadata_path=self.test_dir)
         if result.exit_status != 0:
             errors.append("Config generate failed with use_tmpfs_scm = True!")
         generated_yaml = yaml.safe_load(result.stdout)

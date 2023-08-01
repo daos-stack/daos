@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -185,6 +185,20 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
 
+	rc = d_tm_add_metric(&stats->bds_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
+			     "bytes", "dmabuff/wal_sz/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
+			     "commits", "dmabuff/wal_qd/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&stats->bds_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
+			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
 }
 
 struct bio_dma_buffer *
@@ -258,12 +272,12 @@ bio_iod_sgl(struct bio_desc *biod, unsigned int idx)
 }
 
 struct bio_desc *
-bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
-	      unsigned int type)
+bio_iod_alloc(struct bio_io_context *ctxt, struct umem_instance *umem,
+	      unsigned int sgl_cnt, unsigned int type)
 {
 	struct bio_desc	*biod;
 
-	D_ASSERT(ctxt != NULL && ctxt->bic_umem != NULL);
+	D_ASSERT(ctxt != NULL);
 	D_ASSERT(sgl_cnt != 0);
 
 	D_ALLOC(biod, offsetof(struct bio_desc, bd_sgls[sgl_cnt]));
@@ -271,6 +285,7 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
 		return NULL;
 
 	D_ASSERT(type < BIO_IOD_TYPE_MAX);
+	biod->bd_umem = umem;
 	biod->bd_ctxt = ctxt;
 	biod->bd_type = type;
 	biod->bd_sgl_cnt = sgl_cnt;
@@ -279,10 +294,43 @@ bio_iod_alloc(struct bio_io_context *ctxt, unsigned int sgl_cnt,
 	return biod;
 }
 
+static inline void
+iod_dma_completion(struct bio_desc *biod, int err)
+{
+	if (biod->bd_completion != NULL) {
+		D_ASSERT(biod->bd_comp_arg != NULL);
+		biod->bd_completion(biod->bd_comp_arg, err);
+	} else if (biod->bd_dma_done != ABT_EVENTUAL_NULL) {
+		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+	}
+}
+
+void
+iod_dma_wait(struct bio_desc *biod)
+{
+	struct bio_xs_context	*xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
+	int			 rc;
+
+	D_ASSERT(xs_ctxt != NULL);
+	if (xs_ctxt->bxc_self_polling) {
+		D_DEBUG(DB_IO, "Self poll completion\n");
+		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
+		if (rc)
+			D_ERROR("Self poll completion failed. "DF_RC"\n", DP_RC(rc));
+	} else if (biod->bd_inflights != 0) {
+		rc = ABT_eventual_wait(biod->bd_dma_done, NULL);
+		if (rc != ABT_SUCCESS)
+			D_ERROR("ABT eventual wait failed. %d\n", rc);
+	}
+}
+
 void
 bio_iod_free(struct bio_desc *biod)
 {
 	int i;
+
+	if (biod->bd_async_post && biod->bd_dma_done != ABT_EVENTUAL_NULL)
+		iod_dma_wait(biod);
 
 	D_ASSERT(!biod->bd_buffer_prep);
 
@@ -329,6 +377,7 @@ iod_release_buffer(struct bio_desc *biod)
 	D_FREE(rsrvd_dma->brd_regions);
 	rsrvd_dma->brd_regions = NULL;
 	rsrvd_dma->brd_rg_max = rsrvd_dma->brd_rg_cnt = 0;
+	biod->bd_nvme_bytes = 0;
 
 	/* All DMA chunks are used through cached bulk handle */
 	if (rsrvd_dma->brd_chk_cnt == 0) {
@@ -666,6 +715,10 @@ iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 	rsrvd_dma->brd_regions[cnt].brr_end = end;
 	rsrvd_dma->brd_regions[cnt].brr_media = media;
 	rsrvd_dma->brd_rg_cnt++;
+
+	if (media == DAOS_MEDIA_NVME)
+		biod->bd_nvme_bytes += (end - off);
+
 	return 0;
 }
 
@@ -797,10 +850,10 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	}
 
 	if (direct_scm_access(biod, biov)) {
-		struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+		struct umem_instance *umem = biod->bd_umem;
 
-		bio_iov_set_raw_buf(biov,
-				    umem_off2ptr(umem, bio_iov2raw_off(biov)));
+		D_ASSERT(umem != NULL);
+		bio_iov_set_raw_buf(biov, umem_off2ptr(umem, bio_iov2raw_off(biov)));
 		return 0;
 	}
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
@@ -949,9 +1002,24 @@ injected_nvme_error(struct bio_desc *biod)
 }
 
 static void
+dma_drop_iod(struct bio_dma_buffer *bdb)
+{
+	D_ASSERT(bdb->bdb_active_iods > 0);
+	bdb->bdb_active_iods--;
+	if (bdb->bdb_stats.bds_active_iods)
+		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
+
+	ABT_mutex_lock(bdb->bdb_mutex);
+	ABT_cond_broadcast(bdb->bdb_wait_iod);
+	ABT_mutex_unlock(bdb->bdb_mutex);
+}
+
+static void
 rw_completion(void *cb_arg, int err)
 {
 	struct bio_xs_context	*xs_ctxt;
+	struct bio_xs_blobstore	*bxb;
+	struct bio_io_context	*io_ctxt;
 	struct bio_desc		*biod = cb_arg;
 	struct media_error_msg	*mem;
 
@@ -959,10 +1027,15 @@ rw_completion(void *cb_arg, int err)
 	D_ASSERT(biod->bd_inflights > 0);
 	biod->bd_inflights--;
 
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-	D_ASSERT(xs_ctxt->bxc_blob_rw > 0);
-	xs_ctxt->bxc_blob_rw--;
+	bxb = biod->bd_ctxt->bic_xs_blobstore;
+	D_ASSERT(bxb != NULL);
+	D_ASSERT(bxb->bxb_blob_rw > 0);
+	bxb->bxb_blob_rw--;
+
+	io_ctxt = biod->bd_ctxt;
+	D_ASSERT(io_ctxt != NULL);
+	D_ASSERT(io_ctxt->bic_inflight_dmas > 0);
+	io_ctxt->bic_inflight_dmas--;
 
 	if (err != 0 || injected_nvme_error(biod)) {
 		/* Report only one NVMe I/O error per IOD */
@@ -980,37 +1053,47 @@ rw_completion(void *cb_arg, int err)
 			goto done;
 		}
 		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ? MET_WRITE : MET_READ;
-		mem->mem_bs = xs_ctxt->bxc_blobstore;
+		mem->mem_bs = bxb->bxb_blobstore;
+		D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
+		xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 		mem->mem_tgt_id = xs_ctxt->bxc_tgt_id;
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error, mem);
 	}
+
 done:
-	if (biod->bd_inflights == 0 && biod->bd_dma_issued)
-		ABT_eventual_set(biod->bd_dma_done, NULL, 0);
+	if (biod->bd_inflights == 0) {
+		iod_dma_completion(biod, err);
+		if (biod->bd_async_post && biod->bd_buffer_prep) {
+			iod_release_buffer(biod);
+			dma_drop_iod(iod_dma_buf(biod));
+		}
+		D_DEBUG(DB_IO, "DMA complete, type:%d\n", biod->bd_type);
+	}
 }
 
 void
 bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 	   void *addr, ssize_t n)
 {
-	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
-
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	if (biod->bd_type == BIO_IOD_TYPE_UPDATE && media == DAOS_MEDIA_SCM) {
+		struct umem_instance *umem = biod->bd_umem;
+
+		D_ASSERT(umem != NULL);
 		/*
 		 * We could do no_drain copy and rely on the tx commit to
 		 * drain controller, however, test shows calling a persistent
 		 * copy and drain controller here is faster.
 		 */
-		if (DAOS_ON_VALGRIND && pmemobj_tx_stage() == TX_STAGE_WORK) {
+		if (DAOS_ON_VALGRIND && umem_tx_inprogress(umem)) {
 			/** Ignore the update to what is reserved block.
 			 *  Ordinarily, this wouldn't be inside a transaction
 			 *  but in MVCC tests, it can happen.
 			 */
 			umem_tx_xadd_ptr(umem, media_addr, n,
-					 POBJ_XADD_NO_SNAPSHOT);
+					 UMEM_XADD_NO_SNAPSHOT);
 		}
-		pmemobj_memcpy_persist(umem->umm_pool, media_addr, addr, n);
+		umem_atomic_copy(umem, media_addr, addr, n, UMEM_RESERVED_MEM);
 	} else {
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
 			memcpy(media_addr, addr, n);
@@ -1022,11 +1105,12 @@ bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 static void
 scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 {
-	struct umem_instance	*umem = biod->bd_ctxt->bic_umem;
+	struct umem_instance	*umem = biod->bd_umem;
 	void			*payload;
 
 	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(!bio_scm_rdma);
+	D_ASSERT(umem != NULL);
 
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
 	payload += rg->brr_chk_off;
@@ -1046,18 +1130,20 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	struct bio_xs_context	*xs_ctxt;
 	uint64_t		 pg_idx, pg_cnt, rw_cnt;
 	void			*payload;
+	struct bio_xs_blobstore	*bxb = biod->bd_ctxt->bic_xs_blobstore;
 
+	D_ASSERT(bxb != NULL);
 	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
 	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
 	blob = biod->bd_ctxt->bic_blob;
-	channel = xs_ctxt->bxc_io_channel;
+	channel = bxb->bxb_io_channel;
 
 	/* Bypass NVMe I/O, used by daos_perf for performance evaluation */
 	if (daos_io_bypass & IOBP_NVME)
 		return;
 
 	/* No locking for BS state query here is tolerable */
-	if (xs_ctxt->bxc_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
+	if (bxb->bxb_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
 		D_ERROR("Blobstore is marked as FAULTY.\n");
 		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
 			biod->bd_result = -DER_NVME_IO;
@@ -1082,10 +1168,13 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	pg_cnt -= pg_idx;
 
 	while (pg_cnt > 0) {
-		drain_inflight_ios(xs_ctxt);
 
+		drain_inflight_ios(xs_ctxt, bxb);
+
+		biod->bd_dma_issued = 1;
 		biod->bd_inflights++;
-		xs_ctxt->bxc_blob_rw++;
+		bxb->bxb_blob_rw++;
+		biod->bd_ctxt->bic_inflight_dmas++;
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
@@ -1099,11 +1188,14 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 					   page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					   page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					   rw_completion, biod);
-		else
+		else {
 			spdk_blob_io_read(blob, channel, payload,
 					  page2io_unit(biod->bd_ctxt, pg_idx, BIO_DMA_PAGE_SZ),
 					  page2io_unit(biod->bd_ctxt, rw_cnt, BIO_DMA_PAGE_SZ),
 					  rw_completion, biod);
+			if (DAOS_ON_VALGRIND)
+				VALGRIND_MAKE_MEM_DEFINED(payload, rw_cnt * BIO_DMA_PAGE_SZ);
+		}
 
 		pg_cnt -= rw_cnt;
 		pg_idx += rw_cnt;
@@ -1116,16 +1208,9 @@ dma_rw(struct bio_desc *biod)
 {
 	struct bio_rsrvd_dma	*rsrvd_dma = &biod->bd_rsrvd;
 	struct bio_rsrvd_region	*rg;
-	struct bio_xs_context	*xs_ctxt;
 	int			 i;
 
-	D_ASSERT(biod->bd_ctxt->bic_xs_ctxt);
-	xs_ctxt = biod->bd_ctxt->bic_xs_ctxt;
-
-	biod->bd_inflights = 0;
-	biod->bd_dma_issued = 0;
-	biod->bd_result = 0;
-	biod->bd_ctxt->bic_inflight_dmas++;
+	biod->bd_inflights = 1;
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 	D_DEBUG(DB_IO, "DMA start, type:%d\n", biod->bd_type);
@@ -1142,37 +1227,20 @@ dma_rw(struct bio_desc *biod)
 			nvme_rw(biod, rg);
 	}
 
-	if (xs_ctxt->bxc_self_polling) {
-		D_DEBUG(DB_IO, "Self poll completion\n");
-		xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
-	} else {
-		biod->bd_dma_issued = 1;
-		if (biod->bd_inflights != 0)
-			ABT_eventual_wait(biod->bd_dma_done, NULL);
+	D_ASSERT(biod->bd_inflights > 0);
+	biod->bd_inflights -= 1;
+
+	if (!biod->bd_async_post) {
+		iod_dma_wait(biod);
+		D_DEBUG(DB_IO, "Wait DMA done, type:%d\n", biod->bd_type);
 	}
-
-	biod->bd_ctxt->bic_inflight_dmas--;
-	D_DEBUG(DB_IO, "DMA done, type:%d\n", biod->bd_type);
-}
-
-static void
-dma_drop_iod(struct bio_dma_buffer *bdb)
-{
-	D_ASSERT(bdb->bdb_active_iods > 0);
-	bdb->bdb_active_iods--;
-	if (bdb->bdb_stats.bds_active_iods)
-		d_tm_set_gauge(bdb->bdb_stats.bds_active_iods, bdb->bdb_active_iods);
-
-	ABT_mutex_lock(bdb->bdb_mutex);
-	ABT_cond_broadcast(bdb->bdb_wait_iod);
-	ABT_mutex_unlock(bdb->bdb_mutex);
 }
 
 static inline bool
 iod_should_retry(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 {
 	/*
-	 * When there isn't any inflight IODs, it means the whole DMA buffer
+	 * When there isn't any in-flight IODs, it means the whole DMA buffer
 	 * isn't large enough to satisfy current huge IOD, don't retry.
 	 *
 	 * When current IOD is for copy target, take the source IOD into account.
@@ -1206,6 +1274,12 @@ iod_fifo_in(struct bio_desc *biod, struct bio_dma_buffer *bdb)
 {
 	/* No prior waiters */
 	if (!bdb || bdb->bdb_queued_iods == 0)
+		return;
+	/*
+	 * Non-blocking prep request is usually from high priority job like checkpointing,
+	 * so we allow it jump the queue.
+	 */
+	if (biod->bd_non_blocking)
 		return;
 
 	biod->bd_in_fifo = 1;
@@ -1315,6 +1389,11 @@ retry:
 			goto out;
 		}
 
+		if (biod->bd_non_blocking) {
+			rc = -DER_AGAIN;
+			goto out;
+		}
+
 		retry_cnt++;
 		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n", biod, retry_cnt);
 
@@ -1334,8 +1413,8 @@ out:
 }
 
 int
-bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
-	     unsigned int bulk_perm)
+iod_prep_internal(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		  unsigned int bulk_perm)
 {
 	struct bio_bulk_args	 bulk_arg;
 	struct bio_dma_buffer	*bdb;
@@ -1377,11 +1456,13 @@ bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
 		}
 	}
 
+	biod->bd_dma_issued = 0;
+	biod->bd_inflights = 0;
+	biod->bd_result = 0;
+
 	/* Load data from media to buffer on read */
 	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
 		dma_rw(biod);
-	else
-		biod->bd_result = 0;
 
 	if (biod->bd_result) {
 		rc = biod->bd_result;
@@ -1396,30 +1477,77 @@ failed:
 }
 
 int
+bio_iod_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+	     unsigned int bulk_perm)
+{
+	return iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
+}
+
+int
+bio_iod_try_prep(struct bio_desc *biod, unsigned int type, void *bulk_ctxt,
+		 unsigned int bulk_perm)
+{
+	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
+		return -DER_NOTSUPPORTED;
+
+	biod->bd_non_blocking = 1;
+	return iod_prep_internal(biod, type, bulk_ctxt, bulk_perm);
+}
+
+int
 bio_iod_post(struct bio_desc *biod, int err)
 {
-	struct bio_dma_buffer *bdb;
+	biod->bd_dma_issued = 0;
+	biod->bd_inflights = 0;
+	biod->bd_result = err;
 
-	if (!biod->bd_buffer_prep)
-		return -DER_INVAL;
+	if (!biod->bd_buffer_prep) {
+		biod->bd_result = -DER_INVAL;
+		goto out;
+	}
 
 	/* No more actions for direct accessed SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
 		iod_release_buffer(biod);
-		return err;
+		goto out;
 	}
 
 	/* Land data from buffer to media on write */
 	if (err == 0 && biod->bd_type == BIO_IOD_TYPE_UPDATE)
 		dma_rw(biod);
-	else
-		biod->bd_result = err;
 
-	iod_release_buffer(biod);
-	bdb = iod_dma_buf(biod);
-	dma_drop_iod(bdb);
-
+	if (biod->bd_inflights == 0) {
+		if (biod->bd_buffer_prep) {
+			iod_release_buffer(biod);
+			dma_drop_iod(iod_dma_buf(biod));
+		}
+	}
+out:
+	if (!biod->bd_dma_issued && biod->bd_type == BIO_IOD_TYPE_UPDATE)
+		iod_dma_completion(biod, biod->bd_result);
 	return biod->bd_result;
+}
+
+int
+bio_iod_post_async(struct bio_desc *biod, int err)
+{
+	/* Async post is for UPDATE only */
+	if (biod->bd_type != BIO_IOD_TYPE_UPDATE)
+		goto out;
+
+	/* Async post is only for MD on SSD */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
+		goto out;
+	/*
+	 * When the value on data blob is too large, don't do async post to
+	 * avoid calculating checksum for large values.
+	 */
+	if (biod->bd_nvme_bytes > bio_max_async_sz)
+		goto out;
+
+	biod->bd_async_post = 1;
+out:
+	return bio_iod_post(biod, err);
 }
 
 int
@@ -1442,10 +1570,11 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 static int
 flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 {
-	struct umem_instance *umem = biod->bd_ctxt->bic_umem;
+	struct umem_instance *umem = biod->bd_umem;
 
 	D_ASSERT(arg == NULL);
 	D_ASSERT(biov);
+	D_ASSERT(umem != NULL);
 
 	if (bio_iov2req_len(biov) == 0)
 		return 0;
@@ -1457,7 +1586,7 @@ flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		return 0;
 
 	D_ASSERT(bio_iov2raw_buf(biov) != NULL);
-	pmemobj_flush(umem->umm_pool, bio_iov2req_buf(biov),
+	umem_atomic_flush(umem, bio_iov2req_buf(biov),
 		      bio_iov2req_len(biov));
 	return 0;
 }
@@ -1509,8 +1638,8 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 	}
 
 	/* allocate blob I/O descriptor */
-	biod = bio_iod_alloc(ioctxt, 1 /* single bsgl */,
-			update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);
+	biod = bio_iod_alloc(ioctxt, NULL, 1 /* single bsgl */,
+			     update ? BIO_IOD_TYPE_UPDATE : BIO_IOD_TYPE_FETCH);
 	if (biod == NULL)
 		return -DER_NOMEM;
 
@@ -1626,7 +1755,7 @@ bio_buf_alloc(struct bio_io_context *ioctxt, unsigned int len, void *bulk_ctxt,
 	unsigned int		 chk_type;
 	int			 rc;
 
-	biod = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_GETBUF);
+	biod = bio_iod_alloc(ioctxt, NULL, 1, BIO_IOD_TYPE_GETBUF);
 	if (biod == NULL)
 		return NULL;
 
@@ -1698,8 +1827,8 @@ free_copy_desc(struct bio_copy_desc *copy_desc)
 }
 
 static struct bio_copy_desc *
-alloc_copy_desc(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-		struct bio_sglist *bsgl_dst)
+alloc_copy_desc(struct bio_io_context *ioctxt, struct umem_instance *umem,
+		struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst)
 {
 	struct bio_copy_desc	*copy_desc;
 	struct bio_sglist	*bsgl_read, *bsgl_write;
@@ -1708,11 +1837,11 @@ alloc_copy_desc(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	if (copy_desc == NULL)
 		return NULL;
 
-	copy_desc->bcd_iod_src = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_FETCH);
+	copy_desc->bcd_iod_src = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_FETCH);
 	if (copy_desc->bcd_iod_src == NULL)
 		goto free;
 
-	copy_desc->bcd_iod_dst = bio_iod_alloc(ioctxt, 1, BIO_IOD_TYPE_UPDATE);
+	copy_desc->bcd_iod_dst = bio_iod_alloc(ioctxt, umem, 1, BIO_IOD_TYPE_UPDATE);
 	if (copy_desc->bcd_iod_dst == NULL)
 		goto free;
 
@@ -1730,16 +1859,19 @@ free:
 	return NULL;
 }
 
-struct bio_copy_desc *
-bio_copy_prep(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	      struct bio_sglist *bsgl_dst)
+int
+bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	      struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	      struct bio_copy_desc **desc)
 {
 	struct bio_copy_desc	*copy_desc;
-	int			 rc;
+	int			 rc, ret;
 
-	copy_desc = alloc_copy_desc(ioctxt, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return NULL;
+	copy_desc = alloc_copy_desc(ioctxt, umem, bsgl_src, bsgl_dst);
+	if (copy_desc == NULL) {
+		*desc = NULL;
+		return -DER_NOMEM;
+	}
 
 	rc = bio_iod_prep(copy_desc->bcd_iod_src, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc)
@@ -1748,15 +1880,17 @@ bio_copy_prep(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
 	copy_desc->bcd_iod_dst->bd_copy_dst = 1;
 	rc = bio_iod_prep(copy_desc->bcd_iod_dst, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		rc = bio_iod_post(copy_desc->bcd_iod_src, 0);
-		D_ASSERT(rc == 0);
+		ret = bio_iod_post(copy_desc->bcd_iod_src, 0);
+		D_ASSERT(ret == 0);
 		goto free;
 	}
 
-	return copy_desc;
+	*desc = copy_desc;
+	return 0;
 free:
 	free_copy_desc(copy_desc);
-	return NULL;
+	*desc = NULL;
+	return rc;
 }
 
 int
@@ -1814,16 +1948,16 @@ bio_copy_get_sgl(struct bio_copy_desc *copy_desc, bool src)
 }
 
 int
-bio_copy(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_src,
-	 struct bio_sglist *bsgl_dst, unsigned int copy_size,
-	 struct bio_csum_desc *csum_desc)
+bio_copy(struct bio_io_context *ioctxt, struct umem_instance *umem,
+	 struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+	 unsigned int copy_size, struct bio_csum_desc *csum_desc)
 {
 	struct bio_copy_desc	*copy_desc;
 	int			 rc;
 
-	copy_desc = bio_copy_prep(ioctxt, bsgl_src, bsgl_dst);
-	if (copy_desc == NULL)
-		return -DER_NOMEM;
+	rc = bio_copy_prep(ioctxt, umem, bsgl_src, bsgl_dst, &copy_desc);
+	if (rc)
+		return rc;
 
 	rc = bio_copy_run(copy_desc, copy_size, csum_desc);
 	rc = bio_copy_post(copy_desc, rc);

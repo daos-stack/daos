@@ -5,7 +5,7 @@ Maintainer: daos-stack <daos@daos.groups.io>
 Build-Depends: debhelper (>= 10),
                dh-python,
                libcmocka-dev,
-               libfabric-dev (>= 1.15.1-1), libfabric-dev (<< 1.18),
+               libfabric-dev (>= 1.15.1-1),
                libhwloc-dev,
                libopenmpi-dev,
                libssl-dev,
@@ -29,7 +29,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev (>= 22.01.2),
                libipmctl-dev,
-               libraft-dev (= 0.9.1-1401.gc18bcb8),
+               libraft-dev (= 0.10.1-1408.g9524cdb),
                python3-tabulate,
                liblz4-dev,
                libcapstone-dev
@@ -115,6 +115,7 @@ Depends: python (>=3.8), python3, python-yaml, python3-yaml,
          ${shlibs:Depends}, ${misc:Depends},
          daos-client (= ${binary:Version}),
          daos-admin (= ${binary:Version}),
+         golang-go (>=1.18),
          libcapstone-dev
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
@@ -151,7 +152,7 @@ Package: daos-client
 Section: net
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.15.1-1), libfabric (<< 1.18)
+Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin, libfabric (>= 1.15.1-1)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage
@@ -170,7 +171,7 @@ Section: net
 Architecture: any
 Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}, openmpi-bin,
-         ipmctl (>=03.00.00.0468), libfabric (>= 1.15.1-1), libfabric (<< 1.18), spdk-tools (>= 22.01.2)
+         ipmctl (>=03.00.00.0468), libfabric (>= 1.15.1-1), spdk-tools (>= 22.01.2)
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for
  massively distributed Non Volatile Memory (NVM). DAOS takes advantage

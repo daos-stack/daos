@@ -148,12 +148,13 @@ ktr_rec_msize(int alloc_overhead)
 static void
 ktr_hkey_gen(struct btr_instance *tins, d_iov_t *key_iov, void *hkey)
 {
-	struct ktr_hkey	*kkey = (struct ktr_hkey *)hkey;
+	struct ktr_hkey		*kkey = (struct ktr_hkey *)hkey;
+	struct umem_pool        *umm_pool = tins->ti_umm.umm_pool;
 
 	hkey_common_gen(key_iov, hkey);
 
 	if (key_iov->iov_len > KH_INLINE_MAX)
-		vos_kh_set(kkey->kh_murmur64);
+		vos_kh_set(kkey->kh_murmur64, umm_pool->up_store.store_standalone);
 }
 
 /** compare the hashed key */
@@ -278,6 +279,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	daos_handle_t		 coh;
 	int			 gc;
 	int			 rc;
+	struct vos_pool		*pool;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
@@ -290,14 +292,14 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	if (rc != 0)
 		return rc;
 
+	pool = (struct vos_pool *)tins->ti_priv;
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
-			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY);
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
 	coh = vos_cont2hdl(args);
-	return gc_add_item((struct vos_pool *)tins->ti_priv, coh, gc,
-			   rec->rec_off, 0);
+	return gc_add_item(pool, coh, gc, rec->rec_off, 0);
 }
 
 static int
@@ -332,7 +334,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -363,7 +365,8 @@ static int
 svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
-	struct dtx_handle	*dth	= vos_dth_get();
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
+	struct dtx_handle	*dth	= vos_dth_get(cont->vc_pool->vp_sysdb);
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -507,7 +510,7 @@ svt_rec_alloc_common(struct btr_instance *tins, struct btr_record *rec,
 
 	D_ASSERT(!UMOFF_IS_NULL(rbund->rb_off));
 	rc = umem_tx_xadd(&tins->ti_umm, rbund->rb_off, vos_irec_msize(rbund),
-			  POBJ_XADD_NO_SNAPSHOT);
+			  UMEM_XADD_NO_SNAPSHOT);
 	if (rc != 0)
 		return rc;
 
@@ -579,15 +582,15 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_irec_df	*irec = vos_rec2irec(tins, rec);
 	bio_addr_t		*addr = &irec->ir_ex_addr;
 	struct dtx_handle	*dth = NULL;
-	struct vos_rsrvd_scm	*rsrvd_scm;
-	struct pobj_action	*act;
+	struct umem_rsrvd_act	*rsrvd_scm;
+	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
 	int			 i;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return 0;
 
 	if (overwrite) {
-		dth = vos_dth_get();
+		dth = vos_dth_get(cont->vc_pool->vp_sysdb);
 		if (dth == NULL)
 			return -DER_NO_PERM; /* Not allowed */
 	}
@@ -619,11 +622,8 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 	i = dth->dth_op_seq - 1;
 	rsrvd_scm = dth->dth_deferred[i];
 	D_ASSERT(rsrvd_scm != NULL);
-	D_ASSERT(rsrvd_scm->rs_actv_at < rsrvd_scm->rs_actv_cnt);
 
-	act = &rsrvd_scm->rs_actv[rsrvd_scm->rs_actv_at];
-	umem_defer_free(&tins->ti_umm, rec->rec_off, act);
-	rsrvd_scm->rs_actv_at++;
+	umem_defer_free(&tins->ti_umm, rec->rec_off, rsrvd_scm);
 
 	cancel_nvme_exts(addr, dth);
 
@@ -692,7 +692,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	return vos_slab_alloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t singv_btr_ops = {
@@ -851,8 +851,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
 				     sizeof(*krec));
 		if (rc != 0) {
-			D_ERROR("Failed to add key record to transaction,"
-				" rc = %d", rc);
+			D_ERROR("Failed to add key record to transaction: " DF_RC "\n", DP_RC(rc));
 			goto out;
 		}
 	}
@@ -928,7 +927,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	int			 tmprc;
 
 	/** reset the saved hash */
-	vos_kh_clear();
+	vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
 
 	if (krecp != NULL)
 		*krecp = NULL;

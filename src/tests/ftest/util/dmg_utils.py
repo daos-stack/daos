@@ -90,14 +90,14 @@ class DmgCommand(DmgCommandBase):
         #         "HostFabric": {
         #           "Interfaces": [
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib1",
         #               "NumaNode": 1,
         #               "Priority": 0,
         #               "NetDevClass": 32
         #             },
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib0",
         #               "NumaNode": 0,
         #               "Priority": 1,
@@ -119,7 +119,6 @@ class DmgCommand(DmgCommandBase):
         #             }
         #           ],
         #           "Providers": [
-        #             "ofi+psm2",
         #             "ofi+verbs;ofi_rxm",
         #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
@@ -423,9 +422,16 @@ class DmgCommand(DmgCommandBase):
         #                   "rank": 0,
         #                   "total_bytes": 398358216704,
         #                   "avail_bytes": 0,
+        #                   "usable_bytes": 0
         #                   "cluster_size": 1073741824,
+        #                   "meta_size": 0,
+        #                   "meta_wal_size": 0,
+        #                   "rdb_size": 134217728,
+        #                   "rdb_wal_size": 268435456,
         #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0"
+        #                   "tr_addr": "0000:05:00.0",
+        #                   "roles": "data",
+        #                   "has_sys_xs": false
         #                 }
         #               ]
         #             }
@@ -445,6 +451,7 @@ class DmgCommand(DmgCommandBase):
         #                 "path": "/mnt/daos",
         #                 "total_bytes": 17179869184,
         #                 "avail_bytes": 0
+        #                 "usable_bytes": 0
         #               }
         #             }
         #           ],
@@ -461,11 +468,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self, masks=None, raise_exception=None):
+    def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
 
         Args:
             masks (str, optional): log masks to set. Defaults to None.
+            streams (str, optional): log debug streams to set. Defaults to None.
+            subsystems (str, optional): logging subsystems to enable. Defaults to None (interpreted
+                as enable all).
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
@@ -486,12 +496,36 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
 
+        return self._get_json_result(("server", "set-logmasks"),
+                                     raise_exception=raise_exception, masks=masks, streams=streams,
+                                     subsystems=subsystems)
+
+    def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
+                            extra_logs_dir=None, target_host=None):
+        """Collect logs for debug purpose.
+
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            target-host (str, optional): R sync all the logs to target system
+        Raises:
+            CommandFailure: if the dmg support collect-log command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
         kwargs = {
-            "masks": masks,
+            "stop_on_error": stop_on_error,
+            "target_folder": target_folder,
+            "archive": archive,
+            "extra_logs_dir": extra_logs_dir,
+            "target_host": target_host,
         }
 
-        return self._get_json_result(("server", "set-logmasks"),
-                                     raise_exception=raise_exception, **kwargs)
+        return self._get_json_result(("support", "collect-log"), **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -708,6 +742,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
+    def pool_upgrade(self, pool):
+        """Call dmg pool upgrade.
+
+        Args:
+            pool (str): pool to upgrade
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(("pool", "upgrade"), pool=pool)
+
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
 
@@ -812,12 +861,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1022,8 +1071,8 @@ class DmgCommand(DmgCommandBase):
         # Example JSON output:
         # {
         #   "response": {
-        #     "CurrentLeader": "127.0.0.1:10001",
-        #     "Replicas": [
+        #     "current_leader": "127.0.0.1:10001",
+        #     "replicas": [
         #       "127.0.0.1:10001"
         #     ]
         #   },
@@ -1118,7 +1167,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False,
+                        control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
@@ -1130,9 +1180,11 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+                i.e. "ofi+tcp;ofi_rxm" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
+            control_metadata_path (str): External directory provided to store control
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1142,7 +1194,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=control_metadata_path)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.
@@ -1282,14 +1335,13 @@ class DmgCommand(DmgCommandBase):
         """Call dmg version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
 
 
 def check_system_query_status(data):

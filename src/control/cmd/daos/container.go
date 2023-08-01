@@ -314,8 +314,8 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ci.ContainerLabel = cmd.Args.Label
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(ci, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
@@ -750,8 +750,8 @@ func (cmd *containerListCmd) Execute(_ []string) error {
 			"unable to list containers for pool %s", cmd.PoolID())
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(contIDs, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(contIDs, nil)
 	}
 
 	var bld strings.Builder
@@ -903,7 +903,7 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		for i := C.uint32_t(0); i < readOids; i++ {
 			oid := fmt.Sprintf("%d.%d", oidArr[i].hi, oidArr[i].lo)
 
-			if !cmd.jsonOutputEnabled() {
+			if !cmd.JSONOutputEnabled() {
 				cmd.Infof("%s", oid)
 				continue
 			}
@@ -911,8 +911,8 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 		}
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(oids, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(oids, nil)
 	}
 
 	return nil
@@ -1035,8 +1035,8 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 			cmd.contUUID)
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(ci, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
@@ -1080,8 +1080,8 @@ func (cmd *containerCloneCmd) Execute(_ []string) error {
 		return errors.Wrapf(err, "failed to clone container %s", cmd.Source)
 	}
 
-	if cmd.shouldEmitJSON {
-		return cmd.outputJSON(struct {
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(struct {
 			SourcePool string `json:"src_pool"`
 			SourceCont string `json:"src_cont"`
 			DestPool   string `json:"dst_pool"`
@@ -1160,11 +1160,11 @@ func (cmd *containerListAttrsCmd) Execute(args []string) error {
 			cmd.ContainerID())
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		if cmd.Verbose {
-			return cmd.outputJSON(attrs.asMap(), nil)
+			return cmd.OutputJSON(attrs.asMap(), nil)
 		}
-		return cmd.outputJSON(attrs.asList(), nil)
+		return cmd.OutputJSON(attrs.asList(), nil)
 	}
 
 	var bld strings.Builder
@@ -1258,12 +1258,12 @@ func (cmd *containerGetAttrCmd) Execute(args []string) error {
 		return errors.Wrapf(err, "failed to get attributes from container %s", cmd.ContainerID())
 	}
 
-	if cmd.jsonOutputEnabled() {
+	if cmd.JSONOutputEnabled() {
 		// Maintain compatibility with older behavior.
 		if len(cmd.Args.Attrs.ParsedProps) == 1 && len(attrs) == 1 {
-			return cmd.outputJSON(attrs[0], nil)
+			return cmd.OutputJSON(attrs[0], nil)
 		}
-		return cmd.outputJSON(attrs, nil)
+		return cmd.OutputJSON(attrs, nil)
 	}
 
 	var bld strings.Builder
@@ -1398,8 +1398,8 @@ func (cmd *containerGetPropCmd) Execute(args []string) error {
 		}
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(props, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(props, nil)
 	}
 
 	title := fmt.Sprintf("Properties for container %s", cmd.ContainerID())

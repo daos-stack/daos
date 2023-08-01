@@ -115,14 +115,19 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	/* Response status is populated with SUCCESS (0) on init */
+	/** Response status is populated with SUCCESS (0) on init */
 	ctl__set_log_masks_resp__init(&resp);
 
-	/* This assumes req->masks is a null terminated string */
-	d_log_setmasks(req->masks, -1);
+	/**
+	 * Assuming req->masks and req->streams are null terminated strings, update engine log
+	 * masks and debug stream mask.
+	 */
+	d_log_sync_mask_ex(req->masks, req->streams);
+
+	/** Check settings have persisted */
 	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
-	D_INFO("Received request to set log masks '%s', masks are now %s\n",
-		req->masks, retbuf);
+	D_INFO("Received request to set log masks '%s' masks are now %s, debug streams (DD_MASK) "
+	       "set to '%s'\n", req->masks, retbuf, req->streams);
 
 	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
@@ -155,9 +160,10 @@ ds_mgmt_drpc_set_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set rank to %u\n", req->rank);
+	D_INFO("Received request to set rank to %u and map_version to %u\n", req->rank,
+	       req->map_version);
 
-	rc = crt_rank_self_set(req->rank);
+	rc = crt_rank_self_set(req->rank, req->map_version);
 	if (rc != 0)
 		D_ERROR("Failed to set self rank %u: "DF_RC"\n", req->rank,
 			DP_RC(rc));
@@ -480,13 +486,12 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req->n_properties > 0) {
 		prop = daos_prop_merge(base_props, req_props);
-		daos_prop_free(req_props);
-		daos_prop_free(base_props);
 		if (prop == NULL) {
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		prop = base_props;
+		base_props = NULL;
 	}
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
@@ -515,7 +520,10 @@ out:
 
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
+	daos_prop_free(base_props);
+	daos_prop_free(req_props);
 	daos_prop_free(prop);
+
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
@@ -767,7 +775,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -817,7 +824,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1086,7 +1092,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_upgrade_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1303,8 +1308,7 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 
 	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACL to string list, rc="DF_RC"",
-			DP_RC(rc));
+		D_ERROR("Couldn't convert ACL to string list: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1358,7 +1362,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -2143,6 +2146,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	if (bio_health == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	bio_health->mb_meta_size = req->meta_size;
+	bio_health->mb_rdb_size = req->rdb_size;
 	rc = ds_mgmt_bio_health_query(bio_health, uuid);
 	if (rc != 0) {
 		D_ERROR("Failed to query BIO health data :"DF_RC"\n",
@@ -2178,6 +2183,8 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
 	resp->cluster_size = stats.cluster_size;
+	resp->meta_wal_size = stats.meta_wal_size;
+	resp->rdb_wal_size = stats.rdb_wal_size;
 	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
 	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
 	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
@@ -2399,11 +2406,21 @@ void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+	int		rc;
 
 	D_INFO("Received request to setup engine\n");
 
-	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	rc = dss_module_setup_all();
+	if (rc != 0) {
+		D_ERROR("Module setup failed: %d\n", rc);
+		goto err;
+	}
 
+	D_INFO("Modules successfully set up\n");
+
+	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+err:
+	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
 }
 

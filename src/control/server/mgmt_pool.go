@@ -240,14 +240,26 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 // PoolCreate implements the method defined for the Management Service.
 //
-// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
-// are per-engine so need to be larger than (minimum_target_allocation *
-// target_count).
-func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
+// NB: Only one pool create request may be processed at a time.
+func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
+	msg, err := svc.submitSerialRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return msg.(*mgmtpb.PoolCreateResp), nil
+}
+
+// poolCreate handles the actual pool creation request. This is separated from
+// PoolCreate() so that it can be called from the batch request handler.
+//
+// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
+// are per-engine so need to be larger than (minimum_target_allocation *
+// target_count).
+func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if err := svc.poolCreateAddSystemProps(req); err != nil {
 		return nil, err
 	}
@@ -443,7 +455,7 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 
 		switch errors.Cause(err) {
-		case errInstanceNotReady:
+		case errEngineNotReady:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
 			resp.Status = int32(daos.TryAgain)

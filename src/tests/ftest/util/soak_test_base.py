@@ -15,14 +15,15 @@ from getpass import getuser
 import socket
 
 from apricot import TestWithServers
-
+from ClusterShell.NodeSet import NodeSet
 from agent_utils import include_local_host
 from exception_utils import CommandFailure
-from general_utils import run_command, DaosTestError
+from general_utils import journalctl_time
 from host_utils import get_local_host
 import slurm_utils
-from run_utils import run_remote
-from soak_utils import ddhhmmss_format, add_pools, get_remote_dir, \
+from dmg_utils import DmgCommand
+from run_utils import run_local, RunException
+from soak_utils import ddhhmmss_format, add_pools, \
     launch_snapshot, launch_exclude_reintegrate, launch_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
@@ -44,7 +45,6 @@ class SoakTestBase(TestWithServers):
         """Initialize a SoakBase object."""
         super().__init__(*args, **kwargs)
         self.failed_job_id_list = None
-        self.soaktest_dir = None
         self.loop = None
         self.outputsoak_dir = None
         self.test_name = None
@@ -86,12 +86,10 @@ class SoakTestBase(TestWithServers):
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
         # Create the remote log directories on all client nodes
-        self.soak_dir = self.base_test_dir + "/soak"
-        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
-        self.dmg_command = self.get_dmg_command()
+        self.dmg_command = DmgCommand(self.bin)
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.
@@ -131,11 +129,11 @@ class SoakTestBase(TestWithServers):
         if self.failed_job_id_list:
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
             self.log.info("<<Cancel jobs in queue with ids %s >>", job_id)
+            cmd = "scancel --partition {} -u {} {}".format(
+                self.host_info.clients.partition.name, self.username, job_id)
             try:
-                run_command(
-                    "scancel --partition {} -u {} {}".format(
-                        self.host_info.clients.partition.name, self.username, job_id))
-            except DaosTestError as error:
+                run_local(self.log, cmd, timeout=120)
+            except RunException as error:
                 # Exception was raised due to a non-zero exit status
                 errors.append("Failed to cancel jobs {}: {}".format(
                     self.failed_job_id_list, error))
@@ -173,14 +171,6 @@ class SoakTestBase(TestWithServers):
         until = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(self.end_time))
         for journalctl_type in ["kernel", "daos_server"]:
             get_journalctl(self, hosts, since, until, journalctl_type, logging=True)
-        # Gather client daos logs with resource manager
-        try:
-            get_remote_dir(
-                self, self.base_test_dir, self.outputsoak_dir, self.hostlist_clients,
-                shared_dir=self.sharedsoak_dir, rm_remote=False, append="/daos_logs-")
-        except SoakTestError as error:
-            errors.append(
-                "<<FAILED: Failed to copy remote logs - {}>>".format(error))
 
         if self.all_failed_harassers:
             errors.extend(self.all_failed_harassers)
@@ -192,7 +182,7 @@ class SoakTestBase(TestWithServers):
         cleanup_dfuse(self)
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
-            self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
+            self.hostlist_clients = NodeSet(socket.gethostname().split('.', 1)[0])
         for error in errors:
             self.log.info("<<ERRORS: %s >>\n", error)
         return errors
@@ -402,7 +392,7 @@ class SoakTestBase(TestWithServers):
         harasser_timer = time.time()
         check_time = datetime.now()
         event_check_messages = []
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         # loop time exists after the first pass; no harassers in the first pass
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
@@ -444,7 +434,7 @@ class SoakTestBase(TestWithServers):
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
             # check journalctl for events;
-            until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            until = journalctl_time()
             event_check_messages = run_event_check(self, since, until)
             self.check_errors.extend(event_check_messages)
             run_monitor_check(self)
@@ -461,10 +451,14 @@ class SoakTestBase(TestWithServers):
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
             # gather all the logfiles for this pass and cleanup test nodes
+            command = "/usr/bin/rsync -avtr --min-size=1B {} {}/".format(
+                self.sharedsoaktest_dir, self.outputsoak_dir)
+            command2 = f"/usr/bin/rm -rf {self.sharedsoaktest_dir}"
             try:
-                get_remote_dir(self, self.soaktest_dir, self.outputsoak_dir, self.hostlist_clients)
-            except SoakTestError as error:
-                self.log.info("Remote copy failed with %s", error)
+                run_local(self.log, command, timeout=300)
+                run_local(self.log, command2, timeout=300)
+            except RunException as error:
+                self.log.info("Local copy failed with %s", error)
             self.soak_results = {}
         return job_id_list
 
@@ -490,20 +484,11 @@ class SoakTestBase(TestWithServers):
         job_script_list = []
         # Update the remote log directories from new loop/pass
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
-        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
-        result = run_remote(
-            self.log, self.hostlist_clients, "mkdir -p {}".format(self.soaktest_dir))
-        if not result.passed:
-            raise SoakTestError(
-                "<<FAILED: logfile directory not created on clients>>: {}".format(
-                    self.hostlist_clients))
         # Create local avocado log directory for this pass
         os.makedirs(outputsoaktest_dir)
         # Create shared log directory for this pass
         os.makedirs(self.sharedsoaktest_dir, exist_ok=True)
-        # Create local test log directory for this pass
-        os.makedirs(self.soaktest_dir)
         # create the batch scripts
         job_script_list = self.job_setup(jobs, pools)
         # randomize job list
@@ -582,20 +567,12 @@ class SoakTestBase(TestWithServers):
                 "Current pools: %s",
                 " ".join([pool.identifier for pool in self.pool]))
 
-        # cleanup soak log directories before test on all nodes
-        result = run_remote(self.log, self.hostlist_clients, "rm -rf {}".format(self.soak_dir))
-        if not result.passed:
+        # cleanup soak log directories before test
+        try:
+            run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=30)
+        except RunException as error:
             raise SoakTestError(
-                "<<FAILED: Soak directories not removed from clients>>: {}".format(
-                    self.hostlist_clients))
-        # cleanup test_node
-        for log_dir in [self.soak_dir, self.sharedsoak_dir]:
-            cmd = "rm -rf {}/*".format(log_dir)
-            try:
-                result = run_command(cmd, timeout=30)
-            except DaosTestError as error:
-                raise SoakTestError(
-                    "<<FAILED: Soak directory {} was not removed>>".format(log_dir)) from error
+                f"<<FAILED: Soak directory {self.sharedsoak_dir} was not removed>>") from error
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time

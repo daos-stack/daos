@@ -11,8 +11,9 @@ server_config:
   engines:
     0:
       targets: 2
+      nr_xs_helpers: 1
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
+  system_ram_reserved: 2

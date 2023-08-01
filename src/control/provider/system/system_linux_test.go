@@ -9,6 +9,7 @@ package system
 import (
 	"errors"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -154,6 +155,82 @@ func TestParseFsType(t *testing.T) {
 			if diff := cmp.Diff(tc.expFsType, parseFsType(tc.input)); diff != "" {
 				t.Fatalf("unexpected fsType (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestSystemLinux_GetFsType(t *testing.T) {
+	for name, tc := range map[string]struct {
+		path      string
+		expResult *FsType
+		expErr    error
+	}{
+		"no path": {
+			expErr: syscall.ENOENT,
+		},
+		"bad path": {
+			path:   "notreal",
+			expErr: syscall.ENOENT,
+		},
+		"temp dir": {
+			path: "/run",
+			expResult: &FsType{
+				Name:   "tmpfs",
+				NoSUID: true,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := DefaultProvider().GetFsType(tc.path)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected fsType (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystemLinux_fsStrFromMagic(t *testing.T) {
+	for name, tc := range map[string]struct {
+		magic     int64
+		expResult string
+	}{
+		"ext4": {
+			magic:     MagicExt4,
+			expResult: FsTypeExt4,
+		},
+		"tmpfs": {
+			magic:     MagicTmpfs,
+			expResult: FsTypeTmpfs,
+		},
+		"nfs": {
+			magic:     MagicNfs,
+			expResult: FsTypeNfs,
+		},
+		"ntfs": {
+			magic:     MagicNtfs,
+			expResult: FsTypeNtfs,
+		},
+		"btrfs": {
+			magic:     MagicBtrfs,
+			expResult: FsTypeBtrfs,
+		},
+		"xfs": {
+			magic:     MagicXfs,
+			expResult: FsTypeXfs,
+		},
+		"zfs": {
+			magic:     MagicZfs,
+			expResult: FsTypeZfs,
+		},
+		"unknown": {
+			magic:     0x1,
+			expResult: FsTypeUnknown,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, fsStrFromMagic(tc.magic), "")
 		})
 	}
 }

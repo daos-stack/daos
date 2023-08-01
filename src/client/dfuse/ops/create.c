@@ -129,7 +129,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->dpi_info->di_wb_cache &&
+	if (parent->ie_dfs->dfc_data_timeout != 0 && fs_handle->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(parent, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -156,12 +156,12 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
 
-	dfuse_ie_init(ie);
-	dfuse_open_handle_init(oh, ie);
+	dfuse_ie_init(fs_handle, ie);
+	dfuse_open_handle_init(fs_handle, oh, ie);
 
 	oh->doh_linear_read = false;
 
-	if (!fs_handle->dpi_info->di_multi_user) {
+	if (!fs_handle->di_multi_user) {
 		rc = _dfuse_mode_update(req, parent, &mode);
 		if (rc != 0)
 			D_GOTO(err, rc);
@@ -220,6 +220,6 @@ release:
 	dfs_release(oh->doh_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
-	D_FREE(oh);
-	D_FREE(ie);
+	dfuse_oh_free(fs_handle, oh);
+	dfuse_ie_free(fs_handle, ie);
 }

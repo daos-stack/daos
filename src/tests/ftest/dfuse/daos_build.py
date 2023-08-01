@@ -203,6 +203,9 @@ class DaosBuild(DfuseTestBase):
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
+                'daos filesystem query {}'.format(mount_dir),
+                'daos filesystem evict {}'.format(build_dir),
+                'daos filesystem query {}'.format(mount_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)

@@ -58,25 +58,18 @@ on_faulty(struct bio_blobstore *bbs)
 }
 
 static void
-teardown_xstream(void *arg)
+teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 {
-	struct bio_xs_context	*xs_ctxt = arg;
 	struct bio_io_context	*ioc;
 	int			 opened_blobs = 0;
+	struct bio_xs_blobstore	*bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
 
-	D_ASSERT(xs_ctxt != NULL);
-	if (!is_server_started()) {
-		D_INFO("Abort xs teardown on server start/shutdown\n");
-		return;
-	}
-
-	xs_ctxt->bxc_ready = 0;
-	/* This xstream is torndown */
-	if (xs_ctxt->bxc_io_channel == NULL)
+	/* This blobstore is torndown */
+	if (bxb->bxb_io_channel == NULL)
 		return;
 
 	/* Try to close all blobs */
-	d_list_for_each_entry(ioc, &xs_ctxt->bxc_io_ctxts, bic_link) {
+	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
 		if (ioc->bic_blob == NULL && ioc->bic_opening == 0)
 			continue;
 
@@ -88,16 +81,32 @@ teardown_xstream(void *arg)
 	}
 
 	if (opened_blobs) {
-		D_DEBUG(DB_MGMT, "xs:%p has %d opened blobs\n",
-			xs_ctxt, opened_blobs);
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs\n",
+			bxb->bxb_blobstore, opened_blobs);
 		return;
 	}
 
 	/* Put the io channel */
-	if (xs_ctxt->bxc_io_channel != NULL) {
-		spdk_bs_free_io_channel(xs_ctxt->bxc_io_channel);
-		xs_ctxt->bxc_io_channel = NULL;
+	if (bxb->bxb_io_channel != NULL) {
+		spdk_bs_free_io_channel(bxb->bxb_io_channel);
+		bxb->bxb_io_channel = NULL;
 	}
+}
+
+static void
+teardown_xstream(void *arg)
+{
+	struct bio_xs_context	*xs_ctxt = arg;
+
+	D_ASSERT(xs_ctxt != NULL);
+	if (!is_server_started()) {
+		D_INFO("Abort xs teardown on server start/shutdown\n");
+		return;
+	}
+
+	xs_ctxt->bxc_ready = 0;
+	/* only teardown data blobstore for now */
+	teardown_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
 }
 
 static void
@@ -123,6 +132,19 @@ unload_bs_cp(void *arg, int rc)
 	D_ASSERT(init_thread() != NULL);
 	spdk_thread_send_msg(init_thread(), bio_release_bdev,
 			     bbs->bb_dev);
+}
+
+static inline bool
+is_xstream_torndown(struct bio_xs_context *xs_ctxt)
+{
+	struct bio_xs_blobstore	*bxb;
+
+	/* only check data blobstore for now */
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA);
+	if (bxb->bxb_io_channel != NULL)
+		return false;
+
+	return true;
 }
 
 /*
@@ -153,7 +175,7 @@ on_teardown(struct bio_blobstore *bbs)
 		struct bio_xs_context	*xs_ctxt = bbs->bb_xs_ctxts[i];
 
 		/* This xstream is torndown */
-		if (xs_ctxt->bxc_io_channel == NULL)
+		if (is_xstream_torndown(xs_ctxt))
 			continue;
 
 		D_ASSERT(xs_ctxt->bxc_thread != NULL);
@@ -197,12 +219,59 @@ on_teardown(struct bio_blobstore *bbs)
 }
 
 static void
+setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
+		int *closed_blobs)
+{
+	struct bio_io_context	*ioc;
+	struct bio_blobstore	*bbs;
+	struct bio_xs_blobstore	*bxb;
+
+	bxb = bio_xs_context2xs_blobstore(xs_ctxt, st);
+	D_ASSERT(bxb != NULL);
+
+	bbs = bxb->bxb_blobstore;
+	if (bbs == NULL)
+		return;
+
+	D_ASSERT(bbs->bb_bs != NULL);
+	/*
+	 * Setup the blobstore io channel. It's must be done as the first step
+	 * of xstream setup, since blobstore teardown checks io channel to tell
+	 * if everything is torndown for the blobstore.
+	 */
+	if (bxb->bxb_io_channel == NULL) {
+		bxb->bxb_io_channel = spdk_bs_alloc_io_channel(bbs->bb_bs);
+		if (bxb->bxb_io_channel == NULL) {
+			D_ERROR("Failed to create io channel for %p\n", bbs);
+			return;
+		}
+	}
+
+	/* Try to open all blobs */
+	d_list_for_each_entry(ioc, &bxb->bxb_io_ctxts, bic_link) {
+		if (ioc->bic_blob != NULL && !ioc->bic_closing)
+			continue;
+
+		*closed_blobs = *closed_blobs + 1;
+		if (ioc->bic_opening || ioc->bic_closing)
+			continue;
+
+		/* fix sysdb */
+		bio_blob_open(ioc, true, 0, st, SPDK_BLOBID_INVALID);
+	}
+
+	if (*closed_blobs)
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d closed blobs\n",
+			bbs, *closed_blobs);
+	return;
+
+}
+
+static void
 setup_xstream(void *arg)
 {
 	struct bio_xs_context	*xs_ctxt = arg;
-	struct bio_blobstore	*bbs;
-	struct bio_io_context	*ioc;
-	int			 closed_blobs = 0;
+	int			 closed_blobs;
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
@@ -210,41 +279,20 @@ setup_xstream(void *arg)
 		return;
 	}
 
-	bbs = xs_ctxt->bxc_blobstore;
-	D_ASSERT(bbs != NULL);
-	D_ASSERT(bbs->bb_bs != NULL);
-
+	/* only support data blobstore for now */
+	closed_blobs = 0;
+	setup_blobstore(xs_ctxt, SMD_DEV_TYPE_DATA, &closed_blobs);
 	/*
-	 * Setup the blobstore io channel. It's must be done as the first step
-	 * of xstream setup, since xstream teardown checks io channel to tell
-	 * if everything is torndown for the xstream.
+	 * It doesn't mean setup failed when there is any closed blob,
+	 * it means some blob is still busy and we can't move forward to
+	 * next state yet, we'll retry setup_xstream() later.
 	 */
-	if (xs_ctxt->bxc_io_channel == NULL) {
-		xs_ctxt->bxc_io_channel = spdk_bs_alloc_io_channel(bbs->bb_bs);
-		if (xs_ctxt->bxc_io_channel == NULL) {
-			D_ERROR("Failed to create io channel for %p\n", bbs);
-			return;
-		}
-	}
-
-	/* Try to open all blobs */
-	d_list_for_each_entry(ioc, &xs_ctxt->bxc_io_ctxts, bic_link) {
-		if (ioc->bic_blob != NULL && !ioc->bic_closing)
-			continue;
-
-		closed_blobs++;
-		if (ioc->bic_opening || ioc->bic_closing)
-			continue;
-
-		bio_blob_open(ioc, true);
-	}
-
-	if (closed_blobs) {
-		D_DEBUG(DB_MGMT, "xs:%p has %d closed blobs\n",
-			xs_ctxt, closed_blobs);
+	if (closed_blobs > 0)
 		return;
-	}
+
 	xs_ctxt->bxc_ready = 1;
+	return;
+
 }
 
 static void
@@ -466,6 +514,8 @@ on_normal(struct bio_blobstore *bbs)
 	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
 		D_ERROR("Reint reaction failed. "DF_RC"\n", DP_RC(rc));
+	else if (rc > 0)
+		D_DEBUG(DB_MGMT, "Reint reaction is in-progress.");
 	else
 		bdev->bb_trigger_reint = false;
 }

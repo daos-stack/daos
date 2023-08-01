@@ -1,6 +1,6 @@
 #!/bin/bash
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -23,6 +23,13 @@ FILES=("$@")
 
 for file in "${FILES[@]}"; do
     if [ -f "$file" ]; then
+        dir=$(dirname "$file")
+        base=$(basename "$file")
+        if [[ "${base}" =~ UTEST_|run_test\.sh ]]; then
+            # for local runs, skip files already processed
+            echo "Skipping ${file}"
+            continue
+        fi
         echo "Processing XML $file"
 
         if ! grep "<testcase classname" "$file" >/dev/null; then
@@ -42,8 +49,6 @@ for file in "${FILES[@]}"; do
             sed -i "/<\/testsuites>/,/<testsuites>/ d" "$file"
             echo "</testsuites>" >> "$file"
         fi
-        dir=$(dirname "$file")
-        base=$(basename "$file")
         mv "$file" "${dir}/${COMP}_${base}"
     fi
 done

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -90,12 +90,6 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 	if err := ei.handleReady(ctx, ready); err != nil {
 		return err
 	}
-	// update engine target count to reflect allocated number of targets, not number requested
-	// when starting
-	// NOTE: Engine mem_size passed on engine invocation is based on the number of targets
-	//       requested in config so if number of targets allocated doesn't match the number of
-	//       targets requested the mem_size value may be inappropriate.
-	ei.setTargetCount(int(ready.GetNtgts()))
 
 	ei.ready.SetTrue()
 

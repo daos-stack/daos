@@ -1,7 +1,7 @@
 """Build blob I/O"""
 
 FILES = ['bio_buffer.c', 'bio_bulk.c', 'bio_config.c', 'bio_context.c', 'bio_device.c',
-         'bio_monitor.c', 'bio_recovery.c', 'bio_xstream.c', 'smd.pb-c.c']
+         'bio_monitor.c', 'bio_recovery.c', 'bio_xstream.c', 'bio_wal.c', 'smd.pb-c.c']
 
 
 def scons():

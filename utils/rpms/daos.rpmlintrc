@@ -20,7 +20,7 @@ addFilter("daos-client\.x86_64: E: post(i|u)n-without-ldconfig \/usr\/lib64\/lib
 addFilter("daos-(client|server)\.x86_64: W: dangerous-command-in-%post(un)? rm")
 
 # lots of missing manpages
-addFilter("W: no-manual-page-for-binary (cart_ctl|daos_agent|dfuse|self_test|acl_dump_test|agent_tests|common_test|crt_launch|daos_debug_set_params|daos_gen_io_conf|daos_perf|daos_racer|daos_run_io_conf|daos_test|dfs_test|dfuse_test|drpc_engine_test|drpc_test|eq_tests|fault_status|hello_drpc|job_tests|jobtest|security_test|daos_firmware|daos_admin|daos_engine|daos_metrics|daos_server|daos_storage_estimator.py|evt_ctl|jump_pl_map|obj_ctl|pl_bench|pool_scrubbing_tests|rdbt|ring_pl_map|smd_ut|srv_checksum_tests|rpc_tests|vea_stress|vea_ut|vos_perf|vos_tests)")
+addFilter("W: no-manual-page-for-binary (cart_ctl|daos_agent|dfuse|self_test|acl_dump_test|agent_tests|crt_launch|daos_debug_set_params|daos_gen_io_conf|daos_perf|daos_racer|daos_run_io_conf|daos_test|dfs_test|dfuse_test|drpc_engine_test|drpc_test|eq_tests|fault_status|hello_drpc|job_tests|jobtest|security_test|daos_firmware|daos_admin|daos_engine|daos_metrics|daos_server|daos_storage_estimator.py|evt_ctl|jump_pl_map|obj_ctl|pl_bench|rdbt|ring_pl_map|smd_ut|bio_ut|vea_stress|vea_ut|vos_perf|vos_tests)")
 
 addFilter("daos-(server|firmware)\.x86_64: W: non-standard-(u|g)id \/.+ daos_server")
 

@@ -254,12 +254,13 @@ class CartIvOneNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-    def test_cart_iv(self):
+    def test_cart_iv_one_node(self):
         """Test CaRT IV.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,iv,one_node,memcheck
-        :avocado: tags=test_cart_iv
+        :avocado: tags=CartIvOneNodeTest,test_cart_iv_one_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

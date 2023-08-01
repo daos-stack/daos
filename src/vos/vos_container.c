@@ -55,15 +55,15 @@ static int
 cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 {
 	struct vos_cont_df	*cont_df;
+	struct vos_pool		*vos_pool = (struct vos_pool *)tins->ti_priv;
 
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NONEXIST;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT);
+	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT, vos_pool->vp_sysdb);
 
-	return gc_add_item(tins->ti_priv, DAOS_HDL_INVAL, GC_CONT, rec->rec_off,
-			   0);
+	return gc_add_item(vos_pool, DAOS_HDL_INVAL, GC_CONT, rec->rec_off, 0);
 }
 
 static int
@@ -198,7 +198,8 @@ cont_free_internal(struct vos_container *cont)
 	}
 
 	cont->vc_pool->vp_dtx_committed_count -= cont->vc_dtx_committed_count;
-	d_tm_dec_gauge(vos_tls_get()->vtl_committed, cont->vc_dtx_committed_count);
+	d_tm_dec_gauge(vos_tls_get(cont->vc_pool->vp_sysdb)->vtl_committed,
+		       cont->vc_dtx_committed_count);
 
 	D_FREE(cont);
 }
@@ -229,7 +230,7 @@ cont_insert(struct vos_container *cont, struct d_uuid *key, struct d_uuid *pkey,
 	D_ASSERT(cont != NULL && coh != NULL);
 
 	d_uhash_ulink_init(&cont->vc_uhlink, &co_hdl_uh_ops);
-	rc = d_uhash_link_insert(vos_cont_hhash_get(), key,
+	rc = d_uhash_link_insert(vos_cont_hhash_get(cont->vc_pool->vp_sysdb), key,
 				 pkey, &cont->vc_uhlink);
 	if (rc) {
 		D_ERROR("UHASH table container handle insert failed\n");
@@ -245,11 +246,11 @@ exit:
 
 static int
 cont_lookup(struct d_uuid *key, struct d_uuid *pkey,
-	    struct vos_container **cont) {
+	    struct vos_container **cont, bool is_sysdb) {
 
 	struct d_ulink *ulink;
 
-	ulink = d_uhash_link_lookup(vos_cont_hhash_get(), key, pkey);
+	ulink = d_uhash_link_lookup(vos_cont_hhash_get(is_sysdb), key, pkey);
 	if (ulink == NULL)
 		return -DER_NONEXIST;
 
@@ -260,13 +261,13 @@ cont_lookup(struct d_uuid *key, struct d_uuid *pkey,
 static void
 cont_decref(struct vos_container *cont)
 {
-	d_uhash_link_putref(vos_cont_hhash_get(), &cont->vc_uhlink);
+	d_uhash_link_putref(vos_cont_hhash_get(cont->vc_pool->vp_sysdb), &cont->vc_uhlink);
 }
 
 static void
 cont_addref(struct vos_container *cont)
 {
-	d_uhash_link_addref(vos_cont_hhash_get(), &cont->vc_uhlink);
+	d_uhash_link_addref(vos_cont_hhash_get(cont->vc_pool->vp_sysdb), &cont->vc_uhlink);
 }
 
 /**
@@ -342,7 +343,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	 * Check if handle exists
 	 * then return the handle immediately
 	 */
-	rc = cont_lookup(&ukey, &pkey, &cont);
+	rc = cont_lookup(&ukey, &pkey, &cont, pool->vp_sysdb);
 	if (rc == 0) {
 		cont->vc_open_count++;
 		D_DEBUG(DB_TRACE, "Found handle for cont "DF_UUID
@@ -482,7 +483,7 @@ vos_cont_close(daos_handle_t coh)
 
 	cont->vc_open_count--;
 	if (cont->vc_open_count == 0)
-		vos_obj_cache_evict(vos_obj_cache_current(), cont);
+		vos_obj_cache_evict(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont);
 
 	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
 		DP_UUID(cont->vc_id), cont->vc_open_count);
@@ -563,12 +564,12 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	vos_dedup_invalidate(pool);
 
-	rc = cont_lookup(&key, &pkey, &cont);
+	rc = cont_lookup(&key, &pkey, &cont, pool->vp_sysdb);
 	if (rc != -DER_NONEXIST) {
 		D_ASSERT(rc == 0);
 
 		if (cont->vc_open_count == 0) {
-			d_uhash_link_delete(vos_cont_hhash_get(),
+			d_uhash_link_delete(vos_cont_hhash_get(pool->vp_sysdb),
 					    &cont->vc_uhlink);
 			cont_decref(cont);
 		} else {
@@ -585,6 +586,12 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	if (rc) {
 		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
 			DP_UUID(co_uuid));
+		D_GOTO(exit, rc);
+	}
+
+	rc = vos_flush_wal_header(pool);
+	if (rc) {
+		D_ERROR("Failed to flush WAL header. "DF_RC"\n", DP_RC(rc));
 		D_GOTO(exit, rc);
 	}
 

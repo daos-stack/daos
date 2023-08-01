@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,17 @@
 #include <daos/pool.h>
 #include <daos_pool.h>
 #include "rpc.h"
+
+char *
+dc_pool_op_str(enum pool_operation op)
+{
+#define X(a, b, c, d, e) case a: return #a;
+	switch (op) {
+	POOL_PROTO_RPC_LIST
+	default: return "POOL_UNKNOWN_OPERATION";
+	}
+#undef X
+}
 
 #define crt_proc_daos_target_state_t crt_proc_uint32_t
 
@@ -208,16 +219,16 @@ CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(4)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(5)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 #undef X
@@ -323,6 +334,15 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_OBJ_VERSION:
 			bits |= DAOS_PO_QUERY_PROP_OBJ_VERSION;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_MODE;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

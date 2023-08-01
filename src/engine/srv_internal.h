@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -139,7 +139,6 @@ int dss_module_load(const char *modname);
 int dss_module_init_all(uint64_t *mod_fac);
 int dss_module_unload(const char *modname);
 void dss_module_unload_all(void);
-int dss_module_setup_all(void);
 int dss_module_cleanup_all(void);
 
 /* srv.c */
@@ -212,14 +211,15 @@ void sched_stop(struct dss_xstream *dx);
 static inline bool
 sched_xstream_stopping(void)
 {
-	struct dss_xstream	*dx = dss_current_xstream();
+	struct dss_xstream	*dx;
 	ABT_bool		 state;
 	int			 rc;
 
 	/* ULT creation from main thread which doesn't have dss_xstream */
-	if (dx == NULL)
+	if (dss_tls_get() == NULL)
 		return false;
 
+	dx = dss_current_xstream();
 	rc = ABT_future_test(dx->dx_stopping, &state);
 	D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 	return state == ABT_TRUE;
@@ -251,7 +251,8 @@ static inline void
 dss_free_stack_cb(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
-	struct dss_xstream *dx = dss_current_xstream();
+	/* main thread doesn't have TLS and XS */
+	struct dss_xstream *dx = dss_tls_get() ? dss_current_xstream() : NULL;
 
 	/* ensure pool where to free stack is from current-XStream/ULT-exiting */
 	if (dx != NULL)
@@ -271,7 +272,11 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 #ifdef ULT_MMAP_STACK
-	struct dss_xstream *cur_dx = dss_current_xstream();
+	bool			 tls_set = dss_tls_get() ? true : false;
+	struct dss_xstream	*cur_dx = NULL;
+
+	if (tls_set)
+		cur_dx = dss_current_xstream();
 
 	/* if possible,stack should be allocated from launching XStream pool */
 	if (cur_dx == NULL)
@@ -338,6 +343,18 @@ dss_xs2tgt(int xs_id)
 		return -1;
 	return (xs_id - dss_sys_xs_nr) /
 	       (dss_tgt_offload_xs_nr / dss_tgt_nr + 1);
+}
+
+static inline bool
+dss_xstream_has_nvme(struct dss_xstream *dx)
+{
+
+	if (dx->dx_main_xs != 0)
+		return true;
+	if (bio_nvme_configured(SMD_DEV_TYPE_META) && dx->dx_xs_id == 0)
+		return true;
+
+	return false;
 }
 
 #endif /* __DAOS_SRV_INTERNAL__ */

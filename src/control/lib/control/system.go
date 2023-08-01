@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -137,9 +137,10 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank      ranklist.Rank
-	State     system.MemberState
-	LocalJoin bool
+	Rank       ranklist.Rank
+	State      system.MemberState
+	LocalJoin  bool
+	MapVersion uint32 `json:"map_version"`
 }
 
 // SystemJoin will attempt to join a new member to the DAOS system.
@@ -184,7 +185,23 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      system.MemberState // Bitmask of desired states
+}
+
+func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+	switch {
+	case req.NotOK:
+		return system.AllMemberFilter &^ system.MemberStateJoined, nil
+	case req.WantedStates == 0:
+		return system.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
+		return req.WantedStates, nil
+	default:
+		return system.MemberStateUnknown, errors.Errorf("invalid member states bitmask %x",
+			int(req.WantedStates))
+	}
 }
 
 // SystemQueryResp contains the request response.
@@ -234,6 +251,12 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem(rpcClient)
+
+	mask, err := req.getStateMask()
+	if err != nil {
+		return nil, errors.Wrap(err, "calculating member state bitmask")
+	}
+	pbReq.StateMask = uint32(mask)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
@@ -614,13 +637,15 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
+	sysRequest
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader   string `json:"CurrentLeader"`
-	Replicas []string
+	Leader       string   `json:"current_leader"`
+	Replicas     []string `json:"replicas"`
+	DownReplicas []string `json:"down_replicas"`
 }
 
 // LeaderQuery requests the current Management Service leader and the set of
@@ -638,7 +663,24 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 	}
 
 	resp := new(LeaderQueryResp)
-	return resp, convertMSResponse(ur, resp)
+	if err = convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, "converting MS to LeaderQuery resp")
+	}
+
+	req.SetHostList(resp.Replicas)
+	ur, err = rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			resp.DownReplicas = append(resp.DownReplicas, hostResp.Addr)
+			continue
+		}
+	}
+
+	return resp, nil
 }
 
 // RanksReq contains the parameters for a system ranks request.

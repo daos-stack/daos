@@ -318,7 +318,7 @@ vos_ilog_ts_ignore(struct umem_instance *umm, struct ilog_df *ilog)
 		return;
 
 	umem_tx_xadd_ptr(umm, ilog_ts_idx_get(ilog), sizeof(int),
-			 POBJ_XADD_NO_SNAPSHOT);
+			 UMEM_XADD_NO_SNAPSHOT);
 }
 
 
@@ -347,11 +347,13 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  *
  *  \param	ilog[in]	The incarnation log
  *  \param	type[in]	The timestamp type
+ *  \param	standalone[in]	standloane TLS or not
  */
 void
-vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone);
 
 void
-vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc);
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
+		     bool standalone);
 
 #endif /* __VOS_ILOG_H__ */

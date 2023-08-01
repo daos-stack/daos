@@ -12,7 +12,13 @@
 #include <stdarg.h>
 #include <math.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <pthread.h>
+
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
@@ -76,15 +82,39 @@ d_asprintf(char **strp, const char *fmt, ...)
 }
 
 char *
+d_asprintf2(int *_rc, const char *fmt, ...)
+{
+	char   *str = NULL;
+	va_list ap;
+	int     rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(&str, fmt, ap);
+	va_end(ap);
+
+	*_rc = rc;
+
+	if (rc == -1)
+		return NULL;
+
+	return str;
+}
+
+char *
 d_realpath(const char *path, char *resolved_path)
 {
 	return realpath(path, resolved_path);
 }
 
 void *
-d_aligned_alloc(size_t alignment, size_t size)
+d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
-	return aligned_alloc(alignment, size);
+	void *buf = aligned_alloc(alignment, size);
+
+	if (!zero || buf == NULL)
+		return buf;
+	memset(buf, 0, size);
+	return buf;
 }
 
 int
@@ -1191,4 +1221,120 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
 	pointers->p_buf[pointers->p_len] = pointer;
 	pointers->p_len++;
 	return 0;
+}
+
+/**
+ * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
+ * functions from glibc.
+ * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
+ * so it will be the earliest to be loaded and will ensure the hook to be
+ * installed as early as possible and could prevent usage of LD_PRELOAD.
+ * The idea is to strengthen all the environment APIs by using a common lock.
+ *
+ * XXX this will address the main lack of multi-thread protection in the Glibc
+ * APIs but do not handle all unsafe use-cases (like the change/removal of an
+ * env var when its value address has already been grabbed by a previous
+ * getenv(), ...).
+ */
+
+static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+static char *(* ATOMIC real_getenv)(const char *);
+static int (* ATOMIC real_putenv)(char *);
+static int (* ATOMIC real_setenv)(const char *, const char *, int);
+static int (* ATOMIC real_unsetenv)(const char *);
+static int (* ATOMIC real_clearenv)(void);
+
+static void bind_libc_symbol(void **real_ptr_addr, const char *name)
+{
+	void *real_temp;
+
+	/* XXX __atomic_*() built-ins are used to avoid the need to cast
+	 * each of the ATOMIC pointers of functions, that seems to be
+	 * required to make Intel compiler happy ...
+	 */
+	if (__atomic_load_n(real_ptr_addr, __ATOMIC_RELAXED) == NULL) {
+		/* libc should be already loaded ... */
+		real_temp = dlsym(RTLD_NEXT, name);
+		if (real_temp == NULL) {
+			/* try after loading libc now */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_temp = dlsym(handle, name);
+			D_ASSERT(real_temp != NULL);
+		}
+		__atomic_store_n(real_ptr_addr, real_temp, __ATOMIC_RELAXED);
+	}
+}
+
+static pthread_once_t init_real_symbols_flag = PTHREAD_ONCE_INIT;
+
+static void init_real_symbols(void)
+{
+	bind_libc_symbol((void **)&real_getenv, "getenv");
+	bind_libc_symbol((void **)&real_putenv, "putenv");
+	bind_libc_symbol((void **)&real_setenv, "setenv");
+	bind_libc_symbol((void **)&real_unsetenv, "unsetenv");
+	bind_libc_symbol((void **)&real_clearenv, "clearenv");
+}
+
+char *getenv(const char *name)
+{
+	char *p;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_RDLOCK(&hook_env_lock);
+	p = real_getenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return p;
+}
+
+int putenv(char *name)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_putenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int setenv(const char *name, const char *value, int overwrite)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_setenv(name, value, overwrite);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int unsetenv(const char *name)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_unsetenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int clearenv(void)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_clearenv();
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
 }
