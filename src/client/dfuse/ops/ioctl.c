@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(fs_handle->dpi_info->di_session,
+		rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session,
 						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
 		if (rc == 0) {
@@ -120,8 +120,12 @@ handle_poh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 		D_GOTO(err, rc = ENOMEM);
 
 	rc = daos_pool_local2global(oh->doh_ie->ie_dfs->dfs_dfp->dfp_poh, &iov);
-	if (rc)
+	if (rc) {
+		if (rc == -DER_TRUNC)
+			DFUSE_TRA_INFO(oh, "handle size changed or application should call "
+					   "DFUSE_IOCTL_REPLY_PFILE");
 		D_GOTO(free, rc = daos_der2errno(rc));
+	}
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -293,6 +297,59 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+static void
+handle_cont_qe_ioctl_helper(fuse_req_t req, const struct dfuse_mem_query *in_query)
+{
+	struct dfuse_info     *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_mem_query query      = {};
+
+	if (in_query && in_query->ino) {
+		struct dfuse_inode_entry *ie;
+
+		D_RWLOCK_WRLOCK(&dfuse_info->di_forget_lock);
+
+		ie = dfuse_inode_lookup(dfuse_info, in_query->ino);
+		if (ie) {
+			query.found = true;
+			dfuse_inode_decref(dfuse_info, ie);
+		}
+		D_RWLOCK_UNLOCK(&dfuse_info->di_forget_lock);
+	}
+
+	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
+	query.fh_count        = atomic_load_relaxed(&dfuse_info->di_fh_count);
+	query.pool_count      = atomic_load_relaxed(&dfuse_info->di_pool_count);
+	query.container_count = atomic_load_relaxed(&dfuse_info->di_container_count);
+
+	DFUSE_REPLY_IOCTL(dfuse_info, req, query);
+}
+
+static void
+handle_cont_query_ioctl(fuse_req_t req, const void *in_buf, size_t in_bufsz)
+{
+	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
+	const struct dfuse_mem_query *in_query   = in_buf;
+	int                           rc;
+
+	if (in_bufsz != sizeof(struct dfuse_mem_query))
+		D_GOTO(err, rc = EIO);
+
+	handle_cont_qe_ioctl_helper(req, in_query);
+	return;
+
+err:
+	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+}
+
+static void
+handle_cont_evict_ioctl(fuse_req_t req, struct dfuse_obj_hdl *oh, const void *in_buf,
+			size_t in_bufsz)
+{
+	oh->doh_evict_on_close = true;
+
+	handle_cont_qe_ioctl_helper(req, NULL);
+}
+
 #ifdef FUSE_IOCTL_USE_INT
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
@@ -331,6 +388,12 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	}
 
 	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
+
+	if (cmd == DFUSE_IOCTL_COUNT_QUERY)
+		return handle_cont_query_ioctl(req, in_buf, in_bufsz);
+
+	if (cmd == DFUSE_IOCTL_DFUSE_EVICT)
+		return handle_cont_evict_ioctl(req, oh, in_buf, in_bufsz);
 
 	if (cmd == DFUSE_IOCTL_IL) {
 		if (out_bufsz < sizeof(struct dfuse_il_reply))

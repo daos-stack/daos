@@ -44,7 +44,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 	int			 rc = 0;
 
 	if (!ft) {
-		D_ERROR("No function table");
+		D_ERROR("No function table\n");
 		return -DER_INVAL;
 	}
 
@@ -261,12 +261,12 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 	int		i;
 
 	if (a->cs_type != b->cs_type) {
-		D_ERROR("%d != %d", a->cs_type, b->cs_type);
+		D_ERROR("%d != %d\n", a->cs_type, b->cs_type);
 		return false;
 	}
 
 	if (a_len != b_len) {
-		D_ERROR("%d != %d", a_len, b_len);
+		D_ERROR("%d != %d\n", a_len, b_len);
 		return false;
 	}
 
@@ -924,6 +924,19 @@ daos_csummer_free_ci(struct daos_csummer *obj, struct dcs_csum_info **p_cis)
 	if (!(daos_csummer_initialized(obj) && *p_cis))
 		return;
 	D_FREE((*p_cis));
+}
+
+int
+daos_csummer_verify_iods(struct daos_csummer *obj, daos_iod_t *iods, d_sg_list_t *sgls,
+			 struct dcs_iod_csums *iods_csum, uint32_t nr,
+			 struct dcs_layout *singv_lo, int singv_idx, daos_iom_t *map)
+{
+	int i, rc = 0;
+
+	for (i = 0; i < nr && rc == 0; i++)
+		rc = daos_csummer_verify_iod(obj, &iods[i], &sgls[i], &iods_csum[i],
+					     singv_lo, singv_idx, map);
+	return rc;
 }
 
 int

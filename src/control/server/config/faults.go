@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -12,6 +12,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/dustin/go-humanize"
 )
 
 var (
@@ -52,7 +53,7 @@ var (
 	)
 	FaultConfigNoProvider = serverConfigFault(
 		code.ServerConfigBadProvider,
-		"provider not specified in configuration",
+		"provider not specified in server configuration",
 		"specify a valid network provider in configuration ('provider' parameter) and restart the control server",
 	)
 	FaultConfigNoEngines = serverConfigFault(
@@ -87,7 +88,7 @@ var (
 	)
 	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
 		code.ServerConfigFaultDomainTooManyLayers,
-		"only a single fault domain layer below the root is supported",
+		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 	FaultConfigHugepagesDisabled = serverConfigFault(
@@ -99,6 +100,21 @@ var (
 		code.ServerConfigVMDSettingDuplicate,
 		"enable_vmd and disable_vmd parameters both specified in config",
 		"remove legacy enable_vmd parameter from config",
+	)
+	FaultConfigControlMetadataNoPath = serverConfigFault(
+		code.ServerConfigControlMetadataNoPath,
+		"using a control_metadata device requires a path to use as the mount point",
+		"add a valid 'path' to the 'control_metadata' section of the config",
+	)
+	FaultConfigEngineBdevRolesMismatch = serverConfigFault(
+		code.ServerConfigEngineBdevRolesMismatch,
+		"md-on-ssd bdev roles have been set in some but not all engine configs",
+		"set bdev roles on all engines or remove all bdev role assignments in config",
+	)
+	FaultConfigSysRsvdZero = serverConfigFault(
+		code.ServerConfigSysRsvdZero,
+		"`system_ram_reserved` is set to zero in server config",
+		"set `system_ram_reserved` to a positive integer value in config",
 	)
 )
 
@@ -125,6 +141,15 @@ func FaultConfigDuplicateScmMount(curIdx, seenIdx int) *fault.Fault {
 func FaultConfigDuplicateScmDeviceList(curIdx, seenIdx int) *fault.Fault {
 	return dupeValue(
 		code.ServerConfigDuplicateScmDeviceList, "scm_list", curIdx, seenIdx,
+	)
+}
+
+func FaultConfigScmDiffClass(curIdx, seenIdx int) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigScmDiffClass,
+		fmt.Sprintf("the SCM class in I/O Engine %d is different from I/O Engine %d",
+			curIdx, seenIdx),
+		"ensure that each I/O Engine has a single SCM tier with the same class and restart",
 	)
 }
 
@@ -208,6 +233,20 @@ func FaultConfigNrHugepagesOutOfRange(req, max int) *fault.Fault {
 		code.ServerConfigNrHugepagesOutOfRange,
 		fmt.Sprintf("number of hugepages specified (%d) is out of range (0 - %d)", req, max),
 		fmt.Sprintf("specify a nr_hugepages value between 0 and %d", max),
+	)
+}
+
+// FaultConfigRamdiskOverMaxMem indicates that the tmpfs size requested in config is larger than
+// maximum allowed.
+func FaultConfigRamdiskOverMaxMem(confSize, ramSize, memRamdiskMin uint64) *fault.Fault {
+	return serverConfigFault(
+		code.ServerConfigRamdiskOverMaxMem,
+		fmt.Sprintf("configured scm tmpfs size %s is larger than the maximum (%s) that "+
+			"total system memory (RAM) will allow", humanize.IBytes(confSize),
+			humanize.IBytes(ramSize)),
+		fmt.Sprintf("remove the 'scm_size' parameter so it can be automatically set "+
+			"or manually set to a value between %s and %s in the config file",
+			humanize.IBytes(memRamdiskMin), humanize.IBytes(ramSize)),
 	)
 }
 

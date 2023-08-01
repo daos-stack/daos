@@ -1826,24 +1826,23 @@ crt_group_config_path_set(const char *path)
 	int rc;
 
 	if (path == NULL) {
-		D_ERROR("path can't be NULL");
+		D_ERROR("path can't be NULL\n");
 		return -DER_INVAL;
 	}
 
 	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
-		D_ERROR("specified path must be fewer than %d characters",
-			CRT_MAX_ATTACH_PREFIX);
+		D_ERROR("specified path must be fewer than %d characters\n", CRT_MAX_ATTACH_PREFIX);
 		return -DER_INVAL;
 	}
 
 	rc = stat(path, &buf);
 	if (rc != 0) {
-		D_ERROR("bad path specified: %s", path);
+		D_ERROR("bad path specified: %s\n", path);
 		return d_errno2der(errno);
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
-		D_ERROR("not a directory: %s", path);
+		D_ERROR("not a directory: %s\n", path);
 		return -DER_NOTDIR;
 	}
 
@@ -2539,7 +2538,7 @@ out:
 }
 
 int
-crt_rank_self_set(d_rank_t rank)
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 {
 	int rc = 0;
 	struct crt_grp_priv	*default_grp_priv;
@@ -2551,11 +2550,22 @@ crt_rank_self_set(d_rank_t rank)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_INFO("Setting self rank to %d\n", rank);
+	D_INFO("Setting self rank to %u and minimum group version to %u\n", rank,
+	       group_version_min);
 
 	if (!crt_is_service()) {
 		D_WARN("Setting self rank is not supported on client\n");
 		return 0;
+	}
+
+	if (rank == CRT_NO_RANK) {
+		D_ERROR("Self rank should not be %u\n", CRT_NO_RANK);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (group_version_min == 0) {
+		D_ERROR("Minimum group version should not be zero\n");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
@@ -2566,6 +2576,7 @@ crt_rank_self_set(d_rank_t rank)
 
 	D_RWLOCK_WRLOCK(&default_grp_priv->gp_rwlock);
 	default_grp_priv->gp_self = rank;
+	default_grp_priv->gp_membs_ver_min = group_version_min;
 	rc = grp_add_to_membs_list(default_grp_priv, rank, CRT_NO_INCARNATION);
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
@@ -3412,6 +3423,17 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
+
+	if (grp_priv->gp_membs_ver_min == 0) {
+		D_INFO("Minimum group version not known yet\n");
+		D_GOTO(unlock, rc = -DER_UNINIT);
+	}
+
+	if (version < grp_priv->gp_membs_ver_min || version <= grp_priv->gp_membs_ver) {
+		D_INFO("Incoming group version too low: incoming=%u min=%u current=%u\n", version,
+		       grp_priv->gp_membs_ver_min, grp_priv->gp_membs_ver);
+		D_GOTO(unlock, rc = -DER_ALREADY);
+	}
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 

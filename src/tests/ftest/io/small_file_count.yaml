@@ -22,7 +22,7 @@ server_config:
       storage: auto
 pool:
   scm_size: 40G
-  nvme_size: 350G
+  nvme_size: 300G
 container:
   type: POSIX
   control_method: daos

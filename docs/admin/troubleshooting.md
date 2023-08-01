@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.4/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -122,15 +122,14 @@ CaRT and DAOS). DD_SUBSYS can be used to set which subsystems to enable
 logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 -   DAOS Facilities:
-    array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container,
-    object, placement, rebuild, tier, mgmt, bio, tests, dfs, duns, drpc,
-    security, dtx, dfuse, il, csum
+    daos, array, kv, common, tree, vos, client, server, rdb, rsvc, pool, container, object,
+    placement, rebuild, mgmt, bio, tests, dfs, duns, drpc, security, dtx, dfuse, il, csum, stack
 
 -   Common Facilities (GURT):
-    MISC, MEM, SWIM, TELEM
+    misc, mem, swim, fi, telem
 
 -   CaRT Facilities:
-    RPC, BULK, CORPC, GRP, HG, ST, IV, CTL
+    crt, rpc, bulk, corpc, grp, lm, hg, external, st, iv, ctl
 
 ### Priority Logging
 
@@ -144,6 +143,11 @@ with D_LOG_MASK, which by default is set to INFO
 messages being logged. D_LOG_MASK can also be used to specify the
 level of logging on a per-subsystem basis as well
 ("D_LOG_MASK=DEBUG,MEM=ERR").
+
+-   Log Levels:
+    debug, dbug, info, note, warn, error, err, crit, alrt, fatal, emrg, emit
+
+Note: debug == dbug, error == err and fatal == emrg.
 
 ### Debug Masks/Streams:
 
@@ -171,11 +175,15 @@ composition of multiple individual bits.
 
     -   rebuild = rebuild process
 
+    -   sec = security
+
+    -   csum = checksum
+
     -   group_default = (group mask) io, md, pl, and rebuild operations
 
-    -   group_metadata_only = (group mask) mgmt, md operations
-
     -   group_metadata = (group mask) group_default plus mgmt operations
+
+    -   group_metadata_only = (group mask) mgmt, md operations
 
 -   Common Debug Masks (GURT):
 
@@ -187,7 +195,9 @@ composition of multiple individual bits.
 
     -   net = network operations
 
-    -   io = object I/Otest = test programs
+    -   io = object I/O
+
+    -   test = test programs
 
 ### Common Use Cases
 
@@ -453,6 +463,15 @@ fabric_iface_port: 31316
 # engine 1
 fabric_iface_port: 31416
 ```
+### daos_agent cache of engine URIs is stale
+
+The `daos_agent` cache may become invalid if `daos_engine` processes restart with different
+configurations or IP addresses, or if the DAOS system is reformatted.
+If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) may return
+`-DER_BAD_TARGET` (-1035) errors.
+
+To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
+force an immediate cache refresh.
 
 ## Diagnostic and Recovery Tools
 
@@ -941,7 +960,7 @@ pool header correct
 
 ## Syslog
 
-[`RAS events`](https://docs.daos.io/v2.4/admin/administration/#ras-events) are printed to the Syslog
+[`RAS events`](https://docs.daos.io/v2.6/admin/administration/#ras-events) are printed to the Syslog
 by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 

@@ -27,6 +27,22 @@
 #access_points: ['hostname1']
 #
 #
+## Control plane metadata
+## Immutable after running "dmg storage format".
+#
+## Mandatory if MD-on-SSD bdev device roles have been assigned.
+## Define a directory or partition/mountpoint to be used as the storage location for
+## control plane metadata. The location specified should be persistent across reboots.
+#
+#control_metadata:
+#  # Directory to store control plane metadata.
+#  # If device is also defined, this path will be used as the mountpoint.
+#  path: /home/daos_server/control_meta
+#  # Storage partition to be formatted with an ext4 filesystem and mounted for
+#  # control plane metadata storage.
+#  device: /dev/sdb1
+#
+#
 ## Default control plane port
 #
 ## Port number to bind daos_server to. This will also be used when connecting
@@ -186,6 +202,9 @@
 #
 ## Number of hugepages to allocate for DMA buffer memory
 #
+## Optional parameter that should only be set if overriding the automatically calculated value is
+## necessary.
+#
 ## Specifies the number (not size) of hugepages to allocate for use by NVMe
 ## through SPDK. Note that each target requires 1 GiB of hugepage space.
 ## In DAOS version 2.2 and newer, nr_hugepages specifies the total across all
@@ -205,6 +224,22 @@
 #
 ## default: false
 #disable_hugepages: false
+#
+#
+## Reserve an amount of RAM for system use when calculating the size of RAM-disks that will be
+## created for DAOS I/O engines. Units are in GiB and represents the total RAM that will be
+## reserved when calculating RAM-disk sizes for all engines.
+#
+## Optional parameter that should only be set if the automatically calculated value is unsuitable.
+## In situations when a host is running applications alongside DAOS that use a significant amount
+## of RAM resulting in MemAvailable value being too low to support the calculated RAM-disk size
+## increasing the value will reduce the calculate size. Alternatively in situations where total
+## RAM is low, reducing the value may prevent problems where RAM-disk size calculated is below the
+## minimum of 4gib. Increasing the value may help avoid the potential of OOM killer terminating
+## engine processes but could also result in stopping DAOS from using available memory resources.
+#
+## default: 16
+#system_ram_reserved: 5
 #
 #
 ## Set specific debug mask for daos_server (control plane).
@@ -346,18 +381,19 @@
 #    scm_mount: /mnt/daos/1
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size ignored
-#    # - "ram" to emulate SCM with memory, scm_list ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
 #    class: ram
 #
-#    # When class is set to ram, tmpfs will be used to emulate SCM.
-#    # The size of ram is specified by scm_size in GB units.
-#    scm_size: 16
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to ram, tmpfs will be mounted with hugepage
 #    # support, if the kernel supports it. If this is not desirable,
@@ -377,7 +413,7 @@
 #
 #    # Backend block device configuration to be used by this engine instance.
 #    # When class is set to nvme, bdev_list is the list of unique NVMe IDs
-#    # that should be different across different engine instance.
+#    # that should be different across different engine instances.
 #    # Immutable after running "dmg storage format".
 #    bdev_list: ["0000:81:00.0", "0000:82:00.0"]  # generate regular nvme.conf
 #
@@ -392,6 +428,22 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    bdev_busid_range: 0x80-0x8f
 #    #bdev_busid_range: 128-143
+#
+#    # Optional explicit nvme-class bdev tier role assignments will
+#    # define the roles and responsibilities of this bdev tier.
+#    # If DCPM class is defined for the first tier,
+#    # only one bdev tier is supported and its role must be data.
+#
+#    # Roles will be derived based on configured bdev
+#    # tiers, if not specified here.  You must assign all roles or none.
+#    # Options are:
+#    # - "data" SSDs will be used to store actual data
+#    # - "meta" SSDs will be used to store the VOS metadata
+#    # - "wal" SSDs will be used to store the write-ahead-log
+#    bdev_roles:
+#    - data
+#    - meta
+#    - wal
 #
 #
 #  # Specify accelerator engine setting (experimental).
@@ -503,26 +555,32 @@
 #    scm_mount: /mnt/daos/2
 #
 #    # Backend SCM device type. Either use PMem (Intel(R) Optane(TM) persistent
-#    # memory) modules configured in interleaved mode or emulate SCM with a
-#    # tmpfs running in RAM.
+#    # memory) modules configured in interleaved mode or a tmpfs running in RAM.
 #    # Options are:
-#    # - "dcpm" for real SCM (preferred option), scm_size is ignored
-#    # - "ram" to emulate SCM with memory, scm_list is ignored
+#    # - "dcpm" for SCM, scm_size is ignored
+#    # - "ram" to use tmpfs, scm_list is ignored
 #    # Immutable after running "dmg storage format".
 #
-#    class: dcpm
+#    class: ram
+#
+#    # When class is set to ram, tmpfs will be used instead of dcpm.
+#    # The size of ram is specified by scm_size in GB units and will be automatically calculated
+#    # unless overridden by this optional parameter (units in GiB).
+#
+#    #scm_size: 0
 #
 #    # When class is set to dcpm, scm_list is the list of device paths for
 #    # PMem namespaces (currently only one per engine supported).
-#    scm_list: [/dev/pmem1]
+#    #class: dcpm
+#    #scm_list: [/dev/pmem1]
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine
 #    # instance.
 #    # Options are:
-#    # - "nvme" for NVMe SSDs (preferred option), bdev_{size,number} ignored
-#    # - "file" to emulate a NVMe SSD with a regular file, bdev_number ignored
-#    # - "kdev" to use a kernel block device, bdev_{size,number} ignored
+#    # - "nvme" for NVMe SSDs (preferred option), bdev_size ignored
+#    # - "file" to emulate a NVMe SSD with a regular file
+#    # - "kdev" to use a kernel block device, bdev_size ignored
 #    # Immutable after running "dmg storage format".
 #
 #    # When class is set to file, Linux AIO will be used to emulate NVMe.
@@ -552,6 +610,9 @@
 #    # will not be processed by this engine. Empty or unset range signifies allow all.
 #    #bdev_busid_range: 0xd0-0xdf
 #    #bdev_busid_range: 208-223
+#
+#    # See about bdev_roles above.
+#    bdev_roles: [wal, meta, data]
 #
 #
 #  # Specify accelerator engine setting (experimental).

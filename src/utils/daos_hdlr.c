@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -49,12 +50,16 @@ struct file_dfs {
 };
 
 /* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+#define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
+	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+#define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
+	} while (0)
 
 static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap);
@@ -726,9 +731,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* create the destination directory if it does not exist. Assume root always exists */
 	if (strcmp(dst_path, "/") != 0) {
 		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-		if (rc == EEXIST) {
-			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-		} else if (rc != 0) {
+		if (rc != 0 && rc != EEXIST) {
+			DH_PERROR_SYS(ap, rc, "mkdir '%s' failed", dst_path);
 			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 	}
@@ -739,9 +743,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 		/* walk source directory */
 		rc = file_readdir(ap, src_file_dfs, src_dir, &entry);
 		if (rc != 0) {
-			rc = daos_errno2der(rc);
-			DH_PERROR_DER(ap, rc, "Cannot read directory");
-			D_GOTO(out, rc);
+			DH_PERROR_SYS(ap, rc, "Cannot read directory");
+			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 
 		/* end of stream when entry is NULL and rc == 0 */
@@ -1199,10 +1202,9 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	rc = daos_cont_get_acl(coh, &prop_acl, NULL);
 	if (rc == 0) {
 		/* ACL will be appended to the end */
-		props_merged = daos_prop_merge(props, prop_acl);
-		if (props_merged == NULL) {
-			rc = -DER_INVAL;
-			DH_PERROR_DER(ap, rc, "Failed set container ACL");
+		rc = daos_prop_merge2(props, prop_acl, &props_merged);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "Failed to set container ACL");
 			D_GOTO(out, rc);
 		}
 		daos_prop_free(props);
@@ -1377,12 +1379,12 @@ dm_connect(struct cmd_args_s *ap,
 		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
-			D_GOTO(out, rc);
+			D_GOTO(err, rc);
 		}
 		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
 				    src_cont_info, NULL);
 		if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "failed to open source container\n");
+			DH_PERROR_DER(ap, rc, "failed to open source container");
 			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
@@ -1391,7 +1393,6 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1427,12 +1428,12 @@ dm_connect(struct cmd_args_s *ap,
 			rc = dm_cont_get_all_props(ap, ca->src_coh, &props, false,  true, false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 			rc = dm_serialize_cont_md(ap, ca, props, ap->preserve_props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 		/* if DAOS -> DAOS copy container properties from src to dst */
@@ -1448,7 +1449,7 @@ dm_connect(struct cmd_args_s *ap,
 							   true, false, true);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 			ca->cont_layout = props->dpp_entries[1].dpe_val;
 		}
@@ -1504,7 +1505,7 @@ dm_connect(struct cmd_args_s *ap,
 			rc = dm_deserialize_cont_md(ap, ca, ap->preserve_props, &props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to deserialize metadata");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 
@@ -1577,7 +1578,6 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "dfs_mount on destination failed");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
 				D_GOTO(err, rc);
 			}
 		}
@@ -1605,11 +1605,21 @@ dm_connect(struct cmd_args_s *ap,
 	D_GOTO(out, rc);
 err:
 	if (daos_handle_is_valid(ca->dst_coh)) {
+		if (dst_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(dst_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount destination container");
+		}
 		rc2 = daos_cont_close(ca->dst_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close destination container");
 	}
 	if (daos_handle_is_valid(ca->src_coh)) {
+		if (src_file_dfs->dfs_sys != NULL) {
+			rc2 = dfs_sys_umount(src_file_dfs->dfs_sys);
+			if (rc2 != 0)
+				DH_PERROR_SYS(ap, rc2, "failed to unmount source container");
+		}
 		rc2 = daos_cont_close(ca->src_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close source container");
@@ -1662,43 +1672,44 @@ dm_disconnect(struct cmd_args_s *ap,
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-			daos_cont_close(ca->src_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
-			daos_pool_disconnect(ca->src_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->src_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(ap, rc,
+						      "failed to disconnect source pool on retry");
+			}
 		}
 	}
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			dst_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->dst_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-			daos_cont_close(ca->dst_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
-			daos_pool_disconnect(ca->dst_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->dst_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(
+					    ap, rc,
+					    "failed to disconnect destination pool on retry");
+			}
 		}
 	}
 	return rc;
@@ -1729,6 +1740,8 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_st
 			strncpy(path, "/", path_len);
 		else
 			strncpy(path, dattr.da_rel_path, path_len);
+	} else if (rc == ENOMEM) {
+		D_GOTO(out, rc);
 	} else {
 		/* If basename does not exist yet then duns_resolve_path will fail even if
 		 * dirname is a UNS path
@@ -1857,8 +1870,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, num);
-	if (rc != 0)
+	if (rc != 0) {
+		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
+	}
 
 	if (dst_file_dfs.type == POSIX)
 		ap->fs_copy_posix = true;
@@ -2411,5 +2426,142 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
+	return rc;
+}
+
+int
+dfuse_count_query(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	query.ino = ap->dfuse_mem.ino;
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+	ap->dfuse_mem.found           = query.found;
+
+close:
+	close(fd);
+	return rc;
+}
+
+/* Dfuse cache evict (and helper).
+ * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
+ * cannot do this so perform the same over all the top-level directory entries instead.
+ */
+
+static int
+dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
+{
+	struct dirent *ent;
+	DIR           *dir;
+	int            rc = 0;
+
+	dir = fdopendir(fd);
+	if (dir == 0) {
+		rc = errno;
+		return rc;
+	}
+
+	while ((ent = readdir(dir)) != NULL) {
+		int cfd;
+
+		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
+		if (cfd < 0) {
+			rc = errno;
+			goto out;
+		}
+
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT, query);
+		close(cfd);
+		if (rc < 0) {
+			rc = errno;
+			goto out;
+		}
+	}
+
+out:
+	closedir(dir);
+	return rc;
+}
+
+int
+dfuse_evict(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	struct stat            buf;
+	int                    rc = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = fstat(fd, &buf);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		rc = daos_errno2der(rc);
+		goto close;
+	}
+
+	if (buf.st_ino == 1) {
+		rc = dfuse_evict_helper(fd, &query);
+		if (rc != 0) {
+			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
+			rc = daos_errno2der(rc);
+			goto close;
+		}
+		goto out;
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.ino = buf.st_ino;
+out:
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+
+close:
+	close(fd);
 	return rc;
 }

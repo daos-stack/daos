@@ -126,13 +126,10 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
-	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	rc = dfs_release(hdl->obj);
-	if (rc == ENOMEM)
-		dfs_release(hdl->obj);
+	dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -472,7 +469,7 @@ fini_sys(dfs_sys_t *dfs_sys, bool disconnect)
 		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
-			return rc;
+			return daos_der2errno(rc);
 		}
 		dfs_sys->hash = NULL;
 	}
@@ -794,10 +791,10 @@ int
 dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	     struct stat *buf)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -1215,8 +1212,6 @@ dfs_sys_close(dfs_obj_t *obj)
 	int rc = 0;
 
 	rc = dfs_release(obj);
-	if (rc == ENOMEM)
-		dfs_release(obj);
 	return rc;
 }
 
@@ -1471,9 +1466,6 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
-	if (rc == ENOMEM)
-		dfs_release(sys_dir->obj);
-
 	D_FREE(sys_dir);
 
 	return rc;

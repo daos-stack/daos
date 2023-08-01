@@ -137,9 +137,9 @@ void vos_obj_cache_evict(struct daos_lru_cache *occ,
 			 struct vos_container *cont);
 
 /**
- * Return object cache for the current thread.
+ * Return object cache for the current IO.
  */
-struct daos_lru_cache *vos_obj_cache_current(void);
+struct daos_lru_cache *vos_obj_cache_current(bool standalone);
 
 /**
  * Object Index API and handles

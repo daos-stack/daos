@@ -14,6 +14,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/checksum.h>
+#include "cli_csum.h"
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -106,313 +107,76 @@ struct rw_cb_args {
 	struct shard_rw_args	*shard_args;
 };
 
-static struct dcs_layout *
-dc_rw_cb_singv_lo_get(daos_iod_t *iods, d_sg_list_t *sgls, uint32_t iod_nr,
-		      struct obj_reasb_req *reasb_req)
-{
-	struct dcs_layout	*singv_lo, *singv_los;
-	daos_iod_t		*iod;
-	d_sg_list_t		*sgl;
-	uint32_t		 i;
-
-	if (reasb_req == NULL)
-		return NULL;
-
-	singv_los = reasb_req->orr_singv_los;
-	for (i = 0; i < iod_nr; i++) {
-		singv_lo = &singv_los[i];
-		iod = &iods[i];
-		sgl = &sgls[i];
-		if (singv_lo->cs_even_dist == 0 || singv_lo->cs_bytes != 0 ||
-		    iod->iod_size == DAOS_REC_ANY)
-			continue;
-		/* the case of fetch singv with unknown rec size, now after the
-		 * fetch need to re-calculate the singv_lo again
-		 */
-		if (obj_ec_singv_one_tgt(iod->iod_size, sgl,
-					 reasb_req->orr_oca)) {
-			singv_lo->cs_even_dist = 0;
-			continue;
-		}
-		singv_lo->cs_bytes = obj_ec_singv_cell_bytes(iod->iod_size,
-						reasb_req->orr_oca);
-	}
-	return singv_los;
-}
-
-static int
-dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
-		      d_sg_list_t *cp_sgl, struct obj_shard_iod *siod,
-		      uint64_t off)
-{
-	struct daos_sgl_idx	sgl_idx = {0};
-	int			i, rc;
-
-	cp_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
-	cp_iod->iod_nr = siod->siod_nr;
-
-	rc = daos_sgl_processor(sgl, false, &sgl_idx, off, NULL, NULL);
-	if (rc)
-		return rc;
-
-	if (sgl_idx.iov_idx >= sgl->sg_nr) {
-		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset "DF_U64
-			", offset "DF_U64", tgt_idx %d\n", sgl_idx.iov_idx,
-			sgl_idx.iov_offset, off, siod->siod_tgt_idx);
-		return -DER_IO;
-	}
-
-	cp_sgl->sg_nr = sgl->sg_nr - sgl_idx.iov_idx;
-	cp_sgl->sg_nr_out = cp_sgl->sg_nr;
-	for (i = 0; i < cp_sgl->sg_nr; i++)
-		cp_sgl->sg_iovs[i] = sgl->sg_iovs[sgl_idx.iov_idx + i];
-	D_ASSERTF(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len,
-		  "iov_offset "DF_U64", iov_len "DF_U64"\n",
-		  sgl_idx.iov_offset, cp_sgl->sg_iovs[0].iov_len);
-	cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
-	cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
-
-	return 0;
-}
-
 static d_iov_t *
-rw_args2csum_iov(const struct rw_cb_args *rw_args)
+rw_args2csum_iov(const struct shard_rw_args *shard_args)
 {
 	daos_obj_rw_t	*api_args;
 
-	D_ASSERT(rw_args != NULL);
-	D_ASSERT(rw_args->shard_args != NULL);
-	D_ASSERT(rw_args->shard_args != NULL);
-	D_ASSERT(rw_args->shard_args->auxi.obj_auxi != NULL);
-	D_ASSERT(rw_args->shard_args->auxi.obj_auxi->obj_task != NULL);
+	D_ASSERT(shard_args != NULL);
+	D_ASSERT(shard_args->auxi.obj_auxi != NULL);
+	D_ASSERT(shard_args->auxi.obj_auxi->obj_task != NULL);
 
-	api_args = dc_task_get_args(rw_args->shard_args->auxi.obj_auxi->obj_task);
+	api_args = dc_task_get_args(shard_args->auxi.obj_auxi->obj_task);
 	return api_args->csum_iov;
 }
 
-static bool
-rw_args_has_csum_iov(const struct rw_cb_args *rw_args)
-{
-	return rw_args2csum_iov(rw_args) != NULL;
-}
-
-/**
- * If csums exist and the rw_args has a checksum iov to put checksums into,
- * then serialize the data checksums to the checksum iov. If the iov buffer
- * isn't large enough, then the checksums will be truncated. The iov len will
- * be the length needed. The caller can decide if it wants to grow the iov
- * buffer and call again.
- */
-static void
-rw_args_store_csum(const struct rw_cb_args *rw_args,
-		   const struct dcs_iod_csums *iod_csum)
-{
-	d_iov_t			*csum_iov;
-	struct obj_rw_in	*orw;
-	int			 c, rc;
-	int			 csum_iov_too_small = false;
-
-	if (!rw_args_has_csum_iov(rw_args) || iod_csum == NULL)
-		return;
-
-	orw = crt_req_get(rw_args->rpc);
-	csum_iov = rw_args2csum_iov(rw_args);
-	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY "Storing %d csum(s) in iov: "DF_IOV"\n",
-		DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-		iod_csum->ic_nr,
-		DP_IOV(csum_iov));
-	for (c = 0; c < iod_csum->ic_nr; c++) {
-		if (!csum_iov_too_small) {
-			D_DEBUG(DB_CSUM, DF_C_UOID_DKEY
-					"Serializing "DF_CI
-					" into iov: "DF_IOV"\n",
-				DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-				DP_CI(iod_csum->ic_data[c]),
-				DP_IOV(csum_iov));
-			rc = ci_serialize(&iod_csum->ic_data[c],
-					  csum_iov);
-			csum_iov_too_small = rc == -DER_REC2BIG;
-		}
-
-		if (csum_iov_too_small) {
-			D_DEBUG(DB_CSUM, "IOV is too small\n");
-			csum_iov->iov_len += ci_size(iod_csum->ic_data[c]);
-		}
-	}
-}
-
 static int
-dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
+rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 {
-	struct daos_csummer	*csummer;
-	struct daos_csummer	*csummer_copy = NULL;
-	d_sg_list_t		*sgls;
-	struct obj_rw_in	*orw;
-	struct obj_rw_out	*orwo;
-	daos_iod_t		*iods;
-	struct dcs_iod_csums	*iods_csums;
-	daos_iom_t		*maps;
-	struct obj_reasb_req	*reasb_req;
-	struct dcs_layout	*singv_lo, *singv_los;
-	struct obj_io_desc	*oiods;
-	struct daos_oclass_attr	*oca;
-	uint32_t		 shard_idx;
-	int			 i;
-	int			 rc = 0;
+	struct obj_rw_in	*orw = crt_req_get(rw_args->rpc);
+	struct obj_rw_out	*orwo = crt_reply_get(rw_args->rpc);
+	int			 rc;
+	bool			 is_ec_obj;
+	struct dc_object	*obj = rw_args->shard_args->auxi.obj_auxi->obj;
+	struct dc_csum_veriry_args csum_verify_args = {
+	    .csummer    = rw_args->co->dc_csummer,
+	    .sgls       = rw_args->rwaa_sgls,
+	    .iods       = orw->orw_iod_array.oia_iods,
+	    .iods_csums = orwo->orw_iod_csums.ca_arrays,
+	    .maps       = orwo->orw_maps.ca_arrays,
+	    .dkey       = &orw->orw_dkey,
+	    .sizes      = orwo->orw_iod_sizes.ca_arrays,
+	    .oid        = orw->orw_oid,
+	    .iod_nr     = orw->orw_iod_array.oia_iod_nr,
+	    .maps_nr    = orwo->orw_maps.ca_count,
+	    .oiods      = rw_args->shard_args->oiods,
+	    .reasb_req  = rw_args->shard_args->reasb_req,
+	    .obj        = obj,
+	    .dkey_hash  = rw_args->shard_args->auxi.obj_auxi->dkey_hash,
+	    .shard_offs = rw_args->shard_args->offs,
+	    .oc_attr    = &obj->cob_oca,
+	    .iov_csum   = rw_args2csum_iov(rw_args->shard_args),
+	    .shard      = rw_args->shard_args->auxi.shard,
+	};
 
-	csummer = rw_args->co->dc_csummer;
-	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_data_verify)
-		return 0;
+	if (obj_is_ec(obj))
+		csum_verify_args.shard_idx =
+		    obj_ec_shard_off(obj,
+				     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
+				     orw->orw_oid.id_shard);
+	else
+		csum_verify_args.shard_idx = orw->orw_oid.id_shard %
+					     daos_oclass_grp_size(&obj->cob_oca);
 
-	orw = crt_req_get(rw_args->rpc);
-	orwo = crt_reply_get(rw_args->rpc);
-	sgls = rw_args->rwaa_sgls;
-	iods = orw->orw_iod_array.oia_iods;
-	oiods = rw_args->shard_args->oiods;
-	iods_csums = orwo->orw_iod_csums.ca_arrays;
-	maps = orwo->orw_maps.ca_arrays;
 
-	/** currently don't verify echo classes */
-	if ((daos_obj_is_echo(orw->orw_oid.id_pub)) || (sgls == NULL))
-		return 0;
+	rc = dc_rw_cb_csum_verify(&csum_verify_args);
 
-	D_ASSERTF(orwo->orw_maps.ca_count == orw->orw_iod_array.oia_iod_nr,
-		  "orwo->orw_maps.ca_count(%lu) == "
-		  "orw->orw_iod_array.oia_iod_nr(%d)",
-		  orwo->orw_maps.ca_count, orw->orw_iod_array.oia_iod_nr);
+	is_ec_obj = (rw_args->shard_args->reasb_req != NULL) &&
+		    daos_oclass_is_ec(rw_args->shard_args->reasb_req->orr_oca);
 
-	/** Used to do actual checksum calculations. This prevents conflicts
-	 * between tasks
-	 */
-	csummer_copy = daos_csummer_copy(csummer);
-	if (csummer_copy == NULL)
-		return -DER_NOMEM;
+	if (rc == -DER_CSUM && is_ec_obj) {
+		uint32_t tgt_idx;
 
-	/** fault injection - corrupt data after getting from server and before
-	 * verifying on client - simulates corruption over network
-	 */
-	if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_FETCH))
-		/** Got csum successfully from server. Now poison it!! */
-		orwo->orw_iod_csums.ca_arrays->ic_data->cs_csum[0]++;
-
-	reasb_req = rw_args->shard_args->reasb_req;
-	oca = &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca;
-	if (obj_is_ec(rw_args->shard_args->auxi.obj_auxi->obj)) {
-		shard_idx = obj_ec_shard_off(rw_args->shard_args->auxi.obj_auxi->obj,
-					     rw_args->shard_args->auxi.obj_auxi->dkey_hash,
-					     orw->orw_oid.id_shard);
-	} else {
-		shard_idx = orw->orw_oid.id_shard % daos_oclass_grp_size(oca);
+		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
+		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
+		if (rc) {
+			D_ERROR(DF_OID" fail info insert"
+				DF_RC"\n",
+				DP_OID(orw->orw_oid.id_pub),
+				DP_RC(rc));
+		}
+		rc = -DER_CSUM;
 	}
-
-	singv_los = dc_rw_cb_singv_lo_get(iods, sgls, orw->orw_nr, reasb_req);
-
-	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"VERIFY %d iods dkey_hash "DF_U64"\n",
-		DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-		orw->orw_nr, rw_args->shard_args->auxi.obj_auxi->dkey_hash);
-
-	for (i = 0; i < orw->orw_nr; i++) {
-#define IOV_INLINE	8
-		daos_iod_t		*iod = &iods[i];
-		daos_iod_t		 shard_iod = *iod;
-		d_iov_t			 iovs_inline[IOV_INLINE];
-		d_iov_t			*iovs_alloc = NULL;
-		d_sg_list_t		 shard_sgl = sgls[i];
-		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
-		uint64_t		*sizes;
-		daos_iom_t		*map = &maps[i];
-
-		if (!csum_iod_is_supported(iod))
-			continue;
-
-		sizes = orwo->orw_iod_sizes.ca_arrays;
-		shard_iod.iod_size = sizes[i];
-		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
-			if (sgls[i].sg_nr <= IOV_INLINE) {
-				shard_sgl.sg_iovs = iovs_inline;
-			} else {
-				D_ALLOC_ARRAY(iovs_alloc, sgls[i].sg_nr);
-				if (iovs_alloc == NULL) {
-					rc = -DER_NOMEM;
-					break;
-				}
-				shard_sgl.sg_iovs = iovs_alloc;
-			}
-			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
-					&shard_sgl, oiods[i].oiod_siods,
-					rw_args->shard_args->offs[i]);
-			if (rc != 0) {
-				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
-					DF_OID"): "DF_RC"\n",
-					DP_OID(orw->orw_oid.id_pub),
-					DP_RC(rc));
-				D_FREE(iovs_alloc);
-				break;
-			}
-		}
-
-		singv_lo = (singv_los == NULL || iod->iod_type == DAOS_IOD_ARRAY) ?
-			   NULL : &singv_los[i];
-		if (singv_lo != NULL) {
-			/* Single-value csum layout not needed for short single value that only
-			 * stored on one data shard.
-			 */
-			if (obj_ec_singv_one_tgt(iod->iod_size, NULL,
-						 &rw_args->shard_args->auxi.obj_auxi->obj->cob_oca))
-				singv_lo = NULL;
-			else
-				singv_lo->cs_cell_align = 1;
-		}
-		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
-					     &shard_sgl, iod_csum, singv_lo,
-					     shard_idx, map);
-		D_FREE(iovs_alloc);
-		if (rc != 0) {
-			bool			 is_ec_obj;
-
-			if (iod->iod_type == DAOS_IOD_SINGLE) {
-				D_ERROR("Data Verification failed (object: "
-					DF_C_UOID_DKEY" shard %d): "DF_RC"\n",
-					DP_C_UOID_DKEY(orw->orw_oid,
-						     &orw->orw_dkey),
-					shard_idx,
-					DP_RC(rc));
-			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
-				D_ERROR("Data Verification failed (object: "
-					DF_C_UOID_DKEY" shard %d, extent: "
-						DF_RECX"): "
-					DF_RC"\n",
-					DP_C_UOID_DKEY(orw->orw_oid,
-						     &orw->orw_dkey),
-					shard_idx, DP_RECX(iod->iod_recxs[0]),
-					DP_RC(rc));
-			}
-
-			is_ec_obj = (reasb_req != NULL) &&
-				daos_oclass_is_ec(reasb_req->orr_oca);
-			if (rc == -DER_CSUM && is_ec_obj) {
-				struct shard_auxi_args	*sa;
-				uint32_t		 tgt_idx;
-
-				sa = &rw_args->shard_args->auxi;
-				tgt_idx = sa->shard %
-					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
-				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
-				if (rc) {
-					D_ERROR(DF_OID" fail info insert"
-						DF_RC"\n",
-						DP_OID(orw->orw_oid.id_pub),
-						DP_RC(rc));
-				}
-				rc = -DER_CSUM;
-			}
-			break;
-		}
-
-		rw_args_store_csum(rw_args, iod_csum);
-	}
-	daos_csummer_destroy(&csummer_copy);
 
 	return rc;
 }
@@ -1138,7 +902,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		if (rc != 0)
 			goto out;
 
-		rc = dc_rw_cb_csum_verify(rw_args);
+		rc = rw_cb_csum_verify(rw_args);
 		if (rc != 0)
 			goto out;
 
@@ -1391,7 +1155,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
 			if (rc != 0)
-				D_ERROR("crt_req_set_timeout error: %d", rc);
+				D_ERROR("crt_req_set_timeout error: %d\n", rc);
 		    }
 
 		rc = daos_rpc_send(req, task);
@@ -1654,9 +1418,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 					     &enum_type_val, ci_to_compare);
 
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d",
-				kd->kd_val_type == OBJ_ITER_AKEY ?
-				"AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
 			return rc;
 		}
 		break;
@@ -2087,8 +1850,8 @@ static int
 obj_shard_query_key_cb(tse_task_t *task, void *data)
 {
 	struct obj_query_key_cb_args	*cb_args;
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	uint32_t			flags;
 	int				opc;
 	int				ret = task->dt_result;
@@ -2237,7 +2000,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 		       struct dtx_id *dti, uint32_t *map_ver, daos_handle_t th, tse_task_t *task)
 {
 	struct dc_pool			*pool = NULL;
-	struct obj_query_key_1_in	*okqi;
+	struct obj_query_key_in		*okqi;
 	crt_rpc_t			*req;
 	struct obj_query_key_cb_args	 cb_args;
 	daos_unit_oid_t			 oid;
@@ -2286,6 +2049,8 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_epoch_first		= epoch->oe_first;
 	okqi->okqi_api_flags		= flags;
 	okqi->okqi_oid			= oid;
+	d_iov_set(&okqi->okqi_dkey, NULL, 0);
+	d_iov_set(&okqi->okqi_akey, NULL, 0);
 	if (dkey != NULL)
 		okqi->okqi_dkey		= *dkey;
 	if (akey != NULL)
@@ -2446,7 +2211,6 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	struct obj_k2a_args		*k2a_args = (struct obj_k2a_args *)arg;
 	struct obj_key2anchor_in	*oki;
 	struct obj_key2anchor_out	*oko;
-	uint64_t			save_sub_anchor;
 	int				ret = task->dt_result;
 	int				rc = 0;
 
@@ -2490,9 +2254,7 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	}
 
 	*k2a_args->eaa_map_ver = obj_reply_map_version_get(k2a_args->rpc);
-	save_sub_anchor = k2a_args->anchor->da_sub_anchors;
 	enum_anchor_copy(k2a_args->anchor, &oko->oko_anchor);
-	k2a_args->anchor->da_sub_anchors = save_sub_anchor;
 	dc_obj_shard2anchor(k2a_args->anchor, k2a_args->shard);
 out:
 	if (k2a_args->eaa_obj != NULL)
@@ -2566,7 +2328,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.eaa_map_ver = &args->ka_auxi.map_ver;
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
-	cb_args.anchor = obj_args->anchor;
+	cb_args.anchor = args->ka_anchor;
 	cb_args.shard = obj_shard->do_shard_idx;
 	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)

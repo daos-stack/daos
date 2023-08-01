@@ -14,9 +14,9 @@ engines:
       - DAOS_MD_CAP=1024
       - DAOS_STRICT_SHUTDOWN=1
       - CRT_CTX_SHARE_ADDR=0
+      - DAOS_TARGET_OVERSUBSCRIBE=1
       - ABT_STACK_OVERFLOW_CHECK=mprotect
     storage:
       -
         class: ram
         scm_mount: /mnt/daos
-        scm_size: 32

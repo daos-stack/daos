@@ -153,8 +153,11 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
 	if err != nil {
 		return
 	}
@@ -232,6 +235,7 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		userExt    auth.UserExt
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList `json:"-"`
@@ -833,7 +837,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
 	}
 
-	resp := req.Properties
 	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
 	for _, prop := range pbResp.GetProperties() {
 		if _, found := pbMap[prop.GetNumber()]; found {
@@ -842,10 +845,12 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
-	for _, prop := range resp {
+	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
+	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			// Properties can be missing due to DAOS-11418 and DAOS-13919
+			rpcClient.Debugf("can't find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -856,6 +861,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		default:
 			return nil, errors.Errorf("unable to represent response value %+v", v)
 		}
+		resp = append(resp, prop)
 	}
 
 	return resp, nil
@@ -1244,10 +1250,10 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 			continue
 		}
 
-		scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+		usableBytes := scmNamespace.Mount.UsableBytes
 
-		if scmBytes > scmNamespaceFreeBytes {
-			scmBytes = scmNamespaceFreeBytes
+		if scmBytes > usableBytes {
+			scmBytes = usableBytes
 		}
 
 		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
@@ -1266,6 +1272,12 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, nvmeController := range nvmeControllers {
 		for _, smdDevice := range nvmeController.SmdDevices {
+			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
+				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
+			}
+
 			if smdDevice.NvmeState != storage.NvmeStateNormal {
 				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
@@ -1283,11 +1295,11 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
 			}
 
-			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.AvailBytes
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
 			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
 				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
-				smdDevice.AvailBytes, rankNVMeFreeSpace[smdDevice.Rank])
+				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
 
@@ -1317,7 +1329,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	for _, key := range resp.HostStorage.Keys() {
 		hostStorage := resp.HostStorage[key].HostStorage
 
-		if hostStorage.ScmNamespaces.Free() == 0 {
+		if hostStorage.ScmNamespaces.Usable() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
 				resp.HostStorage[key].HostSet.String())
 		}

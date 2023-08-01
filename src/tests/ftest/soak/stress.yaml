@@ -89,7 +89,7 @@ soak_stress:
     - macsio_stress
     - datamover_stress
   ignore_soak_errors: false
-  enable_intercept_lib: false
+  enable_intercept_lib: true
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -173,7 +173,7 @@ fio_stress:
       #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
-    disable_wb_caching: true
+    disable_caching: true
     thread_count: 8
     cores: '0-7'
 daos_racer:
@@ -185,7 +185,7 @@ vpic_stress:
     - 1
   taskspernode:
     - 32
-  cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
+  cmdline: "${DAOS_TEST_APP_DIR}/vpic-install/bin/harris.Linux"
   api:
     - POSIX
     - POSIX-LIBIOIL
@@ -202,7 +202,7 @@ lammps_stress:
     - 8
   taskspernode:
     - 32
-  cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj"
+  cmdline: "${DAOS_TEST_APP_DIR}/lammps/src/lmp_mpi -i ${DAOS_TEST_APP_DIR}/lammps/bench/in.lj"
   api:
     - POSIX
     - POSIX-LIBIOIL

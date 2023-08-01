@@ -5,7 +5,6 @@
 
 %global mercury_version 2.2.0-6%{?dist}
 %global libfabric_version 1.15.1-1
-%global libfabric_max_version 1.18
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -15,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.107
-Release:       5%{?relval}%{?dist}
+Version:       2.5.100
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -28,7 +27,7 @@ BuildRequires: python3-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}, libfabric-devel < %{libfabric_max_version}
+BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
@@ -73,7 +72,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-1.408.g9524cdb%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -142,12 +141,12 @@ Requires: ndctl
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
 Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
-Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
+Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
 Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
 %endif
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
+Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -168,9 +167,9 @@ This package contains DAOS administrative tools (e.g. dmg).
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury >= %{mercury_version}
-Requires: libfabric >= %{libfabric_version}, libfabric < %{libfabric_max_version}
+Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
-Requires: libfabric1 >= %{libfabric_version}, libfabric1 < %{libfabric_max_version}
+Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
@@ -217,6 +216,7 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: go >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -421,6 +421,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -480,7 +481,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %exclude %{daoshome}/TESTING/ftest/avocado_tests.yaml
 %{_bindir}/hello_drpc
 %{_libdir}/libdaos_tests.so
-%{_bindir}/common_test
 %{_bindir}/acl_dump_test
 %{_bindir}/agent_tests
 %{_bindir}/drpc_engine_test
@@ -517,9 +517,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/rdbt
 %{_bindir}/ring_pl_map
 %{_bindir}/smd_ut
-%{_bindir}/srv_checksum_tests
-%{_bindir}/pool_scrubbing_tests
-%{_bindir}/rpc_tests
+%{_bindir}/bio_ut
 %{_bindir}/vea_ut
 %{_bindir}/vos_tests
 %{_bindir}/vea_stress
@@ -556,6 +554,33 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
+- Fix golang daos-client-tests dependency to be go instead
+
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
+* Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
+- Remove lmdb-devel for MD on SSD
+
+* Wed Jun 07 2023 Ryon Jensen <ryon.jensen@intel.com> 2.5.100-2
+- Removed unnecessary test files
+
+* Tue Jun 06 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.5.100-1
+- Switch version to 2.5.100 for 2.6 test builds
+
+* Mon Jun  5 2023 Jerome Soumagne <jerome.soumagne@intel.com> 2.3.107-7
+- Remove libfabric pinning and allow for 1.18 builds
+
+* Fri May 26 2023 Jeff Olivier <jeffrey.v.olivier@intel.com> 2.3.107-6
+- Add lmdb-devel and bio_ut for MD on SSD
+
 * Tue May 23 2023 Lei Huang <lei.huang@intel.com> 2.3.107-5
 - Add libcapstone-devel to deps of client-tests package
 

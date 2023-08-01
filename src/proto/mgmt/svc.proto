@@ -53,15 +53,18 @@ message JoinResp {
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance
 	bool localJoin = 5;	// Join processed locally.
+	uint32 map_version = 6; // Join processed in this version of the system map.
 }
 
 message LeaderQueryReq {
 	string sys = 1;		// System name.
+	string hosts = 2;	// hostset to query
 }
 
 message LeaderQueryResp {
-	string currentLeader = 1;
+	string current_leader = 1;
 	repeated string replicas = 2;
+	repeated string DownReplicas = 3;
 }
 
 message GetAttachInfoReq {
@@ -110,6 +113,7 @@ message PingRankReq {
 
 message SetRankReq {
 	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
+	uint32 map_version = 2;	// System map version in which the rank joined the system.
 }
 
 // SetRankResp is identical to DaosResp.

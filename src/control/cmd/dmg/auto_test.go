@@ -8,9 +8,11 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -101,8 +103,8 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			errors.New("Invalid value"),
 		},
 		{
-			"Generate with tmpfs scm",
-			"config generate -a foo --use-tmpfs-scm",
+			"Generate MD-on-SSD config",
+			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
 			strings.Join([]string{
 				printRequest(t, &control.NetworkScanReq{}),
 			}, " "),
@@ -138,15 +140,38 @@ func TestAuto_confGen(t *testing.T) {
 		Addr:    "host1",
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
-	exmplEngineCfgs := []*engine.Config{
-		control.MockEngineCfg(t, 0, 2, 4, 6, 8).WithHelperStreamCount(4),
-		control.MockEngineCfg(t, 1, 1, 3, 5, 7).WithHelperStreamCount(4),
+	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
+	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 16GiB sys rsvd,
+	// 5GiB per engine for tmpfs.
+	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 16 + 10)) / humanize.KiByte
+	mockRamdiskSize := 5
+	storHostRespHighMem := &control.HostResponse{
+		Addr:    "host1",
+		Message: storRespHighMem,
 	}
-	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
+	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
+	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
+	exmplEngineCfgs := []*engine.Config{e0, e1}
+	metadataMountPath := "/mnt/daos_md"
+	controlMetadata := storage.ControlMetadata{
+		Path: metadataMountPath,
+	}
 	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(t, 0, mockRamdiskSize, 2, 4, 6, 8).
+		control.MockEngineCfgTmpfs(0, mockRamdiskSize,
+			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
+			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4, 6, 8)).
+			WithStorageControlMetadataPath(metadataMountPath).
+			WithStorageConfigOutputPath(
+				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
+			).
 			WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(t, 1, mockRamdiskSize, 1, 3, 5, 7).
+		control.MockEngineCfgTmpfs(1, mockRamdiskSize,
+			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
+			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3, 5, 7)).
+			WithStorageControlMetadataPath(metadataMountPath).
+			WithStorageConfigOutputPath(
+				filepath.Join(controlMetadata.EngineDirectory(1), storage.BdevOutConfName),
+			).
 			WithHelperStreamCount(4),
 	}
 
@@ -157,6 +182,7 @@ func TestAuto_confGen(t *testing.T) {
 		scmOnly          bool
 		netClass         string
 		tmpfsSCM         bool
+		extMetadataPath  string
 		uErr             error
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
@@ -187,8 +213,9 @@ func TestAuto_confGen(t *testing.T) {
 				{netHostResp},
 				{storHostResp},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(16384).
+			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
+				// 16 targets * 2 engines * 512 pages
+				WithNrHugepages(16 * 2 * 512).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -198,8 +225,9 @@ func TestAuto_confGen(t *testing.T) {
 				{netHostResp},
 				{storHostResp},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", exmplEngineCfgs).
-				WithNrHugePages(16384).
+			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
+				// 16 targets * 2 engines * 512 pages
+				WithNrHugepages(16*2*512).
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -231,15 +259,35 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm": {
+		"successful fetch of host storage and fabric; tmpfs scm; no control_metadata path": {
 			tmpfsSCM: true,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostRespHighMem},
+			},
+			expErr: ErrTmpfsNoExtMDPath,
+		},
+		"successful fetch of host storage and fabric; ram scm tier; low mem": {
+			tmpfsSCM:        true,
+			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
 			},
-			expCfg: control.MockServerCfg(t, "ofi+psm2", tmpfsEngineCfgs).
-				WithNrHugePages(16384).
-				WithControlLogFile("/tmp/daos_server.log"),
+			expErr: errors.New("insufficient ram"),
+		},
+		"successful fetch of host storage and fabric; tmpfs scm": {
+			tmpfsSCM:        true,
+			extMetadataPath: metadataMountPath,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostRespHighMem},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
+				WithNrHugepages(17 * 2 * 512).
+				WithControlLogFile("/tmp/daos_server.log").
+				WithControlMetadata(controlMetadata),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -253,13 +301,13 @@ func TestAuto_confGen(t *testing.T) {
 			if tc.accessPoints == "" {
 				tc.accessPoints = "localhost"
 			}
-
 			cmd := &configGenCmd{
-				AccessPoints: tc.accessPoints,
-				NrEngines:    tc.nrEngines,
-				SCMOnly:      tc.scmOnly,
-				NetClass:     tc.netClass,
-				UseTmpfsSCM:  tc.tmpfsSCM,
+				AccessPoints:    tc.accessPoints,
+				NrEngines:       tc.nrEngines,
+				SCMOnly:         tc.scmOnly,
+				NetClass:        tc.netClass,
+				UseTmpfsSCM:     tc.tmpfsSCM,
+				ExtMetadataPath: tc.extMetadataPath,
 			}
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
@@ -358,6 +406,7 @@ disable_vfio: false
 disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
+system_ram_reserved: 16
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log
@@ -376,7 +425,7 @@ hyperthreads: false
 		WithControlLogFile(defaultControlLogFile).
 		WithFabricProvider("ofi+verbs").
 		WithAccessPoints("hostX:10002").
-		WithNrHugePages(6144).
+		WithNrHugepages(6144).
 		WithDisableVMD(false).
 		WithEngines(
 			engine.MockConfig().
@@ -416,6 +465,7 @@ hyperthreads: false
 						WithStorageClass(storage.ClassNvme.String()).
 						WithBdevDeviceList(test.MockPCIAddrs(4, 5, 6)...),
 				).
+				WithIndex(1).
 				WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
 				WithStorageVosEnv("NVME").
 				WithTargetCount(6).

@@ -24,27 +24,31 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+var ErrTmpfsNoExtMDPath = errors.New("--use-tmpfs-scm will generate an md-on-ssd config and so " +
+	"--control-metadata-path must also be set")
+
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
 	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable locally-attached hardware devices"`
 }
 
 type configGenCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-	AccessPoints   string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines      int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	SCMOnly        bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
-	NetClass       string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider    string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
-	UseTmpfsSCM    bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
-	SkipPrep       bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
+	cmdutil.LogCmd  `json:"-"`
+	helperLogCmd    `json:"-"`
+	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
+	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
+	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
+	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
+	NetProvider     string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
+	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
+	SkipPrep        bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
-type getFabricFn func(context.Context, logging.Logger) (*control.HostFabric, error)
+type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
 
-func getLocalFabric(ctx context.Context, log logging.Logger) (*control.HostFabric, error) {
-	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), allProviders)
+func getLocalFabric(ctx context.Context, log logging.Logger, provider string) (*control.HostFabric, error) {
+	hf, err := GetLocalFabricIfaces(ctx, hwprov.DefaultFabricScanner(log), provider)
 	if err != nil {
 		return nil, errors.Wrapf(err, "fetching local fabric interfaces")
 	}
@@ -107,7 +111,7 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		return nil, errors.Wrapf(err, "scm scan")
 	}
 
-	hpi, err := common.GetMemInfo()
+	mi, err := common.GetMemInfo()
 	if err != nil {
 		return nil, errors.Wrapf(err, "get hugepage info")
 	}
@@ -116,17 +120,16 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 		NvmeDevices:   nvmeResp.Controllers,
 		ScmModules:    scmResp.Modules,
 		ScmNamespaces: scmResp.Namespaces,
-		MemInfo: control.MemInfo{
-			HugePageSizeKb: hpi.HugePageSizeKb,
-			MemTotal:       hpi.MemTotal,
-			MemFree:        hpi.MemFree,
-			MemAvailable:   hpi.MemAvailable,
-		},
+		MemInfo:       mi,
 	}, nil
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
+
+	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
+		return nil, ErrTmpfsNoExtMDPath
+	}
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
 
@@ -140,7 +143,12 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		return nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
 	}
 
-	hf, err := getFabric(ctx, cmd.Logger)
+	prov := cmd.NetProvider
+	if prov == allProviders {
+		prov = ""
+	}
+
+	hf, err := getFabric(ctx, cmd.Logger, prov)
 	if err != nil {
 		return nil, err
 	}
@@ -153,13 +161,14 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
 	req := control.ConfGenerateReq{
-		Log:          cmd.Logger,
-		NrEngines:    cmd.NrEngines,
-		SCMOnly:      cmd.SCMOnly,
-		NetClass:     ndc,
-		NetProvider:  cmd.NetProvider,
-		AccessPoints: accessPoints,
-		UseTmpfsSCM:  cmd.UseTmpfsSCM,
+		Log:             cmd.Logger,
+		NrEngines:       cmd.NrEngines,
+		SCMOnly:         cmd.SCMOnly,
+		NetClass:        ndc,
+		NetProvider:     cmd.NetProvider,
+		AccessPoints:    accessPoints,
+		UseTmpfsSCM:     cmd.UseTmpfsSCM,
+		ExtMetadataPath: cmd.ExtMetadataPath,
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
@@ -178,6 +187,10 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 // parameters suitable to be used on the local host. Use the control API to generate config from
 // local scan results using the current process.
 func (cmd *configGenCmd) Execute(_ []string) error {
+	if err := common.CheckDupeProcess(); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	cfg, err := cmd.confGen(ctx, getLocalFabric, getLocalStorage)
 	if err != nil {

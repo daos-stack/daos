@@ -210,7 +210,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	d_rank_list_free(rank_list);
 
-	ret = crt_rank_self_set(max_rank+1);
+	ret = crt_rank_self_set(max_rank+1, 1 /* group_version_min */);
 	if (ret != 0) {
 		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
 		return ret;
@@ -1022,7 +1022,7 @@ cleanup:
 	g_shutdown_flag = 1;
 
 	if (pthread_join(tid, NULL)) {
-		D_ERROR("Could not join progress thread");
+		D_ERROR("Could not join progress thread\n");
 		ret = -1;
 	}
 
@@ -1206,7 +1206,7 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Maximum number of RPCs allowed to be executing concurrently.\n"
 	       "\n"
 	       "      Note that at the beginning of each test run, a buffer of size send_size\n"
-	       "        is allocated for each inflight RPC (total max_inflight * send_size).\n"
+	       "        is allocated for each in-flight RPC (total max_inflight * send_size).\n"
 	       "        This could be a lot of memory. Also, if the reply uses bulk, the\n"
 	       "        size increases to (max_inflight * max(send_size, reply_size))\n"
 	       "\n"
@@ -1994,7 +1994,7 @@ int main(int argc, char *argv[])
 	else
 		printf("  Buffer addresses end with:  %d\n", buf_alignment);
 	printf("  Repetitions per size:       %d\n"
-	       "  Max inflight RPCs:          %d\n\n",
+	       "  Max in-flight RPCs:          %d\n\n",
 	       rep_count, max_inflight);
 
 	/********************* Run the self test *********************/

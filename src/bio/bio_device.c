@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -218,13 +218,13 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
 		bool	found_tgt = false;
 
-		for (i = 0; i < pool_info->spi_tgt_cnt; i++) {
+		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; i++) {
 			/* Skip the targets not assigned to old device */
-			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[i]))
+			if (!is_tgt_on_dev(old_info, pool_info->spi_tgts[SMD_DEV_TYPE_DATA][i]))
 				continue;
 
 			found_tgt = true;
-			rc = create_one_blob(bs, pool_info->spi_blob_sz,
+			rc = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
 					     &blob_id);
 			if (rc)
 				goto out;
@@ -241,7 +241,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 			d_list_add_tail(&created->bi_link, blob_list);
 
 			/* Replace the blob id in pool info */
-			pool_info->spi_blobs[i] = blob_id;
+			pool_info->spi_blobs[SMD_DEV_TYPE_DATA][i] = blob_id;
 		}
 
 		/*
@@ -325,7 +325,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
-	new_dev->bb_replacing = true;
+	new_dev->bb_replacing = 1;
 
 	D_INIT_LIST_HEAD(&pool_list);
 	D_INIT_LIST_HEAD(&blob_list);
@@ -355,7 +355,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
-	new_dev->bb_replacing = false;
+	new_dev->bb_replacing = 0;
 	old_dev = new_dev;
 	new_dev = NULL;
 
@@ -367,7 +367,7 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	 * is triggered, we'll miss auto reint on the replaced device. It's
 	 * supposed to be fixed once incremental reint is ready.
 	 */
-	old_dev->bb_trigger_reint = true;
+	old_dev->bb_trigger_reint = 1;
 
 	/* Transit BS state to SETUP */
 	D_ASSERT(owner_thread(bbs) != NULL);
@@ -378,7 +378,7 @@ out:
 pool_list_out:
 	free_pool_list(&pool_list);
 	if (new_dev)
-		new_dev->bb_replacing = false;
+		new_dev->bb_replacing = 0;
 	return rc;
 }
 
@@ -633,6 +633,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 			rc = -DER_NOMEM;
 			goto out;
 		}
+		b_info->bdi_dev_roles = d_bdev->bb_roles;
 		if (!d_bdev->bb_removed)
 			b_info->bdi_flags |= NVME_DEV_FL_PLUGGED;
 		if (d_bdev->bb_faulty)
@@ -747,7 +748,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
-		D_ERROR("Reset action is not supported");
+		D_ERROR("Reset action is not supported\n");
 		opts->status = -DER_INVAL;
 		return;
 	default:
@@ -946,6 +947,10 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		break;
 	default:
 		break;
+	}
+	if (!opts.all_devices && !opts.finished) {
+		D_ERROR("Device could not be found\n");
+		return -DER_NONEXIST;
 	}
 
 	*state = opts.led_state;

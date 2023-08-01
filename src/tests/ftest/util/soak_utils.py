@@ -22,7 +22,7 @@ from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import DcpCommand, FsCopy
 from dfuse_utils import Dfuse
 from dmg_utils import get_storage_query_device_info
-from job_manager_utils import Srun, Mpirun
+from job_manager_utils import Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, \
     run_pcmd, list_to_str, get_log_file
@@ -68,7 +68,9 @@ def add_pools(self, pool_names, ranks=None):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(self.get_pool(namespace=path, connect=False, target_list=target_list))
+        self.pool.append(
+            self.get_pool(
+                namespace=path, connect=False, target_list=target_list, dmg=self.dmg_command))
         self.log.info("Valid Pool ID is %s", self.pool[-1].identifier)
 
 
@@ -123,80 +125,6 @@ def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
         src_file = format_path(pool, container, dst_name)
         fscopy_cmd.set_params(src=src_file, dst=dst_path)
         fscopy_cmd.run()
-
-
-def get_remote_dir(self, source_dir, dest_dir, host_list, shared_dir=None,
-                   rm_remote=True, append=None):
-    """Copy files from remote dir to local dir.
-
-    Args:
-        self (obj): soak obj
-        source_dir (str): Source directory to archive
-        dest_dir (str): Destination directory
-        host_list (NodeSet): list of hosts
-
-    Raises:
-        SoakTestError: if there is an error with the remote copy
-
-    """
-    if shared_dir is None:
-        shared_dir = self.sharedsoaktest_dir
-    if append:
-        for host in host_list:
-            shared_dir_tmp = shared_dir + append + str(host)
-            dest_dir_tmp = dest_dir + append + str(host)
-            if not os.path.exists(shared_dir_tmp):
-                os.mkdir(shared_dir_tmp)
-            if not os.path.exists(dest_dir_tmp):
-                os.mkdir(dest_dir_tmp)
-            # copy the directory from each client node to a shared directory
-            # tagged with the hostname
-            command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir_tmp}/.."
-            result = run_remote(self.log, host, command, timeout=300)
-            if not result.passed:
-                raise SoakTestError(
-                    f"<<FAILED: Soak remote logfiles not copied from clients>>: {host}")
-            command = f"/usr/bin/cp -R -p {shared_dir_tmp}/ \'{dest_dir}\'"
-            try:
-                run_command(command, timeout=30)
-            except DaosTestError as error:
-                raise SoakTestError(
-                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
-                        shared_dir_tmp)) from error
-
-    else:
-        # copy the remote dir on all client nodes to a shared directory
-        command = f"/usr/bin/rsync -avtr --min-size=1B {source_dir} {shared_dir}/.."
-        result = run_remote(self.log, host_list, command, timeout=300)
-        if not result.passed:
-            raise SoakTestError(
-                f"<<FAILED: Soak remote logfiles not copied from clients>>: {host_list}")
-
-        # copy the local logs and the logs in the shared dir to avocado dir
-        for directory in [source_dir, shared_dir]:
-            command = f"/usr/bin/cp -R -p {directory}/ \'{dest_dir}\'"
-            try:
-                run_command(command, timeout=30)
-            except DaosTestError as error:
-                raise SoakTestError(
-                    "<<FAILED: Soak logfiles not copied from shared area>>: {}".format(
-                        directory)) from error
-
-    if rm_remote:
-        # remove the remote soak logs for this pass
-        command = f"/usr/bin/rm -rf {source_dir}"
-        result = run_remote(self.log, host_list, command)
-        if not result.passed:
-            raise SoakTestError(
-                f"<<FAILED: Soak logfiles removal failed>>: {directory} on {host_list}")
-        # remove the local log for this pass
-        for directory in [source_dir, shared_dir]:
-            command = f"/usr/bin/rm -rf {directory}"
-            try:
-                run_command(command, timeout=30)
-            except DaosTestError as error:
-                raise SoakTestError(
-                    "<<FAILED: Soak logfiles removal failed>>: {}".format(directory)) from error
 
 
 def write_logfile(data, name, destination):
@@ -493,7 +421,7 @@ def launch_vmd_identify_check(self, name, results, args):
 
     for uuid in uuids:
         # Blink led
-        self.dmg_command.storage_led_identify(ids=uuid, timeout=5, reset=True)
+        self.dmg_command.storage_led_identify(ids=uuid, reset=True)
         time.sleep(2)
         # check if led is blinking
         result = self.dmg_command.storage_led_check(ids=uuid)
@@ -758,35 +686,6 @@ def launch_server_stop_start(self, pools, name, results, args):
         "<<<PASS %s: %s completed at %s>>>\n", self.loop, name, time.ctime())
 
 
-def get_srun_cmd(cmd, nodesperjob=1, ppn=1, srun_params=None, env=None):
-    """Wrap cmdline in a srun cmdline.
-
-    Args:
-        cmd (str): cmdline to wrap in srun cmdline
-        ppn (int): processes per node
-        nodesperjob(int): number of nodes
-        srun_params(dict): additional srun_params
-        env (dict): env variables to pass on cmdline
-
-    Returns:
-        cmdlines: cmdline string
-
-    """
-    srun_cmd = Srun(cmd)
-    srun_cmd.nodes.update(nodesperjob)
-    srun_cmd.ntasks_per_node.update(ppn)
-    if srun_params:
-        for key, value in list(srun_params.items()):
-            key_obj = getattr(srun_cmd, key)
-            if key_obj is not None and hasattr(key_obj, "update"):
-                key_obj.update(value, key)
-            else:
-                raise SoakTestError(f"<<FAILED: The srun param {key} does not exist")
-    if env:
-        srun_cmd.assign_environment(env)
-    return str(srun_cmd)
-
-
 def start_dfuse(self, pool, container, name=None, job_spec=None):
     """Create dfuse start command line for slurm.
 
@@ -803,15 +702,13 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
-    unique = get_random_string(5, self.used)
-    self.used.append(unique)
-    mount_dir = dfuse.mount_dir.value + unique
+    mount_dir = dfuse.mount_dir.value
     dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
-    dfuse_log = os.path.join(
-        self.soaktest_dir,
+    dfuselog = os.path.join(
+        self.sharedsoaktest_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
-        "" + "${SLURM_JOB_ID}_" + "daos_dfuse_" + unique)
-    dfuse_env = f"export D_LOG_MASK=ERR;export D_LOG_FILE={dfuse_log}"
+        "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
+    dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
     module_load = f"module load {self.mpi_module}"
 
     dfuse_start_cmds = [
@@ -937,7 +834,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 job_spec.replace("/", "_"), api, b_size, t_size,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
-                self.soaktest_dir, self.test_name + "_" + log_name
+                self.sharedsoaktest_dir, self.test_name + "_" + log_name
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
@@ -1009,13 +906,13 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
-                self.soaktest_dir, self.test_name
+                self.sharedsoaktest_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             macsio_log = os.path.join(
-                self.soaktest_dir, self.test_name
+                self.sharedsoaktest_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
             macsio_timing_log = os.path.join(
-                self.soaktest_dir, self.test_name
+                self.sharedsoaktest_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
@@ -1109,7 +1006,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob,
                 ppn)
             daos_log = os.path.join(
-                self.soaktest_dir, self.test_name + "_" + log_name
+                self.sharedsoaktest_dir, self.test_name + "_" + log_name
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
@@ -1166,7 +1063,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)
     racer_log = os.path.join(
-        self.soaktest_dir,
+        self.sharedsoaktest_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
     daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
@@ -1228,12 +1125,19 @@ def create_fio_cmdline(self, job_spec, pool):
         fio_cmd.update(
             "global", "rw", rw_val,
             "fio --name=global --rw")
+        if api == "POSIX-LIBPIL4DFS":
+            fio_cmd.update(
+                "global", "ioengine", "sync",
+                "fio --name=global --ioengine")
+        else:
+            fio_cmd.update(
+                "global", "ioengine", "libaio",
+                "fio --name=global --ioengine")
         cmds = []
         # add start dfuse cmds; api is always POSIX
         fio_cmd.api.update("POSIX")
         # Connect to the pool, create container and then start dfuse
         add_containers(self, pool, file_dir_oclass[0], file_dir_oclass[1])
-        self.container[-1].set_attr(attrs={'dfuse-direct-io-disable': 'on'})
         log_name = "{}_{}_{}_{}_{}_{}".format(
             job_spec, api, blocksize, size, rw_val, file_dir_oclass[0])
 
@@ -1370,7 +1274,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         src_file = format_path(pool, cont_1)
         dcp_cmd.set_params(src=src_file, dst=dst_file)
         env_vars = {
-            "D_LOG_FILE": os.path.join(self.soaktest_dir, self.test_name + "_"
+            "D_LOG_FILE": os.path.join(self.sharedsoaktest_dir, self.test_name + "_"
                                        + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log"),
             "D_LOG_FILE_APPEND_PID": "1"
         }
@@ -1422,7 +1326,7 @@ def build_job_script(self, commands, job, nodesperjob):
         if isinstance(cmd, str):
             cmd = [cmd]
         output = os.path.join(
-            self.soaktest_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
+            self.sharedsoaktest_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
@@ -1435,7 +1339,7 @@ def build_job_script(self, commands, job, nodesperjob):
         sbatch.update(self.srun_params)
         unique = get_random_string(5, self.used)
         script = slurm_utils.write_slurm_script(
-            self.soaktest_dir, job, output, nodesperjob,
+            self.sharedsoaktest_dir, job, output, nodesperjob,
             prepend_cmds + cmd + append_cmds + exit_cmd, unique, sbatch)
         script_list.append(script)
         self.used.append(unique)

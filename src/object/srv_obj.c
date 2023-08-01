@@ -145,12 +145,11 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc == -DER_VOS_PARTIAL_UPDATE)
 				rc = -DER_NO_PERM;
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
-				 DLOG_DBG, DLOG_ERR,
-				 DF_UOID " %s end failed: "DF_RC"\n",
-				 DP_UOID(orwi->orw_oid),
-				 update ? "Update" : "Fetch", DP_RC(rc));
+				     rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				     rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				     rc == -DER_CHKPT_BUSY,
+				 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n",
+				 DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch", DP_RC(rc));
 			if (status == 0)
 				status = rc;
 		}
@@ -481,7 +480,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 		remote_off += length;
 
-		/* Give cart progress a chance to complete some inflight bulk transfers */
+		/* Give cart progress a chance to complete some in-flight bulk transfers */
 		if (bulk_iovs >= MAX_BULK_IOVS) {
 			bulk_iovs = 0;
 			ABT_thread_yield();
@@ -874,7 +873,7 @@ obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
 	return rc;
 }
 
-static struct dcs_iod_csums *
+static inline struct dcs_iod_csums *
 get_iod_csum(struct dcs_iod_csums *iod_csums, int i)
 {
 	if (iod_csums == NULL)
@@ -923,54 +922,8 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		 struct dcs_csum_info *dkey_csum,
 		 struct obj_iod_array *oia, daos_unit_oid_t *uoid)
 {
-	uint32_t	i;
-	int		rc;
-
-	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
-		return 0;
-
-	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
-		/**
-		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose
-		 * for object verification tests. Don't reject the
-		 * update in this case
-		 */
-		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
-		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for dkey: "
-				DF_RC"\n", DP_RC(rc));
-			return rc;
-		}
-	}
-
-	for (i = 0; i < oia->oia_iod_nr; i++) {
-		daos_iod_t		*iod = &oia->oia_iods[i];
-		struct dcs_iod_csums	*csum = &oia->oia_iod_csums[i];
-
-		if (!csum_iod_is_supported(iod))
-			continue;
-
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
-			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
-
-		if (csum->ic_nr > 0)
-			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
-
-		rc = daos_csummer_verify_key(csummer,
-					     &iod->iod_name,
-					     &csum->ic_akey);
-		if (rc != 0) {
-			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
-				"failed for akey: "DF_KEY", csum: "DF_CI", "
-				"error: "DF_RC"\n",
-				DP_C_UOID_DKEY(*uoid, dkey), i,
-				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
-				DP_CI(csum->ic_akey), DP_RC(rc));
-			return rc;
-		}
-	}
-
-	return 0;
+	return ds_csum_verify_keys(csummer, dkey, dkey_csum, oia->oia_iods, oia->oia_iod_csums,
+				   oia->oia_iod_nr, uoid);
 }
 
 /** Add a recov record to the recov_lists (for singv degraded fetch) */
@@ -1089,7 +1042,7 @@ obj_log_csum_err(void)
 		return;
 	}
 
-	bio_log_csum_err(bxc);
+	bio_log_data_csum_err(bxc);
 }
 
 /**
@@ -1722,7 +1675,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		obj_log_csum_err();
 post:
 	time = daos_get_ntime();
-	rc = bio_iod_post(biod, rc);
+	rc = bio_iod_post_async(biod, rc);
 	bio_post_latency = daos_get_ntime() - time;
 out:
 	/* The DTX has been aborted during long time bulk data transfer. */
@@ -2321,7 +2274,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 		return 0;
 
 	/* If the incoming I/O is during integration, then it needs to wait the
-	 * vos discard to finish, which otherwise might discard these new inflight
+	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
 	if ((flags & ORF_REINTEGRATING_IO) &&
@@ -3874,11 +3827,11 @@ cleanup:
 	obj_ioc_end(&ioc, rc);
 }
 
-static void
-ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
+void
+ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	struct dtx_handle		*dth = NULL;
@@ -3936,7 +3889,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       return_epoch ? &okqo->okqo_max_epoch : NULL,
+			       &okqo->okqo_max_epoch,
 			       cell_size, stripe_size, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc.ioc_coc);
@@ -3955,18 +3908,6 @@ failed:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
-}
-
-void
-ds_obj_query_key_handler_0(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, false);
-}
-
-void
-ds_obj_query_key_handler_1(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, true);
 }
 
 void
@@ -4117,39 +4058,38 @@ cleanup:
  */
 #define LOCAL_STACK_NUM		2
 static int
-ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
-		  struct daos_cpd_disp_ent *dcde,
-		  struct daos_cpd_sub_req *dcsrs,
-		  struct obj_io_context *ioc, struct dtx_handle *dth)
+ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cpd_disp_ent *dcde,
+		  struct daos_cpd_sub_req *dcsrs, struct obj_io_context *ioc,
+		  struct dtx_handle *dth)
 {
-	struct daos_cpd_req_idx		 *dcri = dcde->dcde_reqs;
-	struct daos_cpd_sub_req		 *dcsr;
-	struct daos_cpd_update		 *dcu;
-	daos_handle_t			 *iohs = NULL;
-	struct bio_desc			**biods = NULL;
-	struct obj_bulk_args		 *bulks = NULL;
-	daos_iod_t			local_iods[LOCAL_STACK_NUM] = { {0} };
-	uint32_t			local_iod_nrs[LOCAL_STACK_NUM] = { 0 };
-	struct dcs_iod_csums		local_csums[LOCAL_STACK_NUM] = { {0} };
-	struct dcs_csum_info		local_csum_info[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			local_offs[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			local_skips[LOCAL_STACK_NUM] = { 0 };
-	daos_iod_t			*local_p_iods[LOCAL_STACK_NUM] = { 0 };
-	struct dcs_iod_csums		*local_p_csums[LOCAL_STACK_NUM] = { 0 };
-	uint64_t			*local_p_offs[LOCAL_STACK_NUM] = { 0 };
-	uint8_t				*local_p_skips[LOCAL_STACK_NUM] = { 0 };
-	uint8_t				**pskips = NULL;
-	daos_iod_t			**piods = NULL;
-	uint32_t			*piod_nrs = NULL;
-	struct dcs_iod_csums		**pcsums = NULL;
-	uint64_t			**poffs = NULL;
-	struct dcs_csum_info		*pcsum_info = NULL;
-	int				  rma = 0;
-	int				  rma_idx = 0;
-	int				  rc = 0;
-	int				  i;
-	uint64_t			  update_flags;
-	uint64_t			  sched_seq = sched_cur_seq();
+	struct daos_cpd_req_idx *dcri = dcde->dcde_reqs;
+	struct daos_cpd_sub_req *dcsr;
+	struct daos_cpd_update  *dcu;
+	daos_handle_t           *iohs                             = NULL;
+	struct bio_desc        **biods                            = NULL;
+	struct obj_bulk_args    *bulks                            = NULL;
+	daos_iod_t               local_iods[LOCAL_STACK_NUM]      = {0};
+	uint32_t                 local_iod_nrs[LOCAL_STACK_NUM]   = {0};
+	struct dcs_iod_csums     local_csums[LOCAL_STACK_NUM]     = {0};
+	struct dcs_csum_info     local_csum_info[LOCAL_STACK_NUM] = {0};
+	uint64_t                 local_offs[LOCAL_STACK_NUM]      = {0};
+	uint64_t                 local_skips[LOCAL_STACK_NUM]     = {0};
+	daos_iod_t              *local_p_iods[LOCAL_STACK_NUM]    = {0};
+	struct dcs_iod_csums    *local_p_csums[LOCAL_STACK_NUM]   = {0};
+	uint64_t                *local_p_offs[LOCAL_STACK_NUM]    = {0};
+	uint8_t                 *local_p_skips[LOCAL_STACK_NUM]   = {0};
+	uint8_t                **pskips                           = NULL;
+	daos_iod_t             **piods                            = NULL;
+	uint32_t                *piod_nrs                         = NULL;
+	struct dcs_iod_csums   **pcsums                           = NULL;
+	uint64_t               **poffs                            = NULL;
+	struct dcs_csum_info    *pcsum_info                       = NULL;
+	int                      rma                              = 0;
+	int                      rma_idx                          = 0;
+	int                      rc                               = 0;
+	int                      i;
+	uint64_t                 update_flags;
+	uint64_t                 sched_seq = sched_cur_seq();
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))

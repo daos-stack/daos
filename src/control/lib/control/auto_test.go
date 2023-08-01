@@ -8,6 +8,7 @@ package control
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/common/test"
@@ -508,10 +510,7 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 					NvmeDevices:   storage.NvmeControllers{storage.MockNvmeController()},
 					ScmModules:    storage.ScmModules{storage.MockScmModule()},
 					ScmNamespaces: storage.ScmNamespaces{storage.MockScmNamespace(0)},
-					MemInfo: MemInfo{
-						HugePageSizeKb: humanize.KiByte * 2,
-						MemTotal:       (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
-					},
+					MemInfo:       MockMemInfo(),
 				},
 			},
 		},
@@ -604,7 +603,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			hostResponses: withSSDsNoHugepageSz.resps,
 			useTmpfs:      true,
 			numaCount:     2,
-			expErr:        errors.New("requires nonzero HugePageSize"),
+			expErr:        errors.New("requires nonzero HugepageSize"),
 		},
 		"scm tmpfs; zero memory available": {
 			hostResponses: withSSDsNoMemTotal.resps,
@@ -1141,8 +1140,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: ib1,
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfg(t, 0),
-				MockEngineCfg(t, 1),
+				MockEngineCfg(0),
+				MockEngineCfg(1),
 			},
 		},
 		"missing scm on second numa": {
@@ -1226,8 +1225,8 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfg(t, 0, 0, 1, 2),
-				MockEngineCfg(t, 1, 3, 4, 5),
+				MockEngineCfg(0, 0, 1, 2),
+				MockEngineCfg(1, 3, 4, 5),
 			},
 		},
 		"dual tmpfs; single ssd per numa": {
@@ -1241,11 +1240,11 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(1)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(t, 0, 9, 0),
-				MockEngineCfgTmpfs(t, 1, 9, 1),
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 1)),
 			},
 		},
-		"dual tmpfs; multiple ssds per numa": {
+		"dual tmpfs; three ssds per numa": {
 			scmCls:     storage.ClassRam,
 			memTotal:   humanize.GiByte * 25,
 			numaSet:    []int{0, 1},
@@ -1256,8 +1255,23 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(3, 4, 5)...),
 			},
 			expCfgs: []*engine.Config{
-				MockEngineCfgTmpfs(t, 0, 9, 0, 1, 2),
-				MockEngineCfgTmpfs(t, 1, 9, 3, 4, 5),
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+		},
+		"dual tmpfs; six ssds per numa": {
+			scmCls:     storage.ClassRam,
+			memTotal:   humanize.GiByte * 25,
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3, 4, 5)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(6, 7, 8, 9, 10, 11)...),
+			},
+			expCfgs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0, 1), mockBdevTier(0, 2, 3, 4, 5)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 6, 7), mockBdevTier(1, 8, 9, 10, 11)),
 			},
 		},
 		"vmd enabled; balanced nr ssds": {
@@ -1329,11 +1343,13 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				NumaIfaces: tc.numaIfaces,
 			}
 			sd := &storageDetails{
-				HugePageSize: 2048,                          // in kib
-				MemTotal:     tc.memTotal / humanize.KiByte, // convert to kib
-				NumaSCMs:     tc.numaPMems,
-				NumaSSDs:     tc.numaSSDs,
-				scmCls:       storage.ClassDcpm,
+				MemInfo: &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     tc.memTotal / humanize.KiByte,
+				},
+				NumaSCMs: tc.numaPMems,
+				NumaSSDs: tc.numaSSDs,
+				scmCls:   storage.ClassDcpm,
 			}
 			if tc.scmCls.String() != "" {
 				sd.scmCls = tc.scmCls
@@ -1341,8 +1357,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				sd.scmCls = storage.ClassDcpm
 			}
 
-			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet,
-				nd, sd)
+			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet, nd, sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1437,39 +1452,51 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 
 func TestControl_AutoConfig_genConfig(t *testing.T) {
 	defHpSizeKb := 2048
-	exmplEngineCfg0 := MockEngineCfg(t, 0, 0, 1, 2)
-	exmplEngineCfg1 := MockEngineCfg(t, 1, 3, 4, 5)
+	exmplEngineCfg0 := MockEngineCfg(0, 0, 1, 2)
+	exmplEngineCfg1 := MockEngineCfg(1, 3, 4, 5)
+	metadataMountPath := "/mnt/daos_md"
+	controlMetadata := storage.ControlMetadata{
+		Path: metadataMountPath,
+	}
 
 	for name, tc := range map[string]struct {
-		accessPoints []string // list of access point host/ip addresses
-		ecs          []*engine.Config
-		hpSize       int
-		threadCounts *threadCounts  // numa to cpu mappings
-		expCfg       *config.Server // expected config generated
-		expErr       error
+		accessPoints    []string // list of access point host/ip addresses
+		extMetadataPath string
+		ecs             []*engine.Config
+		hpSize          int
+		memTotal        int
+		threadCounts    *threadCounts  // numa to cpu mappings
+		expCfg          *config.Server // expected config generated
+		expErr          error
 	}{
 		"no engines": {
-			expErr: errors.New("numTargets must be > 0"),
+			expErr: errors.New("expected non-zero"),
 		},
 		"no hugepage size": {
 			threadCounts: &threadCounts{16, 0},
-			ecs:          []*engine.Config{testEngineCfg(0)},
+			ecs:          []*engine.Config{exmplEngineCfg0},
+			memTotal:     (humanize.GiByte * 16) / humanize.KiByte, // convert to kib
 			expErr:       errors.New("invalid system hugepage size"),
 		},
 		"no provider in engine config": {
 			threadCounts: &threadCounts{16, 0},
-			ecs:          []*engine.Config{testEngineCfg(0)},
-			hpSize:       defHpSizeKb,
-			expErr:       errors.New("provider not specified"),
+			ecs: []*engine.Config{
+				MockEngineCfg(0, 0, 1, 2).WithFabricProvider(""),
+			},
+			hpSize: defHpSizeKb,
+			expErr: errors.New("provider not specified"),
 		},
 		"single engine config": {
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
 			hpSize:       defHpSizeKb,
-			expCfg: MockServerCfg(t, exmplEngineCfg0.Fabric.Provider,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
-				}).WithNrHugePages(8192).WithAccessPoints("hostX:10002"),
+				}).
+				// 16 targets * 1 engine * 512 pages
+				WithNrHugepages(16 * 512).
+				WithAccessPoints("hostX:10002"),
 		},
 		"dual engine config": {
 			threadCounts: &threadCounts{16, 0},
@@ -1478,11 +1505,14 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				exmplEngineCfg1,
 			},
 			hpSize: defHpSizeKb,
-			expCfg: MockServerCfg(t, exmplEngineCfg0.Fabric.Provider,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					exmplEngineCfg0.WithHelperStreamCount(0),
 					exmplEngineCfg1.WithHelperStreamCount(0),
-				}).WithNrHugePages(16384).WithAccessPoints("hostX:10002"),
+				}).
+				// 16 targets * 2 engines * 512 pages
+				WithNrHugepages(16 * 2 * 512).
+				WithAccessPoints("hostX:10002"),
 		},
 		"bad accesspoint port": {
 			accessPoints: []string{"hostX:-10001"},
@@ -1493,6 +1523,82 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			},
 			hpSize: defHpSizeKb,
 			expErr: config.FaultConfigBadControlPort,
+		},
+		"dual engine tmpfs; no control metadata path": {
+			threadCounts: &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: (52 * humanize.GiByte) / humanize.KiByte,
+			expErr:   errors.New("no external metadata path"),
+		},
+		"dual engine tmpfs; no hugepage size": {
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			memTotal: humanize.GiByte,
+			expErr:   errors.New("invalid system hugepage size"),
+		},
+		"dual engine tmpfs; no mem": {
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize: defHpSizeKb,
+			expErr: errors.New("requires nonzero total mem"),
+		},
+		"dual engine tmpfs; low mem": {
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: humanize.GiByte / humanize.KiByte,
+			expErr:   errors.New("insufficient ram"),
+		},
+		"dual engine tmpfs; high mem": {
+			extMetadataPath: metadataMountPath,
+			threadCounts:    &threadCounts{16, 0},
+			ecs: []*engine.Config{
+				MockEngineCfgTmpfs(0, 0, mockBdevTier(0, 0), mockBdevTier(0, 1, 2)),
+				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
+			},
+			hpSize:   defHpSizeKb,
+			memTotal: (64 * humanize.GiByte) / humanize.KiByte,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
+				[]*engine.Config{
+					MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
+						mockBdevTier(0, 0).WithBdevDeviceRoles(4),
+						mockBdevTier(0, 1, 2).WithBdevDeviceRoles(3)).
+						WithHelperStreamCount(0).
+						WithStorageControlMetadataPath(metadataMountPath).
+						WithStorageConfigOutputPath(
+							filepath.Join(controlMetadata.EngineDirectory(0),
+								storage.BdevOutConfName),
+						),
+					MockEngineCfgTmpfs(1, 5, /* tmpfs size in gib */
+						mockBdevTier(1, 3).WithBdevDeviceRoles(4),
+						mockBdevTier(1, 4, 5).WithBdevDeviceRoles(3)).
+						WithHelperStreamCount(0).
+						WithStorageControlMetadataPath(metadataMountPath).
+						WithStorageConfigOutputPath(
+							filepath.Join(controlMetadata.EngineDirectory(1),
+								storage.BdevOutConfName),
+						),
+				}).
+				// 16+1 (MD-on-SSD) targets * 2 engines * 512 pages
+				WithNrHugepages(17 * 2 * 512).
+				WithAccessPoints("hostX:10002").
+				WithControlMetadata(controlMetadata),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1506,8 +1612,12 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				tc.threadCounts = &threadCounts{}
 			}
 
-			gotResp, gotErr := genServerConfig(log, tc.accessPoints, tc.ecs, tc.hpSize,
-				tc.threadCounts)
+			mi := &common.MemInfo{
+				HugepageSizeKiB: tc.hpSize,
+				MemTotalKiB:     tc.memTotal,
+			}
+
+			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.extMetadataPath, tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1524,8 +1634,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			}
 			cmpOpts = append(cmpOpts, defResCmpOpts()...)
 
-			if diff := cmp.Diff(tc.expCfg, gotResp, cmpOpts...); diff != "" {
-				t.Fatalf("unexpected engine configs (-want, +got):\n%s\n", diff)
+			if diff := cmp.Diff(tc.expCfg, getCfg, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected server config (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

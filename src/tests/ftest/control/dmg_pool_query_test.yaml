@@ -8,8 +8,9 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 8
+      targets: 4
       storage: auto
+  system_ram_reserved: 64
 pool:
   control_method: dmg
   scm_size: 16GB
@@ -25,14 +26,14 @@ ior:
 
 exp_vals:
   pool_status: 0
-  total_targets: 8
-  active_targets: 8
+  total_targets: 4
+  active_targets: 4
   total_engines: 1
   disabled_targets: 0
   version: 1
   leader: 0
   scm:
-    total: 16000024576
+    total: 16000008192
   nvme:
     total: 32000000000
   rebuild:

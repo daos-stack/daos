@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
@@ -41,7 +42,42 @@ const (
 
 	accelOptMoveName = "move"
 	accelOptCRCName  = "crc"
+
+	bdevRoleDataName = "data"
+	bdevRoleMetaName = "meta"
+	bdevRoleWALName  = "wal"
+
+	maxNrBdevTiersWithoutRoles = 1
+	maxNrBdevTiersWithRoles    = 3
+
+	// ControlMetadataSubdir defines the name of the subdirectory to hold control metadata
+	ControlMetadataSubdir = "daos_control"
 )
+
+// ControlMetadata describes configuration options for control plane metadata storage on the
+// DAOS server.
+type ControlMetadata struct {
+	Path       string `yaml:"path,omitempty"`
+	DevicePath string `yaml:"device,omitempty"`
+}
+
+// Directory returns the full path to the directory where the control plane metadata is saved.
+func (cm ControlMetadata) Directory() string {
+	if cm.Path == "" {
+		return ""
+	}
+	return filepath.Join(cm.Path, ControlMetadataSubdir)
+}
+
+// EngineDirectory returns the full path to the directory where the per-engine metadata is saved.
+func (cm ControlMetadata) EngineDirectory(idx uint) string {
+	return ControlMetadataEngineDir(cm.Directory(), idx)
+}
+
+// HasPath returns true if the ControlMetadata path is set.
+func (cm ControlMetadata) HasPath() bool {
+	return cm.Path != ""
+}
 
 // Class indicates a specific type of storage.
 type Class string
@@ -189,6 +225,12 @@ func (tc *TierConfig) WithBdevBusidRange(rangeStr string) *TierConfig {
 	return tc
 }
 
+// WithBdevDeviceRoles sets the role assignments for the bdev tier.
+func (tc *TierConfig) WithBdevDeviceRoles(bits int) *TierConfig {
+	tc.Bdev.DeviceRoles = BdevRoles{OptionBits(bits)}
+	return tc
+}
+
 // WithNumaNodeIndex sets the NUMA node index to be used for this tier.
 func (tc *TierConfig) WithNumaNodeIndex(idx uint) *TierConfig {
 	tc.SetNumaNodeIndex(idx)
@@ -250,12 +292,207 @@ func (tcs TierConfigs) HaveEmulatedNVMe() bool {
 	return tcs.checkBdevs(false, true)
 }
 
+func (tcs TierConfigs) HasBdevRoleMeta() bool {
+	for _, bc := range tcs.BdevConfigs() {
+		bits := bc.Bdev.DeviceRoles.OptionBits
+		if (bits & BdevRoleMeta) != 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (tcs TierConfigs) Validate() error {
+	if len(tcs) == 0 {
+		return errors.New("no storage tiers configured")
+	}
+
+	scmCfgs := tcs.ScmConfigs()
+	if len(scmCfgs) == 0 {
+		return FaultScmConfigTierMissing
+	}
+
+	if tcs.HaveRealNVMe() && tcs.HaveEmulatedNVMe() {
+		return FaultBdevConfigTierTypeMismatch
+	}
+
 	for _, cfg := range tcs {
 		if err := cfg.Validate(); err != nil {
 			return errors.Wrapf(err, "tier %d failed validation", cfg.Tier)
 		}
 	}
+
+	return tcs.validateBdevRoles()
+}
+
+// Validation of configuration options and intended behavior to use or not use
+// the MD-on-SSD code path are as follows:
+//
+//   - Exactly one storage tier with class: dcpm exists, no storage tier with class:
+//     ram exists, and zero or one tier(s) with class: nvme exists. If an NVMe tier is
+//     present, no bdev_roles: attributes are allowed on it.  This is the traditional
+//     PMem-based configuration, obviously not using MD-on-SSD.
+//
+//   - No storage tier with class: dcpm exists, exactly one storage tier with class:
+//     ram exists, and zero or one tier(s) with class: nvme exists. If an NVMe
+//     tier is present, no bdev_roles: attributes are specified for the NVMe tier.
+//     This is the traditional DRAM-based (ephemeral) configuration, and it shall not
+//     use MD-on-SSD (to be compatible/consistent with earlier levels of DAOS software).
+//
+//   - No storage tier with class: dcpm exists, exactly one storage tier with class:
+//     ram exists, and one, two or three tiers with class: nvme exist, with mandatory
+//     bdev_roles: attributes on each of the NVMe tiers. Each of the three roles
+//     (wal,meta,data) must be assigned to exactly one NVMe tier (no default
+//     assignments of roles to tiers by the control plane software; all roles shall be
+//     explicitly specified). This setup shall use the MD-on-SSD code path.  In this
+//     scenario allow the use of a single NVMe tier co-locating all three roles, three
+//     separate NVMe tiers with each tier dedicated to exactly one role, or two
+//     separate NVMe tiers where two of the three roles are co-located on one of the
+//     two NVMe tiers. In the latter case, all combinations to co-locate two of the
+//     roles shall be allowed, although not all those combinations may be technically
+//     desirable in production environments.
+func (tcs TierConfigs) validateBdevRoles() error {
+	scmConfs := tcs.ScmConfigs()
+	if len(scmConfs) != 1 || scmConfs[0].Tier != 0 {
+		return errors.New("first storage tier is not scm")
+	}
+
+	sc := scmConfs[0]
+	bcs := tcs.BdevConfigs()
+
+	var wal, meta, data int
+	hasRoles := func() bool {
+		return wal > 0 || meta > 0 || data > 0
+	}
+
+	for i, bc := range bcs {
+		roles := bc.Bdev.DeviceRoles
+		if roles.IsEmpty() {
+			if hasRoles() {
+				return FaultBdevConfigRolesMissing
+			}
+			continue
+		}
+		if i != 0 && !hasRoles() {
+			return FaultBdevConfigRolesMissing
+		}
+
+		bits := roles.OptionBits
+		hasWAL := (bits & BdevRoleWAL) != 0
+		hasMeta := (bits & BdevRoleMeta) != 0
+		hasData := (bits & BdevRoleData) != 0
+
+		// Disallow having both wal and data only on a tier.
+		if hasWAL && hasData && !hasMeta {
+			return FaultBdevConfigRolesWalDataNoMeta
+		}
+
+		if hasWAL {
+			wal++
+		}
+		if hasMeta {
+			meta++
+		}
+		if hasData {
+			data++
+		}
+	}
+
+	if !hasRoles() {
+		if len(bcs) > maxNrBdevTiersWithoutRoles {
+			return FaultBdevConfigMultiTiersWithoutRoles
+		}
+		return nil // MD-on-SSD is not to be enabled
+	}
+
+	if sc.Class == ClassDcpm {
+		return FaultBdevConfigRolesWithDCPM
+	} else if sc.Class != ClassRam {
+		return errors.Errorf("unexpected scm class %s", sc.Class)
+	}
+
+	// MD-on-SSD configurations supports 1, 2 or 3 bdev tiers.
+	if len(bcs) > maxNrBdevTiersWithRoles {
+		return FaultBdevConfigBadNrTiersWithRoles
+	}
+
+	// When roles have been assigned, each role should be seen exactly once.
+	if wal != 1 {
+		return FaultBdevConfigBadNrRoles("WAL", wal, 1)
+	}
+	if meta != 1 {
+		return FaultBdevConfigBadNrRoles("Meta", meta, 1)
+	}
+	if data != 1 {
+		return FaultBdevConfigBadNrRoles("Data", data, 1)
+	}
+
+	return nil
+}
+
+// Set NVME class tier roles either based on explicit settings or heuristics.
+//
+// Role assignments will be decided based on the following rule set:
+//   - For 1 bdev tier, all roles will be assigned to that tier.
+//   - For 2 bdev tiers, WAL role will be assigned to the first bdev tier and Meta and Data to
+//     the second bdev tier.
+//   - For 3 or more bdev tiers, WAL role will be assigned to the first bdev tier, Meta to the
+//     second bdev tier and Data to all remaining bdev tiers.
+//   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
+//   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
+func (tcs TierConfigs) AssignBdevTierRoles() error {
+	scs := tcs.ScmConfigs()
+
+	// Require tier-0 to be a SCM tier.
+	if len(scs) != 1 || scs[0].Tier != 0 {
+		return errors.New("first storage tier is not scm")
+	}
+	// No roles should be assigned if scm tier is DCPM.
+	if scs[0].Class == ClassDcpm {
+		return nil
+	}
+	// Skip role assignment and validation if no real NVMe tiers exist.
+	if !tcs.HaveRealNVMe() {
+		return nil
+	}
+
+	bcs := tcs.BdevConfigs()
+
+	tiersWithoutRoles := make([]int, 0, len(bcs))
+	for _, bc := range bcs {
+		if bc.Bdev.DeviceRoles.IsEmpty() {
+			tiersWithoutRoles = append(tiersWithoutRoles, bc.Tier)
+		}
+	}
+
+	l := len(tiersWithoutRoles)
+	switch {
+	case l == 0:
+		// All bdev tiers have assigned roles, skip implicit assignment.
+		return nil
+	case l == len(bcs):
+		// No assigned roles, fall-through to perform implicit assignment.
+	default:
+		// Some bdev tiers have assigned roles but not all, unsupported.
+		return FaultBdevConfigRolesMissing
+	}
+
+	// Apply role assignments.
+	switch len(bcs) {
+	case 1:
+		tcs[1].WithBdevDeviceRoles(BdevRoleAll)
+	case 2:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta | BdevRoleData)
+	default:
+		tcs[1].WithBdevDeviceRoles(BdevRoleWAL)
+		tcs[2].WithBdevDeviceRoles(BdevRoleMeta)
+		for i := 3; i < len(tcs); i++ {
+			tcs[i].WithBdevDeviceRoles(BdevRoleData)
+		}
+	}
+
 	return nil
 }
 
@@ -327,11 +564,16 @@ func (sc *ScmConfig) Validate(class Class) error {
 			return errors.New("scm_hugepages_disabled may not be set when scm_class is dcpm")
 		}
 	case ClassRam:
-		if sc.RamdiskSize == 0 {
-			return errors.New("scm_size may not be unset or 0 when scm_class is ram")
-		}
 		if len(sc.DeviceList) > 0 {
 			return errors.New("scm_list may not be set when scm_class is ram")
+		}
+		// Note: RAM-disk size can be auto-sized so allow if zero.
+		if sc.RamdiskSize != 0 {
+			confScmSize := uint64(humanize.GiByte * sc.RamdiskSize)
+			if confScmSize < MinRamdiskMem {
+				// Ramdisk size requested in config is less than minimum allowed.
+				return FaultConfigRamdiskUnderMinMem(confScmSize, MinRamdiskMem)
+			}
 		}
 	}
 
@@ -560,12 +802,112 @@ func MustNewBdevBusRange(rangeStr string) *BdevBusRange {
 	return br
 }
 
+// OptionBits is a type alias representing option flags as a bitset.
+type OptionBits uint16
+
+type optFlagMap map[string]OptionBits
+
+func (ofm optFlagMap) keys() []string {
+	keys := common.NewStringSet()
+	for k := range ofm {
+		keys.Add(k)
+	}
+
+	return keys.ToSlice()
+}
+
+// toStrings returns a slice of option names that have been set.
+func (obs OptionBits) toStrings(optStr2Flag optFlagMap) []string {
+	opts := common.NewStringSet()
+	for str, flag := range optStr2Flag {
+		if obs&flag == flag {
+			opts.Add(str)
+		}
+	}
+
+	return opts.ToSlice()
+}
+
+// toString returns a comma separated list of option names that have been set.
+func (obs OptionBits) toString(optStr2Flag optFlagMap) string {
+	return strings.Join(obs.toStrings(optStr2Flag), ",")
+}
+
+// fromStrings generates bitset referenced by the function receiver from the option names provided.
+func (obs *OptionBits) fromStrings(optStr2Flag optFlagMap, opts ...string) error {
+	if obs == nil {
+		return errors.New("called on nil OptionBits")
+	}
+
+	*obs = 0
+	for _, opt := range opts {
+		if len(opt) == 0 {
+			continue
+		}
+		flag, exists := optStr2Flag[opt]
+		if !exists {
+			return FaultBdevConfigOptFlagUnknown(opt, optStr2Flag.keys()...)
+		}
+		*obs |= flag
+	}
+
+	return nil
+}
+
+// IsEmpty returns true if no options have been set.
+func (obs *OptionBits) IsEmpty() bool {
+	return obs == nil || *obs == 0
+}
+
+var roleOptFlags = optFlagMap{
+	bdevRoleDataName: BdevRoleData,
+	bdevRoleMetaName: BdevRoleMeta,
+	bdevRoleWALName:  BdevRoleWAL,
+}
+
+// BdevRoles is a bitset representing SSD role assignments (enabling Metadata-on-SSD).
+type BdevRoles struct {
+	OptionBits
+}
+
+func (bdr BdevRoles) MarshalYAML() (interface{}, error) {
+	return bdr.toStrings(roleOptFlags), nil
+}
+
+func (bdr *BdevRoles) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var opts []string
+	if err := unmarshal(&opts); err != nil {
+		return err
+	}
+
+	return bdr.fromStrings(roleOptFlags, opts...)
+}
+
+// MarshalJSON represents roles as user readable string.
+func (bdr BdevRoles) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + bdr.String() + `"`), nil
+}
+
+// UnmarshalJSON decodes user readable roles string into bitmask.
+func (bdr *BdevRoles) UnmarshalJSON(data []byte) error {
+	str := strings.Trim(strings.ToLower(string(data)), "\"")
+	return bdr.fromStrings(roleOptFlags, strings.Split(str, ",")...)
+}
+
+func (bdr *BdevRoles) String() string {
+	if bdr == nil {
+		return "none"
+	}
+	return bdr.toString(roleOptFlags)
+}
+
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList    *BdevDeviceList `yaml:"bdev_list,omitempty"`
 	DeviceCount   int             `yaml:"bdev_number,omitempty"`
 	FileSize      int             `yaml:"bdev_size,omitempty"`
 	BusidRange    *BdevBusRange   `yaml:"bdev_busid_range,omitempty"`
+	DeviceRoles   BdevRoles       `yaml:"bdev_roles,omitempty"`
 	NumaNodeIndex uint            `yaml:"-"`
 }
 
@@ -647,40 +989,16 @@ func parsePCIBusRange(numRange string, bitSize int) (uint8, uint8, error) {
 	return uint8(begin), uint8(end), nil
 }
 
-// AccelOptionBits is a type alias representing optional capabilities as a bit-set.
-type AccelOptionBits uint16
-
-// toStrings returns a slice of option names that have been set.
-func (obs AccelOptionBits) toStrings() []string {
-	opts := common.NewStringSet()
-	for str, flag := range accelOptStr2Flag {
-		if obs&flag == flag {
-			opts.Add(str)
-		}
-	}
-
-	return opts.ToSlice()
+var accelOptFlags = optFlagMap{
+	accelOptCRCName:  AccelOptCRCFlag,
+	accelOptMoveName: AccelOptMoveFlag,
 }
 
-// fromStrings generates bit-set referenced by the function receiver from the option names provided.
-func (obs *AccelOptionBits) fromStrings(opts ...string) error {
-	if obs == nil {
-		return errors.New("fromStrings() called on nil AccelOptionBits")
-	}
-
-	for _, opt := range opts {
-		flag, exists := accelOptStr2Flag[opt]
-		if !exists {
-			return FaultBdevAccelOptionUnknown(opt, accelOptStr2Flag.keys()...)
-		}
-		*obs |= flag
-	}
-
-	return nil
-}
+// AccelOptionBits is a type alias representing acceleration capabilities as a bitset.
+type AccelOptionBits = OptionBits
 
 func (obs AccelOptionBits) MarshalYAML() (interface{}, error) {
-	return obs.toStrings(), nil
+	return obs.toStrings(accelOptFlags), nil
 }
 
 func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -689,35 +1007,14 @@ func (obs *AccelOptionBits) UnmarshalYAML(unmarshal func(interface{}) error) err
 		return err
 	}
 
-	return obs.fromStrings(opts...)
-}
-
-// IsEmpty returns true if no options have been set.
-func (obs *AccelOptionBits) IsEmpty() bool {
-	return obs == nil || *obs == 0
+	return obs.fromStrings(accelOptFlags, opts...)
 }
 
 // AccelProps struct describes acceleration engine setting and optional capabilities expressed
-// as a bit mask. AccelProps is used both in YAML server config and JSON NVMe config files.
+// as a bitset. AccelProps is used both in YAML server config and JSON NVMe config files.
 type AccelProps struct {
 	Engine  string          `yaml:"engine,omitempty" json:"accel_engine"`
 	Options AccelOptionBits `yaml:"options,omitempty" json:"accel_opts"`
-}
-
-type optFlagMap map[string]AccelOptionBits
-
-func (aosf optFlagMap) keys() []string {
-	keys := common.NewStringSet()
-	for k := range aosf {
-		keys.Add(k)
-	}
-
-	return keys.ToSlice()
-}
-
-var accelOptStr2Flag = optFlagMap{
-	accelOptCRCName:  AccelOptCRCFlag,
-	accelOptMoveName: AccelOptMoveFlag,
 }
 
 func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -741,7 +1038,7 @@ func (ap *AccelProps) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	case AccelEngineSPDK, AccelEngineDML:
 		if out.Options == 0 {
 			// If no options have been specified, all capabilities should be enabled.
-			if err := out.Options.fromStrings(accelOptStr2Flag.keys()...); err != nil {
+			if err := out.Options.fromStrings(accelOptFlags, accelOptFlags.keys()...); err != nil {
 				return err
 			}
 		}
@@ -762,13 +1059,15 @@ type SpdkRpcServer struct {
 }
 
 type Config struct {
-	Tiers            TierConfigs   `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
-	ConfigOutputPath string        `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
-	VosEnv           string        `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
-	EnableHotplug    bool          `yaml:"-"`
-	NumaNodeIndex    uint          `yaml:"-"`
-	AccelProps       AccelProps    `yaml:"acceleration,omitempty"`
-	SpdkRpcSrvProps  SpdkRpcServer `yaml:"spdk_rpc_server,omitempty"`
+	ControlMetadata  ControlMetadata `yaml:"-"` // inherited from server
+	EngineIdx        uint            `yaml:"-"`
+	Tiers            TierConfigs     `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
+	ConfigOutputPath string          `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
+	VosEnv           string          `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool            `yaml:"-"`
+	NumaNodeIndex    uint            `yaml:"-"`
+	AccelProps       AccelProps      `yaml:"acceleration,omitempty"`
+	SpdkRpcSrvProps  SpdkRpcServer   `yaml:"spdk_rpc_server,omitempty"`
 }
 
 func (c *Config) SetNUMAAffinity(node uint) {
@@ -788,50 +1087,43 @@ func (c *Config) GetNVMeBdevs() *BdevDeviceList {
 
 func (c *Config) Validate() error {
 	if err := c.Tiers.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
-	var pruned TierConfigs
-	for _, tier := range c.Tiers {
-		if tier.IsBdev() && tier.Bdev.DeviceList.Len() == 0 {
-			continue // prune empty bdev tier
-		}
-		pruned = append(pruned, tier)
-	}
-	c.Tiers = pruned
-
-	scmCfgs := c.Tiers.ScmConfigs()
 	bdevCfgs := c.Tiers.BdevConfigs()
-
-	if len(scmCfgs) == 0 {
-		return errors.New("missing scm storage tier in config")
-	}
 
 	// set persistent location for engine bdev config file to be consumed by provider
 	// backend, set to empty when no devices specified
 	if len(bdevCfgs) == 0 {
 		c.ConfigOutputPath = ""
+		if c.ControlMetadata.HasPath() {
+			return FaultBdevConfigControlMetadataNoRoles
+		}
+
 		return nil
 	}
-	c.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-
-	if c.Tiers.HaveRealNVMe() && c.Tiers.HaveEmulatedNVMe() {
-		return FaultBdevConfigTypeMismatch
-	}
-
-	fbc := bdevCfgs[0]
 
 	// set vos environment variable based on class of first bdev config
-	if fbc.Class == ClassFile || fbc.Class == ClassKdev {
+	switch bdevCfgs[0].Class {
+	case ClassNvme:
+		c.VosEnv = "NVME"
+	case ClassFile, ClassKdev:
 		c.VosEnv = "AIO"
-		return nil
 	}
 
-	if fbc.Class != ClassNvme {
-		return nil
+	var nvmeConfigRoot string
+	if c.ControlMetadata.HasPath() {
+		if !c.Tiers.HasBdevRoleMeta() {
+			return FaultBdevConfigControlMetadataNoRoles
+		}
+		nvmeConfigRoot = c.ControlMetadata.EngineDirectory(c.EngineIdx)
+	} else {
+		if c.Tiers.HasBdevRoleMeta() {
+			return FaultBdevConfigRolesNoControlMetadata
+		}
+		nvmeConfigRoot = c.Tiers.ScmConfigs()[0].Scm.MountPoint
 	}
-
-	c.VosEnv = "NVME"
+	c.ConfigOutputPath = filepath.Join(nvmeConfigRoot, BdevOutConfName)
 
 	return nil
 }

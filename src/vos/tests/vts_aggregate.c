@@ -29,7 +29,7 @@ cleanup(void)
 	gc_wait();
 }
 
-static void
+void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	     daos_size_t iod_size, daos_recx_t *recx, char *buf)
@@ -84,7 +84,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	arg->ta_flags &= ~TF_ZERO_COPY;
 }
 
-static void
+void
 fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	    uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	    daos_size_t iod_size, daos_recx_t *recx, char *buf)
@@ -202,11 +202,11 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 *  tree.   If this returns 0, we need to release the object though
 	 *  this is only presently used to check existence
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(),
+	rc = vos_obj_hold(vos_obj_cache_current(true),
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
 			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+		vos_obj_release(vos_obj_cache_current(true), obj, false);
 	return rc;
 }
 

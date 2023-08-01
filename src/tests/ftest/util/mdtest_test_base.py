@@ -44,6 +44,22 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
+    def get_mdtest_container(self, pool):
+        """Create a container to use with mdtest.
+
+        Args:
+            pool (TestPool): pool to create container in
+
+        Returns:
+            TestContainer: the new container
+        """
+        params = {}
+        if self.mdtest_cmd.dfs_oclass.value:
+            params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
+        return self.get_container(pool, **params)
+
     def execute_mdtest(self, out_queue=None, display_space=True):
         """Runner method for Mdtest.
 
@@ -56,9 +72,9 @@ class MdtestBase(DfuseTestBase):
             self.add_pool(connect=False)
         # create container
         if self.container is None:
-            self.add_container(self.pool)
+            self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -87,7 +103,7 @@ class MdtestBase(DfuseTestBase):
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
             manager = get_job_manager(
-                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
+                self, "Mpirun", self.mdtest_cmd, self.subprocess)
         else:
             manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
         return manager
@@ -141,8 +157,7 @@ class MdtestBase(DfuseTestBase):
         """Running mdtest different variants of mdtest with
            different values.
         Args:
-            mdtest_params(list): List comprising of different set of
-                                 mdtest parameters.
+            mdtest_params(list): List comprising of different set of mdtest parameters.
         """
 
         # Running mdtest for different variants

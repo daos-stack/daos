@@ -65,11 +65,18 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
+	/* destination tag */
 	uint32_t	cch_dst_tag;
+
+
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
-	uint32_t	cch_rc;
+	/* TODO: workaround for DAOS-13973 */
+	union {
+		uint32_t	cch_src_timeout;
+		uint32_t	cch_rc;
+	};
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
@@ -133,7 +140,7 @@ struct crt_rpc_priv {
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
-	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
 
 	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */

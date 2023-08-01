@@ -15,6 +15,8 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
 
 message BioHealthReq {
 	string dev_uuid = 1;
+	uint64 meta_size = 2;	// Size of the metadata (i.e. vos file index) blob
+	uint64 rdb_size = 3;	// Size of the RDB blob
 }
 
 // BioHealthResp mirrors nvme_health_stats structure.
@@ -68,7 +70,9 @@ message BioHealthResp {
 	uint64 nand_bytes_written = 44;
 	uint64 host_bytes_written = 45;
 	// Engine configs properties
-	uint64 cluster_size = 46; // blobstore cluster size in bytes
+	uint64 cluster_size = 46;		// blobstore cluster size in bytes
+	uint64 meta_wal_size = 47;		// metadata WAL blob size
+	uint64 rdb_wal_size = 48;		// RDB WAL blob size
 }
 
 enum NvmeDevState {
@@ -95,9 +99,15 @@ message SmdDevice {
 	NvmeDevState dev_state = 4;	// NVMe device state
 	LedState led_state = 5;		// LED state
 	uint64 total_bytes = 6;		// blobstore clusters total bytes
-	uint64 avail_bytes = 7;		// blobstore clusters available bytes
+	uint64 avail_bytes = 7;		// Available RAW storage for data
 	uint64 cluster_size = 8;	// blobstore cluster size in bytes
 	uint32 rank = 9;		// DAOS I/O Engine using controller
+	uint32 role_bits = 10;		// Device active roles (bitmask)
+	uint64 meta_size = 11;		// Size of the metadata (i.e. vos file index) blob
+	uint64 meta_wal_size = 12;	// Size of the metadata WAL blob
+	uint64 rdb_size = 13;		// Size of the RDB blob
+	uint64 rdb_wal_size = 14;	// Size of the RDB WAL blob
+	uint64 usable_bytes = 15;	// Effective storage available for data
 }
 
 message SmdDevReq {}

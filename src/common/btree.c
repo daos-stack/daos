@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1059,7 +1059,7 @@ btr_check_availability(struct btr_context *tcx, struct btr_check_alb *alb)
 	}
 }
 
-static void
+static int
 btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 			 struct btr_record *rec)
 {
@@ -1068,6 +1068,7 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	bool		   leaf;
 	bool		   reuse = false;
 	char		   sbuf[BTR_PRINT_BUF];
+	int		   rc;
 
 	/* NB: assume trace->tr_node has been added to TX */
 	D_ASSERT(!btr_node_is_full(tcx, trace->tr_node));
@@ -1080,7 +1081,6 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	nd = btr_off2ptr(tcx, trace->tr_node);
 	if (nd->tn_keyn > 0) {
 		struct btr_check_alb	alb;
-		int			rc;
 
 		if (trace->tr_at != nd->tn_keyn)
 			alb.at = trace->tr_at;
@@ -1102,7 +1102,9 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	rec_a = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
 
 	if (reuse) {
-		btr_rec_free(tcx, rec_a, NULL);
+		rc = btr_rec_free(tcx, rec_a, NULL);
+		if (rc)
+			return rc;
 	} else {
 		if (trace->tr_at != nd->tn_keyn) {
 			struct btr_record *rec_b;
@@ -1116,6 +1118,7 @@ btr_node_insert_rec_only(struct btr_context *tcx, struct btr_trace *trace,
 	}
 
 	btr_rec_copy(tcx, rec_a, rec, 1);
+	return 0;
 }
 
 /**
@@ -1194,7 +1197,9 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 		D_DEBUG(DB_TRACE, "Splitting leaf node\n");
 
 		btr_rec_copy(tcx, rec_dst, rec_src, nd_right->tn_keyn);
-		btr_node_insert_rec_only(tcx, trace, rec);
+		rc = btr_node_insert_rec_only(tcx, trace, rec);
+		if (rc)
+			return rc;
 
 		/* insert the right node and the first key of the right
 		 * node to its parent
@@ -1241,7 +1246,9 @@ btr_node_split_and_insert(struct btr_context *tcx, struct btr_trace *trace,
 	 */
 	btr_hkey_copy(tcx, &hkey_buf[0], &rec_src->rec_hkey[0]);
 
-	btr_node_insert_rec_only(tcx, trace, rec);
+	rc = btr_node_insert_rec_only(tcx, trace, rec);
+	if (rc)
+		return rc;
 
 	btr_hkey_copy(tcx, &rec->rec_hkey[0], &hkey_buf[0]);
 
@@ -1330,7 +1337,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	if (btr_root_resize_needed(tcx)) {
 		rc = btr_root_resize(tcx, trace, &node_alloc);
 		if (rc != 0) {
-			D_ERROR("Failed to resize root node: %s", d_errstr(rc));
+			D_ERROR("Failed to resize root node: %s\n", d_errstr(rc));
 			goto done;
 		}
 	}
@@ -1338,8 +1345,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	if (!node_alloc && btr_has_tx(tcx)) {
 		rc = btr_node_tx_add(tcx, trace->tr_node);
 		if (rc != 0) {
-			D_ERROR("Failed to add node to txn record: %s",
-				d_errstr(rc));
+			D_ERROR("Failed to add node to txn record: %s\n", d_errstr(rc));
 			goto done;
 		}
 	}
@@ -1347,7 +1353,7 @@ btr_node_insert_rec(struct btr_context *tcx, struct btr_trace *trace,
 	if (btr_node_is_full(tcx, trace->tr_node))
 		rc = btr_node_split_and_insert(tcx, trace, rec);
 	else
-		btr_node_insert_rec_only(tcx, trace, rec);
+		rc = btr_node_insert_rec_only(tcx, trace, rec);
 done:
 	return rc;
 }
@@ -2011,7 +2017,9 @@ btr_update(struct btr_context *tcx, d_iov_t *key, d_iov_t *val, d_iov_t *val_out
 		}
 
 		D_DEBUG(DB_TRACE, "Replace the original record\n");
-		btr_rec_free(tcx, rec, NULL);
+		rc = btr_rec_free(tcx, rec, NULL);
+		if (rc)
+			goto out;
 		rc = btr_rec_alloc(tcx, key, val, rec, val_out);
 	}
 out:
@@ -2197,6 +2205,7 @@ int
 dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feats)
 {
 	int			 rc = 0;
+	bool                     end = false;
 
 	if (root->tr_feats == feats)
 		return 0;
@@ -2207,22 +2216,24 @@ dbtree_feats_set(struct btr_root *root, struct umem_instance *umm, uint64_t feat
 	}
 
 #ifdef DAOS_PMEM_BUILD
-	if (DAOS_ON_VALGRIND) {
+	if (!umem_tx_inprogress(umm)) {
 		rc = umem_tx_begin(umm, NULL);
 		if (rc != 0)
 			return rc;
-		rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats),
-				      POBJ_XADD_NO_SNAPSHOT);
+		end = true;
 	}
+	rc = umem_tx_xadd_ptr(umm, &root->tr_feats, sizeof(root->tr_feats), UMEM_XADD_NO_SNAPSHOT);
 #endif
 
 	if (rc == 0)
 		root->tr_feats = feats;
 
 #ifdef DAOS_PMEM_BUILD
-	if (DAOS_ON_VALGRIND)
+	if (end)
 		rc = umem_tx_end(umm, rc);
 #endif
+
+	(void)end; /* less code than else blocks */
 
 	return rc;
 }

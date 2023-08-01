@@ -64,14 +64,15 @@ dump_envariables(void)
 	int	i;
 	char	*val;
 	char	*envars[] = {"D_PROVIDER", "D_INTERFACE", "D_DOMAIN", "D_PORT",
-		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
+		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG", "D_LOG_SIZE",
 		"D_LOG_FILE", "D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
 		"CRT_CTX_SHARE_ADDR", "CRT_CTX_NUM", "D_FI_CONFIG",
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
-		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST"};
+		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST",
+		"D_POLL_TIMEOUT"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -525,8 +526,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		return;
 
 	/* rxm and verbs providers only works with regular EP */
-	if (prov != CRT_PROV_OFI_PSM2 &&
-	    prov != CRT_PROV_OFI_SOCKETS &&
+	if (prov != CRT_PROV_OFI_SOCKETS &&
 	    crt_provider_is_sep(primary, prov)) {
 		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
 		       "for current provider, ignoring it.\n");
@@ -544,25 +544,18 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	}
 
-	/* Print notice that "ofi+psm2" will be deprecated*/
-	if (prov == CRT_PROV_OFI_PSM2) {
-		D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
-		setenv("FI_PSM2_NAME_SERVER", "1", true);
-		D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
-	}
-
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
-	else {
-		/* Use tagged messages for other providers, disable multi-recv */
-		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
-	}
 
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
 		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
 		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
+
+	/* Use tagged messages for other providers, disable multi-recv */
+	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP)
+		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
 
 	g_prov_settings_applied[prov] = true;
 }
@@ -1004,19 +997,6 @@ crt_get_port_opx(int *port)
 	return rc;
 }
 
-static inline int
-crt_get_port_psm2(int *port)
-{
-	int		rc = 0;
-	uint16_t	pid;
-
-	pid = getpid();
-	*port = (pid << 8);
-	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
-
-	return rc;
-}
-
 #define PORT_RANGE_STR_SIZE 32
 
 static void
@@ -1173,9 +1153,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			    provider == CRT_PROV_OFI_TCP_RXM)
 				crt_port_range_verify(port);
 
-			if (provider == CRT_PROV_OFI_PSM2)
-				port = (uint16_t)port << 8;
-
 			if (provider == CRT_PROV_OFI_CXI && port_auto_adjust) {
 				if (port > 511) {
 					D_WARN("Port=%d outside of valid range 0-511, "
@@ -1186,12 +1163,6 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 			}
 
 			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
-		}
-	} else if (provider == CRT_PROV_OFI_PSM2) {
-		rc = crt_get_port_psm2(&port);
-		if (rc != 0) {
-			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
-			D_GOTO(out, rc);
 		}
 	} else if (provider == CRT_PROV_OFI_OPX) {
 		rc = crt_get_port_opx(&port);

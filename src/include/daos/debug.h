@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -50,7 +50,9 @@
 	ACTION(dfuse,     dfuse,     arg)	\
 	ACTION(il,        il,        arg)	\
 	ACTION(csum,      csum,      arg)	\
+	ACTION(pipeline,  pipeline,  arg)	\
 	ACTION(stack,     stack,     arg)
+
 
 #define DAOS_FOREACH_DB(ACTION, arg)				\
 	/** metadata operation */				\
@@ -106,6 +108,8 @@ enum {
 	IOBP_NVME		= (1 << 3),
 	/** bypass bulk handle cache */
 	IOBP_SRV_BULK_CACHE	= (1 << 4),
+	/** bypass WAL commit */
+	IOBP_WAL_COMMIT		= (1 << 5),
 };
 
 /**
@@ -119,6 +123,7 @@ enum {
 #define IOBP_ENV_TARGET		"target"
 #define IOBP_ENV_NVME		"nvme"
 #define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
+#define IOBP_ENV_WAL_COMMIT	"wal_commit"
 
 extern unsigned int daos_io_bypass;
 

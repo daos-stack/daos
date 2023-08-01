@@ -38,14 +38,13 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_PROV_OFI_PSM2,
-		.nad_str	= "ofi+psm2",
-		.nad_contig_eps	= false,
-		.nad_port_bind  = false,
+		.nad_type	= CRT_PROV_OFI_TCP,
+		.nad_str	= "ofi+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
 	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
-		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -532,7 +531,8 @@ crt_provider_ip_str_get(bool primary, int provider)
 static bool
 crt_provider_is_block_mode(int provider)
 {
-	if (provider == CRT_PROV_OFI_PSM2 || provider == CRT_PROV_OFI_OPX)
+	/* return false for providers that should busy poll */
+	if (provider == CRT_PROV_OFI_OPX)
 		return false;
 
 	return true;
@@ -659,7 +659,7 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	strcpy(domain_name, domain);
+	strncpy(domain_name, domain, sizeof(domain_name) - 1);
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
 	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
@@ -1264,8 +1264,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 mem_free:
-
-	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	crt_rpc_priv_free(rpc_priv);
 }

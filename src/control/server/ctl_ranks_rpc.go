@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,8 +8,6 @@ package server
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -379,52 +378,84 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	return resp, nil
 }
 
+// If reset flags are set, pull values from config before merging DD_SUBSYS into D_LOG_MASK and
+// setting the result in the request.
+func updateSetLogMasksReq(cfg *engine.Config, req *ctlpb.SetLogMasksReq) error {
+	msg := "request"
+	if req.ResetMasks {
+		msg = "config"
+		req.Masks = cfg.LogMask
+	}
+	if req.Masks == "" {
+		return errors.Errorf("empty log masks in %s", msg)
+	}
+
+	if req.ResetStreams {
+		streams, err := cfg.ReadLogDbgStreams()
+		if err != nil {
+			return err
+		}
+		req.Streams = streams
+	}
+
+	if req.ResetSubsystems {
+		subsystems, err := cfg.ReadLogSubsystems()
+		if err != nil {
+			return err
+		}
+		req.Subsystems = subsystems
+	}
+
+	newMasks, err := engine.MergeLogEnvVars(req.Masks, req.Subsystems)
+	if err != nil {
+		return err
+	}
+	req.Masks = newMasks
+	req.Subsystems = ""
+
+	return nil
+}
+
 // SetEngineLogMasks calls into each engine over dRPC to set loglevel at runtime.
 func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.SetLogMasksReq) (*ctlpb.SetLogMasksResp, error) {
 	if req == nil {
 		return nil, errors.New("nil request")
 	}
 
-	var errs []string
+	resp := new(ctlpb.SetLogMasksResp)
+	instances := svc.harness.Instances()
+	resp.Errors = make([]string, len(instances))
 
-	for idx, ei := range svc.harness.Instances() {
-		if !ei.IsReady() {
-			errs = append(errs, fmt.Sprintf("engine-%d: not ready", ei.Index()))
+	for idx, ei := range instances {
+		eReq := *req // local per-engine copy
+
+		if int(ei.Index()) != idx {
+			svc.log.Errorf("engine instance index %d doesn't match engine.Index %d",
+				idx, ei.Index())
+		}
+
+		if err := updateSetLogMasksReq(svc.srvCfg.Engines[idx], &eReq); err != nil {
+			resp.Errors[idx] = err.Error()
 			continue
 		}
+		svc.log.Debugf("setting engine %d log masks %q, streams %q and subsystems %q",
+			ei.Index(), eReq.Masks, eReq.Streams, eReq.Subsystems)
 
-		if req.Masks == "" {
-			// no need to validate here as config value already validated on start-up
-			req.Masks = svc.srvCfg.Engines[idx].LogMask
-		}
-		if req.Masks == "" {
-			errs = append(errs, fmt.Sprintf("engine-%d: no log_mask set in engine config", ei.Index()))
-			continue
-		}
-
-		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, req)
+		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, &eReq)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			resp.Errors[idx] = err.Error()
 			continue
 		}
 
 		engineResp := new(ctlpb.SetLogMasksResp)
 		if err = proto.Unmarshal(dresp.Body, engineResp); err != nil {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
-			continue
+			return nil, err
 		}
 
 		if engineResp.Status != 0 {
-			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(),
-				daos.Status(engineResp.Status)))
+			resp.Errors[idx] = daos.Status(engineResp.Status).Error()
 		}
 	}
-
-	if len(errs) > 0 {
-		return nil, errors.New(strings.Join(errs, ", "))
-	}
-
-	resp := new(ctlpb.SetLogMasksResp)
 
 	return resp, nil
 }

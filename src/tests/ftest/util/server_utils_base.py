@@ -59,8 +59,8 @@ class DaosServerCommand(YamlCommand):
         # -o, --config-path= Path to agent configuration file
         self.debug = FormattedParameter("--debug", True)
         self.json_logs = FormattedParameter("--json-logging", False)
+        self.json = FormattedParameter("--json", False)
         self.config = FormattedParameter("--config={}", default_yaml_file)
-
         # Additional daos_server command line parameters:
         #     --allow-proxy  Allow proxy configuration via environment
         self.allow_proxy = FormattedParameter("--allow-proxy", False)
@@ -93,6 +93,7 @@ class DaosServerCommand(YamlCommand):
         #   scm            Perform tasks related to locally-attached SCM storage
         #   start          Start daos_server
         #   storage        Perform tasks related to locally-attached storage
+        #   support        Perform tasks related to debug the system to help support team
         #   version        Print daos_server version
         if sub_command == "ms":
             self.sub_command_class = self.MsSubCommand()
@@ -106,6 +107,8 @@ class DaosServerCommand(YamlCommand):
             self.sub_command_class = self.StartSubCommand()
         elif sub_command == "storage":
             self.sub_command_class = self.StorageSubCommand()
+        elif sub_command == "support":
+            self.sub_command_class = self.SupportSubCommand()
         elif sub_command == "version":
             self.sub_command_class = self.VersionSubCommand()
         else:
@@ -145,29 +148,38 @@ class DaosServerCommand(YamlCommand):
 
     @property
     def using_nvme(self):
-        """Is the daos command setup to use NVMe devices.
+        """Is the server command setup to use NVMe devices.
 
         Returns:
             bool: True if NVMe devices are configured; False otherwise
 
         """
-        value = False
         if self.yaml is not None and hasattr(self.yaml, "using_nvme"):
-            value = self.yaml.using_nvme
-        return value
+            return self.yaml.using_nvme
+        return False
 
     @property
     def using_dcpm(self):
-        """Is the daos command setup to use SCM devices.
+        """Is the server command setup to use SCM devices.
 
         Returns:
             bool: True if SCM devices are configured; False otherwise
 
         """
-        value = False
         if self.yaml is not None and hasattr(self.yaml, "using_dcpm"):
-            value = self.yaml.using_dcpm
-        return value
+            return self.yaml.using_dcpm
+        return False
+
+    @property
+    def using_control_metadata(self):
+        """Is the server command setup to use a control plane metadata.
+
+        Returns:
+            bool: True if a control metadata path is being used; False otherwise
+        """
+        if self.yaml is not None and hasattr(self.yaml, "using_control_metadata"):
+            return self.yaml.using_control_metadata
+        return False
 
     @property
     def engine_params(self):
@@ -177,10 +189,21 @@ class DaosServerCommand(YamlCommand):
             list: a list of YamlParameters for each server engine
 
         """
-        engine_params = []
         if self.yaml is not None and hasattr(self.yaml, "engine_params"):
-            engine_params = self.yaml.engine_params
-        return engine_params
+            return self.yaml.engine_params
+        return []
+
+    @property
+    def control_metadata(self):
+        """Get the control plane metadata configuration parameters.
+
+        Returns:
+            ControlMetadataParameters: the control plane metadata configuration parameters or None
+                if not defined.
+        """
+        if self.yaml is not None and hasattr(self.yaml, "metadata_params"):
+            return self.yaml.metadata_params
+        return None
 
     def get_engine_values(self, name):
         """Get the value of the specified attribute name for each engine.
@@ -527,6 +550,42 @@ class DaosServerCommand(YamlCommand):
                 self.force = FormattedParameter("--force", False)
                 self.scm_ns_per_socket = FormattedParameter("--scm-ns-per-socket={}")
 
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the daos_server support sub command."""
+
+        def __init__(self):
+            """Create a support subcommand object."""
+            super().__init__("/run/daos_server/support/*", "support")
+
+        def get_sub_command_class(self):
+            """Get the daos_server support sub command object."""
+            # Available sub-commands:
+            #   collect-log  Collect logs on servers
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectLogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectLogSubCommand(CommandWithSubCommand):
+            """Defines an object for the daos_server support collect-log command."""
+
+            def __init__(self):
+                """Create a support collect-log subcommand object."""
+                super().__init__(
+                    "/run/daos_server/support/collect-log/*", "collect-log")
+
+                # daos_server support collect-log command options:
+                #   --stop-on-error     Stop the collect-log command on very first error
+                #   --target-folder=    Target Folder location where log will be copied
+                #   --archive=          Archive the log/config files
+                #   --extra-logs-dir=   Collect the Logs from given custom directory
+                #   --target-host=      R sync the logs to target-host system
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}")
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}")
+                self.target_host = FormattedParameter("--target-host={}")
+
     class VersionSubCommand(CommandWithSubCommand):
         """Defines an object for the daos_server version sub command."""
 
@@ -662,9 +721,8 @@ class DaosServerInformation():
         Returns:
             dict: a dictionary of network information for the host, e.g.
                     {
-                        1: {"fabric_iface": ib0, "provider": "ofi+psm2"},
-                        2: {"fabric_iface": ib0, "provider": "ofi+verbs"},
-                        3: {"fabric_iface": ib0, "provider": "ofi+tcp"},
+                        1: {"fabric_iface": ib0, "provider": "ofi+verbs"},
+                        2: {"fabric_iface": ib0, "provider": "ofi+tcp"},
                     }
 
         """
@@ -873,11 +931,10 @@ class DaosServerCommandRunner(DaosServerCommand):
         """Call daos_server version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the daos_server command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos_server version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))

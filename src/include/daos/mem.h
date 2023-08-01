@@ -24,22 +24,171 @@
  * umem		Unified memory abstraction
  * umoff	Unified Memory offset
  */
+
+int umempobj_settings_init(bool md_on_ssd);
+
+/* convert backend type to umem class id */
+int umempobj_backend_type2class_id(int backend);
+
+/* umem persistent object property flags */
+#define	UMEMPOBJ_ENABLE_STATS	0x1
+
 #ifdef DAOS_PMEM_BUILD
-#include <libpmemobj.h>
+enum {
+	DAOS_MD_PMEM	= 0,
+	DAOS_MD_BMEM	= 1,
+	DAOS_MD_ADMEM	= 2,
+};
+
+/* return umem backend type */
+int umempobj_get_backend_type(void);
+
 #endif
 
+struct umem_wal_tx;
+
+struct umem_wal_tx_ops {
+	/**
+	 * Get number of umem_actions in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	uint32_t	(*wtx_act_nr)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get payload size of umem_actions in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	uint32_t	(*wtx_payload_sz)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get the first umem_action in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	struct umem_action *	(*wtx_act_first)(struct umem_wal_tx *tx);
+
+	/**
+	 * Get the next umem_action in TX redo log.
+	 *
+	 * \param tx[in]	umem_wal_tx pointer
+	 */
+	struct umem_action *	(*wtx_act_next)(struct umem_wal_tx *tx);
+};
+
+#define UTX_PRIV_SIZE	(256)
+struct umem_wal_tx {
+	struct umem_wal_tx_ops	*utx_ops;
+	int			 utx_stage;	/* enum umem_pobj_tx_stage */
+	uint64_t		 utx_id;
+	/* umem class specific TX data */
+	struct {
+		char		 utx_space[UTX_PRIV_SIZE];
+	}			 utx_private;
+};
+
+/** Describing a storage region for I/O */
+struct umem_store_region {
+	/** start offset of the region */
+	daos_off_t	sr_addr;
+	/** size of the region */
+	daos_size_t	sr_size;
+};
+
+/** I/O descriptor, it can include arbitrary number of storage regions */
+struct umem_store_iod {
+	/* number of regions */
+	int				 io_nr;
+	/** embedded one for single region case */
+	struct umem_store_region	 io_region;
+	struct umem_store_region	*io_regions;
+};
+
+struct umem_store;
+
+struct umem_store_ops {
+	int	(*so_load)(struct umem_store *store, char *start);
+	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
+			   d_sg_list_t *sgl);
+	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
+			    d_sg_list_t *sgl);
+	int	(*so_flush_prep)(struct umem_store *store, struct umem_store_iod *iod,
+				 daos_handle_t *fh);
+	int	(*so_flush_copy)(daos_handle_t fh, d_sg_list_t *sgl);
+	int (*so_flush_post)(daos_handle_t fh, int err);
+	int	(*so_wal_reserv)(struct umem_store *store, uint64_t *id);
+	int	(*so_wal_submit)(struct umem_store *store, struct umem_wal_tx *wal_tx,
+				 void *data_iod);
+	int	(*so_wal_replay)(struct umem_store *store,
+				 int (*replay_cb)(uint64_t tx_id, struct umem_action *act,
+						  void *data),
+				 void *arg);
+	/* See bio_wal_id_cmp() */
+	int	(*so_wal_id_cmp)(struct umem_store *store, uint64_t id1, uint64_t id2);
+};
+
 /** The offset of an object from the base address of the pool */
-typedef uint64_t		umem_off_t;
+typedef uint64_t umem_off_t;
+
+struct umem_store {
+	/**
+	 * Size of the umem storage, excluding blob header which isn't visible to allocator.
+	 */
+	daos_size_t		 stor_size;
+	uint32_t		 stor_blk_size;
+	uint32_t		 stor_hdr_blks;
+	/** private data passing between layers */
+	void			*stor_priv;
+	void			*stor_stats;
+	void                    *vos_priv;
+	/** Cache for this store */
+	struct umem_cache       *cache;
+	/**
+	 * Callbacks provided by upper level stack, umem allocator uses them to operate
+	 * the storage device.
+	 */
+	struct umem_store_ops	*stor_ops;
+	/* backend type */
+	int			 store_type;
+	/* standalone store */
+	bool			 store_standalone;
+};
+
+struct umem_slab_desc {
+	size_t		unit_size;
+	unsigned	class_id;
+};
+
+struct umem_pool {
+	void			*up_priv;
+	struct umem_store	 up_store;
+	/** Slabs of the umem pool */
+	struct umem_slab_desc	 up_slabs[0];
+};
+
+/* umem persistent object functions */
+struct umem_pool *umempobj_create(const char *path, const char *layout_name,
+				  int prop_flags, size_t poolsize,
+				  mode_t mode, struct umem_store *store);
+struct umem_pool *umempobj_open(const char *path, const char *layout_name,
+				int prop_flags, struct umem_store *store);
+void  umempobj_close(struct umem_pool *pool);
+void *umempobj_get_rootptr(struct umem_pool *pool, size_t size);
+int   umempobj_get_heapusage(struct umem_pool *pool,
+			     daos_size_t *cur_allocated);
+void  umempobj_log_fraginfo(struct umem_pool *pool);
+
 /** Number of flag bits to reserve for encoding extra information in
  *  a umem_off_t entry.
  */
-#define UMOFF_NUM_FLAG_BITS		(8)
+#define UMOFF_NUM_FLAG_BITS	(8)
 /** The absolute value of a flag mask must be <= this value */
 #define UMOFF_MAX_FLAG		(1ULL << UMOFF_NUM_FLAG_BITS)
 /** Number of bits to shift the flag bits */
-#define UMOFF_FLAG_SHIFT (63 - UMOFF_NUM_FLAG_BITS)
+#define UMOFF_FLAG_SHIFT	(63 - UMOFF_NUM_FLAG_BITS)
 /** Mask for flag bits */
-#define UMOFF_FLAG_MASK ((UMOFF_MAX_FLAG - 1) << UMOFF_FLAG_SHIFT)
+#define UMOFF_FLAG_MASK		((UMOFF_MAX_FLAG - 1) << UMOFF_FLAG_SHIFT)
 /** In theory and offset can be NULL but in practice, pmemobj_root
  *  is not at offset 0 as pmdk reserves some space for its internal
  *  use.   So, use 0 for NULL.   Invalid bits are also considered
@@ -48,20 +197,6 @@ typedef uint64_t		umem_off_t;
 #define UMOFF_NULL		(0ULL)
 /** Check for a NULL value including possible invalid flag bits */
 #define UMOFF_IS_NULL(umoff)	(umem_off2offset(umoff) == 0)
-
-enum _vmem_pobj_tx_stage {
-	VT_STAGE_NONE,		/* no transaction in this thread */
-	VT_STAGE_WORK,		/* transaction in progress */
-	VT_STAGE_ONCOMMIT,	/* successfully committed */
-	VT_STAGE_ONABORT,	/* tx_begin failed or transaction aborted */
-	VT_STAGE_FINALLY,	/* always called */
-
-	MAX_VT_TX_STAGE
-};
-
-#define VMEM_FLAG_ZERO		(((uint64_t)1) << 0)
-#define VMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
-
 
 /** Retrieves any flags that are set.
  *
@@ -111,11 +246,19 @@ umem_off_set_null_flags(umem_off_t *offset, uint64_t flags)
 	*offset = flags << UMOFF_FLAG_SHIFT;
 }
 
-int umem_tx_errno(int err);
-
 /* print format of umoff */
 #define UMOFF_PF		DF_X64
 #define UMOFF_P(umoff)		umem_off2offset(umoff)
+
+enum umem_pobj_tx_stage {
+	UMEM_STAGE_NONE,	/* no transaction in this thread */
+	UMEM_STAGE_WORK,	/* transaction in progress */
+	UMEM_STAGE_ONCOMMIT,	/* successfully committed */
+	UMEM_STAGE_ONABORT,	/* tx_begin failed or transaction aborted */
+	UMEM_STAGE_FINALLY,	/* always called */
+
+	MAX_UMEM_TX_STAGE
+};
 
 typedef enum {
 	/** volatile memory */
@@ -124,11 +267,13 @@ typedef enum {
 	UMEM_CLASS_PMEM,
 	/** persistent memory but ignore PMDK snapshot */
 	UMEM_CLASS_PMEM_NO_SNAP,
+	/** blob backed memory */
+	UMEM_CLASS_BMEM,
+	/** ad-hoc memory */
+	UMEM_CLASS_ADMEM,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;
-
-struct umem_instance;
 
 typedef void (*umem_tx_cb_t)(void *data, bool noop);
 
@@ -160,6 +305,25 @@ int  umem_init_txd(struct umem_tx_stage_data *txd);
 /** Finalize the txd initialized by \a umem_init_txd */
 void umem_fini_txd(struct umem_tx_stage_data *txd);
 
+struct umem_instance;
+
+/* Flags associated with various umem ops */
+#define UMEM_FLAG_ZERO		(((uint64_t)1) << 0)
+#define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
+#define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
+
+/* type num used by umem ops */
+enum {
+	UMEM_TYPE_ANY,
+};
+
+/* Hints for umem atomic copy operation primarily for bmem implementation */
+enum acopy_hint {
+	UMEM_COMMIT_IMMEDIATE = 0, /* commit immediate, do not call within a tx */
+	UMEM_COMMIT_DEFER,	/* OK to defer commit to blob to a later point */
+	UMEM_RESERVED_MEM	/* memory from dav_reserve(), commit on publish */
+};
+
 typedef struct {
 	/** free umoff */
 	int		 (*mo_tx_free)(struct umem_instance *umm,
@@ -167,9 +331,9 @@ typedef struct {
 	/**
 	 * allocate umoff with the specified size & flags
 	 *
-	 * \param umm	[IN]	umem class instance.
-	 * \param size	[IN]	size to allocate.
-	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
+	 * \param umm	   [IN]	umem class instance.
+	 * \param size	   [IN]	size to allocate.
+	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK)
 	 * \param type_num [IN]	struct type (for PMDK)
 	 */
 	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
@@ -216,9 +380,12 @@ typedef struct {
 	int		 (*mo_tx_begin)(struct umem_instance *umm,
 					struct umem_tx_stage_data *txd);
 	/** commit memory transaction */
-	int		 (*mo_tx_commit)(struct umem_instance *umm);
+	int		 (*mo_tx_commit)(struct umem_instance *umm, void *data);
 
 #ifdef DAOS_PMEM_BUILD
+	/** get TX stage */
+	int		 (*mo_tx_stage)(void);
+
 	/**
 	 * Reserve space with specified size.
 	 *
@@ -227,8 +394,7 @@ typedef struct {
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm,
-				       struct pobj_action *act, size_t size,
+	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
 				       unsigned int type_num);
 
 	/**
@@ -239,9 +405,7 @@ typedef struct {
 	 * \param off	[IN]		offset of allocation
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 */
-	void		 (*mo_defer_free)(struct umem_instance *umm,
-					  umem_off_t off,
-					  struct pobj_action *act);
+	void		 (*mo_defer_free)(struct umem_instance *umm, umem_off_t off, void *act);
 
 	/**
 	 * Cancel the reservation.
@@ -250,8 +414,7 @@ typedef struct {
 	 * \param actv	[IN]	action array to be canceled.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	void		 (*mo_cancel)(struct umem_instance *umm,
-				      struct pobj_action *actv, int actv_cnt);
+	void		 (*mo_cancel)(struct umem_instance *umm, void *act, int actv_cnt);
 
 	/**
 	 * Publish the reservation (make it persistent).
@@ -260,9 +423,45 @@ typedef struct {
 	 * \param actv	[IN]	action array to be published.
 	 * \param actv_cnt [IN]	size of action array.
 	 */
-	int		 (*mo_tx_publish)(struct umem_instance *umm,
-					  struct pobj_action *actv,
-					  int actv_cnt);
+	int		 (*mo_tx_publish)(struct umem_instance *umm, void *act, int actv_cnt);
+
+	/**
+	 * Atomically copy the contents from src to the destination address.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param dest	[IN]	destination address
+	 * \param src	[IN]	source address
+	 * \param len	[IN]	length of data to be copied.
+	 * \param hint	[IN]	hint on when to persist.
+	 */
+	 void *		(*mo_atomic_copy)(struct umem_instance *umem,
+					  void *dest, const void *src,
+					  size_t len, enum acopy_hint hint);
+
+	/** free umoff atomically */
+	int		 (*mo_atomic_free)(struct umem_instance *umm,
+					   umem_off_t umoff);
+
+	/**
+	 * allocate umoff with the specified size & flags atomically
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param size	[IN]	size to allocate.
+	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
+	 * \param type_num [IN]	struct type (for PMDK)
+	 */
+	umem_off_t	 (*mo_atomic_alloc)(struct umem_instance *umm, size_t size,
+					    unsigned int type_num);
+
+	/**
+	 * flush data at specific offset to persistent store.
+	 *
+	 * \param umm	[IN]	umem class instance.
+	 * \param addr	[IN]	starting address
+	 * \param size	[IN]	total bytes to be flushed.
+	 */
+	void		(*mo_atomic_flush)(struct umem_instance *umm, void *addr,
+					   size_t size);
 
 #endif
 	/**
@@ -282,18 +481,10 @@ typedef struct {
 					       void *data);
 } umem_ops_t;
 
-#define UMM_SLABS_CNT 16
-
 /** attributes to initialize an unified memory class */
 struct umem_attr {
 	umem_class_id_t			 uma_id;
-#ifdef DAOS_PMEM_BUILD
-	PMEMobjpool			*uma_pool;
-	/** Slabs of the umem pool */
-	struct pobj_alloc_class_desc	 uma_slabs[UMM_SLABS_CNT];
-#else
-	void				*uma_pool;
-#endif
+	struct umem_pool		*uma_pool;
 };
 
 /** instance of an unified memory class */
@@ -301,44 +492,17 @@ struct umem_instance {
 	umem_class_id_t		 umm_id;
 	int			 umm_nospc_rc;
 	const char		*umm_name;
-#ifdef DAOS_PMEM_BUILD
-	PMEMobjpool		*umm_pool;
-#else
-	void			*umm_pool;
-#endif
+	struct umem_pool	*umm_pool;
 	/** Cache the pool id field for umem addresses */
 	uint64_t		 umm_pool_uuid_lo;
 	/** Cache the base address of the pool */
 	uint64_t		 umm_base;
 	/** class member functions */
 	umem_ops_t		*umm_ops;
-#ifdef DAOS_PMEM_BUILD
-	/** Slabs of the umem pool */
-	struct pobj_alloc_class_desc	 umm_slabs[UMM_SLABS_CNT];
-#endif
 };
 
 #ifdef DAOS_PMEM_BUILD
-static inline bool
-umem_slab_registered(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return umm->umm_slabs[slab_id].class_id != 0;
-}
-
-static inline uint64_t
-umem_slab_flags(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return POBJ_CLASS_ID(umm->umm_slabs[slab_id].class_id);
-}
-
-static inline size_t
-umem_slab_usize(struct umem_instance *umm, unsigned int slab_id)
-{
-	D_ASSERT(slab_id < UMM_SLABS_CNT);
-	return umm->umm_slabs[slab_id].unit_size;
-}
+void umem_stage_callback(int stage, void *data);
 #endif
 
 int  umem_class_init(struct umem_attr *uma, struct umem_instance *umm);
@@ -387,21 +551,17 @@ umem_get_uuid(const struct umem_instance *umm)
 	return umm->umm_pool_uuid_lo;
 }
 
-enum {
-	UMEM_TYPE_ANY,
-};
-
 static inline bool
 umem_has_tx(struct umem_instance *umm)
 {
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size)                                                          \
+#define umem_alloc_verb(umm, flags, size)			                                   \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);            \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);   \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -415,21 +575,11 @@ umem_has_tx(struct umem_instance *umm)
 #define umem_alloc(umm, size)						\
 	umem_alloc_verb(umm, 0, size)
 
-#ifdef DAOS_PMEM_BUILD
 #define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, POBJ_FLAG_ZERO, size)
-#else
-#define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, VMEM_FLAG_ZERO, size)
-#endif
+	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size)
 
-#ifdef DAOS_PMEM_BUILD
 #define umem_alloc_noflush(umm, size)					\
-	umem_alloc_verb(umm, POBJ_FLAG_NO_FLUSH, size)
-#else
-#define umem_alloc_noflush(umm, size)					\
-	umem_alloc_noflush(umm, VMEM_FLAG_NO_FLUSH, size)
-#endif
+	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -496,12 +646,18 @@ umem_tx_begin(struct umem_instance *umm, struct umem_tx_stage_data *txd)
 }
 
 static inline int
-umem_tx_commit(struct umem_instance *umm)
+umem_tx_commit_ex(struct umem_instance *umm, void *data)
 {
 	if (umm->umm_ops->mo_tx_commit)
-		return umm->umm_ops->mo_tx_commit(umm);
+		return umm->umm_ops->mo_tx_commit(umm, data);
 	else
 		return 0;
+}
+
+static inline int
+umem_tx_commit(struct umem_instance *umm)
+{
+	return umem_tx_commit_ex(umm, NULL);
 }
 
 static inline int
@@ -514,61 +670,112 @@ umem_tx_abort(struct umem_instance *umm, int err)
 }
 
 static inline int
-umem_tx_end(struct umem_instance *umm, int err)
+umem_tx_end_ex(struct umem_instance *umm, int err, void *data)
 {
 	if (err)
 		return umem_tx_abort(umm, err);
 	else
-		return umem_tx_commit(umm);
-}
-
-#ifdef DAOS_PMEM_BUILD
-#define umem_reserve(umm, act, size)                                                               \
-	({                                                                                         \
-		umem_off_t __umoff = UMOFF_NULL;                                                   \
-		if (umm->umm_ops->mo_reserve)                                                      \
-			__umoff = (umm)->umm_ops->mo_reserve(umm, act, size, UMEM_TYPE_ANY);       \
-		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
-			  "Invalid assumption about allocnot using flag bits");                    \
-		D_DEBUG(DB_MEM,                                                                    \
-			"reserve %s umoff=" UMOFF_PF " size=%zu base=" DF_X64                      \
-			" pool_uuid_lo=" DF_X64 "\n",                                              \
-			(umm)->umm_name, UMOFF_P(__umoff), (size_t)(size), (umm)->umm_base,        \
-			(umm)->umm_pool_uuid_lo);                                                  \
-		__umoff;                                                                           \
-	})
-
-#define umem_defer_free(umm, off, act)                                                             \
-	do {                                                                                       \
-		D_DEBUG(DB_MEM,                                                                    \
-			"Defer free %s umoff=" UMOFF_PF "base=" DF_X64 " pool_uuid_lo=" DF_X64     \
-			"\n",                                                                      \
-			(umm)->umm_name, UMOFF_P(off), (umm)->umm_base, (umm)->umm_pool_uuid_lo);  \
-		if ((umm)->umm_ops->mo_defer_free)                                                 \
-			(umm)->umm_ops->mo_defer_free(umm, off, act);                              \
-		else                                                                               \
-			/** Go ahead and free immediately.  The purpose of this function           \
-			 *  is to allow reserve/publish pair to execute on commit                  \
-			 */                                                                        \
-			umem_free(umm, off);                                                       \
-	} while (0)
-
-static inline void
-umem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
-{
-	if (umm->umm_ops->mo_cancel)
-		return umm->umm_ops->mo_cancel(umm, actv, actv_cnt);
+		return umem_tx_commit_ex(umm, data);
 }
 
 static inline int
-umem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
-		int actv_cnt)
+umem_tx_end(struct umem_instance *umm, int err)
 {
-	if (umm->umm_ops->mo_tx_publish)
-		return umm->umm_ops->mo_tx_publish(umm, actv, actv_cnt);
-	return 0;
+	return umem_tx_end_ex(umm, err, NULL);
 }
-#endif
+
+#ifdef DAOS_PMEM_BUILD
+bool umem_tx_inprogress(struct umem_instance *umm);
+bool umem_tx_none(struct umem_instance *umm);
+
+int umem_tx_errno(int err);
+
+static inline int
+umem_tx_stage(struct umem_instance *umm)
+{
+	return umm->umm_ops->mo_tx_stage();
+}
+
+/* Get number of umem_actions in TX redo log */
+static inline uint32_t
+umem_tx_act_nr(struct umem_wal_tx *tx)
+{
+	return tx->utx_ops->wtx_act_nr(tx);
+}
+
+/* Get payload size of umem_actions in TX redo list */
+static inline uint32_t
+umem_tx_act_payload_sz(struct umem_wal_tx *tx)
+{
+	return tx->utx_ops->wtx_payload_sz(tx);
+}
+
+/* Get the first umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_first(struct umem_wal_tx *tx)
+{
+	return tx->utx_ops->wtx_act_first(tx);
+}
+
+/* Get the next umem_action in TX redo list */
+static inline struct umem_action *
+umem_tx_act_next(struct umem_wal_tx *tx)
+{
+	return tx->utx_ops->wtx_act_next(tx);
+}
+
+struct umem_rsrvd_act;
+
+/* Get the active reserved actions cnt pending for publications */
+int umem_rsrvd_act_cnt(struct umem_rsrvd_act *act);
+/* Allocate array of structures for reserved actions */
+int umem_rsrvd_act_alloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int cnt);
+/* Extend the array of structures for reserved actions to max_cnt */
+int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **act, int max_cnt);
+/* Free up the array of reserved actions */
+int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
+
+umem_off_t umem_reserve(struct umem_instance *umm,
+			struct umem_rsrvd_act *rsrvd_act, size_t size);
+void umem_defer_free(struct umem_instance *umm, umem_off_t off,
+		     struct umem_rsrvd_act *rsrvd_act);
+void umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
+int umem_tx_publish(struct umem_instance *umm,
+		    struct umem_rsrvd_act *rsrvd_act);
+
+static inline void *
+umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
+		 enum acopy_hint hint)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_copy != NULL);
+	return umm->umm_ops->mo_atomic_copy(umm, dest, src, len, hint);
+}
+
+static inline umem_off_t
+umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num);
+}
+
+static inline int
+umem_atomic_free(struct umem_instance *umm, umem_off_t umoff)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_free != NULL);
+	return umm->umm_ops->mo_atomic_free(umm, umoff);
+}
+
+static inline void
+umem_atomic_flush(struct umem_instance *umm, void *addr, size_t len)
+{
+	if (umm->umm_ops->mo_atomic_flush)
+		umm->umm_ops->mo_atomic_flush(umm, addr, len);
+	return;
+}
+
+int
+umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd, int stage,
+	       umem_tx_cb_t cb, void *data);
 
 static inline int
 umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
@@ -577,5 +784,289 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
 	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
+
+/*********************************************************************************/
+
+/* Type of memory actions */
+enum {
+	UMEM_ACT_NOOP			= 0,
+	/** copy appended payload to specified storage address */
+	UMEM_ACT_COPY,
+	/** copy payload addressed by @ptr to specified storage address */
+	UMEM_ACT_COPY_PTR,
+	/** assign 8/16/32 bits integer to specified storage address */
+	UMEM_ACT_ASSIGN,
+	/** move specified bytes from source address to destination address */
+	UMEM_ACT_MOVE,
+	/** memset a region with specified value */
+	UMEM_ACT_SET,
+	/** set the specified bit in bitmap */
+	UMEM_ACT_SET_BITS,
+	/** unset the specified bit in bitmap */
+	UMEM_ACT_CLR_BITS,
+	/** it's checksum of the specified address */
+	UMEM_ACT_CSUM,
+};
+
+/**
+ * Memory operations for redo/undo.
+ * 16 bytes for bit operation (set/clr) and integer assignment, 32+ bytes for other operations.
+ */
+#define UMEM_ACT_PAYLOAD_MAX_LEN	(1ULL << 20)
+struct umem_action {
+	uint16_t			ac_opc;
+	union {
+		struct {
+			uint64_t		addr;
+			uint64_t		size;
+			uint8_t			payload[0];
+		} ac_copy;	/**< copy payload from @payload to @addr */
+		struct {
+			uint64_t		addr;
+			uint64_t		size;
+			uint64_t		ptr;
+		} ac_copy_ptr;	/**< copy payload from @ptr to @addr */
+		struct {
+			uint16_t		size;
+			uint32_t		val;
+			uint64_t		addr;
+		} ac_assign;	/**< assign integer to @addr, int64 should use ac_copy */
+		struct {
+			uint16_t		num;
+			uint32_t		pos;
+			uint64_t		addr;
+		} ac_op_bits;	/**< set or clear the @pos bit in bitmap @addr */
+		struct {
+			uint8_t			val;
+			uint32_t		size;
+			uint64_t		addr;
+		} ac_set;	/**< memset(addr, val, size) */
+		struct {
+			uint32_t		size;
+			uint64_t		src;
+			uint64_t		dst;
+		} ac_move;	/**< memmove(dst, size src) */
+		struct {
+			uint32_t		csum;
+			uint32_t		size;
+			uint64_t		addr;
+		} ac_csum;	/**< it is checksum of data stored in @addr */
+	};
+};
+
+#define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
+#define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
+#define UMEM_CACHE_PAGE_SZ_MASK   (UMEM_CACHE_PAGE_SZ - 1)
+
+#define UMEM_CACHE_CHUNK_SZ_SHIFT 12 /* 4KB */
+#define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
+#define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
+
+#define UMEM_CACHE_BMAP_SZ        (1 << (UMEM_CACHE_PAGE_SZ_SHIFT - UMEM_CACHE_CHUNK_SZ_SHIFT - 6))
+
+struct umem_page_info;
+/** 16 MB page */
+struct umem_page {
+	/** page ID */
+	unsigned int		 pg_id;
+	/** refcount */
+	int			 pg_ref;
+	/** page info */
+	struct umem_page_info   *pg_info;
+};
+
+/** Global cache status for each umem_store */
+struct umem_cache {
+	struct umem_store	*ca_store;
+	/** Total pages store */
+	uint64_t                 ca_num_pages;
+	/** Total pages in cache */
+	uint64_t                 ca_mapped;
+	/** Maximum number of cached pages */
+	uint64_t                 ca_max_mapped;
+	/** Free list for mapped page info */
+	d_list_t                 ca_pi_free;
+	/** all the dirty pages */
+	d_list_t                 ca_pgs_dirty;
+	/** Pages waiting for copy to DMA buffer */
+	d_list_t                 ca_pgs_copying;
+	/** LRU list all pages not in one of the other states for future eviction support */
+	d_list_t                 ca_pgs_lru;
+	/** TODO: some other global status */
+	/** All pages, sorted by umem_page::pg_id */
+	struct umem_page         ca_pages[0];
+};
+
+struct umem_cache_chkpt_stats {
+	/** Last committed checkpoint id */
+	uint64_t	*uccs_chkpt_id;
+	/** Number of pages processed */
+	int		 uccs_nr_pages;
+	/** Number of dirty chunks copied */
+	int		 uccs_nr_dchunks;
+	/** Number of sgl iovs used to copy dirty chunks */
+	int		 uccs_nr_iovs;
+};
+
+static inline uint64_t
+umem_cache_size2pages(uint64_t len)
+{
+	D_ASSERT((len & UMEM_CACHE_PAGE_SZ_MASK) == 0);
+
+	return len >> UMEM_CACHE_PAGE_SZ_SHIFT;
+}
+
+static inline uint64_t
+umem_cache_size_round(uint64_t len)
+{
+	return (len + UMEM_CACHE_PAGE_SZ_MASK) & ~UMEM_CACHE_PAGE_SZ_MASK;
+}
+
+static inline struct umem_page *
+umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
+{
+	uint64_t idx = offset >> UMEM_CACHE_PAGE_SZ_SHIFT;
+
+	D_ASSERTF(idx < cache->ca_num_pages,
+		  "offset=" DF_U64 ", num_pages=" DF_U64 ", idx=" DF_U64 "\n", offset,
+		  cache->ca_num_pages, idx);
+
+	return &cache->ca_pages[idx];
+}
+
+/** From a mapped page address, return the umem_cache it belongs to */
+static inline struct umem_cache *
+umem_page2cache(struct umem_page *page)
+{
+	return (struct umem_cache *)container_of(&page[-page->pg_id], struct umem_cache, ca_pages);
+}
+
+/** From a mapped page address, return the umem_store it belongs to */
+static inline struct umem_store *
+umem_page2store(struct umem_page *page)
+{
+	return umem_page2cache(page)->ca_store;
+}
+
+/** Allocate global cache for umem store.  All 16MB pages are initially unmapped
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	max_mapped	0 or Maximum number of mapped 16MB pages (must be 0 for now)
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
+
+/** Free global cache for umem store.  Pages must be unmapped first
+ *
+ * \param[in]	store	Store for which to free cache
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_free(struct umem_store *store);
+
+/** Query if the page cache has enough space to map a range
+ *
+ * \param[in]	store		The store
+ * \param[in]	num_pages	Number of pages to bring into cache
+ *
+ * \return number of pages that need eviction to support mapping the range
+ */
+int
+umem_cache_check(struct umem_store *store, uint64_t num_pages);
+
+/** Evict the pages.   This invokes the unmap callback. (XXX: not yet implemented)
+ *
+ * \param[in]	store		The store
+ * \param[in]	num_pages	Number of pages to evict
+ *
+ * \return 0 on success, -DER_BUSY means a checkpoint is needed to evict the pages
+ */
+int
+umem_cache_evict(struct umem_store *store, uint64_t num_pages);
+
+/** Adds a mapped range of pages to the page cache.
+ *
+ * \param[in]	store		The store
+ * \param[in]	offset		The offset in the umem cache
+ * \param[in]	start_addr	Start address of mapping
+ * \param[in]	num_pages	Number of consecutive 16MB pages to being cached
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
+		     uint64_t num_pages);
+
+/** Take a reference on the pages in the range.   Only needed for cases where we need the page to
+ *  stay loaded across a yield, such as the VOS object cache.  Pages in the range must be mapped.
+ *
+ *  \param[in]	store	The umem store
+ *  \param[in]	addr	The address of the hold
+ *  \param[in]	size	The size of the hold
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+
+/** Release a reference on pages in the range.  Pages in the range must be mapped and held.
+ *
+ *  \param[in]	store	The umem store
+ *  \param[in]	addr	The address of the hold
+ *  \param[in]	size	The size of the hold
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+
+/**
+ * Touched the region identified by @addr and @size, it will mark pages in this region as
+ * dirty (also set bitmap within each page), and put it on dirty list
+ *
+ * This function is called by allocator(probably VOS as well) each time it creates memory
+ * snapshot (calls tx_snap) or just to mark a region to be flushed.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	wr_tx	The writing transaction
+ * \param[in]	addr	The start address
+ * \param[in]	size	size of dirty region
+ *
+ * \return 0 on success, -DER_CHKPT_BUSY if a checkpoint is in progress on the page. The calling
+ *         transaction must either abort or find another location to modify.
+ */
+int
+umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size);
+
+/** Callback for checkpoint to wait for the commit of chkpt_tx.
+ *
+ * \param[in]	arg		Argument passed to umem_cache_checkpoint
+ * \param[in]	chkpt_tx	The WAL transaction ID we are waiting to commit to WAL
+ * \param[out]	committed_tx	The WAL tx ID of the last transaction committed to WAL
+ */
+typedef void
+umem_cache_wait_cb_t(void *arg, uint64_t chkpt_tx, uint64_t *committed_tx);
+
+/**
+ * Write all dirty pages before @wal_tx to MD blob. (XXX: not yet implemented)
+ *
+ * This function can yield internally, it is called by checkpoint service of upper level stack.
+ *
+ * \param[in]		store		The umem store
+ * \param[in]		wait_cb		Callback for to wait for wal commit completion
+ * \param[in]		arg		argument for wait_cb
+ * \param[in,out]	chkpt_id	Input is last committed id, output is checkpointed id
+ * \param[out]		chkpt_stats	check point stats
+ *
+ * \return 0 on success
+ */
+int
+umem_cache_checkpoint(struct umem_store *store, umem_cache_wait_cb_t wait_cb, void *arg,
+		      uint64_t *chkpt_id, struct umem_cache_chkpt_stats *chkpt_stats);
+
+#endif /** DAOS_PMEM_BUILD */
 
 #endif /* __DAOS_MEM_H__ */
