@@ -102,9 +102,13 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 			// no results as rank cannot be read from superblock
 			expResults: []*sharedpb.RankResult{},
 		},
-		"instances stopped": {
+		"instances stopped already": {
 			req:              &ctlpb.RanksReq{Ranks: "0-3"},
 			instancesStopped: true,
+			drpcResps: []proto.Message{
+				&mgmtpb.DaosResp{Status: -1},
+				&mgmtpb.DaosResp{Status: -1},
+			},
 			expResults: []*sharedpb.RankResult{
 				{Rank: 1, State: msStopped},
 				{Rank: 2, State: msStopped},
