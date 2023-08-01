@@ -115,6 +115,13 @@ function setup_environment()
 		echo "including path \"${src_include}\" in CGO_CFLAGS"
 		CGO_CFLAGS+=" -I${src_include}"
 	fi
+
+	src_include="$(dirname "$build_source")/src/include/internal"
+	if [ -d "$src_include" ]; then
+		echo "including path \"${src_include}\" in CGO_CFLAGS"
+		CGO_CFLAGS+=" -I${src_include}"
+	fi
+
 }
 
 function emit_junit_failure()
