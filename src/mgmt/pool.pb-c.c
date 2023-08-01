@@ -3465,10 +3465,10 @@ static const ProtobufCFieldDescriptor mgmt__pool_query_resp__field_descriptors[1
     "state",
     17,
     PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_INT32,
+    PROTOBUF_C_TYPE_ENUM,
     0,   /* quantifier_offset */
     offsetof(Mgmt__PoolQueryResp, state),
-    NULL,
+    &mgmt__pool_service_state__descriptor,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
@@ -4289,5 +4289,39 @@ const ProtobufCEnumDescriptor mgmt__storage_media_type__descriptor =
   mgmt__storage_media_type__enum_values_by_name,
   1,
   mgmt__storage_media_type__value_ranges,
+  NULL,NULL,NULL,NULL   /* reserved[1234] */
+};
+static const ProtobufCEnumValue mgmt__pool_service_state__enum_values_by_number[5] =
+{
+  { "Creating", "MGMT__POOL_SERVICE_STATE__Creating", 0 },
+  { "Ready", "MGMT__POOL_SERVICE_STATE__Ready", 1 },
+  { "Destroying", "MGMT__POOL_SERVICE_STATE__Destroying", 2 },
+  { "Degraded", "MGMT__POOL_SERVICE_STATE__Degraded", 3 },
+  { "Unknown", "MGMT__POOL_SERVICE_STATE__Unknown", 4 },
+};
+static const ProtobufCIntRange mgmt__pool_service_state__value_ranges[] = {
+{0, 0},{0, 5}
+};
+static const ProtobufCEnumValueIndex mgmt__pool_service_state__enum_values_by_name[5] =
+{
+  { "Creating", 0 },
+  { "Degraded", 3 },
+  { "Destroying", 2 },
+  { "Ready", 1 },
+  { "Unknown", 4 },
+};
+const ProtobufCEnumDescriptor mgmt__pool_service_state__descriptor =
+{
+  PROTOBUF_C__ENUM_DESCRIPTOR_MAGIC,
+  "mgmt.PoolServiceState",
+  "PoolServiceState",
+  "Mgmt__PoolServiceState",
+  "mgmt",
+  5,
+  mgmt__pool_service_state__enum_values_by_number,
+  5,
+  mgmt__pool_service_state__enum_values_by_name,
+  1,
+  mgmt__pool_service_state__value_ranges,
   NULL,NULL,NULL,NULL   /* reserved[1234] */
 };

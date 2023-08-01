@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,12 +8,16 @@ package system
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	. "github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
@@ -143,4 +147,34 @@ func (pss PoolServiceState) String() string {
 		"Degraded",
 		"Unknown",
 	}[pss]
+}
+
+func (pss PoolServiceState) MarshalJSON() ([]byte, error) {
+	stateStr, ok := mgmtpb.PoolServiceState_name[int32(pss)]
+	if !ok {
+		return nil, errors.Errorf("invalid Pool Service state %d", pss)
+	}
+	return []byte(`"` + stateStr + `"`), nil
+}
+
+func (pss *PoolServiceState) UnmarshalJSON(data []byte) error {
+	stateStr := strings.Trim(string(data), "\"")
+
+	state, ok := mgmtpb.PoolServiceState_value[stateStr]
+	if !ok {
+		// Try converting the string to an int32, to handle the
+		// conversion from protobuf message using convert.Types().
+		si, err := strconv.ParseInt(stateStr, 0, 32)
+		if err != nil {
+			return errors.Errorf("invalid Pool Service state number parse %q", stateStr)
+		}
+
+		if _, ok = mgmtpb.PoolServiceState_name[int32(si)]; !ok {
+			return errors.Errorf("invalid Pool Service state name lookup %q", stateStr)
+		}
+		state = int32(si)
+	}
+	*pss = PoolServiceState(state)
+
+	return nil
 }

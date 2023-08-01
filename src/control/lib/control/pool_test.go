@@ -585,6 +585,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -596,7 +597,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
@@ -616,7 +617,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":1,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -727,7 +728,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            int32(system.PoolServiceStateDegraded),
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -799,7 +800,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            int32(system.PoolServiceStateDegraded),
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -873,7 +874,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
-						State:            int32(system.PoolServiceStateDegraded),
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
