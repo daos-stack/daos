@@ -4,6 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import json
+
 from ClusterShell.NodeSet import NodeSet
 
 from general_utils import run_command, DaosTestError, get_journalctl, journalctl_time
@@ -13,8 +15,6 @@ from exception_utils import CommandFailure
 # Imports need to be split or python fails to import
 from apricot import TestWithServers
 from apricot import TestWithoutServers
-
-import json
 
 
 # pylint: disable-next=fixme
