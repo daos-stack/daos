@@ -439,7 +439,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
 			}
-			members := membership.Members(nil)
+			members, err := membership.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),
@@ -537,10 +540,11 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
 				{
-					Started: atm.NewBool(true),
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
 				},
 			},
-			expErr: errInstanceNotReady,
+			expErr: errEngineNotReady,
 		},
 		"harness not started": {
 			mics:       []*MockInstanceConfig{},

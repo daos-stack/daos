@@ -619,8 +619,12 @@ daos_eq_create(daos_handle_t *eqh)
 	int			rc = 0;
 
 	/** not thread-safe, but best effort */
-	if (eq_ref == 0)
+	D_MUTEX_LOCK(&daos_eq_lock);
+	if (eq_ref == 0) {
+		D_MUTEX_UNLOCK(&daos_eq_lock);
 		return -DER_UNINIT;
+	}
+	D_MUTEX_UNLOCK(&daos_eq_lock);
 
 	eq = daos_eq_alloc();
 	if (eq == NULL)
@@ -1289,7 +1293,9 @@ daos_event_priv_wait()
 		break;
 	}
 
-	D_ASSERT(evx->evx_status == DAOS_EVS_READY);
+	/** on success, the event should have been reset to ready stat by the progress cb */
+	if (rc == 0)
+		D_ASSERT(evx->evx_status == DAOS_EVS_READY);
 	rc2 = daos_event_priv_reset();
 	if (rc2) {
 		if (rc == 0)

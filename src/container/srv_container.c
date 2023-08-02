@@ -78,8 +78,8 @@ cont_verify_redun_req(struct pool_map *pmap, daos_prop_t *props)
 	if (num_allowed_failures >= num_failed)
 		return 0;
 
-	D_ERROR("Domain contains %d failed components, allows at most %d",
-		num_failed, num_allowed_failures);
+	D_ERROR("Domain contains %d failed components, allows at most %d\n", num_failed,
+		num_allowed_failures);
 	return -DER_INVAL;
 }
 
@@ -2388,7 +2388,8 @@ out:
 		 * ds_cont_op_handler.
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop, true);
-		out->coo_prop = prop;
+		if (rc == -DER_SUCCESS)
+			out->coo_prop = prop;
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
@@ -4216,6 +4217,13 @@ cont_filter_match(struct rdb_tx *tx, struct cont *cont, daos_pool_cont_filter_t 
 	uint32_t	combine_op = filt->pcf_combine_func;
 	int		rc = 0;
 
+	/* defensive, partially redundant with pool_cont_filter_is_valid() from top-level handler */
+	if ((filt->pcf_nparts > 0) && (filt->pcf_parts == NULL)) {
+		D_ERROR(DF_CONT": filter has %u parts but pcf_parts is NULL\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), filt->pcf_nparts);
+		return -DER_INVAL;
+	}
+
 	/* logical OR combining: start with false result, transition to true on first match */
 	if ((filt->pcf_parts != NULL) && (combine_op == PCF_COMBINE_LOGICAL_OR))
 		whole_match = false;
@@ -4556,6 +4564,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		}
 	}
 
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
+	D_ASSERT(entry != NULL);
+	entry->dpe_val = DS_POOL_OBJ_VERSION;
+	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
@@ -4778,8 +4790,8 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 	pool = svc->cs_pool;
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to read prop for cont, rc=%d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		D_ERROR(DF_CONT ": failed to read prop for cont: " DF_RC "\n",
+			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
