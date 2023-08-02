@@ -1,15 +1,17 @@
 // (C) Copyright 2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-package main
+package daos
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 // CommandContext structure used for all commands
 type CommandContext struct {
-	ddbContext        *DdbContext
-	jsonOutput        bool
-	jsonOutputHandled bool
+	DdbContext        interface{}
+	JsonOutput        bool
+	JsonOutputHandled bool
 }
 
 // SuperBlock The pool super block used for the superblock_dump command

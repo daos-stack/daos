@@ -94,7 +94,7 @@ func ddbClose(ctx *DdbContext) error {
 	return daosError(C.ddb_run_close(&ctx.ctx))
 }
 
-func ddbSuperblockDump(ctx *DdbContext) (*SuperBlock, error) {
+func ddbSuperblockDump(ctx *DdbContext) (*daos.SuperBlock, error) {
 
 	/* Run the c code command */
 	cSb := C.struct_ddb_superblock{}
@@ -112,7 +112,7 @@ func ddbSuperblockDump(ctx *DdbContext) (*SuperBlock, error) {
 	}
 
 	/* convert the c struct to the go struct */
-	sb := SuperBlock{
+	sb := daos.SuperBlock{
 		PoolUuid:             goUuid,
 		ScmSize:              uint64(cSb.dsb_scm_sz),
 		ContCount:            int(cSb.dsb_cont_nr),

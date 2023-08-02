@@ -6,10 +6,11 @@ package main
 import (
 	"github.com/dustin/go-humanize"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func printSuperBlock(log *logging.LeveledLogger, sb *SuperBlock) {
+func printSuperBlock(log *logging.LeveledLogger, sb *daos.SuperBlock) {
 	log.Infof("Pool UUID: %s\n", sb.PoolUuid.String())
 	log.Infof("Format Version: %d\n", sb.DurableFormatVersion)
 	log.Infof("Containers: %d\n", sb.ContCount)

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1700,10 +1700,14 @@ struct vea_cb_args {
 static int
 vea_free_extent_cb(void *cb_arg, struct vea_free_extent *vfe)
 {
-	struct vea_cb_args	*args = cb_arg;
+	struct vea_cb_args       *args = cb_arg;
+
+	struct dv_vea_free_extent dvfe = {.dvfe_block_count  = vfe->vfe_blk_cnt,
+					  .dvfe_block_offset = vfe->vfe_blk_off,
+					  .dvfe_age          = vfe->vfe_age};
 
 	if (args->vca_cb)
-		return args->vca_cb(args->vca_cb_args, vfe);
+		return args->vca_cb(args->vca_cb_args, &dvfe);
 
 	return 0;
 }

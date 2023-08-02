@@ -5,6 +5,7 @@
  */
 
 #include "ddb_printer.h"
+#include <daos_srv/vos_types.h>
 
 #define DF_IDX "[%d]"
 #define DP_IDX(idx) idx
