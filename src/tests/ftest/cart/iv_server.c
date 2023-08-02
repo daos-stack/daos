@@ -623,7 +623,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	return 0;
 }
 
-static int
+static void
 iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
@@ -635,8 +635,6 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
-
-	return 0;
 }
 
 static void
