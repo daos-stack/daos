@@ -117,19 +117,50 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("CtlSvc.PrepShutdownRanks dispatch, req:%+v\n", req)
 
-	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
+	// iterate over local instances issuing dRPC requests in parallel and return system member
+	// results when all have been received.
+	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "filtering instances by rank set")
+	}
+
+	ch := make(chan *system.MemberResult, len(instances))
+	for _, ei := range instances {
+		if !ei.IsReady() {
+			rank, err := ei.GetRank()
+			svc.log.Debugf("skip prep-shutdown as rank %d is dead", rank)
+			// If rank is already dead, return successful result.
+			ch <- system.NewMemberResult(rank, err, system.MemberStateStopped)
+			continue
+		}
+
+		go func(ctx context.Context, e Engine) {
+			select {
+			case <-ctx.Done():
+				ch <- nil
+			case ch <- e.tryDrpc(ctx, drpc.MethodPrepShutdown):
+			}
+		}(ctx, ei)
+	}
+
+	results := make(system.MemberResults, 0, len(instances))
+	for len(results) < len(instances) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-ch:
+			if result == nil {
+				return nil, errors.New("tryDrpc returned nil result")
+			}
+			results = append(results, result)
+		}
 	}
 
 	resp := &ctlpb.RanksResp{}
 	if err := convert.Types(results, &resp.Results); err != nil {
 		return nil, err
 	}
-
-	svc.log.Debugf("CtlSvc.PrepShutdown dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }

@@ -614,7 +614,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 		results    MemberResults
 		expMembers Members
 		expResults MemberResults
-		expErrMsg  string
+		expErr     error
 	}{
 		"update result address from member": {
 			members: Members{
@@ -694,9 +694,14 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
-				NewMemberResult(3, errors.New("can't stop"), MemberStateJoined),
+				func() *MemberResult {
+					mr := NewMemberResult(3, errors.New("can't stop"),
+						MemberStateJoined)
+					mr.State = MemberStateJoined
+					return mr
+				}(),
 			},
-			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
+			expErr: errors.New("rank 3 has conflicting state 'Joined'"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -706,9 +711,8 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			ms := populateMembership(t, log, tc.members...)
 
 			// members should be updated with result state
-			err := ms.UpdateMemberStates(tc.results, !tc.ignoreErrs)
-			ExpectError(t, err, tc.expErrMsg, name)
-			if err != nil {
+			CmpErr(t, tc.expErr, ms.UpdateMemberStates(tc.results, !tc.ignoreErrs))
+			if tc.expErr != nil {
 				return
 			}
 
