@@ -176,6 +176,11 @@ class PoolMembershipTest(TestWithServers):
         # 6. Enable and start the checker.
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable()
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
         dmg_command.check_start()
 
         # 7. Query the checker and verify that the issue was fixed.
@@ -208,6 +213,85 @@ class PoolMembershipTest(TestWithServers):
         if dst_free_fixed < dst_free_orig:
             msg = (f"Destination rank space was not recovered by checker! "
                    f"Original = {dst_free_orig}; With fixed = {dst_free_fixed}")
+            errors.append(msg)
+
+        report_errors(test=self, errors=errors)
+
+    def test_dangling_pool_map(self):
+        """Test dangling pool map.
+
+        1. Create a pool.
+        2. Stop servers.
+        3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
+        4. Enable and start the checker.
+        5. Query the checker and verify that the issue was fixed. i.e., Current status is
+        COMPLETED.
+        6. Disable the checker.
+        7. Verify that the pool has one less target.
+
+        Jira ID: DAOS-11736
+
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,pool_membership
+        :avocado: tags=PoolMembershipTest,test_dangling_pool_map
+        """
+        # 1. Create a pool.
+        self.log_step("Creating a pool (dmg pool create)")
+        pool = self.get_pool(connect=False)
+
+        # 2. Stop servers.
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        # 3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
+        rank_0_host = NodeSet(self.server_managers[0].get_host(0))
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rm_cmd = f"sudo rm {scm_mount}/{pool.uuid.lower()}/vos-0"
+        if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
+            self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
+
+        # 4. Enable and start the checker.
+        self.log_step("Enable and start the checker.")
+        dmg_command.check_enable(stop=False)
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
+        # Start checker.
+        dmg_command.check_start()
+
+        # 5. Query the checker and verify that the issue was fixed.
+        repair_reports = None
+        for _ in range(8):
+            check_query_out = dmg_command.check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                repair_reports = check_query_out["response"]["reports"]
+                break
+            time.sleep(5)
+
+        if not repair_reports:
+            self.fail("Checker didn't detect or repair any inconsistency!")
+
+        errors = []
+        query_msg = repair_reports[0]["msg"]
+        if "dangling target" not in query_msg:
+            errors.append(
+                "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
+
+        # 6. Disable the checker.
+        self.log_step("Disable and start the checker.")
+        dmg_command.check_disable()
+
+        # 7. Verify that the pool has one less target.
+        query_out = pool.query()
+        total_targets = query_out["response"]["total_targets"]
+        active_targets = query_out["response"]["active_targets"]
+        expected_targets = total_targets - 1
+        if active_targets != expected_targets:
+            msg = (f"Unexpected number of active targets! Expected = {expected_targets}; "
+                   f"Actual = {active_targets}")
             errors.append(msg)
 
         report_errors(test=self, errors=errors)

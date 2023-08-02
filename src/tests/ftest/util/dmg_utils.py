@@ -1422,6 +1422,18 @@ class DmgCommand(DmgCommandBase):
             ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
             auto=auto, find_orphans=find_orphans, policies=policies)
 
+    def check_stop(self, pool=None):
+        """Call dmg check stop.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "stop"), pool=pool)
+
     def check_query(self, pool=None):
         """Call dmg check query.
 
