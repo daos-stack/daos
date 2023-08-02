@@ -4824,13 +4824,12 @@ set_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		}
 		ap->cont_nrs++;
 		/* Yield in case there are too many containers. */
-		if ((ap->cont_nrs + 1) % 32 == 0) {
+		if (ap->cont_nrs % 32 == 0) {
 			rc = rdb_tx_commit(ap->tx);
 			ap->need_commit = false;
 			if (rc)
 				goto out_free_prop;
 			rdb_tx_end(ap->tx);
-			dss_sleep(0);
 			rc = rdb_tx_begin(ap->svc->cs_rsvc->s_db,
 					  ap->svc->cs_rsvc->s_term, ap->tx);
 			if (rc)
