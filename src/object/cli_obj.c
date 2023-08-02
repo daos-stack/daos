@@ -4157,9 +4157,25 @@ obj_list_obj_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 		struct comp_iter_arg *arg)
 {
 	daos_obj_list_t *obj_arg = dc_task_get_args(obj_auxi->obj_task);
+	daos_anchor_t	*anchor = obj_arg->dkey_anchor;
+	uint32_t	grp;
 
 	*obj_arg->nr = arg->merge_nr;
 	anchor_update_check_eof(obj_auxi, obj_arg->dkey_anchor);
+
+	grp = dc_obj_anchor2shard(anchor) / obj_get_grp_size(obj_auxi->obj);
+	if (!daos_anchor_is_eof(anchor)) {
+		D_DEBUG(DB_IO, "More in grp %d\n", grp);
+	} else if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
+		   (grp < (obj_auxi->obj->cob_shards_nr / obj_get_grp_size(obj_auxi->obj) - 1))) {
+		D_DEBUG(DB_IO, DF_OID" next grp %u total grp %u\n",
+			DP_OID(obj_auxi->obj->cob_md.omd_id), grp + 1,
+			obj_auxi->obj->cob_shards_nr / obj_get_grp_size(obj_auxi->obj));
+		daos_anchor_set_zero(anchor);
+		dc_obj_shard2anchor(anchor, (grp + 1) * obj_get_grp_size(obj_auxi->obj));
+	} else {
+		D_DEBUG(DB_IO, "Enumerated All shards\n");
+	}
 }
 
 static int
