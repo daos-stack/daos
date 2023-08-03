@@ -4810,7 +4810,7 @@ set_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 
 	d_iov_set(&value, &ap->status, sizeof(ap->status));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
-				   &ds_cont_prop_co_status, &value);
+			   &ds_cont_prop_co_status, &value);
 	if (rc) {
 		D_ERROR("failed to set container status pool/cont: "DF_CONTF"\n",
 			DP_CONT(ap->pool_uuid, cont_uuid));
@@ -4837,6 +4837,10 @@ set_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		} else {
 			ap->need_commit = true;
 		}
+		/* rdb might not commit, use latest one */
+		entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+		D_ASSERT(entry != NULL);
+		entry->dpe_val = ap->status;
 
 		rc = cont_iv_prop_update(ap->svc->cs_pool->sp_iv_ns,
 					 cont_uuid, prop, true);
