@@ -171,21 +171,27 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
-	// Restrict log messages to ERROR during the generation of server config file parameters
-	// as stdout is to be reserved for config file output only.
 	oldLog := cmd.Logger
-	log := logging.NewCommandLineLogger()
-	log.SetLevel(logging.LogLevelError)
-	cmd.Logger = log
-	req.Log = cmd.Logger
+	dbgEnabled := oldLog.EnabledFor(logging.LogLevelTrace)
+	if !dbgEnabled {
+		// If --debug flag has not been set, restrict log messages to ERROR during the
+		// generation of server config file parameters as stdout is to be reserved for
+		// config file output only.
+		log := logging.NewCommandLineLogger()
+		log.SetLevel(logging.LogLevelError)
+		cmd.Logger = log
+		req.Log = cmd.Logger
+	}
 
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}
 
-	// Restore original logging behaviour.
-	cmd.Logger = oldLog
+	if !dbgEnabled {
+		// Restore original logging behaviour.
+		cmd.Logger = oldLog
+	}
 
 	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
 	return &resp.Server, nil
