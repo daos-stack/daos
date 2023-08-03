@@ -91,6 +91,15 @@ unlock:
 	return rc;
 }
 
+static int
+close_shard_cb(tse_task_t *task, void *data)
+{
+	struct dc_obj_shard *obj_shard = *((struct dc_obj_shard **)data);
+
+	obj_shard_close(obj_shard);
+	return 0;
+}
+
 static void
 obj_layout_free(struct dc_object *obj)
 {
@@ -197,6 +206,19 @@ dc_obj_get_redun_lvl(struct dc_object *obj)
 	return props.dcp_redun_lvl;
 }
 
+uint32_t
+dc_obj_hdl2redun_lvl(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 lvl;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	lvl = dc_obj_get_redun_lvl(obj);
+	obj_decref(obj);
+	return lvl;
+}
+
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t oh)
 {
@@ -223,13 +245,44 @@ dc_obj_hdl2layout_ver(daos_handle_t oh)
 	ver = obj->cob_layout_version;
 	obj_decref(obj);
 	return ver;
-
 }
 
 static uint32_t
 dc_obj_get_pda(struct dc_object *obj)
 {
 	return daos_cont_props2pda(&obj->cob_co->dc_props, obj_is_ec(obj));
+}
+
+uint32_t
+dc_obj_hdl2pda(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 pda;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	pda = dc_obj_get_pda(obj);
+	obj_decref(obj);
+	return pda;
+}
+
+static uint32_t
+dc_obj_get_pdom(struct dc_object *obj)
+{
+	return obj->cob_co->dc_props.dcp_perf_domain;
+}
+
+uint32_t
+dc_obj_hdl2pdom(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 pdom;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	pdom = dc_obj_get_pdom(obj);
+	obj_decref(obj);
+	return pdom;
 }
 
 static int
@@ -252,6 +305,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_pdom_lvl = dc_obj_get_pdom(obj);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,
@@ -2809,6 +2863,13 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 		return rc;
 	}
 
+	rc = tse_task_register_comp_cb(task, close_shard_cb, &obj_shard, sizeof(obj_shard));
+	if (rc != 0) {
+		obj_shard_close(obj_shard);
+		obj_task_complete(task, rc);
+		return rc;
+	}
+
 	shard_auxi->flags = shard_auxi->obj_auxi->flags;
 	req_tgts = &shard_auxi->obj_auxi->req_tgts;
 	D_ASSERT(shard_auxi->grp_idx < req_tgts->ort_grp_nr);
@@ -2828,8 +2889,6 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 
 	rc = shard_auxi->shard_io_cb(obj_shard, obj_auxi->opc, shard_auxi,
 				     fw_shard_tgts, fw_cnt, task);
-	obj_shard_close(obj_shard);
-
 	return rc;
 }
 
@@ -6699,6 +6758,13 @@ shard_query_key_task(tse_task_t *task)
 		return rc;
 	}
 
+	rc = tse_task_register_comp_cb(task, close_shard_cb, &obj_shard, sizeof(obj_shard));
+	if (rc != 0) {
+		obj_shard_close(obj_shard);
+		obj_task_complete(task, rc);
+		return rc;
+	}
+
 	api_args = dc_task_get_args(args->kqa_auxi.obj_auxi->obj_task);
 	rc = dc_obj_shard_query_key(obj_shard, epoch, api_args->flags,
 				    args->kqa_auxi.obj_auxi->map_ver_req, obj,
@@ -6707,7 +6773,6 @@ shard_query_key_task(tse_task_t *task)
 				    args->kqa_cont_uuid, &args->kqa_dti,
 				    &args->kqa_auxi.obj_auxi->map_ver_reply, th, task);
 
-	obj_shard_close(obj_shard);
 	return rc;
 }
 

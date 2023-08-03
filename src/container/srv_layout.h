@@ -106,6 +106,7 @@ extern d_iov_t ds_cont_prop_roots;		/* daos_prop_co_roots */
 extern d_iov_t ds_cont_prop_ec_cell_sz;		/* uint64_t */
 extern d_iov_t ds_cont_prop_ec_pda;		/* uint64_t */
 extern d_iov_t ds_cont_prop_rp_pda;		/* uint64_t */
+extern d_iov_t ds_cont_prop_perf_domain;	/* uint64_t */
 extern d_iov_t ds_cont_prop_cont_global_version;/* uint32_t */
 extern d_iov_t ds_cont_prop_scrubber_disabled;	/* uint64_t */
 extern d_iov_t ds_cont_prop_co_md_times;	/* co_md_times */
