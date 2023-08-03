@@ -683,7 +683,9 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 	}
 	invalidMembers := &ranklist.RankSet{}
 
+	svc.log.Tracef("checking %d members", len(allMembers))
 	for _, m := range allMembers {
+		svc.log.Tracef("member %d: %s", m.Rank.Uint32(), m.State)
 		if m.State&stateMask == 0 {
 			invalidMembers.Add(m.Rank)
 		}

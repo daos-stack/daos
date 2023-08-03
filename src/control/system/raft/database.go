@@ -803,6 +803,8 @@ func (db *Database) UpdateMember(m *system.Member) error {
 	db.Lock()
 	defer db.Unlock()
 
+	db.log.Tracef("updating member: %+v", m)
+
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {
 		return err
