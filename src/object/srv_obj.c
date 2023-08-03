@@ -1990,6 +1990,16 @@ out:
 	return rc;
 }
 
+static bool
+is_cont_rw(bool is_write, struct ds_cont_child *cont)
+{
+	if ((is_write && cont->sc_write_disabled) ||
+	    (!is_write && cont->sc_read_disabled))
+		return false;
+
+	return true;
+}
+
 static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
@@ -2007,7 +2017,7 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 		return -DER_NO_PERM;
 	}
 
-	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
+	if (!is_agg_migrate && coh->sch_cont && !is_cont_rw(is_write, coh->sch_cont)) {
 		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
 	}

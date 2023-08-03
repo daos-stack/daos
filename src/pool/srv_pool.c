@@ -4503,7 +4503,7 @@ out:
 		if (entry != NULL) {
 			if (entry->dpe_val == DAOS_REINT_MODE_NO_DATA_SYNC &&
 			    orig_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_UNCLEAN, 0,
+				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CO_RO,
 							ds_pool_get_version(svc->ps_pool));
 				rc = ds_cont_set_status(in->psi_op.pi_uuid, status);
 			} else if (entry->dpe_val == DAOS_REINT_MODE_DATA_SYNC &&
