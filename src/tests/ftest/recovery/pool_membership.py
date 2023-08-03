@@ -326,7 +326,7 @@ class PoolMembershipTest(IorTestBase):
         :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
         """
         targets = self.params.get("targets", "/run/server_config/engines/0/*")
-        EXP_MSG = "dangling rank entry"
+        exp_msg = "dangling rank entry"
 
         # 1. Create a pool and a container.
         # self.log_step("Create a pool and a container.")
@@ -374,11 +374,11 @@ class PoolMembershipTest(IorTestBase):
         # Verify that the message contains dangling rank entry.
         exp_msg_found = False
         for repair_report in repair_reports:
-            if EXP_MSG in repair_report["msg"]:
+            if exp_msg in repair_report["msg"]:
                 exp_msg_found = True
                 break
         if not exp_msg_found:
-            errors.append(f"{EXP_MSG} not in repair message!")
+            errors.append(f"{exp_msg} not in repair message!")
 
         # 8. Disable checker.
         dmg_command.check_disable()
