@@ -747,6 +747,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 	int		rank_nr = 1;
 	int		i;
 	int		rc = 0;
+	char		buffer[32];
 
 	if (!test_runable(arg, 4))
 		return;
@@ -764,6 +765,18 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 		rc = daos_pool_set_prop(arg->pool.pool_uuid, "reintegration",
 					"no_data_sync");
 		assert_success(rc);
+		print_message("lookup 100 dkeys with RO containers\n");
+		for (i = 0; i < 100 && verify; i++) {
+			memset(buffer, 0, 32);
+			sprintf(dkey, "dkey_%d\n", i);
+			lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+			assert_string_equal(buffer, rec);
+		}
+		sprintf(dkey, "dkey_101\n");
+		arg->expect_result = -DER_IO;
+		insert_single(dkey, akey, 0, (void *)rec, strlen(rec),
+			      DAOS_TX_NONE, &req);
+		arg->expect_result = 0;
 	}
 
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
@@ -786,8 +799,6 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 
 	print_message("lookup 100 dkeys\n");
 	for (i = 0; i < 100 && verify; i++) {
-		char buffer[32];
-
 		memset(buffer, 0, 32);
 		sprintf(dkey, "dkey_%d\n", i);
 		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
