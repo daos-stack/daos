@@ -9,10 +9,6 @@ server_config:
   engines:
     0:
       targets: 8
-      env_vars:
-        - SWIM_PROTOCOL_PERIOD_LEN=2000
-        - SWIM_SUSPECT_TIMEOUT=19000
-        - SWIM_PING_TIMEOUT=1900
       storage: auto
 testparams:
   ranks_to_kill:

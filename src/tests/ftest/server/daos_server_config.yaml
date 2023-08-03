@@ -164,13 +164,13 @@ server_config_val: !mux
       - "nr_xs_helpers"
       - -10000
       - "PASS"
-  targets_negative:
-    config_val:
-      - "targets"
-      - -1
-      - "PASS"
   targets_str:
     config_val:
       - "targets"
       - "ABDCD"
+      - "FAIL"
+  targets_negative:
+    config_val:
+      - "targets"
+      - -1
       - "FAIL"
