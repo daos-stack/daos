@@ -1277,7 +1277,7 @@ func TestControl_SystemErase(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateStopped.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member1.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
@@ -1309,7 +1309,7 @@ func TestControl_SystemErase(t *testing.T) {
 					Results: []*sharedpb.RankResult{
 						{
 							Rank: member1.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateStopped.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member1.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
@@ -1330,7 +1330,7 @@ func TestControl_SystemErase(t *testing.T) {
 						},
 						{
 							Rank: member5.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateStopped.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member5.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
@@ -1342,7 +1342,7 @@ func TestControl_SystemErase(t *testing.T) {
 						},
 						{
 							Rank: member7.Rank.Uint32(), Action: "system erase",
-							State:   system.MemberStateStopped.String(),
+							State:   system.MemberStateErrored.String(),
 							Addr:    member7.Addr.String(),
 							Errored: true, Msg: "erase failed",
 						},
