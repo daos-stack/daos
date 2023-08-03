@@ -2388,7 +2388,8 @@ out:
 		 * ds_cont_op_handler.
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop, true);
-		out->coo_prop = prop;
+		if (rc == -DER_SUCCESS)
+			out->coo_prop = prop;
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
@@ -4563,6 +4564,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		}
 	}
 
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION);
+	D_ASSERT(entry != NULL);
+	entry->dpe_val = DS_POOL_OBJ_VERSION;
+	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
@@ -4785,8 +4790,8 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 	pool = svc->cs_pool;
 	rc = cont_prop_read(tx, cont, DAOS_CO_QUERY_PROP_ALL, &prop, false);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to read prop for cont, rc=%d\n",
-			DP_CONT(pool_uuid, cont_uuid), rc);
+		D_ERROR(DF_CONT ": failed to read prop for cont: " DF_RC "\n",
+			DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
