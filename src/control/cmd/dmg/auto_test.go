@@ -141,9 +141,10 @@ func TestAuto_confGen(t *testing.T) {
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
 	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
-	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd,
+	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 16GiB sys rsvd,
 	// 5GiB per engine for tmpfs.
-	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 6 + 10)) / humanize.KiByte
+	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 16 + 10)) / humanize.KiByte
+	mockRamdiskSize := 5
 	storHostRespHighMem := &control.HostResponse{
 		Addr:    "host1",
 		Message: storRespHighMem,
@@ -151,7 +152,6 @@ func TestAuto_confGen(t *testing.T) {
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
-	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
 	metadataMountPath := "/mnt/daos_md"
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
@@ -406,7 +406,7 @@ disable_vfio: false
 disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
-system_ram_reserved: 6
+system_ram_reserved: 16
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log

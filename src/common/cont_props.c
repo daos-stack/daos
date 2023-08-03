@@ -70,6 +70,8 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 		cont_prop->dcp_ec_pda = daos_cont_prop2ec_pda(props);
 	if (daos_prop_entry_get(props, DAOS_PROP_CO_RP_PDA) != NULL)
 		cont_prop->dcp_rp_pda = daos_cont_prop2rp_pda(props);
+	if (daos_prop_entry_get(props, DAOS_PROP_CO_PERF_DOMAIN) != NULL)
+		cont_prop->dcp_perf_domain = daos_cont_prop2perf_domain(props);
 
 	/** global version */
 	if (daos_prop_entry_get(props, DAOS_PROP_CO_GLOBAL_VERSION) != NULL)
@@ -261,6 +263,16 @@ daos_cont_prop2rp_pda(daos_prop_t *props)
 		daos_prop_entry_get(props, DAOS_PROP_CO_RP_PDA);
 
 	return prop == NULL ? DAOS_PROP_PO_RP_PDA_DEFAULT :
+			      (uint32_t)prop->dpe_val;
+}
+
+uint32_t
+daos_cont_prop2perf_domain(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_PERF_DOMAIN);
+
+	return prop == NULL ? DAOS_PROP_PO_PERF_DOMAIN_DEFAULT :
 			      (uint32_t)prop->dpe_val;
 }
 
