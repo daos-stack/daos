@@ -31,6 +31,8 @@
 #define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
 #define DTX_SUB_REQ_DEF		16
 
+/* Only for test. */
+
 /* Whether check redundancy group validation when DTX resync. */
 bool tx_verify_rdg;
 
