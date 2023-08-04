@@ -997,6 +997,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	else
 		pool_df->pd_version = POOL_DF_VERSION;
 
+	D_ERROR("PD_VERSION IS %d\n", pool_df->pd_version);
+
 	gc_init_pool(&umem, pool_df);
 end:
 	/**
@@ -1285,7 +1287,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df = pool_df;
-	D_ERROR("pool_df->pd_version = %d\n", POOL_DF_VERSION);
+	D_ERROR("pool_df->pd_version = %d\n", pool_df->pd_version);
 
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
