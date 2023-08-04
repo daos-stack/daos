@@ -1588,10 +1588,13 @@ update_vos_prop_on_targets(void *in)
 	D_ERROR("pool->sp_global_version = %d\n", pool->sp_global_version);
 	/** If necessary, upgrade the vos pool format */
 	if (pool->sp_global_version >= 3) {
-		D_ERROR("calling upgrade for 2.6 with %d\n", VOS_POOL_DF_2_6);
+		D_ERROR("calling upgrade for 2.6 with %d sp_global_version is %d\n",
+			VOS_POOL_DF_2_6, pool->sp_global_version);
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
 	} else if (pool->sp_global_version == 2) {
 		D_ERROR("calling upgrade for 2.4 with %d\n", VOS_POOL_DF_2_4);
+		D_ERROR("calling upgrade for 2.4 with %d sp_global_version is %d\n",
+			VOS_POOL_DF_2_4, pool->sp_global_version);
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
 	} else {
 		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
