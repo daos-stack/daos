@@ -18,6 +18,10 @@
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
 #include <daos/pool.h>
+#include <daos/pool_map.h>
+
+D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_ROOT == (int)PO_COMP_TP_ROOT);
+D_CASSERT((int)DAOS_PROP_PERF_DOMAIN_GROUP == (int)PO_COMP_TP_GRP);
 
 daos_prop_t *
 daos_prop_alloc(uint32_t entries_nr)
@@ -335,11 +339,10 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			}
 			break;
 		case DAOS_PROP_PO_PERF_DOMAIN:
+		case DAOS_PROP_CO_PERF_DOMAIN:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != PO_COMP_TP_ROOT &&
-			    val != PO_COMP_TP_NODE &&
-			    val != PO_COMP_TP_RANK &&
-			    val != PO_COMP_TP_TARGET) {
+			    val != PO_COMP_TP_GRP) {
 				D_ERROR("invalid perf domain "DF_U64".\n", val);
 				return false;
 			}
@@ -1086,6 +1089,9 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		entry->dpe_val = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_RP_PDA) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_RP_PDA;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_PERF_DOMAIN) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 		entry->dpe_val = strtoull(val, NULL, 0);
 	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||

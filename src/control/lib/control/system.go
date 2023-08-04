@@ -843,27 +843,6 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
-// PingRanks concurrently performs ping on ranks across all hosts
-// supplied in the request's hostlist.
-//
-// This is called from SystemQuery in server/ctl_system.go with a
-// populated host list in the request parameter and blocks until all results
-// (successful or otherwise) are received after invoking fan-out.
-// Returns a single response structure containing results generated with
-// request responses from each selected rank.
-func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(ctlpb.RanksReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
-	}
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).PingRanks(ctx, pbReq)
-	})
-
-	rpcClient.Debugf("DAOS system ping-ranks request: %s", pbUtil.Debug(pbReq))
-	return invokeRPCFanout(ctx, rpcClient, req)
-}
-
 // SystemCleanupReq contains the inputs for the system cleanup request.
 type SystemCleanupReq struct {
 	unaryRequest

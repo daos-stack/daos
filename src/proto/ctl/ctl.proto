@@ -47,8 +47,6 @@ service CtlSvc {
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
 	rpc StopRanks(RanksReq) returns (RanksResp) {}
-	// Ping DAOS I/O Engines on a host. (gRPC fanout)
-	rpc PingRanks(RanksReq) returns (RanksResp) {}
 	// ResetFormat DAOS I/O Engines on a host. (gRPC fanout)
 	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
 	// Start DAOS I/O Engines on a host. (gRPC fanout)
