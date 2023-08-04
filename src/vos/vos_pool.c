@@ -997,8 +997,6 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	else
 		pool_df->pd_version = POOL_DF_VERSION;
 
-	D_ERROR("PD_VERSION IS %d\n", pool_df->pd_version);
-
 	gc_init_pool(&umem, pool_df);
 end:
 	/**
@@ -1286,8 +1284,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	pool->vp_dtx_committed_count = 0;
-	pool->vp_pool_df = pool_df;
-	D_ERROR("pool_df->pd_version = %d\n", pool_df->pd_version);
+	pool->vp_pool_df             = pool_df;
 
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
@@ -1302,7 +1299,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
 	lock_pool_memory(pool);
-	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	D_DEBUG(DB_MGMT, "Opened pool %p df version %d\n", pool, pool_df->pd_version);
 	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
@@ -1418,7 +1415,8 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	if (version == pool_df->pd_version)
 		return 0;
 
-	D_ERROR("Attempting upgrade from %d to %d\n", pool_df->pd_version, version);
+	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
+		pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
