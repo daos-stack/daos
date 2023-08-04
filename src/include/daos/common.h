@@ -153,7 +153,7 @@ char *DP_UUID(const void *uuid);
 #define DF_KEY       "key[%d]"
 #define DP_KEY(_key) (int)((_key)->iov_len)
 
-#define DF_DE        "de[%d]"
+#define DF_DE        "de[%zi]"
 #define DP_DE(_de)   strnlen(_de, NAME_MAX)
 
 #else
