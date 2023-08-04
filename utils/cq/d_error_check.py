@@ -188,6 +188,7 @@ class AllChecks():
             return
         with open(fname, 'w') as fd:
             fd.write(self._output.getvalue())
+        print('Changes saved, run git-clang-format to format them.')
 
     def check_print_string(self, line):
         """Check for %s in message"""
@@ -218,7 +219,9 @@ class AllChecks():
             return
 
         count = code.count('\\n')
-        if count > max_newlines:
+        # Some logging calls contain multiple new-line characters and that's OK, as long as one of
+        # them isn't at the end of a line.
+        if max_newlines == 1 and count > max_newlines:
             line.warning("Line contains too many newlines")
 
     def check_df_rc_dot(self, line):
