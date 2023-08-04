@@ -258,7 +258,8 @@ DP_UUID(const void *uuid)
 }
 
 #ifndef DAOS_BUILD_RELEASE
-#define DF_KEY_MAX		8
+#define DF_KEY_STR_SIZE 64
+#define DF_KEY_MAX      8
 
 static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
@@ -301,7 +302,6 @@ daos_key2str(daos_key_t *key)
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }
-#endif
 
 /* Format a directory entry suitable for logging.
  * Take a directory entry (filename) and return something suitable for printing, no not modify the
@@ -326,3 +326,5 @@ daos_de2str(const char *de)
 	}
 	return "<entry too long>";
 }
+
+#endif
