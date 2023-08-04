@@ -278,6 +278,9 @@ func TestServer_mgmtSvc_SystemCheckStart(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			// ensure the slices are in the same order
+			sort.Slice(tc.expDrpcPolicies, func(i, j int) bool { return tc.expDrpcPolicies[i].InconsistCas < tc.expDrpcPolicies[j].InconsistCas })
+			sort.Slice(drpcInput.Policies, func(i, j int) bool { return drpcInput.Policies[i].InconsistCas < drpcInput.Policies[j].InconsistCas })
 			if diff := cmp.Diff(tc.expDrpcPolicies, drpcInput.Policies, cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
 				t.Fatalf("want-, got+:\n%s", diff)
 			}
