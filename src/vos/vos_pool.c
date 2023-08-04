@@ -1289,7 +1289,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	pool->vp_rdb                 = !!(flags & VOS_POF_RDB);
+	pool->vp_rdb    = !!(flags & VOS_POF_RDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
