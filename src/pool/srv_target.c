@@ -1585,6 +1585,7 @@ update_vos_prop_on_targets(void *in)
 	if (ret)
 		goto out;
 
+	printf("pool->sp_global_version = %d\n", pool->sp_global_version);
 	/** If necessary, upgrade the vos pool format */
 	if (pool->sp_global_version >= 3)
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);

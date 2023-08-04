@@ -17,6 +17,7 @@
 
 #define VOS_SUB_OP_MAX	((uint16_t)-2)
 
+#define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
 #define VOS_POOL_DF_2_6 26
 

@@ -1434,6 +1434,8 @@ end:
 	if (rc != 0)
 		return rc;
 
+	if (version >= VOS_POOL_DF_2_2)
+		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
 	if (version >= VOS_POOL_DF_2_6)
