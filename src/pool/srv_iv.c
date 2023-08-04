@@ -1517,7 +1517,7 @@ out_eventual:
 }
 
 int
-ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
+ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop, bool sync)
 {
 	struct pool_iv_entry	*iv_entry = NULL;
 	uint32_t		 iv_entry_size;
@@ -1543,9 +1543,9 @@ ds_pool_iv_prop_update(struct ds_pool *pool, daos_prop_t *prop)
 
 	pool_iv_prop_l2g(prop, &iv_entry->piv_prop);
 
-	rc = pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, pool->sp_uuid,
-			    iv_entry, iv_entry_size, CRT_IV_SHORTCUT_NONE,
-			    CRT_IV_SYNC_LAZY, true);
+	rc =
+	    pool_iv_update(pool->sp_iv_ns, IV_POOL_PROP, pool->sp_uuid, iv_entry, iv_entry_size,
+			   CRT_IV_SHORTCUT_NONE, sync ? CRT_IV_SYNC_EAGER : CRT_IV_SYNC_LAZY, true);
 	if (rc != 0)
 		D_ERROR("pool_iv_update failed "DF_RC"\n", DP_RC(rc));
 
