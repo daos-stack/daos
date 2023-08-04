@@ -1285,6 +1285,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df = pool_df;
+	D_ERROR("pool_df->pd_version = %d\n", POOL_DF_VERSION);
+
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
@@ -1414,6 +1416,7 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	if (version == pool_df->pd_version)
 		return 0;
 
+	D_ERROR("Attempting upgrade from %d to %d\n", pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
