@@ -2698,7 +2698,78 @@ multiple_ec_singv_csum(void **state)
 	client_clear_fault();
 	cleanup_cont_obj(&ctx);
 	cleanup_data(&ctx);
+}
 
+static void
+multiple_ec_singv_csum_with_iod_size_0(void **state)
+{
+	test_arg_t          *arg = *state;
+	struct csum_test_ctx ctx = {0};
+	daos_oclass_id_t     oc  = dts_csum_oc;
+	daos_handle_t        oh;
+	d_iov_t              dkey;
+	d_sg_list_t          sgl[3];
+	d_iov_t              sg_iov[3];
+	daos_iod_t           iod[3];
+	char                *buf[3];
+	size_t               len[3];
+	int                  i, rc;
+
+	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
+		skip();
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
+
+	for (i = 0; i < 3; i++) {
+		buf[i] = NULL;
+		len[i] = 0;
+	}
+
+	len[0] = 195;
+	len[1] = 5822;
+	len[2] = 6162;
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(buf[i], len[i]);
+		assert_non_null(buf[i]);
+		dts_buf_render(buf[i], len[i]);
+	}
+
+	oh = ctx.oh;
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], buf[i], len[i]);
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr     = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs   = &sg_iov[i];
+		iod[i].iod_nr    = 1;
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_type  = DAOS_IOD_SINGLE;
+		iod[i].iod_size  = len[i];
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++) {
+		iod[i].iod_size = DAOS_REC_ANY;
+	}
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_success(rc);
+
+	for (i = 0; i < 3; i++)
+		D_FREE(buf[i]);
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
 }
 
 static int
@@ -2716,98 +2787,82 @@ setup(void **state)
 			  csum_ec_enable, test_case_teardown }
 
 static const struct CMUnitTest csum_tests[] = {
-	CSUM_TEST("DAOS_CSUM00: csum disabled", checksum_disabled),
-	CSUM_TEST("DAOS_CSUM01: simple update with server side verify",
-		  io_with_server_side_verify),
-	CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
-	CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
-		  fetch_with_multiple_extents),
-	CSUM_TEST("DAOS_CSUM03.1: Overwrites after first chunk",
-		overwrites_after_first_chunk),
-	CSUM_TEST("DAOS_CSUM03.2: Unaligned record size",
-		  unaligned_record_size),
-	CSUM_TEST("DAOS_CSUM03.3: Record size is larger than chunk size",
-		record_size_larger_than_chunksize),
-	CSUM_TEST("DAOS_CSUM03.4: Record size is 20",
-		  larger_record_size_with_second_chunk_half_first),
-	CSUM_TEST("DAOS_CSUM03.5: Setup multiple overlapping/unaligned extents",
-		  overlapping_after_first_chunk),
-	CSUM_TEST("DAOS_CSUM03.6: Request the second half of a chunk",
-		  request_second_half_of_chunk),
-	CSUM_TEST("DAOS_CSUM04.1: With holes between extents. All in 1 chunk",
-		  extents_with_holes_1),
-	CSUM_TEST("DAOS_CSUM04.2: With holes at beginning and end. of extent."
-		  " All in 1 chunk",
-		  extents_with_holes_2),
-	CSUM_TEST("DAOS_CSUM04.3: With hole that spans into next chunk",
-		  extents_with_holes_3),
-	CSUM_TEST("DAOS_CSUM04.4: With many holes in a single chunk",
-		  extents_with_holes_4),
-	CSUM_TEST("DAOS_CSUM04.5: With hole that spans many chunks",
-		  extents_with_holes_5),
-	CSUM_TEST("DAOS_CSUM04.6: With holes with larger record size.",
-		  extents_with_holes_6),
-	CSUM_TEST("DAOS_CSUM04.7: With hole caused by a punch.",
-		  extents_with_holes_7),
-	CSUM_TEST("DAOS_CSUM04.8: With extents in reverse order",
-		  extents_in_reverse_order),
-	CSUM_TEST("DAOS_CSUM05: Server data corrupted after RDMA",
-		  test_server_data_corruption),
-	CSUM_TEST("DAOS_CSUM06: Single Value Checksum", single_value),
-	CSUM_TEST("DAOS_CSUM07: Mix of Single Value and Array values iods",
-		  mix_test),
-	CSUM_TEST("DAOS_CSUM08: Update/Fetch A Key", test_update_fetch_a_key),
-	CSUM_TEST("DAOS_CSUM09: Update/Fetch D Key", test_update_fetch_d_key),
-	CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
-	CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
-	CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
-	CSUM_TEST("DAOS_CSUM12.1: Enumerate objects with overlapping "
-		  "extents", test_enumerate_object2),
-	CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
-		  test_enumerate_object_csum_buf_too_small),
-	CSUM_TEST("DAOS_CSUM14 - Get checksum through fetch task api",
-		  test_fetch_task_api),
-	CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
-	CSUM_TEST("DAOS_CSUM14.1: two iods and two recx", two_iods_two_recxs),
-	CSUM_TEST("DAOS_CSUM15: Request non existent data",
-		  request_non_existent_data),
-	CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning",
-		  unaligned_hole_at_beginning),
-	CSUM_TEST("DAOS_CSUM17: Through some random testing found a rounding "
-		  "error", bug_rounding_error),
-	CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
-		  "beginning of the stored extent",
-		  request_is_after_extent_start),
-	CSUM_TEST("DAOS_CSUM19: DTX with checksum enabled against REP obj",
-		  dtx_with_csum),
-	CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
-	CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk",
-		  rebuild_2),
-	CSUM_TEST("DAOS_CSUM_REBUILD03: Array, Data bulk transfer", rebuild_3),
-	CSUM_TEST("DAOS_CSUM_REBUILD04: SV, Data is inlined", rebuild_4),
-	CSUM_TEST("DAOS_CSUM_REBUILD05: SV, Data not inlined, not bulk",
-		  rebuild_5),
-	CSUM_TEST("DAOS_CSUM_REBUILD06: SV, Data bulk transfer", rebuild_6),
-	CSUM_TEST("Punch before insert", punch_before_insert),
-	EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
-	EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
-		     io_with_server_side_verify),
-	EC_CSUM_TEST("DAOS_EC_CSUM02: Fetch EC Array Type", test_fetch_array),
-	EC_CSUM_TEST("DAOS_EC_CSUM03: Single Value Checksum", single_value),
-	EC_CSUM_TEST("DAOS_EC_CSUM04: DTX with checksum enabled against EC obj",
-		     dtx_with_csum),
-	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
-		  "EC chunk", ec_chunk_plus_one),
-	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
-		  "2 EC chunks", ec_two_chunk_plus_one),
-	EC_CSUM_TEST("DAOS_EC_CSUM05: multiple EC single value csum", multiple_ec_singv_csum),
-	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
-		  "running very frequently",
-		  scrubbing_a_lot),
-	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
-		  "in between. Should still be able to destroy cont and pool",
-		  scrubbing_with_large_sleep)
-};
+    CSUM_TEST("DAOS_CSUM00: csum disabled", checksum_disabled),
+    CSUM_TEST("DAOS_CSUM01: simple update with server side verify", io_with_server_side_verify),
+    CSUM_TEST("DAOS_CSUM02: Fetch Array Type", test_fetch_array),
+    CSUM_TEST("DAOS_CSUM03: Setup multiple overlapping/unaligned extents",
+	      fetch_with_multiple_extents),
+    CSUM_TEST("DAOS_CSUM03.1: Overwrites after first chunk", overwrites_after_first_chunk),
+    CSUM_TEST("DAOS_CSUM03.2: Unaligned record size", unaligned_record_size),
+    CSUM_TEST("DAOS_CSUM03.3: Record size is larger than chunk size",
+	      record_size_larger_than_chunksize),
+    CSUM_TEST("DAOS_CSUM03.4: Record size is 20", larger_record_size_with_second_chunk_half_first),
+    CSUM_TEST("DAOS_CSUM03.5: Setup multiple overlapping/unaligned extents",
+	      overlapping_after_first_chunk),
+    CSUM_TEST("DAOS_CSUM03.6: Request the second half of a chunk", request_second_half_of_chunk),
+    CSUM_TEST("DAOS_CSUM04.1: With holes between extents. All in 1 chunk", extents_with_holes_1),
+    CSUM_TEST("DAOS_CSUM04.2: With holes at beginning and end. of extent."
+	      " All in 1 chunk",
+	      extents_with_holes_2),
+    CSUM_TEST("DAOS_CSUM04.3: With hole that spans into next chunk", extents_with_holes_3),
+    CSUM_TEST("DAOS_CSUM04.4: With many holes in a single chunk", extents_with_holes_4),
+    CSUM_TEST("DAOS_CSUM04.5: With hole that spans many chunks", extents_with_holes_5),
+    CSUM_TEST("DAOS_CSUM04.6: With holes with larger record size.", extents_with_holes_6),
+    CSUM_TEST("DAOS_CSUM04.7: With hole caused by a punch.", extents_with_holes_7),
+    CSUM_TEST("DAOS_CSUM04.8: With extents in reverse order", extents_in_reverse_order),
+    CSUM_TEST("DAOS_CSUM05: Server data corrupted after RDMA", test_server_data_corruption),
+    CSUM_TEST("DAOS_CSUM06: Single Value Checksum", single_value),
+    CSUM_TEST("DAOS_CSUM07: Mix of Single Value and Array values iods", mix_test),
+    CSUM_TEST("DAOS_CSUM08: Update/Fetch A Key", test_update_fetch_a_key),
+    CSUM_TEST("DAOS_CSUM09: Update/Fetch D Key", test_update_fetch_d_key),
+    CSUM_TEST("DAOS_CSUM10: Enumerate A Keys", test_enumerate_a_key),
+    CSUM_TEST("DAOS_CSUM11: Enumerate D Keys", test_enumerate_d_key),
+    CSUM_TEST("DAOS_CSUM12: Enumerate objects", test_enumerate_object),
+    CSUM_TEST("DAOS_CSUM12.1: Enumerate objects with overlapping "
+	      "extents",
+	      test_enumerate_object2),
+    CSUM_TEST("DAOS_CSUM13: Enumerate objects with too small csum buffer",
+	      test_enumerate_object_csum_buf_too_small),
+    CSUM_TEST("DAOS_CSUM14 - Get checksum through fetch task api", test_fetch_task_api),
+    CSUM_TEST("DAOS_CSUM14: Many IODs", many_iovs_with_single_values),
+    CSUM_TEST("DAOS_CSUM14.1: two iods and two recx", two_iods_two_recxs),
+    CSUM_TEST("DAOS_CSUM15: Request non existent data", request_non_existent_data),
+    CSUM_TEST("DAOS_CSUM16: Unaligned hole at beginning", unaligned_hole_at_beginning),
+    CSUM_TEST("DAOS_CSUM17: Through some random testing found a rounding "
+	      "error",
+	      bug_rounding_error),
+    CSUM_TEST("DAOS_CSUM18: request extent starts much later than the "
+	      "beginning of the stored extent",
+	      request_is_after_extent_start),
+    CSUM_TEST("DAOS_CSUM19: DTX with checksum enabled against REP obj", dtx_with_csum),
+    CSUM_TEST("DAOS_CSUM_REBUILD01: Array, Data is inlined", rebuild_1),
+    CSUM_TEST("DAOS_CSUM_REBUILD02: Array, Data not inlined, not bulk", rebuild_2),
+    CSUM_TEST("DAOS_CSUM_REBUILD03: Array, Data bulk transfer", rebuild_3),
+    CSUM_TEST("DAOS_CSUM_REBUILD04: SV, Data is inlined", rebuild_4),
+    CSUM_TEST("DAOS_CSUM_REBUILD05: SV, Data not inlined, not bulk", rebuild_5),
+    CSUM_TEST("DAOS_CSUM_REBUILD06: SV, Data bulk transfer", rebuild_6),
+    CSUM_TEST("Punch before insert", punch_before_insert),
+    EC_CSUM_TEST("DAOS_EC_CSUM00: csum disabled", checksum_disabled),
+    EC_CSUM_TEST("DAOS_EC_CSUM01: simple update with server side verify",
+		 io_with_server_side_verify),
+    EC_CSUM_TEST("DAOS_EC_CSUM02: Fetch EC Array Type", test_fetch_array),
+    EC_CSUM_TEST("DAOS_EC_CSUM03: Single Value Checksum", single_value),
+    EC_CSUM_TEST("DAOS_EC_CSUM04: DTX with checksum enabled against EC obj", dtx_with_csum),
+    CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
+	      "EC chunk",
+	      ec_chunk_plus_one),
+    CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
+	      "2 EC chunks",
+	      ec_two_chunk_plus_one),
+    EC_CSUM_TEST("DAOS_EC_CSUM05: multiple EC single value csum", multiple_ec_singv_csum),
+    EC_CSUM_TEST("DAOS_EC_CSUM06: multiple EC single value csum with iod size DAOS_REC_ANY",
+		 multiple_ec_singv_csum_with_iod_size_0),
+    CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
+	      "running very frequently",
+	      scrubbing_a_lot),
+    CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
+	      "in between. Should still be able to destroy cont and pool",
+	      scrubbing_with_large_sleep)};
 
 static int
 run_csum_tests(int rc)
