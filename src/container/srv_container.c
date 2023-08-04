@@ -4791,6 +4791,7 @@ set_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	d_iov_t				 value;
 	int				 rc;
 	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
