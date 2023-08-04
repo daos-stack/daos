@@ -206,6 +206,19 @@ dc_obj_get_redun_lvl(struct dc_object *obj)
 	return props.dcp_redun_lvl;
 }
 
+uint32_t
+dc_obj_hdl2redun_lvl(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 lvl;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	lvl = dc_obj_get_redun_lvl(obj);
+	obj_decref(obj);
+	return lvl;
+}
+
 daos_handle_t
 dc_obj_hdl2cont_hdl(daos_handle_t oh)
 {
@@ -232,13 +245,44 @@ dc_obj_hdl2layout_ver(daos_handle_t oh)
 	ver = obj->cob_layout_version;
 	obj_decref(obj);
 	return ver;
-
 }
 
 static uint32_t
 dc_obj_get_pda(struct dc_object *obj)
 {
 	return daos_cont_props2pda(&obj->cob_co->dc_props, obj_is_ec(obj));
+}
+
+uint32_t
+dc_obj_hdl2pda(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 pda;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	pda = dc_obj_get_pda(obj);
+	obj_decref(obj);
+	return pda;
+}
+
+static uint32_t
+dc_obj_get_pdom(struct dc_object *obj)
+{
+	return obj->cob_co->dc_props.dcp_perf_domain;
+}
+
+uint32_t
+dc_obj_hdl2pdom(daos_handle_t oh)
+{
+	struct dc_object	*obj;
+	uint32_t		 pdom;
+
+	obj = obj_hdl2ptr(oh);
+	D_ASSERT(obj != NULL);
+	pdom = dc_obj_get_pdom(obj);
+	obj_decref(obj);
+	return pdom;
 }
 
 static int
@@ -261,6 +305,7 @@ obj_layout_create(struct dc_object *obj, unsigned int mode, bool refresh)
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	obj->cob_md.omd_pdom_lvl = dc_obj_get_pdom(obj);
 	obj->cob_md.omd_fdom_lvl = dc_obj_get_redun_lvl(obj);
 	obj->cob_md.omd_pda = dc_obj_get_pda(obj);
 	rc = obj_pl_place(map, obj->cob_layout_version, &obj->cob_md, mode,

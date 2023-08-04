@@ -164,6 +164,25 @@ func (c *Config) Validate() error {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
 	}
 
+	errNegative := func(s string) error {
+		return errors.Errorf("%s must not be negative", s)
+	}
+	if c.TargetCount < 0 {
+		return errNegative("target count")
+	}
+	if c.HelperStreamCount < 0 {
+		return errNegative("helper stream count")
+	}
+	if c.ServiceThreadCore < 0 {
+		return errNegative("service thread core index")
+	}
+	if c.MemSize < 0 {
+		return errNegative("mem size")
+	}
+	if c.HugepageSz < 0 {
+		return errNegative("hugepage size")
+	}
+
 	if c.TargetCount == 0 {
 		return errors.New("target count must be nonzero")
 	}
