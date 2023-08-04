@@ -2586,6 +2586,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
+	rc = vos_aggregate_enter(cont->sc_hdl, epr);
+	if (rc)
+		goto update_hae;
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
@@ -2618,6 +2622,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		D_ASSERT(cont->sc_ec_agg_req != NULL);
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
+
+	vos_aggregate_exit(cont->sc_hdl);
 
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {

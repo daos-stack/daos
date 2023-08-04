@@ -2912,7 +2912,6 @@ migrate_obj_ult(void *data)
 			if (tls->mpt_fini)
 				D_GOTO(free_notls, rc);
 		}
-		D_ASSERT(tls->mpt_pool->spc_pool->sp_need_discard == 0);
 		if (tls->mpt_pool->spc_pool->sp_discard_status) {
 			rc = tls->mpt_pool->spc_pool->sp_discard_status;
 			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
