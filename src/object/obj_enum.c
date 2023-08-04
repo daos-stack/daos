@@ -13,38 +13,6 @@
 #include <daos/object.h>
 #include "obj_internal.h"
 
-/* add bytes to the sgl index offset. If the new offset is greater than or equal to the indexed iov
- * len, move the index to the next iov in the sgl.
- */
-static inline void
-sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
-{
-	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE,
-		"Moving sgl index forward by %lu bytes."
-		"Idx: " DF_SGL_IDX "\n",
-		bytes, DP_SGL_IDX(sgl_idx));
-
-	/** move to next iov if necessary */
-	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
-		sgl_idx->iov_idx++;
-		sgl_idx->iov_offset = 0;
-		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
-	}
-	D_DEBUG(DB_TRACE, "Idx: " DF_SGL_IDX "\n", DP_SGL_IDX(sgl_idx));
-}
-
-static inline void *
-sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
-{
-	D_DEBUG(DB_TRACE, "Idx: " DF_SGL_IDX "\n", DP_SGL_IDX(sgl_idx));
-	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
-		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
-		return NULL;
-	}
-	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
-}
-
 static d_iov_t *
 io_csums_iov(struct dc_obj_enum_unpack_io *io)
 {
