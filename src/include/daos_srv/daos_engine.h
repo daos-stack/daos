@@ -779,7 +779,7 @@ ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
 
 int
 obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
-		struct daos_obj_md *md, uint32_t *tgt, uint32_t *shard_p);
+		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
