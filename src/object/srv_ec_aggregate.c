@@ -57,7 +57,7 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
-#define EC_AGG_ITERATION_MAX	2048
+#define EC_AGG_ITERATION_MAX	1024
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.

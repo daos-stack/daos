@@ -865,7 +865,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Wait for EC aggregation to finish. NB: migrate needs to wait for EC aggregation to finish */
-	cont_child->sc_migrating = 1;
 	while (cont_child->sc_ec_agg_active) {
 		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
 			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
@@ -911,10 +910,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 close:
 	vos_cont_close(coh);
 
-	if (cont_child != NULL) {
-		cont_child->sc_migrating = 0;
+	if (cont_child != NULL)
 		ds_cont_child_put(cont_child);
-	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),

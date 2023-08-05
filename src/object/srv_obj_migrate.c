@@ -1381,7 +1381,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 						 min_eph,
 						 DIOF_FOR_MIGRATION | DIOF_EC_RECOV_FROM_PARITY,
 						 ds_cont);
-		if (rc < 0)
+		if (rc != 0)
 			D_GOTO(out, rc);
 	}
 
@@ -1405,7 +1405,7 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 					/* In some cases, EC aggregation failed to delete the
 					 * replicate recx, then during rebuild these replicate
 					 * recx might be rebuilt again. Since the data rebuilt
-					 * from parity will be rebuilt first. so let's ingore
+					 * from parity will be rebuilt first. so let's ignore
 					 * this replicate recx for now.
 					 */
 					D_WARN(DF_UOID" "DF_RECX"/"DF_X64" already rebuilt\n",

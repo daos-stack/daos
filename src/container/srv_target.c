@@ -55,10 +55,10 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* If the container is discarding the object mostly due to rebuild failure
-	 * reclaim, let's abort the aggregation to let discard proceed.
-	 */
-	if (cont->sc_migrating)
+	/* EC aggregation needs to be parsed during rebuilding to avoid the race
+	 * between EC rebuild and EC aggregation.
+	 **/
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
