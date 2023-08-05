@@ -17,6 +17,8 @@
 #include "chk.pb-c.h"
 #include "chk_internal.h"
 
+/* Only for test. */
+
 struct chk_pool_bundle {
 	d_list_t		*cpb_head;
 	uuid_t			 cpb_uuid;
