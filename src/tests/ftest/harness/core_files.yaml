@@ -5,6 +5,9 @@ server_config:
   engines_per_host: 1
   engines:
     0:
+      targets: 4
+      env_vars:
+        - DAOS_TARGET_OVERSUBSCRIBE=1
       storage:
         0:
           class: ram

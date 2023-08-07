@@ -50,12 +50,12 @@ func inList(c Component, compList []Component) bool {
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
 	testCases := map[string][]Component{
-		"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 		"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
 		"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
 		"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 		"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
+		"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
 		"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
 		"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
@@ -63,7 +63,6 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
 		"/ctl.CtlSvc/PrepShutdownRanks":          {ComponentServer},
 		"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
-		"/ctl.CtlSvc/PingRanks":                  {ComponentServer},
 		"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 		"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
 		"/mgmt.MgmtSvc/Join":                     {ComponentServer},

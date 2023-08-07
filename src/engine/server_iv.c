@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -169,6 +169,9 @@ ds_iv_ns_get(struct ds_iv_ns *ns)
 	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
+
+static void
+ds_iv_ns_destroy(void *ns);
 
 void
 ds_iv_ns_put(struct ds_iv_ns *ns)
@@ -605,6 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	if (rc)
 		D_GOTO(out, rc);
 
+	/* A failure here appears to leak the memory from ivc_value_alloc() above for pools */
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
@@ -627,7 +631,7 @@ out:
 	return rc;
 }
 
-static int
+static void
 ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 {
 	struct ds_iv_ns		*ns = NULL;
@@ -639,7 +643,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	if (rc != 0) {
 		if (ns != NULL)
 			ds_iv_ns_put(ns); /* balance ivc_on_get */
-		return rc;
+		return;
 	}
 	D_ASSERT(ns != NULL);
 
@@ -653,9 +657,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
-	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
-	if (rc)
-		D_GOTO(put, rc);
+	entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
 
 	D_FREE(priv_entry);
 	if (--entry->iv_ref > 0)
@@ -669,7 +671,7 @@ put:
 	ds_iv_ns_put(ns);
 	ds_iv_ns_put(ns);
 
-	return rc;
+	return;
 }
 
 static int
@@ -783,7 +785,7 @@ iv_ns_create_internal(unsigned int ns_id, uuid_t pool_uuid,
 }
 
 /* Destroy iv ns. */
-void
+static void
 ds_iv_ns_destroy(void *ns)
 {
 	struct ds_iv_ns *iv_ns = ns;
@@ -1127,7 +1129,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
 		if (rc) {
 			D_FREE(ult_arg);
-			return -DER_NOMEM;
+			return rc;
 		}
 	}
 
