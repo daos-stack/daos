@@ -31,7 +31,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 8
+#define DAOS_OBJ_VERSION 9
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -107,7 +107,8 @@ enum obj_rpc_opc {
 };
 #undef X
 
-extern struct crt_proto_format obj_proto_fmt;
+extern struct crt_proto_format obj_proto_fmt_0;
+extern struct crt_proto_format obj_proto_fmt_1;
 extern int dc_obj_proto_version;
 
 /* Helper function to convert opc to name */
