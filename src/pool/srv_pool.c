@@ -1540,8 +1540,6 @@ check_map:
 	*global_version_out = global_version;
 	*map_buf_out = map_buf;
 	*map_version_out = map_version;
-	if (rc != 0)
-		D_FREE(map_buf);
 out:
 	return rc;
 }
@@ -1762,7 +1760,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
-		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
+		D_ERROR("ds_pool_iv_prop_update failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1777,7 +1775,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
 				       cont_hdl_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_iv_srv_hdl_update failed %d.\n", rc);
+		D_ERROR("ds_pool_iv_srv_hdl_update failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -2374,7 +2372,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, NULL, 0);
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &svc_list);
 		if (rc) {
-			D_ERROR("get svc list failed: rc %d\n", rc);
+			D_ERROR("get svc list failed: rc " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out_prop, rc);
 		}
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
@@ -5223,6 +5221,11 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 
 	D_DEBUG(DB_MGMT, DF_UUID": Setting pool prop\n", DP_UUID(pool_uuid));
 
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_PERF_DOMAIN)) {
+		D_ERROR("Can't set perf_domain on existing pool.\n");
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
 		D_ERROR("Can't set set redundancy factor on existing pool.\n");
 		D_GOTO(out, rc = -DER_NO_PERM);
@@ -6802,8 +6805,8 @@ rechoose:
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0)
-		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
-			"rc: %d\n", DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": pool destroy failed to evict handles, rc: " DF_RC "\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 	if (count)
 		*count = out->pvo_n_hdls_evicted;
 

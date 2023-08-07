@@ -800,6 +800,22 @@ class TestPool(TestDaosApiBase):
             acl_file = self.acl_file.value
         return self.dmg.pool_update_acl(pool=self.identifier, acl_file=acl_file, entry=entry)
 
+    def upgrade(self, *args, **kwargs):
+        """Call dmg pool upgrade.
+
+        Args:
+            args (tuple, optional): positional arguments to DmgCommand.pool_upgrade
+            kwargs (dict, optional): named arguments to DmgCommand.pool_upgrade
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        Returns:
+            dict: json output of the command
+
+        """
+        return self.dmg.pool_upgrade(pool=self.identifier, *args, **kwargs)
+
     @fail_on(DaosApiError)
     def get_info(self):
         """Query the pool for information.

@@ -106,7 +106,9 @@ type systemQueryCmd struct {
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
 	rankListCmd
-	Verbose bool `long:"verbose" short:"v" description:"Display more member details"`
+	Verbose      bool                  `long:"verbose" short:"v" description:"Display more member details"`
+	NotOK        bool                  `long:"not-ok" description:"Display components in need of administrative investigation"`
+	WantedStates ui.MemberStateSetFlag `long:"with-states" description:"Only show engines in one of a set of comma-separated states"`
 }
 
 // Execute is run when systemQueryCmd activates.
@@ -115,12 +117,17 @@ func (cmd *systemQueryCmd) Execute(_ []string) (errOut error) {
 		errOut = errors.Wrap(errOut, "system query failed")
 	}()
 
+	if cmd.NotOK && !cmd.WantedStates.Empty() {
+		return errors.New("--not-ok and --with-states options cannot be set together")
+	}
 	if err := cmd.validateHostsRanks(); err != nil {
 		return err
 	}
 	req := new(control.SystemQueryReq)
 	req.Hosts.Replace(&cmd.Hosts.HostSet)
 	req.Ranks.Replace(&cmd.Ranks.RankSet)
+	req.NotOK = cmd.NotOK
+	req.WantedStates = cmd.WantedStates.States
 
 	resp, err := control.SystemQuery(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

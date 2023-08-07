@@ -286,8 +286,20 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 cancel:
 	if (dtx_is_valid_handle(dth_in)) {
 		dae = dth->dth_ent;
-		if (dae != NULL)
+		if (dae != NULL) {
+			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
+				dae->dae_preparing = 0;
+				rc = vos_dtx_abort_internal(cont, dae, true);
+				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
+					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
+					 DP_DTI(&dth->dth_xid), rc);
+
+				/* Aborted by race, return -DER_INPROGRESS for client retry. */
+				return -DER_INPROGRESS;
+			}
+
 			dae->dae_preparing = 0;
+		}
 
 		if (unlikely(dth->dth_need_validation && dth->dth_active)) {
 			/* Aborted by race during the yield for local TX commit. */
