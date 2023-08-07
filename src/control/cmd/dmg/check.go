@@ -281,7 +281,7 @@ func (f *getRepPolFlag) UnmarshalFlag(fv string) error {
 
 	i := 0
 	f.ReqClasses = make([]control.SystemCheckFindingClass, len(f.ParsedProps))
-	for class := range f.ParsedProps {
+	for _, class := range f.ParsedProps.ToSlice() {
 		if err := f.ReqClasses[i].FromString(class); err != nil {
 			return err
 		}
@@ -304,7 +304,8 @@ func (f *getRepPolFlag) Complete(match string) []flags.Completion {
 type checkGetPolicyCmd struct {
 	checkCmdBase
 
-	Args struct {
+	Latest bool `short:"d" long:"latest" description:"Fetch the last policy used by the checker."`
+	Args   struct {
 		Classes getRepPolFlag `description:"Inconsistency class names"`
 	} `positional-args:"yes"`
 }
@@ -313,6 +314,7 @@ func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
 	req := new(control.SystemCheckGetPolicyReq)
+	req.Latest = cmd.Latest
 	req.SetClasses(cmd.Args.Classes.ReqClasses)
 	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {

@@ -170,6 +170,7 @@ message CheckPropResp {
 message CheckGetPolicyReq {
 	string sys = 1; // DAOS system identifier.
 	repeated chk.CheckInconsistClass classes = 2;
+	bool latest = 3;
 }
 
 // CheckGetPolicyResp returns the result of check prop and the properties when start check.
