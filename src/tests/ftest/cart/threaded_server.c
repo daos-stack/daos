@@ -108,6 +108,9 @@ int main(int argc, char **argv)
 	int                     rc;
 	int			i;
 	int                     thread_count;
+	crt_group_t		*grp;
+	char			*uri;
+
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -116,6 +119,14 @@ int main(int argc, char **argv)
 	if (rc != 0) {
 		printf("Could not start server, rc = %d", rc);
 		goto log_fini;
+	}
+
+	grp = crt_group_lookup("manyserver");
+
+	rc = crt_rank_self_set(0, 1);
+	if (rc != 0) {
+		D_ERROR("failed to set self rank\n");
+		goto fini;
 	}
 
 	rc = crt_proto_register(&my_proto_fmt_threaded_server);
@@ -129,6 +140,21 @@ int main(int argc, char **argv)
 		printf("Failed to create context: " DF_RC "\n", DP_RC(rc));
 		goto fini;
 	}
+
+	rc = crt_rank_uri_get(grp, 0, 0, &uri);
+	if (rc != 0) {
+		D_ERROR("Failed to get uri; rc=%d\n", rc);
+		goto fini;
+	}
+
+	printf("Server uri: %s\n", uri);
+
+	rc = crt_group_config_save(grp, true);
+	if (rc != 0) {
+		D_ERROR("Failed to save config file; rc = %d\n", rc);
+		goto fini;
+	}
+
 
 	for (thread_count = 0; thread_count < NUM_THREADS; thread_count++) {
 		rc = pthread_create(&thread[thread_count], NULL, progress, &status);
