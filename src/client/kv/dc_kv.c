@@ -248,6 +248,7 @@ dc_kv_close_direct(daos_handle_t oh)
 		return rc;
 	}
 
+	kv_hdl_unlink(kv);
 	/* -1 for ref taken here */
 	kv_decref(kv);
 	/* -1 for kv handle */

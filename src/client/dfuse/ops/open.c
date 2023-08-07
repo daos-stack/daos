@@ -30,7 +30,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
 	dfuse_open_handle_init(dfuse_info, oh, ie);
-
 	oh->doh_parent_dir = dfuse_inode_lookup(dfuse_info, ie->ie_parent);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
