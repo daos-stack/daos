@@ -256,15 +256,19 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 			       struct dcs_csum_info *b)
 {
 	uint32_t	a_len = a->cs_len * a->cs_nr;
-	uint32_t	b_len = b->cs_len * b->cs_nr;
+	uint32_t	b_len;
 	bool		match = true;
 	int		i;
+
+	if (b == NULL)
+		return false;
 
 	if (a->cs_type != b->cs_type) {
 		D_ERROR("Checksum types don't match. %d != %d\n", a->cs_type, b->cs_type);
 		return false;
 	}
 
+	b_len = b->cs_len * b->cs_nr;
 	if (a_len != b_len) {
 		D_ERROR("Checksum lengths don't match. %d != %d\n", a_len, b_len);
 		return false;
@@ -986,7 +990,6 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 					"received "DF_CI"\n",
 					DP_CI(new_iod_csums->ic_data[i]),
 					DP_CI(iod_csum->ic_data[i]));
-
 			D_GOTO(done, rc = -DER_CSUM);
 		}
 	}
