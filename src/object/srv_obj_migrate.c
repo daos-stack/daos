@@ -2713,7 +2713,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		}
 
 		/* Each object enumeration RPC will at least one OID */
-		if (num <= minimum_nr) {
+		if (num <= minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
 			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
