@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -70,8 +70,7 @@ func (cdb *CheckerDatabase) addFinding(finding *checker.Finding) error {
 }
 
 func (cdb *CheckerDatabase) updateFinding(finding *checker.Finding) error {
-	_, found := cdb.Findings[finding.Seq]
-	if !found {
+	if _, found := cdb.Findings[finding.Seq]; !found {
 		return ErrFindingNotFound(finding.Seq)
 	}
 	// TODO: Selectively update fields?
@@ -81,8 +80,7 @@ func (cdb *CheckerDatabase) updateFinding(finding *checker.Finding) error {
 }
 
 func (cdb *CheckerDatabase) removeFinding(finding *checker.Finding) error {
-	_, found := cdb.Findings[finding.Seq]
-	if !found {
+	if _, found := cdb.Findings[finding.Seq]; !found {
 		return ErrFindingNotFound(finding.Seq)
 	}
 
