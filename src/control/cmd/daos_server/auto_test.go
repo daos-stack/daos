@@ -520,7 +520,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					t.Fatal("no output from config generate print function")
 				}
 				outFirstLine := strings.Split(buf.String(), "\n")[0]
-				test.AssertTrue(t, strings.Contains(outFirstLine, tc.expOutPrefix),
+				test.AssertTrue(t, strings.HasSuffix(outFirstLine, tc.expOutPrefix),
 					fmt.Sprintf("test: %s, expected %q to be included in the "+
 						"first line of output: %q", name, tc.expOutPrefix,
 						outFirstLine))

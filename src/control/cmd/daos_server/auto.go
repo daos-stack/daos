@@ -184,13 +184,14 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
-	if err != nil {
-		return nil, err
-	}
 
 	if !dbgEnabled {
-		// Restore original logging behaviour.
+		// Restore original logging behavior.
 		cmd.Logger = oldLog
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	cmd.Debugf("control API ConfGenerate resp: %+v", resp)

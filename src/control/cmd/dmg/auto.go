@@ -46,11 +46,6 @@ type configGenCmd struct {
 }
 
 func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
-	// TODO: decide whether we want meaningful JSON output
-	if cmd.JSONOutputEnabled() {
-		return nil, cmd.OutputJSON(nil, errors.New("JSON output not supported"))
-	}
-
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
@@ -107,6 +102,16 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	}
 
 	resp, err := control.ConfGenerateRemote(ctx, req)
+
+	if !dbgEnabled {
+		// Restore original logging behavior.
+		cmd.Logger = oldLog
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
+	}
+
 	if err != nil {
 		cge, ok := errors.Cause(err).(*control.ConfGenerateError)
 		if !ok {
@@ -123,18 +128,13 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 		return nil, err
 	}
 
-	if !dbgEnabled {
-		// Restore original logging behaviour.
-		cmd.Logger = oldLog
-	}
-
 	cmd.Debugf("control API ConfGenerateRemote resp: %+v", resp)
 	return &resp.Server, nil
 }
 
 func (cmd *configGenCmd) confGenPrint(ctx context.Context) error {
 	cfg, err := cmd.confGen(ctx)
-	if err != nil {
+	if cmd.JSONOutputEnabled() || err != nil {
 		return err
 	}
 
