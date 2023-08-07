@@ -615,7 +615,7 @@ open_handle_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_obj, rc);
+		return rc;
 	}
 
 	/** check and set array metadata in case of array_open */
@@ -826,6 +826,31 @@ err_put1:
 err_ptask:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_array_close_direct(daos_handle_t oh)
+{
+	struct dc_array		*array;
+	int			rc;
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	rc = daos_obj_close(array->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		array_decref(array);
+		return rc;
+	}
+
+	array_hdl_unlink(array);
+	/* -1 for ref taken here */
+	array_decref(array);
+	/* -1 for array handle */
+	array_decref(array);
+	return 0;
 }
 
 int

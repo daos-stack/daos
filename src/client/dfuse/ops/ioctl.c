@@ -304,14 +304,16 @@ handle_cont_qe_ioctl_helper(fuse_req_t req, const struct dfuse_mem_query *in_que
 	struct dfuse_mem_query query      = {};
 
 	if (in_query && in_query->ino) {
-		d_list_t *rlink;
+		struct dfuse_inode_entry *ie;
 
-		rlink =
-		    d_hash_rec_find(&dfuse_info->dpi_iet, &in_query->ino, sizeof(in_query->ino));
-		if (rlink) {
+		D_RWLOCK_WRLOCK(&dfuse_info->di_forget_lock);
+
+		ie = dfuse_inode_lookup(dfuse_info, in_query->ino);
+		if (ie) {
 			query.found = true;
-			d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
+			dfuse_inode_decref(dfuse_info, ie);
 		}
+		D_RWLOCK_UNLOCK(&dfuse_info->di_forget_lock);
 	}
 
 	query.inode_count     = atomic_load_relaxed(&dfuse_info->di_inode_count);
@@ -326,11 +328,10 @@ static void
 handle_cont_query_ioctl(fuse_req_t req, const void *in_buf, size_t in_bufsz)
 {
 	struct dfuse_info            *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_mem_query        query      = {};
 	const struct dfuse_mem_query *in_query   = in_buf;
 	int                           rc;
 
-	if (in_bufsz != sizeof(query))
+	if (in_bufsz != sizeof(struct dfuse_mem_query))
 		D_GOTO(err, rc = EIO);
 
 	handle_cont_qe_ioctl_helper(req, in_query);

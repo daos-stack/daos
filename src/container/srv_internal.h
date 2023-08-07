@@ -145,6 +145,7 @@ struct cont_iv_prop {
 	uint64_t	cip_ec_cell_sz;
 	uint32_t	cip_ec_pda;
 	uint32_t	cip_rp_pda;
+	uint32_t	cip_perf_domain;
 	uint32_t	cip_global_version;
 	uint32_t	cip_obj_version;
 	uint64_t	cip_valid_bits;

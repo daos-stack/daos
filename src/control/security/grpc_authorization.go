@@ -22,12 +22,12 @@ func (c Component) String() string {
 
 // methodAuthorizations is the map for checking which components are authorized to make the specific method call.
 var methodAuthorizations = map[string][]Component{
-	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 	"/ctl.CtlSvc/StorageScan":                {ComponentAdmin},
 	"/ctl.CtlSvc/StorageFormat":              {ComponentAdmin},
 	"/ctl.CtlSvc/StorageNvmeRebind":          {ComponentAdmin},
 	"/ctl.CtlSvc/StorageNvmeAddDevice":       {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":                {ComponentAdmin},
+	"/ctl.CtlSvc/CollectLog":                 {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareQuery":              {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareUpdate":             {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                   {ComponentAdmin},
@@ -35,7 +35,6 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/SetEngineLogMasks":          {ComponentAdmin},
 	"/ctl.CtlSvc/PrepShutdownRanks":          {ComponentServer},
 	"/ctl.CtlSvc/StopRanks":                  {ComponentServer},
-	"/ctl.CtlSvc/PingRanks":                  {ComponentServer},
 	"/ctl.CtlSvc/ResetFormatRanks":           {ComponentServer},
 	"/ctl.CtlSvc/StartRanks":                 {ComponentServer},
 	"/mgmt.MgmtSvc/Join":                     {ComponentServer},
@@ -66,7 +65,6 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/ListContainers":           {ComponentAdmin},
 	"/mgmt.MgmtSvc/ContSetOwner":             {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCleanup":            {ComponentAdmin},
-	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckEnable":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckDisable":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemCheckStart":         {ComponentAdmin},
@@ -78,6 +76,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/FaultInjectReport":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectPoolFault":     {ComponentAdmin},
 	"/mgmt.MgmtSvc/FaultInjectMgmtPoolFault": {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolUpgrade":              {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemGetAttr":            {ComponentAdmin},
 	"/mgmt.MgmtSvc/SystemSetProp":            {ComponentAdmin},

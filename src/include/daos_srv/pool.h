@@ -52,6 +52,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;

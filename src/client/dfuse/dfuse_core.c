@@ -1042,6 +1042,8 @@ dfuse_fs_init(struct dfuse_info *fs_handle)
 
 	D_SPIN_INIT(&fs_handle->di_lock, 0);
 
+	D_RWLOCK_INIT(&fs_handle->di_forget_lock, 0);
+
 	for (i = 0; i < fs_handle->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->di_eqt[i];
 
@@ -1071,6 +1073,7 @@ dfuse_fs_init(struct dfuse_info *fs_handle)
 
 err_eq:
 	D_SPIN_DESTROY(&fs_handle->di_lock);
+	D_RWLOCK_DESTROY(&fs_handle->di_forget_lock);
 
 	for (i = 0; i < fs_handle->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &fs_handle->di_eqt[i];
@@ -1136,11 +1139,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
-		if (rc == ENOMEM)
-			rc = dfs_release(ie->ie_obj);
-		if (rc) {
+		if (rc)
 			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
-		}
 	}
 
 	if (ie->ie_root) {
@@ -1529,6 +1529,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 	int i;
 
 	D_SPIN_DESTROY(&dfuse_info->di_lock);
+	D_RWLOCK_DESTROY(&dfuse_info->di_forget_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
