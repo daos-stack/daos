@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -388,16 +388,23 @@ const (
 	SystemCheckScanPhaseDone             = SystemCheckScanPhase(chkpb.CheckScanPhase_CSP_DONE)
 )
 
+// SystemCheckRepairChoice describes a possible means to repair a checker error.
 type SystemCheckRepairChoice struct {
 	Action SystemCheckRepairAction
 	Info   string
 }
 
+// SystemCheckReport contains the results of a system check.
 type SystemCheckReport struct {
 	chkpb.CheckReport
 }
 
+// RepairChoices lists all possible repair options for this particular report.
 func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
+	if r == nil {
+		return nil
+	}
+
 	choices := make([]*SystemCheckRepairChoice, len(r.ActChoices))
 	for i, c := range r.ActChoices {
 		info := r.ActMsgs[i]
@@ -416,16 +423,19 @@ func (r *SystemCheckReport) RepairChoices() []*SystemCheckRepairChoice {
 	return choices
 }
 
+// IsInteractive indicates whether this report requires user interaction to make a repair choice.
 func (r *SystemCheckReport) IsInteractive() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_INTERACT
 }
 
+// IsRemovedPool indicates whether the error detected in this report indicates a missing pool.
 func (r *SystemCheckReport) IsRemovedPool() bool {
 	return r.Action == chkpb.CheckInconsistAction_CIA_DISCARD &&
 		(r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE ||
 			r.Class == chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_MS)
 }
 
+// Resolution returns a string describing the action taken to resolve this report.
 func (r *SystemCheckReport) Resolution() string {
 	msg := SystemCheckRepairAction(r.Action).String()
 	if len(r.ActMsgs) == 1 {
