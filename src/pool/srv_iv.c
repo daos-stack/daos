@@ -1018,7 +1018,7 @@ update_iv_cache:
 	 */
 	if (!pool->sp_stopping) {
 		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-		if (rc == 0 && pool_key->pik_eph != 0)
+		if (rc == 0 && pool_key->pik_eph != 0 && ent_pool_key->pik_eph < pool_key->pik_eph)
 			ent_pool_key->pik_eph = pool_key->pik_eph;
 	}
 out_put:
