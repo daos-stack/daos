@@ -373,7 +373,7 @@ btr_rec_verify_delete(umem_off_t *rec, d_iov_t *key)
 
 	if ((sizeof(irec->ir_key) != key->iov_len) ||
 		(irec->ir_key != *((uint64_t *)key->iov_buf))) {
-		D_ERROR("Preserved record mismatch while delete\n");
+		D_ERROR("Preserved record mismatch while delete");
 		return -1;
 	}
 
@@ -499,7 +499,7 @@ ik_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_LOOKUP:
-			D_DEBUG(DB_TEST, "Looking for "DF_U64"\n", key);
+			D_DEBUG(DB_TEST, "Looking for " DF_U64, key);
 
 			d_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(ik_toh, &key_iov, &val_iov);

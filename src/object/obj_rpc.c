@@ -192,7 +192,7 @@ crt_proc_daos_iod_and_csum(crt_proc_t proc, crt_proc_op_t proc_op,
 
 #if 0
 	if (iod->iod_nr == 0 && iod->iod_type != DAOS_IOD_ARRAY) {
-		D_ERROR("invalid I/O descriptor, iod_nr = 0\n");
+D_ERROR("invalid I/O descriptor, iod_nr = 0");
 		D_GOTO(out, rc = -DER_HG);
 	}
 #else

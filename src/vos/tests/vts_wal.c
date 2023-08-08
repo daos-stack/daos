@@ -134,19 +134,19 @@ copy_pool_file(struct wal_test_args *arg, const char *src_pool, const char *dst_
 
 	rc = stat(src_pool, &lstat);
 	if (rc != 0) {
-		D_ERROR("Stat source pool:%s failed. %s\n", src_pool, strerror(errno));
+		D_ERROR("Stat source pool:%s failed. %s", src_pool, strerror(errno));
 		return -1;
 	}
 
 	src_fd = open(src_pool, O_RDONLY);
 	if (src_fd < 0) {
-		D_ERROR("Open source pool:%s failed. %s\n", src_pool, strerror(errno));
+		D_ERROR("Open source pool:%s failed. %s", src_pool, strerror(errno));
 		return -1;
 	}
 
 	dst_fd = open(dst_pool, O_WRONLY);
 	if (dst_fd < 0) {
-		D_ERROR("Open dest pool:%s failed. %s\n", dst_pool, strerror(errno));
+		D_ERROR("Open dest pool:%s failed. %s", dst_pool, strerror(errno));
 		close(src_fd);
 		return -1;
 	}
@@ -159,16 +159,16 @@ copy_pool_file(struct wal_test_args *arg, const char *src_pool, const char *dst_
 
 		read_sz = read(src_fd, arg->wta_buf, copy_sz);
 		if (read_sz < copy_sz) {
-			D_ERROR("Failed to read "DF_U64" bytes from source pool:%s. %s\n",
-				copy_sz, src_pool, strerror(errno));
+			D_ERROR("Failed to read " DF_U64 " bytes from source pool:%s. %s", copy_sz,
+				src_pool, strerror(errno));
 			rc = -1;
 			break;
 		}
 
 		read_sz = write(dst_fd, arg->wta_buf, copy_sz);
 		if (read_sz < copy_sz) {
-			D_ERROR("Failed to write "DF_U64" bytes to dest pool:%s. %s\n",
-				copy_sz, dst_pool, strerror(errno));
+			D_ERROR("Failed to write " DF_U64 " bytes to dest pool:%s. %s", copy_sz,
+				dst_pool, strerror(errno));
 			rc = -1;
 			break;
 		}

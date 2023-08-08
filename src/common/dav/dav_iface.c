@@ -92,11 +92,11 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 	hdl->do_store = store;
 	if (hdl->do_store->stor_priv == NULL) {
-		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
+		D_ERROR("meta context not defined. WAL commit disabled for %s", path);
 	} else {
 		rc = umem_cache_alloc(store, 0);
 		if (rc != 0) {
-			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "Could not allocate page cache");
 			err = rc;
 			goto out1;
 		}
@@ -107,7 +107,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	num_pages = (sz + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 	rc = umem_cache_map_range(hdl->do_store, 0, base, num_pages);
 	if (rc != 0) {
-		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not allocate page cache");
 		err = rc;
 		goto out2;
 	}
@@ -137,7 +137,7 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 		rc = store->stor_ops->so_load(store, hdl->do_base);
 		if (rc) {
-			D_ERROR("Failed to read blob to vos file %s, rc = %d\n", path, rc);
+			D_ERROR("Failed to read blob to vos file %s, rc = %d", path, rc);
 			goto out2;
 		}
 

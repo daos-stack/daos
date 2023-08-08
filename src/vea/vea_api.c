@@ -23,16 +23,14 @@ erase_md(struct umem_instance *umem, struct vea_space_df *md)
 	if (rc == 0) {
 		rc = dbtree_destroy(free_btr, NULL);
 		if (rc)
-			D_ERROR("destroy free extent tree error: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "destroy free extent tree error");
 	}
 
 	rc = dbtree_open_inplace(&md->vsd_vec_tree, &uma, &vec_btr);
 	if (rc == 0) {
 		rc = dbtree_destroy(vec_btr, NULL);
 		if (rc)
-			D_ERROR("destroy vector tree error: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "destroy vector tree error");
 	}
 }
 
@@ -86,7 +84,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 * largest extent won't overflow.
 	 */
 	if (tot_blks > UINT32_MAX) {
-		D_ERROR("Capacity "DF_U64" is too large.\n", capacity);
+		D_ERROR("Capacity " DF_U64 " is too large", capacity);
 		return -DER_INVAL;
 	}
 
@@ -206,7 +204,7 @@ vea_load(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	D_ASSERT(vsip != NULL);
 
 	if (md->vsd_magic != VEA_MAGIC) {
-		D_DEBUG(DB_IO, "load unformatted blob\n");
+		D_DEBUG(DB_IO, "load unformatted blob");
 		return -DER_UNINIT;
 	}
 
@@ -695,7 +693,7 @@ int
 vea_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
 {
 	if (!umem_tx_none(vsi->vsi_umem)) {
-		D_ERROR("This function isn't supposed to be called in transaction!\n");
+		D_ERROR("This function isn't supposed to be called in transaction!");
 		return -DER_INVAL;
 	}
 

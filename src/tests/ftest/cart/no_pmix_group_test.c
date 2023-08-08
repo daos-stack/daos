@@ -91,8 +91,7 @@ handler_ping(crt_rpc_t *rpc)
 	crt_context_idx(rpc->cr_ctx, &my_tag);
 
 	if (my_tag != input->tag) {
-		D_ERROR("Request was sent to wrong tag. Expected %lu got %d\n",
-			input->tag, my_tag);
+		D_ERROR("Request was sent to wrong tag. Expected %lu got %d", input->tag, my_tag);
 		assert(0);
 	}
 
@@ -174,7 +173,7 @@ __dump_ranks(crt_group_t *grp) {
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_ranks_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -216,47 +215,42 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size, int line)
 
 	rc = d_rank_list_dup_sort_uniq(&exp_sorted, &exp_list);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d\n", rc);
+		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
-		D_ERROR("Line:%d crt_group_size() failed; rc=%d\n", line, rc);
+		D_ERROR("Line:%d crt_group_size() failed; rc=%d", line, rc);
 		assert(0);
 	}
 
 	if (grp_size != size) {
-		D_ERROR("Line:%d group_size expected=%d got=%d\n",
-			line, size, grp_size);
+		D_ERROR("Line:%d group_size expected=%d got=%d", line, size, grp_size);
 		assert(0);
 	}
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("Line:%d crt_group_ranks_get() failed; rc=%d\n",
-			line, rc);
+		D_ERROR("Line:%d crt_group_ranks_get() failed; rc=%d", line, rc);
 		assert(0);
 	}
 
 	if (rank_list->rl_nr != size) {
-		D_ERROR("Line:%d rank_list size expected=%d got=%d\n",
-			line, size, rank_list->rl_nr);
+		D_ERROR("Line:%d rank_list size expected=%d got=%d", line, size, rank_list->rl_nr);
 		assert(0);
 	}
 
 	rc = d_rank_list_dup_sort_uniq(&sorted_list, rank_list);
 	if (rc != 0) {
-		D_ERROR("Line:%d d_rank_list_dup_sort_uniq() failed; rc=%d\n",
-			line, rc);
+		D_ERROR("Line:%d d_rank_list_dup_sort_uniq() failed; rc=%d", line, rc);
 		assert(0);
 	}
 
 	for (i = 0; i < size; i++) {
 		if (sorted_list->rl_ranks[i] != exp_sorted->rl_ranks[i]) {
-			D_ERROR("Line:%d rank_list[%d] expected=%d got=%d\n",
-				line, i, sorted_list->rl_ranks[i],
-				exp_sorted->rl_ranks[i]);
+			D_ERROR("Line:%d rank_list[%d] expected=%d got=%d", line, i,
+				sorted_list->rl_ranks[i], exp_sorted->rl_ranks[i]);
 			__dump_ranklist("Expected\n", exp_sorted);
 			__dump_ranklist("Actual\n", sorted_list);
 			assert(0);
@@ -340,32 +334,32 @@ int main(int argc, char **argv)
 	DBG_PRINT("Server starting up\n");
 	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);
+		D_ERROR("crt_proto_register() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
-		D_ERROR("Failed to lookup group\n");
+		D_ERROR("Failed to lookup group");
 		assert(0);
 	}
 
 	rc = crt_group_auto_rank_remove(grp, true);
 	if (rc != 0) {
-		D_ERROR("crt_group_auto_rank_remove() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_auto_rank_remove() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	for (i = 0; i < NUM_SERVER_CTX; i++) {
 		rc = crt_context_create(&crt_ctx[i]);
 		if (rc != 0) {
-			D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+			D_ERROR("crt_context_create() failed; rc=%d", rc);
 			assert(0);
 		}
 
@@ -377,7 +371,7 @@ int main(int argc, char **argv)
 	if (opts->is_swim_enabled) {
 		rc = crt_swim_init(0);
 		if (rc != 0) {
-			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			D_ERROR("crt_swim_init() failed; rc=%d", rc);
 			assert(0);
 		}
 	}
@@ -386,14 +380,13 @@ int main(int argc, char **argv)
 
 	rc = crt_rank_self_set(my_rank, primary_grp_version);
 	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
-			my_rank, rc);
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d", my_rank, rc);
 		assert(0);
 	}
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
-		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_rank_uri_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -401,7 +394,7 @@ int main(int argc, char **argv)
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
 				       true);
 	if (rc != 0) {
-		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -411,13 +404,12 @@ int main(int argc, char **argv)
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_size() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (grp_size != 8) {
-		D_ERROR("This test expects 8 instances of servers; got=%d\n",
-			grp_size);
+		D_ERROR("This test expects 8 instances of servers; got=%d", grp_size);
 		assert(0);
 	}
 
@@ -425,18 +417,18 @@ int main(int argc, char **argv)
 	rc = crt_group_secondary_create("sec_group1", grp, NULL,
 					&sec_grp1);
 	if (rc != 0) {
-		D_ERROR("crt_group_secondary_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_secondary_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_group_size(sec_grp1, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_size() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (grp_size != 0) {
-		D_ERROR("Expected group_size=0 got=%d\n", grp_size);
+		D_ERROR("Expected group_size=0 got=%d", grp_size);
 		assert(0);
 	}
 
@@ -448,7 +440,7 @@ int main(int argc, char **argv)
 		rc = crt_group_secondary_rank_add(sec_grp1,
 					sec_ranks[i], real_ranks[i]);
 		if (rc != 0) {
-			D_ERROR("Rank addition failed; rc=%d\n", rc);
+			D_ERROR("Rank addition failed; rc=%d", rc);
 			assert(0);
 		}
 
@@ -459,25 +451,23 @@ int main(int argc, char **argv)
 	for (i = 0; i < 8; i++) {
 		rc = crt_group_rank_s2p(sec_grp1, sec_ranks[i], &tmp_rank);
 		if (rc != 0) {
-			D_ERROR("crt_group_rank_s2p() failed; rc=%d\n", rc);
+			D_ERROR("crt_group_rank_s2p() failed; rc=%d", rc);
 			assert(0);
 		}
 
 		if (real_ranks[i] != tmp_rank) {
-			D_ERROR("Expected rank=%d got=%d\n",
-				real_ranks[i], tmp_rank);
+			D_ERROR("Expected rank=%d got=%d", real_ranks[i], tmp_rank);
 			assert(0);
 		}
 
 		rc = crt_group_rank_p2s(sec_grp1, real_ranks[i], &tmp_rank);
 		if (rc != 0) {
-			D_ERROR("crt_group_rank_p2s() failed; rc=%d\n", rc);
+			D_ERROR("crt_group_rank_p2s() failed; rc=%d", rc);
 			assert(0);
 		}
 
 		if (sec_ranks[i] != tmp_rank) {
-			D_ERROR("Expected rank=%d got %d\n",
-				sec_ranks[i], tmp_rank);
+			D_ERROR("Expected rank=%d got %d", sec_ranks[i], tmp_rank);
 			assert(0);
 		}
 	}
@@ -485,7 +475,7 @@ int main(int argc, char **argv)
 	/* Test removal of the rank from the middle of the list */
 	rc = crt_group_rank_remove(sec_grp1, 8);
 	if (rc != 0) {
-		D_ERROR("crt_group_rank_remove() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_rank_remove() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -494,7 +484,7 @@ int main(int argc, char **argv)
 	/* Add new sec_rank=50 after the removal of previous one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 2);
 	if (rc != 0) {
-		D_ERROR("Rank addition failed; rc=%d\n", rc);
+		D_ERROR("Rank addition failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -503,33 +493,33 @@ int main(int argc, char **argv)
 	/* Verify new ranks secondary to primary conversion */
 	rc = crt_group_rank_s2p(sec_grp1, 50, &tmp_rank);
 	if (rc != 0) {
-		D_ERROR("crt_group_rank_s2p() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_rank_s2p() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (tmp_rank != 2) {
-		D_ERROR("Expected real rank=2 got=%d\n", tmp_rank);
+		D_ERROR("Expected real rank=2 got=%d", tmp_rank);
 		assert(0);
 	}
 
 	/* Add existing secondary rank with bogus primary one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 15);
 	if (rc != -DER_EXIST) {
-		D_ERROR("Expected -DER_EXIST got %d\n", rc);
+		D_ERROR("Expected -DER_EXIST got %d", rc);
 		assert(0);
 	}
 
 	/* Add already existing primary rank - Negative test */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 2);
 	if (rc != -DER_EXIST) {
-		D_ERROR("Expected -DER_EXIST got %d\n", rc);
+		D_ERROR("Expected -DER_EXIST got %d", rc);
 		assert(0);
 	}
 
 	/* Remove non existent rank - Negative test */
 	rc = crt_group_rank_remove(sec_grp1, 105);
 	if (rc != -DER_OOG) {
-		D_ERROR("Expected -DER_OOG got %d\n", rc);
+		D_ERROR("Expected -DER_OOG got %d", rc);
 		assert(0);
 	}
 
@@ -539,14 +529,14 @@ int main(int argc, char **argv)
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_ranks_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
 				 NUM_SERVER_CTX, 50, 100.0);
 	if (rc != 0) {
-		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		D_ERROR("wait_for_ranks() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -557,13 +547,13 @@ int main(int argc, char **argv)
 	DBG_PRINT("------------------------------------\n");
 	rc = crt_group_ranks_get(sec_grp1, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_ranks_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {
-		D_ERROR("sem_init() failed; rc=%d\n", rc);
+		D_ERROR("sem_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -583,8 +573,7 @@ int main(int argc, char **argv)
 			rc = crt_req_create(crt_ctx[1], &server_ep,
 					RPC_PING, &rpc);
 			if (rc != 0) {
-				D_ERROR("crt_req_create() failed; rc=%d\n",
-					rc);
+				D_ERROR("crt_req_create() failed; rc=%d", rc);
 				assert(0);
 			}
 
@@ -593,7 +582,7 @@ int main(int argc, char **argv)
 
 			rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 			if (rc != 0) {
-				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+				D_ERROR("crt_req_send() failed; rc=%d", rc);
 				assert(0);
 			}
 			crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
@@ -610,13 +599,13 @@ int main(int argc, char **argv)
 				crt_tree_topo(CRT_TREE_KNOMIAL, 4),
 				&rpc);
 	if (rc != 0) {
-		D_ERROR("crt_corpc_req_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_corpc_req_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 	if (rc != 0) {
-		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+		D_ERROR("crt_req_send() failed; rc=%d", rc);
 		assert(0);
 	}
 	crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
@@ -640,13 +629,13 @@ int main(int argc, char **argv)
 				&server_ep, RPC_SHUTDOWN,
 				&rpc);
 		if (rc != 0) {
-			D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+			D_ERROR("crt_req_create() failed; rc=%d", rc);
 			assert(0);
 		}
 
 		rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 		if (rc != 0) {
-			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
+			D_ERROR("crt_req_send() failed; rc=%d", rc);
 			assert(0);
 		}
 		crtu_sem_timedwait(&sem, g_exp_rpc_timeout, __LINE__);
@@ -661,7 +650,7 @@ int main(int argc, char **argv)
 	DBG_PRINT("Testing removal of primary rank\n");
 	rc = crt_group_rank_remove(grp, 2);
 	if (rc != 0) {
-		D_ERROR("Failed to remove rank 50; rc=%d\n", rc);
+		D_ERROR("Failed to remove rank 50; rc=%d", rc);
 		assert(0);
 	}
 
@@ -673,13 +662,13 @@ int main(int argc, char **argv)
 
 	mod_ranks = d_rank_list_alloc(10);
 	if (!mod_ranks) {
-		D_ERROR("rank list allocation failed\n");
+		D_ERROR("rank list allocation failed");
 		assert(0);
 	}
 
 	D_ALLOC_ARRAY(incarnations, mod_ranks->rl_nr);
 	if (!incarnations) {
-		D_ERROR("incarnation list allocation failed\n");
+		D_ERROR("incarnation list allocation failed");
 		assert(0);
 	}
 
@@ -687,7 +676,7 @@ int main(int argc, char **argv)
 		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
 		if (rc == -1) {
-			D_ERROR("asprintf() failed\n");
+			D_ERROR("asprintf() failed");
 			assert(0);
 		}
 		mod_ranks->rl_ranks[i] = i + 1;
@@ -699,7 +688,7 @@ int main(int argc, char **argv)
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
 				      CRT_GROUP_MOD_OP_ADD, primary_grp_version);
 	if (rc != 0) {
-		D_ERROR("crt_group_primary_modify() failed; rc = %d\n", rc);
+		D_ERROR("crt_group_primary_modify() failed; rc = %d", rc);
 		assert(0);
 	}
 
@@ -717,7 +706,7 @@ int main(int argc, char **argv)
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
 				      CRT_GROUP_MOD_OP_REPLACE, primary_grp_version);
 	if (rc != 0) {
-		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_primary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -733,7 +722,7 @@ int main(int argc, char **argv)
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, NULL,
 				      CRT_GROUP_MOD_OP_REMOVE, primary_grp_version);
 	if (rc != 0) {
-		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_primary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -749,7 +738,7 @@ int main(int argc, char **argv)
 	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
 				      CRT_GROUP_MOD_OP_ADD, primary_grp_version);
 	if (rc != 0) {
-		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_primary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -766,7 +755,7 @@ int main(int argc, char **argv)
 	mod_sec_ranks = d_rank_list_alloc(10);
 
 	if (!mod_prim_ranks || !mod_sec_ranks) {
-		D_ERROR("Failed to allocate lists\n");
+		D_ERROR("Failed to allocate lists");
 		assert(0);
 	}
 
@@ -786,7 +775,7 @@ int main(int argc, char **argv)
 					mod_prim_ranks, CRT_GROUP_MOD_OP_ADD,
 					0X0);
 	if (rc != 0) {
-		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -808,7 +797,7 @@ int main(int argc, char **argv)
 	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, mod_prim_ranks,
 					CRT_GROUP_MOD_OP_REPLACE, 0x0);
 	if (rc != 0) {
-		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -821,7 +810,7 @@ int main(int argc, char **argv)
 	rc = crt_group_secondary_modify(sec_grp1, mod_sec_ranks, NULL,
 					CRT_GROUP_MOD_OP_REMOVE, 0x0);
 	if (rc != 0) {
-		D_ERROR("crt_group_secondary_modify() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_secondary_modify() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -844,7 +833,7 @@ join:
 
 	rc = crt_group_secondary_destroy(sec_grp1);
 	if (rc != 0) {
-		D_ERROR("Failed to destroy a secondary group\n");
+		D_ERROR("Failed to destroy a secondary group");
 		assert(0);
 	}
 
@@ -852,7 +841,7 @@ join:
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed with rc=%d", rc);
 		assert(0);
 	}
 

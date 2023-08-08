@@ -63,7 +63,7 @@ cont:
 			}
 			to_consume = rc;
 		} else if (rc < 0) {
-			DFUSE_TRA_WARNING(eqt, "Error from daos_eq_poll, " DF_RC, DP_RC(rc));
+			DFUSE_TRA_WARNING(eqt, "Error from daos_eq_poll: " DF_RC, DP_RC(rc));
 			to_consume = 0;
 		} else {
 			to_consume = 0;
@@ -364,7 +364,7 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, " DF_RC, DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed: " DF_RC, DP_RC(rc));
 	}
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
@@ -423,10 +423,10 @@ dfuse_pool_connect(struct dfuse_info *fs_handle, const char *label, struct dfuse
 				       &p_info, NULL);
 		if (rc) {
 			if (rc == -DER_NO_PERM || rc == -DER_NONEXIST)
-				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed, " DF_RC,
+				DFUSE_TRA_INFO(dfp, "daos_pool_connect() failed: " DF_RC,
 					       DP_RC(rc));
 			else
-				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed, " DF_RC,
+				DFUSE_TRA_ERROR(dfp, "daos_pool_connect() '%s' failed: " DF_RC,
 						label, DP_RC(rc));
 			D_GOTO(err_free, rc = daos_der2errno(rc));
 		}
@@ -561,7 +561,7 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		/* none of the cache related attrs are present */
 		D_GOTO(out, rc = ENODATA);
 	} else if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache related attrs" DF_RC,
+		DFUSE_TRA_WARNING(dfc, "Failed to load values for all cache related attrs: " DF_RC,
 				  DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
@@ -1084,7 +1084,7 @@ err_eq:
 
 		rc2 = daos_eq_destroy(eqt->de_eq, 0);
 		if (rc2 != -DER_SUCCESS)
-			DFUSE_TRA_ERROR(eqt, "Failed to destroy event queue:" DF_RC, DP_RC(rc2));
+			DFUSE_TRA_ERROR(eqt, "Failed to destroy event queue: " DF_RC, DP_RC(rc2));
 
 		sem_destroy(&eqt->de_sem);
 		DFUSE_TRA_DOWN(eqt);
@@ -1355,7 +1355,7 @@ err_ie_remove:
 err_ie:
 	dfuse_ie_free(fs_handle, ie);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: " DF_RC, DP_RC(rc));
+	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse: " DF_RC, DP_RC(rc));
 	fuse_opt_free_args(&args);
 	return rc;
 }
@@ -1536,7 +1536,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 
 		rc = daos_eq_destroy(eqt->de_eq, 0);
 		if (rc)
-			DFUSE_TRA_WARNING(dfuse_info, "Failed to destroy EQ" DF_RC, DP_RC(rc));
+			DFUSE_TRA_WARNING(dfuse_info, "Failed to destroy EQ: " DF_RC, DP_RC(rc));
 
 		DFUSE_TRA_DOWN(eqt);
 	}

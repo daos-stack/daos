@@ -153,7 +153,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 
 	/* batched_commit/aggreagtion ULT may hold reference on the dbca. */
 	while (dbca->dbca_refs > 0) {
-		D_DEBUG(DB_TRACE, "Sleep 10 mseconds for reference release\n");
+		D_DEBUG(DB_TRACE, "Sleep 10 mseconds for reference release");
 		dss_sleep(10);
 	}
 
@@ -328,8 +328,8 @@ dtx_cleanup(void *arg)
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
 			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
 	if (rc < 0)
-		D_WARN("Failed to scan DTX entry for cleanup "
-		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
+		DL_WARN(rc, "Failed to scan DTX entry for cleanup " DF_UUID,
+			DP_UUID(cont->sc_uuid));
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
 	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list) &&
@@ -370,7 +370,7 @@ dtx_cleanup(void *arg)
 		if (dte->dte_mbs != NULL)
 			rc = dtx_commit(cont, &dte, NULL, 1);
 
-		D_DEBUG(DB_IO, "Cleanup partial committed DTX "DF_DTI", left %d: %d\n",
+		D_DEBUG(DB_IO, "Cleanup partial committed DTX " DF_DTI ", left %d: %d",
 			DP_DTI(&dte->dte_xid), dcca.dcca_pc_count, rc);
 		dtx_dpci_free(dpci);
 	}
@@ -493,7 +493,7 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
 			if (dbca->dbca_agg_req == NULL) {
-				D_WARN("Fail to start DTX agg ULT (1) for "DF_UUID"\n",
+				D_WARN("Fail to start DTX agg ULT (1) for " DF_UUID,
 				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
 				continue;
@@ -526,8 +526,8 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		dtx_get_dbca(victim_dbca);
 		victim_dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, victim_dbca, 0);
 		if (victim_dbca->dbca_agg_req == NULL) {
-			D_WARN("Fail to start DTX agg ULT (2) for "DF_UUID"\n",
-				DP_UUID(victim_dbca->dbca_cont->sc_uuid));
+			D_WARN("Fail to start DTX agg ULT (2) for " DF_UUID,
+			       DP_UUID(victim_dbca->dbca_cont->sc_uuid));
 			dtx_put_dbca(victim_dbca);
 		} else {
 			dbpa->dbpa_aggregating++;
@@ -550,7 +550,7 @@ dtx_aggregation_main(void *arg)
 	D_ASSERT(dmi->dmi_dtx_agg_req == NULL);
 	dmi->dmi_dtx_agg_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (dmi->dmi_dtx_agg_req == NULL) {
-		D_ERROR("Failed to get DTX aggregation sched request.\n");
+		D_ERROR("Failed to get DTX aggregation sched request");
 		return;
 	}
 
@@ -604,16 +604,16 @@ dtx_batched_commit_one(void *arg)
 			break;
 
 		if (cnt < 0) {
-			D_WARN("Fail to fetch committable for "DF_UUID": "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_RC(cnt));
+			DL_WARN(cnt, "Fail to fetch committable for " DF_UUID,
+				DP_UUID(cont->sc_uuid));
 			break;
 		}
 
 		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
-			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
-			       cnt, DP_UUID(cont->sc_uuid), DP_RC(rc));
+			DL_WARN(rc, "Fail to batched commit %d entries for " DF_UUID, cnt,
+				DP_UUID(cont->sc_uuid));
 			break;
 		}
 
@@ -652,7 +652,7 @@ dtx_batched_commit(void *arg)
 	D_ASSERT(dmi->dmi_dtx_cmt_req == NULL);
 	dmi->dmi_dtx_cmt_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (dmi->dmi_dtx_cmt_req == NULL) {
-		D_ERROR("Failed to get DTX batched commit sched request.\n");
+		D_ERROR("Failed to get DTX batched commit sched request");
 		return;
 	}
 
@@ -701,7 +701,7 @@ dtx_batched_commit(void *arg)
 			dbca->dbca_commit_req = sched_create_ult(&attr, dtx_batched_commit_one,
 								 dbca, 0);
 			if (dbca->dbca_commit_req == NULL) {
-				D_WARN("Fail to start DTX ULT (1) for "DF_UUID"\n",
+				D_WARN("Fail to start DTX ULT (1) for " DF_UUID,
 				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
 			}
@@ -724,7 +724,7 @@ dtx_batched_commit(void *arg)
 			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
 			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup, dbca, 0);
 			if (dbca->dbca_cleanup_req == NULL) {
-				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
+				D_WARN("Fail to start DTX ULT (3) for " DF_UUID,
 				       DP_UUID(cont->sc_uuid));
 				dtx_put_dbca(dbca);
 			}
@@ -853,8 +853,8 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		bool resent, bool prepared, bool drop_cmt, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
-		D_ERROR("Too many modifications in a single transaction:"
-			"%u > %u\n", sub_modification_cnt, DTX_SUB_MOD_MAX);
+		D_ERROR("Too many modifications in a single transaction:%u > %u",
+			sub_modification_cnt, DTX_SUB_MOD_MAX);
 		return -DER_OVERFLOW;
 	}
 	dth->dth_modification_cnt = sub_modification_cnt;
@@ -909,10 +909,9 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		return 0;
 
 	if (!dtx_epoch_chosen(epoch)) {
-		D_ERROR("initializing DTX "DF_DTI" with invalid epoch: value="
-			DF_U64" first="DF_U64" flags=%x\n",
-			DP_DTI(dti), epoch->oe_value, epoch->oe_first,
-			epoch->oe_flags);
+		D_ERROR("initializing DTX " DF_DTI " with invalid epoch: value=" DF_U64
+			" first=" DF_U64 " flags=%x",
+			DP_DTI(dti), epoch->oe_value, epoch->oe_first, epoch->oe_flags);
 		return -DER_INVAL;
 	}
 	dth->dth_epoch = epoch->oe_value;
@@ -1024,8 +1023,7 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 		return 0;
 
 	if (dth->dth_op_seq == VOS_SUB_OP_MAX) {
-		D_ERROR("Transaction exceeds maximum number of suboperations"
-			" (%d)\n", VOS_SUB_OP_MAX);
+		D_ERROR("Transaction exceeds maximum number of suboperations (%d)", VOS_SUB_OP_MAX);
 		return -DER_NO_PERM;
 	}
 
@@ -1077,10 +1075,10 @@ dtx_sub_init(struct dtx_handle *dth, daos_unit_oid_t *oid, uint64_t dkey_hash)
 	rc = dtx_insert_oid(dth, oid, false);
 
 out:
-	D_DEBUG(DB_IO, "Sub init DTX "DF_DTI" for object "DF_UOID
-		" dkey %lu, opc seq %d: "DF_RC"\n",
-		DP_DTI(&dth->dth_xid), DP_UOID(*oid),
-		(unsigned long)dkey_hash, dth->dth_op_seq, DP_RC(rc));
+	D_DEBUG(DB_IO,
+		"Sub init DTX " DF_DTI " for object " DF_UOID " dkey %lu, opc seq %d: " DF_RC,
+		DP_DTI(&dth->dth_xid), DP_UOID(*oid), (unsigned long)dkey_hash, dth->dth_op_seq,
+		DP_RC(rc));
 
 	return rc;
 }
@@ -1146,10 +1144,11 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
-		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
-		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
+	D_DEBUG(DB_IO,
+		"Start DTX " DF_DTI " sub modification %d, ver %u, leader " DF_UOID
+		", dti_cos_cnt %d, tgt_cnt %d, flags %x: " DF_RC,
+		DP_DTI(dti), sub_modification_cnt, dth->dth_ver, DP_UOID(*leader_oid), dti_cos_cnt,
+		tgt_cnt, flags, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh);
@@ -1172,8 +1171,8 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 		ABT_future_free(&dlh->dlh_future);
 	}
 
-	D_DEBUG(DB_IO, "dth "DF_DTI" rc "DF_RC"\n",
-		DP_DTI(&dlh->dlh_handle.dth_xid), DP_RC(dlh->dlh_result));
+	D_DEBUG(DB_IO, "dth " DF_DTI ": " DF_RC, DP_DTI(&dlh->dlh_handle.dth_xid),
+		DP_RC(dlh->dlh_result));
 
 	return dlh->dlh_result;
 };
@@ -1209,7 +1208,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 		goto out;
 
 	if (unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
+		D_ERROR("Cont hdl " DF_UUID " is closed/evicted unexpectedly",
 			DP_UUID(coh->sch_uuid));
 		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
 		    result == -DER_STALE || daos_crt_network_error(result))
@@ -1348,8 +1347,8 @@ sync:
 		dte = &dth->dth_dte;
 		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0)
-			D_WARN(DF_UUID": Fail to sync commit DTX "DF_DTI": "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
+			DL_WARN(rc, DF_UUID ": Fail to sync commit DTX " DF_DTI,
+				DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
 
 		/*
 		 * NOTE: The semantics of 'sync' commit does not guarantee that all
@@ -1412,7 +1411,7 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
-	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+	D_DEBUG(DB_IO, "Stop the DTX " DF_DTI " ver %u, dkey %lu, %s, cos %d/%d: " DF_RC,
 		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
 		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
 		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
@@ -1465,10 +1464,10 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, false);
 
-	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
-		"dti_cos_cnt %d, flags %x: "DF_RC"\n",
-		DP_DTI(dti), sub_modification_cnt,
-		dth->dth_ver, dti_cos_cnt, flags, DP_RC(rc));
+	D_DEBUG(DB_IO,
+		"Start DTX " DF_DTI
+		" sub modification %d, ver %u, dti_cos_cnt %d, flags %x: " DF_RC,
+		DP_DTI(dti), sub_modification_cnt, dth->dth_ver, dti_cos_cnt, flags, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dth);
@@ -1503,7 +1502,7 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
 					    dth->dth_dti_cos_count, NULL);
 			if (rc < 0)
-				D_ERROR(DF_UUID": Fail to DTX CoS commit: %d\n",
+				D_ERROR(DF_UUID ": Fail to DTX CoS commit: %d",
 					DP_UUID(cont->sc_uuid), rc);
 			else
 				dth->dth_cos_done = 1;
@@ -1515,10 +1514,8 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		vos_dtx_cleanup(dth, true);
 	}
 
-	D_DEBUG(DB_IO,
-		"Stop the DTX "DF_DTI" ver %u, dkey %lu: "DF_RC"\n",
-		DP_DTI(&dth->dth_xid), dth->dth_ver,
-		(unsigned long)dth->dth_dkey_hash, DP_RC(result));
+	D_DEBUG(DB_IO, "Stop the DTX " DF_DTI " ver %u, dkey %lu: " DF_RC, DP_DTI(&dth->dth_xid),
+		dth->dth_ver, (unsigned long)dth->dth_dkey_hash, DP_RC(result));
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
@@ -1563,8 +1560,8 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 		 * Under such case, have to break the dtx_flush.
 		 */
 		if (unlikely(total > stat.dtx_committable_count)) {
-			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
-			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu", (unsigned long)total,
+			       (unsigned long)stat.dtx_committable_count);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
@@ -1574,8 +1571,7 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 out:
 	if (rc < 0)
-		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
-			DP_UUID(cont->sc_uuid), rc);
+		D_ERROR(DF_UUID ": Fail to flush CoS cache: rc = %d", DP_UUID(cont->sc_uuid), rc);
 }
 
 /* Per VOS container DTX re-index ULT ***************************************/
@@ -1587,7 +1583,7 @@ dtx_reindex_ult(void *arg)
 	struct dss_module_info		*dmi	= dss_get_module_info();
 	int				 rc	= 0;
 
-	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
+	D_INFO(DF_CONT ": starting DTX reindex ULT on xstream %d, ver %u",
 	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
@@ -1624,8 +1620,7 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 	cont->sc_dtx_reindex = 1;
 	rc = dss_ult_create(dtx_reindex_ult, cont, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": Failed to create DTX reindex ULT: "DF_RC"\n",
-			DP_UUID(cont->sc_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": Failed to create DTX reindex ULT", DP_UUID(cont->sc_uuid));
 		cont->sc_dtx_reindex = 0;
 		ds_cont_child_put(cont);
 	}
@@ -1710,8 +1705,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->sc_dtx_cos_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX CoS btree: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX CoS btree");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -1876,8 +1870,8 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		vos_dtx_stat(coh, &stat, DSF_SKIP_BAD);
 		if (dti->dti_hlc <= stat.dtx_newest_aggregated ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
-			D_ERROR("Not sure about whether the old RPC "
-				DF_DTI" is resent or not: %lu/%lu\n",
+			D_ERROR("Not sure about whether the old RPC " DF_DTI
+				" is resent or not: %lu/%lu",
 				DP_DTI(dti), dti->dti_hlc, stat.dtx_newest_aggregated);
 			rc = -DER_EP_OLD;
 		}
@@ -1942,8 +1936,8 @@ dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 		sub->dss_comp = 1;
 		sub->dss_result = rc;
 
-		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
-			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d", idx, tgt->st_rank,
+			tgt->st_tgt_idx, tgt->st_flags, rc);
 	}
 
 	rc = ABT_future_set(dlh->dlh_future, dlh);
@@ -2069,8 +2063,8 @@ again:
 	 */
 	rc = ABT_future_create(dlh->dlh_forward_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed [%u, %u] (1): "DF_RC"\n",
-			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
+		DL_ERROR(rc, "ABT_future_create failed [%u, %u] (1)", dlh->dlh_forward_idx,
+			 dlh->dlh_forward_cnt);
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
@@ -2081,8 +2075,8 @@ again:
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
-		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
-			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
+		DL_ERROR(rc, "ult create failed [%u, %u] (2)", dlh->dlh_forward_idx,
+			 dlh->dlh_forward_cnt);
 		ABT_future_free(&dlh->dlh_future);
 		goto out;
 	}
@@ -2111,11 +2105,12 @@ exec:
 				dlh->dlh_agg_cb = agg_cb;
 		}
 
-		D_DEBUG(DB_IO, "More dispatch sub-requests for "DF_DTI", normal %u, "
-			"delay %u, idx %u, cnt %d, allow_failure %d\n",
+		D_DEBUG(DB_IO,
+			"More dispatch sub-requests for " DF_DTI
+			", normal %u, delay %u, idx %u, cnt %d, allow_failure %d",
 			DP_DTI(&dlh->dlh_handle.dth_xid), dlh->dlh_normal_sub_cnt,
-			dlh->dlh_delay_sub_cnt, dlh->dlh_forward_idx,
-			dlh->dlh_forward_cnt, allow_failure);
+			dlh->dlh_delay_sub_cnt, dlh->dlh_forward_idx, dlh->dlh_forward_cnt,
+			allow_failure);
 
 		goto again;
 	}
@@ -2141,7 +2136,7 @@ exec:
 	 */
 	rc = ABT_future_create(dlh->dlh_delay_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed (3): "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ABT_future_create failed (3)");
 		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
@@ -2153,7 +2148,7 @@ exec:
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
-		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ult create failed (4)");
 		ABT_future_free(&dlh->dlh_future);
 		goto out;
 	}
@@ -2162,10 +2157,11 @@ exec:
 	if (remote_rc != 0 && remote_rc != allow_failure)
 		rc = remote_rc;
 
-	D_DEBUG(DB_IO, "Delay dispatched sub-requests for "DF_DTI", normal %u, delay %u, cnt %d, "
-		"allow_failure %d, local_rc %d, remote_rc %d\n", DP_DTI(&dlh->dlh_handle.dth_xid),
-		dlh->dlh_normal_sub_cnt, dlh->dlh_delay_sub_cnt, dlh->dlh_forward_cnt,
-		allow_failure, local_rc, remote_rc);
+	D_DEBUG(DB_IO,
+		"Delay dispatched sub-requests for " DF_DTI
+		", normal %u, delay %u, cnt %d, allow_failure %d, local_rc %d, remote_rc %d",
+		DP_DTI(&dlh->dlh_handle.dth_xid), dlh->dlh_normal_sub_cnt, dlh->dlh_delay_sub_cnt,
+		dlh->dlh_forward_cnt, allow_failure, local_rc, remote_rc);
 
 out:
 	if (rc == 0 && local_rc == allow_failure &&
@@ -2191,15 +2187,14 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		if (cnt <= 0) {
 			rc = cnt;
 			if (rc < 0)
-				D_ERROR("Failed to fetch dtx: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "Failed to fetch dtx");
 			break;
 		}
 
 		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
-			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Fail to commit dtx");
 			break;
 		}
 	}

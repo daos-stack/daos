@@ -40,7 +40,7 @@ drpc_progress_context_create(struct drpc *listener)
 	struct drpc_progress_context *result;
 
 	if (!drpc_is_valid_listener(listener)) {
-		D_ERROR("Invalid dRPC listener\n");
+		D_ERROR("Invalid dRPC listener");
 		return NULL;
 	}
 
@@ -61,7 +61,7 @@ drpc_progress_context_close(struct drpc_progress_context *ctx)
 	struct drpc_list	*next;
 
 	if (ctx == NULL) {
-		D_ERROR("NULL drpc_progress_context passed\n");
+		D_ERROR("NULL drpc_progress_context passed");
 		return;
 	}
 
@@ -111,7 +111,7 @@ unixcomm_poll(struct unixcomm_poll *comms, size_t num_comms, int timeout_ms)
 		return -DER_TIMEDOUT;
 
 	if (poll_rc < 0) {
-		D_ERROR("Polling failed, errno=%u\n", errno);
+		D_ERROR("Polling failed, errno=%u", errno);
 		return daos_errno2der(errno);
 	}
 
@@ -135,8 +135,7 @@ get_open_drpc_session_count(struct drpc_progress_context *ctx)
 
 	d_list_for_each_entry(current, &ctx->session_ctx_list, link) {
 		if (!drpc_is_valid_listener(current->ctx)) {
-			D_ERROR("drpc_progress_context session ctx is not a "
-				"valid listener\n");
+			D_ERROR("drpc_progress_context session ctx is not a valid listener");
 			return -DER_INVAL;
 		}
 
@@ -160,7 +159,7 @@ drpc_progress_context_to_unixcomms(struct drpc_progress_context *ctx,
 
 	num_comms = get_open_drpc_session_count(ctx);
 	if (num_comms < 0) {
-		D_ERROR("Failed to count open drpc sessions\n");
+		D_ERROR("Failed to count open drpc sessions");
 		return num_comms;
 	}
 
@@ -201,7 +200,7 @@ drpc_progress_context_accept(struct drpc_progress_context *ctx)
 		/*
 		 * Any failure to accept is weird and surprising
 		 */
-		D_ERROR("Failed to accept new drpc connection\n");
+		D_ERROR("Failed to accept new drpc connection");
 		return -DER_MISC;
 	}
 
@@ -236,8 +235,7 @@ process_listener_activity(struct drpc_progress_context *ctx,
 	case UNIXCOMM_ACTIVITY_ERROR:
 	case UNIXCOMM_ACTIVITY_PEER_DISCONNECTED:
 		/* Unexpected - don't do anything */
-		D_INFO("Ignoring surprising listener activity: %u\n",
-		       listener_comm->activity);
+		D_INFO("Ignoring surprising listener activity: %u", listener_comm->activity);
 		rc = -DER_MISC;
 		break;
 
@@ -274,15 +272,14 @@ drpc_handler_ult(void *call_ctx)
 	int			rc;
 	struct drpc_call_ctx	*ctx = (struct drpc_call_ctx *)call_ctx;
 
-	D_INFO("dRPC handler ULT for module=%u method=%u\n",
-	       ctx->call->module, ctx->call->method);
+	D_INFO("dRPC handler ULT for module=%u method=%u", ctx->call->module, ctx->call->method);
 
 	ctx->session->handler(ctx->call, ctx->resp);
 
 	rc = drpc_send_response(ctx->session, ctx->resp);
 	if (rc != 0)
-		D_ERROR("Failed to send dRPC response (module=%u method=%u)\n",
-			ctx->call->module, ctx->call->method);
+		D_ERROR("Failed to send dRPC response (module=%u method=%u)", ctx->call->module,
+			ctx->call->method);
 
 	/*
 	 * We are responsible for cleaning up the call ctx.
@@ -326,7 +323,7 @@ handle_incoming_call(struct drpc *session_ctx)
 
 	resp = drpc_response_create(call);
 	if (resp == NULL) {
-		D_ERROR("Could not allocate Drpc__Response\n");
+		D_ERROR("Could not allocate Drpc__Response");
 		drpc_call_free(call);
 		return -DER_NOMEM;
 	}
@@ -338,8 +335,7 @@ handle_incoming_call(struct drpc *session_ctx)
 		resp->status = DRPC__STATUS__FAILED_UNMARSHAL_CALL;
 		tmp_rc = drpc_send_response(session_ctx, resp);
 		if (tmp_rc != 0)
-			D_ERROR("unable to send response to bad incoming dRPC: "DF_RC"\n",
-				DP_RC(tmp_rc));
+			DL_ERROR(tmp_rc, "unable to send response to bad incoming dRPC");
 		drpc_response_free(resp);
 		return rc;
 	}
@@ -361,8 +357,7 @@ handle_incoming_call(struct drpc *session_ctx)
 	rc = dss_ult_create(drpc_handler_ult, (void *)call_ctx,
 			    DSS_XS_SYS, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create drpc handler ULT: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create drpc handler ULT");
 		free_call_ctx(call_ctx);
 		return rc;
 	}
@@ -382,7 +377,7 @@ process_session_activity(struct drpc_list *session_node,
 	case UNIXCOMM_ACTIVITY_DATA_IN:
 		rc = handle_incoming_call(session_node->ctx);
 		if (rc != 0 && rc != -DER_AGAIN) {
-			D_ERROR("Error processing incoming session %u data\n",
+			D_ERROR("Error processing incoming session %u data",
 				session_comm->comm->fd);
 			destroy_session_node(session_node);
 
@@ -393,8 +388,7 @@ process_session_activity(struct drpc_list *session_node,
 
 	case UNIXCOMM_ACTIVITY_ERROR:
 	case UNIXCOMM_ACTIVITY_PEER_DISCONNECTED:
-		D_INFO("Session %u connection has been terminated\n",
-		       session_comm->comm->fd);
+		D_INFO("Session %u connection has been terminated", session_comm->comm->fd);
 		destroy_session_node(session_node);
 		break;
 
@@ -458,14 +452,13 @@ drpc_progress(struct drpc_progress_context *ctx, int timeout_ms)
 	int			rc;
 
 	if (!drpc_progress_context_is_valid(ctx)) {
-		D_ERROR("Invalid drpc_progress_context\n");
+		D_ERROR("Invalid drpc_progress_context");
 		return -DER_INVAL;
 	}
 
 	rc = drpc_progress_context_to_unixcomms(ctx, &comms);
 	if (rc < 0) {
-		D_ERROR("Failed to convert drpc_progress_context to unixcomm "
-			"structures, rc="DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to convert drpc_progress_context to unixcomm structures");
 		return rc;
 	}
 

@@ -113,21 +113,20 @@ bio_spdk_env_init(void)
 	if (bio_nvme_configured(SMD_DEV_TYPE_MAX)) {
 		rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts, &roles);
 		if (rc != 0) {
-			D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to add allowed devices to SPDK env");
 			goto out;
 		}
 		nvme_glb.bd_nvme_roles = roles;
 
 		rc = bio_set_hotplug_filter(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
-			D_ERROR("Failed to set hotplug filter, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to set hotplug filter");
 			goto out;
 		}
 
 		rc = bio_read_accel_props(nvme_glb.bd_nvme_conf);
 		if (rc != 0) {
-			D_ERROR("Failed to read acceleration properties, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to read acceleration properties");
 			goto out;
 		}
 
@@ -138,13 +137,12 @@ bio_spdk_env_init(void)
 		rc = bio_read_rpc_srv_settings(nvme_glb.bd_nvme_conf, &enable_rpc_srv,
 					       &nvme_glb.bd_rpc_srv_addr);
 		if (rc != 0) {
-			D_ERROR("Failed to read SPDK JSON-RPC server settings, "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to read SPDK JSON-RPC server settings");
 			goto out;
 		}
 #ifdef DAOS_BUILD_RELEASE
 		if (enable_rpc_srv) {
-			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds.\n");
+			D_ERROR("SPDK JSON-RPC server may not be enabled for release builds");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 #endif
@@ -154,7 +152,7 @@ bio_spdk_env_init(void)
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
-		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to initialize SPDK env");
 		goto out;
 	}
 
@@ -163,7 +161,7 @@ bio_spdk_env_init(void)
 	rc = spdk_thread_lib_init(NULL, 0);
 	if (rc != 0) {
 		rc = -DER_INVAL;
-		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to init SPDK thread lib");
 		spdk_env_fini();
 	}
 out:
@@ -195,9 +193,9 @@ set_faulty_criteria(void)
 	d_getenv_int("DAOS_NVME_AUTO_FAULTY_IO", &glb_criteria.fc_max_io_errs);
 	d_getenv_int("DAOS_NVME_AUTO_FAULTY_CSUM", &glb_criteria.fc_max_csum_errs);
 
-	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u\n",
-	       glb_criteria.fc_enabled ? "enabled" : "disabled",
-	       glb_criteria.fc_max_io_errs, glb_criteria.fc_max_csum_errs);
+	D_INFO("NVMe auto faulty is %s. Criteria: max_io_errs:%u, max_csum_errs:%u",
+	       glb_criteria.fc_enabled ? "enabled" : "disabled", glb_criteria.fc_max_io_errs,
+	       glb_criteria.fc_max_csum_errs);
 }
 
 int
@@ -209,12 +207,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
 
 	if (tgt_nr <= 0) {
-		D_ERROR("tgt_nr: %u should be > 0\n", tgt_nr);
+		D_ERROR("tgt_nr: %u should be > 0", tgt_nr);
 		return -DER_INVAL;
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0 && mem_size == 0) {
-		D_ERROR("Hugepages must be configured when NVMe SSD is configured\n");
+		D_ERROR("Hugepages must be configured when NVMe SSD is configured");
 		return -DER_INVAL;
 	}
 
@@ -243,32 +241,32 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
-	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
+	D_INFO("RDMA to SCM is %s", bio_scm_rdma ? "enabled" : "disabled");
 
 	d_getenv_int("DAOS_SPDK_SUBSYS_TIMEOUT", &bio_spdk_subsys_timeout);
-	D_INFO("SPDK subsystem fini timeout is %u ms\n", bio_spdk_subsys_timeout);
+	D_INFO("SPDK subsystem fini timeout is %u ms", bio_spdk_subsys_timeout);
 
 	d_getenv_int("DAOS_SPDK_MAX_UNMAP_CNT", &bio_spdk_max_unmap_cnt);
 	if (bio_spdk_max_unmap_cnt == 0)
 		bio_spdk_max_unmap_cnt = UINT32_MAX;
-	D_INFO("SPDK batch blob unmap call count is %u\n", bio_spdk_max_unmap_cnt);
+	D_INFO("SPDK batch blob unmap call count is %u", bio_spdk_max_unmap_cnt);
 
 	d_getenv_int("DAOS_MAX_ASYNC_SZ", &bio_max_async_sz);
-	D_INFO("Max async data size is set to %u bytes\n", bio_max_async_sz);
+	D_INFO("Max async data size is set to %u bytes", bio_max_async_sz);
 
 	/* Hugepages disabled */
 	if (mem_size == 0) {
-		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
-			bio_chk_cnt_max, size_mb);
-		D_INFO("Hugepages are not specified, skip NVMe setup.\n");
+		D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks", bio_chk_cnt_max,
+		       size_mb);
+		D_INFO("Hugepages are not specified, skip NVMe setup");
 		return 0;
 	}
 
 	if (nvme_conf && strlen(nvme_conf) > 0) {
 		fd = open(nvme_conf, O_RDONLY, 0600);
 		if (fd < 0)
-			D_WARN("Open %s failed, skip DAOS NVMe setup "DF_RC"\n",
-			       nvme_conf, DP_RC(daos_errno2der(errno)));
+			D_WARN("Open %s failed, skip DAOS NVMe setup " DF_RC, nvme_conf,
+			       DP_RC(daos_errno2der(errno)));
 		else
 			close(fd);
 	}
@@ -276,12 +274,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	D_ASSERT(hugepage_size > 0);
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
 	if (bio_chk_cnt_max < DAOS_DMA_CHUNK_CNT_MIN) {
-		D_ERROR("%uMB hugepages are not enough for %u targets (256MB per target)\n",
-			mem_size, tgt_nr);
+		D_ERROR("%uMB hugepages are not enough for %u targets (256MB per target)", mem_size,
+			tgt_nr);
 		return -DER_INVAL;
 	}
-	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
-	       bio_chk_cnt_max, size_mb);
+	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks", bio_chk_cnt_max,
+	       size_mb);
 
 	spdk_bs_opts_init(&nvme_glb.bd_bs_opts, sizeof(nvme_glb.bd_bs_opts));
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
@@ -289,14 +287,14 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	env = getenv("VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "AIO") == 0) {
-		D_WARN("AIO device(s) will be used!\n");
+		D_WARN("AIO device(s) will be used!");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
 
 	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;
 	} else if (numa_node == -1) {
-		D_WARN("DMA buffer will be allocated from any NUMA node available\n");
+		D_WARN("DMA buffer will be allocated from any NUMA node available");
 		bio_numa_node = SPDK_ENV_SOCKET_ID_ANY;
 	}
 
@@ -311,7 +309,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 
 	rc = bio_spdk_env_init();
 	if (rc) {
-		D_ERROR("Failed to init SPDK environment\n");
+		D_ERROR("Failed to init SPDK environment");
 		D_FREE(nvme_glb.bd_nvme_conf);
 		nvme_glb.bd_nvme_conf = NULL;
 		goto free_cond;
@@ -324,8 +322,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 		nvme_glb.bd_bs_opts.cluster_sz = (1UL << 30);	/* 1GB */
 
-	D_INFO("MD on SSD is %s\n",
-	       bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
+	D_INFO("MD on SSD is %s", bio_nvme_configured(SMD_DEV_TYPE_META) ? "enabled" : "disabled");
 
 	bio_spdk_inited = true;
 	set_faulty_criteria();
@@ -538,7 +535,7 @@ load_blobstore(struct bio_xs_context *ctxt, char *bdev_name, uuid_t *bs_uuid,
 	rc = spdk_bdev_create_bs_dev_ext(bdev_name, bio_bdev_event_cb, NULL,
 					 &bs_dev);
 	if (rc != 0) {
-		D_ERROR("failed to create bs_dev %s, %d\n", bdev_name, rc);
+		D_ERROR("failed to create bs_dev %s, %d", bdev_name, rc);
 		return NULL;
 	}
 
@@ -596,7 +593,7 @@ unload_blobstore(struct bio_xs_context *ctxt, struct spdk_blob_store *bs)
 	D_ASSERT(rc == 0);
 
 	if (cp_arg.cca_rc != 0)
-		D_ERROR("failed to unload blobstore %d\n", cp_arg.cca_rc);
+		D_ERROR("failed to unload blobstore %d", cp_arg.cca_rc);
 
 	return cp_arg.cca_rc;
 }
@@ -665,7 +662,7 @@ bio_release_bdev(void *arg)
 	struct bio_bdev	*d_bdev = arg;
 
 	if (!is_server_started()) {
-		D_INFO("Skip device release on server start/shutdown\n");
+		D_INFO("Skip device release on server start/shutdown");
 		return;
 	}
 
@@ -691,7 +688,7 @@ teardown_bio_bdev(void *arg)
 	int			 rc;
 
 	if (!is_server_started()) {
-		D_INFO("Skip device teardown on server start/shutdown\n");
+		D_INFO("Skip device teardown on server start/shutdown");
 		return;
 	}
 
@@ -706,12 +703,12 @@ teardown_bio_bdev(void *arg)
 		/* fallthrough */
 	case BIO_BS_STATE_FAULTY:
 	case BIO_BS_STATE_TEARDOWN:
-		D_DEBUG(DB_MGMT, "Device "DF_UUID"(%s) is already in "
-			"%s state\n", DP_UUID(d_bdev->bb_uuid),
-			d_bdev->bb_name, bio_state_enum_to_str(bbs->bb_state));
+		D_DEBUG(DB_MGMT, "Device " DF_UUID "(%s) is already in %s state",
+			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name,
+			bio_state_enum_to_str(bbs->bb_state));
 		break;
 	default:
-		D_ERROR("Invalid BS state %d\n", bbs->bb_state);
+		D_ERROR("Invalid BS state %d", bbs->bb_state);
 		break;
 	}
 }
@@ -726,11 +723,10 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	if (d_bdev == NULL || type != SPDK_BDEV_EVENT_REMOVE)
 		return;
 
-	D_DEBUG(DB_MGMT, "Got SPDK event(%d) for dev %s\n", type,
-		spdk_bdev_get_name(bdev));
+	D_DEBUG(DB_MGMT, "Got SPDK event(%d) for dev %s", type, spdk_bdev_get_name(bdev));
 
 	if (!is_server_started()) {
-		D_INFO("Skip device remove cb on server start/shutdown\n");
+		D_INFO("Skip device remove cb on server start/shutdown");
 		return;
 	}
 
@@ -740,17 +736,16 @@ bio_bdev_event_cb(enum spdk_bdev_event_type type, struct spdk_bdev *bdev,
 	/* The bio_bdev is still under construction */
 	if (d_list_empty(&d_bdev->bb_link)) {
 		D_ASSERT(d_bdev->bb_blobstore == NULL);
-		D_DEBUG(DB_MGMT, "bio_bdev for "DF_UUID"(%s) is still "
-			"under construction\n", DP_UUID(d_bdev->bb_uuid),
-			d_bdev->bb_name);
+		D_DEBUG(DB_MGMT, "bio_bdev for " DF_UUID "(%s) is still under construction",
+			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
 		return;
 	}
 
 	bbs = d_bdev->bb_blobstore;
 	/* A new device isn't used by DAOS yet */
 	if (bbs == NULL && !d_bdev->bb_replacing) {
-		D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
-			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
+		D_DEBUG(DB_MGMT, "Removed device " DF_UUID "(%s)", DP_UUID(d_bdev->bb_uuid),
+			d_bdev->bb_name);
 
 		d_list_del_init(&d_bdev->bb_link);
 		destroy_bio_bdev(d_bdev);
@@ -795,14 +790,14 @@ bdev_name2roles(const char *name)
 	dst++;
 	value = strtoul(dst, &ptr_parse_end, 0);
 	if (ptr_parse_end && *ptr_parse_end != 'n' && *ptr_parse_end != '\0') {
-		D_ERROR("invalid numeric value: %s (name %s)\n", dst, name);
+		D_ERROR("invalid numeric value: %s (name %s)", dst, name);
 		return -DER_INVAL;
 	}
 
 	if (value & (~NVME_ROLE_ALL))
 		return -DER_INVAL;
 
-	D_INFO("bdev name:%s, bdev role:%u\n", name, value);
+	D_INFO("bdev name:%s, bdev role:%u", name, value);
 	return value;
 }
 
@@ -833,7 +828,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	 */
 	d_bdev = lookup_dev_by_name(bdev_name);
 	if (d_bdev != NULL) {
-		D_ERROR("Device %s is already created\n", bdev_name);
+		D_ERROR("Device %s is already created", bdev_name);
 		return -DER_EXIST;
 	}
 
@@ -845,7 +840,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	D_INIT_LIST_HEAD(&d_bdev->bb_link);
 	rc = bdev_name2roles(bdev_name);
 	if (rc < 0) {
-		D_ERROR("Failed to get role from bdev name, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get role from bdev name");
 		goto error;
 	}
 
@@ -866,7 +861,7 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	rc = spdk_bdev_open_ext(d_bdev->bb_name, false, bio_bdev_event_cb,
 				d_bdev, &d_bdev->bb_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to hold bdev %s, %d\n", d_bdev->bb_name, rc);
+		D_ERROR("Failed to hold bdev %s, %d", d_bdev->bb_name, rc);
 		rc = daos_errno2der(-rc);
 		goto error;
 	}
@@ -876,15 +871,14 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	bs = load_blobstore(ctxt, d_bdev->bb_name, NULL, false, false,
 			    NULL, NULL);
 	if (bs == NULL) {
-		D_DEBUG(DB_MGMT, "Creating bs for %s\n", d_bdev->bb_name);
+		D_DEBUG(DB_MGMT, "Creating bs for %s", d_bdev->bb_name);
 
 		/* Create blobstore if it wasn't created before */
 		uuid_generate(bs_uuid);
 		bs = load_blobstore(ctxt, d_bdev->bb_name, &bs_uuid, true,
 				    false, NULL, NULL);
 		if (bs == NULL) {
-			D_ERROR("Failed to create blobstore on dev: "
-				""DF_UUID"\n", DP_UUID(bs_uuid));
+			D_ERROR("Failed to create blobstore on dev: " DF_UUID, DP_UUID(bs_uuid));
 			rc = -DER_INVAL;
 			goto error;
 		}
@@ -894,19 +888,18 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	/* Get the 'bstype' (device ID) of blobstore */
 	bstype = spdk_bs_get_bstype(bs);
 	memcpy(bs_uuid, bstype.bstype, sizeof(bs_uuid));
-	D_DEBUG(DB_MGMT, "%s :"DF_UUID"\n",
-		new_bs ? "Created new blobstore" : "Loaded blobstore",
+	D_DEBUG(DB_MGMT, "%s :" DF_UUID, new_bs ? "Created new blobstore" : "Loaded blobstore",
 		DP_UUID(bs_uuid));
 
 	rc = unload_blobstore(ctxt, bs);
 	if (rc != 0) {
-		D_ERROR("Unable to unload blobstore\n");
+		D_ERROR("Unable to unload blobstore");
 		goto error;
 	}
 
 	/* Verify if the blobstore was created by DAOS */
 	if (uuid_is_null(bs_uuid)) {
-		D_ERROR("The bdev has old blobstore not created by DAOS!\n");
+		D_ERROR("The bdev has old blobstore not created by DAOS!");
 		rc = -DER_INVAL;
 		goto error;
 	}
@@ -917,17 +910,16 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 	if (old_dev != NULL) {
 		/* If it's in server xstreams start phase, report error */
 		if (!is_server_started()) {
-			D_ERROR("Dup device "DF_UUID" detected!\n",
-				DP_UUID(bs_uuid));
+			D_ERROR("Dup device " DF_UUID " detected!", DP_UUID(bs_uuid));
 			rc = -DER_EXIST;
 			goto error;
 		}
 		/* Old device is plugged back */
-		D_INFO("Device "DF_UUID" is plugged back\n", DP_UUID(bs_uuid));
+		D_INFO("Device " DF_UUID " is plugged back", DP_UUID(bs_uuid));
 
 		if (old_dev->bb_desc != NULL) {
-			D_INFO("Device "DF_UUID"(%s) isn't torndown\n",
-			       DP_UUID(old_dev->bb_uuid), old_dev->bb_name);
+			D_INFO("Device " DF_UUID "(%s) isn't torndown", DP_UUID(old_dev->bb_uuid),
+			       old_dev->bb_name);
 			destroy_bio_bdev(d_bdev);
 		} else {
 			D_ASSERT(old_dev->bb_removed);
@@ -941,8 +933,8 @@ create_bio_bdev(struct bio_xs_context *ctxt, const char *bdev_name,
 		return 0;
 	}
 
-	D_DEBUG(DB_MGMT, "Create DAOS bdev "DF_UUID", role:%u\n",
-		DP_UUID(bs_uuid), d_bdev->bb_roles);
+	D_DEBUG(DB_MGMT, "Create DAOS bdev " DF_UUID ", role:%u", DP_UUID(bs_uuid),
+		d_bdev->bb_roles);
 
 	d_list_add_tail(&d_bdev->bb_link, &nvme_glb.bd_bdevs);
 
@@ -961,7 +953,7 @@ init_bio_bdevs(struct bio_xs_context *ctxt)
 
 	D_ASSERT(!is_server_started());
 	if (spdk_bdev_first() == NULL) {
-		D_ERROR("No SPDK bdevs found!\n");
+		D_ERROR("No SPDK bdevs found!");
 		rc = -DER_NONEXIST;
 	}
 
@@ -988,7 +980,7 @@ put_bio_blobstore(struct bio_xs_blobstore *bxb, struct bio_xs_context *ctxt)
 	d_list_for_each_entry_safe(ioc, tmp, &bxb->bxb_io_ctxts, bic_link) {
 		d_list_del_init(&ioc->bic_link);
 		if (ioc->bic_blob != NULL)
-			D_WARN("Pool isn't closed. tgt:%d\n", ctxt->bxc_tgt_id);
+			D_WARN("Pool isn't closed. tgt:%d", ctxt->bxc_tgt_id);
 	}
 
 	ABT_mutex_lock(bbs->bb_mutex);
@@ -1081,7 +1073,7 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 
 	for (i = 0; i < xs_cnt_max; i++) {
 		if (bb->bb_xs_ctxts[i] == ctxt) {
-			D_ERROR("Dup xstream context!\n");
+			D_ERROR("Dup xstream context!");
 			ABT_mutex_unlock(bb->bb_mutex);
 			return NULL;
 		} else if (bb->bb_xs_ctxts[i] == NULL) {
@@ -1094,7 +1086,7 @@ get_bio_blobstore(struct bio_blobstore *bb, struct bio_xs_context *ctxt)
 	ABT_mutex_unlock(bb->bb_mutex);
 
 	if (i == xs_cnt_max) {
-		D_ERROR("Too many xstreams per device!\n");
+		D_ERROR("Too many xstreams per device!");
 		return NULL;
 	}
 	return bb;
@@ -1162,7 +1154,7 @@ choose_device(int tgt_id, enum smd_dev_type st)
 				/* Device isn't in SMD, not used by DAOS yet */
 				d_bdev->bb_tgt_cnt = 0;
 			} else {
-				D_ERROR("Unable to get dev info for "DF_UUID"\n",
+				D_ERROR("Unable to get dev info for " DF_UUID,
 					DP_UUID(d_bdev->bb_uuid));
 				return NULL;
 			}
@@ -1206,8 +1198,8 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 
 		rc = smd_dev_add_tgt(d_bdev->bb_uuid, tgt_id, st);
 		if (rc) {
-			D_ERROR("Failed to map dev "DF_UUID" type:%u to tgt %d. "DF_RC"\n",
-				DP_UUID(d_bdev->bb_uuid), st, tgt_id, DP_RC(rc));
+			DL_ERROR(rc, "Failed to map dev " DF_UUID " type:%u to tgt %d",
+				 DP_UUID(d_bdev->bb_uuid), st, tgt_id);
 			failed_st = st;
 			goto error;
 		}
@@ -1231,9 +1223,9 @@ assign_roles(struct bio_bdev *d_bdev, unsigned int tgt_id)
 		if (tgt_id != BIO_SYS_TGT_ID)
 			d_bdev->bb_tgt_cnt++;
 
-		D_DEBUG(DB_MGMT, "Successfully mapped dev "DF_UUID"/%d/%u to tgt %d role %u\n",
-			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles,
-			tgt_id, dev_type2role(st));
+		D_DEBUG(DB_MGMT, "Successfully mapped dev " DF_UUID "/%d/%u to tgt %d role %u",
+			DP_UUID(d_bdev->bb_uuid), d_bdev->bb_tgt_cnt, d_bdev->bb_roles, tgt_id,
+			dev_type2role(st));
 
 		if (!bio_nvme_configured(SMD_DEV_TYPE_META))
 			break;
@@ -1262,20 +1254,19 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	if (rc == -DER_NONEXIST) {
 		d_bdev = choose_device(tgt_id, st);
 		if (d_bdev == NULL) {
-			D_ERROR("Failed to choose bdev for tgt:%u type:%u\n", tgt_id, st);
+			D_ERROR("Failed to choose bdev for tgt:%u type:%u", tgt_id, st);
 			return NULL;
 		}
 
 		rc = assign_roles(d_bdev, tgt_id);
 		if (rc) {
-			D_ERROR("Failed to assign roles. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to assign roles");
 			return NULL;
 		}
 
 		return d_bdev;
 	} else if (rc) {
-		D_ERROR("Failed to get device info for tgt:%u type:%u, "DF_RC"\n",
-			tgt_id, st, DP_RC(rc));
+		DL_ERROR(rc, "Failed to get device info for tgt:%u type:%u", tgt_id, st);
 		return NULL;
 	}
 
@@ -1293,8 +1284,8 @@ assign_xs_bdev(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_type st,
 	 */
 	d_bdev = lookup_dev_by_id(dev_info->sdi_id);
 	if (d_bdev == NULL)
-		D_ERROR("Device "DF_UUID" for target %d type %d isn't plugged or the "
-			"SMD table is stale/corrupted.\n",
+		D_ERROR("Device " DF_UUID
+			" for target %d type %d isn't plugged or the SMD table is stale/corrupted",
 			DP_UUID(dev_info->sdi_id), tgt_id, st);
 	smd_dev_free_info(dev_info);
 
@@ -1315,14 +1306,14 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	D_ASSERT(ctxt->bxc_xs_blobstores[st] == NULL);
 
 	if (d_list_empty(&nvme_glb.bd_bdevs)) {
-		D_ERROR("No available SPDK bdevs, please check whether "
-			"VOS_BDEV_CLASS is set properly.\n");
+		D_ERROR(
+		    "No available SPDK bdevs, please check whether VOS_BDEV_CLASS is set properly");
 		return -DER_UNINIT;
 	}
 
 	ctxt->bxc_xs_blobstores[st] = alloc_xs_blobstore();
 	if (ctxt->bxc_xs_blobstores[st] == NULL) {
-		D_ERROR("Failed to allocate memory for xs blobstore\n");
+		D_ERROR("Failed to allocate memory for xs blobstore");
 		return -DER_NOMEM;
 	}
 
@@ -1360,15 +1351,14 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 		} else if (dev_state == SMD_DEV_FAULTY) {
 			bbs->bb_state = BIO_BS_STATE_OUT;
 		} else {
-			D_ERROR("Invalid SMD state:%d\n", dev_state);
+			D_ERROR("Invalid SMD state:%d", dev_state);
 			return -DER_INVAL;
 		}
 
 		/* Initialize health monitor */
 		rc = bio_init_health_monitoring(bbs, d_bdev->bb_name);
 		if (rc != 0) {
-			D_ERROR("BIO health monitor init failed. "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "BIO health monitor init failed");
 			return rc;
 		}
 
@@ -1382,8 +1372,8 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 			return -DER_INVAL;
 		bbs->bb_bs = bs;
 
-		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s\n",
-			tgt_id, ctxt, d_bdev->bb_name);
+		D_DEBUG(DB_MGMT, "Loaded bs, tgt_id:%d, xs:%p dev:%s", tgt_id, ctxt,
+			d_bdev->bb_name);
 	}
 
 	if (bbs->bb_state == BIO_BS_STATE_OUT)
@@ -1395,7 +1385,7 @@ init_xs_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id, enum smd_dev_typ
 	D_ASSERT(bxb->bxb_io_channel == NULL);
 	bxb->bxb_io_channel = spdk_bs_alloc_io_channel(bs);
 	if (bxb->bxb_io_channel == NULL) {
-		D_ERROR("Failed to create io channel\n");
+		D_ERROR("Failed to create io channel");
 		return -DER_NOMEM;
 	}
 
@@ -1475,7 +1465,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * wait for all other xstreams finalized first.
 			 */
 			if (nvme_glb.bd_xstream_cnt != 0) {
-				D_DEBUG(DB_MGMT, "Init xs waits\n");
+				D_DEBUG(DB_MGMT, "Init xs waits");
 				ABT_cond_wait(nvme_glb.bd_barrier,
 					      nvme_glb.bd_mutex);
 			}
@@ -1483,7 +1473,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			fini_bio_bdevs(ctxt);
 
 			common_prep_arg(&cp_arg);
-			D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems\n");
+			D_DEBUG(DB_MGMT, "Finalizing SPDK subsystems");
 			spdk_subsystem_fini(common_fini_cb, &cp_arg);
 			/*
 			 * spdk_subsystem_fini() won't run to completion if
@@ -1564,8 +1554,8 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	ABT_mutex_lock(nvme_glb.bd_mutex);
 	nvme_glb.bd_xstream_cnt++;
 
-	D_INFO("Initialize NVMe context, tgt_id:%d, init_thread:%p\n",
-	       tgt_id, nvme_glb.bd_init_thread);
+	D_INFO("Initialize NVMe context, tgt_id:%d, init_thread:%p", tgt_id,
+	       nvme_glb.bd_init_thread);
 
 	/*
 	 * Register SPDK thread beforehand, it could be used for poll device
@@ -1576,7 +1566,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 	snprintf(th_name, sizeof(th_name), "daos_spdk_%d", tgt_id);
 	ctxt->bxc_thread = spdk_thread_create((const char *)th_name, NULL);
 	if (ctxt->bxc_thread == NULL) {
-		D_ERROR("failed to alloc SPDK thread\n");
+		D_ERROR("failed to alloc SPDK thread");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -1603,7 +1593,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 		if (cp_arg.cca_rc != 0) {
 			rc = cp_arg.cca_rc;
-			D_ERROR("failed to init bdevs, rc:%d\n", rc);
+			D_ERROR("failed to init bdevs, rc:%d", rc);
 			goto out;
 		}
 
@@ -1615,8 +1605,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 		nvme_glb.bd_init_thread = ctxt->bxc_thread;
 		rc = init_bio_bdevs(ctxt);
 		if (rc != 0) {
-			D_ERROR("failed to init bio_bdevs, "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to init bio_bdevs");
 			goto out;
 		}
 
@@ -1627,14 +1616,14 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 			rc = spdk_rpc_initialize(nvme_glb.bd_rpc_srv_addr);
 			if (rc != 0) {
-				D_ERROR("failed to start SPDK JSON-RPC server at %s, "DF_RC"\n",
+				D_ERROR("failed to start SPDK JSON-RPC server at %s, " DF_RC,
 					nvme_glb.bd_rpc_srv_addr, DP_RC(daos_errno2der(-rc)));
 				goto out;
 			}
 
 			/* Set SPDK JSON-RPC server state to receive and process RPCs */
 			spdk_rpc_set_state(SPDK_RPC_RUNTIME);
-			D_DEBUG(DB_MGMT, "SPDK JSON-RPC server listening at %s\n",
+			D_DEBUG(DB_MGMT, "SPDK JSON-RPC server listening at %s",
 				nvme_glb.bd_rpc_srv_addr);
 		}
 	}
@@ -1666,7 +1655,7 @@ bio_xsctxt_alloc(struct bio_xs_context **pctxt, int tgt_id, bool self_polling)
 
 	ctxt->bxc_dma_buf = dma_buffer_create(bio_chk_cnt_init, tgt_id);
 	if (ctxt->bxc_dma_buf == NULL) {
-		D_ERROR("failed to initialize dma buffer\n");
+		D_ERROR("failed to initialize dma buffer");
 		rc = -DER_NOMEM;
 		goto out;
 	}
@@ -1693,7 +1682,7 @@ bio_nvme_ctl(unsigned int cmd, void *arg)
 		ABT_mutex_unlock(nvme_glb.bd_mutex);
 		break;
 	default:
-		D_ERROR("Invalid ctl cmd %d\n", cmd);
+		D_ERROR("Invalid ctl cmd %d", cmd);
 		rc = -DER_INVAL;
 		break;
 	}
@@ -1709,7 +1698,7 @@ setup_bio_bdev(void *arg)
 	int			 rc;
 
 	if (!is_server_started()) {
-		D_INFO("Skip device setup on server start/shutdown\n");
+		D_INFO("Skip device setup on server start/shutdown");
 		return;
 	}
 
@@ -1717,17 +1706,15 @@ setup_bio_bdev(void *arg)
 
 	rc = smd_dev_get_by_id(d_bdev->bb_uuid, &dev_info);
 	if (rc != 0) {
-		D_ERROR("Original dev "DF_UUID" not in SMD. "DF_RC"\n",
-			DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Original dev " DF_UUID " not in SMD", DP_UUID(d_bdev->bb_uuid));
 		return;
 	}
 
 	if (dev_info->sdi_state == SMD_DEV_FAULTY) {
-		D_INFO("Faulty dev "DF_UUID" is plugged back\n",
-		       DP_UUID(d_bdev->bb_uuid));
+		D_INFO("Faulty dev " DF_UUID " is plugged back", DP_UUID(d_bdev->bb_uuid));
 		goto out;
 	} else if (dev_info->sdi_state != SMD_DEV_NORMAL) {
-		D_ERROR("Invalid dev state %d\n", dev_info->sdi_state);
+		D_ERROR("Invalid dev state %d", dev_info->sdi_state);
 		goto out;
 	}
 
@@ -1765,8 +1752,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		if (d_bdev != NULL)
 			continue;
 
-		D_INFO("Detected hot plugged device %s\n",
-		       spdk_bdev_get_name(bdev));
+		D_INFO("Detected hot plugged device %s", spdk_bdev_get_name(bdev));
 		/* Print a console message */
 		D_PRINT("Detected hot plugged device %s\n",
 			spdk_bdev_get_name(bdev));
@@ -1776,8 +1762,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		/* don't support hot plug for sys device yet */
 		rc = create_bio_bdev(ctxt, spdk_bdev_get_name(bdev), &d_bdev);
 		if (rc) {
-			D_ERROR("Failed to init hot plugged device %s\n",
-				spdk_bdev_get_name(bdev));
+			D_ERROR("Failed to init hot plugged device %s", spdk_bdev_get_name(bdev));
 			break;
 		}
 
@@ -1792,8 +1777,7 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		bbs = d_bdev->bb_blobstore;
 		/* The device isn't used by DAOS yet */
 		if (bbs == NULL) {
-			D_INFO("New device "DF_UUID" is plugged back\n",
-			       DP_UUID(d_bdev->bb_uuid));
+			D_INFO("New device " DF_UUID " is plugged back", DP_UUID(d_bdev->bb_uuid));
 			continue;
 		}
 
@@ -1809,8 +1793,8 @@ scan_bio_bdevs(struct bio_xs_context *ctxt, uint64_t now)
 		bbs = d_bdev->bb_blobstore;
 		/* Device not used by DAOS */
 		if (bbs == NULL && !d_bdev->bb_replacing) {
-			D_DEBUG(DB_MGMT, "Removed device "DF_UUID"(%s)\n",
-				DP_UUID(d_bdev->bb_uuid), d_bdev->bb_name);
+			D_DEBUG(DB_MGMT, "Removed device " DF_UUID "(%s)", DP_UUID(d_bdev->bb_uuid),
+				d_bdev->bb_name);
 			d_list_del_init(&d_bdev->bb_link);
 			destroy_bio_bdev(d_bdev);
 			continue;
@@ -1844,15 +1828,17 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 	/* Scan all devices present in bio_bdev list */
 	d_list_for_each_entry(d_bdev, bio_bdev_list(), bb_link) {
 		if ((d_bdev->bb_led_expiry_time != 0) && (d_bdev->bb_led_expiry_time < now)) {
-			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for "DF_UUID"\n",
+			D_DEBUG(DB_MGMT, "Clearing LED QUICK_BLINK state for " DF_UUID,
 				DP_UUID(d_bdev->bb_uuid));
 
 			/* LED will be reset to faulty or normal state based on SSDs bio_bdevs */
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
 			if (rc != 0)
-				D_ERROR("Reset LED identify state after timeout failed on device:"
-					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				DL_ERROR(rc,
+					 "Reset LED identify state after timeout failed on "
+					 "device:" DF_UUID,
+					 DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }

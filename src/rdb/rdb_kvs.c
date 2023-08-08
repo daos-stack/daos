@@ -64,7 +64,7 @@ rdb_kvs_open_path(struct rdb *db, uint64_t index, const rdb_path_t *path,
 	};
 
 	/* Walk through the keys after "p". */
-	D_DEBUG(DB_TRACE, "walking path %zu from kvs %p\n", p.iov_len, kvs);
+	D_DEBUG(DB_TRACE, "walking path %zu from kvs %p", p.iov_len, kvs);
 	p.iov_buf += p.iov_len;
 	p.iov_buf_len -= p.iov_len;
 	p.iov_len = path->iov_len - p.iov_len;
@@ -78,7 +78,7 @@ rdb_kvs_open_path(struct rdb *db, uint64_t index, const rdb_path_t *path,
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DB_TRACE, "got kvs handle "DF_X64"\n", arg.deo_parent);
+	D_DEBUG(DB_TRACE, "got kvs handle " DF_X64, arg.deo_parent);
 	*object = arg.deo_parent;
 	return 0;
 }
@@ -124,8 +124,7 @@ rdb_kvs_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != 0)
 		goto err_kvs;
 
-	D_DEBUG(DB_TRACE, DF_DB": created %p len %u\n", DP_DB(arg->dea_db), kvs,
-		ksize);
+	D_DEBUG(DB_TRACE, DF_DB ": created %p len %u", DP_DB(arg->dea_db), kvs, ksize);
 	*link = &kvs->de_entry;
 	return 0;
 
@@ -140,7 +139,7 @@ rdb_kvs_free_ref(struct daos_llink *llink)
 {
 	struct rdb_kvs *kvs = rdb_kvs_obj(llink);
 
-	D_DEBUG(DB_TRACE, "freeing %p "DF_X64"\n", kvs, kvs->de_object);
+	D_DEBUG(DB_TRACE, "freeing %p " DF_X64, kvs, kvs->de_object);
 	D_FREE(kvs);
 }
 
@@ -199,8 +198,8 @@ rdb_kvs_lookup(struct rdb *db, const rdb_path_t *path, uint64_t index,
 	struct daos_llink	       *entry;
 	int				rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": looking up "DF_IOV": alloc=%d\n", DP_DB(db),
-		DP_IOV(path), alloc);
+	D_DEBUG(DB_TRACE, DF_DB ": looking up " DF_IOV ": alloc=%d", DP_DB(db), DP_IOV(path),
+		alloc);
 
 	arg.dea_db = db;
 	arg.dea_index = index;

@@ -44,12 +44,11 @@ daos_oclass_attr_find(daos_obj_id_t oid, uint32_t *nr_grps)
 	/* see daos_objid_generate */
 	oc = oclass_ident2cl(daos_obj_id2class(oid), nr_grps);
 	if (!oc) {
-		D_DEBUG(DB_PL, "Unknown object class %u for "DF_OID"\n",
+		D_DEBUG(DB_PL, "Unknown object class %u for " DF_OID,
 			(unsigned int)daos_obj_id2class(oid), DP_OID(oid));
 		return NULL;
 	}
-	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
-		oc->oc_name, DP_OID(oid));
+	D_DEBUG(DB_PL, "Find class %s for oid " DF_OID, oc->oc_name, DP_OID(oid));
 
 	return &oc->oc_attr;
 }
@@ -80,7 +79,7 @@ daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 
 	oc = oclass_ident2cl(cid, &nr_grps);
 	if (!oc) {
-		D_DEBUG(DB_PL, "Unknown object class %u\n", (unsigned int)cid);
+		D_DEBUG(DB_PL, "Unknown object class %u", (unsigned int)cid);
 		return -DER_INVAL;
 	}
 
@@ -114,7 +113,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 			str[0] = 'S';
 			i = snprintf(&str[1], MAX_OBJ_CLASS_NAME_LEN - 1, "%u", nr_grps);
 			if (i < 0) {
-				D_ERROR("Failed to encode object class name\n");
+				D_ERROR("Failed to encode object class name");
 				strcpy(str, "UNKNOWN");
 				return -1;
 			}
@@ -130,7 +129,7 @@ daos_oclass_id2name(daos_oclass_id_t oc_id, char *str)
 		str[i++] = 0;
 		i = snprintf(p, MAX_OBJ_CLASS_NAME_LEN - strlen(str), "%u", nr_grps);
 		if (i < 0) {
-			D_ERROR("Failed to encode object class name\n");
+			D_ERROR("Failed to encode object class name");
 			strcpy(str, "UNKNOWN");
 			return -1;
 		}
@@ -265,7 +264,7 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum d
 	oc = oclass_ident2cl(oc_id, &nr_grps);
 	if (!oc) {
 		rc = -DER_INVAL;
-		D_ERROR("oclass_ident2cl(oc_id %d), failed "DF_RC"\n", oc_id, DP_RC(rc));
+		DL_ERROR(rc, "oclass_ident2cl(oc_id %d), failed", oc_id);
 		return rc;
 	}
 
@@ -294,14 +293,14 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum d
 			ca.ca_grp_nr -= reserve_grp;
 	}
 	if (grp_size > domain_nr) {
-		D_ERROR("grp size (%u) (%u) is larger than domain nr (%u)\n",
-			grp_size, DAOS_OBJ_REPL_MAX, domain_nr);
+		D_ERROR("grp size (%u) (%u) is larger than domain nr (%u)", grp_size,
+			DAOS_OBJ_REPL_MAX, domain_nr);
 		return -DER_INVAL;
 	}
 
 	if (ca.ca_grp_nr * grp_size > target_nr) {
-		D_ERROR("grp_size (%u) x grp_nr (%u) is larger than targets (%u)\n",
-			grp_size, ca.ca_grp_nr, target_nr);
+		D_ERROR("grp_size (%u) x grp_nr (%u) is larger than targets (%u)", grp_size,
+			ca.ca_grp_nr, target_nr);
 		return -DER_INVAL;
 	}
 
@@ -314,8 +313,7 @@ out:
 		*nr = oc_id;
 	}
 
-	D_DEBUG(DB_PL, "found object class, group_nr: %d, redun: %d\n",
-		*nr, *ord);
+	D_DEBUG(DB_PL, "found object class, group_nr: %d, redun: %d", *nr, *ord);
 	return 0;
 }
 
@@ -492,18 +490,18 @@ obj_ec_codec_init()
 		k = oc->oc_attr.ca_ec_k;
 		p = oc->oc_attr.ca_ec_p;
 		if (k > OBJ_EC_MAX_K || p > OBJ_EC_MAX_P) {
-			D_ERROR("invalid k %d p %d (max k %d, max p %d)\n",
-				k, p, OBJ_EC_MAX_K, OBJ_EC_MAX_P);
+			D_ERROR("invalid k %d p %d (max k %d, max p %d)", k, p, OBJ_EC_MAX_K,
+				OBJ_EC_MAX_P);
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
 		if (k < 2 || p < 1) {
-			D_ERROR("invalid k %d / p %d (min k 2, min p 1).\n",
-				k, p);
+			D_ERROR("invalid k %d / p %d (min k 2, min p 1)", k, p);
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
 		if (p > k) {
-			D_ERROR("invalid k %d p %d (parity target number cannot"
-				" exceed data target number).\n", k, p);
+			D_ERROR("invalid k %d p %d (parity target number cannot exceed data target "
+				"number)",
+				k, p);
 			D_GOTO(failed, rc = -DER_INVAL);
 		}
 		m = k + p;
@@ -809,7 +807,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	if (unlikely(grp_size > domain_nr)) {
 		/** cannot meet redundancy requirement */
 		rc = -DER_INVAL;
-		D_ERROR("grp_size %d > domain_nr %d, "DF_RC"\n", grp_size, domain_nr, DP_RC(rc));
+		DL_ERROR(rc, "grp_size %d > domain_nr %d", grp_size, domain_nr);
 		return rc;
 	}
 
@@ -838,7 +836,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		grp_nr = max(1024, target_nr * 80 / 100);
 		break;
 	default:
-		D_ERROR("Invalid sharding hint\n");
+		D_ERROR("Invalid sharding hint");
 		return -DER_INVAL;
 	}
 
@@ -890,12 +888,9 @@ oclass_resil_str(struct daos_obj_class *oc)
 static inline void
 oclass_debug(struct daos_obj_class *oc)
 {
-	D_DEBUG(DB_PL,
-		"ID: %u, name: %s, resil: %s, resil_degree: %d, "
-		"grp_size: %d, grp_nr: %d\n",
-		(unsigned int)oc->oc_id, oc->oc_name, oclass_resil_str(oc),
-		oc->oc_resil_degree, daos_oclass_grp_size(&oc->oc_attr),
-		oc->oc_grp_nr);
+	D_DEBUG(DB_PL, "ID: %u, name: %s, resil: %s, resil_degree: %d, grp_size: %d, grp_nr: %d",
+		(unsigned int)oc->oc_id, oc->oc_name, oclass_resil_str(oc), oc->oc_resil_degree,
+		daos_oclass_grp_size(&oc->oc_attr), oc->oc_grp_nr);
 }
 
 static void
@@ -904,7 +899,7 @@ oclass_array_debug(char *array_name, struct daos_obj_class **oc_array,
 {
 	int	i;
 
-	D_DEBUG(DB_PL, "Object class %s array[%d]:\n", array_name, array_size);
+	D_DEBUG(DB_PL, "Object class %s array[%d]:", array_name, array_size);
 	for (i = 0; i < array_size; i++)
 		oclass_debug(oc_array[i]);
 }
@@ -951,7 +946,7 @@ obj_class_init(void)
 	rc = daos_array_sort(oc_ident_array, oc_ident_array_sz, true,
 			     &oc_ident_sort_ops);
 	if (rc) {
-		D_ERROR("object class ID should be unique\n");
+		D_ERROR("object class ID should be unique");
 		goto failed;
 	}
 	oclass_array_debug("ident", oc_ident_array, oc_ident_array_sz);
@@ -959,7 +954,7 @@ obj_class_init(void)
 	rc = daos_array_sort(oc_resil_array, oc_resil_array_sz, true,
 			     &oc_resil_sort_ops);
 	if (rc) {
-		D_ERROR("object class resilience attribute should be unique\n");
+		D_ERROR("object class resilience attribute should be unique");
 		goto failed;
 	}
 	oclass_array_debug("resilience", oc_resil_array, oc_resil_array_sz);

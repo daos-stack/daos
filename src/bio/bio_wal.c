@@ -58,14 +58,14 @@ meta_csum_init(struct bio_meta_context *mc, uint16_t csum_type)
 
 	mc->mc_csum_algo = daos_mhash_type2algo(csum_type);
 	if (mc->mc_csum_algo == NULL) {
-		D_ERROR("Failed to init csum type: %u\n", csum_type);
+		D_ERROR("Failed to init csum type: %u", csum_type);
 		return -DER_INVAL;
 	}
 
 	if (mc->mc_csum_algo->cf_init) {
 		rc = mc->mc_csum_algo->cf_init(&mc->mc_csum_ctx);
 		if (rc)
-			D_ERROR("Csum type init failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Csum type init failed");
 	}
 
 	return rc;
@@ -241,13 +241,13 @@ reserve_allowed(struct wal_super_info *si)
 	 */
 	if (si->si_tx_failed) {
 		D_ASSERT(!d_list_empty(&si->si_pending_list));
-		D_WARN("Prior transaction failed, pending transactions not drained\n");
+		D_WARN("Prior transaction failed, pending transactions not drained");
 		return false;
 	}
 
 	/* Freeze ID reserving when checkpointing didn't reclaim space in time */
 	if (wal_free_blks(si) < WAL_MAX_TRANS_BLKS) {
-		D_WARN("WAL space is insufficient (%u free blocks)\n", wal_free_blks(si));
+		D_WARN("WAL space is insufficient (%u free blocks)", wal_free_blks(si));
 		return false;
 	}
 
@@ -550,7 +550,7 @@ fill_trans_blks(struct bio_meta_context *mc, struct bio_sglist *bsgl, struct ume
 
 	/* Simulate a server crash before the in-flight WAL tx committed */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
-		D_ERROR("Injected WAL tx lost for ID:"DF_U64".\n", tx->utx_id);
+		D_ERROR("Injected WAL tx lost for ID:" DF_U64, tx->utx_id);
 		return;
 	}
 
@@ -881,8 +881,8 @@ generate_data_csum(struct bio_meta_context *mc, struct bio_desc *biod_data,
 		payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
 		rc = meta_csum_calc(mc, payload, act->ac_csum.size, &act->ac_csum.csum, csum_len);
 		if (rc) {
-			D_ERROR("Failed to calculate data csum off:"DF_U64" len:%u, "DF_RC"\n",
-				act->ac_csum.addr, act->ac_csum.size, DP_RC(rc));
+			DL_ERROR(rc, "Failed to calculate data csum off:" DF_U64 " len:%u",
+				 act->ac_csum.addr, act->ac_csum.size);
 			break;
 		}
 		dc_arr->dca_nr++;
@@ -891,7 +891,7 @@ generate_data_csum(struct bio_meta_context *mc, struct bio_desc *biod_data,
 	if (rc)
 		free_data_csum(dc_arr);
 	else
-		D_DEBUG(DB_IO, "Generate %u data csums\n", dc_arr->dca_nr);
+		D_DEBUG(DB_IO, "Generate %u data csums", dc_arr->dca_nr);
 
 	return rc;
 }
@@ -908,14 +908,14 @@ wait_tx_committed(struct wal_tx_desc *wal_tx)
 	D_ASSERT(xs_ctxt != NULL);
 
 	if (xs_ctxt->bxc_self_polling) {
-		D_DEBUG(DB_IO, "Self poll completion\n");
+		D_DEBUG(DB_IO, "Self poll completion");
 		rc = xs_poll_completion(xs_ctxt, &biod_tx->bd_inflights, 0);
 		if (rc)
-			D_ERROR("Self pool completion failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Self pool completion failed");
 	} else if (biod_tx->bd_inflights != 0 || biod_data != NULL) {
 		rc = ABT_eventual_wait(biod_tx->bd_dma_done, NULL);
 		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT_eventual_wait failed. %d\n", rc);
+			D_ERROR("ABT_eventual_wait failed. %d", rc);
 	}
 	/* The completion must have been called */
 	D_ASSERT(d_list_empty(&wal_tx->td_link));
@@ -944,13 +944,13 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 		return 0;
 	}
 
-	D_DEBUG(DB_IO, "MC:%p WAL commit ID:"DF_U64" seq:%u off:%u, biod_data:%p inflights:%u\n",
+	D_DEBUG(DB_IO, "MC:%p WAL commit ID:" DF_U64 " seq:%u off:%u, biod_data:%p inflights:%u",
 		mc, tx_id, id2seq(tx_id), id2off(tx_id), biod_data,
 		biod_data != NULL ? biod_data->bd_inflights : 0);
 
 	rc = generate_data_csum(mc, biod_data, &dc_arr);
 	if (rc) {
-		D_ERROR("Failed to generate async data csum. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to generate async data csum");
 		return rc;
 	}
 
@@ -960,7 +960,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 
 	D_ASSERT(blk_desc.bd_blks > 0);
 	if (blk_desc.bd_blks > WAL_MAX_TRANS_BLKS) {
-		D_ERROR("Too large transaction (%u blocks)\n", blk_desc.bd_blks);
+		D_ERROR("Too large transaction (%u blocks)", blk_desc.bd_blks);
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -1021,7 +1021,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 	 */
 	rc = bio_iod_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		D_ERROR("WAL IOD prepare failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "WAL IOD prepare failed");
 		wal_completion(&wal_tx, rc);
 		D_ASSERT(d_list_empty(&wal_tx.td_link));
 		goto out;
@@ -1045,7 +1045,7 @@ bio_wal_commit(struct bio_meta_context *mc, struct umem_wal_tx *tx, struct bio_d
 
 	rc = bio_iod_post_async(biod, 0);
 	if (rc)
-		D_ERROR("WAL commit failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "WAL commit failed");
 
 	/* Wait for WAL commit completion */
 	wait_tx_committed(&wal_tx);
@@ -1071,29 +1071,29 @@ load_wal_header(struct bio_meta_context *mc)
 
 	rc = bio_read(mc->mc_wal, addr, &iov);
 	if (rc) {
-		D_ERROR("Failed to load WAL header. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to load WAL header");
 		return rc;
 	}
 
 	if (hdr->wh_magic != BIO_WAL_MAGIC) {
-		D_ERROR("Invalid WAL header. %x\n", hdr->wh_magic);
+		D_ERROR("Invalid WAL header. %x", hdr->wh_magic);
 		return -DER_UNINIT;
 	}
 
 	if (hdr->wh_version != BIO_WAL_VERSION) {
-		D_ERROR("Invalid WAL version. %u\n", hdr->wh_version);
+		D_ERROR("Invalid WAL version. %u", hdr->wh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
 	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
 	if (rc) {
-		D_ERROR("Calculate WAL headr csum failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Calculate WAL headr csum failed");
 		return rc;
 	}
 
 	if (csum != hdr->wh_csum) {
-		D_ERROR("WAL header is corrupted.\n");
+		D_ERROR("WAL header is corrupted");
 		return -DER_CSUM;
 	}
 
@@ -1111,7 +1111,7 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 	csum_len = meta_csum_len(mc);
 	rc = meta_csum_calc(mc, hdr, hdr_sz - csum_len, csum, csum_len);
 	if (rc) {
-		D_ERROR("Calculate headr csum failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Calculate headr csum failed");
 		return rc;
 	}
 
@@ -1120,7 +1120,7 @@ write_header(struct bio_meta_context *mc, struct bio_io_context *ioc, void *hdr,
 
 	rc = bio_write(ioc, addr, &iov);
 	if (rc) {
-		D_ERROR("Failed to write header. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to write header");
 		return rc;
 	}
 
@@ -1234,18 +1234,18 @@ verify_tx_hdr(struct wal_super_info *si, struct wal_trans_head *hdr, uint64_t tx
 			 id2seq(hdr->th_id), id2seq(tx_id));
 		return committed ? -DER_INVAL : 1;
 	} else if (id2seq(hdr->th_id) > id2seq(tx_id)) {
-		D_ERROR("Invalid sequence number detected, %u > %u\n",
-			id2seq(hdr->th_id), id2seq(tx_id));
+		D_ERROR("Invalid sequence number detected, %u > %u", id2seq(hdr->th_id),
+			id2seq(tx_id));
 		return -DER_INVAL;
 	}
 
 	if (hdr->th_id != tx_id) {
-		D_ERROR("Mismatched transaction ID. "DF_U64" != "DF_U64"\n", hdr->th_id, tx_id);
+		D_ERROR("Mismatched transaction ID. " DF_U64 " != " DF_U64, hdr->th_id, tx_id);
 		return -DER_INVAL;
 	}
 
 	if (hdr->th_tot_ents == 0) {
-		D_ERROR("Invalid entry number\n");
+		D_ERROR("Invalid entry number");
 		return -DER_INVAL;
 	}
 
@@ -1309,19 +1309,19 @@ verify_data(struct bio_meta_context *mc, uint64_t off, uint32_t len, uint32_t ex
 	rc = bio_readv(mc->mc_data, &bsgl, &sgl);
 	bio_sgl_fini(&bsgl);
 	if (rc) {
-		D_ERROR("Read data from data blob failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Read data from data blob failed");
 		return rc;
 	}
 
 	csum_len = meta_csum_len(mc);
 	rc = meta_csum_calc(mc, buf, len, &csum, csum_len);
 	if (rc) {
-		D_ERROR("Calculate data csum failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Calculate data csum failed");
 		return rc;
 	}
 
 	if (csum != expected_csum) {
-		D_DEBUG(DB_IO, "Mismatched data csum, %u != %u\n", csum, expected_csum);
+		D_DEBUG(DB_IO, "Mismatched data csum, %u != %u", csum, expected_csum);
 		return 1;
 	}
 
@@ -1461,7 +1461,7 @@ verify_tx(struct bio_meta_context *mc, char *buf, struct wal_blks_desc *blk_desc
 
 	rc = meta_csum_calc(mc, buf, buf_len, &csum, csum_len);
 	if (rc) {
-		D_ERROR("Calculate WAL tx csum failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Calculate WAL tx csum failed");
 		return rc;
 	}
 
@@ -1577,8 +1577,7 @@ replay_tx(struct wal_super_info *si, char *buf,
 		if (act->ac_opc != UMEM_ACT_CSUM) {
 			rc = replay_cb(hdr->th_id, act, arg);
 			if (rc)
-				D_ERROR("Replay CB on action %u failed. "DF_RC"\n",
-					act->ac_opc, DP_RC(rc));
+				DL_ERROR(rc, "Replay CB on action %u failed", act->ac_opc);
 		}
 
 		nr++;
@@ -1611,7 +1610,7 @@ unmap_wal(struct bio_meta_context *mc, uint64_t unmap_start, uint64_t unmap_end,
 
 	rc = d_sgl_init(&unmap_sgl, 2);
 	if (rc) {
-		D_ERROR("Failed to init unmap SGL. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to init unmap SGL");
 		return rc;
 	}
 
@@ -1644,7 +1643,7 @@ unmap_wal(struct bio_meta_context *mc, uint64_t unmap_start, uint64_t unmap_end,
 	rc = bio_blob_unmap_sgl(mc->mc_wal, &unmap_sgl, blk_sz);
 	d_sgl_fini(&unmap_sgl, false);
 	if (rc) {
-		D_ERROR("Unmap WAL failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Unmap WAL failed");
 		return rc;
 	}
 
@@ -1694,14 +1693,14 @@ load_wal:
 	blk_off = 0;
 	rc = load_wal(mc, buf, max_blks, tx_id);
 	if (rc) {
-		D_ERROR("Failed to load WAL. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to load WAL");
 		goto out;
 	}
 
 	while (1) {
 		/* Something went wrong, it's impossible to replay the whole WAL */
 		if (id2seq(tx_id) != id2seq(start_id) && id2off(tx_id) >= id2off(start_id)) {
-			D_ERROR("Whole WAL replayed. "DF_U64"/"DF_U64"\n", start_id, tx_id);
+			D_ERROR("Whole WAL replayed. " DF_U64 "/" DF_U64, start_id, tx_id);
 			rc = -DER_INVAL;
 			break;
 		}
@@ -1715,7 +1714,7 @@ load_wal:
 
 		if (blk_off + blk_desc.bd_blks > max_blks) {
 			if (blk_off == 0) {
-				D_ERROR("Too large tx, the WAL is corrupted\n");
+				D_ERROR("Too large tx, the WAL is corrupted");
 				rc = -DER_INVAL;
 				break;
 			}
@@ -1761,7 +1760,7 @@ load_wal:
 	}
 out:
 	if (rc >= 0) {
-		D_DEBUG(DB_IO, "Replayed %u WAL transactions\n", nr_replayed);
+		D_DEBUG(DB_IO, "Replayed %u WAL transactions", nr_replayed);
 		D_ASSERT(si->si_commit_blks == 0 || wal_id_cmp(si, tx_id, si->si_commit_id) > 0);
 		si->si_unused_id = wal_next_id(si, si->si_commit_id, si->si_commit_blks);
 
@@ -1789,7 +1788,7 @@ out:
 		 */
 		rc = unmap_wal(mc, unmap_start, unmap_end, NULL);
 		if (rc)
-			D_ERROR("Unmap after replay failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Unmap after replay failed");
 
 		/* upper layer (VOS) rehydration metrics */
 		if (wrs != NULL) {
@@ -1799,7 +1798,7 @@ out:
 			wrs->wrs_tx_cnt = total_tx;
 		}
 	} else {
-		D_ERROR("WAL replay failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "WAL replay failed");
 	}
 
 	D_FREE(dbuf);
@@ -1829,14 +1828,14 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	/* Load single WAL block to get the block nr used by the transaction */
 	rc = load_wal(mc, buf, 1, tx_id);
 	if (rc) {
-		D_ERROR("Failed to load WAL. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to load WAL");
 		goto out;
 	}
 
 	hdr = (struct wal_trans_head *)buf;
 	rc = verify_tx_hdr(si, hdr, tx_id);
 	if (rc) {
-		D_ERROR("Corrupted WAL transaction head\n");
+		D_ERROR("Corrupted WAL transaction head");
 		goto out;
 	}
 
@@ -1848,7 +1847,7 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	/* Unmap the checkpointed regions */
 	rc = unmap_wal(mc, unmap_start, unmap_end, purged_blks);
 	if (rc)	/* Flush the WAL header anyway */
-		D_ERROR("Unmap checkpointed region failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Unmap checkpointed region failed");
 
 	si->si_ckp_id = tx_id;
 	si->si_ckp_blks = blk_desc.bd_blks;
@@ -1857,7 +1856,7 @@ bio_wal_checkpoint(struct bio_meta_context *mc, uint64_t tx_id, uint64_t *purged
 	/* Flush the WAL header */
 	rc = bio_wal_flush_header(mc);
 	if (rc)
-		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Flush WAL header failed");
 out:
 	D_FREE(buf);
 	return rc;
@@ -1888,14 +1887,14 @@ wal_close(struct bio_meta_context *mc)
 
 	/* Simulate a server crash before in-flight WAL commit completed */
 	if (DAOS_FAIL_CHECK(DAOS_NVME_WAL_TX_LOST)) {
-		D_ERROR("Injected WAL tx lost, reset committed ID to zero.\n");
+		D_ERROR("Injected WAL tx lost, reset committed ID to zero");
 		si->si_commit_id = 0;
 		si->si_commit_blks = 0;
 	}
 
 	rc = bio_wal_flush_header(mc);
 	if (rc)
-		D_ERROR("Flush WAL header failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Flush WAL header failed");
 
 	ABT_mutex_free(&si->si_mutex);
 	ABT_cond_free(&si->si_rsrv_wq);
@@ -1955,29 +1954,29 @@ load_meta_header(struct bio_meta_context *mc)
 
 	rc = bio_read(mc->mc_meta, addr, &iov);
 	if (rc) {
-		D_ERROR("Failed to load meta header. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to load meta header");
 		return rc;
 	}
 
 	if (hdr->mh_magic != BIO_META_MAGIC) {
-		D_ERROR("Invalid meta header. %x\n", hdr->mh_magic);
+		D_ERROR("Invalid meta header. %x", hdr->mh_magic);
 		return -DER_UNINIT;
 	}
 
 	if (hdr->mh_version != BIO_META_VERSION) {
-		D_ERROR("Invalid meta version. %u\n", hdr->mh_version);
+		D_ERROR("Invalid meta version. %u", hdr->mh_version);
 		return -DER_DF_INCOMPT;
 	}
 
 	csum_len = meta_csum_len(mc);
 	rc = meta_csum_calc(mc, hdr, sizeof(*hdr) - csum_len, &csum, csum_len);
 	if (rc) {
-		D_ERROR("Calculate meta headr csum failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Calculate meta headr csum failed");
 		return rc;
 	}
 
 	if (csum != hdr->mh_csum) {
-		D_ERROR("Meta header is corrupted.\n");
+		D_ERROR("Meta header is corrupted");
 		return -DER_CSUM;
 	}
 
@@ -2033,15 +2032,15 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	int			 rc;
 
 	if (fi->fi_meta_size < WAL_MIN_CAPACITY) {
-		D_ERROR("Meta size "DF_U64" is too small\n", fi->fi_meta_size);
+		D_ERROR("Meta size " DF_U64 " is too small", fi->fi_meta_size);
 		return -DER_INVAL;
 	}
 
 	if (fi->fi_wal_size < WAL_MIN_CAPACITY) {
-		D_ERROR("WAL size "DF_U64" is too small\n", fi->fi_wal_size);
+		D_ERROR("WAL size " DF_U64 " is too small", fi->fi_wal_size);
 		return -DER_INVAL;
 	} else if (fi->fi_wal_size > ((uint64_t)WAL_BLK_SZ * UINT32_MAX)) {
-		D_ERROR("WAL size "DF_U64" is too large\n", fi->fi_wal_size);
+		D_ERROR("WAL size " DF_U64 " is too large", fi->fi_wal_size);
 		return -DER_INVAL;
 	}
 
@@ -2052,7 +2051,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 	if (!force) {
 		rc = load_meta_header(mc);
 		if (rc != -DER_UNINIT) {
-			D_ERROR("Meta blob is already formatted!\n");
+			D_ERROR("Meta blob is already formatted!");
 			rc = -DER_ALREADY;
 			goto out;
 		}
@@ -2075,7 +2074,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 
 	rc = write_header(mc, mc->mc_meta, meta_hdr, sizeof(*meta_hdr), &meta_hdr->mh_csum);
 	if (rc) {
-		D_ERROR("Write meta header failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Write meta header failed");
 		goto out;
 	}
 
@@ -2089,7 +2088,7 @@ meta_format(struct bio_meta_context *mc, struct meta_fmt_info *fi, bool force)
 
 	rc = write_header(mc, mc->mc_wal, wal_hdr, sizeof(*wal_hdr), &wal_hdr->wh_csum);
 	if (rc) {
-		D_ERROR("Write WAL header failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Write WAL header failed");
 		goto out;
 	}
 out:
@@ -2130,7 +2129,7 @@ bio_meta_clear_empty(struct bio_meta_context *mc)
 	rc = write_header(mc, mc->mc_meta, hdr, sizeof(*hdr), &hdr->mh_csum);
 	if (rc) {
 		hdr->mh_flags |= META_HDR_FL_EMPTY;
-		D_ERROR("Write meta header failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Write meta header failed");
 	}
 
 	return rc;

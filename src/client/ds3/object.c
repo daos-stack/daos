@@ -51,7 +51,7 @@ ds3_obj_create(const char *key, ds3_obj_t **ds3o, ds3_bucket_t *ds3b)
 		return -EINVAL;
 
 	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
-		D_ERROR("Creating an object that ends with %s is not allowed.\n",
+		D_ERROR("Creating an object that ends with %s is not allowed",
 			LATEST_INSTANCE_SUFFIX);
 		return -EINVAL;
 	}
@@ -368,7 +368,7 @@ ds3_obj_mark_latest(const char *key, ds3_bucket_t *ds3b)
 		return -EINVAL;
 
 	if (ends_with(key, LATEST_INSTANCE_SUFFIX)) {
-		D_ERROR("Creating an object that ends with %s is not allowed.\n",
+		D_ERROR("Creating an object that ends with %s is not allowed",
 			LATEST_INSTANCE_SUFFIX);
 		return -EINVAL;
 	}

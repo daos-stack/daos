@@ -329,11 +329,11 @@ blob_init(struct ad_blob *blob)
 				     MAP_SHARED, blob->bb_fd, 0);
 		if (blob->bb_mmap == MAP_FAILED) {
 			rc = daos_errno2der(errno);
-			D_ERROR("mmap failed, errno %d, "DF_RC"\n", errno, DP_RC(rc));
+			DL_ERROR(rc, "mmap failed, errno %d", errno);
 			goto failed;
 		}
-		D_DEBUG(DB_TRACE, "blob path %s, mmap %p, size "DF_U64"\n",
-			blob->bb_path, blob->bb_mmap, blob_size(blob));
+		D_DEBUG(DB_TRACE, "blob path %s, mmap %p, size " DF_U64, blob->bb_path,
+			blob->bb_mmap, blob_size(blob));
 		buf = blob->bb_mmap;
 	}
 	for (i = 0; i < blob->bb_pgs_nr; i++) {
@@ -381,7 +381,7 @@ blob_init(struct ad_blob *blob)
 	return 0;
 failed:
 	/* NB: caller is supposed to call blob_decref()->blob_fini() */
-	D_ERROR("Failed to initialize blob, rc=%d\n", rc);
+	D_ERROR("Failed to initialize blob, rc=%d", rc);
 	return rc;
 }
 
@@ -391,7 +391,7 @@ blob_fini(struct ad_blob *blob)
 	struct ad_arena *arena;
 	struct ad_group *group;
 
-	D_DEBUG(DB_TRACE, "Finalizing blob\n");
+	D_DEBUG(DB_TRACE, "Finalizing blob");
 	D_ASSERT(d_list_empty(&blob->bb_gps_rsv));
 	D_ASSERT(d_list_empty(&blob->bb_ars_rsv));
 
@@ -512,7 +512,7 @@ blob_load(struct ad_blob *blob)
 		if (blob->bb_store.stor_ops->so_read != NULL) {
 			rc = blob->bb_store.stor_ops->so_read(&blob->bb_store, &iod, &sgl);
 			if (rc) {
-				D_ERROR("Failed to load storage contents: %d\n", rc);
+				D_ERROR("Failed to load storage contents: %d", rc);
 				goto out;
 			}
 		}
@@ -523,7 +523,7 @@ blob_load(struct ad_blob *blob)
 			D_ASSERT(ad->ad_id == i);
 			rc = arena_insert_free_entry(blob, ad);
 			if (rc) {
-				D_ERROR("Failed to insert arena free memory entry: %d\n", rc);
+				D_ERROR("Failed to insert arena free memory entry: %d", rc);
 				goto out;
 			}
 		}
@@ -567,12 +567,12 @@ blob_close(struct ad_blob *blob)
 	struct ad_group *group;
 
 	D_ASSERT(blob->bb_opened > 0);
-	D_DEBUG(DB_TRACE, "Close blob, openers=%d\n", blob->bb_opened);
+	D_DEBUG(DB_TRACE, "Close blob, openers=%d", blob->bb_opened);
 	blob->bb_opened--;
 	if (blob->bb_opened > 0)
 		return;
 
-	D_DEBUG(DB_TRACE, "Evict unpublished groups and arenas\n");
+	D_DEBUG(DB_TRACE, "Evict unpublished groups and arenas");
 	while ((group = d_list_pop_entry(&blob->bb_gps_rsv, struct ad_group, gp_link))) {
 		D_ASSERT(group->gp_unpub);
 		group_decref(group);
@@ -583,7 +583,7 @@ blob_close(struct ad_blob *blob)
 		arena_decref(arena);
 	}
 
-	D_DEBUG(DB_TRACE, "Unbind groups and arenas in LRU\n");
+	D_DEBUG(DB_TRACE, "Unbind groups and arenas in LRU");
 	d_list_for_each_entry(group, &blob->bb_gps_lru, gp_link)
 		group_unbind(group, false);
 
@@ -616,7 +616,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 		/* Open the file and obtain the size */
 		fd = open(path, O_RDWR);
 		if (fd == -1) {
-			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			D_ERROR("open %s failed, errno %d:%s", path, errno, strerror(errno));
 			return daos_errno2der(errno);
 		}
 
@@ -632,7 +632,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 				flags |= O_CREAT;
 				continue;
 			}
-			D_ERROR("open %s failed, errno %d:%s\n", path, errno, strerror(errno));
+			D_ERROR("open %s failed, errno %d:%s", path, errno, strerror(errno));
 			return daos_errno2der(errno);
 		}
 
@@ -641,8 +641,8 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 			rc = fallocate(fd, 0, 0, *size);
 			if (rc) {
 				rc = daos_errno2der(errno);
-				D_ERROR("fallocate blob file %s with size: "DF_U64" failed: "
-					DF_RC"\n", path, *size, DP_RC(rc));
+				DL_ERROR(rc, "fallocate blob file %s with size: " DF_U64 " failed",
+					 path, *size);
 				(void)close(fd);
 				return rc;
 			}
@@ -651,7 +651,7 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 			if (rc) {
 				(void)close(fd);
 				rc = daos_errno2der(errno);
-				D_ERROR("failed to sync blob file %s: "DF_RC"\n", path, DP_RC(rc));
+				DL_ERROR(rc, "failed to sync blob file %s", path);
 				return rc;
 			}
 		}
@@ -659,14 +659,14 @@ blob_file_open(struct ad_blob *blob, const char *path, size_t *size, bool create
 
 	if (fstat(fd, &stat_buf) != 0) {
 		close(fd);
-		D_ERROR("fstat %s failed, errno %d:%s\n", path, errno, strerror(errno));
+		D_ERROR("fstat %s failed, errno %d:%s", path, errno, strerror(errno));
 		return daos_errno2der(errno);
 	}
 
 	blob->bb_stat_sz = stat_buf.st_size;
 	if (*size == 0)
 		*size = stat_buf.st_size;
-	D_DEBUG(DB_TRACE, "stat %s size %zu\n", path, *size);
+	D_DEBUG(DB_TRACE, "stat %s size %zu", path, *size);
 
 	return fd;
 }
@@ -706,7 +706,7 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	if (!is_dummy) {
 		rc = blob_file_open(blob, path, &store->stor_size, true);
 		if (rc < 0) {
-			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			DL_ERROR(rc, "blob_file_open %s failed", path);
 			D_FREE(blob);
 			return rc;
 		}
@@ -759,12 +759,12 @@ ad_blob_create(const char *path, unsigned int flags, struct umem_store *store,
 	if (store->stor_ops->so_write != NULL) {
 		rc = store->stor_ops->so_write(store, &iod, &sgl);
 		if (rc) {
-			D_ERROR("Failed to write ad_mem superblock\n");
+			D_ERROR("Failed to write ad_mem superblock");
 			goto failed;
 		}
 	}
 	arena_decref(arena);
-	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created\n");
+	D_DEBUG(DB_TRACE, "Ad-hoc memory blob created");
 	blob_set_opened(blob);
 	bh->bh_blob = blob;
 	return 0;
@@ -794,7 +794,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	if (is_dummy) {
 		if (dummy_blob) {
 			blob = dummy_blob;
-			D_DEBUG(DB_TRACE, "found dummy blob, refcount=%d\n", blob->bb_ref);
+			D_DEBUG(DB_TRACE, "found dummy blob, refcount=%d", blob->bb_ref);
 			blob_addref(blob);
 		} else {
 			D_ALLOC_PTR(blob);
@@ -814,7 +814,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 		rc = blob_file_open(blob, path, &store->stor_size, false);
 		if (rc < 0) {
 			D_FREE(blob);
-			D_ERROR("blob_file_open %s failed, "DF_RC"\n", path, DP_RC(rc));
+			DL_ERROR(rc, "blob_file_open %s failed", path);
 			return rc;
 		}
 		blob->bb_fd = rc;
@@ -839,7 +839,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	if (store->stor_ops->so_read != NULL) {
 		rc = store->stor_ops->so_read(store, &iod, &sgl);
 		if (rc) {
-			D_ERROR("Failed to read superblock of ad_mem\n");
+			D_ERROR("Failed to read superblock of ad_mem");
 			goto failed;
 		}
 	} else {
@@ -850,8 +850,7 @@ ad_blob_open(const char *path, unsigned int flags, struct umem_store *store,
 	}
 
 	if (bd->bd_magic != BLOB_MAGIC || bd->bd_version == 0) {
-		D_ERROR("Invalid superblock: magic=%x, version=%d\n",
-			bd->bd_magic, bd->bd_version);
+		D_ERROR("Invalid superblock: magic=%x, version=%d", bd->bd_magic, bd->bd_version);
 		goto failed;
 	}
 	store->stor_size = bd->bd_size;
@@ -892,7 +891,7 @@ ad_blob_destroy(struct ad_blob_handle bh)
 	struct ad_blob *blob = bh.bh_blob;
 
 	if (blob->bb_opened > 1) {
-		D_ERROR("blob is still in use, opened=%d\n", blob->bb_opened);
+		D_ERROR("blob is still in use, opened=%d", blob->bb_opened);
 		return -DER_BUSY;
 	}
 
@@ -1010,8 +1009,7 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 		id = find_bits(bd->bd_bmap, blob->bb_bmap_rsv, blob_bmap_size(blob), 1, &bits);
 		if (id < 0) {
 			rc = -DER_NOSPACE;
-			D_ERROR("Blob %s is full, cannot create more arena, "DF_RC"\n",
-				blob->bb_path, DP_RC(rc));
+			DL_ERROR(rc, "Blob %s is full, cannot create more arena", blob->bb_path);
 			return rc;
 		}
 		reserving = true;
@@ -1019,8 +1017,8 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 
 	if ((((uint64_t)id + 1) << ARENA_SIZE_BITS) > blob_size(blob)) {
 		rc = reserving ? -DER_NOSPACE : -DER_INVAL;
-		D_ERROR("Blob %s, arena id %d, blob_size "DF_U64", "DF_RC"\n",
-			blob->bb_path, id, blob_size(blob), DP_RC(rc));
+		DL_ERROR(rc, "Blob %s, arena id %d, blob_size " DF_U64, blob->bb_path, id,
+			 blob_size(blob));
 		return rc;
 	}
 
@@ -1028,8 +1026,7 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 	    !isset64(bd->bd_bmap, id) &&
 	    !isset64(blob->bb_bmap_rsv, id)) {
 		rc = -DER_NONEXIST;
-		D_ERROR("Blob %s arena id %d not allocated or reserved, "DF_RC"\n",
-			blob->bb_path, id, DP_RC(rc));
+		DL_ERROR(rc, "Blob %s arena id %d not allocated or reserved", blob->bb_path, id);
 		return rc;
 	}
 
@@ -1064,12 +1061,12 @@ arena_load(struct ad_blob *blob, uint32_t arena_id, struct ad_arena **arena_p)
 	D_ASSERT(arena_id != AD_ARENA_ANY);
 	rc = arena_find(blob, &arena_id, &ad);
 	if (rc) {
-		D_ERROR("No available arena, id=%d\n", arena_id);
+		D_ERROR("No available arena, id=%d", arena_id);
 		return rc;
 	}
 
 	if (ad->ad_magic != ARENA_MAGIC) {
-		D_ERROR("Invalid arena magic: %x/%x\n", ad->ad_magic, ARENA_MAGIC);
+		D_ERROR("Invalid arena magic: %x/%x", ad->ad_magic, ARENA_MAGIC);
 		return -DER_PROTO;
 	}
 
@@ -1152,25 +1149,25 @@ arena_reserve(struct ad_blob *blob, unsigned int type, struct umem_store *store_
 	D_ASSERT(store_extern == NULL); /* XXX: not supported yet */
 
 	if (type >= ARENA_SPEC_MAX) {
-		D_ERROR("Invalid arena type=%d\n", type);
+		D_ERROR("Invalid arena type=%d", type);
 		return -DER_INVAL;
 	}
 
 	if (bd->bd_asp[type].as_specs_nr == 0) {
-		D_ERROR("Unregistered arena type=%d\n", type);
+		D_ERROR("Unregistered arena type=%d", type);
 		return -DER_NONEXIST;
 	}
 
 	id = AD_ARENA_ANY;
 	rc = arena_find(blob, &id, &ad);
 	if (rc) {
-		D_ERROR("Failed to find available arena\n");
+		D_ERROR("Failed to find available arena");
 		D_ASSERT(rc == -DER_NOSPACE);
 		return rc;
 	}
 	D_ASSERT(id != AD_ARENA_ANY);
 
-	D_DEBUG(DB_TRACE, "Reserved a new arena: type=%d, id=%d\n", type, id);
+	D_DEBUG(DB_TRACE, "Reserved a new arena: type=%d, id=%d", type, id);
 	blob->bb_arena_last[type] = id;
 	D_ASSERT(ad->ad_magic != ARENA_MAGIC);
 
@@ -1220,7 +1217,7 @@ arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx)
 	struct ad_arena_spec	*spec	= &bd->bd_asp[ad->ad_type];
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "publishing arena=%d\n", ad->ad_id);
+	D_DEBUG(DB_TRACE, "publishing arena=%d", ad->ad_id);
 	rc = ad_tx_setbits(tx, bd->bd_bmap, ad->ad_id, 1);
 	if (rc)
 		return rc;
@@ -1230,7 +1227,7 @@ arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_TRACE, "Published arena type = %u, ID = %u\n", ad->ad_type, spec->as_last_used);
+	D_DEBUG(DB_TRACE, "Published arena type = %u, ID = %u", ad->ad_type, spec->as_last_used);
 
 	rc = ad_tx_set(tx, ad, 0, sizeof(*ad), AD_TX_REDO | AD_TX_LOG_ONLY);
 	if (rc)
@@ -1285,14 +1282,14 @@ arena_size2gsp(struct ad_arena *arena, daos_size_t size, int *spec_id)
 			D_ASSERTF(gsp->gs_unit >= size, "gs_unit %d, size %zu\n",
 				  gsp->gs_unit, size);
 		} else {
-			D_ERROR("size is too large: %d\n", (int)size);
+			D_ERROR("size is too large: %d", (int)size);
 			gsp = NULL;
 		}
 	}
 
 	if (gsp) { /* matched */
-		D_DEBUG(DB_TRACE, "Found spec: spec_unit=%d, size=%d\n",
-			(int)gsp->gs_unit, (int)size);
+		D_DEBUG(DB_TRACE, "Found spec: spec_unit=%d, size=%d", (int)gsp->gs_unit,
+			(int)size);
 		if (spec_id)
 			*spec_id = cur;
 	}
@@ -1394,7 +1391,7 @@ arena_find_grp(struct ad_arena *arena, daos_size_t size, int *pos, struct ad_gro
 
 	gsp = arena_size2gsp(arena, size, NULL);
 	if (!gsp) {
-		D_ERROR("Cannot find matched group specification for size=%d\n", (int)size);
+		D_ERROR("Cannot find matched group specification for size=%d", (int)size);
 		return -DER_INVAL;
 	}
 
@@ -1430,7 +1427,7 @@ arena_find_grp(struct ad_arena *arena, daos_size_t size, int *pos, struct ad_gro
 		else
 			end = cur - 1;
 	}
-	D_DEBUG(DB_TRACE, "matched grp=%p, unit=%d, size=%d\n", gd, gd->gd_unit, (int)size);
+	D_DEBUG(DB_TRACE, "matched grp=%p, unit=%d, size=%d", gd, gd->gd_unit, (int)size);
 
 	while (gd->gd_unit <= size) {
 		if (gd->gd_unit == size && group_weight(gd) > 0)
@@ -1472,7 +1469,7 @@ arena_addr2grp(struct ad_arena *arena, daos_off_t addr, struct ad_group **grp_p)
 		gd = arena->ar_addr_sorter[cur];
 
 		if (gd->gd_unit_nr > GRP_UNIT_NR_MAX || gd->gd_unit > GRP_UNIT_SZ_MAX) {
-			D_ERROR("Invalid unit size\n");
+			D_ERROR("Invalid unit size");
 			return -DER_INVAL;
 		}
 
@@ -1495,7 +1492,7 @@ arena_addr2grp(struct ad_arena *arena, daos_off_t addr, struct ad_group **grp_p)
 			end = cur - 1;
 	}
 	if (!found) {
-		D_ERROR("Invalid address %lx\n", (unsigned long)addr);
+		D_ERROR("Invalid address %lx", (unsigned long)addr);
 		return -DER_ENOENT;
 	}
 
@@ -1505,7 +1502,7 @@ arena_addr2grp(struct ad_arena *arena, daos_off_t addr, struct ad_group **grp_p)
 
 	/* This can happen in nested transaction */
 	if (!grp->gp_unpub)
-		D_DEBUG(DB_TRACE, "Free space %lx in unpublished group\n", (unsigned long)addr);
+		D_DEBUG(DB_TRACE, "Free space %lx in unpublished group", (unsigned long)addr);
 
 	*grp_p = grp;
 	return 0;
@@ -1820,7 +1817,7 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 	size_sorter = arena->ar_size_sorter;
 	addr_sorter = arena->ar_addr_sorter;
 
-	D_DEBUG(DB_TRACE, "Adding group to address sorter of arena=%d\n", arena2id(arena));
+	D_DEBUG(DB_TRACE, "Adding group to address sorter of arena=%d", arena2id(arena));
 	cur = group_locate_by_addr(arena, addr_sorter, grp->gp_df, len, true);
 	if (cur < len) {
 		memmove(&addr_sorter[cur + 1], &addr_sorter[cur],
@@ -1829,7 +1826,7 @@ arena_add_grp(struct ad_arena *arena, struct ad_group *grp, int *pos)
 	addr_sorter[cur] = grp->gp_df;
 
 	/* step-2: add the group the size sorter */
-	D_DEBUG(DB_TRACE, "Adding group to size sorter of arena=%d\n", arena2id(arena));
+	D_DEBUG(DB_TRACE, "Adding group to size sorter of arena=%d", arena2id(arena));
 	cur = group_locate_by_size(arena, size_sorter, grp->gp_df, len, true);
 	if (cur < len) {
 		memmove(&size_sorter[cur + 1], &size_sorter[cur],
@@ -1961,13 +1958,13 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 
 	gsp = arena_size2gsp(arena, size, NULL);
 	if (!gsp) {
-		D_ERROR("No matched group spec for size=%d\n", (int)size);
+		D_ERROR("No matched group spec for size=%d", (int)size);
 		return -DER_INVAL;
 	}
 
 	if (arena->ar_grp_nr == ARENA_GRP_MAX) {
 		/* Too many small groups (e.g., 64 bytes), cannot store more metadata */
-		D_DEBUG(DB_TRACE, "Arena %d has too many groups\n", arena2id(arena));
+		D_DEBUG(DB_TRACE, "Arena %d has too many groups", arena2id(arena));
 		return -DER_NOSPACE;
 	}
 
@@ -2000,7 +1997,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	}
 	/* run out of ad groups */
 	if (grp_idx == ARENA_GRP_MAX) {
-		D_DEBUG(DB_TRACE, "Arena=%d, no group found\n", arena2id(arena));
+		D_DEBUG(DB_TRACE, "Arena=%d, no group found", arena2id(arena));
 		return -DER_NOSPACE;
 	}
 	arena->ar_last_grp = max(arena->ar_last_grp, grp_idx);
@@ -2022,7 +2019,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	grp->gp_bit_nr	= bits;
 	grp->gp_frags	= (bits << GRP_SIZE_SHIFT) - gd->gd_unit_nr * gd->gd_unit;
 
-	D_DEBUG(DB_TRACE, "Arena=%d reserved a new group (bit_at=%d, bits=%d, size=%d)\n",
+	D_DEBUG(DB_TRACE, "Arena=%d reserved a new group (bit_at=%d, bits=%d, size=%d)",
 		arena2id(arena), bit_at, bits, (int)size);
 
 	setbits64(arena->ar_space_rsv, bit_at, bits);
@@ -2046,7 +2043,7 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 
 	bit_at = (gd->gd_addr - ad->ad_addr) >> GRP_SIZE_SHIFT;
 	bit_nr = group_df2b(gd);
-	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d\n", group, bit_at, bit_nr);
+	D_DEBUG(DB_TRACE, "publishing group=%p, bit_at=%d, bits_nr=%d", group, bit_at, bit_nr);
 
 	rc = ad_tx_setbits(tx, ad->ad_bmap, bit_at, bit_nr);
 	if (rc)
@@ -2062,8 +2059,8 @@ group_tx_publish(struct ad_group *group, struct ad_tx *tx)
 
 	return 0;
  failed:
-	D_ERROR("Failed to publish group=%p, bit_at=%d, bits_nr=%d, rc=%d\n",
-		group, bit_at, bit_nr, rc);
+	D_ERROR("Failed to publish group=%p, bit_at=%d, bits_nr=%d, rc=%d", group, bit_at, bit_nr,
+		rc);
 	return rc;
 }
 
@@ -2187,36 +2184,33 @@ arena_reserve_addr(struct ad_arena *arena, daos_size_t size, struct ad_reserv_ac
 		grp    = NULL;
 		/* fall through */
 	} else if (rc != 0) {
-		D_ERROR("Failed to find group, arena=%d, size=%d, rc=%d\n",
-			arena->ar_df->ad_id, (int)size, rc);
+		D_ERROR("Failed to find group, arena=%d, size=%d, rc=%d", arena->ar_df->ad_id,
+			(int)size, rc);
 		return rc; /* other errors, failed to reserve */
 	}
 
 	while (1) {
 		if (grp == NULL) { /* full group */
-			D_DEBUG(DB_TRACE,
-				"No group(size=%d) found in arena=%d, reserve a new one\n",
+			D_DEBUG(DB_TRACE, "No group(size=%d) found in arena=%d, reserve a new one",
 				(int)size, arena2id(arena));
 
 			node = arena2heap_node(arena);
 			rc = arena_reserve_grp(arena, size, &grp_at, &grp);
 			if (rc == -DER_NOSPACE) { /* cannot create a new group, full arena */
 				/* XXX: other sized groups may have space. */
-				D_DEBUG(DB_TRACE, "Full arena=%d, grp_nr=%d\n",
-					arena2id(arena), arena->ar_grp_nr);
+				D_DEBUG(DB_TRACE, "Full arena=%d, grp_nr=%d", arena2id(arena),
+					arena->ar_grp_nr);
 				node->mh_weight = arena_weight(node);
 				node->mh_inactive = 1;
 				return rc;
 			}
 			if (rc != 0) {
-				D_ERROR("Failed to reserve group, size=%d, rc=%d\n",
-					(int)size, rc);
+				D_ERROR("Failed to reserve group, size=%d, rc=%d", (int)size, rc);
 				return rc;
 			}
 		}
-		D_DEBUG(DB_TRACE, "Found group=%p [r=%d, f=%d] for size=%d in arena=%d\n",
-			grp->gp_df, grp->gp_unit_rsv, grp->gp_df->gd_unit_free,
-			(int)size, arena2id(arena));
+		D_DEBUG(DB_TRACE, "Found group=%p [r=%d, f=%d] for size=%d in arena=%d", grp->gp_df,
+			grp->gp_unit_rsv, grp->gp_df->gd_unit_free, (int)size, arena2id(arena));
 
 		addr = group_reserve_addr(grp, act);
 		if (addr)
@@ -2278,8 +2272,8 @@ group_tx_reset(struct ad_tx *tx, struct ad_group *group)
 	/* lock the bit and prevent it from being reused before commit */
 	setbits64(arena->ar_space_rsv, group->gp_bit_at, group->gp_bit_nr);
 	setbits64(arena->ar_gpid_rsv, gp_df2index(group), 1);
-	D_DEBUG(DB_TRACE, "resetting group=%p, bit_at=%d, bits_nr=%d\n",
-		group, group->gp_bit_at, group->gp_bit_nr);
+	D_DEBUG(DB_TRACE, "resetting group=%p, bit_at=%d, bits_nr=%d", group, group->gp_bit_at,
+		group->gp_bit_nr);
 
 	rc = ad_tx_clrbits(tx, ad->ad_bmap, group->gp_bit_at, group->gp_bit_nr);
 	if (rc)
@@ -2317,7 +2311,7 @@ arena_tx_free_addr(struct ad_arena *arena, daos_off_t addr, struct ad_tx *tx)
 	if (rc == 0) {
 		rc = group_tx_reset(tx, grp);
 		if (rc)
-			D_ERROR("Failed to reset group, rc=%d\n", rc);
+			D_ERROR("Failed to reset group, rc=%d", rc);
 	}
 	group_decref(grp);
 	return rc;
@@ -2346,7 +2340,7 @@ arena_select(struct ad_blob *blob, int sel, int type, struct ad_arena **arena_p)
 		if (rc == 0)
 			break;
 
-		D_DEBUG(DB_TRACE, "Failed to reserve new arena, rc=%d.\n", rc);
+		D_DEBUG(DB_TRACE, "Failed to reserve new arena, rc=%d", rc);
 		return rc;
 
 	case ARENA_SEL_REUSE:
@@ -2359,7 +2353,7 @@ arena_select(struct ad_blob *blob, int sel, int type, struct ad_arena **arena_p)
 		if (rc == 0)
 			break;
 
-		D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", an->mh_arena_id, rc);
+		D_DEBUG(DB_TRACE, "Failed to load arena %u: %d", an->mh_arena_id, rc);
 		return rc;
 	}
 	*arena_p = arena;
@@ -2387,13 +2381,13 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 		id = blob->bb_arena_last[type]; /* the last used arena */
 
 	if (id != AD_ARENA_ANY) {
-		D_DEBUG(DB_TRACE, "Loading arena=%u\n", id);
+		D_DEBUG(DB_TRACE, "Loading arena=%u", id);
 		rc = arena_load(blob, id, &arena);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d\n", id, rc);
+			D_DEBUG(DB_TRACE, "Failed to load arena %u: %d", id, rc);
 			/* fall through and create a new one */
 		} else if (arena2heap_node(arena)->mh_inactive) {
-			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one\n", id);
+			D_DEBUG(DB_TRACE, "Arena %u is full, create a new one", id);
 			arena_decref(arena);
 			arena = NULL;
 		} else {
@@ -2412,13 +2406,14 @@ ad_reserve_addr(struct ad_blob *blob, int type, daos_size_t size,
 			}
 		}
 
-		D_DEBUG(DB_TRACE, "reserve space in arena=%d\n", arena2id(arena));
+		D_DEBUG(DB_TRACE, "reserve space in arena=%d", arena2id(arena));
 		rc = arena_reserve_addr(arena, size, act, &addr);
 		if (rc) {
 			struct ad_maxheap_node *mn = arena2heap_node(arena);
 
-			D_DEBUG(DB_TRACE, "Failed to reserve size=%d from arena=%d (rc=%d), "
-				"grps=%d, sel=%d, active=%d, weight=%d, free=%d, frag=%d\n",
+			D_DEBUG(DB_TRACE,
+				"Failed to reserve size=%d from arena=%d (rc=%d), grps=%d, sel=%d, "
+				"active=%d, weight=%d, free=%d, frag=%d",
 				(int)size, arena2id(arena), rc, arena->ar_grp_nr, sel,
 				!mn->mh_inactive, mn->mh_weight, mn->mh_free_size,
 				mn->mh_frag_size);
@@ -2595,11 +2590,10 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		struct ad_group_df *gd = group->gp_df;
 
 		if (arena->ar_unpub && !arena->ar_publishing) {
-			D_DEBUG(DB_TRACE, "publishing arena=%d\n", arena2id(arena));
+			D_DEBUG(DB_TRACE, "publishing arena=%d", arena2id(arena));
 			rc = arena_tx_publish(arena, tx);
 			if (rc) {
-				D_ERROR("Failed to publish arena=%d, rc=%d\n",
-					arena2id(arena), rc);
+				D_ERROR("Failed to publish arena=%d, rc=%d", arena2id(arena), rc);
 				break;
 			}
 
@@ -2616,11 +2610,11 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		arena_decref(arena);
 
 		if (group->gp_unpub && !group->gp_publishing) {
-			D_DEBUG(DB_TRACE, "publishing a new group, size=%d\n",
+			D_DEBUG(DB_TRACE, "publishing a new group, size=%d",
 				(int)group->gp_df->gd_unit);
 			rc = group_tx_publish(group, tx);
 			if (rc) {
-				D_ERROR("Failed to publish group, size=%d, rc=%d\n",
+				D_ERROR("Failed to publish group, size=%d, rc=%d",
 					(int)group->gp_df->gd_unit, rc);
 				break;
 			}
@@ -2641,11 +2635,10 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 			break;
 		}
 
-		D_DEBUG(DB_TRACE, "publishing reserved bit=%d\n", acts[i].ra_bit);
+		D_DEBUG(DB_TRACE, "publishing reserved bit=%d", acts[i].ra_bit);
 		rc = ad_tx_setbits(tx, gd->gd_bmap, acts[i].ra_bit, 1);
 		if (rc)  {
-			D_ERROR("Failed to publish reserved bit=%d, rc=%d\n",
-				acts[i].ra_bit, rc);
+			D_ERROR("Failed to publish reserved bit=%d, rc=%d", acts[i].ra_bit, rc);
 			break;
 		}
 
@@ -2653,7 +2646,7 @@ ad_tx_publish(struct ad_tx *tx, struct ad_reserv_act *acts, int act_nr)
 		gd->gd_unit_free--;
 		rc = ad_tx_decrease(tx, &gd->gd_unit_free, AD_TX_REDO | AD_TX_LOG_ONLY);
 		if (rc) {
-			D_ERROR("Failed to decrease free units, rc=%d\n", rc);
+			D_ERROR("Failed to decrease free units, rc=%d", rc);
 			break;
 		}
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
@@ -2682,7 +2675,7 @@ ad_cancel(struct ad_reserv_act *acts, int act_nr)
 		group = acts[i].ra_group;
 		arena = acts[i].ra_arena;
 		blob = arena->ar_blob;
-		D_DEBUG(DB_TRACE, "cancel bit=%d\n", acts[i].ra_bit);
+		D_DEBUG(DB_TRACE, "cancel bit=%d", acts[i].ra_bit);
 		clrbit64(group->gp_bmap_rsv, acts[i].ra_bit);
 
 		group_refresh_weight(group, -1, GRP_OP_RSV_CANCEL);
@@ -2749,7 +2742,7 @@ ad_tx_free(struct ad_tx *tx, daos_off_t addr)
 	ad = blob_addr2ptr(blob, addr & ~ARENA_SIZE_MASK);
 	D_ASSERT(ad->ad_magic == ARENA_MAGIC);
 
-	D_DEBUG(DB_TRACE, "loading arena for free\n");
+	D_DEBUG(DB_TRACE, "loading arena for free");
 	rc = arena_load(blob, ad->ad_id, &arena);
 	if (rc)
 		return rc;
@@ -2801,7 +2794,7 @@ ad_arena_register(struct ad_blob_handle bh, unsigned int arena_type,
 	int		 rc;
 
 	if (arena_type == ARENA_TYPE_DEF || arena_type == ARENA_TYPE_LARGE) {
-		D_ERROR("Cannot use internal type ID: %d\n", arena_type);
+		D_ERROR("Cannot use internal type ID: %d", arena_type);
 		return -DER_NO_PERM;
 	}
 

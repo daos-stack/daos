@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 		case 'l':
 			obj_class = daos_oclass_name2id(optarg);
 			if (obj_class == OC_UNKNOWN) {
-				D_ERROR("invalid obj class %s\n", optarg);
+				D_ERROR("invalid obj class %s", optarg);
 				return -1;
 			}
 		case 'o':

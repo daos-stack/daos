@@ -23,7 +23,7 @@ rpc_cb_common(const struct crt_cb_info *info)
 	if (p_blk && *p_blk) {
 		rc = crt_bulk_free(*p_blk);
 		if (rc)
-			D_ERROR("bulk free failed with %d\n", rc);
+			D_ERROR("bulk free failed with %d", rc);
 	}
 
 	sem_post(&test.tg_token_to_proceed);
@@ -237,7 +237,7 @@ test_run()
 		rc = pthread_join(test.tg_tid[i], NULL);
 		D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
 	}
-	D_DEBUG(DB_TRACE, "joined progress threads.\n");
+	D_DEBUG(DB_TRACE, "joined progress threads");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
@@ -248,7 +248,7 @@ test_run()
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-	D_DEBUG(DB_TRACE, "exiting.\n");
+	D_DEBUG(DB_TRACE, "exiting");
 }
 
 int

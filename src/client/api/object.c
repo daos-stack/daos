@@ -15,7 +15,7 @@ int
 daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
 			struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -23,7 +23,7 @@ int
 daos_obj_query_class(daos_handle_t coh, daos_oclass_id_t cid,
 		     struct daos_oclass_attr *cattr, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -31,7 +31,7 @@ int
 daos_obj_list_class(daos_handle_t coh, struct daos_oclass_list *clist,
 		    daos_anchor_t *anchor, daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -88,7 +88,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 
 	if (nr != 1) {
 		/* TODO: create multiple tasks for punch of multiple dkeys */
-		D_ERROR("Can't punch multiple dkeys for now\n");
+		D_ERROR("Can't punch multiple dkeys for now");
 		return -DER_INVAL;
 	}
 
@@ -120,7 +120,7 @@ int
 daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
 	       daos_event_t *ev)
 {
-	D_ERROR("Unsupported API\n");
+	D_ERROR("Unsupported API");
 	return -DER_NOSYS;
 }
 
@@ -315,8 +315,7 @@ daos_obj_anchor_split(daos_handle_t oh, uint32_t *nr, daos_anchor_t *anchors)
 
 	/** TBD - support more than per shard iteration */
 	if (*nr != 0 && *nr != layout->ol_nr) {
-		D_ERROR("For now, num anchors should be the same as what is"
-			" reported as optimal\n");
+		D_ERROR("For now, num anchors should be the same as what is reported as optimal");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -416,13 +415,13 @@ daos_oit_open(daos_handle_t coh, daos_epoch_t epoch,
 
 	rc = dc_cont_hdl2redunfac(coh, &cont_rf);
 	if (rc) {
-		D_ERROR("dc_cont_hdl2redunfac failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dc_cont_hdl2redunfac failed");
 		return rc;
 	}
 
 	rc = dc_cont_hdl2globalver(coh, &co_global_ver);
 	if (rc) {
-		D_ERROR("dc_cont_hdl2globalver failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dc_cont_hdl2globalver failed");
 		return rc;
 	}
 

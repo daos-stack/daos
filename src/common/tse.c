@@ -393,7 +393,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_cb *dtc;
 
 	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a callback for a completed task\n");
+		D_ERROR("Can't add a callback for a completed task");
 		return -DER_NO_PERM;
 	}
 
@@ -526,7 +526,7 @@ tse_task_complete_callback(tse_task_t *task)
 		/** Task was re-initialized, or new dep-task added */
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
-			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added", task);
 			tse_task_decref(task);
 			return false;
 		}
@@ -655,8 +655,7 @@ tse_task_post_process(tse_task_t *task)
 		/* see if the dependent task is ready to be scheduled */
 		D_ASSERT(dtp_tmp->dtp_dep_cnt > 0);
 		dtp_tmp->dtp_dep_cnt--;
-		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
-			dtp_tmp->dtp_dep_cnt);
+		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d", dtp_tmp, dtp_tmp->dtp_dep_cnt);
 		if (!dsp_tmp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
 		    dtp_tmp->dtp_running) {
 			bool done;
@@ -900,8 +899,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	D_ASSERT(task != dep);
 
 	if (dtp->dtp_completed) {
-		D_ERROR("Can't add a dependency for a completed task (%p)\n",
-			task);
+		D_ERROR("Can't add a dependency for a completed task (%p)", task);
 		return -DER_NO_PERM;
 	}
 
@@ -915,7 +913,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	if (tlink == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
+	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
 	tse_task_addref_locked(dtp);
@@ -1083,12 +1081,12 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is canceling, can't re-insert task\n");
+		D_ERROR("Scheduler is canceling, can't re-insert task");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (dtp->dtp_func == NULL) {
-		D_ERROR("Task body function can't be NULL.\n");
+		D_ERROR("Task body function can't be NULL");
 		D_GOTO(err_unlock, rc = -DER_INVAL);
 	}
 
@@ -1102,8 +1100,7 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 		/** Task not in-flight anymore */
 		dsp->dsp_inflight--;
 	} else {
-		D_ERROR("Can't re-init a task that is not running or "
-			"completed.\n");
+		D_ERROR("Can't re-init a task that is not running or completed");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
@@ -1115,8 +1112,7 @@ tse_task_reinit_with_delay(tse_task_t *task, uint64_t delay)
 
 	/** reset stack pointer as zero */
 	if (dtp->dtp_stack_top != 0) {
-		D_ERROR("task %p, dtp_stack_top reset from %d to zero.\n",
-			task, dtp->dtp_stack_top);
+		D_ERROR("task %p, dtp_stack_top reset from %d to zero", task, dtp->dtp_stack_top);
 		dtp->dtp_stack_top = 0;
 	}
 
@@ -1160,37 +1156,37 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (dsp->dsp_cancelling) {
-		D_ERROR("Scheduler is canceling, can't reset task\n");
+		D_ERROR("Scheduler is canceling, can't reset task");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!dtp->dtp_completed) {
-		D_ERROR("Can't reset a task in init or running state.\n");
+		D_ERROR("Can't reset a task in init or running state");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!d_list_empty(&dtp->dtp_list)) {
-		D_ERROR("task scheduler processing list should be empty\n");
+		D_ERROR("task scheduler processing list should be empty");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!d_list_empty(&dtp->dtp_task_list)) {
-		D_ERROR("task user list should be empty\n");
+		D_ERROR("task user list should be empty");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!d_list_empty(&dtp->dtp_dep_list)) {
-		D_ERROR("task dep list should be empty\n");
+		D_ERROR("task dep list should be empty");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!d_list_empty(&dtp->dtp_comp_cb_list)) {
-		D_ERROR("task completion CB list should be empty\n");
+		D_ERROR("task completion CB list should be empty");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
 	if (!d_list_empty(&dtp->dtp_prep_cb_list)) {
-		D_ERROR("task prep CB list should be empty\n");
+		D_ERROR("task prep CB list should be empty");
 		D_GOTO(err_unlock, rc = -DER_NO_PERM);
 	}
 
@@ -1200,8 +1196,7 @@ tse_task_reset(tse_task_t *task, tse_task_func_t task_func, void *priv)
 
 	/** reset stack pointer as zero */
 	if (dtp->dtp_stack_top != 0) {
-		D_ERROR("task %p, dtp_stack_top reset from %d to zero.\n",
-			task, dtp->dtp_stack_top);
+		D_ERROR("task %p, dtp_stack_top reset from %d to zero", task, dtp->dtp_stack_top);
 		dtp->dtp_stack_top = 0;
 	}
 

@@ -390,19 +390,17 @@ prune_purge_list(struct dss_xstream *dx)
 						    pi->pi_pool_id,
 						    sizeof(uuid_t));
 			if (!deleted)
-				D_ERROR("Purge "DF_UUID" failed.\n",
-					DP_UUID(pi->pi_pool_id));
+				D_ERROR("Purge " DF_UUID " failed", DP_UUID(pi->pi_pool_id));
 		} else {
 			unsigned int type;
 
-			D_ERROR("Pool "DF_UUID", req_cnt:%u, gc_ults:%d\n",
-				DP_UUID(pi->pi_pool_id), spi->spi_req_cnt,
-				spi->spi_gc_ults);
+			D_ERROR("Pool " DF_UUID ", req_cnt:%u, gc_ults:%d", DP_UUID(pi->pi_pool_id),
+				spi->spi_req_cnt, spi->spi_gc_ults);
 
 			for (type = SCHED_REQ_UPDATE; type < SCHED_REQ_MAX;
 			     type++) {
 				if (pool2req_cnt(spi, type) != 0)
-					D_ERROR("type:%u, req_cnt:%u\n", type,
+					D_ERROR("type:%u, req_cnt:%u", type,
 						pool2req_cnt(spi, type));
 			}
 		}
@@ -501,32 +499,32 @@ sched_metrics_init(struct dss_xstream *dx)
 	rc = d_tm_add_metric(&stats->ss_total_time, D_TM_COUNTER, "Total running time", "ms",
 			     "sched/total_time/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create total_time telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create total_time telemetry");
 
 	rc = d_tm_add_metric(&stats->ss_relax_time, D_TM_COUNTER, "Total relaxing time", "ms",
 			     "sched/relax_time/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create relax_time telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create relax_time telemetry");
 
 	rc = d_tm_add_metric(&stats->ss_wq_len, D_TM_GAUGE, "Wait queue length", "req",
 			     "sched/wait_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create wait_queue telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create wait_queue telemetry");
 
 	rc = d_tm_add_metric(&stats->ss_sq_len, D_TM_GAUGE, "Sleep queue length", "req",
 			     "sched/sleep_queue/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create sleep_queue telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create sleep_queue telemetry");
 
 	rc = d_tm_add_metric(&stats->ss_cycle_duration, D_TM_STATS_GAUGE, "Schedule cycle duration",
 			     "ms", "sched/cycle_duration/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create cycle_duration telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create cycle_duration telemetry");
 
 	rc = d_tm_add_metric(&stats->ss_cycle_size, D_TM_STATS_GAUGE, "Schedule cycle size",
 			     "ULT", "sched/cycle_size/xs_%u", dx->dx_xs_id);
 	if (rc)
-		D_WARN("Failed to create cycle_size telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create cycle_size telemetry");
 }
 
 static int
@@ -552,7 +550,7 @@ sched_info_init(struct dss_xstream *dx)
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Create sched pool hash failed");
 		return rc;
 	}
 
@@ -599,7 +597,7 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	rc = d_hash_rec_insert(info->si_pool_hash, pool_uuid, sizeof(uuid_t),
 			       &spi->spi_hash_link, false);
 	if (rc)
-		D_ERROR("Failed to insert pool hash. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to insert pool hash");
 
 	D_ASSERT(spi->spi_ref == 1);
 	return spi;
@@ -619,8 +617,7 @@ req_get(struct dss_xstream *dx, struct sched_req_attr *attr,
 	} else {
 		spi = cur_pool_info(info, attr->sra_pool_id);
 		if (spi == NULL) {
-			D_ERROR("Get pool info "DF_UUID" failed.\n",
-				DP_UUID(attr->sra_pool_id));
+			D_ERROR("Get pool info " DF_UUID " failed", DP_UUID(attr->sra_pool_id));
 			return NULL;
 		}
 	}
@@ -733,8 +730,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 		add_purge_list(dx, spi);
 		goto out;
 	} else if (rc) {
-		D_ERROR("Query pool:"DF_UUID" space failed. "DF_RC"\n",
-			DP_UUID(spi->spi_pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Query pool:" DF_UUID " space failed", DP_UUID(spi->spi_pool_id));
 		goto out;
 	}
 	spi->spi_space_ts = info->si_cur_ts;
@@ -765,12 +761,12 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	if (spi->spi_space_pressure != SCHED_SPACE_PRESS_NONE &&
 	    spi->spi_space_pressure != orig_pressure) {
-		D_INFO("Pool:"DF_UUID" is under %d pressure, "
-		       "SCM: tot["DF_U64"], sys["DF_U64"], free["DF_U64"] "
-		       "NVMe: tot["DF_U64"], sys["DF_U64"], free["DF_U64"]\n",
-		       DP_UUID(spi->spi_pool_id), spi->spi_space_pressure,
-		       SCM_TOTAL(&vps), SCM_SYS(&vps), SCM_FREE(&vps),
-		       NVME_TOTAL(&vps), NVME_SYS(&vps), NVME_FREE(&vps));
+		D_INFO("Pool:" DF_UUID " is under %d pressure, SCM: tot[" DF_U64 "], sys[" DF_U64
+		       "], free[" DF_U64 "] NVMe: tot[" DF_U64 "], sys[" DF_U64 "], free[" DF_U64
+		       "]",
+		       DP_UUID(spi->spi_pool_id), spi->spi_space_pressure, SCM_TOTAL(&vps),
+		       SCM_SYS(&vps), SCM_FREE(&vps), NVME_TOTAL(&vps), NVME_SYS(&vps),
+		       NVME_FREE(&vps));
 
 		spi->spi_pressure_ts = info->si_cur_ts;
 	}
@@ -845,8 +841,8 @@ set_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
 
 	D_ASSERT(limit <= tot);
 	if (tot - limit > max_qds[req_type]) {
-		D_CRIT("Too large QD: %u/%u/%u for req:%d\n",
-		       tot, max_qds[req_type], limit, req_type);
+		D_CRIT("Too large QD: %u/%u/%u for req:%d", tot, max_qds[req_type], limit,
+		       req_type);
 		limit = tot - max_qds[req_type];
 	}
 	spi->spi_req_array[req_type].sri_req_limit = limit;
@@ -1128,7 +1124,7 @@ process_all(struct dss_xstream *dx)
 	prune_purge_list(dx);
 	rc = d_hash_table_traverse(info->si_pool_hash, process_pool_cb, dx);
 	if (rc)
-		D_ERROR("Traverse pool hash error. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Traverse pool hash error");
 
 	D_ASSERT(policy_ops[sched_policy].process_io != NULL);
 	policy_ops[sched_policy].process_io(dx);
@@ -1199,7 +1195,7 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
-		D_ERROR("Get req failed.\n");
+		D_ERROR("Get req failed");
 		return -DER_NOMEM;
 	}
 	req_enqueue(dx, req);
@@ -1376,7 +1372,7 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 
 		rc = ABT_thread_self(&self);
 		if (rc != ABT_SUCCESS) {
-			D_ERROR("Failed to get self thread: %d\n", rc);
+			D_ERROR("Failed to get self thread: %d", rc);
 			return NULL;
 		}
 		ult = self;
@@ -1390,11 +1386,11 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 		 */
 		rc = ABT_thread_is_unnamed(ult, &unnamed);
 		if (rc != ABT_SUCCESS) {
-			D_ERROR("Failed to get thread type: %d\n", rc);
+			D_ERROR("Failed to get thread type: %d", rc);
 			return NULL;
 		}
 		if (unnamed == ABT_TRUE) {
-			D_ERROR("Unnamed threads are not supported\n");
+			D_ERROR("Unnamed threads are not supported");
 			return NULL;
 		}
 		owned = true;
@@ -1486,7 +1482,7 @@ sched_create_ult(struct sched_req_attr *attr, void (*func)(void *), void *arg, s
 	/* The ULT must be created on the caller xstream */
 	rc = dss_ult_create(func, arg, DSS_XS_SELF, 0, stack_size, &ult);
 	if (rc) {
-		D_ERROR("Failed to create ULT: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create ULT");
 		req_put(dx, req);
 		return NULL;
 	}
@@ -1556,7 +1552,7 @@ sched_init(ABT_sched sched, ABT_sched_config config)
 	ret = ABT_sched_config_read(config, 2, &data->sd_event_freq,
 				    &data->sd_dx);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Failed to read ABT sched config: %d\n", ret);
+		D_ERROR("Failed to read ABT sched config: %d", ret);
 		D_FREE(data);
 		return ret;
 	}
@@ -1612,7 +1608,7 @@ sched_pop_net_poll(struct sched_data *data, ABT_pool pool)
 	 */
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Failed to pop network poll ULT: %d\n", ret);
+		D_ERROR("Failed to pop network poll ULT: %d", ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1674,7 +1670,7 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Failed to pop NVMe poll ULT: %d\n", ret);
+		D_ERROR("Failed to pop NVMe poll ULT: %d", ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1694,7 +1690,7 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 
 	ret = ABT_pool_pop(pool, &unit);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Failed to pop ULT for ABT pool(%d): %d\n", pool_idx, ret);
+		D_ERROR("Failed to pop ULT for ABT pool(%d): %d", pool_idx, ret);
 		return ABT_UNIT_NULL;
 	}
 
@@ -1708,7 +1704,7 @@ sched_pop_one(struct sched_data *data, ABT_pool pool, int pool_idx)
 	 * ABT_thread_join() is called.
 	 */
 	if (unit == ABT_UNIT_NULL)
-		D_DEBUG(DB_TRACE, "Popped NULL unit for ABT pool(%d)\n", pool_idx);
+		D_DEBUG(DB_TRACE, "Popped NULL unit for ABT pool(%d)", pool_idx);
 
 	cycle->sc_age_net++;
 	cycle->sc_age_nvme++;
@@ -1759,8 +1755,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 
 	ret = ABT_pool_get_total_size(pools[DSS_POOL_GENERIC], &blocked);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Get ABT pool(%d) total size error: %d\n",
-			DSS_POOL_GENERIC, ret);
+		D_ERROR("Get ABT pool(%d) total size error: %d", DSS_POOL_GENERIC, ret);
 		return;
 	}
 
@@ -1814,7 +1809,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 	} else {
 		ret = usleep(sleep_time * 1000);
 		if (ret)
-			D_ERROR("Sleep error: %s\n", strerror(errno));
+			D_ERROR("Sleep error: %s", strerror(errno));
 	}
 
 	/* Rough stats, interruption isn't taken into account */
@@ -1841,8 +1836,8 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	/* Update current ts stored in sched_info */
 	cur_ts = daos_getmtime_coarse();
 	if (cur_ts < info->si_cur_ts) {
-		D_WARN("Backwards time: cur_ts:"DF_U64", si_cur_ts:"DF_U64"\n",
-		       cur_ts, info->si_cur_ts);
+		D_WARN("Backwards time: cur_ts:" DF_U64 ", si_cur_ts:" DF_U64, cur_ts,
+		       info->si_cur_ts);
 		cur_ts = info->si_cur_ts;
 	}
 	duration = cur_ts - info->si_cur_ts;
@@ -1855,8 +1850,7 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	D_ASSERT(cycle->sc_ults_cnt[DSS_POOL_GENERIC] == 0);
 	ret = ABT_pool_get_size(pools[DSS_POOL_GENERIC], &cnt);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Get ABT pool(%d) size error: %d\n",
-			DSS_POOL_GENERIC, ret);
+		D_ERROR("Get ABT pool(%d) size error: %d", DSS_POOL_GENERIC, ret);
 		cnt = 0;
 	}
 	cycle->sc_ults_cnt[DSS_POOL_GENERIC] = cnt;
@@ -1895,14 +1889,14 @@ sched_exec_time(uint64_t *msecs, const char *ult_name)
 
 	cur = daos_getmtime_coarse();
 	if (cur < info->si_ult_start) {
-		D_WARN("cur:"DF_U64" < start:"DF_U64"\n", cur, info->si_ult_start);
+		D_WARN("cur:" DF_U64 " < start:" DF_U64, cur, info->si_ult_start);
 		*msecs = 0;
 		return 0;
 	}
 
 	*msecs = cur - info->si_ult_start;
 	if (*msecs > sched_unit_runtime_max && ult_name != NULL)
-		D_WARN("ULT:%s executed "DF_U64" msecs\n", ult_name, *msecs);
+		D_WARN("ULT:%s executed " DF_U64 " msecs", ult_name, *msecs);
 	return 0;
 }
 
@@ -1956,8 +1950,7 @@ sched_watchdog_post(struct dss_xstream *dx)
 
 	cur = daos_getmtime_coarse();
 	if (cur < info->si_ult_start) {
-		D_WARN("Backwards time, cur:"DF_U64", start:"DF_U64"\n",
-		       cur, info->si_ult_start);
+		D_WARN("Backwards time, cur:" DF_U64 ", start:" DF_U64, cur, info->si_ult_start);
 		return;
 	}
 
@@ -1978,8 +1971,8 @@ sched_watchdog_post(struct dss_xstream *dx)
 	info->si_stats.ss_watchdog_ts = cur;
 
 	strings = backtrace_symbols(&info->si_ult_func, 1);
-	D_WARN("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
-		info->si_ult_func, elapsed, strings != NULL ? strings[0] : NULL);
+	D_WARN("WATCHDOG: Thread %p took %u ms. symbol:%s", info->si_ult_func, elapsed,
+	       strings != NULL ? strings[0] : NULL);
 
 	free(strings);
 }
@@ -2002,7 +1995,7 @@ sched_run(ABT_sched sched)
 
 	ret = ABT_sched_get_pools(sched, DSS_POOL_CNT, 0, pools);
 	if (ret != ABT_SUCCESS) {
-		D_ERROR("Get ABT pools error: %d\n", ret);
+		D_ERROR("Get ABT pools error: %d", ret);
 		return;
 	}
 
@@ -2051,7 +2044,7 @@ check_event:
 
 			ABT_sched_has_to_stop(sched, &stop);
 			if (stop == ABT_TRUE) {
-				D_DEBUG(DB_TRACE, "Stop scheduler\n");
+				D_DEBUG(DB_TRACE, "Stop scheduler");
 				break;
 			}
 			work_count = 0;

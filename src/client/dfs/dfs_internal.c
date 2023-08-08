@@ -61,11 +61,11 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	if (hdl->type == DFS_H_POOL) {
 		rc = daos_pool_disconnect(hdl->handle, NULL);
 		if (rc)
-			D_ERROR("daos_pool_connect() Failed "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_pool_connect() Failed");
 	} else if (hdl->type == DFS_H_CONT) {
 		rc = daos_cont_close(hdl->handle, NULL);
 		if (rc)
-			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_cont_close() Failed");
 	} else {
 		D_ASSERT(0);
 	}
@@ -119,14 +119,14 @@ dfs_init(void)
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_LRU, 4, NULL, &hdl_hash_ops,
 				 &poh_hash);
 	if (rc) {
-		D_ERROR("Failed to init pool handle hash "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to init pool handle hash");
 		D_GOTO(out_fini, rc = daos_der2errno(rc));
 	}
 
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_LRU, 4, NULL, &hdl_hash_ops,
 				 &coh_hash);
 	if (rc) {
-		D_ERROR("Failed to init container handle hash "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to init container handle hash");
 		D_GOTO(out_poh, rc = daos_der2errno(rc));
 	}
 
@@ -305,7 +305,7 @@ dfs_hdl_cont_destroy(const char *pool, const char *cont, bool force)
 
 	hdl = hdl_obj(rlink);
 	if (hdl->ref > 2) {
-		D_ERROR("Container handle is still open or DFS mount still connected\n");
+		D_ERROR("Container handle is still open or DFS mount still connected");
 		return EBUSY;
 	}
 	d_hash_rec_decref(coh_hash, rlink);

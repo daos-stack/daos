@@ -385,9 +385,10 @@ static inline int
 rdb_mc_update(daos_handle_t mc, rdb_oid_t oid, int n, d_iov_t akeys[],
 	      d_iov_t values[])
 {
-	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" n=%d akeys[0]=<%p, %zd> "
-		"values[0]=<%p, %zd>\n", mc.cookie, oid, n, akeys[0].iov_buf,
-		akeys[0].iov_len, values[0].iov_buf, values[0].iov_len);
+	D_DEBUG(DB_TRACE,
+		"mc=" DF_X64 " oid=" DF_X64 " n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>",
+		mc.cookie, oid, n, akeys[0].iov_buf, akeys[0].iov_len, values[0].iov_buf,
+		values[0].iov_len);
 	return rdb_vos_update(mc, RDB_MC_EPOCH, oid, true /* crit */, n,
 			      akeys, values);
 }
@@ -396,9 +397,8 @@ static inline int
 rdb_mc_lookup(daos_handle_t mc, rdb_oid_t oid, d_iov_t *akey,
 	      d_iov_t *value)
 {
-	D_DEBUG(DB_TRACE, "mc="DF_X64" oid="DF_X64" akey=<%p, %zd> "
-		"value=<%p, %zd, %zd>\n", mc.cookie, oid, akey->iov_buf,
-		akey->iov_len, value->iov_buf, value->iov_buf_len,
+	D_DEBUG(DB_TRACE, "mc=" DF_X64 " oid=" DF_X64 " akey=<%p, %zd> value=<%p, %zd, %zd>",
+		mc.cookie, oid, akey->iov_buf, akey->iov_len, value->iov_buf, value->iov_buf_len,
 		value->iov_len);
 	return rdb_vos_fetch(mc, RDB_MC_EPOCH, oid, akey, value);
 }
@@ -407,10 +407,11 @@ static inline int
 rdb_lc_update(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool crit,
 	      int n, d_iov_t akeys[], d_iov_t values[])
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
-		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>\n", lc.cookie,
-		index, oid, n, akeys[0].iov_buf, akeys[0].iov_len,
-		values[0].iov_buf, values[0].iov_len);
+	D_DEBUG(DB_TRACE,
+		"lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64
+		" n=%d akeys[0]=<%p, %zd> values[0]=<%p, %zd>",
+		lc.cookie, index, oid, n, akeys[0].iov_buf, akeys[0].iov_len, values[0].iov_buf,
+		values[0].iov_len);
 	return rdb_vos_update(lc, index, oid, crit, n, akeys, values);
 }
 
@@ -419,12 +420,12 @@ rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
 	     d_iov_t akeys[])
 {
 	if (n > 0)
-		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
-			" n=%d akeys[0]=<%p, %zd>\n", lc.cookie, index, oid, n,
-			akeys[0].iov_buf, akeys[0].iov_len);
+		D_DEBUG(DB_TRACE,
+			"lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64 " n=%d akeys[0]=<%p, %zd>",
+			lc.cookie, index, oid, n, akeys[0].iov_buf, akeys[0].iov_len);
 	else
-		D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
-			" n=%d\n", lc.cookie, index, oid, n);
+		D_DEBUG(DB_TRACE, "lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64 " n=%d", lc.cookie,
+			index, oid, n);
 	return rdb_vos_punch(lc, index, oid, n, akeys);
 }
 
@@ -432,8 +433,7 @@ rdb_lc_punch(daos_handle_t lc, uint64_t index, rdb_oid_t oid, int n,
 static inline int
 rdb_lc_discard(daos_handle_t lc, uint64_t low, uint64_t high)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" low="DF_U64" high="DF_U64"\n", lc.cookie,
-		low, high);
+	D_DEBUG(DB_TRACE, "lc=" DF_X64 " low=" DF_U64 " high=" DF_U64, lc.cookie, low, high);
 	return rdb_vos_discard(lc, low, high);
 }
 
@@ -441,7 +441,7 @@ rdb_lc_discard(daos_handle_t lc, uint64_t low, uint64_t high)
 static inline int
 rdb_lc_aggregate(daos_handle_t lc, uint64_t high)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" high="DF_U64"\n", lc.cookie, high);
+	D_DEBUG(DB_TRACE, "lc=" DF_X64 " high=" DF_U64, lc.cookie, high);
 	return rdb_vos_aggregate(lc, high);
 }
 
@@ -449,9 +449,9 @@ static inline int
 rdb_lc_lookup(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 	      d_iov_t *akey, d_iov_t *value)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
-		" akey=<%p, %zd> value=<%p, %zd, %zd>\n", lc.cookie, index, oid,
-		akey->iov_buf, akey->iov_len, value->iov_buf,
+	D_DEBUG(DB_TRACE,
+		"lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64 " akey=<%p, %zd> value=<%p, %zd, %zd>",
+		lc.cookie, index, oid, akey->iov_buf, akey->iov_len, value->iov_buf,
 		value->iov_buf_len, value->iov_len);
 	if (value->iov_buf == NULL)
 		return rdb_vos_fetch_addr(lc, index, oid, akey, value);
@@ -464,16 +464,13 @@ rdb_lc_iter_fetch(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 		  enum rdb_probe_opc opc, d_iov_t *akey_in,
 		  d_iov_t *akey_out, d_iov_t *value)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64" opc=%d"
-		" akey_in=<%p, %zd> akey_out=<%p, %zd> value=<%p, %zd, %zd>\n",
-		lc.cookie, index, oid, opc,
-		akey_in == NULL ? NULL : akey_in->iov_buf,
-		akey_in == NULL ? 0 : akey_in->iov_len,
-		akey_out == NULL ? NULL : akey_out->iov_buf,
-		akey_out == NULL ? 0 : akey_out->iov_len,
-		value == NULL ? NULL : value->iov_buf,
-		value == NULL ? 0 : value->iov_buf_len,
-		value == NULL ? 0 : value->iov_len);
+	D_DEBUG(DB_TRACE,
+		"lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64
+		" opc=%d akey_in=<%p, %zd> akey_out=<%p, %zd> value=<%p, %zd, %zd>",
+		lc.cookie, index, oid, opc, akey_in == NULL ? NULL : akey_in->iov_buf,
+		akey_in == NULL ? 0 : akey_in->iov_len, akey_out == NULL ? NULL : akey_out->iov_buf,
+		akey_out == NULL ? 0 : akey_out->iov_len, value == NULL ? NULL : value->iov_buf,
+		value == NULL ? 0 : value->iov_buf_len, value == NULL ? 0 : value->iov_len);
 	return rdb_vos_iter_fetch(lc, index, oid, opc, akey_in, akey_out,
 				  value);
 }
@@ -488,8 +485,8 @@ static inline int
 rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 	       rdb_iterate_cb_t cb, void *arg)
 {
-	D_DEBUG(DB_TRACE, "lc="DF_X64" index="DF_U64" oid="DF_X64
-		" backward=%d\n", lc.cookie, index, oid, backward);
+	D_DEBUG(DB_TRACE, "lc=" DF_X64 " index=" DF_U64 " oid=" DF_X64 " backward=%d", lc.cookie,
+		index, oid, backward);
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
 

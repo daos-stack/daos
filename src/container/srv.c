@@ -107,16 +107,14 @@ dsm_tls_init(int tags, int xs_id, int tgt_id)
 
 	rc = ds_cont_child_cache_create(&tls->dt_cont_cache);
 	if (rc != 0) {
-		D_ERROR("failed to create thread-local container cache: %d\n",
-			rc);
+		D_ERROR("failed to create thread-local container cache: %d", rc);
 		D_FREE(tls);
 		return NULL;
 	}
 
 	rc = ds_cont_hdl_hash_create(&tls->dt_cont_hdl_hash);
 	if (rc != 0) {
-		D_ERROR("failed to create thread-local container handle cache:"
-			" "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create thread-local container handle cache");
 		ds_cont_child_cache_destroy(tls->dt_cont_cache);
 		D_FREE(tls);
 		return NULL;

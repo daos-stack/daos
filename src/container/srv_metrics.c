@@ -33,32 +33,31 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 			     "Total number of successful container open operations",
 			     "ops", "%s/ops/cont_open", path);
 	if (rc != 0)
-		D_WARN("Failed to create container open counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create container open counter");
 
 	rc = d_tm_add_metric(&metrics->close_total, D_TM_COUNTER,
 			     "Total number of successful container close operations",
 			     "ops", "%s/ops/cont_close", path);
 	if (rc != 0)
-		D_WARN("Failed to create container close counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create container close counter");
 
 	rc = d_tm_add_metric(&metrics->query_total, D_TM_COUNTER,
 			     "Total number of successful container query operations",
 			     "ops", "%s/ops/cont_query", path);
 	if (rc != 0)
-		D_WARN("Failed to create container query counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create container query counter");
 
 	rc = d_tm_add_metric(&metrics->create_total, D_TM_COUNTER,
 			     "Total number of successful container create operations",
 			     "ops", "%s/ops/cont_create", path);
 	if (rc != 0)
-		D_WARN("Failed to create container create counter: "DF_RC"\n", DP_RC(rc));
-
+		DL_WARN(rc, "Failed to create container create counter");
 
 	rc = d_tm_add_metric(&metrics->destroy_total, D_TM_COUNTER,
 			     "Total number of successful container destroy operations",
 			     "ops", "%s/ops/cont_destroy", path);
 	if (rc != 0)
-		D_WARN("Failed to create container destroy counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create container destroy counter");
 
 	return metrics;
 }

@@ -56,12 +56,12 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	int		rc = 0;
 
 	if (unlikely(proc == NULL)) {
-		D_ERROR("Proc is not initilalized.\n");
+		D_ERROR("Proc is not initilalized");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (unlikely(proc_op == NULL)) {
-		D_ERROR("Invalid parameter - NULL proc_op.\n");
+		D_ERROR("Invalid parameter - NULL proc_op");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -77,7 +77,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 		*proc_op = CRT_PROC_FREE;
 		break;
 	default:
-		D_ERROR("Bad hg_proc_op: %d.\n", hg_proc_op);
+		D_ERROR("Bad hg_proc_op: %d", hg_proc_op);
 		rc = -DER_INVAL;
 	}
 
@@ -161,7 +161,7 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	int		 rc = 0;
 
 	if (unlikely(data == NULL)) {
-		D_ERROR("Invalid parameter data: %p.\n", data);
+		D_ERROR("Invalid parameter data: %p", data);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -231,8 +231,8 @@ crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *div)
 		D_GOTO(out, rc);
 
 	if (div->iov_buf_len < div->iov_len) {
-		D_ERROR("invalid iov buf len "DF_U64" < iov len "DF_U64"\n",
-			div->iov_buf_len, div->iov_len);
+		D_ERROR("invalid iov buf len " DF_U64 " < iov len " DF_U64, div->iov_buf_len,
+			div->iov_len);
 		D_GOTO(out, rc = -DER_HG);
 	}
 
@@ -377,7 +377,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	/* Get extra input buffer; if it's null, get regular input buffer */
 	hg_ret = HG_Get_input_extra_buf(handle, &in_buf, &in_buf_size);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "HG_Get_input_extra_buf failed: %d\n", hg_ret);
+		RPC_ERROR(rpc_priv, "HG_Get_input_extra_buf failed: %d", hg_ret);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
@@ -385,7 +385,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	if (in_buf == NULL) {
 		hg_ret = HG_Get_input_buf(handle, &in_buf, &in_buf_size);
 		if (hg_ret != HG_SUCCESS) {
-			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d\n", hg_ret);
+			RPC_ERROR(rpc_priv, "HG_Get_input_buf failed: %d", hg_ret);
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 		}
 	}
@@ -396,14 +396,14 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	hg_class = hg_ctx->chc_hgcla;
 	hg_ret   = hg_proc_create_set(hg_class, in_buf, in_buf_size, HG_DECODE, HG_CRC32, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "hg_proc_create_set failed: %d\n", hg_ret);
+		RPC_ERROR(rpc_priv, "hg_proc_create_set failed: %d", hg_ret);
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
 	/* Decode header */
 	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_req_hdr);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC "\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -430,8 +430,7 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(hg_proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_corpc_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_corpc_hdr failed: " DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
@@ -496,15 +495,14 @@ crt_hg_unpack_body(struct crt_rpc_priv *rpc_priv, crt_proc_t proc)
 	/* Decode input parameters */
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_input failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_input failed: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	/* Flush proc */
 	hg_ret = hg_proc_flush(proc);
 	if (hg_ret != HG_SUCCESS) {
-		RPC_ERROR(rpc_priv, "hg_proc_flush failed: %d\n", hg_ret);
+		RPC_ERROR(rpc_priv, "hg_proc_flush failed: %d", hg_ret);
 		D_GOTO(out, rc);
 	}
 out:
@@ -563,8 +561,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_req_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		/**
@@ -584,24 +581,21 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		rc = crt_proc_corpc_hdr(proc, &rpc_priv->crp_coreq_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_corpc_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_corpc_hdr failed: " DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 	}
 
 	if (*data == NULL) {
 		/*
-		D_DEBUG("crt_proc_in_common, opc: %#x, NULL input.\n",
-			rpc_priv->crp_req_hdr.cch_opc);
+D_DEBUG("crt_proc_in_common, opc: %#x, NULL input",rpc_priv->crp_req_hdr.cch_opc);
 		*/
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_proc_input(rpc_priv, proc);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_input failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_input failed: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -635,8 +629,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		}
 		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_reply_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		if (DECODING(proc_op)) {
@@ -673,12 +666,12 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 		if (rc2 != 0) {
 			if (rpc_priv->crp_reply_hdr.cch_rc != -DER_GRPVER)
 				RPC_ERROR(rpc_priv,
-					  "RPC failed to execute on target. "
-					  "error code: "DF_RC"\n", DP_RC(rc2));
+					  "RPC failed to execute on target. error code: " DF_RC,
+					  DP_RC(rc2));
 			else
 				RPC_TRACE(DB_NET, rpc_priv,
-					  "RPC failed to execute on target. "
-					  "error code: "DF_RC"\n", DP_RC(rc2));
+					  "RPC failed to execute on target. error code: " DF_RC,
+					  DP_RC(rc2));
 
 			D_GOTO(out, rc);
 		}
@@ -686,8 +679,7 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 
 	if (*data == NULL) {
 		/*
-		D_DEBUG("crt_proc_out_common, opc: %#x, NULL output.\n",
-			rpc_priv->crp_req_hdr.cch_opc);
+D_DEBUG("crt_proc_out_common, opc: %#x, NULL output",rpc_priv->crp_req_hdr.cch_opc);
 		*/
 		D_GOTO(out, rc);
 	}
@@ -713,7 +705,7 @@ crt_proc_create(crt_context_t crt_ctx, void *buf, size_t buf_size,
 	hg_ret = hg_proc_create_set(ctx->cc_hg_ctx.chc_hgcla, buf, buf_size,
 				    hg_op, HG_NOHASH, &hg_proc);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Failed to create CaRT proc: %d\n", hg_ret);
+		D_ERROR("Failed to create CaRT proc: %d", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	} else {
 		*proc = (crt_proc_t)hg_proc;
@@ -731,7 +723,7 @@ crt_proc_destroy(crt_proc_t proc)
 
 	hg_ret = hg_proc_free(hg_proc);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Failed to destroy CaRT proc: %d\n", hg_ret);
+		D_ERROR("Failed to destroy CaRT proc: %d", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
@@ -751,7 +743,7 @@ crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_o
 
 	hg_ret = hg_proc_reset(hg_proc, buf, buf_size, hg_op);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("Failed to reset CaRT proc to op %d: %d\n", proc_op, hg_ret);
+		D_ERROR("Failed to reset CaRT proc to op %d: %d", proc_op, hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 

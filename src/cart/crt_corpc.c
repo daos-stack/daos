@@ -31,8 +31,7 @@ crt_corpc_info_init(struct crt_rpc_priv *rpc_priv,
 
 	rc = d_rank_list_dup_sort_uniq(&co_info->co_filter_ranks, filter_ranks);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "d_rank_list_dup failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "d_rank_list_dup failed: " DF_RC, DP_RC(rc));
 		D_FREE(co_info);
 		D_GOTO(out, rc);
 	}
@@ -115,9 +114,8 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			 * return GRPVER to retry until pool map is updated
 			 * or the pool is stopped.
 			 */
-			RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: "
-				  DF_RC"\n", co_hdr->coh_grpid,
-				  DP_RC(-DER_GRPVER));
+			RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: " DF_RC,
+				  co_hdr->coh_grpid, DP_RC(-DER_GRPVER));
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
@@ -140,15 +138,13 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		/* rollback refcount taken in above */
 		if (grp_ref_taken)
 			crt_grp_priv_decref(grp_priv);
-		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_corpc_req_hdlr(rpc_priv);
 	if (rc != 0)
-		RPC_ERROR(rpc_priv, "crt_corpc_req_hdlr failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_req_hdlr failed: " DF_RC, DP_RC(rc));
 
 out:
 	return rc;
@@ -187,8 +183,7 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	co_hdr->coh_bulk_hdl = NULL;
 
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: "
-			  DF_RC"\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_chained_bulk_cb, bulk failed: " DF_RC, DP_RC(rc));
 		D_FREE(bulk_buf);
 		D_GOTO(out, rc);
 	}
@@ -196,8 +191,7 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: " DF_RC, DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 	}
 
@@ -223,13 +217,13 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	if (rc != -DER_TRUNC) {
 		if (rc == 0)
 			rc = -DER_PROTO;
-		D_ERROR("crt_bulk_access failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_bulk_access failed");
 		D_GOTO(out, rc);
 	}
 
 	seg_num = sgl.sg_nr_out;
 	if (seg_num == 0) {
-		D_ERROR("bad zero seg_num.\n");
+		D_ERROR("bad zero seg_num");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 	D_ALLOC_ARRAY(iovs, seg_num);
@@ -240,7 +234,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 	sgl.sg_iovs = iovs;
 	rc = crt_bulk_access(bulk_hdl, &sgl);
 	if (rc != 0) {
-		D_ERROR("crt_bulk_access failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_bulk_access failed");
 		D_GOTO(out, rc);
 	}
 
@@ -249,7 +243,7 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
-		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_bulk_free failed");
 
 out:
 	D_FREE(iovs);
@@ -271,11 +265,11 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	D_ASSERT(rpc_priv != NULL && (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL));
 
 	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized yet.\n");
+		D_ERROR("CaRT not initialized yet");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (!crt_is_service()) {
-		D_ERROR("corpc invalid on client-side.\n");
+		D_ERROR("corpc invalid on client-side");
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -285,8 +279,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (parent_bulk_hdl != CRT_BULK_NULL) {
 		rc = crt_bulk_get_len(parent_bulk_hdl, &bulk_len);
 		if (rc != 0 || bulk_len == 0) {
-			RPC_ERROR(rpc_priv, "crt_bulk_get_len failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_bulk_get_len failed: " DF_RC, DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 
@@ -300,8 +293,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = crt_bulk_create(rpc_priv->crp_pub.cr_ctx, &bulk_sgl,
 				     CRT_BULK_RW, &local_bulk_hdl);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_bulk_create failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_bulk_create failed: " DF_RC, DP_RC(rc));
 			D_FREE(bulk_iov.iov_buf);
 			D_GOTO(out, rc);
 		}
@@ -319,8 +311,7 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = crt_bulk_transfer(&bulk_desc, crt_corpc_chained_bulk_cb,
 				       bulk_iov.iov_buf, NULL);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_bulk_transfer failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_bulk_transfer failed: " DF_RC, DP_RC(rc));
 			D_FREE(bulk_iov.iov_buf);
 			RPC_DECREF(rpc_priv);
 		}
@@ -329,14 +320,12 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_pub.cr_co_bulk_hdl = CRT_BULK_NULL;
 		rc = crt_corpc_initiate(rpc_priv);
 		if (rc != 0)
-			RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: " DF_RC, DP_RC(rc));
 	}
 
 out:
 	if (rc != 0)
-		RPC_ERROR(rpc_priv, "crt_corpc_common_hdlr failed: "
-			  DF_RC"\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_common_hdlr failed: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -357,19 +346,19 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	int			 rc = 0;
 
 	if (crt_ctx == CRT_CONTEXT_NULL || req == NULL) {
-		D_ERROR("invalid parameter (NULL crt_ctx or req).\n");
+		D_ERROR("invalid parameter (NULL crt_ctx or req)");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized yet.\n");
+		D_ERROR("CaRT not initialized yet");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (!crt_is_service()) {
-		D_ERROR("corpc invalid on client-side.\n");
+		D_ERROR("corpc invalid on client-side");
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 	if (!crt_tree_topo_valid(tree_topo)) {
-		D_ERROR("invalid parameter of tree_topo: %#x.\n", tree_topo);
+		D_ERROR("invalid parameter of tree_topo: %#x", tree_topo);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -380,8 +369,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	rc = crt_rpc_priv_alloc(opc, &rpc_priv, false /* forward */);
 	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_alloc(opc: %#x) failed: "DF_RC"\n", opc,
-			DP_RC(rc));
+		DL_ERROR(rc, "crt_rpc_priv_alloc(opc: %#x) failed", opc);
 		D_GOTO(out, rc);
 	}
 
@@ -393,8 +381,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
 	if (grp_root == CRT_NO_RANK) {
-		D_DEBUG(DB_NET, "%s: self rank not known yet\n",
-			grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_NET, "%s: self rank not known yet", grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, rc = -DER_GRPVER);
 	}
 	pri_root = crt_grp_priv_get_primary_rank(grp_priv, grp_root);
@@ -439,8 +426,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 				 flags, tree_topo, grp_root,
 				 true /* init_hdr */, root_excluded);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -525,11 +511,9 @@ crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
 	if (failed_rc != -DER_GRPVER)
-		RPC_ERROR(parent_rpc_priv,
-			  "CORPC failed: "DF_RC"\n", DP_RC(failed_rc));
+		RPC_ERROR(parent_rpc_priv, "CORPC failed: " DF_RC, DP_RC(failed_rc));
 	else
-		RPC_TRACE(DB_NET, parent_rpc_priv,
-			  "CORPC failed: "DF_RC"\n", DP_RC(failed_rc));
+		RPC_TRACE(DB_NET, parent_rpc_priv, "CORPC failed: " DF_RC, DP_RC(failed_rc));
 }
 
 static inline void
@@ -553,8 +537,7 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
 		rc = crt_hg_reply_send(rpc_priv);
 		if (rc != 0)
-			RPC_ERROR(rpc_priv, "crt_hg_reply_send failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_hg_reply_send failed: " DF_RC, DP_RC(rc));
 		/*
 		 * on root node, don't need to free chained bulk handle as it is
 		 * created and passed in by user.
@@ -562,9 +545,8 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 		rc = crt_corpc_free_chained_bulk(
 			rpc_priv->crp_coreq_hdr.coh_bulk_hdl);
 		if (rc != 0)
-			RPC_ERROR(rpc_priv,
-				  "crt_corpc_free_chainded_bulk failed: "
-				  DF_RC"\n", DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_corpc_free_chainded_bulk failed: " DF_RC,
+				  DP_RC(rc));
 		/*
 		 * reset it to NULL to avoid crt_proc_corpc_hdr->
 		 * crt_proc_crt_bulk_t free the bulk handle again.
@@ -679,16 +661,14 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 						  &parent_rpc_priv->crp_pub,
 						  co_info->co_priv);
 			if (rc != 0) {
-				D_ERROR("co_ops->co_aggregate(opc: %#x) "
-					"failed: "DF_RC"\n",
-					child_req->cr_opc, DP_RC(rc));
+				DL_ERROR(rc, "co_ops->co_aggregate(opc: %#x) failed",
+					 child_req->cr_opc);
 				if (co_info->co_rc == 0)
 					co_info->co_rc = rc;
 			}
 			co_info->co_child_ack_num++;
-			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, "
-				"wait_num %d, ack_num %d.\n", parent_rpc_priv,
-				child_rpc_priv, wait_num,
+			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, wait_num %d, ack_num %d",
+				parent_rpc_priv, child_rpc_priv, wait_num,
 				co_info->co_child_ack_num);
 			corpc_del_child_rpc_locked(parent_rpc_priv,
 						   tmp_rpc_priv);
@@ -718,18 +698,16 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 					&parent_rpc_priv->crp_pub,
 					co_info->co_priv);
 				if (rc != 0) {
-					D_ERROR("co_ops->co_aggregate(opc: %#x)"
-						" failed: "DF_RC"\n",
-						child_req->cr_opc, DP_RC(rc));
+					DL_ERROR(rc, "co_ops->co_aggregate(opc: %#x) failed",
+						 child_req->cr_opc);
 					if (co_info->co_rc == 0)
 						co_info->co_rc = rc;
 				}
 			}
 		}
 		co_info->co_child_ack_num++;
-		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, wait_num %d, "
-			"ack_num %d.\n", parent_rpc_priv, child_rpc_priv,
-			wait_num, co_info->co_child_ack_num);
+		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, wait_num %d, ack_num %d",
+			parent_rpc_priv, child_rpc_priv, wait_num, co_info->co_child_ack_num);
 		if (parent_rpc_priv != child_rpc_priv)
 			corpc_del_child_rpc_locked(parent_rpc_priv,
 						   child_rpc_priv);
@@ -737,8 +715,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		D_ASSERT(wait_num > co_info->co_child_ack_num);
 		d_list_move_tail(&child_rpc_priv->crp_parent_link,
 				 &co_info->co_replied_rpcs);
-		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p move to "
-			"replided rpcs.\n", parent_rpc_priv, child_rpc_priv);
+		D_DEBUG(DB_NET, "parent rpc %p, child rpc %p move to replided rpcs",
+			parent_rpc_priv, child_rpc_priv);
 	}
 
 aggregate_done:
@@ -797,10 +775,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,
 					    co_info->co_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "co_pre_forward(group %s) failed: "DF_RC"\n",
-				  co_info->co_grp_priv->gp_pub.cg_grpid,
-				  DP_RC(rc));
+			RPC_ERROR(rpc_priv, "co_pre_forward(group %s) failed: " DF_RC,
+				  co_info->co_grp_priv->gp_pub.cg_grpid, DP_RC(rc));
 			crt_corpc_fail_parent_rpc(rpc_priv, rc);
 			D_GOTO(forward_done, rc);
 		}
@@ -811,7 +787,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	 * might have changed the self rank from CRT_NO_RANK to a valid value.
 	 */
 	if (co_info->co_grp_priv->gp_self == CRT_NO_RANK) {
-		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet\n",
+		RPC_TRACE(DB_NET, rpc_priv, "%s: self rank not known yet",
 			  co_info->co_grp_priv->gp_pub.cg_grpid);
 		rc = -DER_GRPVER;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
@@ -838,12 +814,12 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				children_rank_list->rl_nr;
 	co_info->co_child_ack_num = 0;
 
-	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
-		co_info->co_grp_priv->gp_pub.cg_grpid,
-		co_info->co_grp_priv->gp_self, co_info->co_child_num);
+	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d",
+		co_info->co_grp_priv->gp_pub.cg_grpid, co_info->co_grp_priv->gp_self,
+		co_info->co_child_num);
 
 	if (!ver_match) {
-		D_INFO("parent version and local version mismatch.\n");
+		D_INFO("parent version and local version mismatch");
 		rc = -DER_GRPVER;
 		co_info->co_child_num = 0;
 		crt_corpc_fail_parent_rpc(rpc_priv, rc);
@@ -863,9 +839,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 					     rpc_priv->crp_pub.cr_opc,
 					     true /* forward */, &child_rpc);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_req_create(tgt_ep: %d) failed: "
-				  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_req_create(tgt_ep: %d) failed: " DF_RC,
+				  tgt_ep.ep_rank, DP_RC(rc));
 			crt_corpc_fail_child_rpc(rpc_priv,
 						 co_info->co_child_num - i, rc);
 			D_GOTO(forward_done, rc);
@@ -889,9 +864,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		RPC_ADDREF(rpc_priv);
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_req_send(tgt_ep: %d) failed: "
-				  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
+			RPC_ERROR(rpc_priv, "crt_req_send(tgt_ep: %d) failed: " DF_RC,
+				  tgt_ep.ep_rank, DP_RC(rc));
 			RPC_DECREF(rpc_priv);
 
 			/*
@@ -922,8 +896,7 @@ forward_done:
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: "DF_RC"\n",
-			  DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: " DF_RC, DP_RC(rc));
 		crt_corpc_fail_child_rpc(rpc_priv, 1, rc);
 
 		D_SPIN_LOCK(&rpc_priv->crp_lock);

@@ -111,7 +111,7 @@ ds_iv_class_unregister(unsigned int class_id)
 		}
 	}
 
-	D_DEBUG(DB_TRACE, "can not find the key %d\n", class_id);
+	D_DEBUG(DB_TRACE, "can not find the key %d", class_id);
 	return 0;
 }
 
@@ -158,7 +158,7 @@ iv_key_unpack(struct ds_iv_key *key_iv, crt_iv_key_t *key_iov)
 	else
 		memcpy(key_iv, key_iov->iov_buf, sizeof(*key_iv));
 
-	D_DEBUG(DB_TRACE, "unpack %d\n", key_iv->class_id);
+	D_DEBUG(DB_TRACE, "unpack %d", key_iv->class_id);
 	return rc;
 }
 
@@ -166,8 +166,7 @@ static void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
-	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
-		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+	D_DEBUG(DB_TRACE, DF_UUID " ns ref %u", DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
 
 static void
@@ -178,8 +177,7 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 {
 	D_ASSERT(ns->iv_refcount > 0);
 	ns->iv_refcount--;
-	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
-		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+	D_DEBUG(DB_TRACE, DF_UUID " ns ref %u", DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
 		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
 	else if (ns->iv_refcount == 0)
@@ -197,8 +195,7 @@ iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 			continue;
 
 		if (ns->iv_stop) {
-			D_DEBUG(DB_MD, DF_UUID" stopping\n",
-				DP_UUID(ns->iv_pool_uuid));
+			D_DEBUG(DB_MD, DF_UUID " stopping", DP_UUID(ns->iv_pool_uuid));
 			*p_ns = ns;
 			return -DER_SHUTDOWN;
 		}
@@ -335,14 +332,13 @@ iv_entry_lookup_or_create(struct ds_iv_ns *ns, struct ds_iv_key *key,
 		entry->iv_ref++;
 		if (got != NULL)
 			*got = entry;
-		D_DEBUG(DB_TRACE, "Get entry %p/%d key %d\n",
-			entry, entry->iv_ref, key->class_id);
+		D_DEBUG(DB_TRACE, "Get entry %p/%d key %d", entry, entry->iv_ref, key->class_id);
 		return 0;
 	}
 
 	class = iv_class_lookup(key->class_id);
 	if (class == NULL) {
-		D_ERROR("Can not find class %d\n", key->class_id);
+		D_ERROR("Can not find class %d", key->class_id);
 		return -DER_NONEXIST;
 	}
 
@@ -405,8 +401,8 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	}
 
 	valid = iv_entry_valid(entry, &key);
-	D_DEBUG(DB_MD, "FETCH: Key [%d:%d] entry %p valid %s\n", key.rank,
-		key.class_id, entry, valid ? "yes" : "no");
+	D_DEBUG(DB_MD, "FETCH: Key [%d:%d] entry %p valid %s", key.rank, key.class_id, entry,
+		valid ? "yes" : "no");
 
 	/* Forward the request to its parent if it is not root, and
 	 * let's caller decide how to deal with leader.
@@ -434,7 +430,7 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 output:
 	if (flags & CRT_IV_FLAG_PENDING_FETCH && rc == -DER_IVCB_FORWARD) {
 		/* For pending fetch request, let's reset to DER_NOTLEADER for retry */
-		D_DEBUG(DB_MD, "[%d:%d] reset NOTLEADER to retry.\n", key.rank, key.class_id);
+		D_DEBUG(DB_MD, "[%d:%d] reset NOTLEADER to retry", key.rank, key.class_id);
 		rc = -DER_NOTLEADER;
 	}
 
@@ -474,16 +470,15 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	} else {
 		D_ASSERT(iv_value != NULL);
 		if (ns->iv_master_rank != key.rank) {
-			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d\n",
-				key.class_id, ns->iv_master_rank, key.rank, -DER_GRPVER);
+			D_DEBUG(DB_MD, "key id %d master rank %u != %u: rc = %d", key.class_id,
+				ns->iv_master_rank, key.rank, -DER_GRPVER);
 			D_GOTO(output, rc = -DER_GRPVER);
 		}
 		rc = update_iv_value(entry, &key, iv_value,
 				     priv_entry ? priv_entry->priv : NULL);
 	}
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "key id %d update failed: rc = %d\n",
-			key.class_id, rc);
+		D_DEBUG(DB_MD, "key id %d update failed: rc = %d", key.class_id, rc);
 		D_GOTO(output, rc);
 	}
 
@@ -492,9 +487,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	else
 		entry->iv_valid = true;
 
-	D_DEBUG(DB_MD, "key id %d rank %d myrank %d valid %s\n",
-		key.class_id, key.rank, dss_self_rank(),
-		invalidate ? "no" : "yes");
+	D_DEBUG(DB_MD, "key id %d rank %d myrank %d valid %s", key.class_id, key.rank,
+		dss_self_rank(), invalidate ? "no" : "yes");
 output:
 	/* invalidate entry might require to delete entry after refresh */
 	if (entry && entry->iv_to_delete)
@@ -536,7 +530,7 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	 */
 	rc = dss_ult_periodic(cb_func, cb_arg, DSS_XS_SELF, 0, 0, NULL);
 	if (rc)
-		D_ERROR("dss_ult_periodic failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dss_ult_periodic failed");
 }
 
 static int
@@ -548,7 +542,7 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 
 	iv_key_unpack(&key, iv_key);
 	if (key.rank == ((d_rank_t)-1)) {
-		D_INFO("Uninitialize master rank\n");
+		D_INFO("Uninitialize master rank");
 		return -DER_NOTLEADER;
 	}
 
@@ -558,8 +552,8 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 		return rc;
 
 	if (key.rank != ns->iv_master_rank) {
-		D_INFO("ns %u key rank %d ns iv master rank %d\n",
-		       ns->iv_ns_id, key.rank, ns->iv_master_rank);
+		D_INFO("ns %u key rank %d ns iv master rank %d", ns->iv_ns_id, key.rank,
+		       ns->iv_master_rank);
 		D_GOTO(out_put, rc = -DER_NOTLEADER);
 	}
 
@@ -652,8 +646,8 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	entry = priv_entry->entry;
 	D_ASSERT(entry != NULL);
 
-	D_DEBUG(DB_TRACE, "Put entry %p/%d priv %p/%p\n", entry, entry->iv_ref - 1,
-		priv_entry, priv_entry->priv);
+	D_DEBUG(DB_TRACE, "Put entry %p/%d priv %p/%p", entry, entry->iv_ref - 1, priv_entry,
+		priv_entry->priv);
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
@@ -793,7 +787,7 @@ ds_iv_ns_destroy(void *ns)
 	if (iv_ns == NULL)
 		return;
 
-	D_DEBUG(DB_MGMT, "destroy ivns %d\n", iv_ns->iv_ns_id);
+	D_DEBUG(DB_MGMT, "destroy ivns %d", iv_ns->iv_ns_id);
 	iv_ns_destroy_internal(iv_ns);
 }
 
@@ -832,9 +826,9 @@ ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term)
 	if (term <= ns->iv_master_term)
 		return;
 
-	D_INFO("update iv_ns %u master rank %u->%u term "DF_U64"->"DF_U64
-	       " myrank %u ns %p\n", ns->iv_ns_id, ns->iv_master_rank,
-	       master_rank,  ns->iv_master_term, term, dss_self_rank(), ns);
+	D_INFO("update iv_ns %u master rank %u->%u term " DF_U64 "->" DF_U64 " myrank %u ns %p",
+	       ns->iv_ns_id, ns->iv_master_rank, master_rank, ns->iv_master_term, term,
+	       dss_self_rank(), ns);
 	ns->iv_master_rank = master_rank;
 	ns->iv_master_term = term;
 }
@@ -865,12 +859,11 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 	if (ns->iv_refcount > 1) {
 		int rc;
 
-		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
-			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
+		D_DEBUG(DB_MGMT, DF_UUID " ns stop wait ref %u", DP_UUID(ns->iv_pool_uuid),
+			ns->iv_refcount);
 		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
 		D_ASSERT(rc == ABT_SUCCESS);
-		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
-			DP_UUID(ns->iv_pool_uuid));
+		D_DEBUG(DB_MGMT, DF_UUID " ns stopped", DP_UUID(ns->iv_pool_uuid));
 	}
 
 	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
@@ -878,7 +871,7 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		iv_entry_free(entry);
 	}
 
-	D_INFO(DF_UUID" ns stopped\n", DP_UUID(ns->iv_pool_uuid));
+	D_INFO(DF_UUID " ns stopped", DP_UUID(ns->iv_pool_uuid));
 }
 
 unsigned int
@@ -954,10 +947,8 @@ ds_iv_done(crt_iv_namespace_t ivns, uint32_t class_id,
 		    iv_value->sg_iovs[0].iov_len)
 			rc = daos_sgl_copy_data(cb_info->value, iv_value);
 		else
-			D_DEBUG(DB_MD, "key %d/%d does not"
-				" provide enough buf "DF_U64" < "
-				DF_U64"\n", key.class_id, key.rank,
-				cb_info->value->sg_iovs[0].iov_buf_len,
+			D_DEBUG(DB_MD, "key %d/%d does not provide enough buf " DF_U64 " < " DF_U64,
+				key.class_id, key.rank, cb_info->value->sg_iovs[0].iov_buf_len,
 				iv_value->sg_iovs[0].iov_len);
 	}
 
@@ -983,8 +974,8 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 	key_iv->rank = ns->iv_master_rank;
 	class = iv_class_lookup(key_iv->class_id);
 	D_ASSERT(class != NULL);
-	D_DEBUG(DB_MD, "class_id %d master %d crt class id %d opc %d\n",
-		key_iv->class_id, key_iv->rank, class->iv_cart_class_id, opc);
+	D_DEBUG(DB_MD, "class_id %d master %d crt class id %d opc %d", key_iv->class_id,
+		key_iv->rank, class->iv_cart_class_id, opc);
 
 	iv_key_pack(&key_iov, key_iv);
 	memset(&cb_info, 0, sizeof(cb_info));
@@ -1022,7 +1013,7 @@ iv_op_internal(struct ds_iv_ns *ns, struct ds_iv_key *key_iv,
 
 	ABT_future_wait(future);
 	rc = cb_info.result;
-	D_DEBUG(DB_MD, "class_id %d opc %d rc %d\n", key_iv->class_id, opc, rc);
+	D_DEBUG(DB_MD, "class_id %d opc %d rc %d", key_iv->class_id, opc, rc);
 out:
 	ds_iv_ns_put(ns);
 	ABT_future_free(&future);
@@ -1058,7 +1049,7 @@ retry:
 			 * retry at all, because IV sync always start from
 			 * the leader.
 			 */
-			D_WARN("sync (class %d) leader changed\n", key->class_id);
+			D_WARN("sync (class %d) leader changed", key->class_id);
 			return rc;
 		}
 
@@ -1067,8 +1058,8 @@ retry:
 		 * but in-flight fetch request return IVCB_FORWARD, then queued RPC will
 		 * reply IVCB_FORWARD.
 		 */
-		D_WARN("ns %u retry for class %d opc %d rank %u/%u: " DF_RC "\n", ns->iv_ns_id,
-		       key->class_id, opc, key->rank, ns->iv_master_rank, DP_RC(rc));
+		DL_WARN(rc, "ns %u retry for class %d opc %d rank %u/%u", ns->iv_ns_id,
+			key->class_id, opc, key->rank, ns->iv_master_rank);
 		/* sleep 1sec and retry */
 		dss_sleep(1000);
 		goto retry;

@@ -121,8 +121,7 @@ bulk_chunk_depopulate(struct bio_dma_chunk *chk, bool fini)
 		if (chk->bdc_bulk_hdl != NULL) {
 			rc = bulk_free_fn(chk->bdc_bulk_hdl);
 			if (rc)
-				D_ERROR("Failed to free bulk hdl %p "DF_RC"\n",
-					chk->bdc_bulk_hdl, DP_RC(rc));
+				DL_ERROR(rc, "Failed to free bulk hdl %p", chk->bdc_bulk_hdl);
 			chk->bdc_bulk_hdl = NULL;
 		}
 	}
@@ -262,8 +261,7 @@ bulk_reclaim_chunk(struct bio_dma_buffer *bdb, struct bio_bulk_group *ex_grp)
 
 		d_list_for_each_entry(chk, &bbg->bbg_dma_chks, bdc_link) {
 			if (bulk_chunk_is_idle(chk)) {
-				D_DEBUG(DB_IO, "Reclaim a bulk chunk (%u)\n",
-					bbg->bbg_bulk_pgs);
+				D_DEBUG(DB_IO, "Reclaim a bulk chunk (%u)", bbg->bbg_bulk_pgs);
 				bulk_grp_evict_one(bdb, chk, false);
 				return 0;
 			}
@@ -291,7 +289,7 @@ bulk_create_hdl(struct bio_dma_chunk *chk, struct bio_bulk_args *arg)
 	rc = bulk_create_fn(arg->ba_bulk_ctxt, &sgl, arg->ba_bulk_perm,
 			    &chk->bdc_bulk_hdl);
 	if (rc) {
-		D_ERROR("Create bulk handle failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Create bulk handle failed");
 	} else {
 		D_ASSERT(chk->bdc_bulk_hdl != NULL);
 	}
@@ -497,7 +495,7 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 
 	hdl = bulk_get_shared_hdl(biod, biov, arg->ba_sgl_idx);
 	if (hdl != NULL) {
-		D_DEBUG(DB_IO, "Reuse shared bulk handle %p\n", hdl);
+		D_DEBUG(DB_IO, "Reuse shared bulk handle %p", hdl);
 		return hdl;
 	}
 
@@ -515,8 +513,7 @@ bulk_get_hdl(struct bio_desc *biod, struct bio_iov *biov, unsigned int pg_cnt,
 		if (rc == -DER_AGAIN)
 			biod->bd_retry = 1;
 		else
-			D_ERROR("Failed to grow bulk grp (%u pages) "DF_RC"\n",
-				pg_cnt, DP_RC(rc));
+			DL_ERROR(rc, "Failed to grow bulk grp (%u pages)", pg_cnt);
 
 		return NULL;
 	}
@@ -646,7 +643,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		if (biod->bd_retry)
 			return -DER_AGAIN;
 
-		D_ERROR("Failed to grab cached bulk (%d pages)\n", pg_cnt);
+		D_ERROR("Failed to grab cached bulk (%d pages)", pg_cnt);
 		return -DER_NOMEM;
 	}
 

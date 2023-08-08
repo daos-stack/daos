@@ -189,13 +189,13 @@ attach_shmem(key_t key, size_t size, int flags, struct d_tm_shmem_hdr **shmem)
 
 	shmid = shmget(key, size, flags);
 	if (shmid < 0) {
-		D_INFO("can't get shmid for key 0x%x, %s\n", key, strerror(errno));
+		D_INFO("can't get shmid for key 0x%x, %s", key, strerror(errno));
 		return -DER_NO_SHMEM;
 	}
 
 	addr = shmat(shmid, NULL, 0);
 	if (addr == (void *)-1) {
-		D_ERROR("can't attach to shared memory, %s\n", strerror(errno));
+		D_ERROR("can't attach to shared memory, %s", strerror(errno));
 		return -DER_SHMEM_PERMS;
 	}
 
@@ -208,12 +208,10 @@ new_shmem(key_t key, size_t size, struct d_tm_shmem_hdr **shmem)
 {
 	int rc;
 
-	D_INFO("creating new shared memory segment, key=0x%x, size=%lu\n",
-	       key, size);
+	D_INFO("creating new shared memory segment, key=0x%x, size=%lu", key, size);
 	rc = attach_shmem(key, size, IPC_CREAT | 0660, shmem);
 	if (rc < 0)
-		D_ERROR("failed to create shared memory segment, key=0x%x: "DF_RC"\n", key,
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create shared memory segment, key=0x%x", key);
 
 	return rc;
 }
@@ -231,17 +229,16 @@ close_shmem(struct d_tm_shmem_hdr *shmem)
 		return;
 
 	if (shmdt(shmem) < 0)
-		D_INFO("failed to detach from shmem segment, %s\n",
-			strerror(errno));
+		D_INFO("failed to detach from shmem segment, %s", strerror(errno));
 }
 
 static inline void
 destroy_shmem(int shmid)
 {
-	D_INFO("Destroying shared memory segment (shmid=%d)\n", shmid);
+	D_INFO("Destroying shared memory segment (shmid=%d)", shmid);
 	if (shmctl(shmid, IPC_RMID, NULL) < 0)
-		D_ERROR("Unable to remove shared memory segment (shmid=%d). "
-			"shmctl failed, %s.\n", shmid, strerror(errno));
+		D_ERROR("Unable to remove shared memory segment (shmid=%d). shmctl failed, %s",
+			shmid, strerror(errno));
 }
 
 static int
@@ -279,8 +276,7 @@ open_shmem_for_key(struct d_tm_context *ctx, key_t key)
 
 	rc = track_open_shmem(ctx, shmem, shmid, key);
 	if (rc != 0) {
-		D_ERROR("got shmem segment but couldn't allocate linked "
-			"list, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "got shmem segment but couldn't allocate linked list");
 		close_shmem(shmem);
 		return NULL;
 	}
@@ -297,7 +293,7 @@ get_shmem_entry_for_key(struct d_tm_context *ctx, key_t key)
 
 	d_list_for_each_entry(current, &ctx->open_shmem, link) {
 		if (current->region == NULL) {
-			D_WARN("malformed shmem list\n");
+			D_WARN("malformed shmem list");
 			continue;
 		}
 
@@ -429,7 +425,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	link_key = (key_t)metric->dtm_data.value;
 	shmem = get_shmem_for_key(ctx, link_key);
 	if (shmem == NULL) {
-		D_ERROR("couldn't follow link to shmem key 0x%x\n", link_key);
+		D_ERROR("couldn't follow link to shmem key 0x%x", link_key);
 		return NULL;
 	}
 
@@ -440,8 +436,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		close_shmem_for_key(ctx, link_key, false);
 		shmem = get_shmem_for_key(ctx, link_key);
 		if (shmem == NULL) {
-			D_DEBUG(DB_TRACE, "couldn't reopen shmem key 0x%x\n",
-				link_key);
+			D_DEBUG(DB_TRACE, "couldn't reopen shmem key 0x%x", link_key);
 			return NULL;
 		}
 	}
@@ -519,13 +514,13 @@ init_node(struct d_tm_shmem_hdr *shmem, struct d_tm_node_t *node,
 
 	buff_len = strnlen(name, D_TM_MAX_NAME_LEN);
 	if (buff_len >= D_TM_MAX_NAME_LEN) {
-		D_ERROR("name too long, max = %u\n", D_TM_MAX_NAME_LEN);
+		D_ERROR("name too long, max = %u", D_TM_MAX_NAME_LEN);
 		return -DER_EXCEEDS_PATH_LEN;
 	}
 	buff_len += 1; /* make room for the trailing null */
 	node->dtn_name = shmalloc(shmem, buff_len);
 	if (node->dtn_name == NULL) {
-		D_ERROR("cannot allocate node name [%s]\n", name);
+		D_ERROR("cannot allocate node name [%s]", name);
 		return -DER_NO_SHMEM;
 	}
 	strncpy(node->dtn_name, name, buff_len);
@@ -613,8 +608,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 
 	shmem = get_shmem_for_key(tm_shmem.ctx, parent->dtn_shmem_key);
 	if (shmem == NULL) {
-		D_ERROR("can't get parent node shmem region, key=0x%x\n",
-			parent->dtn_shmem_key);
+		D_ERROR("can't get parent node shmem region, key=0x%x", parent->dtn_shmem_key);
 		D_GOTO(failure, rc = -DER_NO_SHMEM);
 	}
 
@@ -633,8 +627,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 		/* we can re-use this node instead of allocating a new one */
 		rc = init_node(shmem, child, name);
 		if (rc != 0) {
-			D_ERROR("failed to reinit cleared link node, " DF_RC
-				"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed to reinit cleared link node");
 			D_GOTO(failure, rc);
 		}
 		*newnode = child;
@@ -643,7 +636,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 
 	rc = alloc_node(shmem, newnode, name);
 	if (rc != 0) {
-		D_ERROR("can't alloc child node, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "can't alloc child node");
 		D_GOTO(failure, rc);
 	}
 
@@ -659,7 +652,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	return 0;
 
 failure:
-	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", name, DP_RC(rc));
+	DL_ERROR(rc, "Failed to add metric [%s]", name);
 	return rc;
 }
 
@@ -725,7 +718,8 @@ destroy_shmem_with_key(key_t key)
 		return 0;
 	if (rc < 0) {
 		D_ERROR("Unable to open shmem region 0x%x for cleanup. An admin must clean up "
-			"manually using ipcrm.\n", key);
+			"manually using ipcrm",
+			key);
 		return rc;
 	}
 	shmid = rc;
@@ -738,11 +732,10 @@ destroy_shmem_with_key(key_t key)
 		entry = d_list_entry(cur, __typeof__(*entry), rl_link);
 		rc = destroy_shmem_with_key(entry->rl_key);
 		if (rc != 0)
-			D_ERROR("Unable to destroy shmem region 0x%x: "DF_RC"\n", entry->rl_key,
-				DP_RC(rc));
+			DL_ERROR(rc, "Unable to destroy shmem region 0x%x", entry->rl_key);
 	}
 
-	D_INFO("destroying shmem with key: 0x%x\n", key);
+	D_INFO("destroying shmem with key: 0x%x", key);
 	destroy_shmem(shmid);
 	close_shmem(header);
 	return 0;
@@ -780,19 +773,19 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	memset(&tm_shmem, 0, sizeof(tm_shmem));
 
 	if ((flags & ~(D_TM_SERIALIZATION | D_TM_RETAIN_SHMEM)) != 0) {
-		D_ERROR("Invalid flags\n");
+		D_ERROR("Invalid flags");
 		rc = -DER_INVAL;
 		goto failure;
 	}
 
 	if (flags & D_TM_SERIALIZATION) {
 		tm_shmem.sync_access = true;
-		D_INFO("Serialization enabled for id %d\n", id);
+		D_INFO("Serialization enabled for id %d", id);
 	}
 
 	if (flags & D_TM_RETAIN_SHMEM) {
 		tm_shmem.retain = true;
-		D_INFO("Retaining shared memory for id %d\n", id);
+		D_INFO("Retaining shared memory for id %d", id);
 	}
 
 	tm_shmem.id = id;
@@ -809,23 +802,23 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 	if (rc != 0)
 		goto failure;
 
-	D_DEBUG(DB_TRACE, "Shared memory allocation success!\n"
-		"Memory size is %" PRIu64 " bytes at address 0x%" PRIx64
-		"\n", mem_size, new_shmem->sh_base_addr);
+	D_DEBUG(DB_TRACE,
+		"Shared memory allocation success!\nMemory size is %" PRIu64
+		" bytes at address 0x%" PRIx64,
+		mem_size, new_shmem->sh_base_addr);
 
 	rc = D_MUTEX_INIT(&tm_shmem.add_lock, NULL);
 	if (rc != 0) {
-		D_ERROR("Mutex init failure: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Mutex init failure");
 		goto failure;
 	}
 
-	D_INFO("Telemetry and metrics initialized for ID %u\n", id);
+	D_INFO("Telemetry and metrics initialized for ID %u", id);
 
 	return rc;
 
 failure:
-	D_ERROR("Failed to initialize telemetry and metrics for ID %u: "
-		DF_RC "\n", id, DP_RC(rc));
+	DL_ERROR(rc, "Failed to initialize telemetry and metrics for ID %u", id);
 	d_tm_close(&tm_shmem.ctx);
 	return rc;
 }
@@ -1321,7 +1314,7 @@ validate_node_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
 	D_ASSERT(node != NULL);
 	shmem = get_shmem_for_key(ctx, node->dtn_shmem_key);
 	if (shmem == NULL) {
-		D_ERROR("node shmem key %d not valid\n", node->dtn_shmem_key);
+		D_ERROR("node shmem key %d not valid", node->dtn_shmem_key);
 		return -DER_INVAL;
 	}
 
@@ -1689,8 +1682,7 @@ d_tm_set_counter(struct d_tm_node_t *metric, uint64_t value)
 		return;
 
 	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
-		D_ERROR("Failed to set counter [%s] on item not a "
-			"counter.\n", metric->dtn_name);
+		D_ERROR("Failed to set counter [%s] on item not a counter", metric->dtn_name);
 		return;
 	}
 
@@ -1712,8 +1704,7 @@ d_tm_inc_counter(struct d_tm_node_t *metric, uint64_t value)
 		return;
 
 	if (unlikely(metric->dtn_type != D_TM_COUNTER)) {
-		D_ERROR("Failed to set counter [%s] on item not a "
-			"counter.\n", metric->dtn_name);
+		D_ERROR("Failed to set counter [%s] on item not a counter", metric->dtn_name);
 		return;
 	}
 
@@ -1734,9 +1725,10 @@ d_tm_record_timestamp(struct d_tm_node_t *metric)
 		return;
 
 	if (metric->dtn_type != D_TM_TIMESTAMP) {
-		D_ERROR("Failed to record timestamp [%s] on item not a "
-			"timestamp.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(
+		    -DER_OP_NOT_PERMITTED,
+		    "Failed to record timestamp [%s] on item not a timestamp.  Operation mismatch",
+		    metric->dtn_name);
 		return;
 	}
 
@@ -1758,10 +1750,10 @@ d_tm_take_timer_snapshot(struct d_tm_node_t *metric, int clk_id)
 		return;
 
 	if (!(metric->dtn_type & D_TM_TIMER_SNAPSHOT)) {
-		D_ERROR("Failed to record high resolution timer [%s] on item "
-			"not a high resolution timer.  Operation mismatch: "
-			DF_RC "\n", metric->dtn_name,
-			DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(-DER_OP_NOT_PERMITTED,
+			 "Failed to record high resolution timer [%s] on item not a high "
+			 "resolution timer.  Operation mismatch",
+			 metric->dtn_name);
 		return;
 	}
 
@@ -1784,9 +1776,10 @@ d_tm_mark_duration_start(struct d_tm_node_t *metric, int clk_id)
 		return;
 
 	if (!(metric->dtn_type & D_TM_DURATION)) {
-		D_ERROR("Failed to mark duration start [%s] on item "
-			"not a duration.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(-DER_OP_NOT_PERMITTED,
+			 "Failed to mark duration start [%s] on item not a duration.  Operation "
+			 "mismatch",
+			 metric->dtn_name);
 		return;
 	}
 
@@ -1816,9 +1809,10 @@ d_tm_mark_duration_end(struct d_tm_node_t *metric)
 		return;
 
 	if (!(metric->dtn_type & D_TM_DURATION)) {
-		D_ERROR("Failed to mark duration end [%s] on item "
-			"not a duration.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(
+		    -DER_OP_NOT_PERMITTED,
+		    "Failed to mark duration end [%s] on item not a duration.  Operation mismatch",
+		    metric->dtn_name);
 		return;
 	}
 
@@ -1866,9 +1860,9 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
 		return;
 
 	if (!is_gauge(metric)) {
-		D_ERROR("Failed to set gauge [%s] on item "
-			"not a gauge.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(-DER_OP_NOT_PERMITTED,
+			 "Failed to set gauge [%s] on item not a gauge.  Operation mismatch",
+			 metric->dtn_name);
 		return;
 	}
 
@@ -1894,9 +1888,9 @@ d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 		return;
 
 	if (!is_gauge(metric)) {
-		D_ERROR("Failed to increment gauge [%s] on item "
-			"not a gauge.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(-DER_OP_NOT_PERMITTED,
+			 "Failed to increment gauge [%s] on item not a gauge.  Operation mismatch",
+			 metric->dtn_name);
 		return;
 	}
 
@@ -1922,9 +1916,9 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 		return;
 
 	if (!is_gauge(metric)) {
-		D_ERROR("Failed to decrement gauge [%s] on item "
-			"not a gauge.  Operation mismatch: " DF_RC "\n",
-			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		DL_ERROR(-DER_OP_NOT_PERMITTED,
+			 "Failed to decrement gauge [%s] on item not a gauge.  Operation mismatch",
+			 metric->dtn_name);
 		return;
 	}
 
@@ -2100,7 +2094,7 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	if (desc != NULL)
 		buff_len = strnlen(desc, D_TM_MAX_DESC_LEN);
 	if (buff_len == D_TM_MAX_DESC_LEN) {
-		D_ERROR("Desc string too long (max=%d)\n", D_TM_MAX_DESC_LEN);
+		D_ERROR("Desc string too long (max=%d)", D_TM_MAX_DESC_LEN);
 		rc = -DER_OVERFLOW;
 		goto out;
 	}
@@ -2141,7 +2135,7 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 		buff_len = strnlen(unit_string, D_TM_MAX_UNIT_LEN);
 
 	if (buff_len == D_TM_MAX_UNIT_LEN) {
-		D_ERROR("Units string too long (max=%d)\n", D_TM_MAX_UNIT_LEN);
+		D_ERROR("Units string too long (max=%d)", D_TM_MAX_UNIT_LEN);
 		rc = -DER_OVERFLOW;
 		goto out;
 	}
@@ -2163,22 +2157,20 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	    (temp->dtn_type != D_TM_DIRECTORY)) {
 		rc = pthread_mutexattr_init(&mattr);
 		if (rc != 0) {
-			D_ERROR("pthread_mutexattr_init failed: " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "pthread_mutexattr_init failed");
 			goto out;
 		}
 
 		rc = pthread_mutexattr_setpshared(&mattr,
 						  PTHREAD_PROCESS_SHARED);
 		if (rc != 0) {
-			D_ERROR("pthread_mutexattr_setpshared failed: "
-				DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "pthread_mutexattr_setpshared failed");
 			goto out;
 		}
 
 		rc = D_MUTEX_INIT(&temp->dtn_lock, &mattr);
 		if (rc != 0) {
-			D_ERROR("Mutex init failed: " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "Mutex init failed");
 			goto out;
 		}
 
@@ -2243,7 +2235,7 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 
 	rc = d_tm_lock_shmem();
 	if (rc != 0) {
-		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get mutex");
 		goto failure;
 	}
 
@@ -2265,13 +2257,13 @@ int d_tm_add_metric(struct d_tm_node_t **node, int metric_type, char *desc,
 	if (rc != 0)
 		D_GOTO(failure, rc);
 
-	D_DEBUG(DB_TRACE, "successfully added item: [%s]\n", path);
+	D_DEBUG(DB_TRACE, "successfully added item: [%s]", path);
 	d_tm_unlock_shmem();
 	return DER_SUCCESS;
 
 failure:
 	d_tm_unlock_shmem();
-	D_ERROR("Failed to add metric [%s]: " DF_RC "\n", path, DP_RC(rc));
+	DL_ERROR(rc, "Failed to add metric [%s]", path);
 	return rc;
 }
 
@@ -2304,8 +2296,7 @@ get_free_region_entry(struct d_tm_shmem_hdr *shmem,
 
 	tmp = shmalloc(shmem, sizeof(struct shmem_region_list));
 	if (tmp == NULL) {
-		D_ERROR("failed to alloc entry for ephemeral shmem key 0x%x\n",
-			shmem->sh_key);
+		D_ERROR("failed to alloc entry for ephemeral shmem key 0x%x", shmem->sh_key);
 		return -DER_NO_SHMEM;
 	}
 	d_list_add(&tmp->rl_link, &shmem->sh_subregions);
@@ -2322,12 +2313,12 @@ parse_path_fmt(char *path, size_t path_size, const char *fmt, va_list args)
 	rc = vsnprintf(path, path_size, fmt, args);
 
 	if (rc < 0) {
-		D_ERROR("error parsing arguments (errno=%d, %s)\n", errno, strerror(errno));
+		D_ERROR("error parsing arguments (errno=%d, %s)", errno, strerror(errno));
 		return -DER_INVAL;
 	}
 
 	if (rc >= D_TM_MAX_NAME_LEN) {
-		D_ERROR("Path too long (max=%d)\n", D_TM_MAX_NAME_LEN);
+		D_ERROR("Path too long (max=%d)", D_TM_MAX_NAME_LEN);
 		return -DER_EXCEEDS_PATH_LEN;
 	}
 
@@ -2402,18 +2393,18 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail, rc = -DER_UNINIT);
 
 	if (unlikely(fmt == NULL)) {
-		D_ERROR("NULL inputs\n");
+		D_ERROR("NULL inputs");
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
 	if (size_bytes <= sizeof(struct d_tm_shmem_hdr) ||
 	    size_bytes % 8 != 0) { /* must be 64-bit aligned */
-		D_ERROR("invalid size requested, size=%lu\n", size_bytes);
+		D_ERROR("invalid size requested, size=%lu", size_bytes);
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
 	if (strnlen(fmt, D_TM_MAX_NAME_LEN) == 0) {
-		D_ERROR("cannot create ephemeral dir at root\n");
+		D_ERROR("cannot create ephemeral dir at root");
 		D_GOTO(fail, rc = -DER_INVAL);
 	}
 
@@ -2425,13 +2416,13 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
-		D_ERROR("failed to get producer mutex\n");
+		D_ERROR("failed to get producer mutex");
 		D_GOTO(fail, rc);
 	}
 
 	new_node = d_tm_find_metric(ctx, path);
 	if (new_node != NULL) {
-		D_ERROR("metric [%s] already exists\n", path);
+		D_ERROR("metric [%s] already exists", path);
 		D_GOTO(fail_unlock, rc = -DER_EXIST);
 	}
 
@@ -2450,7 +2441,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	/* Add a link to the new region */
 	rc = add_metric(ctx, &link_node, D_TM_LINK, NULL, NULL, path);
 	if (rc != 0) {
-		D_ERROR("can't set up the link node, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "can't set up the link node");
 		D_GOTO(fail_tracking, rc);
 	}
 	D_ASSERT(link_node->dtn_type == D_TM_LINK);
@@ -2459,7 +2450,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 	/* track attached regions within the parent shmem */
 	parent_shmem = get_shmem_for_key(ctx, link_node->dtn_shmem_key);
 	if (parent_shmem == NULL) {
-		D_ERROR("failed to get parent shmem pointer\n");
+		D_ERROR("failed to get parent shmem pointer");
 		D_GOTO(fail_link, rc = -DER_NO_SHMEM);
 	}
 	rc = get_free_region_entry(parent_shmem, &region_entry);
@@ -2485,8 +2476,7 @@ fail_shmem:
 fail_unlock:
 	d_tm_unlock_shmem();
 fail:
-	D_ERROR("Failed to add ephemeral dir [%s]: " DF_RC "\n", path,
-		DP_RC(rc));
+	DL_ERROR(rc, "Failed to add ephemeral dir [%s]", path);
 	return rc;
 }
 
@@ -2497,15 +2487,14 @@ clear_region_entry_for_key(struct d_tm_shmem_hdr *shmem, key_t key)
 
 	d_list_for_each_entry(tmp, &shmem->sh_subregions, rl_link) {
 		if (tmp->rl_key == key) {
-			D_DEBUG(DB_TRACE,
-				"cleared shmem metadata for key 0x%x\n", key);
+			D_DEBUG(DB_TRACE, "cleared shmem metadata for key 0x%x", key);
 			tmp->rl_link_node = NULL;
 			tmp->rl_key = 0;
 			return;
 		}
 	}
 
-	D_WARN("shmem metadata not found for key 0x%x\n", key);
+	D_WARN("shmem metadata not found for key 0x%x", key);
 }
 
 static int
@@ -2522,27 +2511,26 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		return 0; /* nothing to do */
 
 	if (link->dtn_type != D_TM_LINK) {
-		D_ERROR("node type %d cannot be deleted\n", link->dtn_type);
+		D_ERROR("node type %d cannot be deleted", link->dtn_type);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	parent_shmem = get_shmem_for_key(ctx, link->dtn_shmem_key);
 	if (parent_shmem == NULL) {
-		D_ERROR("couldn't get parent shmem, key=0x%x\n",
-			link->dtn_shmem_key);
+		D_ERROR("couldn't get parent shmem, key=0x%x", link->dtn_shmem_key);
 		D_GOTO(out, rc = -DER_SHMEM_PERMS);
 	}
 
 	node = d_tm_follow_link(ctx, link);
 	if (node == NULL) {
-		D_WARN("got NULL after following link [%s]\n", link->dtn_name);
+		D_WARN("got NULL after following link [%s]", link->dtn_name);
 		D_GOTO(out_link, rc = 0);
 	}
 	key = node->dtn_shmem_key;
 
 	shmem = get_shmem_for_key(ctx, key);
 	if (shmem == NULL) {
-		D_ERROR("couldn't get shmem for key 0x%x\n", key);
+		D_ERROR("couldn't get shmem for key 0x%x", key);
 		D_GOTO(out_link, rc = -DER_SHMEM_PERMS);
 	}
 
@@ -2550,8 +2538,7 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	d_list_for_each_entry(curr, &shmem->sh_subregions, rl_link) {
 		rc = rm_ephemeral_dir(ctx, curr->rl_link_node);
 		if (rc != 0) /* nothing much we can do to recover here */
-			D_ERROR("error removing tmp dir [%s]: "DF_RC"\n",
-				link->dtn_name, DP_RC(rc));
+			DL_ERROR(rc, "error removing tmp dir [%s]", link->dtn_name);
 	}
 	rc = 0; /* subregions will be cut off regardless */
 
@@ -2586,7 +2573,7 @@ d_tm_del_ephemeral_dir(const char *fmt, ...)
 		D_GOTO(out, rc = -DER_UNINIT);
 
 	if (fmt == NULL || strnlen(fmt, D_TM_MAX_NAME_LEN) == 0) {
-		D_ERROR("telemetry root cannot be deleted\n");
+		D_ERROR("telemetry root cannot be deleted");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2598,7 +2585,7 @@ d_tm_del_ephemeral_dir(const char *fmt, ...)
 
 	rc = d_tm_lock_shmem();
 	if (unlikely(rc != 0)) {
-		D_ERROR("failed to get producer mutex\n");
+		D_ERROR("failed to get producer mutex");
 		D_GOTO(out, rc);
 	}
 
@@ -2608,10 +2595,9 @@ d_tm_del_ephemeral_dir(const char *fmt, ...)
 	d_tm_unlock_shmem();
 out:
 	if (rc != 0)
-		D_ERROR("Failed to remove ephemeral dir: " DF_RC "\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to remove ephemeral dir");
 	else
-		D_INFO("Removed ephemeral directory [%s]\n", path);
+		D_INFO("Removed ephemeral directory [%s]", path);
 	return rc;
 }
 
@@ -2691,7 +2677,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 
 	rc = d_tm_lock_shmem();
 	if (rc != 0) {
-		D_ERROR("Failed to get mutex: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get mutex");
 		goto failure;
 	}
 
@@ -2760,12 +2746,12 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 		prev_width = (max - min) + 1;
 	}
 
-	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]\n", path);
+	D_DEBUG(DB_TRACE, "Successfully added histogram for: [%s]", path);
 	return DER_SUCCESS;
 
 failure:
 
-	D_ERROR("Failed to histogram for [%s]: " DF_RC "\n", path, DP_RC(rc));
+	DL_ERROR(rc, "Failed to histogram for [%s]", path);
 	return rc;
 }
 
@@ -3462,8 +3448,7 @@ allocate_shared_memory(key_t key, size_t mem_size,
 
 	D_INIT_LIST_HEAD(&header->sh_subregions);
 
-	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu\n",
-		key, mem_size);
+	D_DEBUG(DB_MEM, "Created shared memory region for key 0x%x, size=%lu", key, mem_size);
 
 	*shmem = header;
 
@@ -3559,7 +3544,7 @@ shmalloc(struct d_tm_shmem_hdr *shmem, int length)
 	}
 
 	if ((shmem->sh_bytes_free == 0 || length > shmem->sh_bytes_free)) {
-		D_CRIT("Shared memory allocation failure!\n");
+		D_CRIT("Shared memory allocation failure!");
 		return NULL;
 	}
 
@@ -3567,9 +3552,8 @@ shmalloc(struct d_tm_shmem_hdr *shmem, int length)
 
 	shmem->sh_bytes_free -= length;
 	shmem->sh_free_addr += length;
-	D_DEBUG(DB_TRACE,
-		"Allocated %d bytes.  Now %" PRIu64 " remain\n",
-		length, shmem->sh_bytes_free);
+	D_DEBUG(DB_TRACE, "Allocated %d bytes.  Now %" PRIu64 " remain", length,
+		shmem->sh_bytes_free);
 	memset(new_mem, 0, length);
 	return new_mem;
 }
@@ -3593,9 +3577,9 @@ validate_shmem_ptr(struct d_tm_shmem_hdr *shmem_root, void *ptr)
 	if (((uint64_t)ptr < (uint64_t)shmem_root) ||
 	    ((uint64_t)ptr >= shmem_max_addr)) {
 		D_DEBUG(DB_TRACE,
-			"shmem ptr 0x%" PRIx64 " was outside the shmem range "
-			"0x%" PRIx64 " to 0x%" PRIx64 "\n", (uint64_t)ptr,
-			(uint64_t)shmem_root, shmem_max_addr);
+			"shmem ptr 0x%" PRIx64 " was outside the shmem range 0x%" PRIx64
+			" to 0x%" PRIx64,
+			(uint64_t)ptr, (uint64_t)shmem_root, shmem_max_addr);
 		return false;
 	}
 	return true;

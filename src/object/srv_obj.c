@@ -63,7 +63,7 @@ obj_gen_dtx_mbs(uint32_t flags, uint32_t *tgt_cnt, struct daos_shard_tgt **p_tgt
 	D_ASSERT(tgts != NULL);
 
 	if (!(flags & ORF_CONTAIN_LEADER)) {
-		D_ERROR("Miss DTX leader information, flags %x\n", flags);
+		D_ERROR("Miss DTX leader information, flags %x", flags);
 		return -DER_PROTO;
 	}
 
@@ -179,16 +179,15 @@ obj_rw_reply(crt_rpc_t *rpc, int status, uint64_t epoch,
 		orwo->orw_epoch = max(epoch, orwo->orw_epoch);
 	}
 
-	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch "DF_X64
-		", status %d\n", rpc, opc_get(rpc->cr_opc),
-		ioc->ioc_map_ver, orwo->orw_epoch, status);
+	D_DEBUG(DB_IO, "rpc %p opc %d send reply, pmv %d, epoch " DF_X64 ", status %d", rpc,
+		opc_get(rpc->cr_opc), ioc->ioc_map_ver, orwo->orw_epoch, status);
 
 	if (!ioc->ioc_lost_reply) {
 		rc = crt_reply_send(rpc);
 		if (rc != 0)
-			D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "send reply failed");
 	} else {
-		D_WARN("lost reply rpc %p\n", rpc);
+		D_WARN("lost reply rpc %p", rpc);
 	}
 
 	if (obj_rpc_is_fetch(rpc)) {
@@ -243,7 +242,7 @@ obj_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	crt_rpc_t		*rpc;
 
 	if (cb_info->bci_rc != 0)
-		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
+		D_ERROR("bulk transfer failed: %d", cb_info->bci_rc);
 
 	bulk_desc = cb_info->bci_bulk_desc;
 	rpc = bulk_desc->bd_rpc;
@@ -340,20 +339,20 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 	int			rc, bulk_iovs = 0;
 
 	if (remote_bulk == NULL) {
-		D_ERROR("Remote bulk is NULL\n");
+		D_ERROR("Remote bulk is NULL");
 		return -DER_INVAL;
 	}
 
 	rc = crt_bulk_get_len(remote_bulk, &remote_size);
 	if (rc) {
-		D_ERROR("Failed to get remote bulk size "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get remote bulk size");
 		return rc;
 	}
 
 	if (remote_off >= remote_size) {
 		rc = -DER_OVERFLOW;
-		D_ERROR("remote_bulk_off %zu >= remote_bulk_size %zu, "DF_RC"\n",
-			remote_off, remote_size, DP_RC(rc));
+		DL_ERROR(rc, "remote_bulk_off %zu >= remote_bulk_size %zu", remote_off,
+			 remote_size);
 		return rc;
 	}
 
@@ -385,8 +384,8 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		if (remote_off >= remote_size) {
 			rc = -DER_OVERFLOW;
-			D_ERROR("Remote bulk is used up. off:%zu, size:%zu, "DF_RC"\n",
-				remote_off, remote_size, DP_RC(rc));
+			DL_ERROR(rc, "Remote bulk is used up. off:%zu, size:%zu", remote_off,
+				 remote_size);
 			break;
 		}
 
@@ -435,7 +434,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 			rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, bulk_perm,
 					     &local_bulk);
 			if (rc != 0) {
-				D_ERROR("crt_bulk_create %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
+				DL_ERROR(rc, "crt_bulk_create %d error", sgl_idx);
 				break;
 			}
 			D_ASSERT(local_bulk != NULL);
@@ -444,9 +443,10 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		D_ASSERT(remote_size > remote_off);
 		if (length > (remote_size - remote_off)) {
 			rc = -DER_OVERFLOW;
-			D_ERROR("Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
-				"remote_off:%zu, "DF_RC"\n", length, remote_size, remote_off,
-				DP_RC(rc));
+			DL_ERROR(rc,
+				 "Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
+				 "remote_off:%zu",
+				 length, remote_size, remote_off);
 			break;
 		}
 
@@ -471,7 +471,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 				cached_bulk ? cached_bulk_cp : bulk_cp, p_arg,
 				&bulk_opid);
 		if (rc < 0) {
-			D_ERROR("crt_bulk_transfer %d error " DF_RC "\n", sgl_idx, DP_RC(rc));
+			DL_ERROR(rc, "crt_bulk_transfer %d error", sgl_idx);
 			p_arg->bulks_inflight--;
 			if (!cached_bulk)
 				crt_bulk_free(local_bulk);
@@ -504,7 +504,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 	uint64_t		time = daos_get_ntime();
 
 	if (remote_bulks == NULL) {
-		D_ERROR("No remote bulks provided\n");
+		D_ERROR("No remote bulks provided");
 		return -DER_INVAL;
 	}
 
@@ -519,15 +519,14 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		return dss_abterr2der(rc);
 
 	p_arg->inited = true;
-	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d\n", bulk_op, sgl_nr);
+	D_DEBUG(DB_IO, "bulk_op %d sgl_nr %d", bulk_op, sgl_nr);
 
 	p_arg->bulks_inflight++;
 
 	if (daos_handle_is_valid(ioh)) {
 		rc = vos_dedup_verify_init(ioh, rpc->cr_ctx, CRT_BULK_RW);
 		if (rc) {
-			D_ERROR("Dedup verify prep failed. "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Dedup verify prep failed");
 			goto done;
 		}
 	}
@@ -574,8 +573,7 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		if (sgls == NULL)
 			d_sgl_fini(sgl, false);
 		if (rc) {
-			D_ERROR("bulk_transfer_sgl i %d, skip_nr %d failed, "DF_RC"\n",
-				i, skip_nr, DP_RC(rc));
+			DL_ERROR(rc, "bulk_transfer_sgl i %d, skip_nr %d failed", i, skip_nr);
 			break;
 		}
 	}
@@ -596,7 +594,7 @@ done:
 		obj_update_latency(opc_get(rpc->cr_opc), BULK_LATENCY,
 				   daos_get_ntime() - time, arg.bulk_size);
 	if (rc == 0 && coh != NULL && unlikely(coh->sch_closed)) {
-		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
+		D_ERROR("Cont hdl " DF_UUID " is closed/evicted unexpectedly",
 			DP_UUID(coh->sch_uuid));
 		rc = -DER_IO;
 	}
@@ -607,7 +605,7 @@ done:
 		d_sg_list_t		 fsgl;
 		int			*fbuffer;
 
-		D_ERROR("csum: Corrupting data after RDMA\n");
+		D_ERROR("csum: Corrupting data after RDMA");
 		fbsgl = vos_iod_sgl_at(ioh, 0);
 		bio_sgl_convert(fbsgl, &fsgl);
 		fbuffer = (int *)fsgl.sg_iovs[0].iov_buf;
@@ -634,8 +632,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr, uint8_t *skips
 		goto out;
 
 	if (orw_iod_nr <= 0) {
-		D_ERROR("rpc %p contains invalid sizes count %d for "
-			DF_UOID" with epc "DF_X64".\n",
+		D_ERROR("rpc %p contains invalid sizes count %d for " DF_UOID " with epc " DF_X64,
 			rpc, orw_iod_nr, DP_UOID(orw->orw_oid), orw->orw_epoch);
 		return -DER_INVAL;
 	}
@@ -658,8 +655,7 @@ obj_set_reply_sizes(crt_rpc_t *rpc, daos_iod_t *iods, int iod_nr, uint8_t *skips
 			continue;
 		}
 		sizes[i] = iods[idx].iod_size;
-		D_DEBUG(DB_IO, DF_UOID" %d:"DF_U64"\n", DP_UOID(orw->orw_oid),
-			i, iods[idx].iod_size);
+		D_DEBUG(DB_IO, DF_UOID " %d:" DF_U64, DP_UOID(orw->orw_oid), i, iods[idx].iod_size);
 		idx++;
 	}
 
@@ -671,9 +667,8 @@ out:
 	orwo->orw_iod_sizes.ca_count = orw_iod_nr;
 	orwo->orw_iod_sizes.ca_arrays = sizes;
 
-	D_DEBUG(DB_TRACE, "rpc %p set sizes count as %d for "
-		DF_UOID" with epc "DF_X64".\n",
-		rpc, orw_iod_nr, DP_UOID(orw->orw_oid), orw->orw_epoch);
+	D_DEBUG(DB_TRACE, "rpc %p set sizes count as %d for " DF_UOID " with epc " DF_X64, rpc,
+		orw_iod_nr, DP_UOID(orw->orw_oid), orw->orw_epoch);
 
 	return 0;
 }
@@ -759,12 +754,9 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d oid "DF_UOID" dkey "DF_KEY
-		" tgt/xs %d/%d epc "DF_X64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id,
+	D_DEBUG(DB_TRACE, "opc %d oid " DF_UOID " dkey " DF_KEY " tgt/xs %d/%d epc " DF_X64,
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id,
 		orw->orw_epoch);
 
 	if (obj_rpc_is_fetch(rpc)) {
@@ -905,7 +897,7 @@ csum_add2iods(daos_handle_t ioh, daos_iod_t *iods, uint32_t iods_nr,
 			&biov_csums_used, get_iod_csum(iod_csums, i));
 		idx++;
 		if (rc != 0) {
-			D_ERROR("Failed to add csum for iod\n");
+			D_ERROR("Failed to add csum for iod");
 			return rc;
 		}
 		biov_csums_idx += biov_csums_used;
@@ -1034,8 +1026,8 @@ obj_log_csum_err(void)
 	bxc = info->dmi_nvme_ctxt;
 
 	if (bxc == NULL) {
-		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
-		info->dmi_xs_id, info->dmi_tgt_id);
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d", info->dmi_xs_id,
+			info->dmi_tgt_id);
 		return;
 	}
 
@@ -1119,8 +1111,7 @@ obj_fetch_shadow(struct obj_io_context *ioc, daos_unit_oid_t oid,
 			     cond_flags | VOS_OF_FETCH_RECX_LIST, NULL, &ioh,
 			     dth);
 	if (rc) {
-		D_ERROR(DF_UOID" Fetch begin failed: "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " Fetch begin failed", DP_UOID(oid));
 		goto out;
 	}
 
@@ -1348,19 +1339,17 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			      orw->orw_dkey_csum, &orw->orw_iod_array,
 			      &orw->orw_oid);
 	if (rc != 0) {
-		D_ERROR(DF_C_UOID_DKEY"verify_keys error: "DF_RC"\n",
-			DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_C_UOID_DKEY "verify_keys error",
+			 DP_C_UOID_DKEY(orw->orw_oid, &orw->orw_dkey));
 		if (rc == -DER_CSUM)
 			obj_log_csum_err();
 		return rc;
 	}
 
 	dkey = (daos_key_t *)&orw->orw_dkey;
-	D_DEBUG(DB_IO,
-		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64" flags %x.\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
-		tag, orw->orw_epoch, orw->orw_flags);
+	D_DEBUG(DB_IO, "opc %d oid " DF_UOID " dkey " DF_KEY " tag %d epc " DF_X64 " flags %x",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey), tag, orw->orw_epoch,
+		orw->orw_flags);
 
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
@@ -1377,7 +1366,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 		/** Fault injection - corrupt data from network */
 		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_UPDATE)  && !rma) {
-			D_ERROR("csum: Corrupting data (network)\n");
+			D_ERROR("csum: Corrupting data (network)");
 			dcf_corrupt(orw->orw_sgls.ca_arrays,
 				    orw->orw_sgls.ca_count);
 		}
@@ -1397,8 +1386,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			      ioc->ioc_coc->sc_props.dcp_dedup_size,
 			      &ioh, dth);
 		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " Update begin failed", DP_UOID(orw->orw_oid));
 			goto out;
 		}
 	} else {
@@ -1435,8 +1423,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		if (unlikely(ec_recov &&
 			     obj_ec_recov_need_try_again(orw, orwo, ioc))) {
 			rc = -DER_FETCH_AGAIN;
-			D_DEBUG(DB_IO,
-				DF_UOID " " DF_X64 "<" DF_X64 " ec_recov needs redo, " DF_RC "\n",
+			D_DEBUG(DB_IO, DF_UOID " " DF_X64 "<" DF_X64 " ec_recov needs redo: " DF_RC,
 				DP_UOID(orw->orw_oid), orw->orw_epoch,
 				ioc->ioc_coc->sc_ec_agg_eph_boundary, DP_RC(rc));
 			goto out;
@@ -1455,8 +1442,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			 */
 			rc = daos_iod_recx_dup(iods, iods_nr, &iods_dup);
 			if (rc != 0) {
-				D_ERROR(DF_UOID ": iod_recx_dup failed: " DF_RC "\n",
-					DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_UOID ": iod_recx_dup failed",
+					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
 
@@ -1467,8 +1454,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					      orw->orw_dkey_hash, iods_nr, iods,
 					      orw->orw_tgt_idx, dth, &shadows);
 			if (rc) {
-				D_ERROR(DF_UOID" Fetch shadow failed: "DF_RC
-					"\n", DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " Fetch shadow failed", DP_UOID(orw->orw_oid));
 				goto out;
 			}
 			iod_converted = true;
@@ -1476,9 +1462,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY) {
 				if (shadows == NULL) {
 					rc = -DER_DATA_LOSS;
-					D_ERROR(DF_UOID" ORF_EC_RECOV_FROM_PARITY should not with "
-						"NULL shadows, "DF_RC"\n", DP_UOID(orw->orw_oid),
-						DP_RC(rc));
+					DL_ERROR(rc,
+						 DF_UOID " ORF_EC_RECOV_FROM_PARITY should not "
+							 "with NULL shadows",
+						 DP_UOID(orw->orw_oid));
 					goto out;
 				}
 				fetch_flags |= VOS_OF_SKIP_FETCH;
@@ -1538,8 +1525,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					    iods, offs, orw->orw_epoch, orw->orw_flags,
 					    iods_nr, false, ec_deg_fetch, &recov_lists);
 		if (rc != 0) {
-			D_ERROR(DF_UOID " obj_singv_ec_rw_filter failed: " DF_RC "\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " obj_singv_ec_rw_filter failed",
+				 DP_UOID(orw->orw_oid));
 			goto out;
 		}
 		if (recov_lists != NULL) {
@@ -1575,8 +1562,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	biod = vos_ioh2desc(ioh);
 	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rma ? rpc->cr_ctx : NULL, CRT_BULK_RW);
 	if (rc) {
-		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(orw->orw_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " bio_iod_prep failed", DP_UOID(orw->orw_oid));
 		goto out;
 	}
 
@@ -1598,8 +1584,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
-			D_ERROR(DF_UOID " fetch csum init failed: %d.\n", DP_UOID(orw->orw_oid),
-				rc);
+			D_ERROR(DF_UOID " fetch csum init failed: %d", DP_UOID(orw->orw_oid), rc);
 			goto post;
 		}
 
@@ -1609,8 +1594,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 					   ioc->ioc_coc->sc_csummer, orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
 			if (rc) {
-				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
-					DP_UOID(orw->orw_oid), rc);
+				D_ERROR(DF_UOID " fetch verify failed: %d", DP_UOID(orw->orw_oid),
+					rc);
 				goto post;
 			}
 		}
@@ -1657,15 +1642,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		rc = obj_verify_bio_csum(orw->orw_oid.id_pub, iods, iod_csums,
 					 biod, ioc->ioc_coc->sc_csummer, iods_nr);
 		if (rc != 0)
-			D_ERROR(DF_C_UOID_DKEY " verify_bio_csum failed: "
-				DF_RC"\n",
-				DP_C_UOID_DKEY(orw->orw_oid, dkey),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_C_UOID_DKEY " verify_bio_csum failed",
+				 DP_C_UOID_DKEY(orw->orw_oid, dkey));
 		/** CSUM Verified on update, now corrupt to fake corruption
 		 * on disk
 		 */
 		if (DAOS_FAIL_CHECK(DAOS_CSUM_CORRUPT_DISK) && !rma) {
-			D_ERROR("csum: Corrupting data (DISK)\n");
+			D_ERROR("csum: Corrupting data (DISK)");
 			dcf_corrupt(orw->orw_sgls.ca_arrays,
 				    orw->orw_sgls.ca_count);
 		}
@@ -1733,7 +1716,7 @@ out:
 			vos_update_renew_epoch(ioh, dth);
 
 			D_DEBUG(DB_IO,
-				"update rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
+				"update rpc %p renew epoch " DF_U64 " => " DF_U64 " for " DF_DTI,
 				rpc, orw->orw_epoch, dth->dth_epoch, DP_DTI(&orw->orw_dti));
 
 			orw->orw_epoch = dth->dth_epoch;
@@ -1821,8 +1804,8 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 				skip = (iod_parent->iod_nr == 0 || iod_parent->iod_recxs == NULL);
 			}
 			if (skip) {
-				D_DEBUG(DB_IO, "akey[%d] "DF_KEY" array skipped.\n",
-					i, DP_KEY(&iod_parent->iod_name));
+				D_DEBUG(DB_IO, "akey[%d] " DF_KEY " array skipped", i,
+					DP_KEY(&iod_parent->iod_name));
 				setbit(*skips, i);
 				continue;
 			}
@@ -1864,9 +1847,10 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			    (*iods)[idx].iod_size != DAOS_REC_ANY &&
 			    (*iods)[idx].iod_size <=
 			    OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca))) {
-				D_DEBUG(DB_IO, "akey[%d] "DF_KEY" singv skipped, size %zu, "
-					"tgt_off %d, data_tgt_nr %d.\n", i,
-					DP_KEY(&iod_parent->iod_name), (*iods)[idx].iod_size,
+				D_DEBUG(DB_IO,
+					"akey[%d] " DF_KEY
+					" singv skipped, size %zu, tgt_off %d, data_tgt_nr %d",
+					i, DP_KEY(&iod_parent->iod_name), (*iods)[idx].iod_size,
 					tgt_off, obj_ec_data_tgt_nr(oca));
 				setbit(*skips, i);
 				continue;
@@ -1970,8 +1954,9 @@ again:
 
 			dsp = d_list_entry(dth->dth_share_tbd_list.next, struct dtx_share_peer,
 					   dsp_link);
-			D_WARN("DTX refresh for "DF_DTI" because of "DF_DTI" (%d) for %d times, "
-			       "maybe dead loop\n", DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
+			D_WARN("DTX refresh for " DF_DTI " because of " DF_DTI
+			       " (%d) for %d times, maybe dead loop",
+			       DP_DTI(&dth->dth_xid), DP_DTI(&dsp->dsp_xid),
 			       dth->dth_share_tbd_count, count);
 		}
 
@@ -2004,21 +1989,19 @@ static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
 	if (!is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
-		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
-			"NO_PERM to read.\n",
+		D_ERROR("cont hdl " DF_UUID " sec_capas " DF_U64 ", NO_PERM to read",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
 		return -DER_NO_PERM;
 	}
 
 	if (is_write && !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
-		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
-			"NO_PERM to update.\n",
+		D_ERROR("cont hdl " DF_UUID " sec_capas " DF_U64 ", NO_PERM to update",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
 		return -DER_NO_PERM;
 	}
 
 	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
-		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
+		D_ERROR("cont hdl " DF_UUID " exceeds rf", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
 	}
 
@@ -2056,16 +2039,15 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 		if (uuid_compare(cont_uuid, coc->sc_uuid) == 0)
 			D_GOTO(out, rc = 0);
 
-		D_ERROR("Stale container handle "DF_UUID" != "DF_UUID"\n",
-			DP_UUID(cont_uuid), DP_UUID(coh->sch_uuid));
+		D_ERROR("Stale container handle " DF_UUID " != " DF_UUID, DP_UUID(cont_uuid),
+			DP_UUID(coh->sch_uuid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	} else {
 		/**
 		 * The server handle is a dummy and never attached by
 		 * a real container
 		 */
-		D_DEBUG(DB_TRACE, DF_UUID"/%p is server cont hdl\n",
-			DP_UUID(coh_uuid), coh);
+		D_DEBUG(DB_TRACE, DF_UUID "/%p is server cont hdl", DP_UUID(coh_uuid), coh);
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_NO_HDL))
@@ -2077,8 +2059,8 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, crt_rpc_t *rpc
 	/* load VOS container on demand for rebuild */
 	rc = ds_cont_child_lookup(pool_uuid, cont_uuid, &coc);
 	if (rc) {
-		D_ERROR("Can not find the container "DF_UUID"/"DF_UUID"\n",
-			DP_UUID(pool_uuid), DP_UUID(cont_uuid));
+		D_ERROR("Can not find the container " DF_UUID "/" DF_UUID, DP_UUID(pool_uuid),
+			DP_UUID(cont_uuid));
 		D_GOTO(failed, rc);
 	}
 
@@ -2161,8 +2143,7 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 		 *	   this server during the client retry. It is
 		 *	   inefficient, but harmless.
 		 */
-		D_DEBUG(DB_IO, "stale server map_version %d req %d\n",
-			ioc->ioc_map_ver, rpc_map_ver);
+		D_DEBUG(DB_IO, "stale server map_version %d req %d", ioc->ioc_map_ver, rpc_map_ver);
 		rc = ds_pool_child_map_refresh_async(poc);
 		if (rc == 0) {
 			ioc->ioc_map_ver = poc->spc_map_version;
@@ -2171,8 +2152,8 @@ obj_ioc_begin_lite(uint32_t rpc_map_ver, uuid_t pool_uuid,
 
 		D_GOTO(out, rc);
 	} else if (unlikely(rpc_map_ver < ioc->ioc_map_ver)) {
-		D_DEBUG(DB_IO, "stale version req %d map_version %d\n",
-			rpc_map_ver, ioc->ioc_map_ver);
+		D_DEBUG(DB_IO, "stale version req %d map_version %d", rpc_map_ver,
+			ioc->ioc_map_ver);
 
 		/* For distributed transaction, restart the DTX if using
 		 * stale pool map.
@@ -2290,7 +2271,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 	if ((flags & ORF_REINTEGRATING_IO) &&
 	    (child->sc_pool->spc_pool->sp_need_discard &&
 	     child->sc_pool->spc_discard_done == 0)) {
-		D_ERROR("reintegrating "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		D_ERROR("reintegrating " DF_UUID " retry", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
@@ -2303,7 +2284,7 @@ obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 	if ((flags & ORF_REBUILDING_IO) &&
 	    (!child->sc_pool->spc_pool->sp_disable_rebuild &&
 	      child->sc_pool->spc_rebuild_fence == 0)) {
-		D_ERROR("rebuilding "DF_UUID" retry.\n", DP_UUID(child->sc_pool->spc_uuid));
+		D_ERROR("rebuilding " DF_UUID " retry", DP_UUID(child->sc_pool->spc_uuid));
 		return -DER_UPDATE_AGAIN;
 	}
 
@@ -2365,7 +2346,7 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 			   oer->er_pool_uuid, oer->er_coh_uuid,
 			   oer->er_cont_uuid, rpc, 0, &ioc);
 	if (rc)	{
-		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ioc_begin failed");
 		goto out;
 	}
 
@@ -2381,32 +2362,27 @@ ds_obj_ec_rep_handler(crt_rpc_t *rpc)
 	rc = vos_update_begin(ioc.ioc_coc->sc_hdl, oer->er_oid, oer->er_epoch_range.epr_hi, 0,
 			      dkey, 1, iod, iod_csums, 0, &ioh, NULL);
 	if (rc) {
-		D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
-			DP_UOID(oer->er_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " Update begin failed", DP_UOID(oer->er_oid));
 		goto out;
 	}
 	biod = vos_ioh2desc(ioh);
 	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx, CRT_BULK_RW);
 	if (rc) {
-		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oer->er_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " bio_iod_prep failed", DP_UOID(oer->er_oid));
 		goto end;
 	}
 	rc = obj_bulk_transfer(rpc, CRT_BULK_PUT, false, &oer->er_bulk, NULL, NULL,
 			       ioh, NULL, 1, NULL, ioc.ioc_coh);
 	if (rc)
-		D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oer->er_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " bulk transfer failed", DP_UOID(oer->er_oid));
 
 	rc = bio_iod_post(biod, rc);
 	if (rc)
-		D_ERROR(DF_UOID " bio_iod_post failed: " DF_RC "\n", DP_UOID(oer->er_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " bio_iod_post failed", DP_UOID(oer->er_oid));
 end:
 	rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 	if (rc) {
-		D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n", DP_UOID(oer->er_oid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " vos_update_end failed", DP_UOID(oer->er_oid));
 		goto out;
 	}
 	recx.rx_nr = obj_ioc2ec_cs(&ioc);
@@ -2443,7 +2419,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			   oea->ea_cont_uuid, rpc, 0, &ioc);
 
 	if (rc)	{
-		D_ERROR("ioc_begin failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ioc_begin failed");
 		goto out;
 	}
 	if (!daos_oclass_is_ec(&ioc.ioc_oca)) {
@@ -2458,28 +2434,24 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				      oea->ea_epoch_range.epr_hi, 0, dkey, 1,
 				      iod, iod_csums, 0, &ioh, NULL);
 		if (rc) {
-			D_ERROR(DF_UOID" Update begin failed: "DF_RC"\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " Update begin failed", DP_UOID(oea->ea_oid));
 			goto out;
 		}
 		biod = vos_ioh2desc(ioh);
 		rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO, rpc->cr_ctx,
 				  CRT_BULK_RW);
 		if (rc) {
-			D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " bio_iod_prep failed", DP_UOID(oea->ea_oid));
 			goto end;
 		}
 		rc = obj_bulk_transfer(rpc, CRT_BULK_GET, false, &oea->ea_bulk,
 				       NULL, NULL, ioh, NULL, 1, NULL, ioc.ioc_coh);
 		if (rc)
-			D_ERROR(DF_UOID " bulk transfer failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " bulk transfer failed", DP_UOID(oea->ea_oid));
 
 		rc = bio_iod_post(biod, rc);
 		if (rc)
-			D_ERROR(DF_UOID " bio_iod_post failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " bio_iod_post failed", DP_UOID(oea->ea_oid));
 end:
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc, &ioc.ioc_io_size, NULL);
 		if (rc) {
@@ -2487,12 +2459,12 @@ end:
 				/* Parity already exists, May need a
 				 * different error code.
 				 */
-				D_DEBUG(DB_EPC, DF_UOID " parity already exists\n",
+				D_DEBUG(DB_EPC, DF_UOID " parity already exists",
 					DP_UOID(oea->ea_oid));
 				rc = 0;
 			} else {
-				D_ERROR(DF_UOID " vos_update_end failed: " DF_RC "\n",
-					DP_UOID(oea->ea_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " vos_update_end failed",
+					 DP_UOID(oea->ea_oid));
 				D_GOTO(out, rc);
 			}
 		}
@@ -2508,8 +2480,7 @@ end:
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
 	if (rc1)
-		D_ERROR(DF_UOID ": array_remove failed: " DF_RC "\n", DP_UOID(oea->ea_oid),
-			DP_RC(rc1));
+		DL_ERROR(rc1, DF_UOID ": array_remove failed", DP_UOID(oea->ea_oid));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2548,12 +2519,11 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI".\n",
-		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
-		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
+		"rpc %p opc %d oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI,
+		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey), dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, orw->orw_epoch, orw->orw_map_ver, ioc.ioc_map_ver,
+		DP_DTI(&orw->orw_dti));
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
@@ -2588,12 +2558,12 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 					    orw->orw_dti_cos.ca_arrays,
 					    orw->orw_dti_cos.ca_count, NULL);
 			if (rc < 0) {
-				D_WARN(DF_UOID ": Failed to DTX CoS commit " DF_RC "\n",
-				       DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_WARN(rc, DF_UOID ": Failed to DTX CoS commit",
+					DP_UOID(orw->orw_oid));
 			} else if (rc < orw->orw_dti_cos.ca_count) {
-				D_WARN(DF_UOID": Incomplete DTX CoS commit rc = %d expected "
-				       "%" PRIu64 ".\n", DP_UOID(orw->orw_oid),
-				       rc, orw->orw_dti_cos.ca_count);
+				D_WARN(DF_UOID
+				       ": Incomplete DTX CoS commit rc = %d expected %" PRIu64,
+				       DP_UOID(orw->orw_oid), rc, orw->orw_dti_cos.ca_count);
 			}
 		}
 		D_GOTO(out, rc = 0);
@@ -2620,8 +2590,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 		       orw->orw_dti_cos.ca_arrays,
 		       orw->orw_dti_cos.ca_count, dtx_flags, mbs, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID ": Failed to start DTX for update", DP_UOID(orw->orw_oid));
 		D_GOTO(out, rc);
 	}
 
@@ -2746,7 +2715,7 @@ process_epoch(uint64_t *epoch, uint64_t *epoch_first, uint32_t *flags)
 	if (epoch_first != NULL && *epoch_first == 0)
 		*epoch_first = *epoch;
 
-	D_DEBUG(DB_IO, "overwrite epoch "DF_X64"\n", *epoch);
+	D_DEBUG(DB_IO, "overwrite epoch " DF_X64, *epoch);
 	return PE_OK_LOCAL;
 }
 
@@ -2784,11 +2753,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI" layout %u.\n",
+		"rpc %p opc %d oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI " layout %u",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
 
 	if (obj_rpc_is_fetch(rpc) && !(orw->orw_flags & ORF_EC_RECOV) &&
@@ -2919,8 +2887,7 @@ again2:
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for update " DF_RC "\n",
-			DP_UOID(orw->orw_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID ": Failed to start DTX for update", DP_UOID(orw->orw_oid));
 		D_GOTO(out, rc);
 	}
 
@@ -2981,8 +2948,7 @@ out:
 		dte.dte_mbs = mbs;
 		rc1 = dtx_abort(ioc.ioc_coc, &dte, orw->orw_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
-			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
-			       DP_DTI(&orw->orw_dti), DP_RC(rc1));
+			DL_WARN(rc1, "Failed to abort DTX " DF_DTI, DP_DTI(&orw->orw_dti));
 	}
 
 	obj_rw_reply(rpc, rc, epoch.oe_value, &ioc);
@@ -3007,7 +2973,7 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 
 	d_sgl_fini(&oeo->oeo_sgl, true);
 	D_FREE(oeo->oeo_kds.ca_arrays);
@@ -3154,8 +3120,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		epoch.oe_first = oei->oei_epr.epr_lo;
 		epoch.oe_flags = orf_to_dtx_epoch_flags(oei->oei_flags);
 	} else if (!daos_is_zero_dti(&oei->oei_dti)) {
-		D_ERROR(DF_UOID": mutually exclusive transaction ID and epoch "
-			"range specified\n", DP_UOID(oei->oei_oid));
+		D_ERROR(DF_UOID ": mutually exclusive transaction ID and epoch range specified",
+			DP_UOID(oei->oei_oid));
 		rc = -DER_PROTO;
 		goto failed;
 	}
@@ -3197,8 +3163,8 @@ re_pack:
 		fill_oid(oei->oei_oid, enum_arg);
 		goto re_pack;
 	} else if (enum_arg->size_query) {
-		D_DEBUG(DB_IO, DF_UOID "query size by kds %d total %zd\n",
-			DP_UOID(oei->oei_oid), enum_arg->kds_len, enum_arg->kds[0].kd_key_len);
+		D_DEBUG(DB_IO, DF_UOID "query size by kds %d total %zd", DP_UOID(oei->oei_oid),
+			enum_arg->kds_len, enum_arg->kds[0].kd_key_len);
 		rc = -DER_KEY2BIG;
 	}
 
@@ -3210,10 +3176,9 @@ re_pack:
 	if (type == VOS_ITER_SINGLE)
 		anchors[0].ia_ev = anchors[0].ia_sv;
 
-	D_DEBUG(DB_IO, ""DF_UOID" iterate "DF_X64"-"DF_X64" type %d tag %d"
-		" rc %d\n", DP_UOID(oei->oei_oid), param.ip_epr.epr_lo,
-		param.ip_epr.epr_hi, type, dss_get_module_info()->dmi_tgt_id,
-		rc);
+	D_DEBUG(DB_IO, DF_UOID " iterate " DF_X64 "-" DF_X64 " type %d tag %d rc %d",
+		DP_UOID(oei->oei_oid), param.ip_epr.epr_lo, param.ip_epr.epr_hi, type,
+		dss_get_module_info()->dmi_tgt_id, rc);
 failed:
 	*e_out = epoch.oe_value;
 	return rc;
@@ -3245,12 +3210,11 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 		sgls[idx] = &tmp_sgl;
 		bulks[idx] = oei->oei_kds_bulk;
 		idx++;
-		D_DEBUG(DB_IO, "reply kds bulk %zd\n", tmp_iov.iov_len);
+		D_DEBUG(DB_IO, "reply kds bulk %zd", tmp_iov.iov_len);
 	}
 
 	if (oei->oei_bulk) {
-		D_DEBUG(DB_IO, "reply bulk %zd nr %d nr_out %d\n",
-			oeo->oeo_sgl.sg_iovs[0].iov_len,
+		D_DEBUG(DB_IO, "reply bulk %zd nr %d nr_out %d", oeo->oeo_sgl.sg_iovs[0].iov_len,
 			oeo->oeo_sgl.sg_nr, oeo->oeo_sgl.sg_nr_out);
 		sgls[idx] = &oeo->oeo_sgl;
 		bulks[idx] = oei->oei_bulk;
@@ -3299,11 +3263,9 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" tag/xs %d/%d pmv %u/%u\n",
-		rpc, opc, DP_UOID(oei->oei_oid),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id,
-		oei->oei_map_ver, ioc.ioc_map_ver);
+	D_DEBUG(DB_IO, "rpc %p opc %d oid " DF_UOID " tag/xs %d/%d pmv %u/%u", rpc, opc,
+		DP_UOID(oei->oei_oid), dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, oei->oei_map_ver, ioc.ioc_map_ver);
 
 	D_ALLOC_ARRAY(anchors, 2);
 	if (anchors == NULL)
@@ -3405,7 +3367,7 @@ obj_punch_complete(crt_rpc_t *rpc, int status, uint32_t map_version)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 }
 
 static int
@@ -3416,7 +3378,7 @@ obj_local_punch(struct obj_punch_in *opi, crt_opcode_t opc,
 	int	rc = 0;
 
 	if (daos_is_zero_dti(&opi->opi_dti)) {
-		D_DEBUG(DB_TRACE, "disable dtx\n");
+		D_DEBUG(DB_TRACE, "disable dtx");
 		dth = NULL;
 	}
 
@@ -3451,7 +3413,7 @@ again:
 		break;
 	}
 	default:
-		D_ERROR("opc %#x not supported\n", opc);
+		D_ERROR("opc %#x not supported", opc);
 		D_GOTO(out, rc = -DER_NOSYS);
 	}
 
@@ -3533,8 +3495,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 		       opi->opi_dti_cos.ca_arrays,
 		       opi->opi_dti_cos.ca_count, dtx_flags, mbs, &dth);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
-			DP_UOID(opi->opi_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID ": Failed to start DTX for punch", DP_UOID(opi->opi_oid));
 		D_GOTO(out, rc);
 	}
 
@@ -3588,9 +3549,9 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 		}
 	}
 
-	D_DEBUG(DB_IO, DF_DTI" sub_requests %d/%d, allow_failure %d, result %d\n",
-		DP_DTI(&dlh->dlh_handle.dth_xid),
-		allow_failure_cnt, succeeds, allow_failure, result);
+	D_DEBUG(DB_IO, DF_DTI " sub_requests %d/%d, allow_failure %d, result %d",
+		DP_DTI(&dlh->dlh_handle.dth_xid), allow_failure_cnt, succeeds, allow_failure,
+		result);
 
 	if (allow_failure != 0 && allow_failure_cnt > 0 && result == 0 && succeeds == 0)
 		result = allow_failure;
@@ -3665,24 +3626,18 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 
 	if (opi->opi_dkeys.ca_count == 0)
 		D_DEBUG(DB_TRACE,
-			"punch obj %p oid "DF_UOID" tag/xs %d/%d epc "
-			DF_X64", pmv %u/%u dti "DF_DTI".\n",
-			rpc, DP_UOID(opi->opi_oid),
-			dss_get_module_info()->dmi_tgt_id,
-			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
-			opi->opi_map_ver, ioc.ioc_map_ver,
-			DP_DTI(&opi->opi_dti));
+			"punch obj %p oid " DF_UOID " tag/xs %d/%d epc " DF_X64
+			", pmv %u/%u dti " DF_DTI,
+			rpc, DP_UOID(opi->opi_oid), dss_get_module_info()->dmi_tgt_id,
+			dss_get_module_info()->dmi_xs_id, opi->opi_epoch, opi->opi_map_ver,
+			ioc.ioc_map_ver, DP_DTI(&opi->opi_dti));
 	else
 		D_DEBUG(DB_TRACE,
-			"punch key %p oid "DF_UOID" dkey "
-			DF_KEY" tag/xs %d/%d epc "
-			DF_X64", pmv %u/%u dti "DF_DTI".\n",
-			rpc, DP_UOID(opi->opi_oid),
-			DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
-			dss_get_module_info()->dmi_tgt_id,
-			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
-			opi->opi_map_ver, ioc.ioc_map_ver,
-			DP_DTI(&opi->opi_dti));
+			"punch key %p oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+			", pmv %u/%u dti " DF_DTI,
+			rpc, DP_UOID(opi->opi_oid), DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
+			dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id,
+			opi->opi_epoch, opi->opi_map_ver, ioc.ioc_map_ver, DP_DTI(&opi->opi_dti));
 
 	rc = process_epoch(&opi->opi_epoch, NULL /* epoch_first */,
 			   &opi->opi_flags);
@@ -3775,8 +3730,7 @@ again2:
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
-		D_ERROR(DF_UOID ": Failed to start DTX for punch " DF_RC "\n",
-			DP_UOID(opi->opi_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID ": Failed to start DTX for punch", DP_UOID(opi->opi_oid));
 		D_GOTO(out, rc);
 	}
 
@@ -3825,8 +3779,7 @@ out:
 		dte.dte_mbs = mbs;
 		rc1 = dtx_abort(ioc.ioc_coc, &dte, opi->opi_epoch);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
-			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
-			       DP_DTI(&opi->opi_dti), DP_RC(rc1));
+			DL_WARN(rc1, "Failed to abort DTX " DF_DTI, DP_DTI(&opi->opi_dti));
 	}
 
 	obj_punch_complete(rpc, rc, ioc.ioc_map_ver);
@@ -3857,7 +3810,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	okqo = crt_reply_get(rpc);
 	D_ASSERT(okqo != NULL);
 
-	D_DEBUG(DB_IO, "flags = "DF_U64"\n", okqi->okqi_api_flags);
+	D_DEBUG(DB_IO, "flags = " DF_U64, okqi->okqi_api_flags);
 
 	rc = obj_ioc_begin(okqi->okqi_oid.id_pub, okqi->okqi_map_ver,
 			   okqi->okqi_pool_uuid, okqi->okqi_co_hdl,
@@ -3917,7 +3870,7 @@ failed:
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 }
 
 void
@@ -3940,8 +3893,8 @@ ds_obj_sync_handler(crt_rpc_t *rpc)
 	else
 		oso->oso_epoch = min(epoch, osi->osi_epoch);
 
-	D_DEBUG(DB_IO, "obj_sync start: "DF_UOID", epc "DF_X64"\n",
-		DP_UOID(osi->osi_oid), oso->oso_epoch);
+	D_DEBUG(DB_IO, "obj_sync start: " DF_UOID ", epc " DF_X64, DP_UOID(osi->osi_oid),
+		oso->oso_epoch);
 
 	rc = obj_ioc_begin(osi->osi_oid.id_pub, osi->osi_map_ver,
 			   osi->osi_pool_uuid, osi->osi_co_hdl,
@@ -3956,12 +3909,12 @@ out:
 	obj_reply_set_status(rpc, rc);
 	obj_ioc_end(&ioc, rc);
 
-	D_DEBUG(DB_IO, "obj_sync stop: "DF_UOID", epc "DF_X64", rd = %d\n",
-		DP_UOID(osi->osi_oid), oso->oso_epoch, rc);
+	D_DEBUG(DB_IO, "obj_sync stop: " DF_UOID ", epc " DF_X64 ", rd = %d", DP_UOID(osi->osi_oid),
+		oso->oso_epoch, rc);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 }
 
 static int
@@ -3986,9 +3939,8 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 			continue;
 
 		if (!ci_is_valid(iod_csums[i].ic_data)) {
-			D_ERROR("Checksums is enabled but the csum info is "
-				"invalid for iod_csums %d/%d. ic_nr: %d, "
-				"iod: "DF_C_IOD"\n",
+			D_ERROR("Checksums is enabled but the csum info is invalid for iod_csums "
+				"%d/%d. ic_nr: %d, iod: " DF_C_IOD,
 				i, iods_nr, iod_csums[i].ic_nr, DP_C_IOD(iod));
 			return -DER_CSUM;
 		}
@@ -4004,12 +3956,11 @@ obj_verify_bio_csum(daos_obj_id_t oid, daos_iod_t *iods,
 
 		if (rc != 0) {
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
-				D_ERROR("Data Verification failed (object: "
-					DF_OID"): %d\n",
+				D_ERROR("Data Verification failed (object: " DF_OID "): %d",
 					DP_OID(oid), rc);
 			} else if (iod->iod_type == DAOS_IOD_ARRAY) {
-				D_ERROR("Data Verification failed (object: "
-					DF_OID", extent: "DF_RECX"): %d\n",
+				D_ERROR("Data Verification failed (object: " DF_OID
+					", extent: " DF_RECX "): %d",
 					DP_OID(oid), DP_RECX(iod->iod_recxs[i]), rc);
 			}
 			break;
@@ -4048,12 +3999,11 @@ obj_cpd_reply(crt_rpc_t *rpc, int status, uint32_t map_version)
 	obj_reply_set_status(rpc, status);
 	obj_reply_map_version_set(rpc, map_version);
 
-	D_DEBUG(DB_TRACE, "CPD rpc %p send reply, pmv %d, status %d.\n",
-		rpc, map_version, status);
+	D_DEBUG(DB_TRACE, "CPD rpc %p send reply, pmv %d, status %d", rpc, map_version, status);
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("Send CPD reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Send CPD reply failed");
 
 cleanup:
 	D_FREE(oco->oco_sub_rets.ca_arrays);
@@ -4111,7 +4061,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
 		if (dcsr->dcsr_opc != DCSO_READ) {
-			D_ERROR(DF_DTI" expected sub read, but got opc %u\n",
+			D_ERROR(DF_DTI " expected sub read, but got opc %u",
 				DP_DTI(&dcsh->dcsh_xid), dcsr->dcsr_opc);
 
 			D_GOTO(out, rc = -DER_PROTO);
@@ -4173,11 +4123,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 
 		dcu = &dcsr->dcsr_update;
 		if (dcsr->dcsr_nr != dcu->dcu_iod_array.oia_iod_nr) {
-			D_ERROR("Unmatched iod NR %u vs %u for obj "DF_UOID
-				", DTX "DF_DTI"\n", dcsr->dcsr_nr,
-				dcu->dcu_iod_array.oia_iod_nr,
-				DP_UOID(dcsr->dcsr_oid),
-				DP_DTI(&dcsh->dcsh_xid));
+			D_ERROR("Unmatched iod NR %u vs %u for obj " DF_UOID ", DTX " DF_DTI,
+				dcsr->dcsr_nr, dcu->dcu_iod_array.oia_iod_nr,
+				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 
 			D_GOTO(out, rc = -DER_INVAL);
 		}
@@ -4255,10 +4203,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 				  dcu->dcu_flags & ORF_CPD_BULK ?
 					rpc->cr_ctx : NULL, CRT_BULK_RW);
 		if (rc != 0) {
-			D_ERROR("bio_iod_prep failed for obj "DF_UOID
-				", DTX "DF_DTI": "DF_RC"\n",
-				DP_UOID(dcsr->dcsr_oid),
-				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			DL_ERROR(rc, "bio_iod_prep failed for obj " DF_UOID ", DTX " DF_DTI,
+				 DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 			goto out;
 		}
 
@@ -4273,10 +4219,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 					       dcu->dcu_bulks, poffs[i], pskips[i], iohs[i], NULL,
 					       piod_nrs[i], &bulks[i], ioc->ioc_coh);
 			if (rc != 0) {
-				D_ERROR("Bulk transfer failed for obj "
-					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+				DL_ERROR(rc,
+					 "Bulk transfer failed for obj " DF_UOID ", DTX " DF_DTI,
+					 DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 				goto out;
 			}
 
@@ -4289,10 +4234,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			rc = bio_iod_copy(biods[i], dcu->dcu_sgls,
 					  dcsr->dcsr_nr);
 			if (rc != 0) {
-				D_ERROR("Non-bulk transfer failed for obj "
-					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+				DL_ERROR(
+				    rc, "Non-bulk transfer failed for obj " DF_UOID ", DTX " DF_DTI,
+				    DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 				if (rc == -DER_OVERFLOW)
 					rc = -DER_REC2BIG;
 
@@ -4319,8 +4263,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		rma_idx++;
 
 		if (rc != 0) {
-			D_ERROR(DF_DTI" ABT_eventual_wait failed: "DF_RC"\n",
-				DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			DL_ERROR(rc, DF_DTI " ABT_eventual_wait failed", DP_DTI(&dcsh->dcsh_xid));
 
 			goto out;
 		}
@@ -4335,8 +4278,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		dcu = &dcsr->dcsr_update;
 		rc = vos_dedup_verify(iohs[i]);
 		if (rc != 0) {
-			D_ERROR("dedup_verify failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			DL_ERROR(rc, "dedup_verify failed for obj " DF_UOID ", DTX " DF_DTI,
+				 DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 			goto out;
 		}
 
@@ -4351,8 +4294,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 		rc = bio_iod_post(biods[i], 0);
 		biods[i] = NULL;
 		if (rc != 0) {
-			D_ERROR("iod_post failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			DL_ERROR(rc, "iod_post failed for obj " DF_UOID ", DTX " DF_DTI,
+				 DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 			goto out;
 		}
 	}
@@ -4394,8 +4337,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			vos_update_renew_epoch(iohs[0], dth);
 
 			D_DEBUG(DB_IO,
-				"CPD rpc %p renew epoch "DF_U64" => "DF_U64" for "DF_DTI"\n",
-				rpc, epoch, dcsh->dcsh_epoch.oe_value, DP_DTI(&dcsh->dcsh_xid));
+				"CPD rpc %p renew epoch " DF_U64 " => " DF_U64 " for " DF_DTI, rpc,
+				epoch, dcsh->dcsh_epoch.oe_value, DP_DTI(&dcsh->dcsh_xid));
 		}
 	}
 
@@ -4423,8 +4366,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 				   dcsr->dcsr_opc == DCSO_PUNCH_AKEY) {
 				dkey = &dcsr->dcsr_dkey;
 			} else {
-				D_ERROR("Unknown sub request opc %u for obj "
-					DF_UOID", DTX "DF_DTI":\n",
+				D_ERROR("Unknown sub request opc %u for obj " DF_UOID
+					", DTX " DF_DTI ":",
 					dcsr->dcsr_opc, DP_UOID(dcsr->dcsr_oid),
 					DP_DTI(&dcsh->dcsh_xid));
 
@@ -4563,8 +4506,7 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	int				 rc = 0;
 	int				 rc1 = 0;
 
-	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on non-leader\n",
-		DP_DTI(&dcsh->dcsh_xid));
+	D_DEBUG(DB_IO, "Handling DTX " DF_DTI " on non-leader", DP_DTI(&dcsh->dcsh_xid));
 
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
@@ -4726,11 +4668,11 @@ ds_obj_dtx_leader(struct daos_cpd_args *dca)
 
 	dcsh = ds_obj_cpd_get_head(dca->dca_rpc, dca->dca_idx);
 
-	D_DEBUG(DB_IO, "Handling DTX "DF_DTI" on leader, idx %u\n",
-		DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
+	D_DEBUG(DB_IO, "Handling DTX " DF_DTI " on leader, idx %u", DP_DTI(&dcsh->dcsh_xid),
+		dca->dca_idx);
 
 	if (daos_is_zero_dti(&dcsh->dcsh_xid)) {
-		D_ERROR("DTX ID cannot be empty\n");
+		D_ERROR("DTX ID cannot be empty");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -4869,8 +4811,7 @@ out:
 		dte.dte_mbs = dcsh->dcsh_mbs;
 		rc1 = dtx_abort(dca->dca_ioc->ioc_coc, &dte, dcsh->dcsh_epoch.oe_value);
 		if (rc1 != 0 && rc1 != -DER_NONEXIST)
-			D_WARN("Failed to abort DTX "DF_DTI": "DF_RC"\n",
-			       DP_DTI(&dcsh->dcsh_xid), DP_RC(rc1));
+			DL_WARN(rc1, "Failed to abort DTX " DF_DTI, DP_DTI(&dcsh->dcsh_xid));
 	}
 
 	ds_obj_cpd_set_sub_result(oco, dca->dca_idx, rc,
@@ -5065,7 +5006,7 @@ ds_obj_cpd_body_bulk(crt_rpc_t *rpc, struct obj_io_context *ioc, bool leader,
 
 out:
 	if (rc != 0)
-		D_ERROR("Failed to bulk transfer CPD RPC body for %p: "DF_RC"\n", rpc, DP_RC(rc));
+		DL_ERROR(rc, "Failed to bulk transfer CPD RPC body for %p", rpc);
 
 	D_FREE(sgls);
 	D_FREE(bulks);
@@ -5097,11 +5038,10 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		leader = false;
 
 	D_DEBUG(DB_TRACE,
-		"Handling CPD rpc %p on %s against "DF_UUID"/"DF_UUID"/"DF_UUID
-		" with CPD count %u, flags %u\n",
-		rpc, leader ? "leader" : "non-leader",
-		DP_UUID(oci->oci_pool_uuid), DP_UUID(oci->oci_co_hdl),
-		DP_UUID(oci->oci_co_uuid), tx_count, oci->oci_flags);
+		"Handling CPD rpc %p on %s against " DF_UUID "/" DF_UUID "/" DF_UUID
+		" with CPD count %u, flags %u",
+		rpc, leader ? "leader" : "non-leader", DP_UUID(oci->oci_pool_uuid),
+		DP_UUID(oci->oci_co_hdl), DP_UUID(oci->oci_co_uuid), tx_count, oci->oci_flags);
 
 	rc = obj_ioc_begin_lite(oci->oci_map_ver, oci->oci_pool_uuid,
 				oci->oci_co_hdl, oci->oci_co_uuid, rpc, &ioc);
@@ -5116,10 +5056,10 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 	if (!leader) {
 		if (tx_count != 1 || oci->oci_sub_reqs.ca_count != 1 ||
 		    oci->oci_disp_ents.ca_count != 1 || oci->oci_disp_tgts.ca_count != 0) {
-			D_ERROR("Unexpected CPD RPC format for non-leader: "
-				"head %u, req set %lu, disp %lu, tgts %lu\n",
-				tx_count, oci->oci_sub_reqs.ca_count,
-				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
+			D_ERROR("Unexpected CPD RPC format for non-leader: head %u, req set %lu, "
+				"disp %lu, tgts %lu",
+				tx_count, oci->oci_sub_reqs.ca_count, oci->oci_disp_ents.ca_count,
+				oci->oci_disp_tgts.ca_count);
 
 			D_GOTO(reply, rc = -DER_PROTO);
 		}
@@ -5127,10 +5067,10 @@ ds_obj_cpd_handler(crt_rpc_t *rpc)
 		if (tx_count != oci->oci_sub_reqs.ca_count ||
 		    tx_count != oci->oci_disp_ents.ca_count ||
 		    tx_count != oci->oci_disp_tgts.ca_count || tx_count == 0) {
-			D_ERROR("Unexpected CPD RPC format for leader: "
-				"head %u, req set %lu, disp %lu, tgts %lu\n",
-				tx_count, oci->oci_sub_reqs.ca_count,
-				oci->oci_disp_ents.ca_count, oci->oci_disp_tgts.ca_count);
+			D_ERROR("Unexpected CPD RPC format for leader: head %u, req set %lu, disp "
+				"%lu, tgts %lu",
+				tx_count, oci->oci_sub_reqs.ca_count, oci->oci_disp_ents.ca_count,
+				oci->oci_disp_tgts.ca_count);
 
 			D_GOTO(reply, rc = -DER_PROTO);
 		}
@@ -5256,11 +5196,11 @@ ds_obj_key2anchor_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI".\n",
+	D_DEBUG(DB_IO,
+		"rpc %p opc %d oid " DF_UOID " dkey " DF_KEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI,
 		rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_UOID(oki->oki_oid), DP_KEY(&oki->oki_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
 		oki->oki_map_ver, ioc.ioc_map_ver, DP_DTI(&oki->oki_dti));
 
 	rc = process_epoch(&oki->oki_epoch, NULL, &oki->oki_flags);
@@ -5278,5 +5218,5 @@ out:
 	obj_ioc_end(&ioc, rc);
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 }

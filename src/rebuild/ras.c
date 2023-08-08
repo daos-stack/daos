@@ -19,7 +19,7 @@ raise_ras(ras_event_t id, ras_sev_t sev,
 	char *data = NULL;
 
 	if ((pool == NULL) || uuid_is_null(*pool)) {
-		D_ERROR("invalid pool\n");
+		D_ERROR("invalid pool");
 		return -DER_INVAL;
 	}
 

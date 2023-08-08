@@ -142,8 +142,7 @@ hlc_recovery_end(uint64_t bound)
 		 *	will be longer than the HLC epsilon, then new HLC
 		 *	generated after server restart will not rollback.
 		 */
-		D_INFO("nanosleep %lu:%lu before open external service.\n",
-		       tv.tv_sec, tv.tv_nsec);
+		D_INFO("nanosleep %lu:%lu before open external service", tv.tv_sec, tv.tv_nsec);
 		nanosleep(&tv, NULL);
 	}
 }
@@ -160,8 +159,7 @@ register_dbtree_classes(void)
 	rc = dbtree_class_register(DBTREE_CLASS_KV, 0 /* feats */,
 				   &dbtree_kv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_KV: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_KV");
 		return rc;
 	}
 
@@ -169,31 +167,28 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_iv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IV: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_IV");
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY | BTR_FEAT_DIRECT_KEY,
 				   &dbtree_ifv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_IFV: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_IFV");
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY,
 				   &dbtree_nv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_NV: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_NV");
 		return rc;
 	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_UV, 0 /* feats */,
 				   &dbtree_uv_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_UV: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_UV");
 		return rc;
 	}
 
@@ -201,8 +196,7 @@ register_dbtree_classes(void)
 				   BTR_FEAT_UINT_KEY /* feats */,
 				   &dbtree_ec_ops);
 	if (rc != 0) {
-		D_ERROR("failed to register DBTREE_CLASS_EC: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_EC");
 		return rc;
 	}
 
@@ -238,7 +232,7 @@ modules_load(void)
 
 		rc = dss_module_load(mod);
 		if (rc != 0) {
-			D_ERROR("Failed to load module %s: %d\n", mod, rc);
+			D_ERROR("Failed to load module %s: %d", mod, rc);
 			break;
 		}
 
@@ -270,7 +264,7 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
 		dss_tgt_offload_xs_nr = 2 * tgt_nr;
 	} else if (dss_tgt_offload_xs_nr == 0) {
-		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine");
 	}
 
 	if (oversubscribe) {
@@ -283,8 +277,8 @@ dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 
 	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
 		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
-			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
-			"%d cores reserved for system service).\n",
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers(%d "
+			"cores reserved for system service)",
 			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
 		return -DER_INVAL;
 	}
@@ -323,7 +317,7 @@ dss_topo_init()
 		D_PRINT("Using legacy core allocation algorithm\n");
 		if (dss_core_offset >= dss_core_nr) {
 			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
-				"range [0, %u]\n",
+				"range [0, %u]",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
@@ -332,13 +326,13 @@ dss_topo_init()
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
+		D_ERROR("Invalid NUMA node selected. Must be no larger than %d", numa_node_nr);
 		return -DER_INVAL;
 	}
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -346,7 +340,7 @@ dss_topo_init()
 	/* find a core that matches */
 	core_allocation_bitmap = hwloc_bitmap_alloc();
 	if (core_allocation_bitmap == NULL) {
-		D_ERROR("Unable to allocate core allocation bitmap\n");
+		D_ERROR("Unable to allocate core allocation bitmap");
 		return -DER_INVAL;
 	}
 
@@ -372,7 +366,7 @@ dss_topo_init()
 
 	if (dss_core_offset >= dss_num_cores_numa_node) {
 		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
-			"[0, %d]\n",
+			"[0, %d]",
 			dss_core_offset, dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
@@ -412,7 +406,7 @@ server_init_state_fini(void)
 static void
 server_init_state_wait(enum dss_init_state state)
 {
-	D_INFO("waiting for server init state %d\n", state);
+	D_INFO("waiting for server init state %d", state);
 	ABT_mutex_lock(server_init_state_mutex);
 	while (server_init_state != state)
 		ABT_cond_wait(server_init_state_cv, server_init_state_mutex);
@@ -422,7 +416,7 @@ server_init_state_wait(enum dss_init_state state)
 void
 dss_init_state_set(enum dss_init_state state)
 {
-	D_INFO("setting server init state to %d\n", state);
+	D_INFO("setting server init state to %d", state);
 	ABT_mutex_lock(server_init_state_mutex);
 	server_init_state = state;
 	ABT_cond_broadcast(server_init_state_cv);
@@ -453,7 +447,7 @@ set_abt_max_num_xstreams(int n)
 	D_ASPRINTF(value, "%d", n);
 	if (value == NULL)
 		return -DER_NOMEM;
-	D_INFO("Setting %s to %s\n", name, value);
+	D_INFO("Setting %s to %s", name, value);
 	rc = setenv(name, value, 1 /* overwrite */);
 	D_FREE(value);
 	if (rc != 0)
@@ -482,7 +476,7 @@ abt_init(int argc, char *argv[])
 	/* Now, initialize Argobots. */
 	rc = ABT_init(argc, argv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to init ABT: %d\n", rc);
+		D_ERROR("failed to init ABT: %d", rc);
 		return dss_abterr2der(rc);
 	}
 
@@ -494,15 +488,13 @@ abt_init(int argc, char *argv[])
 	 */
 	fp = fopen("/proc/sys/vm/max_map_count", "r");
 	if (fp == NULL) {
-		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s\n",
-			strerror(errno));
+		D_ERROR("Unable to open /proc/sys/vm/max_map_count: %s", strerror(errno));
 	} else {
 		int n;
 
 		n = fscanf(fp, "%d", &max_nb_mmap_stacks);
 		if (n == EOF) {
-			D_ERROR("Unable to read vm.max_map_count value: %s\n",
-				strerror(errno));
+			D_ERROR("Unable to read vm.max_map_count value: %s", strerror(errno));
 			/* just in case, to ensure value can be later safely
 			 * compared and thus no ULT stack be mmap()'ed
 			 */
@@ -510,7 +502,8 @@ abt_init(int argc, char *argv[])
 		} else {
 			/* need a minimum value to start mmap() ULT stacks */
 			if (max_nb_mmap_stacks < MIN_VM_MAX_MAP_COUNT) {
-				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start mmap() ULT stacks\n",
+				D_WARN("vm.max_map_count (%d) value is too low (< %d) to start "
+				       "mmap() ULT stacks",
 				       max_nb_mmap_stacks, MIN_VM_MAX_MAP_COUNT);
 				max_nb_mmap_stacks = 0;
 			} else {
@@ -518,15 +511,14 @@ abt_init(int argc, char *argv[])
 				 * stacks
 				 */
 				max_nb_mmap_stacks /= 2;
-				D_INFO("Will be able to mmap() %d ULT stacks\n",
-				       max_nb_mmap_stacks);
+				D_INFO("Will be able to mmap() %d ULT stacks", max_nb_mmap_stacks);
 			}
 		}
 	}
 
 	rc = ABT_key_create(free_stack, &stack_key);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT key for stack create failed: %d\n", rc);
+		D_ERROR("ABT key for stack create failed: %d", rc);
 		ABT_finalize();
 		return dss_abterr2der(rc);
 	}
@@ -555,7 +547,7 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 
 	/* We only care about dead ranks for now */
 	if (type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d\n", src, type);
+		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d", src, type);
 		return;
 	}
 
@@ -565,13 +557,12 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		d_tm_inc_counter(metrics->dead_rank_events, 1);
 		rc = ds_notify_swim_rank_dead(rank, incarnation);
 		if (rc)
-			D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
-				src, type, DP_RC(rc));
+			DL_ERROR(rc, "failed to handle %u/%u event", src, type);
 	} else if (src == CRT_EVS_GRPMOD) {
 		d_rank_t self_rank = dss_self_rank();
 
 		if (rank == dss_self_rank()) {
-			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected",
 			       self_rank);
 			/*
 			 * For now, we just raise a SIGKILL to ourselves; we could
@@ -580,7 +571,7 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 			 */
 			rc = kill(getpid(), SIGKILL);
 			if (rc != 0)
-				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+				D_ERROR("failed to raise SIGKILL: %d", errno);
 			return;
 		}
 
@@ -674,8 +665,7 @@ server_init(int argc, char *argv[])
 
 	rc = dss_engine_metrics_init();
 	if (rc != 0)
-		D_WARN("Unable to initialize engine metrics, " DF_RC "\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Unable to initialize engine metrics");
 
 	metrics = &dss_engine_metrics;
 
@@ -684,7 +674,7 @@ server_init(int argc, char *argv[])
 
 	rc = drpc_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to initialize dRPC");
 		goto exit_metrics_init;
 	}
 
@@ -700,7 +690,7 @@ server_init(int argc, char *argv[])
 	rc = dss_module_init();
 	if (rc)
 		goto exit_abt_init;
-	D_INFO("Module interface successfully initialized\n");
+	D_INFO("Module interface successfully initialized");
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
@@ -709,21 +699,19 @@ server_init(int argc, char *argv[])
 			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
-	D_INFO("Network successfully initialized\n");
+	D_INFO("Network successfully initialized");
 
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		rc = daos_init();
 		if (rc) {
-			D_ERROR("daos_init (client) failed, rc: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "daos_init (client) failed");
 			D_GOTO(exit_crt, rc);
 		}
-		D_INFO("Client stack enabled\n");
+		D_INFO("Client stack enabled");
 	} else {
 		rc = daos_hhash_init();
 		if (rc) {
-			D_ERROR("daos_hhash_init failed, rc: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "daos_hhash_init failed");
 			D_GOTO(exit_crt, rc);
 		}
 		rc = pl_init();
@@ -731,7 +719,7 @@ server_init(int argc, char *argv[])
 			daos_hhash_fini();
 			goto exit_crt;
 		}
-		D_INFO("handle hash table and placement initialized\n");
+		D_INFO("handle hash table and placement initialized");
 	}
 	/* server-side uses D_HTYPE_PTR handle */
 	d_hhash_set_ptrtype(daos_ht.dht_hhash);
@@ -745,7 +733,7 @@ server_init(int argc, char *argv[])
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Module %s successfully loaded\n", modules);
+	D_INFO("Module %s successfully loaded", modules);
 
 	/*
 	 * End the HLC recovery so that module init callbacks (e.g.,
@@ -766,24 +754,23 @@ server_init(int argc, char *argv[])
 	if (rc)
 		/* Some modules may have been loaded successfully. */
 		D_GOTO(exit_nvme_init, rc);
-	D_INFO("Module %s successfully initialized\n", modules);
+	D_INFO("Module %s successfully initialized", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
 	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	D_INFO("Service initialized\n");
+	D_INFO("Service initialized");
 
 	rc = server_init_state_init();
 	if (rc != 0) {
-		D_ERROR("failed to init server init state: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to init server init state");
 		goto exit_srv_init;
 	}
 
 	rc = drpc_notify_ready();
 	if (rc != 0) {
-		D_ERROR("Failed to notify daos_server: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to notify daos_server");
 		goto exit_init_state;
 	}
 
@@ -798,7 +785,7 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_init_state, rc);
 
 	dss_xstreams_open_barrier();
-	D_INFO("Service fully up\n");
+	D_INFO("Service fully up");
 
 	/** Report timestamp when engine was open for business */
 	d_tm_record_timestamp(metrics->ready_time);
@@ -850,7 +837,7 @@ exit_debug_init:
 static void
 server_fini(bool force)
 {
-	D_INFO("Service is shutting down\n");
+	D_INFO("Service is shutting down");
 	/*
 	 * The first thing to do is to inform every xstream that the engine is
 	 * shutting down, so that we can avoid allocating new resources or
@@ -859,27 +846,27 @@ server_fini(bool force)
 	 */
 	dss_srv_set_shutting_down();
 	crt_unregister_event_cb(dss_crt_event_cb, NULL);
-	D_INFO("unregister event callbacks done\n");
+	D_INFO("unregister event callbacks done");
 	/*
 	 * Cleaning up modules needs to create ULTs on other xstreams; must be
 	 * called before shutting down the xstreams.
 	 */
 	dss_module_cleanup_all();
-	D_INFO("dss_module_cleanup_all() done\n");
+	D_INFO("dss_module_cleanup_all() done");
 	server_init_state_fini();
-	D_INFO("server_init_state_fini() done\n");
+	D_INFO("server_init_state_fini() done");
 	/*
 	 * All other xstreams start shutting down here. ULT/tasklet creations
 	 * on them are no longer possible.
 	 */
 	dss_srv_fini(force);
-	D_INFO("dss_srv_fini() done\n");
+	D_INFO("dss_srv_fini() done");
 	bio_nvme_fini();
-	D_INFO("bio_nvme_fini() done\n");
+	D_INFO("bio_nvme_fini() done");
 	ds_iv_fini();
-	D_INFO("ds_iv_fini() done\n");
+	D_INFO("ds_iv_fini() done");
 	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
+	D_INFO("dss_module_unload_all() done");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
@@ -890,21 +877,21 @@ server_fini(bool force)
 		pl_fini();
 		daos_hhash_fini();
 	}
-	D_INFO("daos_fini() or pl_fini() done\n");
+	D_INFO("daos_fini() or pl_fini() done");
 	crt_finalize();
-	D_INFO("crt_finalize() done\n");
+	D_INFO("crt_finalize() done");
 	dss_module_fini(force);
-	D_INFO("dss_module_fini() done\n");
+	D_INFO("dss_module_fini() done");
 	abt_fini();
-	D_INFO("abt_fini() done\n");
+	D_INFO("abt_fini() done");
 	drpc_fini();
-	D_INFO("drpc_fini() done\n");
+	D_INFO("drpc_fini() done");
 	dss_engine_metrics_fini();
-	D_INFO("dss_engine_metrics_fini() done\n");
+	D_INFO("dss_engine_metrics_fini() done");
 	d_tm_fini();
-	D_INFO("d_tm_fini() done\n");
+	D_INFO("d_tm_fini() done");
 	daos_debug_fini();
-	D_INFO("daos_debug_fini() done\n");
+	D_INFO("daos_debug_fini() done");
 }
 
 static void
@@ -1080,7 +1067,7 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	int			rc;
 
 	if ((signo < 0) || (signo >= _NSIG)) {
-		D_ERROR("invalid signo %d to register\n", signo);
+		D_ERROR("invalid signo %d to register", signo);
 		return -DER_INVAL;
 	}
 
@@ -1090,8 +1077,8 @@ daos_register_sighand(int signo, void (*handler) (int, siginfo_t *, void *))
 	/* register new and save old handler */
 	rc = sigaction(signo, &act, &old_handlers[signo]);
 	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading "
-			"old %d signal handler\n", signo);
+		D_ERROR("sigaction() failure registering new and reading old %d signal handler",
+			signo);
 		return rc;
 	}
 	return 0;
@@ -1152,8 +1139,8 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	/* re-register old handler */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
 	if (rc != 0) {
-		D_ERROR("sigaction() failure registering new and reading old "
-			"%d signal handler\n", signo);
+		D_ERROR("sigaction() failure registering new and reading old %d signal handler",
+			signo);
 		/* XXX it is weird, we may end-up in a loop handling same
 		 * signal with this handler if we return
 		 */
@@ -1223,7 +1210,7 @@ main(int argc, char **argv)
 	while (1) {
 		rc = sigwait(&set, &sig);
 		if (rc) {
-			D_ERROR("failed to wait for signals: %d\n", rc);
+			D_ERROR("failed to wait for signals: %d", rc);
 			break;
 		}
 
@@ -1236,8 +1223,8 @@ main(int argc, char **argv)
 			if (rc == 0)
 				tm = localtime(&tv.tv_sec);
 			else
-				D_ERROR("failure to gettimeofday(): %s (%d)\n",
-					strerror(errno), errno);
+				D_ERROR("failure to gettimeofday(): %s (%d)", strerror(errno),
+					errno);
 
 			 if (abt_infos == NULL) {
 				/* filename format is
@@ -1258,7 +1245,8 @@ main(int argc, char **argv)
 
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {
-					D_ERROR("failed to open file to dump ABT infos and ULTs stacks: %s (%d)\n",
+					D_ERROR("failed to open file to dump ABT infos and ULTs "
+						"stacks: %s (%d)",
 						strerror(errno), errno);
 					abt_infos = stderr;
 				}
@@ -1284,7 +1272,7 @@ main(int argc, char **argv)
 		 * internal infos and ULTs stacks without internal synchro
 		 */
 		if (sig == SIGUSR1) {
-			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
+			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks");
 			dss_dump_ABT_state(abt_infos);
 			continue;
 		}
@@ -1293,7 +1281,8 @@ main(int argc, char **argv)
 		 * synchro (timeout of 10s)
 		 */
 		if (sig == SIGUSR2) {
-			D_INFO("got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks\n");
+			D_INFO(
+			    "got SIGUSR2, attempting to trigger dump of all Argobots ULTs stacks");
 			ABT_info_trigger_print_all_thread_stacks(abt_infos,
 								 10.0, NULL,
 								 NULL);

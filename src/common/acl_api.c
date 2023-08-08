@@ -663,8 +663,7 @@ check_ace_is_duplicate(struct daos_ace *ace, struct d_hash_table *found_aces)
 			daos_ace_get_size(ace),
 			&entry->entry, true);
 	if (rc != 0) {
-		D_ERROR("Failed to insert new hash entry, rc="DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to insert new hash entry");
 		D_FREE(entry);
 	}
 
@@ -693,7 +692,7 @@ validate_aces(struct daos_acl *acl)
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK,
 			8, NULL, &ops, &found);
 	if (rc != 0) {
-		D_ERROR("Failed to create hash table, rc="DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create hash table");
 		return rc;
 	}
 
@@ -739,16 +738,14 @@ daos_acl_validate(struct daos_acl *acl)
 
 	if (acl->dal_len > 0 && (acl->dal_len < sizeof(struct daos_ace) ||
 				(acl->dal_len > DAOS_ACL_MAX_ACE_LEN))) {
-		D_ERROR("invalid dal_len %d, should with in [%zu, %d].\n",
-			acl->dal_len, sizeof(struct daos_ace),
-			DAOS_ACL_MAX_ACE_LEN);
+		D_ERROR("invalid dal_len %d, should with in [%zu, %d]", acl->dal_len,
+			sizeof(struct daos_ace), DAOS_ACL_MAX_ACE_LEN);
 		return -DER_INVAL;
 	}
 
 	/* overall structure must be 64-bit aligned */
 	if (acl->dal_len % 8 != 0) {
-		D_ERROR("invalid dal_len %d, not 8 bytes aligned.\n",
-			acl->dal_len);
+		D_ERROR("invalid dal_len %d, not 8 bytes aligned", acl->dal_len);
 		return -DER_INVAL;
 	}
 

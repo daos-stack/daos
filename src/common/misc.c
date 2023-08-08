@@ -59,7 +59,7 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 	int i;
 
 	if (src_nr > dst_nr) {
-		D_ERROR("%u > %u\n", src_nr, dst_nr);
+		D_ERROR("%u > %u", src_nr, dst_nr);
 		return -DER_INVAL;
 	}
 
@@ -90,7 +90,7 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 		}
 
 		if (src_sgl[i].sg_nr > dst_sgl[i].sg_nr) {
-			D_ERROR("%d : %u > %u\n", i, src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
+			D_ERROR("%d : %u > %u", i, src_sgl[i].sg_nr, dst_sgl[i].sg_nr);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -104,9 +104,9 @@ daos_sgls_copy_internal(d_sg_list_t *dst_sgl, uint32_t dst_nr,
 
 				if (src_sgl[i].sg_iovs[j].iov_len >
 				    dst_sgl[i].sg_iovs[j].iov_buf_len) {
-					D_ERROR("%d:%d "DF_U64" > "DF_U64"\n",
-					   i, j, src_sgl[i].sg_iovs[j].iov_len,
-					   src_sgl[i].sg_iovs[j].iov_buf_len);
+					D_ERROR("%d:%d " DF_U64 " > " DF_U64, i, j,
+						src_sgl[i].sg_iovs[j].iov_len,
+						src_sgl[i].sg_iovs[j].iov_buf_len);
 					D_GOTO(out, rc = -DER_INVAL);
 				}
 				memcpy(dst_sgl[i].sg_iovs[j].iov_buf,
@@ -383,7 +383,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl\n");
+		D_INFO("Requested more bytes than what's available in sgl");
 
 	return rc;
 }
@@ -424,7 +424,7 @@ daos_iov_copy(d_iov_t *dst, d_iov_t *src)
 	dst->iov_buf_len = src->iov_buf_len;
 	memcpy(dst->iov_buf, src->iov_buf, src->iov_len);
 	dst->iov_len = src->iov_len;
-	D_DEBUG(DB_TRACE, "iov_len %d\n", (int)dst->iov_len);
+	D_DEBUG(DB_TRACE, "iov_len %d", (int)dst->iov_len);
 	return 0;
 }
 
@@ -565,8 +565,7 @@ daos_hhash_init_feats(uint32_t feats)
 		D_ASSERT(daos_ht.dht_hhash != NULL);
 		daos_ht_ref = 1;
 	} else {
-		D_ERROR("failed to create handle hash table: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create handle hash table");
 	}
 
 unlock:
@@ -694,7 +693,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	addr_env = (crt_phy_addr_t)getenv(CRT_PHY_ADDR_ENV);
 	if (addr_env != NULL &&
 	    strncmp(addr_env, CRT_SOCKET_PROV, strlen(CRT_SOCKET_PROV)) == 0) {
-		D_INFO("for sockets provider force it to use regular EP.\n");
+		D_INFO("for sockets provider force it to use regular EP");
 		daos_crt_init_opt.cio_use_sep = 0;
 		goto out;
 	}

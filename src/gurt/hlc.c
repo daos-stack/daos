@@ -150,8 +150,7 @@ uint64_t d_unixnsec2hlc(uint64_t unixnsec)
 void d_hlc_epsilon_set(uint64_t epsilon)
 {
 	d_hlc_epsilon = (epsilon + D_HLC_MASK) & ~D_HLC_MASK;
-	D_INFO("set maximum system clock offset to "DF_U64" ns\n",
-	       d_hlc_epsilon);
+	D_INFO("set maximum system clock offset to " DF_U64 " ns", d_hlc_epsilon);
 }
 
 uint64_t d_hlc_epsilon_get(void)

@@ -218,14 +218,14 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 	if (qat_status == QAT_STOP) {
 		status = qaeMemInit();
 		if (status != CPA_STATUS_SUCCESS) {
-			D_ERROR("QAT: Failed to initialize memory driver\n");
+			D_ERROR("QAT: Failed to initialize memory driver");
 			pthread_mutex_unlock(&qat_mutex);
 			return DC_STATUS_ERR;
 		}
 
 		status = icp_sal_userStartMultiProcess("SSL", CPA_FALSE);
 		if (status != CPA_STATUS_SUCCESS) {
-			D_ERROR("QAT: Failed to start user process SSL\n");
+			D_ERROR("QAT: Failed to start user process SSL");
 			qaeMemDestroy();
 			pthread_mutex_unlock(&qat_mutex);
 			return DC_STATUS_ERR;
@@ -235,7 +235,7 @@ qat_dc_init(CpaInstanceHandle *dcInstHandle,
 
 	get_dc_instance(dcInstHandle);
 	if (*dcInstHandle == NULL) {
-		D_ERROR("QAT: No DC instance\n");
+		D_ERROR("QAT: No DC instance");
 		icp_sal_userStop();
 		qaeMemDestroy();
 		qat_status = QAT_STOP;

@@ -65,7 +65,7 @@ fa_op_rec_free(struct d_hash_table *htab, d_list_t *rlink)
 	D_FREE(ht_rec->fa_attr.fa_argument);
 	rc = D_SPIN_DESTROY(&ht_rec->fa_attr.fa_lock);
 	if (rc != DER_SUCCESS)
-		D_ERROR("Can't destroy spinlock for fault id: %d\n", ht_rec->fa_attr.fa_id);
+		D_ERROR("Can't destroy spinlock for fault id: %d", ht_rec->fa_attr.fa_id);
 	D_FREE(ht_rec);
 }
 
@@ -186,7 +186,7 @@ fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in, bool take_lock)
 		rc = D_SPIN_INIT(&fault_attr->fa_lock, PTHREAD_PROCESS_PRIVATE);
 		if (rc != DER_SUCCESS)
 			D_GOTO(out_unlock, rc);
-		D_DEBUG(DB_ALL, "new fault id: %u added.\n", fault_id);
+		D_DEBUG(DB_ALL, "new fault id: %u added", fault_id);
 		should_free = false;
 	} else {
 		struct d_fault_attr *rec;
@@ -245,7 +245,7 @@ d_fault_attr_lookup(uint32_t fault_id)
 	rlink = d_hash_rec_find(&d_fi_gdata.dfg_fa_table, (void *)&fault_id, sizeof(fault_id));
 	D_RWLOCK_UNLOCK(&d_fi_gdata.dfg_rwlock);
 	if (rlink == NULL) {
-		D_DEBUG(DB_ALL, "fault attr for fault ID %d not set yet.\n", fault_id);
+		D_DEBUG(DB_ALL, "fault attr for fault ID %d not set yet", fault_id);
 		fault_attr = NULL;
 	} else {
 		ht_rec = fa_link2ptr(rlink);
@@ -264,7 +264,7 @@ d_fault_attr_err_code(uint32_t fault_id)
 
 	fault_attr = d_fault_attr_lookup(fault_id);
 	if (fault_attr == NULL) {
-		D_ERROR("fault id: %u not set.\n", fault_id);
+		D_ERROR("fault id: %u not set", fault_id);
 		return -DER_INVAL;
 	}
 
@@ -300,33 +300,33 @@ one_fault_attr_parse(yaml_parser_t *parser)
 		/* libyaml functions return 1 on success, 0 on error */
 		yaml_rc = yaml_parser_parse(parser, &first);
 		if (yaml_rc != 1) {
-			D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+			D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
 		if (first.type == YAML_MAPPING_END_EVENT) {
 			yaml_event_delete(&first);
-			D_DEBUG(DB_ALL, "mapping end\n");
+			D_DEBUG(DB_ALL, "mapping end");
 			break;
 		}
 
 		if (first.type != YAML_SCALAR_EVENT) {
 			yaml_event_delete(&first);
-			D_ERROR("Unknown element.\n");
+			D_ERROR("Unknown element");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
 		yaml_rc = yaml_parser_parse(parser, &second);
 		if (yaml_rc != 1) {
 			yaml_event_delete(&first);
-			D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+			D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
 		if (second.type != YAML_SCALAR_EVENT) {
 			yaml_event_delete(&first);
 			yaml_event_delete(&second);
-			D_ERROR("Unknown element.\n");
+			D_ERROR("Unknown element");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
@@ -334,32 +334,32 @@ one_fault_attr_parse(yaml_parser_t *parser)
 		val_str = (const char *)second.data.scalar.value;
 		val     = strtoul(val_str, NULL, 0);
 		if (!strcmp(key_str, id)) {
-			D_DEBUG(DB_ALL, "id: %lu\n", val);
+			D_DEBUG(DB_ALL, "id: %lu", val);
 			attr.fa_id = val;
 			has_id     = 1;
 		} else if (!strcmp(key_str, probability_x)) {
 			attr.fa_probability_x = val;
-			D_DEBUG(DB_ALL, "probability_x: %lu\n", val);
+			D_DEBUG(DB_ALL, "probability_x: %lu", val);
 		} else if (!strcmp(key_str, probability_y)) {
 			attr.fa_probability_y = val;
-			D_DEBUG(DB_ALL, "probability_y: %lu\n", val);
+			D_DEBUG(DB_ALL, "probability_y: %lu", val);
 		} else if (!strcmp(key_str, interval)) {
 			attr.fa_interval = val;
-			D_DEBUG(DB_ALL, "interval: %lu\n", val);
+			D_DEBUG(DB_ALL, "interval: %lu", val);
 		} else if (!strcmp(key_str, max_faults)) {
 			attr.fa_max_faults = val;
-			D_DEBUG(DB_ALL, "max_faults: %lu\n", val);
+			D_DEBUG(DB_ALL, "max_faults: %lu", val);
 		} else if (!strcmp(key_str, err_code)) {
 			attr.fa_err_code = strtol(val_str, NULL, 0);
-			D_DEBUG(DB_ALL, "err_code: " DF_RC "\n", DP_RC(attr.fa_err_code));
+			D_DEBUG(DB_ALL, "err_code: " DF_RC, DP_RC(attr.fa_err_code));
 		} else if (!strcmp(key_str, argument)) {
 			D_STRNDUP(attr.fa_argument, val_str, FI_CONFIG_ARG_STR_MAX_LEN);
 			if (attr.fa_argument == NULL)
 				rc = -DER_NOMEM;
-			D_DEBUG(DB_ALL, "argument: %s\n", attr.fa_argument);
+			D_DEBUG(DB_ALL, "argument: %s", attr.fa_argument);
 
 		} else {
-			D_ERROR("Unknown key: %s\n", key_str);
+			D_ERROR("Unknown key: %s", key_str);
 			rc = -DER_MISC;
 		}
 
@@ -370,13 +370,13 @@ one_fault_attr_parse(yaml_parser_t *parser)
 	} while (1);
 
 	if (!has_id) {
-		D_ERROR("Fault config file item missing ID field.\n");
+		D_ERROR("Fault config file item missing ID field");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	rc = fault_attr_set(attr.fa_id, attr, true);
 	if (rc != DER_SUCCESS)
-		D_ERROR("d_set_fault_attr(%u) failed, rc %d\n", attr.fa_id, rc);
+		D_ERROR("d_set_fault_attr(%u) failed, rc %d", attr.fa_id, rc);
 out:
 	D_FREE(attr.fa_argument);
 
@@ -395,7 +395,7 @@ fault_attr_parse(yaml_parser_t *parser)
 		/* libyaml functions return 1 on success, 0 on error */
 		yaml_rc = yaml_parser_parse(parser, &event);
 		if (yaml_rc != 1) {
-			D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+			D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 			yaml_event_delete(&event);
 			return -DER_MISC;
 		}
@@ -405,9 +405,7 @@ fault_attr_parse(yaml_parser_t *parser)
 		case YAML_MAPPING_START_EVENT:
 			rc = one_fault_attr_parse(parser);
 			if (rc != DER_SUCCESS) {
-				D_ERROR("yaml_parser_parse() failed. "
-					"rc: %d\n",
-					rc);
+				D_ERROR("yaml_parser_parse() failed. rc: %d", rc);
 			}
 			break;
 		default:
@@ -434,7 +432,7 @@ thread_default_parse(yaml_parser_t *parser)
 	/* libyaml functions return 1 on success, 0 on error */
 	yaml_rc = yaml_parser_parse(parser, &event);
 	if (yaml_rc != 1) {
-		D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+		D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 		return -DER_MISC;
 	}
 
@@ -463,7 +461,7 @@ seed_parse(yaml_parser_t *parser)
 	/* libyaml functions return 1 on success, 0 on error */
 	yaml_rc = yaml_parser_parse(parser, &event);
 	if (yaml_rc != 1) {
-		D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+		D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 		return -DER_MISC;
 	}
 
@@ -491,7 +489,7 @@ d_fi_gdata_init(void)
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, D_FA_TABLE_BITS, NULL, &fa_table_ops,
 					 &d_fi_gdata.dfg_fa_table);
 	if (rc != 0)
-		D_ERROR("d_hash_table_create_inplace() failed, rc: %d.\n", rc);
+		D_ERROR("d_hash_table_create_inplace() failed, rc: %d", rc);
 }
 
 static void
@@ -501,7 +499,7 @@ d_fi_gdata_destroy(void)
 
 	rc = d_hash_table_destroy_inplace(&d_fi_gdata.dfg_fa_table, true /* force */);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_destroy_inplace() failed, rc: %d\n", rc);
+		D_ERROR("d_hash_table_destroy_inplace() failed, rc: %d", rc);
 	}
 	D_RWLOCK_DESTROY(&d_fi_gdata.dfg_rwlock);
 	d_fi_gdata.dfg_refcount = 0;
@@ -536,21 +534,21 @@ d_fault_inject_init(void)
 
 	config_file = getenv(D_FAULT_CONFIG_ENV);
 	if (config_file == NULL || strlen(config_file) == 0) {
-		D_INFO("No config file, fault injection is OFF.\n");
+		D_INFO("No config file, fault injection is OFF");
 		D_GOTO(out, rc);
 	}
 
 	fp         = fopen(config_file, "r");
 	last_errno = errno;
 	if (fp == NULL) {
-		D_ERROR("Failed to open file %s (%s).\n", config_file, strerror(last_errno));
+		D_ERROR("Failed to open file %s (%s)", config_file, strerror(last_errno));
 		rc = d_errno2der(last_errno);
 		D_GOTO(out, rc);
 	}
 
 	yaml_rc = yaml_parser_initialize(&parser);
 	if (yaml_rc != 1) {
-		D_ERROR("Failed to initialize yaml parser. rc: %d\n", yaml_rc);
+		D_ERROR("Failed to initialize yaml parser. rc: %d", yaml_rc);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -559,7 +557,7 @@ d_fault_inject_init(void)
 		/* libyaml functions return 1 on success, 0 on error */
 		yaml_rc = yaml_parser_parse(&parser, &event);
 		if (yaml_rc != 1) {
-			D_ERROR("yaml_parser_parse() failed. rc: %d\n", yaml_rc);
+			D_ERROR("yaml_parser_parse() failed. rc: %d", yaml_rc);
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
@@ -577,19 +575,19 @@ d_fault_inject_init(void)
 			     event.data.scalar.length)) {
 			rc = fault_attr_parse(&parser);
 			if (rc != DER_SUCCESS)
-				D_ERROR("fault_attr_parse() failed. rc %d\n", rc);
+				D_ERROR("fault_attr_parse() failed. rc %d", rc);
 		} else if (!strncmp((char *)event.data.scalar.value, "seed",
 				    event.data.scalar.length)) {
 			rc = seed_parse(&parser);
 			if (rc != DER_SUCCESS)
-				D_ERROR("seed_parse() failed. rc %d\n", rc);
+				D_ERROR("seed_parse() failed. rc %d", rc);
 		} else if (!strncmp((char *)event.data.scalar.value, "thread_default",
 				    event.data.scalar.length)) {
 			rc = thread_default_parse(&parser);
 			if (rc != DER_SUCCESS)
-				D_ERROR("thread_default_parse() failed. rc %d\n", rc);
+				D_ERROR("thread_default_parse() failed. rc %d", rc);
 		} else {
-			D_ERROR("unknown key: %s\n", event.data.scalar.value);
+			D_ERROR("unknown key: %s", event.data.scalar.value);
 			rc = -DER_INVAL;
 		}
 
@@ -600,11 +598,11 @@ d_fault_inject_init(void)
 
 	yaml_parser_delete(&parser);
 	if (rc == DER_SUCCESS) {
-		D_INFO("Config file: %s, fault injection is ON.\n", config_file);
+		D_INFO("Config file: %s, fault injection is ON", config_file);
 		d_fault_config_file = 1;
 		d_fault_inject      = 1;
 	} else {
-		D_ERROR("Failed to parse fault config file.\n");
+		D_ERROR("Failed to parse fault config file");
 		D_GOTO(out, rc);
 	}
 
@@ -625,7 +623,7 @@ d_fault_inject_fini()
 	int rc = 0;
 
 	if (d_fi_gdata.dfg_inited == 0) {
-		D_DEBUG(DB_TRACE, "fault injection not initialized.\n");
+		D_DEBUG(DB_TRACE, "fault injection not initialized");
 		return rc;
 	}
 
@@ -641,7 +639,7 @@ d_fault_inject_fini()
 	d_fi_gdata_init_once = PTHREAD_ONCE_INIT;
 	d_fault_inject       = 0;
 
-	D_DEBUG(DB_ALL, "Finalized.\n");
+	D_DEBUG(DB_ALL, "Finalized");
 
 	return rc;
 }
@@ -650,7 +648,7 @@ int
 d_fault_inject_enable(void)
 {
 	if (!d_fault_config_file) {
-		D_ERROR("No fault config file.\n");
+		D_ERROR("No fault config file");
 		return -DER_NOSYS;
 	}
 
@@ -689,7 +687,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 	bool rc = true;
 
 	if (!d_fi_initialized()) {
-		D_ERROR("fault injection not initialized.\n");
+		D_ERROR("fault injection not initialized");
 		return false;
 	}
 
@@ -733,28 +731,28 @@ out:
 int
 d_fault_inject_init(void)
 {
-	D_INFO("Fault Injection not initialized feature not included in build\n");
+	D_INFO("Fault Injection not initialized feature not included in build");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_fini(void)
 {
-	D_INFO("Fault Injection not finalized feature not included in build\n");
+	D_INFO("Fault Injection not finalized feature not included in build");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_enable(void)
 {
-	D_INFO("Fault Injection not enabled feature not included in build\n");
+	D_INFO("Fault Injection not enabled feature not included in build");
 	return -DER_NOSYS;
 }
 
 int
 d_fault_inject_disable(void)
 {
-	D_INFO("Fault Injection not disabled feature not included in build\n");
+	D_INFO("Fault Injection not disabled feature not included in build");
 	return -DER_NOSYS;
 }
 
@@ -773,7 +771,7 @@ d_should_fail(struct d_fault_attr_t *fault_attr)
 int
 d_fault_attr_set(uint32_t fault_id, struct d_fault_attr_t fa_in)
 {
-	D_INFO("Fault Injection attr not set feature not included in build\n");
+	D_INFO("Fault Injection attr not set feature not included in build");
 	return 0;
 }
 

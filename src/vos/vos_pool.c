@@ -166,14 +166,14 @@ vos_meta_load(struct umem_store *store, char *start)
 	rc = ABT_mutex_create(&mlc.mlc_lock);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to create ABT mutex: %d\n", rc);
+		D_ERROR("Failed to create ABT mutex: %d", rc);
 		return rc;
 	}
 
 	rc = ABT_cond_create(&mlc.mlc_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to create ABT cond: %d\n", rc);
+		D_ERROR("Failed to create ABT cond: %d", rc);
 		goto destroy_lock;
 	}
 
@@ -389,32 +389,31 @@ vos_chkpt_metrics_init(struct vos_chkpt_metrics *vc_metrics, const char *path, i
 	rc = d_tm_add_metric(&vc_metrics->vcm_duration, D_TM_DURATION, "Checkpoint duration", NULL,
 			     "%s/%s/duration/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
-		D_WARN("failed to create checkpoint_duration metric: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "failed to create checkpoint_duration metric");
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_pages, D_TM_STATS_GAUGE,
 			     "Number of dirty page blocks checkpointed", "16MiB",
 			     "%s/%s/dirty_pages/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
-		D_WARN("failed to create checkpoint_dirty_pages metric: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "failed to create checkpoint_dirty_pages metric");
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_dirty_chunks, D_TM_STATS_GAUGE,
 			     "Number of umem chunks checkpointed", "4KiB",
 			     "%s/%s/dirty_chunks/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
-		D_WARN("failed to create checkpoint_dirty_chunks metric: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "failed to create checkpoint_dirty_chunks metric");
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_iovs_copied, D_TM_STATS_GAUGE,
 			     "Number of sgl iovs used to copy dirty chunks", NULL,
 			     "%s/%s/iovs_copied/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
-		D_WARN("failed to create checkpoint_iovs_copied metric: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "failed to create checkpoint_iovs_copied metric");
 
 	rc = d_tm_add_metric(&vc_metrics->vcm_wal_purged, D_TM_STATS_GAUGE,
 			     "Size of WAL purged by the checkpoint", "4KiB",
 			     "%s/%s/wal_purged/tgt_%d", path, CHKPT_TELEMETRY_DIR, tgt_id);
 	if (rc)
-		D_WARN("failed to create checkpoint_wal_purged metric: "DF_RC"\n", DP_RC(rc));
-
+		DL_WARN(rc, "failed to create checkpoint_wal_purged metric");
 }
 
 void
@@ -504,11 +503,11 @@ vos_pool_checkpoint(daos_handle_t poh)
 	bio_wal_query(store->stor_priv, &wal_info);
 	tx_id = wal_info.wi_commit_id;
 	if (tx_id == wal_info.wi_ckp_id) {
-		D_DEBUG(DB_TRACE, "No checkpoint needed for "DF_UUID"\n", DP_UUID(pool->vp_id));
+		D_DEBUG(DB_TRACE, "No checkpoint needed for " DF_UUID, DP_UUID(pool->vp_id));
 		return 0;
 	}
 
-	D_DEBUG(DB_MD, "Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64 "\n",
+	D_DEBUG(DB_MD, "Checkpoint started pool=" DF_UUID ", committed_id=" DF_X64,
 		DP_UUID(pool->vp_id), tx_id);
 
 	rc = bio_meta_clear_empty(store->stor_priv);
@@ -526,8 +525,7 @@ vos_pool_checkpoint(daos_handle_t poh)
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
-	D_DEBUG(DB_MD,
-		"Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ", rc=" DF_RC "\n",
+	D_DEBUG(DB_MD, "Checkpoint finished pool=" DF_UUID ", committed_id=" DF_X64 ": " DF_RC,
 		DP_UUID(pool->vp_id), tx_id, DP_RC(rc));
 
 	if (chkpt_metrics != NULL) {
@@ -593,25 +591,26 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		meta_sz = lstat.st_size;
 	}
 
-	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
+	D_DEBUG(DB_MGMT,
+		"Create BIO meta context for xs:%p pool:" DF_UUID
+		" meta_sz: %zu, nvme_sz: %zu wal_sz:%zu",
 		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
 
 	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
 	if (rc != 0) {
-		D_ERROR("Failed to create BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
-			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to create BIO meta context for xs:%p pool:" DF_UUID, xs_ctxt,
+			 DP_UUID(pool_id));
 		return rc;
 	}
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	if (rc != 0) {
-		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID". "DF_RC"\n",
-			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to open BIO meta context for xs:%p pool:" DF_UUID, xs_ctxt,
+			 DP_UUID(pool_id));
 
 		ret = bio_mc_destroy(xs_ctxt, pool_id, mc_flags);
 		if (ret)
-			D_ERROR("Failed to destroy BIO meta context. "DF_RC"\n", DP_RC(ret));
+			DL_ERROR(ret, "Failed to destroy BIO meta context");
 
 		return rc;
 	}
@@ -632,12 +631,12 @@ umem_create:
 	if (store.stor_priv != NULL) {
 		ret = bio_mc_close(store.stor_priv);
 		if (ret) {
-			D_ERROR("Failed to close BIO meta context. "DF_RC"\n", DP_RC(ret));
+			DL_ERROR(ret, "Failed to close BIO meta context");
 			return rc;
 		}
 		ret = bio_mc_destroy(xs_ctxt, pool_id, mc_flags);
 		if (ret)
-			D_ERROR("Failed to destroy BIO meta context. "DF_RC"\n", DP_RC(ret));
+			DL_ERROR(ret, "Failed to destroy BIO meta context");
 	}
 
 	return rc;
@@ -666,13 +665,13 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_open;
 
-	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:"DF_UUID"\n",
-		xs_ctxt, DP_UUID(pool_id));
+	D_DEBUG(DB_MGMT, "Open BIO meta context for xs:%p pool:" DF_UUID, xs_ctxt,
+		DP_UUID(pool_id));
 
 	rc = bio_mc_open(xs_ctxt, pool_id, mc_flags, &mc);
 	if (rc) {
-		D_ERROR("Failed to open BIO meta context for xs:%p pool:"DF_UUID", "DF_RC"\n",
-			xs_ctxt, DP_UUID(pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to open BIO meta context for xs:%p pool:" DF_UUID, xs_ctxt,
+			 DP_UUID(pool_id));
 		return rc;
 	}
 
@@ -697,7 +696,7 @@ umem_open:
 	if (store.stor_priv != NULL) {
 		ret = bio_mc_close(store.stor_priv);
 		if (ret)
-			D_ERROR("Failed to close BIO meta context. "DF_RC"\n", DP_RC(ret));
+			DL_ERROR(ret, "Failed to close BIO meta context");
 	}
 
 	return rc;
@@ -716,7 +715,7 @@ vos_pmemobj_close(struct umem_pool *pop)
 	if (store.stor_priv != NULL) {
 		rc = bio_mc_close(store.stor_priv);
 		if (rc)
-			D_ERROR("Failed to close BIO meta context. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to close BIO meta context");
 	}
 }
 
@@ -745,13 +744,12 @@ vos_delete_blob(uuid_t pool_uuid, unsigned int flags)
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		return;
 
-	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
-		xs_ctxt, DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:" DF_UUID, xs_ctxt, DP_UUID(pool_uuid));
 
 	rc = bio_mc_destroy(xs_ctxt, pool_uuid, mc_flags);
 	if (rc)
-		D_ERROR("Destroying meta context blob for xs:%p pool="DF_UUID" failed: "DF_RC"\n",
-			xs_ctxt, DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Destroying meta context blob for xs:%p pool=" DF_UUID " failed",
+			 xs_ctxt, DP_UUID(pool_uuid));
 
 	return;
 }
@@ -774,10 +772,10 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_size != 0) {
 		rc = munlock((void *)pool->vp_umm.umm_base, pool->vp_size);
 		if (rc != 0)
-			D_WARN("Failed to unlock pool memory at "DF_X64": errno=%d (%s)\n",
+			D_WARN("Failed to unlock pool memory at " DF_X64 ": errno=%d (%s)",
 			       pool->vp_umm.umm_base, errno, strerror(errno));
 		else
-			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: "DF_U64" bytes at "DF_X64"\n",
+			D_DEBUG(DB_MGMT, "Unlocked VOS pool memory: " DF_U64 " bytes at " DF_X64,
 				pool->vp_size, pool->vp_umm.umm_base);
 	}
 
@@ -789,7 +787,7 @@ pool_hop_free(struct d_ulink *hlink)
 	if (pool->vp_dummy_ioctxt) {
 		rc = bio_ioctxt_close(pool->vp_dummy_ioctxt);
 		if (rc != 0)
-			D_WARN("Failed to close dummy ioctxt: rc=%d\n", rc);
+			D_WARN("Failed to close dummy ioctxt: rc=%d", rc);
 	}
 
 	if (pool->vp_dying)
@@ -829,7 +827,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
-		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "uuid hash table insert failed");
 		D_GOTO(failed, rc);
 	}
 	*poh = vos_pool2hdl(pool);
@@ -847,7 +845,7 @@ pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 
 	hlink = d_uhash_link_lookup(vos_pool_hhash_get(is_sysdb), ukey, NULL);
 	if (hlink == NULL) {
-		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
+		D_DEBUG(DB_MGMT, "can't find " DF_UUID, DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
 	}
 
@@ -866,20 +864,18 @@ vos_blob_format_cb(void *cb_data)
 	/* Create a bio_io_context to get the blob */
 	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, blob_hdr->bbh_pool, false);
 	if (rc) {
-		D_ERROR("Failed to create an I/O context for writing blob "
-			"header: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create an I/O context for writing blob header");
 		return rc;
 	}
 
 	/* Write the blob header info to blob offset 0 */
 	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
 	if (rc)
-		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
-			blob_hdr->bbh_blob_id, DP_RC(rc));
+		DL_ERROR(rc, "Failed to write header for blob:" DF_U64, blob_hdr->bbh_blob_id);
 
 	rc = bio_ioctxt_close(ioctxt);
 	if (rc)
-		D_ERROR("Failed to free I/O context: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to free I/O context");
 
 	return rc;
 }
@@ -896,7 +892,7 @@ vos_blob_unmap_cb(d_sg_list_t *unmap_sgl, uint32_t blk_sz, void *data)
 	/* unmap unused pages for NVMe media to perform more efficiently */
 	rc = bio_blob_unmap_sgl(ioctxt, unmap_sgl, blk_sz);
 	if (rc)
-		D_ERROR("Blob unmap SGL failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Blob unmap SGL failed");
 
 	return rc;
 }
@@ -922,8 +918,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
-		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, size: " DF_U64 ":" DF_U64 ", UUID: " DF_UUID, path, scm_sz,
+		nvme_sz, DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -932,22 +928,22 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
 		D_ASSERT(pool != NULL);
-		D_ERROR("Found already opened(%d) pool:%p dying(%d)\n",
-			pool->vp_opened, pool, pool->vp_dying);
+		D_ERROR("Found already opened(%d) pool:%p dying(%d)", pool->vp_opened, pool,
+			pool->vp_dying);
 		vos_pool_decref(pool);
 		return -DER_EXIST;
 	}
 
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!scm_sz && access(path, F_OK) == -1) {
-		D_ERROR("File not accessible (%d) when size is 0\n", errno);
+		D_ERROR("File not accessible (%d) when size is 0", errno);
 		return daos_errno2der(errno);
 	}
 
 	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, flags, &ph);
 	if (rc) {
-		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64". "DF_RC"\n",
-			path, scm_sz, nvme_sz, DP_RC(rc));
+		DL_ERROR(rc, "Failed to create pool %s, scm_sz=" DF_U64 ", nvme_sz=" DF_U64, path,
+			 scm_sz, nvme_sz);
 		return rc;
 	}
 
@@ -1010,7 +1006,7 @@ end:
 		rc = umem_tx_abort(&umem, rc);
 
 	if (rc != 0) {
-		D_ERROR("Initialize pool root error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Initialize pool root error");
 		goto close;
 	}
 
@@ -1028,8 +1024,7 @@ end:
 			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
-		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		DL_ERROR(rc, "Format blob error for pool:" DF_UUID, DP_UUID(uuid));
 		goto close;
 	}
 
@@ -1093,15 +1088,14 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
-		       DP_UUID(uuid));
+		D_WARN(DF_UUID ": Open reference exists, pool destroy is deferred", DP_UUID(uuid));
 		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
 				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
 				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
-	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+	D_DEBUG(DB_MGMT, "No open handles, OK to delete");
 
 	vos_delete_blob(uuid, flags);
 	return 0;
@@ -1115,8 +1109,7 @@ vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags)
 {
 	int	rc;
 
-	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
-		path, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "delete path: %s UUID: " DF_UUID, path, DP_UUID(uuid));
 
 	rc = vos_pool_kill(uuid, flags);
 	if (rc)
@@ -1133,8 +1126,7 @@ vos_pool_destroy_ex(const char *path, uuid_t uuid, unsigned int flags)
 	if (rc) {
 		if (errno == ENOENT)
 			D_GOTO(exit, rc = 0);
-		D_ERROR("Failure deleting file from PMEM: %s\n",
-			strerror(errno));
+		D_ERROR("Failure deleting file from PMEM: %s", strerror(errno));
 	}
 exit:
 	return rc;
@@ -1166,13 +1158,13 @@ lock_pool_memory(struct vos_pool *pool)
 	if (lock_mem == LM_FLAG_UNINIT) {
 		rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 		if (rc != 0) {
-			D_WARN("getrlimit() failed; errno=%d (%s)\n", errno, strerror(errno));
+			D_WARN("getrlimit() failed; errno=%d (%s)", errno, strerror(errno));
 			lock_mem = LM_FLAG_DISABLED;
 			return;
 		}
 
 		if (rlim.rlim_cur != RLIM_INFINITY || rlim.rlim_max != RLIM_INFINITY) {
-			D_WARN("Infinite rlimit not detected, not locking VOS pool memory\n");
+			D_WARN("Infinite rlimit not detected, not locking VOS pool memory");
 			lock_mem = LM_FLAG_DISABLED;
 			return;
 		}
@@ -1190,15 +1182,15 @@ lock_pool_memory(struct vos_pool *pool)
 
 	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
 	if (rc != 0) {
-		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
-		       "; errno=%d (%s)\n", lock_bytes, pool->vp_umm.umm_base,
-		       errno, strerror(errno));
+		D_WARN("Could not lock memory for VOS pool " DF_U64 " bytes at " DF_X64
+		       "; errno=%d (%s)",
+		       lock_bytes, pool->vp_umm.umm_base, errno, strerror(errno));
 		return;
 	}
 
 	/* Only save the size if the locking was successful */
 	pool->vp_size = lock_bytes;
-	D_DEBUG(DB_MGMT, "Locking VOS pool in memory "DF_U64" bytes at "DF_X64"\n", pool->vp_size,
+	D_DEBUG(DB_MGMT, "Locking VOS pool in memory " DF_U64 " bytes at " DF_X64, pool->vp_size,
 		pool->vp_umm.umm_base);
 }
 
@@ -1218,7 +1210,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Create a new handle during open */
 	rc = pool_alloc(pool_df->pd_id, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
-		D_ERROR("Error allocating pool handle\n");
+		D_ERROR("Error allocating pool handle");
 		vos_pmemobj_close(ph);
 		return rc;
 	}
@@ -1230,14 +1222,14 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
 	if (rc) {
-		D_ERROR("Failed to open dummy I/O context. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open dummy I/O context");
 		D_GOTO(failed, rc);
 	}
 
 	/* initialize a umem instance for later btree operations */
 	rc = umem_class_init(uma, &pool->vp_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to instantiate umem: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to instantiate umem");
 		D_GOTO(failed, rc);
 	}
 
@@ -1245,7 +1237,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma,
 				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
 	if (rc) {
-		D_ERROR("Container Tree open failed\n");
+		D_ERROR("Container Tree open failed");
 		D_GOTO(failed, rc);
 	}
 
@@ -1264,8 +1256,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		rc = vea_load(&pool->vp_umm, vos_txd_get(flags & VOS_POF_SYSDB),
 			      &pool_df->pd_vea_df, &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
-			D_ERROR("Failed to load block space info: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to load block space info");
 			goto failed;
 		}
 	}
@@ -1279,7 +1270,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
-		D_ERROR("Error inserting into vos DRAM hash\n");
+		D_ERROR("Error inserting into vos DRAM hash");
 		D_GOTO(failed, rc);
 	}
 
@@ -1298,7 +1289,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
 	lock_pool_memory(pool);
-	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	D_DEBUG(DB_MGMT, "Opened pool %p", pool);
 	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
@@ -1317,12 +1308,11 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	bool			 skip_uuid_check = flags & VOS_POF_SKIP_UUID_CHECK;
 
 	if (path == NULL || poh == NULL) {
-		D_ERROR("Invalid parameters.\n");
+		D_ERROR("Invalid parameters");
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
-		DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: " DF_UUID, path, DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1332,10 +1322,10 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 		rc = pool_lookup(&ukey, &pool);
 		if (rc == 0) {
 			D_ASSERT(pool != NULL);
-			D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-				pool->vp_opened, pool);
+			D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p", pool->vp_opened,
+				pool);
 			if (pool->vp_dying) {
-				D_ERROR("Found dying pool : %p\n", pool);
+				D_ERROR("Found dying pool : %p", pool);
 				vos_pool_decref(pool);
 				return -DER_BUSY;
 			}
@@ -1351,21 +1341,20 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 
 	rc = vos_pmemobj_open(path, uuid, VOS_POOL_LAYOUT, flags, metrics, &ph);
 	if (rc) {
-		D_ERROR("Error in opening the pool "DF_UUID". "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		DL_ERROR(rc, "Error in opening the pool " DF_UUID, DP_UUID(uuid));
 		return rc;
 	}
 
 	pool_df = vos_pool_pop2df(ph);
 	if (pool_df->pd_magic != POOL_DF_MAGIC) {
-		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
+		D_CRIT("Unknown DF magic %x", pool_df->pd_magic);
 		rc = -DER_DF_INVAL;
 		goto out;
 	}
 
 	if (pool_df->pd_version > POOL_DF_VERSION ||
 	    pool_df->pd_version < POOL_DF_VER_1) {
-		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		D_ERROR("Unsupported DF version %x", pool_df->pd_version);
 		/** Send a RAS notification */
 		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
 					   POOL_DF_VER_1, POOL_DF_VERSION,
@@ -1375,8 +1364,8 @@ vos_pool_open_metrics(const char *path, uuid_t uuid, unsigned int flags, void *m
 	}
 
 	if (!skip_uuid_check && uuid_compare(uuid, pool_df->pd_id)) {
-		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
-			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		D_ERROR("Mismatch uuid, user=" DF_UUIDF ", pool=" DF_UUIDF, DP_UUID(uuid),
+			DP_UUID(pool_df->pd_id));
 		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
@@ -1453,11 +1442,11 @@ vos_pool_close(daos_handle_t poh)
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL) {
-		D_ERROR("Cannot close a NULL handle\n");
+		D_ERROR("Cannot close a NULL handle");
 		return -DER_NO_HDL;
 	}
-	D_DEBUG(DB_MGMT, "Close opened(%d) pool "DF_UUID" (%p).\n",
-		pool->vp_opened, DP_UUID(pool->vp_id), pool);
+	D_DEBUG(DB_MGMT, "Close opened(%d) pool " DF_UUID " (%p)", pool->vp_opened,
+		DP_UUID(pool->vp_id), pool);
 
 	D_ASSERT(pool->vp_opened > 0);
 	pool->vp_opened--;
@@ -1494,8 +1483,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
-		D_ERROR("Query pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Query pool " DF_UUID " failed", DP_UUID(pool->vp_id));
 	return rc;
 }
 
@@ -1567,7 +1555,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 
 		i = *((unsigned int *)param);
 		if (i >= 100 || i < 0) {
-			D_ERROR("Invalid space reserve ratio for rebuild. %d\n", i);
+			D_ERROR("Invalid space reserve ratio for rebuild. %d", i);
 			return -DER_INVAL;
 		}
 		pool->vp_space_rb = i;

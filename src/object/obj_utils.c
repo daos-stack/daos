@@ -99,9 +99,8 @@ recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 	D_ASSERT(key->iov_len == sizeof(*key_recx));
 
 	if (DAOS_RECX_PTR_OVERLAP(r->rr_recx, key_recx)) {
-		D_ERROR("recx overlap between ["DF_U64", "DF_U64"], "
-			"["DF_U64", "DF_U64"].\n", r->rr_recx->rx_idx,
-			r->rr_recx->rx_nr, key_recx->rx_idx, key_recx->rx_nr);
+		D_ERROR("recx overlap between [" DF_U64 ", " DF_U64 "], [" DF_U64 ", " DF_U64 "]",
+			r->rr_recx->rx_idx, r->rr_recx->rx_nr, key_recx->rx_idx, key_recx->rx_nr);
 		return BTR_CMP_ERR;
 	}
 
@@ -212,13 +211,12 @@ obj_utils_init(void)
 	rc = dbtree_class_register(DBTREE_CLASS_RECX, BTR_FEAT_DIRECT_KEY,
 				   &recx_btr_ops);
 	if (rc != 0 && rc != -DER_EXIST) {
-		D_ERROR("failed to register DBTREE_CLASS_RECX: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register DBTREE_CLASS_RECX");
 		D_GOTO(failed, rc);
 	}
 	return 0;
 failed:
-	D_ERROR("Failed to initialize DAOS object utilities\n");
+	D_ERROR("Failed to initialize DAOS object utilities");
 	return rc;
 }
 

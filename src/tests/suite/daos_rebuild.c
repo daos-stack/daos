@@ -1433,13 +1433,13 @@ rebuild_kill_more_RF_ranks(void **state)
 	for (i = 0; i < OBJ_NR; i++) {
 		ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
 		arg->expect_result = -DER_RF;
-		D_DEBUG(DB_TRACE, "lookup single %d\n", i);
+		D_DEBUG(DB_TRACE, "lookup single %d", i);
 		lookup_single("dkey", "akey", 0, "data", strlen("data") + 1,
 			      DAOS_TX_NONE, &req);
 		ioreq_fini(&req);
 	}
 
-	D_DEBUG(DB_TRACE, "cont status clear\n");
+	D_DEBUG(DB_TRACE, "cont status clear");
 	/* clear health status */
 	daos_cont_status_clear(arg->coh, NULL);
 

@@ -41,23 +41,22 @@ int
 drpc_hdlr_register(int module_id, drpc_handler_t handler)
 {
 	if (registry_table == NULL) {
-		D_ERROR("Table not initialized\n");
+		D_ERROR("Table not initialized");
 		return -DER_UNINIT;
 	}
 
 	if (!module_id_is_valid(module_id)) {
-		D_ERROR("Module ID %d out of range\n", module_id);
+		D_ERROR("Module ID %d out of range", module_id);
 		return -DER_INVAL;
 	}
 
 	if (handler == NULL) {
-		D_ERROR("Tried to register a null handler\n");
+		D_ERROR("Tried to register a null handler");
 		return -DER_INVAL;
 	}
 
 	if (registry_table[module_id] != NULL) {
-		D_ERROR("Tried to register module ID %d more than once\n",
-				module_id);
+		D_ERROR("Tried to register module ID %d more than once", module_id);
 		return -DER_EXIST;
 	}
 
@@ -74,7 +73,7 @@ drpc_hdlr_register_all(struct dss_drpc_handler *handlers)
 	struct dss_drpc_handler	*current;
 
 	if (registry_table == NULL) {
-		D_ERROR("Table not initialized\n");
+		D_ERROR("Table not initialized");
 		return -DER_UNINIT;
 	}
 
@@ -106,18 +105,18 @@ drpc_hdlr_get_handler(int module_id)
 	drpc_handler_t handler;
 
 	if (registry_table == NULL) {
-		D_ERROR("Table not initialized\n");
+		D_ERROR("Table not initialized");
 		return NULL;
 	}
 
 	if (!module_id_is_valid(module_id)) {
-		D_ERROR("Module ID %d out of range\n", module_id);
+		D_ERROR("Module ID %d out of range", module_id);
 		return NULL;
 	}
 
 	handler = registry_table[module_id];
 	if (handler == NULL) {
-		D_ERROR("Handler for module %d not found\n", module_id);
+		D_ERROR("Handler for module %d not found", module_id);
 	}
 
 	return handler;
@@ -127,12 +126,12 @@ int
 drpc_hdlr_unregister(int module_id)
 {
 	if (registry_table == NULL) {
-		D_ERROR("Table not initialized\n");
+		D_ERROR("Table not initialized");
 		return -DER_UNINIT;
 	}
 
 	if (!module_id_is_valid(module_id)) {
-		D_ERROR("Module ID %d out of range\n", module_id);
+		D_ERROR("Module ID %d out of range", module_id);
 		return -DER_INVAL;
 	}
 
@@ -147,7 +146,7 @@ drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers)
 	struct dss_drpc_handler *current;
 
 	if (registry_table == NULL) {
-		D_ERROR("Table not initialized\n");
+		D_ERROR("Table not initialized");
 		return -DER_UNINIT;
 	}
 
@@ -162,8 +161,8 @@ drpc_hdlr_unregister_all(struct dss_drpc_handler *handlers)
 
 		rc = drpc_hdlr_unregister(current->module_id);
 		if (rc != 0)
-			D_ERROR("failed to unregister dRPC handler for module %d: "DF_RC"\n",
-				current->module_id, DP_RC(rc));
+			DL_ERROR(rc, "failed to unregister dRPC handler for module %d",
+				 current->module_id);
 
 		current++;
 	}
@@ -185,8 +184,7 @@ drpc_hdlr_process_msg(Drpc__Call *request, Drpc__Response *resp)
 
 	handler = drpc_hdlr_get_handler(request->module);
 	if (handler == NULL) {
-		D_ERROR("Message for unregistered dRPC module: %d\n",
-				request->module);
+		D_ERROR("Message for unregistered dRPC module: %d", request->module);
 		resp->status = DRPC__STATUS__UNKNOWN_MODULE;
 		return;
 	}

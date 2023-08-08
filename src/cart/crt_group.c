@@ -32,7 +32,7 @@ crt_li_destroy(struct crt_lookup_item *li)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		if (li->li_tag_addr[i] != NULL)
-			D_ERROR("tag %d, li_tag_addr not freed.\n", i);
+			D_ERROR("tag %d, li_tag_addr not freed", i);
 	}
 
 	D_MUTEX_DESTROY(&li->li_mutex);
@@ -261,9 +261,7 @@ grp_li_uri_get(struct crt_lookup_item *li, int tag)
 	 * info has not been populated yet
 	 */
 	if (rlink == NULL) {
-		D_DEBUG(DB_TRACE,
-			"Failed to find uri_info for %d:%d\n",
-			rank, tag);
+		D_DEBUG(DB_TRACE, "Failed to find uri_info for %d:%d", rank, tag);
 		return NULL;
 	}
 
@@ -288,7 +286,7 @@ generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 
 	parsed = sscanf(tmp_addr, "0x%x", &raw_addr);
 	if (parsed != 1) {
-		D_ERROR("Failed to parse address '%s'\n", tmp_addr);
+		D_ERROR("Failed to parse address '%s'", tmp_addr);
 		return -DER_INVAL;
 	}
 
@@ -334,7 +332,7 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	 */
 	p = strrchr(tmp_addr, ':');
 	if (p == NULL) {
-		D_ERROR("Badly formed ADDR '%s'\n", tmp_addr);
+		D_ERROR("Badly formed ADDR '%s'", tmp_addr);
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
@@ -344,7 +342,7 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	base_port = atoi(p) - tag;
 
 	if (base_port <= 0) {
-		D_ERROR("Failed to parse addr=%s correctly\n", tmp_addr);
+		D_ERROR("Failed to parse addr=%s correctly", tmp_addr);
 		D_GOTO(exit, rc = -DER_INVAL);
 	}
 
@@ -403,8 +401,8 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc)
 			D_GOTO(exit, rc);
 
-		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d\n",
-			uri, base_addr, provider);
+		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d", uri, base_addr,
+			provider);
 
 		if (crt_provider_is_contig_ep(provider)) {
 			if (crt_provider_is_port_based(provider)) {
@@ -416,7 +414,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				 * TODO: implement generate_opx_uris() function. Once done OPX
 				 * 'contig_ep' setting should be set to true
 				 */
-				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
+				D_ERROR("Unknown provider %d for uri='%s'", provider, uri);
 				rc = -DER_INVAL;
 			}
 
@@ -435,7 +433,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				       &ui->ui_link,
 				       true /* exclusive */);
 		if (rc != 0) {
-			D_ERROR("Entry already present\n");
+			D_ERROR("Entry already present");
 
 			if (crt_provider_is_contig_ep(provider)) {
 				for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++)
@@ -499,7 +497,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 	D_ASSERT(grp_priv != NULL);
 
 	if (grp_priv->gp_primary == 0) {
-		D_ERROR("need not create lookup cache for sub-group.\n");
+		D_ERROR("need not create lookup cache for sub-group");
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -513,8 +511,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 						 NULL, &lookup_table_ops,
 						 &htables[i]);
 		if (rc != 0) {
-			D_ERROR("d_hash_table_create() failed, " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "d_hash_table_create() failed");
 			D_GOTO(free_htables, rc);
 		}
 	}
@@ -525,7 +522,7 @@ crt_grp_lc_create(struct crt_grp_priv *grp_priv)
 					 NULL, &uri_lookup_table_ops,
 					 &grp_priv->gp_uri_lookup_cache);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "d_hash_table_create() failed");
 		D_GOTO(free_htables, rc);
 	}
 
@@ -536,15 +533,14 @@ free_htables:
 		rc2 = d_hash_table_destroy_inplace(&htables[j],
 						   true /* force */);
 		if (rc2 != 0)
-			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
-				DP_RC(rc2));
+			DL_ERROR(rc2, "d_hash_table_destroy() failed");
 	}
 	D_FREE(htables);
 	grp_priv->gp_lookup_cache = NULL;
 
 out:
 	if (rc != 0)
-		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 
 	return rc;
 }
@@ -564,8 +560,7 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 					&grp_priv->gp_lookup_cache[i],
 					true /* force */);
 		if (rc2 != 0) {
-			D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
-				DP_RC(rc2));
+			DL_ERROR(rc2, "d_hash_table_destroy() failed");
 			rc = rc ? rc : rc2;
 		}
 	}
@@ -574,8 +569,7 @@ crt_grp_lc_destroy(struct crt_grp_priv *grp_priv)
 	rc2 = d_hash_table_destroy_inplace(&grp_priv->gp_uri_lookup_cache,
 					   true /* force */);
 	if (rc2 != 0) {
-		D_ERROR("d_hash_table_destroy() failed, " DF_RC "\n",
-			DP_RC(rc2));
+		DL_ERROR(rc2, "d_hash_table_destroy() failed");
 		rc = rc ? rc : rc2;
 	}
 
@@ -603,7 +597,7 @@ crt_grp_lc_uri_remove(struct crt_grp_priv *passed_grp_priv, int ctx_idx,
 	rlink = d_hash_rec_find(&grp_priv->gp_lookup_cache[ctx_idx],
 				&rank, sizeof(rank));
 	if (rlink == NULL) {
-		D_ERROR("Record for rank %d is not found\n", rank);
+		D_ERROR("Record for rank %d is not found", rank);
 		return;
 	}
 
@@ -655,14 +649,16 @@ grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 				       &rank, sizeof(rank), &li->li_link,
 				       true /* exclusive */);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "entry already exists in lookup "
-				"table, grp_priv %p ctx_idx %d, rank: %d.\n",
+			D_DEBUG(DB_TRACE,
+				"entry already exists in lookup table, grp_priv %p ctx_idx %d, "
+				"rank: %d",
 				grp_priv, ctx_idx, rank);
 			crt_li_destroy(li);
 			rc = 0;
 		} else {
-			D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
-				" grp_priv %p ctx_idx %d, rank: %d, rlink %p\n",
+			D_DEBUG(DB_TRACE,
+				"Filling in URI in lookup table.  grp_priv %p ctx_idx %d, rank: "
+				"%d, rlink %p",
 				grp_priv, ctx_idx, rank, &li->li_link);
 		}
 		D_GOTO(out, rc);
@@ -681,13 +677,13 @@ grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 		rc = grp_li_uri_set(li, tag, uri);
 
 		if (rc != DER_SUCCESS) {
-			D_ERROR("Failed to set uri for %d:%d, uri=%s\n",
-				li->li_rank, tag, uri);
+			D_ERROR("Failed to set uri for %d:%d, uri=%s", li->li_rank, tag, uri);
 			rc = -DER_NOMEM;
 		}
 
-		D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
-			"grp_priv %p ctx_idx %d, rank: %d, tag: %u rlink %p\n",
+		D_DEBUG(DB_TRACE,
+			"Filling in URI in lookup table. grp_priv %p ctx_idx %d, rank: %d, tag: %u "
+			"rlink %p",
 			grp_priv, ctx_idx, rank, tag, &li->li_link);
 	}
 	D_MUTEX_UNLOCK(&li->li_mutex);
@@ -718,8 +714,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 	int			 i;
 
 	if (tag >= CRT_SRV_CONTEXT_NUM) {
-		D_ERROR("tag %d out of range [0, %d].\n",
-			tag, CRT_SRV_CONTEXT_NUM - 1);
+		D_ERROR("tag %d out of range [0, %d]", tag, CRT_SRV_CONTEXT_NUM - 1);
 		return -DER_INVAL;
 	}
 
@@ -735,7 +730,7 @@ crt_grp_lc_uri_insert(struct crt_grp_priv *passed_grp_priv,
 		rc = grp_lc_uri_insert_internal_locked(grp_priv, i, rank,
 						       tag, uri);
 		if (rc != 0) {
-			D_ERROR("Insertion failed, " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "Insertion failed");
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -765,8 +760,8 @@ crt_grp_lc_addr_invalid(d_list_t *rlink, void *arg)
 			continue;
 		rc = crt_hg_addr_free(&ctx->cc_hg_ctx, li->li_tag_addr[i]);
 		if (rc != 0) {
-			D_ERROR("crt_hg_addr_free failed, ctx_idx %d, tag %d, "
-				"rc: %d.\n", ctx->cc_idx, i, rc);
+			D_ERROR("crt_hg_addr_free failed, ctx_idx %d, tag %d, rc: %d", ctx->cc_idx,
+				i, rc);
 			D_GOTO(out, rc);
 		}
 		li->li_tag_addr[i] = NULL;
@@ -795,8 +790,7 @@ crt_grp_lc_ctx_invalid(struct crt_grp_priv *grp_priv, struct crt_context *ctx)
 	rc = d_hash_table_traverse(&grp_priv->gp_lookup_cache[ctx_idx],
 				   crt_grp_lc_addr_invalid, ctx);
 	if (rc != 0)
-		D_ERROR("d_hash_table_traverse failed, ctx_idx %d, rc: %d.\n",
-			ctx_idx, rc);
+		D_ERROR("d_hash_table_traverse failed, ctx_idx %d, rc: %d", ctx_idx, rc);
 
 	return rc;
 }
@@ -823,8 +817,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 		crt_swim_disable_all();
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
-				"ctx_idx: %d, rc: %d.\n",
+			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, ctx_idx: %d, rc: %d",
 				grp_priv->gp_pub.cg_grpid, ctx->cc_idx, rc);
 			D_GOTO(out, rc);
 		}
@@ -837,8 +830,7 @@ crt_grp_ctx_invalid(struct crt_context *ctx, bool locked)
 
 		rc = crt_grp_lc_ctx_invalid(grp_priv, ctx);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, "
-				"ctx_idx: %d, rc: %d.\n",
+			D_ERROR("crt_grp_lc_ctx_invalid failed, group %s, ctx_idx: %d, rc: %d",
 				grp_priv->gp_pub.cg_grpid, ctx->cc_idx, rc);
 			break;
 		}
@@ -893,13 +885,13 @@ crt_grp_lc_addr_insert(struct crt_grp_priv *passed_grp_priv,
 	if (li->li_tag_addr[tag] == NULL) {
 		li->li_tag_addr[tag] = *hg_addr;
 	} else {
-		D_INFO("NA address already exits. "
-		       " grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p\n",
-		       grp_priv, ctx_idx, rank, tag, &li->li_link);
+		D_INFO(
+		    "NA address already exits.  grp_priv %p ctx_idx %d, rank: %d, tag %d, rlink %p",
+		    grp_priv, ctx_idx, rank, tag, &li->li_link);
 		rc = crt_hg_addr_free(&crt_ctx->cc_hg_ctx, *hg_addr);
 		if (rc != 0) {
-			D_ERROR("crt_hg_addr_free failed, crt_idx %d, *hg_addr"
-				" 0x%p, rc %d\n", ctx_idx, *hg_addr, rc);
+			D_ERROR("crt_hg_addr_free failed, crt_idx %d, *hg_addr 0x%p, rc %d",
+				ctx_idx, *hg_addr, rc);
 			D_GOTO(out, rc);
 		}
 		*hg_addr = li->li_tag_addr[tag];
@@ -971,7 +963,7 @@ crt_grp_lc_lookup(struct crt_grp_priv *grp_priv, int ctx_idx,
 				  rlink);
 		D_GOTO(out, 0);
 	} else {
-		D_DEBUG(DB_ALL, "Entry for rank=%d not found\n", rank);
+		D_DEBUG(DB_ALL, "Entry for rank=%d not found", rank);
 	}
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
@@ -1120,8 +1112,7 @@ crt_grp_priv_destroy(struct crt_grp_priv *grp_priv)
 
 			rc = crt_grp_ctx_invalid(ctx, true);
 			if (rc != 0) {
-				D_ERROR("crt_grp_ctx_invalid failed, rc: %d.\n",
-					rc);
+				D_ERROR("crt_grp_ctx_invalid failed, rc: %d", rc);
 			}
 		}
 	}
@@ -1213,7 +1204,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	struct crt_grp_gdata	*grp_gdata;
 
 	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized yet.\n");
+		D_ERROR("CaRT not initialized yet");
 		goto out;
 	}
 
@@ -1226,7 +1217,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	}
 
 	if (crt_validate_grpid(grp_id) != 0) {
-		D_ERROR("grp_id contains invalid characters or is too long\n");
+		D_ERROR("grp_id contains invalid characters or is too long");
 		goto out;
 	}
 
@@ -1240,7 +1231,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
-		D_DEBUG(DB_TRACE, "group non-exist (%s).\n", grp_id);
+		D_DEBUG(DB_TRACE, "group non-exist (%s)", grp_id);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
 out:
@@ -1255,12 +1246,12 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 	int			 rc = 0;
 
 	if (rank == NULL) {
-		D_ERROR("invalid parameter of NULL rank pointer.\n");
+		D_ERROR("invalid parameter of NULL rank pointer");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_gdata = crt_gdata.cg_grp;
@@ -1270,7 +1261,7 @@ crt_group_rank(crt_group_t *grp, d_rank_t *rank)
 	*rank = grp_priv->gp_self;
 
 	if (*rank == CRT_NO_RANK) {
-		D_ERROR("Self rank was not set yet\n");
+		D_ERROR("Self rank was not set yet");
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -1287,17 +1278,17 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized yet.\n");
+		D_ERROR("CaRT not initialized yet");
 		return -DER_UNINIT;
 	}
 
 	if (subgrp == NULL) {
-		D_ERROR("Invalid argument: subgrp is NULL.\n");
+		D_ERROR("Invalid argument: subgrp is NULL");
 		return -DER_INVAL;
 	}
 
 	if (rank_out == NULL) {
-		D_ERROR("Invalid argument: rank_out is NULL.\n");
+		D_ERROR("Invalid argument: rank_out is NULL");
 		return -DER_INVAL;
 	}
 
@@ -1312,7 +1303,7 @@ crt_group_rank_p2s(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	rlink = d_hash_rec_find(&grp_priv->gp_p2s_table,
 				(void *)&rank_in, sizeof(rank_in));
 	if (!rlink) {
-		D_ERROR("Rank=%d not part of the group\n", rank_in);
+		D_ERROR("Rank=%d not part of the group", rank_in);
 		D_GOTO(unlock, rc = -DER_OOG);
 	}
 
@@ -1334,17 +1325,17 @@ crt_group_rank_s2p(crt_group_t *subgrp, d_rank_t rank_in, d_rank_t *rank_out)
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
-		D_ERROR("CaRT not initialized yet.\n");
+		D_ERROR("CaRT not initialized yet");
 		return -DER_UNINIT;
 	}
 
 	if (subgrp == NULL) {
-		D_ERROR("Invalid argument: subgrp is NULL.\n");
+		D_ERROR("Invalid argument: subgrp is NULL");
 		return -DER_INVAL;
 	}
 
 	if (rank_out == NULL) {
-		D_ERROR("Invalid argument: rank_out is NULL.\n");
+		D_ERROR("Invalid argument: rank_out is NULL");
 		return -DER_INVAL;
 	}
 
@@ -1364,12 +1355,12 @@ crt_group_size(crt_group_t *grp, uint32_t *size)
 	int			 rc = 0;
 
 	if (size == NULL) {
-		D_ERROR("invalid parameter of NULL size pointer.\n");
+		D_ERROR("invalid parameter of NULL size pointer");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
@@ -1408,12 +1399,12 @@ crt_group_version(crt_group_t *grp, uint32_t *version)
 	int			 rc = 0;
 
 	if (version == NULL) {
-		D_ERROR("invalid parameter: version pointer is NULL.\n");
+		D_ERROR("invalid parameter: version pointer is NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	grp_priv = crt_grp_pub2priv(grp);
@@ -1434,13 +1425,13 @@ crt_group_version_set(crt_group_t *grp, uint32_t version)
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!grp_priv) {
-		D_ERROR("Invalid group\n");
+		D_ERROR("Invalid group");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1469,7 +1460,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = crt_grp_priv_create(&grp_priv, pri_grpid, true);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_priv_create failed");
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_priv != NULL);
@@ -1484,7 +1475,7 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "grp_priv_init_membs() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -1492,17 +1483,16 @@ crt_primary_grp_init(crt_group_id_t grpid)
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_lc_create() failed");
 		D_GOTO(out, rc);
 	}
 
 out:
 	if (rc == 0) {
-		D_DEBUG(DB_TRACE, "primary group %s, gp_size %d, gp_self %d.\n",
-			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size,
-			grp_priv->gp_self);
+		D_DEBUG(DB_TRACE, "primary group %s, gp_size %d, gp_self %d",
+			grp_priv->gp_pub.cg_grpid, grp_priv->gp_size, grp_priv->gp_self);
 	} else {
-		D_ERROR("failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 		if (grp_priv != NULL)
 			crt_grp_priv_decref(grp_priv);
 	}
@@ -1543,15 +1533,14 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	ul_out = crt_reply_get(rpc_req);
 
 	if (!crt_is_service()) {
-		D_ERROR("crt_hdlr_uri_lookup invalid on client.\n");
+		D_ERROR("crt_hdlr_uri_lookup invalid on client");
 		rc = -DER_PROTO;
 	}
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	if (strncmp(ul_in->ul_grp_id, default_grp_priv->gp_pub.cg_grpid,
 		    CRT_GROUP_ID_MAX_LEN) == 0) {
 		grp_priv = default_grp_priv;
-		D_DEBUG(DB_TRACE, "ul_grp_id %s matches with gg_primary_grp"
-			"%s.\n", ul_in->ul_grp_id,
+		D_DEBUG(DB_TRACE, "ul_grp_id %s matches with gg_primary_grp%s", ul_in->ul_grp_id,
 			default_grp_priv->gp_pub.cg_grpid);
 	} else {
 		/* handle subgroup lookups */
@@ -1567,8 +1556,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	}
 
 	if (rc != 0 || grp_priv == NULL) {
-		D_ERROR("Could not find the group %s specified\n",
-			ul_in->ul_grp_id);
+		D_ERROR("Could not find the group %s specified", ul_in->ul_grp_id);
 		ul_out->ul_uri = NULL;
 		D_GOTO(out, rc);
 	}
@@ -1576,10 +1564,8 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	crt_ctx = rpc_req->cr_ctx;
 
 	if (unlikely(ul_in->ul_tag >= CRT_SRV_CONTEXT_NUM)) {
-		D_WARN("Looking up invalid tag %d of rank %d "
-		       "in group %s (%d)\n",
-		       ul_in->ul_tag, ul_in->ul_rank,
-		       grp_priv->gp_pub.cg_grpid, grp_priv->gp_size);
+		D_WARN("Looking up invalid tag %d of rank %d in group %s (%d)", ul_in->ul_tag,
+		       ul_in->ul_rank, grp_priv->gp_pub.cg_grpid, grp_priv->gp_size);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1595,8 +1581,7 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	if (g_rank == grp_priv_primary->gp_self) {
 		rc = crt_self_uri_get(ul_in->ul_tag, &tmp_uri);
 		if (rc != DER_SUCCESS)
-			D_ERROR("crt_self_uri_get(tag: %d) failed, "
-				"rc %d\n", ul_in->ul_tag, rc);
+			D_ERROR("crt_self_uri_get(tag: %d) failed, rc %d", ul_in->ul_tag, rc);
 		ul_out->ul_uri = tmp_uri;
 		ul_out->ul_tag = ul_in->ul_tag;
 		if (crt_gdata.cg_use_sensors)
@@ -1636,8 +1621,7 @@ out:
 	ul_out->ul_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x.\n",
-			rc, rpc_req->cr_opc);
+		D_ERROR("crt_reply_send failed, rc: %d, opc: %#x", rc, rpc_req->cr_opc);
 	D_FREE(tmp_uri);
 }
 
@@ -1648,27 +1632,26 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 	int			 rc = 0;
 
 	if (srv_grpid == NULL) {
-		D_ERROR("invalid parameter, NULL srv_grpid.\n");
+		D_ERROR("invalid parameter, NULL srv_grpid");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_validate_grpid(srv_grpid) != 0) {
-		D_ERROR("srv_grpid contains invalid characters "
-			"or is too long\n");
+		D_ERROR("srv_grpid contains invalid characters or is too long");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (attached_grp == NULL) {
-		D_ERROR("invalid parameter, NULL attached_grp.\n");
+		D_ERROR("invalid parameter, NULL attached_grp");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (crt_gdata.cg_grp_inited == 0) {
-		D_ERROR("crt group not initialized.\n");
+		D_ERROR("crt group not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	rc = crt_group_view_create(srv_grpid, attached_grp);
 	if (rc != 0) {
-		D_ERROR("crt_group_view_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_view_create() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1676,13 +1659,13 @@ crt_group_attach(crt_group_id_t srv_grpid, crt_group_t **attached_grp)
 				struct crt_grp_priv, gp_pub);
 	rc = crt_grp_config_load(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_config_load() failed; rc=%d\n", rc);
+		D_ERROR("crt_grp_config_load() failed; rc=%d", rc);
 		crt_group_view_destroy(*attached_grp);
 	}
 
 out:
 	if (rc != 0)
-		D_ERROR("crt_group_attach failed, rc: %d.\n", rc);
+		D_ERROR("crt_group_attach failed, rc: %d", rc);
 	return rc;
 }
 
@@ -1693,11 +1676,11 @@ crt_group_detach(crt_group_t *attached_grp)
 	int			 rc = 0;
 
 	if (attached_grp == NULL) {
-		D_ERROR("invalid parameter, NULL attached_grp.\n");
+		D_ERROR("invalid parameter, NULL attached_grp");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_gdata.cg_grp_inited == 0) {
-		D_ERROR("crt group not initialized.\n");
+		D_ERROR("crt group not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
@@ -1786,7 +1769,7 @@ open_tmp_attach_info_file(char **filename)
 	mode_t		 old_mode;
 
 	if (filename == NULL) {
-		D_ERROR("filename can't be NULL.\n");
+		D_ERROR("filename can't be NULL");
 		return NULL;
 	}
 
@@ -1804,15 +1787,13 @@ open_tmp_attach_info_file(char **filename)
 	umask(old_mode);
 
 	if (tmp_fd == -1) {
-		D_ERROR("mkstemp() failed on %s, error: %s.\n",
-			*filename, strerror(errno));
+		D_ERROR("mkstemp() failed on %s, error: %s", *filename, strerror(errno));
 		return NULL;
 	}
 
 	tmp_file = fdopen(tmp_fd, "w");
 	if (tmp_file == NULL) {
-		D_ERROR("fdopen() failed on %s, error: %s\n",
-			*filename, strerror(errno));
+		D_ERROR("fdopen() failed on %s, error: %s", *filename, strerror(errno));
 		close(tmp_fd);
 	}
 
@@ -1826,23 +1807,23 @@ crt_group_config_path_set(const char *path)
 	int rc;
 
 	if (path == NULL) {
-		D_ERROR("path can't be NULL\n");
+		D_ERROR("path can't be NULL");
 		return -DER_INVAL;
 	}
 
 	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
-		D_ERROR("specified path must be fewer than %d characters\n", CRT_MAX_ATTACH_PREFIX);
+		D_ERROR("specified path must be fewer than %d characters", CRT_MAX_ATTACH_PREFIX);
 		return -DER_INVAL;
 	}
 
 	rc = stat(path, &buf);
 	if (rc != 0) {
-		D_ERROR("bad path specified: %s\n", path);
+		D_ERROR("bad path specified: %s", path);
 		return d_errno2der(errno);
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
-		D_ERROR("not a directory: %s\n", path);
+		D_ERROR("not a directory: %s", path);
 		return -DER_NOTDIR;
 	}
 
@@ -1856,21 +1837,21 @@ crt_nr_secondary_remote_tags_set(int idx, int num_tags)
 {
 	struct crt_prov_gdata *prov_data;
 
-	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d\n", idx, num_tags);
+	D_DEBUG(DB_ALL, "secondary_idx=%d num_tags=%d", idx, num_tags);
 
 	if (idx != 0) {
-		D_ERROR("Only idx=0 is currently supported\n");
+		D_ERROR("Only idx=0 is currently supported");
 		return -DER_NONEXIST;
 	}
 
 	if ((crt_gdata.cg_prov_gdata_secondary == NULL) ||
 	    (idx >= crt_gdata.cg_num_secondary_provs)) {
-		D_ERROR("Secondary providers not initialized\n");
+		D_ERROR("Secondary providers not initialized");
 		return -DER_NONEXIST;
 	}
 
 	if (num_tags <= 0) {
-		D_ERROR("Invalid number of tags: %d\n", num_tags);
+		D_ERROR("Invalid number of tags: %d", num_tags);
 		return -DER_INVAL;
 	}
 
@@ -1916,13 +1897,13 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	int			 rc = 0;
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!crt_is_service() || !grp_priv->gp_primary) {
-		D_ERROR("Can only save config info for primary service grp.\n");
+		D_ERROR("Can only save config info for primary service grp");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1937,20 +1918,18 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	fp = open_tmp_attach_info_file(&tmp_name);
 	if (fp == NULL) {
-		D_ERROR("cannot create temp file.\n");
+		D_ERROR("cannot create temp file");
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	D_ASSERT(tmp_name != NULL);
 	rc = fprintf(fp, "%s %s\n", "name", grpid);
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
+		D_ERROR("write to file %s failed (%s)", tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
+		D_ERROR("write to file %s failed (%s)", tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (forall)
@@ -1958,16 +1937,14 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 	else
 		rc = fprintf(fp, "self\n");
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
+		D_ERROR("write to file %s failed (%s)", tmp_name, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
 	if (!forall || grp_priv->gp_size == 1) {
 		rc = fprintf(fp, "%d %s\n", rank, addr);
 		if (rc < 0) {
-			D_ERROR("write to file %s failed (%s).\n",
-				tmp_name, strerror(errno));
+			D_ERROR("write to file %s failed (%s)", tmp_name, strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 		D_GOTO(done, rc);
@@ -1985,8 +1962,7 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 		rc = crt_rank_uri_get(grp, rank, 0, &uri);
 		if (rc != 0) {
-			D_ERROR("crt_rank_uri_get(%s, %d) failed "
-				"rc: %d.\n", grpid, rank, rc);
+			D_ERROR("crt_rank_uri_get(%s, %d) failed rc: %d", grpid, rank, rc);
 			D_GOTO(out, rc);
 		}
 
@@ -1997,16 +1973,14 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		D_FREE(uri);
 
 		if (rc < 0) {
-			D_ERROR("write to file %s failed (%s).\n",
-				tmp_name, strerror(errno));
+			D_ERROR("write to file %s failed (%s)", tmp_name, strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 	}
 
 done:
 	if (fclose(fp) != 0) {
-		D_ERROR("file %s closing failed (%s).\n",
-			tmp_name, strerror(errno));
+		D_ERROR("file %s closing failed (%s)", tmp_name, strerror(errno));
 		fp = NULL;
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
@@ -2014,12 +1988,11 @@ done:
 
 	rc = rename(tmp_name, filename);
 	if (rc != 0) {
-		D_ERROR("Failed to rename %s to %s (%s).\n",
-			tmp_name, filename, strerror(errno));
+		D_ERROR("Failed to rename %s to %s (%s)", tmp_name, filename, strerror(errno));
 		rc = d_errno2der(errno);
 	}
 
-	D_DEBUG(DB_ALL, "Group config saved in %s\n", filename);
+	D_DEBUG(DB_ALL, "Group config saved in %s", filename);
 out:
 	if (grp_priv && locked)
 		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -2045,28 +2018,26 @@ crt_group_config_remove(crt_group_t *grp)
 	int			 rc;
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!crt_is_service() || !grp_priv->gp_primary) {
-		D_ERROR("Can only remove config info for primary service "
-			"grp.\n");
+		D_ERROR("Can only remove config info for primary service grp");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	filename = crt_grp_attach_info_filename(grp_priv);
 	if (filename == NULL) {
-		D_ERROR("crt_grp_attach_info_filename() failed.\n");
+		D_ERROR("crt_grp_attach_info_filename() failed");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = unlink(filename);
 	if (rc != 0) {
 		rc = d_errno2der(errno);
-		D_ERROR("Failed to remove %s (%s).\n",
-			filename, strerror(errno));
+		D_ERROR("Failed to remove %s (%s)", filename, strerror(errno));
 	}
 
 out:
@@ -2102,8 +2073,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 
 	fp = fopen(filename, "r");
 	if (fp == NULL) {
-		D_ERROR("open file %s failed (%s).\n",
-			filename, strerror(errno));
+		D_ERROR("open file %s failed (%s)", filename, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
@@ -2114,13 +2084,11 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	snprintf(fmt, 64, "%%*s%%%ds", CRT_GROUP_ID_MAX_LEN);
 	rc = fscanf(fp, fmt, grpname);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
+		D_ERROR("read from file %s failed (%s)", filename, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN) != 0) {
-		D_ERROR("grpname %s in file mismatch with grpid %s.\n",
-			grpname, grpid);
+		D_ERROR("grpname %s in file mismatch with grpid %s", grpname, grpid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2128,15 +2096,13 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 
 	rc = fscanf(fp, "%*s%d", &grp_size);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
+		D_ERROR("read from file %s failed (%s)", filename, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
 	rc = fscanf(fp, "%4s", all_or_self);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
+		D_ERROR("read from file %s failed (%s)", filename, strerror(errno));
 		D_GOTO(out, rc = d_errno2der(errno));
 	}
 
@@ -2158,8 +2124,7 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 		rc = crt_group_primary_add_internal(grp_priv, rank, 0,
 						    addr_str);
 		if (rc != 0) {
-			D_ERROR("crt_group_node_add_internal() failed;"
-				" rank=%d uri='%s' rc=%d\n",
+			D_ERROR("crt_group_node_add_internal() failed; rank=%d uri='%s' rc=%d",
 				rank, addr_str, rc);
 			break;
 		}
@@ -2180,8 +2145,7 @@ out:
 	D_FREE(addr_str);
 
 	if (rc != 0)
-		D_ERROR("crt_grp_config_psr_load (grpid %s) failed, rc: %d.\n",
-			grpid, rc);
+		D_ERROR("crt_grp_config_psr_load (grpid %s) failed, rc: %d", grpid, rc);
 
 	return rc;
 }
@@ -2192,17 +2156,17 @@ crt_grp_config_load(struct crt_grp_priv *grp_priv)
 	int	rc;
 
 	if (!crt_initialized()) {
-		D_ERROR("CRT not initialized.\n");
+		D_ERROR("CRT not initialized");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (grp_priv == NULL) {
-		D_ERROR("Invalid NULL grp_priv pointer.\n");
+		D_ERROR("Invalid NULL grp_priv pointer");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_grp_config_psr_load(grp_priv, -1);
 	if (rc != 0)
-		D_ERROR("crt_grp_config_load failed, rc: %d.\n", rc);
+		D_ERROR("crt_grp_config_load failed, rc: %d", rc);
 
 out:
 	return rc;
@@ -2320,8 +2284,7 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 	while (1) {
 		psr_rank = (psr_rank + 1) % grp_priv->gp_size;
 		if (psr_rank == grp_priv->gp_psr_rank) {
-			D_ERROR("group %s no more PSR candidate.\n",
-				grp_priv->gp_pub.cg_grpid);
+			D_ERROR("group %s no more PSR candidate", grp_priv->gp_pub.cg_grpid);
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
@@ -2335,8 +2298,7 @@ crt_grp_psr_reload(struct crt_grp_priv *grp_priv)
 
 	rc = crt_grp_config_psr_load(grp_priv, psr_rank);
 	if (rc != 0) {
-		D_ERROR("crt_grp_config_psr_load(grp %s, psr_rank %d), "
-			"failed, rc: %d.\n",
+		D_ERROR("crt_grp_config_psr_load(grp %s, psr_rank %d), failed, rc: %d",
 			grp_priv->gp_pub.cg_grpid, psr_rank, rc);
 	}
 out:
@@ -2360,7 +2322,7 @@ grp_get_free_index(struct crt_grp_priv *priv)
 				      struct free_index, fi_link);
 
 	if (!free_index) {
-		D_DEBUG(DB_ALL, "No more free indices left\n");
+		D_DEBUG(DB_ALL, "No more free indices left");
 		return -DER_NOSPACE;
 	}
 
@@ -2481,7 +2443,7 @@ grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t inc
 	if (grp_priv->gp_primary && !grp_priv->gp_view) {
 		rc = crt_swim_rank_add(grp_priv, rank, incarnation);
 		if (rc) {
-			D_ERROR("crt_swim_rank_add() failed: rc=%d\n", rc);
+			D_ERROR("crt_swim_rank_add() failed: rc=%d", rc);
 			D_GOTO(out, 0);
 		} else {
 			membs->rl_ranks[index] = rank;
@@ -2514,14 +2476,13 @@ crt_group_primary_add_internal(struct crt_grp_priv *grp_priv,
 	int rc;
 
 	if (!grp_priv->gp_primary) {
-		D_ERROR("Only available for primary groups\n");
+		D_ERROR("Only available for primary groups");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_grp_lc_uri_insert(grp_priv, rank, tag, uri);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_uri_insert() failed, " DF_RC "\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_lc_uri_insert() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2550,27 +2511,25 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 
 	default_grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
-	D_INFO("Setting self rank to %u and minimum group version to %u\n", rank,
-	       group_version_min);
+	D_INFO("Setting self rank to %u and minimum group version to %u", rank, group_version_min);
 
 	if (!crt_is_service()) {
-		D_WARN("Setting self rank is not supported on client\n");
+		D_WARN("Setting self rank is not supported on client");
 		return 0;
 	}
 
 	if (rank == CRT_NO_RANK) {
-		D_ERROR("Self rank should not be %u\n", CRT_NO_RANK);
+		D_ERROR("Self rank should not be %u", CRT_NO_RANK);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (group_version_min == 0) {
-		D_ERROR("Minimum group version should not be zero\n");
+		D_ERROR("Minimum group version should not be zero");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (default_grp_priv->gp_self != CRT_NO_RANK) {
-		D_ERROR("Self rank was already set to %d\n",
-			default_grp_priv->gp_self);
+		D_ERROR("Self rank was already set to %d", default_grp_priv->gp_self);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2581,7 +2540,7 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 	D_RWLOCK_UNLOCK(&default_grp_priv->gp_rwlock);
 
 	if (rc != 0) {
-		D_ERROR("grp_add_to_membs_list() failed; rc=%d\n", rc);
+		D_ERROR("grp_add_to_membs_list() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2595,15 +2554,14 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 		size = CRT_ADDR_STR_MAX_LEN;
 		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
-			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);
+			D_ERROR("crt_hg_get_addr() failed; rc=%d", rc);
 			D_GOTO(unlock, rc);
 		}
 
 		rc = crt_grp_lc_uri_insert(default_grp_priv, rank, ctx->cc_idx,
 					   uri_addr);
 		if (rc != 0) {
-			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d\n",
-				rc);
+			D_ERROR("crt_grp_lc_uri_insert() failed; rc=%d", rc);
 			D_GOTO(unlock, rc);
 		}
 	}
@@ -2623,14 +2581,14 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 	int			rc = 0;
 
 	if (uri_str == NULL) {
-		D_ERROR("Passed uri_str is NULL\n");
+		D_ERROR("Passed uri_str is NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	grp_priv = crt_grp_pub2priv(group);
 
 	if (!grp_priv->gp_primary) {
-		D_ERROR("Only available for primary groups\n");
+		D_ERROR("Only available for primary groups");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2639,7 +2597,7 @@ crt_rank_uri_get(crt_group_t *group, d_rank_t rank, int tag, char **uri_str)
 
 	crt_grp_lc_lookup(grp_priv, 0, rank, tag, &uri, &hg_addr);
 	if (uri == NULL) {
-		D_DEBUG(DB_ALL, "uri for %d:%d not found\n", rank, tag);
+		D_DEBUG(DB_ALL, "uri for %d:%d not found", rank, tag);
 		D_GOTO(out, rc = -DER_OOG);
 	}
 
@@ -2664,7 +2622,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rlink = d_hash_rec_find(&grp_priv->gp_uri_lookup_cache,
 					(void *)&rank, sizeof(rank));
 		if (!rlink) {
-			D_ERROR("Rank %d is not part of the group\n", rank);
+			D_ERROR("Rank %d is not part of the group", rank);
 			D_GOTO(out, rc = -DER_OOG);
 		}
 
@@ -2681,7 +2639,7 @@ crt_group_rank_remove_internal(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		rlink = d_hash_rec_find(&grp_priv->gp_s2p_table,
 					(void *)&rank, sizeof(rank));
 		if (!rlink) {
-			D_ERROR("Rank %d is not part of the group\n", rank);
+			D_ERROR("Rank %d is not part of the group", rank);
 			D_GOTO(out, rc = -DER_OOG);
 		}
 
@@ -2753,7 +2711,7 @@ crt_grp_remove_from_secondaries(struct crt_grp_priv *grp_priv,
 
 		rc = crt_group_rank_remove_internal(sec_priv, rm->rm_value);
 		if (rc != 0) {
-			D_ERROR("crt_group_rank_remove(%s,%d) failed; rc=%d\n",
+			D_ERROR("crt_group_rank_remove(%s,%d) failed; rc=%d",
 				sec_priv->gp_pub.cg_grpid, rm->rm_value, rc);
 		}
 
@@ -2799,14 +2757,14 @@ out:
 int
 crt_group_info_get(crt_group_t *group, d_iov_t *grp_info)
 {
-	D_ERROR("API is currently not supported\n");
+	D_ERROR("API is currently not supported");
 	return -DER_NOSYS;
 }
 
 int
 crt_group_info_set(d_iov_t *grp_info)
 {
-	D_ERROR("API is currently not supported\n");
+	D_ERROR("API is currently not supported");
 	return -DER_NOSYS;
 }
 
@@ -2836,7 +2794,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 	int			rc = 0;
 
 	if (ret_grp == NULL) {
-		D_ERROR("grp ptr is NULL\n");
+		D_ERROR("grp ptr is NULL");
 		return -DER_INVAL;
 	}
 
@@ -2844,8 +2802,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
-			srv_grpid, DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_priv_create(%s) failed", srv_grpid);
 		D_GOTO(out, rc);
 	}
 
@@ -2854,7 +2811,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "grp_priv_init_membs() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2862,7 +2819,7 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = crt_grp_lc_create(grp_priv);
 	if (rc != 0) {
-		D_ERROR("crt_grp_lc_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_lc_create() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2887,7 +2844,7 @@ crt_group_view_destroy(crt_group_t *grp)
 	int			rc = 0;
 
 	if (!grp) {
-		D_ERROR("Null grp handle passed\n");
+		D_ERROR("Null grp handle passed");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2906,7 +2863,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 	int			rc = 0;
 
 	if (!grp) {
-		D_ERROR("Passed grp is NULL\n");
+		D_ERROR("Passed grp is NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2914,7 +2871,7 @@ crt_group_psr_set(crt_group_t *grp, d_rank_t rank)
 
 	rc = crt_rank_uri_get(grp, rank, 0, &uri);
 	if (rc != 0) {
-		D_ERROR("crt_rank_uri_get() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_rank_uri_get() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2934,27 +2891,25 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 	int			i;
 
 	if (ret_grp == NULL) {
-		D_ERROR("grp ptr is NULL\n");
+		D_ERROR("grp ptr is NULL");
 		return -DER_INVAL;
 	}
 
 	grp_priv_prim = crt_grp_pub2priv(primary_grp);
 
 	if (grp_priv_prim == NULL) {
-		D_ERROR("Invalid primary group\n");
+		D_ERROR("Invalid primary group");
 		return -DER_INVAL;
 	}
 
 	if (!grp_priv_prim->gp_primary) {
-		D_ERROR("Passed group %s is not primary\n",
-			primary_grp->cg_grpid);
+		D_ERROR("Passed group %s is not primary", primary_grp->cg_grpid);
 		return -DER_INVAL;
 	}
 
 	rc = crt_grp_priv_create(&grp_priv, grp_name, false);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
-			grp_name, DP_RC(rc));
+		DL_ERROR(rc, "crt_grp_priv_create(%s) failed", grp_name);
 		D_GOTO(out, rc);
 	}
 
@@ -2963,7 +2918,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	rc = grp_priv_init_membs(grp_priv, grp_priv->gp_size);
 	if (rc != 0) {
-		D_ERROR("grp_priv_init_membs() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "grp_priv_init_membs() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2973,7 +2928,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 					 NULL, &rank_mapping_ops,
 					 &grp_priv->gp_p2s_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "d_hash_table_create() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2982,7 +2937,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 					 NULL, &rank_mapping_ops,
 					 &grp_priv->gp_s2p_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "d_hash_table_create() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -3017,8 +2972,7 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 		rc = crt_group_secondary_rank_add(*ret_grp, i,
 						  ranks->rl_ranks[i]);
 		if (rc != 0) {
-			D_ERROR("Failed to add rank %d : %d to the group\n",
-				i, ranks->rl_ranks[i]);
+			D_ERROR("Failed to add rank %d : %d to the group", i, ranks->rl_ranks[i]);
 			D_GOTO(out, rc);
 		}
 	}
@@ -3042,7 +2996,7 @@ crt_group_secondary_destroy(crt_group_t *grp)
 	int			rc = 0;
 
 	if (!grp) {
-		D_ERROR("Null grp handle passed\n");
+		D_ERROR("Null grp handle passed");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -3111,8 +3065,8 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 	 */
 	D_ASSERT(grp_priv->gp_priv_prim->gp_self != CRT_NO_RANK);
 	if (prim_rank == grp_priv->gp_priv_prim->gp_self) {
-		D_DEBUG(DB_ALL, "Setting rank %d as self rank for grp %s\n",
-			sec_rank, grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_ALL, "Setting rank %d as self rank for grp %s", sec_rank,
+			grp_priv->gp_pub.cg_grpid);
 		grp_priv->gp_self = sec_rank;
 	}
 
@@ -3120,8 +3074,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 	rlink = d_hash_rec_find(&grp_priv->gp_s2p_table,
 				(void *)&sec_rank, sizeof(sec_rank));
 	if (rlink != NULL) {
-		D_ERROR("Entry for secondary_rank = %d already exists\n",
-			sec_rank);
+		D_ERROR("Entry for secondary_rank = %d already exists", sec_rank);
 		d_hash_rec_decref(&grp_priv->gp_s2p_table, rlink);
 		D_GOTO(out, rc = -DER_EXIST);
 	}
@@ -3141,7 +3094,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 			       &sec_rank, sizeof(sec_rank),
 			       &rm_s2p->rm_link, true);
 	if (rc != 0) {
-		D_ERROR("Failed to add entry: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to add entry");
 		crt_rm_destroy(rm_p2s);
 		crt_rm_destroy(rm_s2p);
 		D_GOTO(out, rc);
@@ -3151,7 +3104,7 @@ crt_group_secondary_rank_add_internal(struct crt_grp_priv *grp_priv,
 			       &prim_rank, sizeof(prim_rank),
 			       &rm_p2s->rm_link, true);
 	if (rc != 0) {
-		D_ERROR("Failed to add entry: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to add entry");
 		crt_rm_destroy(rm_p2s);
 		d_hash_rec_delete_at(&grp_priv->gp_s2p_table, &rm_s2p->rm_link);
 		D_GOTO(out, rc);
@@ -3179,12 +3132,12 @@ crt_group_secondary_rank_add(crt_group_t *grp, d_rank_t sec_rank,
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (grp_priv->gp_primary) {
-		D_ERROR("Passed group is a primary group\n");
+		D_ERROR("Passed group is a primary group");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (grp_priv->gp_priv_prim == NULL) {
-		D_ERROR("Associated primary group not found\n");
+		D_ERROR("Associated primary group not found");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -3206,7 +3159,7 @@ int crt_group_primary_rank_add(crt_context_t ctx, crt_group_t *grp,
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (!grp_priv->gp_primary) {
-		D_ERROR("Passed group is not primary group\n");
+		D_ERROR("Passed group is not primary group");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -3253,7 +3206,7 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs, crt_group_
 
 	if (to_remove == NULL || idx_to_add == NULL ||
 	    (ret_idx_to_check != NULL && idx_to_check == NULL)) {
-		D_ERROR("Failed to allocate lists\n");
+		D_ERROR("Failed to allocate lists");
 		D_GOTO(cleanup, rc = -DER_NOMEM);
 	}
 
@@ -3307,12 +3260,12 @@ crt_group_mod_get(d_rank_list_t *grp_membs, d_rank_list_t *mod_membs, crt_group_
 				to_remove->rl_ranks[to_remove->rl_nr++] = rank;
 		}
 	} else {
-		D_ERROR("Should never get here\n");
+		D_ERROR("Should never get here");
 		D_ASSERT(0);
 	}
 
 	if (n_idx_to_add == 0 && to_remove->rl_nr == 0)
-		D_DEBUG(DB_TRACE, "Membership unchanged\n");
+		D_DEBUG(DB_TRACE, "Membership unchanged");
 
 	*ret_idx_to_add = idx_to_add;
 	*ret_n_idx_to_add = n_idx_to_add;
@@ -3345,7 +3298,7 @@ crt_group_auto_rank_remove(crt_group_t *grp, bool enable)
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (grp_priv == NULL) {
-		D_ERROR("Failed to get grp_priv\n");
+		D_ERROR("Failed to get grp_priv");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -3398,39 +3351,39 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (grp_priv == NULL) {
-		D_ERROR("Failed to get grp_priv\n");
+		D_ERROR("Failed to get grp_priv");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (!grp_priv->gp_primary) {
-		D_ERROR("Passed group is not primary\n");
+		D_ERROR("Passed group is not primary");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (op >= CRT_GROUP_MOD_OP_COUNT) {
-		D_ERROR("Invalid operation %d\n", op);
+		D_ERROR("Invalid operation %d", op);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (ranks == NULL || ranks->rl_nr == 0 || ranks->rl_ranks == NULL) {
-		D_ERROR("Modification has no members\n");
+		D_ERROR("Modification has no members");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (op != CRT_GROUP_MOD_OP_REMOVE && uris == NULL) {
-		D_ERROR("URI array is null\n");
+		D_ERROR("URI array is null");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 
 	if (grp_priv->gp_membs_ver_min == 0) {
-		D_INFO("Minimum group version not known yet\n");
+		D_INFO("Minimum group version not known yet");
 		D_GOTO(unlock, rc = -DER_UNINIT);
 	}
 
 	if (version < grp_priv->gp_membs_ver_min || version <= grp_priv->gp_membs_ver) {
-		D_INFO("Incoming group version too low: incoming=%u min=%u current=%u\n", version,
+		D_INFO("Incoming group version too low: incoming=%u min=%u current=%u", version,
 		       grp_priv->gp_membs_ver_min, grp_priv->gp_membs_ver);
 		D_GOTO(unlock, rc = -DER_ALREADY);
 	}
@@ -3455,8 +3408,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 
 		rc = grp_add_to_membs_list(grp_priv, rank, incarnation);
 		if (rc != 0) {
-			D_ERROR("grp_add_to_memb_list %d failed; rc=%d\n",
-				rank, rc);
+			D_ERROR("grp_add_to_memb_list %d failed; rc=%d", rank, rc);
 			D_GOTO(cleanup, rc);
 		}
 
@@ -3510,8 +3462,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs, d_
 		rank = ranks->rl_ranks[idx];
 		rc = crt_swim_rank_check(grp_priv, rank, incarnation);
 		if (rc != 0)
-			D_ERROR("Failed to check SWIM state of rank %u: "DF_RC"\n", rank,
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to check SWIM state of rank %u", rank);
 	}
 
 	if (!grp_priv->gp_view && n_idx_to_add > 0)
@@ -3530,7 +3481,7 @@ out:
 
 cleanup:
 
-	D_ERROR("Failure when adding node %d, rc=%d\n", ranks->rl_ranks[idx_to_add[i]], rc);
+	D_ERROR("Failure when adding node %d, rc=%d", ranks->rl_ranks[idx_to_add[i]], rc);
 
 	for (k = 0; k < i; k++)
 		crt_group_rank_remove_internal(grp_priv, ranks->rl_ranks[idx_to_add[k]]);
@@ -3562,36 +3513,36 @@ crt_group_secondary_modify(crt_group_t *grp, d_rank_list_t *sec_ranks,
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (grp_priv == NULL) {
-		D_ERROR("Failed to get grp_priv\n");
+		D_ERROR("Failed to get grp_priv");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (grp_priv->gp_primary) {
-		D_ERROR("Passed group is primary\n");
+		D_ERROR("Passed group is primary");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (op >= CRT_GROUP_MOD_OP_COUNT) {
-		D_ERROR("Invalid operation %d\n", op);
+		D_ERROR("Invalid operation %d", op);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (sec_ranks == NULL || sec_ranks->rl_nr == 0 ||
 	    sec_ranks->rl_ranks == NULL) {
-		D_ERROR("Modification has no members\n");
+		D_ERROR("Modification has no members");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (op != CRT_GROUP_MOD_OP_REMOVE) {
 		if (prim_ranks == NULL || prim_ranks->rl_nr == 0 ||
 		    prim_ranks->rl_ranks == NULL) {
-			D_ERROR("Primary rank list is empty\n");
+			D_ERROR("Primary rank list is empty");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
 		if (sec_ranks->rl_nr != prim_ranks->rl_nr) {
-			D_ERROR("Prim list size=%d differs from sec=%d\n",
-				prim_ranks->rl_nr, sec_ranks->rl_nr);
+			D_ERROR("Prim list size=%d differs from sec=%d", prim_ranks->rl_nr,
+				sec_ranks->rl_nr);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
@@ -3635,7 +3586,7 @@ out:
 
 cleanup:
 
-	D_ERROR("Failure when adding rank %d, rc=%d\n", sec_ranks->rl_ranks[idx_to_add[i]], rc);
+	D_ERROR("Failure when adding rank %d, rc=%d", sec_ranks->rl_ranks[idx_to_add[i]], rc);
 
 	for (k = 0; k < i; k++)
 		crt_group_rank_remove_internal(grp_priv, sec_ranks->rl_ranks[idx_to_add[k]]);
@@ -3659,23 +3610,23 @@ crt_group_psrs_set(crt_group_t *grp, d_rank_list_t *rank_list)
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (grp_priv == NULL) {
-		D_ERROR("Failed to lookup grp\n");
+		D_ERROR("Failed to lookup grp");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (rank_list == NULL) {
-		D_ERROR("Passed rank_list is NULL\n");
+		D_ERROR("Passed rank_list is NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (rank_list->rl_nr == 0) {
-		D_ERROR("Passed 0-sized rank_list\n");
+		D_ERROR("Passed 0-sized rank_list");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = d_rank_list_dup(&copy_rank_list, rank_list);
 	if (rc != 0) {
-		D_ERROR("Failed to copy rank list\n");
+		D_ERROR("Failed to copy rank list");
 		D_GOTO(out, rc);
 	}
 

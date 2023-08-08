@@ -182,7 +182,7 @@ static void *srv_progress(void *data)
 	while (global_srv.shutdown == 0) {
 		rc = crt_progress(*ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress() failed rc=%d\n", rc);
+			D_ERROR("crt_progress() failed rc=%d", rc);
 			break;
 		}
 	}
@@ -237,7 +237,7 @@ static int srv_init(void)
 	rc = pthread_create(&global_srv.progress_thid, NULL,
 			    srv_progress, &global_srv.crt_ctx);
 	if (rc != 0)
-		D_ERROR("progress thread creating failed, rc=%d\n", rc);
+		D_ERROR("progress thread creating failed, rc=%d", rc);
 
 	dbg("my_rank=%u, group_size=%u srv_pid=%d",
 	    global_srv.my_rank, global_srv.grp_size, getpid());

@@ -60,12 +60,11 @@ pl_map_create_inited(struct pool_map *pool_map, struct pl_map_init_attr *mia,
 	}
 
 	if (dict->pd_type == PL_TYPE_UNKNOWN) {
-		D_DEBUG(DB_PL,
-			"Unknown placement map type %d\n", dict->pd_type);
+		D_DEBUG(DB_PL, "Unknown placement map type %d", dict->pd_type);
 		return -EINVAL;
 	}
 
-	D_DEBUG(DB_PL, "Create a %s placement map\n", dict->pd_name);
+	D_DEBUG(DB_PL, "Create a %s placement map", dict->pd_name);
 
 	rc = dict->pd_ops->o_create(pool_map, mia, &map);
 	if (rc != 0)
@@ -281,18 +280,14 @@ obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout)
 {
 	int i;
 
-	D_DEBUG(DB_PL, "dump layout for "DF_OID", ver %d\n",
-		DP_OID(oid), layout->ol_ver);
+	D_DEBUG(DB_PL, "dump layout for " DF_OID ", ver %d", DP_OID(oid), layout->ol_ver);
 
 	for (i = 0; i < layout->ol_nr; i++)
-		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s\n",
-			i, layout->ol_shards[i].po_shard,
-			layout->ol_shards[i].po_target,
+		D_DEBUG(DB_PL, "%d: shard_id %d, tgt_id %d, f_seq %d, %s %s", i,
+			layout->ol_shards[i].po_shard, layout->ol_shards[i].po_target,
 			layout->ol_shards[i].po_fseq,
-			layout->ol_shards[i].po_rebuilding ?
-			"rebuilding" : "healthy",
-			layout->ol_shards[i].po_reintegrating ?
-			"reintegrating" : "healthy");
+			layout->ol_shards[i].po_rebuilding ? "rebuilding" : "healthy",
+			layout->ol_shards[i].po_reintegrating ? "reintegrating" : "healthy");
 }
 
 /**

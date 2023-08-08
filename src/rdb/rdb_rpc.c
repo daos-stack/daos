@@ -271,7 +271,7 @@ rdb_recvd(void *arg)
 {
 	struct rdb *db = arg;
 
-	D_DEBUG(DB_MD, DF_DB": recvd starting\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB ": recvd starting", DP_DB(db));
 	for (;;) {
 		struct rdb_raft_rpc    *rrpc = NULL;
 		bool			stop;
@@ -307,7 +307,7 @@ rdb_recvd(void *arg)
 		rdb_free_raft_rpc(rrpc);
 		ABT_thread_yield();
 	}
-	D_DEBUG(DB_MD, DF_DB": recvd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB ": recvd stopping", DP_DB(db));
 }
 
 static void
@@ -323,14 +323,13 @@ rdb_raft_rpc_cb(const struct crt_cb_info *cb_info)
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	rc = cb_info->cci_rc;
-	D_DEBUG(DB_MD, DF_DB": opc=%u rank=%u rtt=%f\n", DP_DB(db), opc,
-		dstrank, ABT_get_wtime() - rrpc->drc_sent);
+	D_DEBUG(DB_MD, DF_DB ": opc=%u rank=%u rtt=%f", DP_DB(db), opc, dstrank,
+		ABT_get_wtime() - rrpc->drc_sent);
 	ABT_mutex_lock(db->d_mutex);
 	if (rc != 0 || db->d_stop) {
 		if (rc != -DER_CANCELED)
-			D_ERROR(DF_DB": RPC %x to rank %u failed: "DF_RC"\n",
-				DP_DB(rrpc->drc_db), opc,
-				dstrank, DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": RPC %x to rank %u failed", DP_DB(rrpc->drc_db), opc,
+				 dstrank);
 		/*
 		 * Drop this RPC, assuming that raft will make a new one. If we
 		 * are stopping, rdb_recvd() might have already stopped. Hence,
@@ -400,9 +399,8 @@ rdb_abort_raft_rpcs(struct rdb *db)
 
 			rc2 = crt_req_dst_rank_get(rrpc->drc_rpc, &dstrank);
 			D_ASSERTF(rc2 == 0, ""DF_RC"\n", DP_RC(rc2));
-			D_ERROR(DF_DB": failed to abort %x to rank %u: "
-				""DF_RC"\n", DP_DB(rrpc->drc_db),
-				rrpc->drc_rpc->cr_opc, dstrank, DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to abort %x to rank %u", DP_DB(rrpc->drc_db),
+				 rrpc->drc_rpc->cr_opc, dstrank);
 			return rc;
 		}
 	}

@@ -130,7 +130,7 @@ profile_get_new_chunk(struct daos_profile_op *dpo)
 		chunk = d_list_entry(dpo->dpo_chunk_list.next,
 				     struct daos_profile_chunk,
 				     dpc_chunk_list);
-		D_DEBUG(DB_TRACE, "Reuse the old profile buffer %p\n", chunk);
+		D_DEBUG(DB_TRACE, "Reuse the old profile buffer %p", chunk);
 	}
 
 	dpo->dpo_current_chunk = chunk;
@@ -191,7 +191,7 @@ profile_dump_chunk(struct daos_profile_op *dpo, FILE *file,
 			 dpo->dpo_op_name, dpc->dpc_chunks[i]);
 		size = fwrite(string, 1, strlen(string), file);
 		if (size != strlen(string)) {
-			D_ERROR("dump failed: %s\n", strerror(errno));
+			D_ERROR("dump failed: %s", strerror(errno));
 			rc = daos_errno2der(errno);
 			break;
 		}
@@ -227,7 +227,7 @@ daos_profile_dump(struct daos_profile *dp)
 	file = fopen(path, "a");
 	if (file == NULL) {
 		rc = daos_errno2der(errno);
-		D_ERROR("open %s: %s\n", path, strerror(errno));
+		D_ERROR("open %s: %s", path, strerror(errno));
 		goto out;
 	}
 

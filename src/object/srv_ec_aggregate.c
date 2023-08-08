@@ -277,9 +277,8 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 		 */
 	}
 
-	D_DEBUG(DB_TRACE, DF_UOID", recx "DF_RECX" tail_size "DF_U64"\n",
-		DP_UOID(entry->ae_oid), DP_RECX(agg_extent->ae_recx),
-		tail_size);
+	D_DEBUG(DB_TRACE, DF_UOID ", recx " DF_RECX " tail_size " DF_U64, DP_UOID(entry->ae_oid),
+		DP_RECX(agg_extent->ae_recx), tail_size);
 	return tail_size;
 }
 
@@ -313,11 +312,11 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 	entry->ae_cur_stripe.as_offset = 0U;
 	if (entry->ae_cur_stripe.as_extent_cnt > 0) {
-		D_ERROR(DF_UOID" extent cnt %u\n", DP_UOID(entry->ae_oid),
+		D_ERROR(DF_UOID " extent cnt %u", DP_UOID(entry->ae_oid),
 			entry->ae_cur_stripe.as_extent_cnt);
 		d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
 				      ae_link) {
-			D_ERROR("recx "DF_RECX" eph "DF_X64"\n", DP_RECX(extent->ae_recx),
+			D_ERROR("recx " DF_RECX " eph " DF_X64, DP_RECX(extent->ae_recx),
 				extent->ae_epoch);
 		}
 
@@ -598,7 +597,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open object");
 		goto out;
 	}
 	epoch = is_recalc ? stripe->as_hi_epoch :
@@ -606,7 +605,7 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 	rc = dsc_obj_fetch(entry->ae_obj_hdl, epoch, &entry->ae_dkey, 1, &iod,
 			   &sgl, NULL, DIOF_FOR_EC_AGG, NULL, NULL);
 	if (rc)
-		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dsc_obj_fetch failed");
 
 out:
 	D_FREE(recxs);
@@ -646,8 +645,8 @@ agg_fetch_data_stripe(struct ec_agg_entry *entry)
 			   entry->ae_cur_stripe.as_hi_epoch, 0, &entry->ae_dkey,
 			   1, &iod, &entry->ae_sgl);
 	if (rc)
-		D_ERROR(DF_UOID" vos_obj_fetch "DF_RECX" failed: "DF_RC"\n",
-			DP_UOID(entry->ae_oid), DP_RECX(recx), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " vos_obj_fetch " DF_RECX " failed", DP_UOID(entry->ae_oid),
+			 DP_RECX(recx));
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 out:
 	return rc;
@@ -811,8 +810,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 						    1, false, NULL, 0,
 						    &iod_csums);
 			if (rc) {
-				D_ERROR("daos_csummer_calc_iods failed: "DF_RC
-					"\n", DP_RC(rc));
+				DL_ERROR(rc, "daos_csummer_calc_iods failed");
 				goto out;
 			}
 			D_ASSERT(iod_csums != NULL);
@@ -823,7 +821,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		if (rc) {
-			D_ERROR("vos_obj_update failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "vos_obj_update failed");
 			D_GOTO(out, rc);
 		}
 	}
@@ -839,7 +837,7 @@ agg_update_vos(struct ec_agg_param *agg_param, struct ec_agg_entry *entry,
 					   &entry->ae_akey,
 					   &ext->ae_recx);
 		if (err)
-			D_ERROR("array_remove fails: "DF_RC"\n", DP_RC(err));
+			DL_ERROR(err, "array_remove fails");
 		if (!rc && err)
 			rc = err;
 	}
@@ -919,7 +917,7 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 			   entry->ae_cur_stripe.as_hi_epoch, 0,
 			   &entry->ae_dkey, 1, &iod, &sgl);
 	if (rc)
-		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "vos_obj_fetch failed");
 
 out:
 	D_FREE(recxs);
@@ -1018,16 +1016,15 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 		if (estart > hole_end) {
 			memset(diff + hole_off * rsize, 0,
 			       (estart - hole_end) * rsize);
-			D_DEBUG(DB_TRACE, DF_UOID" zero [off "DF_U64
-				", len "DF_U64"]\n", DP_UOID(entry->ae_oid),
-				hole_off, estart - hole_end);
+			D_DEBUG(DB_TRACE, DF_UOID " zero [off " DF_U64 ", len " DF_U64 "]",
+				DP_UOID(entry->ae_oid), hole_off, estart - hole_end);
 		}
 		hole_off = eend - cell_start;
 	}
 	if (hole_off > 0 && hole_off < len) {
 		memset(diff + hole_off * rsize, 0,
 		       (len - hole_off) * rsize);
-		D_DEBUG(DB_TRACE, DF_UOID" zero [off "DF_U64", len"DF_U64"]\n",
+		D_DEBUG(DB_TRACE, DF_UOID " zero [off " DF_U64 ", len" DF_U64 "]",
 			DP_UOID(entry->ae_oid), hole_off, len - hole_off);
 	}
 }
@@ -1308,9 +1305,8 @@ agg_peer_update_ult(void *arg)
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_AGGREGATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, obj_req_create "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " pidx %d to peer %d, obj_req_create",
+				 DP_UOID(entry->ae_oid), pidx, peer);
 			goto out;
 		}
 		ec_agg_in = crt_req_get(rpc);
@@ -1351,10 +1347,8 @@ agg_peer_update_ult(void *arg)
 			rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
 					     &sgl, CRT_BULK_RW, &bulk_hdl);
 			if (rc) {
-				D_ERROR(DF_UOID" pidx %d to peer %d, "
-					"crt_bulk_create "DF_RC"\n",
-					DP_UOID(entry->ae_oid), pidx, peer,
-					DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " pidx %d to peer %d, crt_bulk_create",
+					 DP_UOID(entry->ae_oid), pidx, peer);
 				goto out_rpc;
 			}
 			ec_agg_in->ea_bulk = bulk_hdl;
@@ -1365,8 +1359,7 @@ agg_peer_update_ult(void *arg)
 							    NULL, 0,
 							    &iod_csums);
 				if (rc) {
-					D_ERROR("daos_csummer_calc_iods "
-						"failed: "DF_RC"\n", DP_RC(rc));
+					DL_ERROR(rc, "daos_csummer_calc_iods failed");
 					goto out;
 				}
 				D_ASSERT(iod_csums != NULL);
@@ -1379,9 +1372,8 @@ agg_peer_update_ult(void *arg)
 
 		rc = dss_rpc_send(rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, dss_rpc_send "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " pidx %d to peer %d, dss_rpc_send",
+				 DP_UOID(entry->ae_oid), pidx, peer);
 			goto out_bulk;
 		}
 		ec_agg_out = crt_reply_get(rpc);
@@ -1390,16 +1382,15 @@ agg_peer_update_ult(void *arg)
 			crt_bulk_free(bulk_hdl);
 			bulk_hdl = NULL;
 		}
-		D_DEBUG(DB_TRACE, "send DAOS_OBJ_RPC_EC_AGGREGATE to %d:%d, peer %d, rc %d\n",
+		D_DEBUG(DB_TRACE, "send DAOS_OBJ_RPC_EC_AGGREGATE to %d:%d, peer %d, rc %d",
 			tgt_ep.ep_rank, tgt_ep.ep_tag, peer, rc);
 		if (csummer != NULL && iod_csums != NULL)
 			daos_csummer_free_ic(csummer, &iod_csums);
 		crt_req_decref(rpc);
 		rpc = NULL;
 		if (rc) {
-			D_ERROR(DF_UOID" pidx %d to peer %d, ea_status "
-				DF_RC"\n", DP_UOID(entry->ae_oid), pidx, peer,
-				DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " pidx %d to peer %d, ea_status",
+				 DP_UOID(entry->ae_oid), pidx, peer);
 			break;
 		}
 	}
@@ -1437,7 +1428,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open object");
 		return rc;
 	}
 
@@ -1445,14 +1436,13 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "DF_RC"\n",
-			DP_UOID(entry->ae_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " pool_map_find_failed_tgts failed", DP_UOID(entry->ae_oid));
 		return rc;
 	}
 
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open object");
 		goto out;
 	}
 
@@ -1462,10 +1452,10 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			for (i = 0; i < failed_tgts_cnt; i++) {
 				if (targets[i].ta_comp.co_rank == peer_loc->sd_rank ||
 				    peer_loc->sd_rank == DAOS_TGT_IGNORE) {
-					D_DEBUG(DB_EPC, DF_UOID" peer parity "
-						"tgt gailed rank %d, tgt_idx "
-						"%d.\n", DP_UOID(entry->ae_oid),
-						peer_loc->sd_rank,
+					D_DEBUG(DB_EPC,
+						DF_UOID
+						" peer parity tgt gailed rank %d, tgt_idx %d",
+						DP_UOID(entry->ae_oid), peer_loc->sd_rank,
 						peer_loc->sd_tgt_idx);
 					goto out;
 				}
@@ -1582,7 +1572,7 @@ agg_process_holes_ult(void *arg)
 				   &entry->ae_dkey, 1, iod, &entry->ae_sgl,
 				   NULL, DIOF_FOR_EC_AGG, NULL, NULL);
 		if (rc) {
-			D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "dsc_obj_fetch failed");
 			goto out;
 		}
 
@@ -1590,7 +1580,7 @@ agg_process_holes_ult(void *arg)
 		rc = daos_csummer_calc_iods(csummer, &entry->ae_sgl, iod, NULL, 1, false,
 					    NULL, -1, &stripe_ud->asu_iod_csums);
 		if (rc != 0) {
-			D_ERROR("setting up iods csums failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "setting up iods csums failed");
 			goto out;
 		}
 	}
@@ -1602,8 +1592,7 @@ agg_process_holes_ult(void *arg)
 		rc = crt_bulk_create(dss_get_module_info()->dmi_ctx,
 				     &entry->ae_sgl, CRT_BULK_RW, &bulk_hdl);
 		if (rc) {
-			D_ERROR(DF_UOID" crt_bulk_create returned: "DF_RC"\n",
-				DP_UOID(entry->ae_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " crt_bulk_create returned", DP_UOID(entry->ae_oid));
 			goto out;
 		}
 	}
@@ -1611,8 +1600,7 @@ agg_process_holes_ult(void *arg)
 	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
 				       &targets, &failed_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "
-			DF_RC"\n", DP_UOID(entry->ae_oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " pool_map_find_failed_tgts failed", DP_UOID(entry->ae_oid));
 		goto out;
 	}
 
@@ -1625,7 +1613,7 @@ agg_process_holes_ult(void *arg)
 
 		for (i = 0; targets && i < failed_tgts_cnt; i++) {
 			if (targets[i].ta_comp.co_rank == entry->ae_peer_pshards[peer].sd_rank) {
-				D_ERROR(DF_UOID" peer %d parity tgt failed\n",
+				D_ERROR(DF_UOID " peer %d parity tgt failed",
 					DP_UOID(entry->ae_oid), peer);
 				rc = -1;
 				goto out;
@@ -1638,8 +1626,7 @@ agg_process_holes_ult(void *arg)
 		rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 				    DAOS_OBJ_RPC_EC_REPLICATE, &rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" obj_req_create failed: "DF_RC"\n",
-				DP_UOID(entry->ae_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " obj_req_create failed", DP_UOID(entry->ae_oid));
 			goto out;
 		}
 		ec_rep_in = crt_req_get(rpc);
@@ -1666,8 +1653,8 @@ agg_process_holes_ult(void *arg)
 		ec_rep_in->er_bulk = bulk_hdl;
 		rc = dss_rpc_send(rpc);
 		if (rc) {
-			D_ERROR(DF_UOID" peer %d dss_rpc_send failed "DF_RC"\n",
-				DP_UOID(entry->ae_oid), peer, DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " peer %d dss_rpc_send failed", DP_UOID(entry->ae_oid),
+				 peer);
 			goto out;
 		}
 		ec_rep_out = crt_reply_get(rpc);
@@ -1675,8 +1662,8 @@ agg_process_holes_ult(void *arg)
 		crt_req_decref(rpc);
 		rpc = NULL;
 		if (rc) {
-			D_ERROR(DF_UOID" peer %d er_status failed "DF_RC"\n",
-				DP_UOID(entry->ae_oid), peer, DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " peer %d er_status failed", DP_UOID(entry->ae_oid),
+				 peer);
 			break;
 		}
 	}
@@ -1714,7 +1701,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	stripe_ud.asu_agg_entry = entry;
 	rc = agg_get_obj_handle(entry);
 	if (rc) {
-		D_ERROR("Failed to open object: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to open object");
 		goto out;
 	}
 	rc = agg_prep_sgl(entry);
@@ -1751,8 +1738,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 				    stripe_ud.asu_iod_csums,
 				    &entry->ae_sgl);
 		if (rc) {
-			D_ERROR("vos_update_begin failed: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "vos_update_begin failed");
 			goto ev_out;
 		}
 		/* Delete parity */
@@ -1812,9 +1798,8 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, NULL);
-	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
-		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
-		iter_param.ip_recx.rx_idx, DP_RC(rc));
+	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: " DF_X64 ": " DF_RC,
+		entry->ae_cur_stripe.as_stripenum, iter_param.ip_recx.rx_idx, DP_RC(rc));
 	if (rc != 0)
 		goto out;
 
@@ -1822,12 +1807,11 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	if (ec_age_with_parity(entry) && ec_age_parity_higher(entry)) {
 		update_vos = true;
 		write_parity = false;
-		D_DEBUG(DB_EPC, "delete replica for stripe: %lu,"
-			DF_U64"/"DF_U64" eph "DF_X64" >= "DF_X64"\n",
-			entry->ae_cur_stripe.as_stripenum,
-			iter_param.ip_recx.rx_idx,
-			iter_param.ip_recx.rx_nr,
-			entry->ae_par_extent.ape_epoch,
+		D_DEBUG(DB_EPC,
+			"delete replica for stripe: %lu," DF_U64 "/" DF_U64 " eph " DF_X64
+			" >= " DF_X64,
+			entry->ae_cur_stripe.as_stripenum, iter_param.ip_recx.rx_idx,
+			iter_param.ip_recx.rx_nr, entry->ae_par_extent.ape_epoch,
 			entry->ae_cur_stripe.as_hi_epoch);
 		goto out;
 	}
@@ -1860,15 +1844,13 @@ out:
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
-				D_ERROR("agg_peer_update fail: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_peer_update fail");
 		}
 
 		if (rc == 0) {
 			rc = agg_update_vos(agg_param, entry, write_parity);
 			if (rc)
-				D_ERROR("agg_update_vos failed: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "agg_update_vos failed");
 		}
 	}
 
@@ -1932,9 +1914,8 @@ agg_extent_add(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry,
 	if (extent->ae_epoch > agg_entry->ae_cur_stripe.as_hi_epoch)
 		agg_entry->ae_cur_stripe.as_hi_epoch = extent->ae_epoch;
 
-	D_DEBUG(DB_TRACE, "adding extent "DF_RECX", to stripe %lu, shard: %u\n",
-		DP_RECX(extent->ae_recx),
-		agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
+	D_DEBUG(DB_TRACE, "adding extent " DF_RECX ", to stripe %lu, shard: %u",
+		DP_RECX(extent->ae_recx), agg_stripenum(agg_entry, extent->ae_recx.rx_idx),
 		agg_entry->ae_oid.id_shard);
 out:
 	return rc;
@@ -1951,9 +1932,8 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 
 	D_ASSERT(!(entry->ie_recx.rx_idx & PARITY_INDICATOR));
 
-	D_DEBUG(DB_IO, DF_UOID" get recx "DF_RECX", %u\n",
-		DP_UOID(agg_entry->ae_oid), DP_RECX(entry->ie_recx),
-		entry->ie_minor_epc);
+	D_DEBUG(DB_IO, DF_UOID " get recx " DF_RECX ", %u", DP_UOID(agg_entry->ae_oid),
+		DP_RECX(entry->ie_recx), entry->ie_minor_epc);
 
 	while (offset < end) {
 		daos_off_t this_stripenum;
@@ -1985,10 +1965,8 @@ agg_data_extent(struct ec_agg_param *agg_param, vos_iter_entry_t *entry,
 		     agg_entry->ae_cur_stripe.as_extent_cnt > 0) {
 			rc = agg_process_stripe(agg_param, agg_entry);
 			if (rc) {
-				D_ERROR(DF_UOID" stripe "DF_U64":"DF_RC"\n",
-					DP_UOID(agg_entry->ae_oid),
-					agg_entry->ae_cur_stripe.as_stripenum,
-					DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " stripe " DF_U64, DP_UOID(agg_entry->ae_oid),
+					 agg_entry->ae_cur_stripe.as_stripenum);
 				D_GOTO(out, rc);
 			}
 			D_ASSERT(agg_entry->ae_cur_stripe.as_extent_cnt == 0);
@@ -2009,8 +1987,7 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 	if (agg_entry->ae_cur_stripe.as_extent_cnt) {
 		rc = agg_process_stripe(agg_param, agg_entry);
 		if (rc) {
-			D_ERROR("Process stripe returned "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Process stripe returned");
 			return rc;
 		}
 
@@ -2110,8 +2087,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	int	rc;
 
 	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
-		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
-			DP_KEY(&entry->ie_key));
+		D_DEBUG(DB_EPC, "Skip dkey: " DF_KEY " ec agg on re-probe", DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
@@ -2124,14 +2100,14 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	rc = agg_shard_is_leader(agg_param->ap_pool_info.api_pool, agg_entry);
 	if (rc == 1) {
-		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting\n",
+		D_DEBUG(DB_EPC, "oid:" DF_UOID ":" DF_KEY " ec agg starting",
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey));
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
 		rc = 0;
 	} else {
 		if (rc < 0) {
-			D_ERROR("oid:"DF_UOID" ds_pool_check_leader failed "
-				DF_RC"\n", DP_UOID(entry->ie_oid), DP_RC(rc));
+			DL_ERROR(rc, "oid:" DF_UOID " ds_pool_check_leader failed",
+				 DP_UOID(entry->ie_oid));
 			if (rc == -DER_STALE)
 				agg_param->ap_obj_skipped = 1;
 			rc = 0;
@@ -2251,17 +2227,15 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 
 	rc = dsc_obj_id2oc_attr(desc->id_oid.id_pub, &info->api_props, &oca);
 	if (rc) {
-		D_ERROR("Skip object("DF_OID") with unknown class(%u)\n",
-			DP_OID(desc->id_oid.id_pub),
-			daos_obj_id2class(desc->id_oid.id_pub));
+		D_ERROR("Skip object(" DF_OID ") with unknown class(%u)",
+			DP_OID(desc->id_oid.id_pub), daos_obj_id2class(desc->id_oid.id_pub));
 		*acts = VOS_ITER_CB_SKIP;
 		agg_param->ap_credits++;
 		goto done;
 	}
 
 	if (!daos_oclass_is_ec(&oca)) { /* Skip non-EC object */
-		D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" non-ec obj\n",
-			DP_UOID(desc->id_oid));
+		D_DEBUG(DB_EPC, "Skip oid:" DF_UOID " non-ec obj", DP_UOID(desc->id_oid));
 		agg_param->ap_credits++;
 		*acts = VOS_ITER_CB_SKIP;
 		goto done;
@@ -2270,11 +2244,11 @@ agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned int *
 check:
 	if (desc->id_agg_write <= agg_param->ap_filter_eph) {
 		if (desc->id_type == VOS_ITER_OBJ)
-			D_DEBUG(DB_EPC, "Skip oid:"DF_UOID" agg_epoch="DF_X64" filter="DF_X64"\n",
+			D_DEBUG(DB_EPC, "Skip oid:" DF_UOID " agg_epoch=" DF_X64 " filter=" DF_X64,
 				DP_UOID(desc->id_oid), desc->id_agg_write,
 				agg_param->ap_filter_eph);
 		else
-			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
+			D_DEBUG(DB_EPC, "Skip key:" DF_KEY " agg_epoch=" DF_X64 " filter=" DF_X64,
 				DP_KEY(&desc->id_key), desc->id_agg_write,
 				agg_param->ap_filter_eph);
 		agg_param->ap_credits++;
@@ -2284,10 +2258,9 @@ check:
 done:
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
-			desc->id_type, *acts);
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u", desc->id_type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			D_DEBUG(DB_EPC, "EC aggregation quit");
 			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
@@ -2317,7 +2290,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	agg_reset_entry(&agg_param->ap_agg_entry, entry, &oca);
 	map = pl_map_find(agg_param->ap_pool_info.api_pool_uuid, entry->ie_oid.id_pub);
 	if (map == NULL) {
-		D_ERROR("Failed to find pool map to check leader for "DF_UOID"\n",
+		D_ERROR("Failed to find pool map to check leader for " DF_UOID,
 			DP_UOID(entry->ie_oid));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -2369,17 +2342,16 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	if (rc < 0) {
-		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "EC aggregation failed");
 		return rc;
 	}
 
 	agg_param->ap_credits += 20;
 	if (agg_param->ap_credits > agg_param->ap_credits_max) {
 		agg_param->ap_credits = 0;
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
-			type, *acts);
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u", type, *acts);
 		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation quit\n");
+			D_DEBUG(DB_EPC, "EC aggregation quit");
 			*acts |= VOS_ITER_CB_EXIT;
 		}
 	}
@@ -2423,7 +2395,7 @@ ec_agg_init_ult(void *arg)
 
 	rc = ds_pool_iv_prop_fetch(pool, prop);
 	if (rc) {
-		D_ERROR("ds_pool_iv_prop_fetch failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ds_pool_iv_prop_fetch failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2438,7 +2410,7 @@ out:
 	if (prop)
 		daos_prop_free(prop);
 
-	D_DEBUG(DB_EPC, DF_UUID" get iv for agg: %d\n",
+	D_DEBUG(DB_EPC, DF_UUID " get iv for agg: %d",
 		DP_UUID(agg_param->ap_pool_info.api_cont_uuid), rc);
 
 	return rc;
@@ -2517,7 +2489,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 			   NULL, info->api_pool->sp_map,
 			   info->api_svc_list, &info->api_pool_hdl);
 	if (rc) {
-		D_ERROR("dsc_pool_open failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dsc_pool_open failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2525,7 +2497,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 			   info->api_coh_uuid, DAOS_COO_RW,
 			   &info->api_cont_hdl);
 	if (rc) {
-		D_ERROR("dsc_cont_open failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dsc_cont_open failed");
 		D_GOTO(out, rc);
 	}
 
@@ -2533,7 +2505,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	D_ASSERT(rc == 0);
 out:
 	if (rc) {
-		D_DEBUG(DB_EPC, "aggregate param init failed: %d\n", rc);
+		D_DEBUG(DB_EPC, "aggregate param init failed: %d", rc);
 		ec_agg_param_fini(cont, agg_param);
 	} else {
 		agg_param->ap_initialized = 1;
@@ -2580,7 +2552,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 
 	if (ec_agg_param->ap_filter_eph != 0 &&
 	    ec_agg_param->ap_filter_eph >= cont->sc_ec_update_timestamp) {
-		D_DEBUG(DB_EPC, DF_CONT" skip EC agg "DF_U64">= "DF_U64"\n",
+		D_DEBUG(DB_EPC, DF_CONT " skip EC agg " DF_U64 ">= " DF_U64,
 			DP_CONT(cont->sc_pool_uuid, cont->sc_uuid), ec_agg_param->ap_filter_eph,
 			cont->sc_ec_update_timestamp);
 		goto update_hae;
@@ -2611,7 +2583,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	}
 
 	if (ec_agg_param->ap_obj_skipped && !cont->sc_stopping) {
-		D_DEBUG(DB_EPC, "with skipped obj during aggregation.\n");
+		D_DEBUG(DB_EPC, "with skipped obj during aggregation");
 		/* There is rebuild going on, and we can't proceed EC aggregate boundary,
 		 * Let's wait for 5 seconds for another EC aggregation.
 		 */
@@ -2637,8 +2609,7 @@ ds_obj_ec_aggregate(void *arg)
 	struct agg_param	param = { 0 };
 	int			rc;
 
-	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
-		DP_UUID(cont->sc_uuid));
+	D_DEBUG(DB_EPC, "start EC aggregation " DF_UUID, DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
 	param.ap_cont = cont;
 	rc = ec_agg_param_init(cont, &param);

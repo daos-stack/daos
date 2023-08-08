@@ -39,11 +39,9 @@ swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src
 	 *		};
 	 */
 
-	D_DEBUG(DB_TEST, "Cart callback event: "
-		"rank = %d, "
-		"crt_event_source = %d, "
-		"crt_event_type = %d\n",
-		rank, src, type);
+	D_DEBUG(DB_TEST,
+		"Cart callback event: rank = %d, crt_event_source = %d, crt_event_type = %d", rank,
+		src, type);
 
 	swim_state_str[0] = type + '0';
 	swim_state_str[1] = 0;
@@ -114,7 +112,7 @@ test_run(d_rank_t my_rank)
 		rc = pthread_join(test_g.t_tid[i], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		D_DEBUG(DB_TEST, "joined progress thread.\n");
+		D_DEBUG(DB_TEST, "joined progress thread");
 	}
 
 	if (test_g.t_write_completion_file)
@@ -135,7 +133,7 @@ test_run(d_rank_t my_rank)
 
 	d_log_fini();
 
-	D_DEBUG(DB_TEST, "exiting.\n");
+	D_DEBUG(DB_TEST, "exiting");
 }
 
 int main(int argc, char **argv)

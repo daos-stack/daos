@@ -40,14 +40,14 @@ cmd_push_arg(char *args[], int *argcount, const char *fmt, ...)
 	rc = vasprintf(&arg, fmt, ap);
 	va_end(ap);
 	if (arg == NULL || rc < 0) {
-		D_ERROR("failed to create arg\n");
+		D_ERROR("failed to create arg");
 		cmd_free_args(args, *argcount);
 		return NULL;
 	}
 
 	D_REALLOC_ARRAY(tmp, args, *argcount, *argcount + 1);
 	if (tmp == NULL) {
-		D_ERROR("realloc failed\n");
+		D_ERROR("realloc failed");
 		D_FREE(arg);
 		cmd_free_args(args, *argcount);
 		return NULL;
@@ -79,7 +79,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 	for (i = 0; i < argcount; i++) {
 		size += strnlen(args[i], ARG_MAX - 1) + 1;
 		if (size >= ARG_MAX) {
-			D_ERROR("arg list too long\n");
+			D_ERROR("arg list too long");
 			D_FREE(cmd_str);
 			return NULL;
 		}
@@ -96,7 +96,7 @@ cmd_string(const char *cmd_base, char *args[], int argcount)
 
 	addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	if (addr == MAP_FAILED) {
-		D_ERROR("mmap() failed : %s\n", strerror(errno));
+		D_ERROR("mmap() failed : %s", strerror(errno));
 		D_FREE(cmd_str);
 		return NULL;
 	}
@@ -113,7 +113,7 @@ log_stderr_pipe(int fd)
 	char	*full_msg = NULL;
 	ssize_t	len = 0;
 
-	D_DEBUG(DB_TEST, "reading from stderr pipe\n");
+	D_DEBUG(DB_TEST, "reading from stderr pipe");
 	while (1) {
 		ssize_t n;
 		ssize_t old_len = len;
@@ -123,15 +123,14 @@ log_stderr_pipe(int fd)
 		if (n == 0)
 			break;
 		if (n < 0) {
-			D_ERROR("read from stderr pipe failed: %s\n", strerror(errno));
+			D_ERROR("read from stderr pipe failed: %s", strerror(errno));
 			break;
 		}
 
 		len = len + n;
 		D_REALLOC(tmp, full_msg, old_len, len);
 		if (tmp == NULL) {
-			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld\n",
-				len);
+			D_ERROR("reading from stderr pipe: can't realloc tmp with size %ld", len);
 			break;
 		}
 
@@ -139,16 +138,15 @@ log_stderr_pipe(int fd)
 		strncpy(&full_msg[old_len], buf, n);
 	}
 
-
-	D_DEBUG(DB_TEST, "done reading stderr pipe\n");
+	D_DEBUG(DB_TEST, "done reading stderr pipe");
 	close(fd);
 
 	if (full_msg == NULL) {
-		D_INFO("no stderr output\n");
+		D_INFO("no stderr output");
 		return;
 	}
 
-	D_DEBUG(DB_TEST, "stderr: %s\n", full_msg);
+	D_DEBUG(DB_TEST, "stderr: %s", full_msg);
 	D_FREE(full_msg);
 }
 
@@ -161,29 +159,29 @@ run_cmd(const char *command, int *outputfd)
 	int stdoutfd[2];
 	int stderrfd[2];
 
-	D_DEBUG(DB_TEST, "dmg cmd: %s\n", command);
+	D_DEBUG(DB_TEST, "dmg cmd: %s", command);
 
 	/* Create pipes */
 	if (pipe(stdoutfd) == -1) {
 		rc = daos_errno2der(errno);
-		D_ERROR("failed to create stdout pipe: %s\n", strerror(errno));
+		D_ERROR("failed to create stdout pipe: %s", strerror(errno));
 		return rc;
 	}
 
 	if (pipe(stderrfd) == -1) {
 		rc = daos_errno2der(errno);
-		D_ERROR("failed to create stderr pipe: %s\n", strerror(errno));
+		D_ERROR("failed to create stderr pipe: %s", strerror(errno));
 		close(stdoutfd[0]);
 		close(stdoutfd[1]);
 		return rc;
 	}
 
-	D_DEBUG(DB_TEST, "forking to run dmg command\n");
+	D_DEBUG(DB_TEST, "forking to run dmg command");
 
 	child_pid = fork();
 	if (child_pid == -1) {
 		rc = daos_errno2der(errno);
-		D_ERROR("failed to fork: %s\n", strerror(errno));
+		D_ERROR("failed to fork: %s", strerror(errno));
 		return rc;
 	} else if (child_pid == 0) {
 		/* child doesn't need the read end of the pipes */
@@ -209,15 +207,15 @@ run_cmd(const char *command, int *outputfd)
 	close(stdoutfd[1]);
 	close(stderrfd[1]);
 
-	D_DEBUG(DB_TEST, "waiting for dmg to finish executing\n");
+	D_DEBUG(DB_TEST, "waiting for dmg to finish executing");
 	if (wait(&child_rc) == -1) {
-		D_ERROR("wait failed: %s\n", strerror(errno));
+		D_ERROR("wait failed: %s", strerror(errno));
 		return daos_errno2der(errno);
 	}
-	D_DEBUG(DB_TEST, "dmg command executed successfully\n");
+	D_DEBUG(DB_TEST, "dmg command executed successfully");
 
 	if (child_rc != 0) {
-		D_ERROR("child process failed, rc=%d (%s)\n", child_rc, strerror(child_rc));
+		D_ERROR("child process failed, rc=%d (%s)", child_rc, strerror(child_rc));
 		close(stdoutfd[0]);
 		log_stderr_pipe(stderrfd[0]);
 		return daos_errno2der(child_rc);
@@ -273,7 +271,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 	fp = fdopen(stdoutfd, "r");
 	if (fp == NULL) {
-		D_ERROR("fdopen failed: %s\n", strerror(errno));
+		D_ERROR("fdopen failed: %s", strerror(errno));
 		D_GOTO(out_close, rc = daos_errno2der(errno));
 	}
 
@@ -282,13 +280,13 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 	size_t	total = 0;
 	size_t	n;
 
-	D_DEBUG(DB_TEST, "reading json from stdout\n");
+	D_DEBUG(DB_TEST, "reading json from stdout");
 	while (1) {
 		if (total + JSON_CHUNK_SIZE + 1 > size) {
 			size = total + JSON_CHUNK_SIZE + 1;
 
 			if (size >= JSON_MAX_INPUT) {
-				D_ERROR("JSON input too large (size=%lu)\n", size);
+				D_ERROR("JSON input too large (size=%lu)", size);
 				D_GOTO(out_jbuf, rc = -DER_REC2BIG);
 			}
 
@@ -304,10 +302,10 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 
 		total += n;
 	}
-	D_DEBUG(DB_TEST, "read %lu bytes\n", total);
+	D_DEBUG(DB_TEST, "read %lu bytes", total);
 
 	if (total == 0) {
-		D_ERROR("dmg output is empty\n");
+		D_ERROR("dmg output is empty");
 		D_GOTO(out_jbuf, rc = -DER_INVAL);
 	}
 
@@ -316,7 +314,7 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		D_GOTO(out_jbuf, rc = -DER_NOMEM);
 	jbuf = temp;
 	jbuf[total] = '\0';
-	D_DEBUG(DB_TEST, "dmg output=\"%s\"\n", jbuf);
+D_DEBUG(DB_TEST, "dmg output=\"%s\, jbuf);
 
 	tok = json_tokener_new_ex(parse_depth);
 	if (tok == NULL)
@@ -328,8 +326,8 @@ daos_dmg_json_pipe(const char *dmg_cmd, const char *dmg_config_file,
 		int fail_off = json_tokener_get_parse_end(tok);
 		char *aterr = &jbuf[fail_off];
 
-		D_ERROR("failed to parse JSON at offset %d: %s (failed character: %c)\n",
-			fail_off, json_tokener_error_desc(jerr), aterr[0]);
+		D_ERROR("failed to parse JSON at offset %d: %s (failed character: %c)", fail_off,
+			json_tokener_error_desc(jerr), aterr[0]);
 		D_GOTO(out_tokener, rc = -DER_INVAL);
 	}
 
@@ -339,7 +337,7 @@ out_jbuf:
 	D_FREE(jbuf);
 
 	if (fclose(fp) == -1) {
-		D_ERROR("failed to close fp: %s\n", strerror(errno));
+		D_ERROR("failed to close fp: %s", strerror(errno));
 		if (rc == 0)
 			rc = daos_errno2der(errno);
 	}
@@ -347,14 +345,13 @@ out_close:
 	close(stdoutfd);
 out:
 	if (munmap(cmd_str, strlen(cmd_str) + 1) == -1)
-		D_ERROR("munmap() failed : %s\n", strerror(errno));
+D_ERROR("munmap() failed : %s", strerror(errno));
 
 	if (obj != NULL) {
 		struct json_object *tmp;
 		int flags = JSON_C_TO_STRING_PRETTY | JSON_C_TO_STRING_SPACED;
 
-		D_DEBUG(DB_TEST, "parsed output:\n%s\n",
-			json_object_to_json_string_ext(obj, flags));
+		D_DEBUG(DB_TEST, "parsed output:\n%s", json_object_to_json_string_ext(obj, flags));
 
 		json_object_object_get_ex(obj, "error", &tmp);
 
@@ -362,7 +359,7 @@ out:
 			const char *err_str;
 
 			err_str = json_object_get_string(tmp);
-			D_ERROR("dmg error: %s\n", err_str);
+			D_ERROR("dmg error: %s", err_str);
 			*json_out = json_object_get(tmp);
 
 			if (json_object_object_get_ex(obj, "status", &tmp))
@@ -390,40 +387,40 @@ parse_pool_info(struct json_object *json_pool, daos_mgmt_pool_info_t *pool_info)
 		return -DER_INVAL;
 
 	if (!json_object_object_get_ex(json_pool, "uuid", &tmp)) {
-		D_ERROR("unable to extract pool UUID from JSON\n");
+		D_ERROR("unable to extract pool UUID from JSON");
 		return -DER_INVAL;
 	}
 	uuid_str = json_object_get_string(tmp);
 	if (uuid_str == NULL) {
-		D_ERROR("unable to extract UUID string from JSON\n");
+		D_ERROR("unable to extract UUID string from JSON");
 		return -DER_INVAL;
 	}
 	rc = uuid_parse(uuid_str, pool_info->mgpi_uuid);
 	if (rc != 0) {
-		D_ERROR("failed parsing uuid_str\n");
+		D_ERROR("failed parsing uuid_str");
 		return -DER_INVAL;
 	}
 
 	if (!json_object_object_get_ex(json_pool, "svc_ldr", &tmp)) {
-		D_ERROR("unable to extract pool leader from JSON\n");
+		D_ERROR("unable to extract pool leader from JSON");
 		return -DER_INVAL;
 	}
 	pool_info->mgpi_ldr = json_object_get_int(tmp);
 
 	if (!json_object_object_get_ex(json_pool, "svc_reps", &tmp)) {
-		D_ERROR("unable to parse pool svcreps from JSON\n");
+		D_ERROR("unable to parse pool svcreps from JSON");
 		return -DER_INVAL;
 	}
 
 	n_svcranks = json_object_array_length(tmp);
 	if (n_svcranks <= 0) {
-		D_ERROR("unexpected svc_reps length: %d\n", n_svcranks);
+		D_ERROR("unexpected svc_reps length: %d", n_svcranks);
 		return -DER_INVAL;
 	}
 	if (pool_info->mgpi_svc == NULL) {
 		pool_info->mgpi_svc = d_rank_list_alloc(n_svcranks);
 		if (pool_info->mgpi_svc == NULL) {
-			D_ERROR("failed to allocate rank list\n");
+			D_ERROR("failed to allocate rank list");
 			return -DER_NOMEM;
 		}
 	}
@@ -482,7 +479,7 @@ print_acl_entry(FILE *outstream, struct daos_prop_entry *acl_entry)
 		acl = acl_entry->dpe_val_ptr;
 		rc = daos_acl_to_strs(acl, &acl_str, &nr_acl_str);
 		if (rc != 0) {
-			D_ERROR("invalid ACL\n");
+			D_ERROR("invalid ACL");
 			goto out;
 		}
 	}
@@ -523,7 +520,7 @@ dmg_pool_set_prop(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool set-prop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
@@ -566,7 +563,7 @@ dmg_pool_create(const char *dmg_config_file,
 		char *ranks_str = rank_list_to_string(tgts);
 
 		if (ranks_str == NULL) {
-			D_ERROR("failed to create rank string\n");
+			D_ERROR("failed to create rank string");
 			D_GOTO(out_cmd, rc = -DER_NOMEM);
 		}
 		args = cmd_push_arg(args, &argcount,
@@ -578,7 +575,7 @@ dmg_pool_create(const char *dmg_config_file,
 
 	passwd = getpwuid(uid);
 	if (passwd == NULL) {
-		D_ERROR("unable to resolve %d to passwd entry\n", uid);
+		D_ERROR("unable to resolve %d to passwd entry", uid);
 		D_GOTO(out_cmd, rc = -DER_INVAL);
 	}
 
@@ -589,7 +586,7 @@ dmg_pool_create(const char *dmg_config_file,
 
 	group = getgrgid(gid);
 	if (group == NULL) {
-		D_ERROR("unable to resolve %d to group name\n", gid);
+		D_ERROR("unable to resolve %d to group name", gid);
 		D_GOTO(out_cmd, rc = -DER_INVAL);
 	}
 
@@ -615,13 +612,12 @@ dmg_pool_create(const char *dmg_config_file,
 		if (entry != NULL) {
 			fd = mkstemp(tmp_name);
 			if (fd < 0) {
-				D_ERROR("failed to create tmpfile file\n");
+				D_ERROR("failed to create tmpfile file");
 				D_GOTO(out_cmd, rc = -DER_NOMEM);
 			}
 			tmp_file = fdopen(fd, "w");
 			if (tmp_file == NULL) {
-				D_ERROR("failed to associate stream: %s\n",
-					strerror(errno));
+				D_ERROR("failed to associate stream: %s", strerror(errno));
 				close(fd);
 				D_GOTO(out_cmd, rc = -DER_MISC);
 			}
@@ -629,7 +625,7 @@ dmg_pool_create(const char *dmg_config_file,
 			rc = print_acl_entry(tmp_file, entry);
 			fclose(tmp_file);
 			if (rc != 0) {
-				D_ERROR("failed to write ACL to tmpfile\n");
+				D_ERROR("failed to write ACL to tmpfile");
 				goto out_cmd;
 			}
 			args = cmd_push_arg(args, &argcount,
@@ -656,8 +652,7 @@ dmg_pool_create(const char *dmg_config_file,
 		/* pool label is required, generate a unique one randomly */
 		tmp_fd = mkstemp(path);
 		if (tmp_fd < 0) {
-			D_ERROR("failed to generate unique label: %s\n",
-				strerror(errno));
+			D_ERROR("failed to generate unique label: %s", strerror(errno));
 			D_GOTO(out_cmd, rc = d_errno2der(errno));
 		}
 		close(tmp_fd);
@@ -678,13 +673,13 @@ dmg_pool_create(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("pool create", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
 	rc = parse_pool_info(dmg_out, &pool_info);
 	if (rc != 0) {
-		D_ERROR("failed to parse pool info\n");
+		D_ERROR("failed to parse pool info");
 		goto out_json;
 	}
 
@@ -693,13 +688,13 @@ dmg_pool_create(const char *dmg_config_file,
 		goto out_svc;
 
 	if (pool_info.mgpi_svc->rl_nr == 0) {
-		D_ERROR("unexpected zero-length pool svc ranks list\n");
+		D_ERROR("unexpected zero-length pool svc ranks list");
 		rc = -DER_INVAL;
 		goto out_svc;
 	}
 	rc = d_rank_list_copy(svc, pool_info.mgpi_svc);
 	if (rc != 0) {
-		D_ERROR("failed to dup svc rank list\n");
+		D_ERROR("failed to dup svc rank list");
 		goto out_svc;
 	}
 
@@ -744,7 +739,7 @@ dmg_pool_destroy(const char *dmg_config_file, const uuid_t uuid, const char *grp
 	rc = daos_dmg_json_pipe("pool destroy", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
@@ -790,7 +785,7 @@ dmg_pool_target(const char *cmd, const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe(cmd, dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
@@ -860,7 +855,7 @@ dmg_pool_extend(const char *dmg_config_file, const uuid_t uuid,
 	rc = daos_dmg_json_pipe("pool extend", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
@@ -892,7 +887,7 @@ dmg_pool_list(const char *dmg_config_file, const char *group,
 	rc = daos_dmg_json_pipe("pool list", dmg_config_file,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
@@ -943,7 +938,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 
 		tmp_var =  strtok_r(host, ":", &saved_ptr);
 		if (tmp_var == NULL) {
-			D_ERROR("Hostname is empty\n");
+			D_ERROR("Hostname is empty");
 			return -DER_INVAL;
 		}
 
@@ -951,19 +946,19 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			 "%s", tmp_var + 1);
 
 		if (!json_object_object_get_ex(dev, "uuid", &tmp)) {
-			D_ERROR("unable to extract uuid from JSON\n");
+			D_ERROR("unable to extract uuid from JSON");
 			return -DER_INVAL;
 		}
 
 		rc = uuid_parse(json_object_get_string(tmp), devices[*disks].device_id);
 		if (rc != 0) {
-			D_ERROR("failed parsing uuid_str\n");
+			D_ERROR("failed parsing uuid_str");
 			return -DER_INVAL;
 		}
 
 		if (!json_object_object_get_ex(dev, "tgt_ids",
 					       &targets)) {
-			D_ERROR("unable to extract tgtids from JSON\n");
+			D_ERROR("unable to extract tgtids from JSON");
 			return -DER_INVAL;
 		}
 
@@ -980,7 +975,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 		devices[*disks].n_tgtidx = tgts_len;
 
 		if (!json_object_object_get_ex(dev, "dev_state", &tmp)) {
-			D_ERROR("unable to extract state from JSON\n");
+			D_ERROR("unable to extract state from JSON");
 			return -DER_INVAL;
 		}
 
@@ -988,7 +983,7 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			 "%s", json_object_to_json_string(tmp));
 
 		if (!json_object_object_get_ex(dev, "rank", &tmp)) {
-			D_ERROR("unable to extract rank from JSON\n");
+			D_ERROR("unable to extract rank from JSON");
 			return -DER_INVAL;
 		}
 		devices[*disks].rank = atoi(json_object_to_json_string(tmp));
@@ -1020,22 +1015,21 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 				NULL, 0, &dmg_out);
 	if (rc != 0) {
 		D_FREE(disk);
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 		goto out_json;
 	}
 
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
-		D_ERROR("unable to extract host_storage_map from JSON\n");
+		D_ERROR("unable to extract host_storage_map from JSON");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
-		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
-			json_object_to_json_string(val));
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s", key, json_object_to_json_string(val));
 
 		if (!json_object_object_get_ex(val, "hosts", &hosts)) {
-			D_ERROR("unable to extract hosts from JSON\n");
+			D_ERROR("unable to extract hosts from JSON");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -1043,14 +1037,14 @@ dmg_storage_device_list(const char *dmg_config_file, int *ndisks,
 		strcpy(host, json_object_to_json_string(hosts));
 
 		json_object_object_foreach(val, key1, val1) {
-			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s\n", key1,
+			D_DEBUG(DB_TEST, "key1:\"%s\",val1=%s", key1,
 				json_object_to_json_string(val1));
 
 			json_object_object_get_ex(val1, "smd_info", &smd_info);
 			if (smd_info != NULL) {
 				if (!json_object_object_get_ex(
 					smd_info, "devices", &smd_dev)) {
-					D_ERROR("unable to extract devices\n");
+					D_ERROR("unable to extract devices");
 					D_FREE(host);
 					D_GOTO(out, rc = -DER_INVAL);
 				}
@@ -1113,7 +1107,7 @@ dmg_storage_set_nvme_fault(const char *dmg_config_file,
 	rc = daos_dmg_json_pipe("storage set nvme-faulty ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed\n");
+		D_ERROR("dmg command failed");
 		goto out_json;
 	}
 
@@ -1154,30 +1148,29 @@ dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 	rc = daos_dmg_json_pipe("storage query device-health ", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0) {
-		D_ERROR("dmg command failed\n");
+		D_ERROR("dmg command failed");
 		goto out_json;
 	}
 	if (!json_object_object_get_ex(dmg_out, "host_storage_map",
 				       &storage_map)) {
-		D_ERROR("unable to extract host_storage_map from JSON\n");
+		D_ERROR("unable to extract host_storage_map from JSON");
 		D_GOTO(out_json, rc = -DER_INVAL);
 	}
 
 	json_object_object_foreach(storage_map, key, val) {
-		D_DEBUG(DB_TEST, "key:\"%s\",val=%s\n", key,
-			json_object_to_json_string(val));
+		D_DEBUG(DB_TEST, "key:\"%s\",val=%s", key, json_object_to_json_string(val));
 
 		if (!json_object_object_get_ex(val, "storage", &storage_info)) {
-			D_ERROR("unable to extract storage info from JSON\n");
+			D_ERROR("unable to extract storage info from JSON");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(storage_info, "smd_info",
 					       &smd_info)) {
-			D_ERROR("unable to extract smd_info from JSON\n");
+			D_ERROR("unable to extract smd_info from JSON");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 		if (!json_object_object_get_ex(smd_info, "devices", &devices)) {
-			D_ERROR("unable to extract devices list from JSON\n");
+			D_ERROR("unable to extract devices list from JSON");
 			D_GOTO(out_json, rc = -DER_INVAL);
 		}
 
@@ -1248,7 +1241,7 @@ int dmg_system_stop_rank(const char *dmg_config_file, d_rank_t rank, int force)
 	rc = daos_dmg_json_pipe("system stop", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);
@@ -1272,7 +1265,7 @@ int dmg_system_start_rank(const char *dmg_config_file, d_rank_t rank)
 	rc = daos_dmg_json_pipe("system start", dmg_config_file,
 				args, argcount, &dmg_out);
 	if (rc != 0)
-		D_ERROR("dmg failed\n");
+		D_ERROR("dmg failed");
 
 	if (dmg_out != NULL)
 		json_object_put(dmg_out);

@@ -292,7 +292,7 @@ sc_wait_until_should_continue(struct scrub_ctx *ctx)
 		}
 		sc_m_track_idle(ctx);
 	} else {
-		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID "\n", sc_mode(ctx),
+		D_ERROR("Unknown Scrub Mode: %d, Pool: " DF_UUID, sc_mode(ctx),
 			DP_UUID(ctx->sc_pool->sp_uuid));
 		/* sleep for 5 minutes to give pool property chance to resolve */
 		sc_sleep(ctx, 1000 * 60 * 5);
@@ -379,21 +379,20 @@ sc_handle_corruption(struct scrub_ctx *ctx)
 		bio_log_data_csum_err(ctx->sc_dmi->dmi_nvme_ctxt);
 	if (rc != 0) {
 		/* Log error but don't let it stop the scrubbing process */
-		D_ERROR("Error trying to mark corrupt: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error trying to mark corrupt");
 		rc = 0;
 	}
 	ctx->sc_pool_tgt_corrupted_detected++;
-	D_ERROR("[tgt_id: %d]Checksum scrubber found corruption. %d so far.\n",
-		ctx->sc_dmi->dmi_tgt_id,
-		ctx->sc_pool_tgt_corrupted_detected);
+	D_ERROR("[tgt_id: %d]Checksum scrubber found corruption. %d so far",
+		ctx->sc_dmi->dmi_tgt_id, ctx->sc_pool_tgt_corrupted_detected);
 	if (sc_should_evict(ctx)) {
-		D_ERROR("Corruption threshold reached. %d >= %d\n",
+		D_ERROR("Corruption threshold reached. %d >= %d",
 			ctx->sc_pool_tgt_corrupted_detected, sc_thresh(ctx));
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs, 0);
 		d_tm_set_counter(ctx->sc_metrics.scm_csum_calcs_last, 0);
 		rc = sc_pool_drain(ctx);
 		if (rc != 0)
-			D_ERROR("Drain error: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Drain error");
 
 		rc = -DER_SHUTDOWN;
 	}
@@ -455,7 +454,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 
 		rc = daos_csummer_calc_for_iov(sc_csummer(ctx), &chunk_iov, csum_buf, csum_len);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_calc_for_iov error: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_csummer_calc_for_iov error");
 			D_GOTO(done, rc);
 		}
 
@@ -464,7 +463,7 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		match = daos_csummer_csum_compare(sc_csummer(ctx), orig_csum, csum_buf, csum_len);
 
 		if (!match) {
-			D_ERROR("Corruption found for chunk #%d of recx: "DF_RECX", epoch: %lu\n",
+			D_ERROR("Corruption found for chunk #%d of recx: " DF_RECX ", epoch: %lu",
 				i, DP_RECX(*recx), ctx->sc_epoch);
 
 			rc = sc_handle_corruption(ctx);
@@ -548,7 +547,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 			d_tm_inc_counter(ctx->sc_metrics.scm_corruption_total, 1);
 		D_GOTO(out, rc = DER_SUCCESS);
 	} else if (rc != 0) {
-		D_WARN("Unable to fetch data for scrubber: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Unable to fetch data for scrubber");
 		D_GOTO(out, rc);
 	}
 
@@ -558,7 +557,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov, daos_handle_t i
 	     sc_verify_sv(ctx, &data);
 	ctx->sc_cur_biov = NULL;
 	if (rc != 0)
-		D_ERROR("Error while scrubbing: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error while scrubbing");
 
 out:
 	D_FREE(data.iov_buf);
@@ -703,7 +702,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			rc = sc_verify_obj_value(ctx, &entry->ie_biov, ih);
 
 			if (rc != 0) {
-				D_ERROR("Error Verifying:"DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "Error Verifying");
 				return rc;
 			}
 		}
@@ -748,7 +747,7 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 		if (rc == -DER_INPROGRESS)
 			return 0;
 		if (rc < 0) {
-			D_ERROR("Object scrub failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Object scrub failed");
 			return rc;
 		}
 		if (rc == SCRUB_POOL_OFF) {
@@ -773,7 +772,7 @@ sc_cont_setup(struct scrub_ctx *ctx, vos_iter_entry_t *entry)
 	rc = ctx->sc_cont_lookup_fn(ctx->sc_pool_uuid, entry->ie_couuid,
 				    ctx->sc_sched_arg, &ctx->sc_cont);
 	if (rc != 0) {
-		D_ERROR("Error opening vos container: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error opening vos container");
 		return rc;
 	}
 
@@ -807,7 +806,7 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
-			D_ERROR("Unable to setup the container. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Unable to setup the container");
 			return 0;
 		}
 
@@ -927,7 +926,7 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 
 	ctx->sc_status = SCRUB_STATUS_NOT_RUNNING;
 	if (daos_handle_is_inval(ctx->sc_vos_pool_hdl)) {
-		D_ERROR("vos_iter_handle is invalid.\n");
+		D_ERROR("vos_iter_handle is invalid");
 		return -DER_INVAL;
 	}
 
@@ -936,7 +935,7 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 
 	rc = sc_ensure_containers_are_loaded(ctx);
 	if (rc != 0) {
-		D_ERROR("Error ensuring containers are loaded: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error ensuring containers are loaded");
 		return rc;
 	}
 

@@ -53,13 +53,12 @@ dc_pool_init(void)
 		rc = daos_rpc_register(&pool_proto_fmt_v5, POOL_PROTO_CLI_COUNT, NULL,
 				       DAOS_POOL_MODULE);
 	} else {
-		D_ERROR("%d version pool RPC not supported.\n", dc_pool_proto_version);
+		D_ERROR("%d version pool RPC not supported", dc_pool_proto_version);
 		rc = -DER_PROTO;
 	}
 
 	if (rc)
-		D_ERROR("failed to register daos %d version pool RPCs: "DF_RC"\n",
-			dc_pool_proto_version, DP_RC(rc));
+		DL_ERROR(rc, "failed to register daos %d version pool RPCs", dc_pool_proto_version);
 
 	return rc;
 }
@@ -77,7 +76,7 @@ dc_pool_fini(void)
 	else
 		rc = daos_rpc_unregister(&pool_proto_fmt_v5);
 	if (rc != 0)
-		D_ERROR("failed to unregister pool RPCs: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to unregister pool RPCs");
 }
 
 static void
@@ -237,10 +236,8 @@ choose:
 		ranklist = NULL;
 		if (rc == 0) {
 			for (i = 0; i < cli->sc_ranks->rl_nr; i++) {
-				D_DEBUG(DB_MD, DF_UUID":%s: "
-					"sc_ranks[%d]=%u\n", DP_UUID(puuid),
-					label ? label : "", i,
-					cli->sc_ranks->rl_ranks[i]);
+				D_DEBUG(DB_MD, DF_UUID ":%s: sc_ranks[%d]=%u", DP_UUID(puuid),
+					label ? label :, i, cli->sc_ranks->rl_ranks[i]);
 			}
 			goto choose;
 		}
@@ -265,27 +262,23 @@ dc_pool_map_update(struct dc_pool *pool, struct pool_map *map, bool connect)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		D_DEBUG(DB_MD, DF_UUID": init pool map: %u\n",
-			DP_UUID(pool->dp_pool), pool_map_get_version(map));
+		D_DEBUG(DB_MD, DF_UUID ": init pool map: %u", DP_UUID(pool->dp_pool),
+			pool_map_get_version(map));
 		D_GOTO(out_update, rc = 0);
 	}
 
 	if (map_version < pool_map_get_version(pool->dp_map)) {
-		D_DEBUG(DB_MD, DF_UUID": got older pool map: %u -> %u %p\n",
-			DP_UUID(pool->dp_pool),
+		D_DEBUG(DB_MD, DF_UUID ": got older pool map: %u -> %u %p", DP_UUID(pool->dp_pool),
 			pool_map_get_version(pool->dp_map), map_version, pool);
 		D_GOTO(out, rc = 0);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": updating pool map: %u -> %u\n",
-		DP_UUID(pool->dp_pool),
-		pool->dp_map == NULL ?
-		0 : pool_map_get_version(pool->dp_map), map_version);
+	D_DEBUG(DB_MD, DF_UUID ": updating pool map: %u -> %u", DP_UUID(pool->dp_pool),
+		pool->dp_map == NULL ? 0 : pool_map_get_version(pool->dp_map), map_version);
 
 	rc = pl_map_update(pool->dp_pool, map, connect, DEFAULT_PL_TYPE);
 	if (rc != 0) {
-		D_ERROR("Failed to refresh placement map: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to refresh placement map");
 		D_GOTO(out, rc);
 	}
 
@@ -333,12 +326,12 @@ pool_print_range_list(struct dc_pool *pool, d_rank_range_list_t *list, bool enab
 		remaining -= ret;
 		linepos += ret;
 	}
-	D_DEBUG(DB_MD, "%s\n", line);
+	D_DEBUG(DB_MD, "%s", line);
 	return;
 err:
 	if (written > 0)
-		D_DEBUG(DB_MD, "%s%s\n", line, (ret >= remaining) ? " ...(TRUNCATED): " : "");
-	D_ERROR(DF_UUID": snprintf failed, %d\n", DP_UUID(pool->dp_pool), ret);
+		D_DEBUG(DB_MD, "%s%s", line, (ret >= remaining) ? " ...(TRUNCATED): " :);
+	D_ERROR(DF_UUID ": snprintf failed, %d", DP_UUID(pool->dp_pool), ret);
 }
 
 /*
@@ -356,12 +349,12 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	struct pool_map	       *map;
 	int			rc;
 
-	D_DEBUG(DB_MD, DF_UUID": info=%p (pi_bits="DF_X64"), ranks=%p\n",
-		DP_UUID(pool->dp_pool), info, info ? info->pi_bits : 0, ranks);
+	D_DEBUG(DB_MD, DF_UUID ": info=%p (pi_bits=" DF_X64 "), ranks=%p", DP_UUID(pool->dp_pool),
+		info, info ? info->pi_bits : 0, ranks);
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create local pool map");
 		return rc;
 	}
 
@@ -374,7 +367,7 @@ process_query_reply(struct dc_pool *pool, struct pool_buf *map_buf,
 	if (info != NULL) {
 		rc = pool_map_find_failed_tgts(map, NULL, &info->pi_ndisabled);
 		if (rc != 0) {
-			D_ERROR("Couldn't get failed targets, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Couldn't get failed targets");
 			goto out_unlock;
 		}
 	}
@@ -477,16 +470,16 @@ pool_connect_cp(tse_task_t *task, void *data)
 	}
 
 	if (rc) {
-		D_ERROR("RPC error while connecting to pool: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "RPC error while connecting to pool");
 		D_GOTO(out, rc);
 	}
 
 	rc = pco->pco_op.po_rc;
 	if (rc == -DER_TRUNC) {
 		/* retry with map buffer size required by server */
-		D_DEBUG(DB_MD, "current pool map buffer size (%ld) < size "
-			"required by server (%u), retry after allocating it\n",
+		D_DEBUG(DB_MD,
+			"current pool map buffer size (%ld) < size required by server (%u), retry "
+			"after allocating it",
 			pool_buf_size(map_buf->pb_nr), pco->pco_map_buf_size);
 		pool->dp_map_sz = pco->pco_map_buf_size;
 		rc = tse_task_reinit(task);
@@ -494,7 +487,7 @@ pool_connect_cp(tse_task_t *task, void *data)
 			put_pool = false;
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		D_ERROR("failed to connect to pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to connect to pool");
 		D_GOTO(out, rc);
 	}
 
@@ -511,15 +504,13 @@ pool_connect_cp(tse_task_t *task, void *data)
 		}
 
 		/* TODO: What do we do about the remote connection state? */
-		D_ERROR("failed to create local pool map: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create local pool map");
 		D_GOTO(out, rc);
 	}
 
 	rc = dc_mgmt_notify_pool_connect(pool);
 	if (rc != 0) {
-		D_ERROR("failed to register pool connect with agent: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to register pool connect with agent");
 		D_GOTO(out, rc);
 	}
 
@@ -527,9 +518,8 @@ pool_connect_cp(tse_task_t *task, void *data)
 	dc_pool_hdl_link(pool); /* +1 ref */
 	dc_pool2hdl(pool, arg->hdlp); /* +1 ref */
 
-	D_DEBUG(DB_MD, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
-		" master\n", DP_UUID(pool->dp_pool), arg->hdlp->cookie,
-		DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": connected: cookie=" DF_X64 " hdl=" DF_UUID " master",
+		DP_UUID(pool->dp_pool), arg->hdlp->cookie, DP_UUID(pool->dp_pool_hdl));
 
 out:
 	crt_req_decref(arg->rpc);
@@ -612,7 +602,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	/** Pool connect RPC by UUID (provided, or looked up by label above) */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_CONNECT, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create rpc");
 		D_GOTO(out, rc);
 	}
 	/** for con_args */
@@ -624,8 +614,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	/** request credentials */
 	rc = dc_sec_request_creds(&pci->pci_cred);
 	if (rc != 0) {
-		D_ERROR("failed to obtain security credential: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to obtain security credential");
 		D_GOTO(out_req, rc);
 	}
 
@@ -707,9 +696,8 @@ dc_pool_connect(tse_task_t *task)
 			goto out_task;
 
 		daos_task_set_priv(task, pool);
-		D_DEBUG(DB_MD, "%s: connecting: hdl="DF_UUIDF" flags=%x\n",
-				args->pool ? : "<compat>",
-				DP_UUID(pool->dp_pool_hdl), args->flags);
+		D_DEBUG(DB_MD, "%s: connecting: hdl=" DF_UUIDF " flags=%x",
+			args->pool ?: "<compat>", DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
 	rc = dc_pool_connect_internal(task, args->info, label, args->poh);
@@ -748,20 +736,18 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	if (rc) {
-		D_ERROR("RPC error while disconnecting from pool: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "RPC error while disconnecting from pool");
 		D_GOTO(out, rc);
 	}
 
 	rc = pdo->pdo_op.po_rc;
 	if (rc) {
-		D_ERROR("failed to disconnect from pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to disconnect from pool");
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": disconnected: cookie="DF_X64" hdl="DF_UUID
-		" master\n", DP_UUID(pool->dp_pool), arg->hdl.cookie,
-		DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": disconnected: cookie=" DF_X64 " hdl=" DF_UUID " master",
+		DP_UUID(pool->dp_pool), arg->hdl.cookie, DP_UUID(pool->dp_pool_hdl));
 
 	pl_map_disconnect(pool->dp_pool);
 
@@ -772,8 +758,7 @@ pool_disconnect_cp(tse_task_t *task, void *data)
 		 * a clean up rpc on process termination however it will be noop
 		 * on the server side.
 		 */
-		D_ERROR("failed to notify agent of pool disconnect: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to notify agent of pool disconnect");
 		rc = 0;
 	}
 
@@ -805,24 +790,22 @@ dc_pool_disconnect(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": disconnecting: hdl="DF_UUID" cookie="DF_X64
-		"\n", DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
-		args->poh.cookie);
+	D_DEBUG(DB_MD, DF_UUID ": disconnecting: hdl=" DF_UUID " cookie=" DF_X64,
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), args->poh.cookie);
 
 	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
 	if (!d_list_empty(&pool->dp_co_list)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		D_ERROR("cannot disconnect pool "DF_UUID", container not closed, "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(-DER_BUSY));
+		DL_ERROR(-DER_BUSY, "cannot disconnect pool " DF_UUID ", container not closed",
+			 DP_UUID(pool->dp_pool));
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 	pool->dp_disconnecting = 1;
 	D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 
 	if (pool->dp_slave) {
-		D_DEBUG(DB_MD, DF_UUID": disconnecting: cookie="DF_X64" hdl="
-			DF_UUID" slave\n", DP_UUID(pool->dp_pool),
-			args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
+		D_DEBUG(DB_MD, DF_UUID ": disconnecting: cookie=" DF_X64 " hdl=" DF_UUID " slave",
+			DP_UUID(pool->dp_pool), args->poh.cookie, DP_UUID(pool->dp_pool_hdl));
 
 		pl_map_disconnect(pool->dp_pool);
 		/* remove pool from hhash */
@@ -837,13 +820,12 @@ dc_pool_disconnect(tse_task_t *task)
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_DISCONNECT, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create rpc");
 		D_GOTO(out_pool, rc);
 	}
 
@@ -992,9 +974,10 @@ dc_pool_l2g(daos_handle_t poh, d_iov_t *glob)
 	}
 	if (glob->iov_buf_len < glob_buf_size) {
 		rc = -DER_TRUNC;
-		D_ERROR("Larger glob buffer needed (" DF_U64 " bytes provided, " DF_U64
-			" required) " DF_RC "\n",
-			glob->iov_buf_len, glob_buf_size, DP_RC(rc));
+		DL_ERROR(rc,
+			 "Larger glob buffer needed (" DF_U64 " bytes provided, " DF_U64
+			 " required)",
+			 glob->iov_buf_len, glob_buf_size);
 		glob->iov_buf_len = glob_buf_size;
 		D_GOTO(out_client_buf, rc);
 	}
@@ -1027,7 +1010,7 @@ out_pool:
 	dc_pool_put(pool);
 out:
 	if (rc != 0)
-		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 	return rc;
 }
 
@@ -1037,13 +1020,14 @@ dc_pool_local2global(daos_handle_t poh, d_iov_t *glob)
 	int	rc = 0;
 
 	if (glob == NULL) {
-		D_DEBUG(DB_MD, "Invalid parameter, NULL glob pointer.\n");
+		D_DEBUG(DB_MD, "Invalid parameter, NULL glob pointer");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (glob->iov_buf != NULL && (glob->iov_buf_len == 0 ||
 	    glob->iov_buf_len < glob->iov_len)) {
-		D_DEBUG(DB_MD, "Invalid parameter of glob, iov_buf %p, "
-			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+		D_DEBUG(DB_MD,
+			"Invalid parameter of glob, iov_buf %p, iov_buf_len " DF_U64
+			", iov_len " DF_U64,
 			glob->iov_buf, glob->iov_buf_len, glob->iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -1092,8 +1076,7 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 
 	rc = pool_map_create(map_buf, pool_glob->dpg_map_version, &map);
 	if (rc != 0) {
-		D_ERROR("failed to create local pool map: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create local pool map");
 		D_GOTO(out, rc);
 	}
 
@@ -1105,13 +1088,12 @@ dc_pool_g2l(struct dc_pool_glob *pool_glob, size_t len, daos_handle_t *poh)
 	dc_pool_hdl_link(pool); /* +1 ref */
 	dc_pool2hdl(pool, poh); /* +1 ref */
 
-	D_DEBUG(DB_MD, DF_UUID": connected: cookie="DF_X64" hdl="DF_UUID
-		" slave\n", DP_UUID(pool->dp_pool), poh->cookie,
-		DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": connected: cookie=" DF_X64 " hdl=" DF_UUID " slave",
+		DP_UUID(pool->dp_pool), poh->cookie, DP_UUID(pool->dp_pool_hdl));
 
 out:
 	if (rc != 0)
-		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 	if (map != NULL)
 		pool_map_decref(map);
 	if (pool != NULL)
@@ -1127,13 +1109,14 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 
 	if (glob.iov_buf == NULL || glob.iov_buf_len == 0 ||
 	    glob.iov_len == 0 || glob.iov_buf_len < glob.iov_len) {
-		D_DEBUG(DB_MD, "Invalid parameter of glob, iov_buf %p, "
-			"iov_buf_len "DF_U64", iov_len "DF_U64".\n",
+		D_DEBUG(DB_MD,
+			"Invalid parameter of glob, iov_buf %p, iov_buf_len " DF_U64
+			", iov_len " DF_U64,
 			glob.iov_buf, glob.iov_buf_len, glob.iov_len);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (poh == NULL) {
-		D_DEBUG(DB_MD, "Invalid parameter, NULL poh.\n");
+		D_DEBUG(DB_MD, "Invalid parameter, NULL poh");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -1142,13 +1125,13 @@ dc_pool_global2local(d_iov_t glob, daos_handle_t *poh)
 		swap_pool_glob(pool_glob);
 		D_ASSERT(pool_glob->dpg_magic == DC_POOL_GLOB_MAGIC);
 	} else if (pool_glob->dpg_magic != DC_POOL_GLOB_MAGIC) {
-		D_ERROR("Bad dpg_magic: %#x.\n", pool_glob->dpg_magic);
+		D_ERROR("Bad dpg_magic: %#x", pool_glob->dpg_magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = dc_pool_g2l(pool_glob, glob.iov_len, poh);
 	if (rc != 0)
-		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 
 out:
 	return rc;
@@ -1182,27 +1165,24 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 	}
 
 	if (rc != 0) {
-		D_ERROR("RPC error while excluding targets: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "RPC error while excluding targets");
 		D_GOTO(out, rc);
 	}
 
 	rc = out->pto_op.po_rc;
 	if (rc != 0) {
-		D_ERROR("failed to exclude targets: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to exclude targets");
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": updated: hdl="DF_UUID" failed=%d\n",
-		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
-		(int)out->pto_addr_list.ca_count);
+	D_DEBUG(DB_MD, DF_UUID ": updated: hdl=" DF_UUID " failed=%d", DP_UUID(in->pti_op.pi_uuid),
+		DP_UUID(in->pti_op.pi_hdl), (int)out->pto_addr_list.ca_count);
 
 	D_FREE(in->pti_addr_list.ca_arrays);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
 	    out->pto_addr_list.ca_count > 0) {
-		D_ERROR("tgt update failed count %zd\n",
-			out->pto_addr_list.ca_count);
+		D_ERROR("tgt update failed count %zd", out->pto_addr_list.ca_count);
 		rc = -DER_INVAL;
 	}
 
@@ -1229,13 +1209,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 	int				rc;
 
 	if (args->tgts == NULL || args->tgts->tl_nr == 0) {
-		D_ERROR("NULL tgts or tgts->tl_nr is zero\n");
+		D_ERROR("NULL tgts or tgts->tl_nr is zero");
 		D_GOTO(out_task, rc = -DER_INVAL);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": opc %d targets:%u tgts[0]=%u/%d\n",
-		DP_UUID(args->uuid), opc, args->tgts->tl_nr,
-		args->tgts->tl_ranks[0], args->tgts->tl_tgts[0]);
+	D_DEBUG(DB_MD, DF_UUID ": opc %d targets:%u tgts[0]=%u/%d", DP_UUID(args->uuid), opc,
+		args->tgts->tl_nr, args->tgts->tl_ranks[0], args->tgts->tl_tgts[0]);
 
 	if (state == NULL) {
 		D_ALLOC_PTR(state);
@@ -1245,15 +1224,14 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 		rc = dc_mgmt_sys_attach(args->grp, &state->sys);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to sys attach, rc %d.\n",
-				DP_UUID(args->uuid), rc);
+			D_ERROR(DF_UUID ": failed to sys attach, rc %d", DP_UUID(args->uuid), rc);
 			D_GOTO(out_state, rc);
 		}
 		rc = rsvc_client_init(&state->client,
 				      state->sys->sy_server ? args->svc : NULL);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to rsvc_client_init, rc %d.\n",
-				DP_UUID(args->uuid), rc);
+			D_ERROR(DF_UUID ": failed to rsvc_client_init, rc %d", DP_UUID(args->uuid),
+				rc);
 			D_GOTO(out_group, rc);
 		}
 
@@ -1265,13 +1243,12 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 				     &state->client, NULL /* mutex */,
 				     state->sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(args->uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(args->uuid));
 		goto out_client;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create rpc");
 		D_GOTO(out_client, rc);
 	}
 
@@ -1280,8 +1257,8 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args,
 
 	rc = pool_target_addr_list_alloc(args->tgts->tl_nr, &list);
 	if (rc) {
-		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
-			DP_UUID(args->uuid), rc);
+		D_ERROR(DF_UUID ": pool_target_addr_list_alloc failed, rc %d", DP_UUID(args->uuid),
+			rc);
 		D_GOTO(out_rpc, rc);
 	}
 
@@ -1387,11 +1364,10 @@ pool_query_cb(tse_task_t *task, void *data)
 	else if (rc == RSVC_CLIENT_RECHOOSE)
 		D_GOTO(out, rc = 0);
 
-	D_DEBUG(DB_MD, DF_UUID": query rpc done: %d\n",
-		DP_UUID(arg->dqa_pool->dp_pool), rc);
+	D_DEBUG(DB_MD, DF_UUID ": query rpc done: %d", DP_UUID(arg->dqa_pool->dp_pool), rc);
 
 	if (rc) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "RPC error while querying pool");
 		D_GOTO(out, rc);
 	}
 
@@ -1399,17 +1375,17 @@ pool_query_cb(tse_task_t *task, void *data)
 	if (rc == -DER_TRUNC) {
 		struct dc_pool *pool = arg->dqa_pool;
 
-		D_WARN("pool map buffer size (%ld) < required (%u)\n",
-		       pool_buf_size(map_buf->pb_nr), out_v5->pqo_map_buf_size);
+		D_WARN("pool map buffer size (%ld) < required (%u)", pool_buf_size(map_buf->pb_nr),
+		       out_v5->pqo_map_buf_size);
 
 		/* retry with map buffer size required by server */
-		D_INFO("retry with map buffer size required by server (%ul)\n",
+		D_INFO("retry with map buffer size required by server (%ul)",
 		       out_v5->pqo_map_buf_size);
 		pool->dp_map_sz = out_v5->pqo_map_buf_size;
 		rc = tse_task_reinit(task);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		D_ERROR("failed to query pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to query pool");
 		D_GOTO(out, rc);
 	}
 
@@ -1428,8 +1404,8 @@ pool_query_cb(tse_task_t *task, void *data)
 		}
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_MD, DF_UUID": got ranklist with %u ranks\n",
-		DP_UUID(arg->dqa_pool->dp_pool), (*ranks_arg)->rl_nr);
+	D_DEBUG(DB_MD, DF_UUID ": got ranklist with %u ranks", DP_UUID(arg->dqa_pool->dp_pool),
+		(*ranks_arg)->rl_nr);
 	if (ranks_arg == &ranks)
 		d_rank_list_free(ranks);
 
@@ -1464,23 +1440,20 @@ dc_pool_query(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": querying: hdl="DF_UUID" ranks=%p info=%p\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
-		args->ranks, args->info);
+	D_DEBUG(DB_MD, DF_UUID ": querying: hdl=" DF_UUID " ranks=%p info=%p",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), args->ranks, args->info);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool query rpc: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool query rpc", DP_UUID(pool->dp_pool));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -1541,7 +1514,7 @@ map_known_stale(struct dc_pool *pool)
 static void
 register_map_task(struct dc_pool *pool, tse_task_t *task)
 {
-	D_DEBUG(DB_MD, DF_UUID": registering map task %p\n", DP_UUID(pool->dp_pool), task);
+	D_DEBUG(DB_MD, DF_UUID ": registering map task %p", DP_UUID(pool->dp_pool), task);
 	D_ASSERT(pool->dp_map_task == NULL);
 	tse_task_addref(task);
 	pool->dp_map_task = task;
@@ -1550,7 +1523,7 @@ register_map_task(struct dc_pool *pool, tse_task_t *task)
 static void
 unregister_map_task(struct dc_pool *pool, tse_task_t *task)
 {
-	D_DEBUG(DB_MD, DF_UUID": unregistering map task %p\n", DP_UUID(pool->dp_pool),
+	D_DEBUG(DB_MD, DF_UUID ": unregistering map task %p", DP_UUID(pool->dp_pool),
 		pool->dp_map_task);
 	D_ASSERTF(pool->dp_map_task == task, "%p == %p\n", pool->dp_map_task, task);
 	tse_task_decref(pool->dp_map_task);
@@ -1644,8 +1617,8 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 
 	rc = pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, &c);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_TGT_QUERY_MAP: %d\n",
-			DP_UUID(pool->dp_pool), rc);
+		D_ERROR(DF_UUID ": failed to create POOL_TGT_QUERY_MAP: %d", DP_UUID(pool->dp_pool),
+			rc);
 		return rc;
 	}
 
@@ -1700,7 +1673,7 @@ map_refresh_cb(tse_task_t *task, void *varg)
 	 */
 	D_RWLOCK_WRLOCK(&pool->dp_map_lock);
 
-	D_DEBUG(DB_MD, DF_UUID": %p: crt: "DF_RC"\n", DP_UUID(pool->dp_pool), task, DP_RC(rc));
+	D_DEBUG(DB_MD, DF_UUID ": %p: crt: " DF_RC, DP_UUID(pool->dp_pool), task, DP_RC(rc));
 	if (daos_rpc_retryable_rc(rc)) {
 		reinit = true;
 		goto out;
@@ -1717,18 +1690,18 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		 * cb_arg->mrc_map_buf is not large enough. Retry with the size
 		 * suggested by the server side.
 		 */
-		D_DEBUG(DB_MD, DF_UUID": %p: map buf < required %u\n",
-			DP_UUID(pool->dp_pool), task, out->tmo_map_buf_size);
+		D_DEBUG(DB_MD, DF_UUID ": %p: map buf < required %u", DP_UUID(pool->dp_pool), task,
+			out->tmo_map_buf_size);
 		pool->dp_map_sz = out->tmo_map_buf_size;
 		reinit = true;
 		goto out;
 	} else if (daos_rpc_retryable_rc(rc) || rc == -DER_AGAIN) {
-		D_DEBUG(DB_MD, DF_UUID": %p: retryable: "DF_RC"\n", DP_UUID(pool->dp_pool), task,
+		D_DEBUG(DB_MD, DF_UUID ": %p: retryable: " DF_RC, DP_UUID(pool->dp_pool), task,
 			DP_RC(rc));
 		reinit = true;
 		goto out;
 	} else if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": %p: serious: "DF_RC"\n", DP_UUID(pool->dp_pool), task,
+		D_DEBUG(DB_MD, DF_UUID ": %p: serious: " DF_RC, DP_UUID(pool->dp_pool), task,
 			DP_RC(rc));
 		arg->mra_n--;
 		reinit = true;
@@ -1747,11 +1720,11 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		 * need to retry. Otherwise, we are done.
 		 */
 		D_DEBUG(DB_MD,
-			DF_UUID": %p: no requested version from rank %u: "
-			"requested=%u known=%u remote=%u\n",
-			DP_UUID(pool->dp_pool), task,
-			cb_arg->mrc_rpc->cr_ep.ep_rank, in->tmi_map_version,
-			pool->dp_map_version_known, out->tmo_op.po_map_version);
+			DF_UUID
+			": %p: no requested version from rank %u: requested=%u known=%u remote=%u",
+			DP_UUID(pool->dp_pool), task, cb_arg->mrc_rpc->cr_ep.ep_rank,
+			in->tmi_map_version, pool->dp_map_version_known,
+			out->tmo_op.po_map_version);
 		if (out->tmo_op.po_map_version < pool->dp_map_version_known ||
 		    map_known_stale(pool))
 			reinit = true;
@@ -1766,7 +1739,7 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		 * The server side has provided a version we requested for, but
 		 * we are no longer interested in it.
 		 */
-		D_DEBUG(DB_MD, DF_UUID": %p: got stale %u < known %u or <= cached %u\n",
+		D_DEBUG(DB_MD, DF_UUID ": %p: got stale %u < known %u or <= cached %u",
 			DP_UUID(pool->dp_pool), task, out->tmo_op.po_map_version,
 			pool->dp_map_version_known, version_cached);
 		reinit = true;
@@ -1775,8 +1748,7 @@ map_refresh_cb(tse_task_t *task, void *varg)
 
 	rc = pool_map_create(cb_arg->mrc_map_buf, out->tmo_op.po_map_version, &map);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool map: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool map", DP_UUID(pool->dp_pool));
 		goto out;
 	}
 
@@ -1794,12 +1766,12 @@ out:
 		rc_tmp = tse_task_reinit_with_delay(task, backoff);
 		if (rc_tmp == 0) {
 			D_DEBUG(DB_MD,
-				DF_UUID": %p: reinitialized due to "DF_RC" with backoff %u\n",
+				DF_UUID ": %p: reinitialized due to " DF_RC " with backoff %u",
 				DP_UUID(pool->dp_pool), task, DP_RC(rc), backoff);
 			rc = 0;
 		} else {
-			D_ERROR(DF_UUID": failed to reinitialize pool map "
-				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to reinitialize pool map refresh task",
+				 DP_UUID(pool->dp_pool));
 			if (rc == 0)
 				rc = rc_tmp;
 			reinit = false;
@@ -1839,7 +1811,7 @@ map_refresh(tse_task_t *task)
 		 * register its completion callback to the bottom of the
 		 * resulting task's callback stack.
 		 */
-		D_DEBUG(DB_MD, DF_UUID": %p: passive done\n", DP_UUID(pool->dp_pool), task);
+		D_DEBUG(DB_MD, DF_UUID ": %p: passive done", DP_UUID(pool->dp_pool), task);
 		rc = 0;
 		goto out_task;
 	}
@@ -1849,7 +1821,7 @@ map_refresh(tse_task_t *task)
 	if (arg->mra_fallen_back) {
 		unregister_map_task(pool, task);
 		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-		D_DEBUG(DB_MD, DF_UUID": %p: fallen-back done\n", DP_UUID(pool->dp_pool), task);
+		D_DEBUG(DB_MD, DF_UUID ": %p: fallen-back done", DP_UUID(pool->dp_pool), task);
 		rc = 0;
 		goto out_task;
 	}
@@ -1877,21 +1849,21 @@ map_refresh(tse_task_t *task)
 		 * known version here via the pool->dp_map_version_known update
 		 * above, and retry till the highest known version is cached.
 		 */
-		D_DEBUG(DB_MD, DF_UUID": %p: becoming passive waiting for %p\n",
+		D_DEBUG(DB_MD, DF_UUID ": %p: becoming passive waiting for %p",
 			DP_UUID(pool->dp_pool), task, pool->dp_map_task);
 		arg->mra_passive = true;
 		rc = tse_task_register_deps(task, 1, &pool->dp_map_task);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to depend on active pool map "
-				"refresh task: "DF_RC"\n", DP_UUID(pool->dp_pool), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to depend on active pool map refresh task",
+				 DP_UUID(pool->dp_pool));
 			D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 			goto out_task;
 		}
 		rc = tse_task_reinit(task);
 		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
-				DP_UUID(pool->dp_pool), task, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to reinitialize task %p",
+				 DP_UUID(pool->dp_pool), task);
 			goto out_task;
 		}
 		goto out;
@@ -1899,7 +1871,7 @@ map_refresh(tse_task_t *task)
 
 	if (pool->dp_map_task == NULL) {
 		/* No active pool map refresh task; become one */
-		D_DEBUG(DB_MD, DF_UUID": %p: becoming active\n", DP_UUID(pool->dp_pool), task);
+		D_DEBUG(DB_MD, DF_UUID ": %p: becoming active", DP_UUID(pool->dp_pool), task);
 		register_map_task(pool, task);
 	}
 
@@ -1910,36 +1882,36 @@ map_refresh(tse_task_t *task)
 
 		/* Fall back to dc_pool_query. */
 		D_RWLOCK_UNLOCK(&pool->dp_map_lock);
-		D_DEBUG(DB_MD, DF_UUID": %p: falling back to dc_pool_query\n",
+		D_DEBUG(DB_MD, DF_UUID ": %p: falling back to dc_pool_query",
 			DP_UUID(pool->dp_pool), task);
 		arg->mra_fallen_back = true;
 		rc = dc_task_create(dc_pool_query, tse_task2sched(task), NULL /* ev */,
 				    &query_task);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create pool query task: "DF_RC"\n",
-				DP_UUID(pool->dp_pool), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to create pool query task",
+				 DP_UUID(pool->dp_pool));
 			goto out_map_task;
 		}
 		query_arg = dc_task_get_args(query_task);
 		query_arg->poh = arg->mra_pool_hdl;
 		rc = tse_task_register_deps(task, 1, &query_task);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to depend on pool query task: "DF_RC"\n",
-				DP_UUID(pool->dp_pool), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to depend on pool query task",
+				 DP_UUID(pool->dp_pool));
 			dc_task_decref(query_task);
 			goto out_map_task;
 		}
 		rc = tse_task_reinit(task);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to reinitialize task %p: "DF_RC"\n",
-				DP_UUID(pool->dp_pool), task, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to reinitialize task %p",
+				 DP_UUID(pool->dp_pool), task);
 			dc_task_decref(query_task);
 			goto out_map_task;
 		}
 		rc = dc_task_schedule(query_task, true);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to run pool query task %p: "DF_RC"\n",
-				DP_UUID(pool->dp_pool), query_task, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to run pool query task %p",
+				 DP_UUID(pool->dp_pool), query_task);
 			goto out_map_task;
 		}
 		goto out;
@@ -1957,8 +1929,7 @@ map_refresh(tse_task_t *task)
 	rc = create_map_refresh_rpc(pool, version, daos_task2ctx(task), pool->dp_sys->sy_group,
 				    rank, &rpc, &cb_arg.mrc_map_buf);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool refresh RPC: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool refresh RPC", DP_UUID(pool->dp_pool));
 		goto out_map_task;
 	}
 
@@ -1967,13 +1938,13 @@ map_refresh(tse_task_t *task)
 
 	rc = tse_task_register_comp_cb(task, map_refresh_cb, &cb_arg, sizeof(cb_arg));
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to task completion callback: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to task completion callback",
+			 DP_UUID(pool->dp_pool));
 		goto out_cb_arg;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": %p: asking rank %u for version > %u\n",
-		DP_UUID(pool->dp_pool), task, rank, version);
+	D_DEBUG(DB_MD, DF_UUID ": %p: asking rank %u for version > %u", DP_UUID(pool->dp_pool),
+		task, rank, version);
 	return daos_rpc_send(rpc, task);
 
 out_cb_arg:
@@ -2020,14 +1991,14 @@ dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version, ts
 
 	pool = dc_hdl2pool(pool_hdl);
 	if (pool == NULL) {
-		D_ERROR("failed to find pool handle "DF_X64"\n", pool_hdl.cookie);
+		D_ERROR("failed to find pool handle " DF_X64, pool_hdl.cookie);
 		return -DER_NO_HDL;
 	}
 
 	rc = tse_task_create(map_refresh, sched, NULL /* priv */, &t);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool map refresh task: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool map refresh task",
+			 DP_UUID(pool->dp_pool));
 		dc_pool_put(pool);
 		return rc;
 	}
@@ -2087,11 +2058,10 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	else if (rc == RSVC_CLIENT_RECHOOSE)
 		D_GOTO(out, rc = 0);
 
-	D_DEBUG(DB_MD, DF_UUID": list cont rpc done: %d\n",
-		DP_UUID(arg->lca_pool->dp_pool), rc);
+	D_DEBUG(DB_MD, DF_UUID ": list cont rpc done: %d", DP_UUID(arg->lca_pool->dp_pool), rc);
 
 	if (rc) {
-		D_ERROR("RPC error while listing containers: %d\n", rc);
+		D_ERROR("RPC error while listing containers: %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2100,11 +2070,11 @@ pool_list_cont_cb(tse_task_t *task, void *data)
 	/* arg->lca_cont_buf written by bulk transfer if buffer provided */
 
 	if (arg->lca_cont_buf && (rc == -DER_TRUNC)) {
-		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
-				in->plci_ncont, out->plco_ncont);
+		D_WARN("ncont provided (" DF_U64 ") < required (" DF_U64 ")", in->plci_ncont,
+		       out->plco_ncont);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		D_ERROR("failed to list containers %d\n", rc);
+		D_ERROR("failed to list containers %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2134,16 +2104,15 @@ dc_pool_list_cont(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": list containers: hdl="DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": list containers: hdl=" DF_UUID, DP_UUID(pool->dp_pool),
+		DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 
@@ -2152,9 +2121,8 @@ dc_pool_list_cont(tse_task_t *task)
 	 */
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_LIST_CONT, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool list cont rpc: "
-			DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool list cont rpc",
+			 DP_UUID(pool->dp_pool));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -2171,9 +2139,8 @@ dc_pool_list_cont(tse_task_t *task)
 		in->plci_ncont = *args->ncont;
 	in->plci_cont_bulk = CRT_BULK_NULL;
 
-	D_DEBUG(DB_MD, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
-			 in->plci_ncont, args->cont_buf,
-			 *args->ncont);
+	D_DEBUG(DB_MD, "req_ncont=" DF_U64 " (cont_buf=%p, *ncont=" DF_U64, in->plci_ncont,
+		args->cont_buf, *args->ncont);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
@@ -2236,11 +2203,10 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 	else if (rc == RSVC_CLIENT_RECHOOSE)
 		D_GOTO(out, rc = 0);
 
-	D_DEBUG(DB_MD, DF_UUID": filter cont rpc done: %d\n",
-		DP_UUID(arg->fca_pool->dp_pool), rc);
+	D_DEBUG(DB_MD, DF_UUID ": filter cont rpc done: %d", DP_UUID(arg->fca_pool->dp_pool), rc);
 
 	if (rc) {
-		D_ERROR("RPC error while filtering containers: %d\n", rc);
+		D_ERROR("RPC error while filtering containers: %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2249,11 +2215,11 @@ pool_filter_cont_cb(tse_task_t *task, void *data)
 	/* arg->fca_cont_buf written by bulk transfer if buffer provided */
 
 	if (arg->fca_cont_buf && (rc == -DER_TRUNC)) {
-		D_WARN("ncont provided ("DF_U64") < required ("DF_U64")\n",
-		       in->pfci_ncont, out->pfco_ncont);
+		D_WARN("ncont provided (" DF_U64 ") < required (" DF_U64 ")", in->pfci_ncont,
+		       out->pfco_ncont);
 		D_GOTO(out, rc);
 	} else if (rc != 0) {
-		D_ERROR("failed to filter containers %d\n", rc);
+		D_ERROR("failed to filter containers %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -2282,24 +2248,23 @@ dc_pool_filter_cont(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": filter containers: hdl="DF_UUID", args=%p, filt=%p, ncont=%p, "
-		"*ncont="DF_U64", cont_buf=%p\n", DP_UUID(pool->dp_pool),
-		DP_UUID(pool->dp_pool_hdl), args, args->filt, args->ncont, *args->ncont,
-		args->cont_buf);
+	D_DEBUG(DB_MD,
+		DF_UUID ": filter containers: hdl=" DF_UUID
+			", args=%p, filt=%p, ncont=%p, *ncont=" DF_U64 ", cont_buf=%p",
+		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl), args, args->filt, args->ncont,
+		*args->ncont, args->cont_buf);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool, &pool->dp_client,
 				     &pool->dp_client_lock, pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_FILTER_CONT, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool filter cont rpc: "
-			DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create pool filter cont rpc",
+			 DP_UUID(pool->dp_pool));
 		D_GOTO(out_pool, rc);
 	}
 
@@ -2323,8 +2288,8 @@ dc_pool_filter_cont(tse_task_t *task)
 		in->pfci_ncont = *args->ncont;
 	in->pfci_cont_bulk = CRT_BULK_NULL;
 
-	D_DEBUG(DB_MD, "req_ncont="DF_U64" (cont_buf=%p, *ncont="DF_U64"\n",
-		in->pfci_ncont, args->cont_buf, *args->ncont);
+	D_DEBUG(DB_MD, "req_ncont=" DF_U64 " (cont_buf=%p, *ncont=" DF_U64, in->pfci_ncont,
+		args->cont_buf, *args->ncont);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
@@ -2414,25 +2379,23 @@ pool_query_target_cb(tse_task_t *task, void *data)
 	else if (rc == RSVC_CLIENT_RECHOOSE)
 		D_GOTO(out, rc = 0);
 
-	D_DEBUG(DB_MD, DF_UUID": target query rpc done: %d\n",
-		DP_UUID(arg->dqa_pool->dp_pool), rc);
+	D_DEBUG(DB_MD, DF_UUID ": target query rpc done: %d", DP_UUID(arg->dqa_pool->dp_pool), rc);
 
 	if (rc) {
-		D_ERROR("RPC error while querying pool target: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "RPC error while querying pool target");
 		D_GOTO(out, rc);
 	}
 
 	rc = out->pqio_op.po_rc;
 
 	if (rc != 0) {
-		D_ERROR("failed to query pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to query pool");
 		D_GOTO(out, rc);
 	}
 
 	arg->dqa_info->ta_state = out->pqio_state;
 	arg->dqa_info->ta_space = out->pqio_space;
-	D_DEBUG(DB_MD, DF_UUID": rank %u index %u state %d\n", DP_UUID(arg->dqa_pool->dp_pool),
+	D_DEBUG(DB_MD, DF_UUID ": rank %u index %u state %d", DP_UUID(arg->dqa_pool->dp_pool),
 		arg->dqa_rank, arg->dqa_tgt_idx, arg->dqa_info->ta_state);
 
 out:
@@ -2459,24 +2422,22 @@ dc_pool_query_target(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": querying: hdl="DF_UUID" tgt=%d rank=%d\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl),
-		args->tgt_idx, args->rank);
+	D_DEBUG(DB_MD, DF_UUID ": querying: hdl=" DF_UUID " tgt=%d rank=%d", DP_UUID(pool->dp_pool),
+		DP_UUID(pool->dp_pool_hdl), args->tgt_idx, args->rank);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	D_MUTEX_LOCK(&pool->dp_client_lock);
 	rc = rsvc_client_choose(&pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_QUERY_INFO, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool tgt info rpc: %d\n",
-			DP_UUID(pool->dp_pool), rc);
-		 goto out_pool;
+		D_ERROR(DF_UUID ": failed to create pool tgt info rpc: %d", DP_UUID(pool->dp_pool),
+			rc);
+		goto out_pool;
 	}
 
 	in = crt_req_get(rpc);
@@ -2557,19 +2518,18 @@ pool_req_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	if (rc != 0) {
-		D_ERROR("RPC error while querying pool: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "RPC error while querying pool");
 		D_GOTO(out, rc);
 	}
 
 	rc = op_out->po_rc;
 	if (rc != 0) {
-		D_DEBUG(DB_MD, DF_UUID": failed to access pool: %d\n",
-			DP_UUID(pool->dp_pool), rc);
+		D_DEBUG(DB_MD, DF_UUID ": failed to access pool: %d", DP_UUID(pool->dp_pool), rc);
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": Accessed: using hdl="DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": Accessed: using hdl=" DF_UUID, DP_UUID(pool->dp_pool),
+		DP_UUID(pool->dp_pool_hdl));
 	if (args->pra_callback != NULL)
 		rc = args->pra_callback(task, data);
 out:
@@ -2607,15 +2567,15 @@ pool_req_prepare(daos_handle_t poh, enum pool_operation opcode,
 	rc = rsvc_client_choose(&args->pra_pool->dp_client, &ep);
 	D_MUTEX_UNLOCK(&args->pra_pool->dp_client_lock);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(args->pra_pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service",
+			 DP_UUID(args->pra_pool->dp_pool));
 		pool_req_cleanup(CLEANUP_POOL, args);
 		goto out;
 	}
 
 	rc = pool_req_create(ctx, &ep, opcode, &args->pra_rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create rpc");
 		pool_req_cleanup(CLEANUP_POOL, args);
 		D_GOTO(out, rc);
 	}
@@ -2648,10 +2608,9 @@ dc_pool_list_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": listing attributes: hdl="
-			 DF_UUID "; size=%lu\n",
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl), *args->size);
+	D_DEBUG(DB_MD, DF_UUID ": listing attributes: hdl=" DF_UUID "; size=%lu",
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl), DP_UUID(cb_args.pra_pool->dp_pool_hdl),
+		*args->size);
 
 	in = crt_req_get(cb_args.pra_rpc);
 	if (*args->size > 0) {
@@ -2687,8 +2646,7 @@ dc_pool_list_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DB_MD, "Failed to list pool attributes: "DF_RC"\n",
-		DP_RC(rc));
+	D_DEBUG(DB_MD, "Failed to list pool attributes: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -2758,20 +2716,20 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 	if (n <= 0 || names == NULL || ((sizes == NULL
 	    || values == NULL) && !readonly)) {
-		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p\n", n,
-			names, values, sizes);
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p", n, names,
+			values, sizes);
 		return -DER_INVAL;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (names[i] == NULL || *names[i] == '\0') {
-			D_ERROR("Invalid Arguments: names[%d] = %s\n", i,
+			D_ERROR("Invalid Arguments: names[%d] = %s", i,
 				names[i] == NULL ? "NULL" : "\'\\0\'");
 
 			return -DER_INVAL;
 		}
 		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
-			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX\n", i);
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX", i);
 			return -DER_INVAL;
 		}
 		if (sizes != NULL) {
@@ -2780,7 +2738,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 			else if (values[i] == NULL || sizes[i] == 0) {
 				if (!readonly) {
 					D_ERROR(
-					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu\n",
+					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
 					    i, values[i], i, sizes[i]);
 					return -DER_INVAL;
 				}
@@ -2824,9 +2782,8 @@ dc_pool_get_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": getting attributes: hdl="DF_UUID"\n",
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": getting attributes: hdl=" DF_UUID,
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl), DP_UUID(cb_args.pra_pool->dp_pool_hdl));
 
 	in = crt_req_get(cb_args.pra_rpc);
 	in->pagi_count = args->n;
@@ -2882,7 +2839,7 @@ dc_pool_get_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DB_MD, "Failed to get pool attributes: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MD, "Failed to get pool attributes: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -2909,9 +2866,8 @@ dc_pool_set_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": setting attributes: hdl="DF_UUID"\n",
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": setting attributes: hdl=" DF_UUID,
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl), DP_UUID(cb_args.pra_pool->dp_pool_hdl));
 
 	in = crt_req_get(cb_args.pra_rpc);
 	in->pasi_count = args->n;
@@ -2988,7 +2944,7 @@ dc_pool_set_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DB_MD, "Failed to set pool attributes: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MD, "Failed to set pool attributes: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -3013,9 +2969,8 @@ dc_pool_del_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": deleting attributes: hdl="DF_UUID"\n",
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl),
-		DP_UUID(cb_args.pra_pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": deleting attributes: hdl=" DF_UUID,
+		DP_UUID(cb_args.pra_pool->dp_pool_hdl), DP_UUID(cb_args.pra_pool->dp_pool_hdl));
 
 	in = crt_req_get(cb_args.pra_rpc);
 	in->padi_count = args->n;
@@ -3065,7 +3020,7 @@ dc_pool_del_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	D_DEBUG(DB_MD, "Failed to del pool attributes: "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MD, "Failed to del pool attributes: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -3088,8 +3043,7 @@ pool_svc_stop_cb(tse_task_t *task, void *data)
 	else if (rc == RSVC_CLIENT_RECHOOSE)
 		D_GOTO(out, rc = 0);
 
-	D_DEBUG(DB_MD, DF_UUID": stop rpc done: %d\n",
-		DP_UUID(arg->dsa_pool->dp_pool), rc);
+	D_DEBUG(DB_MD, DF_UUID ": stop rpc done: %d", DP_UUID(arg->dsa_pool->dp_pool), rc);
 
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -3120,23 +3074,22 @@ dc_pool_stop_svc(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(out_task, rc = -DER_NO_HDL);
 
-	D_DEBUG(DB_MD, DF_UUID": stopping svc: hdl="DF_UUID"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(pool->dp_pool_hdl));
+	D_DEBUG(DB_MD, DF_UUID ": stopping svc: hdl=" DF_UUID, DP_UUID(pool->dp_pool),
+		DP_UUID(pool->dp_pool_hdl));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": cannot find pool service", DP_UUID(pool->dp_pool));
 		goto out_pool;
 	}
 
 	rc = pool_req_create(daos_task2ctx(task), &ep, POOL_SVC_STOP, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create POOL_SVC_STOP RPC: %d\n",
-			DP_UUID(pool->dp_pool), rc);
+		D_ERROR(DF_UUID ": failed to create POOL_SVC_STOP RPC: %d", DP_UUID(pool->dp_pool),
+			rc);
 		goto out_pool;
 	}
 
@@ -3225,7 +3178,7 @@ dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 	n = pool_map_find_target(pool->dp_map, tgt_idx, tgt);
 	D_RWLOCK_UNLOCK(&pool->dp_map_lock);
 	if (n != 1) {
-		D_ERROR("failed to find target %u\n", tgt_idx);
+		D_ERROR("failed to find target %u", tgt_idx);
 		return -DER_INVAL;
 	}
 	return 0;

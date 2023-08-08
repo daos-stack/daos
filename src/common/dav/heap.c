@@ -183,7 +183,7 @@ heap_arena_new(struct palloc_heap *heap, int automatic)
 
 	D_ALLOC_PTR(arena);
 	if (arena == NULL) {
-		D_CRIT("!heap: arena malloc error\n");
+		D_CRIT("!heap: arena malloc error");
 		return NULL;
 	}
 	arena->nthreads = 0;
@@ -1175,7 +1175,7 @@ heap_split_block(struct palloc_heap *heap, struct bucket *b,
 			NULL, NULL, 0, 0, NULL};
 		memblock_rebuild_state(heap, &r);
 		if (bucket_insert_block(b, &r) != 0)
-			D_CRIT("failed to allocate memory block runtime tracking info\n");
+			D_CRIT("failed to allocate memory block runtime tracking info");
 	} else {
 		uint32_t new_chunk_id = m->chunk_id + units;
 		uint32_t new_size_idx = m->size_idx - units;
@@ -1186,7 +1186,7 @@ heap_split_block(struct palloc_heap *heap, struct bucket *b,
 		*m = memblock_huge_init(heap, m->chunk_id, m->zone_id, units);
 
 		if (bucket_insert_block(b, &n) != 0)
-			D_CRIT("failed to allocate memory block runtime tracking info\n");
+			D_CRIT("failed to allocate memory block runtime tracking info");
 	}
 
 	m->size_idx = units;
@@ -1403,9 +1403,9 @@ heap_set_arena_auto(struct palloc_heap *heap, unsigned arena_id,
 	a = VEC_ARR(&heap->rt->arenas.vec)[arena_id - 1];
 
 	if (!automatic && nautomatic <= 1 && a->automatic) {
-		D_CRIT("at least one automatic arena must exist\n");
-		ret = -1;
-		goto out;
+			D_CRIT("at least one automatic arena must exist");
+			ret = -1;
+			goto out;
 	}
 	a->automatic = automatic;
 
@@ -1734,12 +1734,12 @@ static int
 heap_verify_header(struct heap_header *hdr)
 {
 	if (util_checksum(hdr, sizeof(*hdr), &hdr->checksum, 0, 0) != 1) {
-		D_CRIT("heap: invalid header's checksum\n");
+		D_CRIT("heap: invalid header's checksum");
 		return -1;
 	}
 
 	if (memcmp(hdr->signature, HEAP_SIGNATURE, HEAP_SIGNATURE_LEN) != 0) {
-		D_CRIT("heap: invalid signature\n");
+		D_CRIT("heap: invalid signature");
 		return -1;
 	}
 
@@ -1757,7 +1757,7 @@ heap_verify_zone_header(struct zone_header *hdr)
 		return 0;
 
 	if (hdr->size_idx == 0) {
-		D_CRIT("heap: invalid zone size\n");
+		D_CRIT("heap: invalid zone size");
 		return -1;
 	}
 
@@ -1772,17 +1772,17 @@ static int
 heap_verify_chunk_header(struct chunk_header *hdr)
 {
 	if (hdr->type == CHUNK_TYPE_UNKNOWN) {
-		D_CRIT("heap: invalid chunk type\n");
+		D_CRIT("heap: invalid chunk type");
 		return -1;
 	}
 
 	if (hdr->type >= MAX_CHUNK_TYPE) {
-		D_CRIT("heap: unknown chunk type\n");
+		D_CRIT("heap: unknown chunk type");
 		return -1;
 	}
 
 	if (hdr->flags & ~CHUNK_FLAGS_ALL_VALID) {
-		D_CRIT("heap: invalid chunk flags\n");
+		D_CRIT("heap: invalid chunk flags");
 		return -1;
 	}
 
@@ -1799,7 +1799,7 @@ heap_verify_zone(struct zone *zone)
 		return 0; /* not initialized, and that is OK */
 
 	if (zone->header.magic != ZONE_HEADER_MAGIC) {
-		D_CRIT("heap: invalid zone magic\n");
+		D_CRIT("heap: invalid zone magic");
 		return -1;
 	}
 
@@ -1816,7 +1816,7 @@ heap_verify_zone(struct zone *zone)
 	}
 
 	if (i != zone->header.size_idx) {
-		D_CRIT("heap: chunk sizes mismatch\n");
+		D_CRIT("heap: chunk sizes mismatch");
 		return -1;
 	}
 
@@ -1832,7 +1832,7 @@ int
 heap_check(void *heap_start, uint64_t heap_size)
 {
 	if (heap_size < HEAP_MIN_SIZE) {
-		D_CRIT("heap: invalid heap size\n");
+		D_CRIT("heap: invalid heap size");
 		return -1;
 	}
 
@@ -1861,7 +1861,7 @@ heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 	struct zone *zone_buff;
 
 	if (heap_size < HEAP_MIN_SIZE) {
-		D_CRIT("heap: invalid heap size\n");
+		D_CRIT("heap: invalid heap size");
 		return -1;
 	}
 
@@ -1871,7 +1871,7 @@ heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 
 	if (ops->read(ops->ctx, ops->base, &header, &layout->header,
 						sizeof(struct heap_header))) {
-		D_CRIT("heap: obj_read_remote error\n");
+		D_CRIT("heap: obj_read_remote error");
 		return -1;
 	}
 
@@ -1880,13 +1880,13 @@ heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops)
 
 	D_ALLOC_PTR_NZ(zone_buff);
 	if (zone_buff == NULL) {
-		D_CRIT("heap: zone_buff malloc error\n");
+		D_CRIT("heap: zone_buff malloc error");
 		return -1;
 	}
 	for (unsigned i = 0; i < heap_max_zone(heap_size); ++i) {
 		if (ops->read(ops->ctx, ops->base, zone_buff,
 				ZID_TO_ZONE(layout, i), sizeof(struct zone))) {
-			D_CRIT("heap: obj_read_remote error\n");
+			D_CRIT("heap: obj_read_remote error");
 			goto out;
 		}
 

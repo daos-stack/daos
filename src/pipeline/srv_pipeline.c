@@ -91,7 +91,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 
 	/** iterating over dkeys only */
 	rc = vos_iterate(&param, type, false, anchors, enum_pack_cb, NULL, d_key, NULL);
-	D_DEBUG(DB_IO, "enum type %d rc " DF_RC "\n", type, DP_RC(rc));
+	D_DEBUG(DB_IO, "enum type %d: " DF_RC, type, DP_RC(rc));
 	if (rc < 0)
 		return rc;
 	if (d_key->iov_len == 0) /** d_key not found */
@@ -108,7 +108,7 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	biod = vos_ioh2desc(ioh);
 	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, NULL, CRT_BULK_RW);
 	if (rc) {
-		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " bio_iod_prep failed", DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 	rc = bio_iod_copy(biod, sgl_recx, nr_iods);
@@ -275,7 +275,7 @@ try_out_iov:
 			 * If we can't still copy the input iov in an empty out_iov, then the
 			 * out_iov is way too small. No empty iovs are skipped in the sgl.
 			 */
-			D_ERROR("iov has no space available for data value\n");
+			D_ERROR("iov has no space available for data value");
 			return -DER_REC2BIG;
 		}
 		/**
@@ -285,7 +285,7 @@ try_out_iov:
 		iov_idx_bk++;
 		if (iov_idx_bk == sgl->sg_nr) {
 			D_ERROR("Consumed all iovs in the sgl, no space available for the rest of "
-				"the data\n");
+				"the data");
 			return -DER_REC2BIG;
 		}
 		out_iov = &sgl->sg_iovs[iov_idx_bk];
@@ -548,7 +548,7 @@ pipeline_bulk_comp_cb(const struct crt_bulk_cb_info *cb_info)
 	bulk_desc->bd_local_hdl = CRT_BULK_NULL;
 
 	if (cb_info->bci_rc != 0)
-		D_ERROR("bulk transfer failed: %d\n", cb_info->bci_rc);
+		D_ERROR("bulk transfer failed: %d", cb_info->bci_rc);
 
 	rpc = bulk_desc->bd_rpc;
 	arg = (struct pipeline_bulk_args *)cb_info->bci_arg;
@@ -580,13 +580,13 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 	int                   rc;
 
 	if (bulk == NULL) {
-		D_ERROR("Remote bulk is NULL\n");
+		D_ERROR("Remote bulk is NULL");
 		return -DER_INVAL;
 	}
 
 	rc = crt_bulk_get_len(bulk, &size);
 	if (rc != 0) {
-		D_ERROR("Failed to get remote bulk size "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get remote bulk size");
 		return rc;
 	}
 
@@ -597,8 +597,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 
 		if (remote_off >= size) {
 			rc = -DER_OVERFLOW;
-			D_ERROR("Remote bulk is used up. off:%zu, size:%zu, "DF_RC"\n",
-				remote_off, size, DP_RC(rc));
+			DL_ERROR(rc, "Remote bulk is used up. off:%zu, size:%zu", remote_off, size);
 			break;
 		}
 
@@ -618,7 +617,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 
 		rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
-			D_ERROR("crt_bulk_create %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
+			DL_ERROR(rc, "crt_bulk_create %d error", sgl_idx);
 			break;
 		}
 		D_ASSERT(local_bulk != NULL);
@@ -626,8 +625,10 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 		D_ASSERT(size > remote_off);
 		if (length > (size - remote_off)) {
 			rc = -DER_OVERFLOW;
-			D_ERROR("Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
-				"remote_off:%zu, "DF_RC"\n", length, size, remote_off, DP_RC(rc));
+			DL_ERROR(rc,
+				 "Remote bulk isn't large enough. local_sz:%zu, remote_sz:%zu, "
+				 "remote_off:%zu",
+				 length, size, remote_off);
 			break;
 		}
 
@@ -645,7 +646,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 		arg->bulks_inflight++;
 		rc = crt_bulk_transfer(&bulk_desc, pipeline_bulk_comp_cb, arg, &bulk_opid);
 		if (rc < 0) {
-			D_ERROR("crt_bulk_transfer %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
+			DL_ERROR(rc, "crt_bulk_transfer %d error", sgl_idx);
 			arg->bulks_inflight--;
 			crt_bulk_free(local_bulk);
 			crt_req_decref(rpc);
@@ -666,7 +667,7 @@ do_bulk_transfers(crt_rpc_t *rpc, crt_bulk_t *bulks, d_sg_list_t **sgls, int sgl
 	struct pipeline_bulk_args  arg = {0};
 
 	if (bulks == NULL) {
-		D_ERROR("No remote bulks provided\n");
+		D_ERROR("No remote bulks provided");
 		return -DER_INVAL;
 	}
 
@@ -674,7 +675,7 @@ do_bulk_transfers(crt_rpc_t *rpc, crt_bulk_t *bulks, d_sg_list_t **sgls, int sgl
 	if (rc != 0)
 		return dss_abterr2der(rc);
 	arg.inited = true;
-	D_DEBUG(DB_IO, "bulk_op CRT_BULK_PUT sgl_nr %d\n", sgl_nr);
+	D_DEBUG(DB_IO, "bulk_op CRT_BULK_PUT sgl_nr %d", sgl_nr);
 
 	arg.bulks_inflight++;
 
@@ -729,7 +730,7 @@ pipeline_bulk_transfer(crt_rpc_t *rpc)
 		bulks[idx]             = pri->pri_kds_bulk;
 		idx++;
 
-		D_DEBUG(DB_IO, "reply kds bulk %zd\n", tmp_iov[0].iov_len);
+		D_DEBUG(DB_IO, "reply kds bulk %zd", tmp_iov[0].iov_len);
 	}
 	if (pri->pri_iods_bulk != NULL && pro->pro_recx_size.ca_count > 0) {
 		tmp_iov[1].iov_buf     = pro->pro_recx_size.ca_arrays;
@@ -744,7 +745,7 @@ pipeline_bulk_transfer(crt_rpc_t *rpc)
 		bulks[idx]             = pri->pri_iods_bulk;
 		idx++;
 
-		D_DEBUG(DB_IO, "reply iods bulk %zd\n", tmp_iov[1].iov_len);
+		D_DEBUG(DB_IO, "reply iods bulk %zd", tmp_iov[1].iov_len);
 	}
 	if (pri->pri_sgl_keys_bulk != NULL && pro->pro_sgl_keys.sg_nr_out > 0) {
 		sgls[idx]              = &pro->pro_sgl_keys;
@@ -804,7 +805,7 @@ ds_pipeline_run_handler(crt_rpc_t *rpc)
 	D_ASSERT(pri != NULL);
 	pro = crt_reply_get(rpc);
 	D_ASSERT(pro != NULL);
-	D_DEBUG(DB_IO, "flags = " DF_U64 "\n", pri->pri_flags);
+	D_DEBUG(DB_IO, "flags = " DF_U64, pri->pri_flags);
 
 	/** -- get vos container handle */
 
@@ -879,7 +880,7 @@ exit:
 	pro->pro_ret = rc;
 	rc           = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 
 	/** free memory after sending RPC */
 	D_FREE(kds);

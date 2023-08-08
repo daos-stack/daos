@@ -187,13 +187,13 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_self_polling) {
-		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
+		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p", xs_ctxt);
 		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
 		D_ASSERT(rc == 0);
 	} else {
 		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
 		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT eventual wait failed. %d\n", rc);
+			D_ERROR("ABT eventual wait failed. %d", rc);
 	}
 }
 
@@ -249,7 +249,7 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	D_ASSERT(bbs != NULL);
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_bs == NULL) {
-		D_ERROR("Blobstore %p is closed, fail request.\n", bbs);
+		D_ERROR("Blobstore %p is closed, fail request", bbs);
 		rc = -DER_NO_HDL;
 		goto out;
 	}
@@ -257,8 +257,8 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_TEARDOWN ||
 	    bbs->bb_state == BIO_BS_STATE_OUT ||
 	    bbs->bb_state == BIO_BS_STATE_SETUP) {
-		D_ERROR("Blobstore %p is in %s state, reject request.\n",
-			bbs, bio_state_enum_to_str(bbs->bb_state));
+		D_ERROR("Blobstore %p is in %s state, reject request", bbs,
+			bio_state_enum_to_str(bbs->bb_state));
 		rc = -DER_DOS;
 		goto out;
 	}
@@ -356,8 +356,8 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 		return rc;
 	}
 
-	D_DEBUG(DB_MGMT, "Deleting blobID "DF_U64" for pool:"DF_UUID" xs:%p\n",
-		blob_id, DP_UUID(uuid), xs_ctxt);
+	D_DEBUG(DB_MGMT, "Deleting blobID " DF_U64 " for pool:" DF_UUID " xs:%p", blob_id,
+		DP_UUID(uuid), xs_ctxt);
 
 	ba->bca_inflights = 1;
 	bma.bma_bs = bbs->bb_bs;
@@ -369,20 +369,19 @@ bio_blob_delete(uuid_t uuid, struct bio_xs_context *xs_ctxt, enum smd_dev_type s
 	rc = ba->bca_rc;
 
 	if (rc != 0) {
-		D_ERROR("Delete blobID "DF_U64" failed for pool:"DF_UUID" "
-			"xs:%p rc:%d\n", blob_id, DP_UUID(uuid), xs_ctxt, rc);
+		D_ERROR("Delete blobID " DF_U64 " failed for pool:" DF_UUID " xs:%p rc:%d", blob_id,
+			DP_UUID(uuid), xs_ctxt, rc);
 	} else {
-		D_DEBUG(DB_MGMT, "Successfully deleted blobID "DF_U64" for "
-			"pool:"DF_UUID" xs:%p\n", blob_id, DP_UUID(uuid),
-			xs_ctxt);
+		D_DEBUG(DB_MGMT,
+			"Successfully deleted blobID " DF_U64 " for pool:" DF_UUID " xs:%p",
+			blob_id, DP_UUID(uuid), xs_ctxt);
 		if (flags & BIO_MC_FL_RDB)
 			rc = smd_rdb_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		else
 			rc = smd_pool_del_tgt(uuid, xs_ctxt->bxc_tgt_id, st);
 		if (rc)
-			D_ERROR("Failed to unassign blob:"DF_U64" from pool: "
-				""DF_UUID":%d. %d\n", blob_id, DP_UUID(uuid),
-				xs_ctxt->bxc_tgt_id, rc);
+			D_ERROR("Failed to unassign blob:" DF_U64 " from pool: " DF_UUID ":%d. %d",
+				blob_id, DP_UUID(uuid), xs_ctxt->bxc_tgt_id, rc);
 	}
 
 	bio_bs_unhold(bbs);
@@ -408,16 +407,15 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 		if (rc == -DER_NONEXIST) {
 			return 0;
 		} else if (rc) {
-			D_ERROR("Qeury data blob for pool "DF_UUID" tgt:%u failed. "DF_RC"\n",
-				DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
+			DL_ERROR(rc, "Qeury data blob for pool " DF_UUID " tgt:%u failed",
+				 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
 			return rc;
 		}
 
 		D_ASSERT(data_blobid != SPDK_BLOBID_INVALID);
 		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc) {
-			D_ERROR("Delete data blob "DF_U64" failed. "DF_RC"\n",
-				data_blobid, DP_RC(rc));
+			DL_ERROR(rc, "Delete data blob " DF_U64 " failed", data_blobid);
 			return rc;
 		}
 		return 0;
@@ -425,8 +423,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 
 	rc = bio_mc_open(xs_ctxt, pool_id, flags, &mc);
 	if (rc) {
-		D_ERROR("Failed to open meta context for "DF_UUID". "DF_RC"\n",
-			DP_UUID(pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to open meta context for " DF_UUID, DP_UUID(pool_id));
 		return rc;
 	}
 
@@ -438,16 +435,14 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 
 	rc = bio_mc_close(mc);
 	if (rc) {
-		D_ERROR("Failed to close meta context for "DF_UUID". "DF_RC"\n",
-			DP_UUID(pool_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to close meta context for " DF_UUID, DP_UUID(pool_id));
 		return rc;
 	}
 
 	if (data_blobid != SPDK_BLOBID_INVALID) {
 		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc) {
-			D_ERROR("Failed to delete data blob "DF_U64". "DF_RC"\n",
-				data_blobid, DP_RC(rc));
+			DL_ERROR(rc, "Failed to delete data blob " DF_U64, data_blobid);
 			return rc;
 		}
 	}
@@ -455,15 +450,14 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 	if (wal_blobid != SPDK_BLOBID_INVALID) {
 		rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid, flags);
 		if (rc) {
-			D_ERROR("Failed to delete WAL blob "DF_U64". "DF_RC"\n",
-				wal_blobid, DP_RC(rc));
+			DL_ERROR(rc, "Failed to delete WAL blob " DF_U64, wal_blobid);
 			return rc;
 		}
 	}
 
 	rc = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid, flags);
 	if (rc)
-		D_ERROR("Failed to delete meta blob "DF_U64". "DF_RC"\n", wal_blobid, DP_RC(rc));
+		DL_ERROR(rc, "Failed to delete meta blob " DF_U64, wal_blobid);
 
 	return rc;
 }
@@ -489,14 +483,14 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 		spdk_bs_get_cluster_size(bbs->bb_bs) : 0;
 
 	if (cluster_sz == 0) {
-		D_ERROR("Blobstore is already closed?\n");
+		D_ERROR("Blobstore is already closed?");
 		return -DER_NO_HDL;
 	}
 
 	if (blob_sz < cluster_sz) {
 		/* Blob needs to be at least 1 cluster */
-		D_ERROR("Blob size is less than the size of a cluster "DF_U64""
-			" < "DF_U64"\n", blob_sz, cluster_sz);
+		D_ERROR("Blob size is less than the size of a cluster " DF_U64 " < " DF_U64,
+			blob_sz, cluster_sz);
 		return -DER_INVAL;
 	}
 
@@ -517,7 +511,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 	}
 
 	if (rc == 0) {
-		D_ERROR("Duplicated blob for xs:%p pool:"DF_UUID"\n", xs_ctxt, DP_UUID(uuid));
+		D_ERROR("Duplicated blob for xs:%p pool:" DF_UUID, xs_ctxt, DP_UUID(uuid));
 		return -DER_EXIST;
 	}
 
@@ -540,14 +534,14 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 	rc = ba->bca_rc;
 
 	if (rc != 0) {
-		D_ERROR("Create blob failed for xs:%p pool:"DF_UUID" rc:%d\n",
-			xs_ctxt, DP_UUID(uuid), rc);
+		D_ERROR("Create blob failed for xs:%p pool:" DF_UUID " rc:%d", xs_ctxt,
+			DP_UUID(uuid), rc);
 	} else {
 		D_ASSERT(ba->bca_id != 0);
-		D_DEBUG(DB_MGMT, "Successfully created blobID "DF_U64" for xs:"
-			"%p pool:"DF_UUID" blob size:"DF_U64" clusters\n",
-			ba->bca_id, xs_ctxt, DP_UUID(uuid),
-			bma.bma_opts.num_clusters);
+		D_DEBUG(DB_MGMT,
+			"Successfully created blobID " DF_U64 " for xs:%p pool:" DF_UUID
+			" blob size:" DF_U64 " clusters",
+			ba->bca_id, xs_ctxt, DP_UUID(uuid), bma.bma_opts.num_clusters);
 		if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 			if (flags & BIO_MC_FL_RDB)
 				rc = smd_rdb_add_tgt(uuid, xs_ctxt->bxc_tgt_id, ba->bca_id, st,
@@ -560,18 +554,17 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz,
 		}
 
 		if (rc != 0) {
-			D_ERROR("Failed to assign pool blob:"DF_U64" to pool: "
-				""DF_UUID":%d. %d\n", ba->bca_id, DP_UUID(uuid),
-				xs_ctxt->bxc_tgt_id, rc);
+			D_ERROR("Failed to assign pool blob:" DF_U64 " to pool: " DF_UUID ":%d. %d",
+				ba->bca_id, DP_UUID(uuid), xs_ctxt->bxc_tgt_id, rc);
 			/* Delete newly created blob */
 			if (bio_blob_delete(uuid, xs_ctxt, st, ba->bca_id, flags))
-				D_ERROR("Unable to delete newly created blobID "
-					""DF_U64" for xs:%p pool:"DF_UUID"\n",
+				D_ERROR("Unable to delete newly created blobID " DF_U64
+					" for xs:%p pool:" DF_UUID,
 					ba->bca_id, xs_ctxt, DP_UUID(uuid));
 		} else {
-			D_DEBUG(DB_MGMT, "Successfully assign blob:"DF_U64" "
-				"to pool:"DF_UUID":%d\n", ba->bca_id,
-				DP_UUID(uuid), xs_ctxt->bxc_tgt_id);
+			D_DEBUG(DB_MGMT,
+				"Successfully assign blob:" DF_U64 " to pool:" DF_UUID ":%d",
+				ba->bca_id, DP_UUID(uuid), xs_ctxt->bxc_tgt_id);
 			*blob_id = ba->bca_id;
 		}
 	}
@@ -664,8 +657,8 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 
 	D_ASSERT(meta_sz > 0);
 	if (meta_sz < default_cluster_sz()) {
-		D_ERROR("Meta blob size("DF_U64") is less than minimal size(%u)\n",
-			meta_sz, default_cluster_sz());
+		D_ERROR("Meta blob size(" DF_U64 ") is less than minimal size(%u)", meta_sz,
+			default_cluster_sz());
 		rc = -DER_INVAL;
 		goto delete_data;
 	}
@@ -732,8 +725,8 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 
 	rc = meta_format(mc, fi, true);
 	if (rc)
-		D_ERROR("Unable to format newly created blob for xs:%p pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(pool_id));
+		D_ERROR("Unable to format newly created blob for xs:%p pool:" DF_UUID, xs_ctxt,
+			DP_UUID(pool_id));
 
 	rc1 = bio_ioctxt_close(mc->mc_wal);
 	if (rc == 0)
@@ -749,22 +742,22 @@ delete_wal:
 	if (rc && wal_blobid != SPDK_BLOBID_INVALID) {
 		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_WAL, wal_blobid, flags);
 		if (rc1)
-			D_ERROR("Unable to delete WAL blob for xs:%p pool:"DF_UUID"\n",
-				xs_ctxt, DP_UUID(pool_id));
+			D_ERROR("Unable to delete WAL blob for xs:%p pool:" DF_UUID, xs_ctxt,
+				DP_UUID(pool_id));
 	}
 delete_meta:
 	if (rc && meta_blobid != SPDK_BLOBID_INVALID) {
 		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_META, meta_blobid, flags);
 		if (rc1)
-			D_ERROR("Unable to delete meta blob for xs:%p pool:"DF_UUID"\n",
-				xs_ctxt, DP_UUID(pool_id));
+			D_ERROR("Unable to delete meta blob for xs:%p pool:" DF_UUID, xs_ctxt,
+				DP_UUID(pool_id));
 	}
 delete_data:
 	if (rc && data_blobid != SPDK_BLOBID_INVALID) {
 		rc1 = bio_blob_delete(pool_id, xs_ctxt, SMD_DEV_TYPE_DATA, data_blobid, flags);
 		if (rc1)
-			D_ERROR("Unable to delete data blob for xs:%p pool:"DF_UUID"\n",
-				xs_ctxt, DP_UUID(pool_id));
+			D_ERROR("Unable to delete data blob for xs:%p pool:" DF_UUID, xs_ctxt,
+				DP_UUID(pool_id));
 	}
 	return rc;
 }
@@ -781,10 +774,10 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 	int				 rc;
 
 	if (ctxt->bic_blob != NULL) {
-		D_ERROR("Blob %p is already opened\n", ctxt->bic_blob);
+		D_ERROR("Blob %p is already opened", ctxt->bic_blob);
 		return -DER_ALREADY;
 	} else if (ctxt->bic_opening) {
-		D_ERROR("Blob is in opening\n");
+		D_ERROR("Blob is in opening");
 		return -DER_AGAIN;
 	}
 	D_ASSERT(!ctxt->bic_closing);
@@ -816,7 +809,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		}
 
 		if (rc != 0) {
-			D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID", tgt:%d\n",
+			D_ERROR("Failed to find blobID for xs:%p, pool:" DF_UUID ", tgt:%d",
 				xs_ctxt, DP_UUID(ctxt->bic_pool_id), xs_ctxt->bxc_tgt_id);
 			rc = -DER_NONEXIST;
 			goto out_free;
@@ -825,8 +818,8 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 		blob_id = open_blobid;
 	}
 
-	D_DEBUG(DB_MGMT, "Opening blobID "DF_U64" for xs:%p pool:"DF_UUID"\n",
-		blob_id, xs_ctxt, DP_UUID(ctxt->bic_pool_id));
+	D_DEBUG(DB_MGMT, "Opening blobID " DF_U64 " for xs:%p pool:" DF_UUID, blob_id, xs_ctxt,
+		DP_UUID(ctxt->bic_pool_id));
 
 	ctxt->bic_opening = 1;
 	ba->bca_inflights = 1;
@@ -845,14 +838,13 @@ bio_blob_open(struct bio_io_context *ctxt, bool async, enum bio_mc_flags flags,
 	ctxt->bic_opening = 0;
 
 	if (rc != 0) {
-		D_ERROR("Open blobID "DF_U64" failed for xs:%p pool:"DF_UUID" "
-			"rc:%d\n", blob_id, xs_ctxt, DP_UUID(ctxt->bic_pool_id),
-			rc);
+		D_ERROR("Open blobID " DF_U64 " failed for xs:%p pool:" DF_UUID " rc:%d", blob_id,
+			xs_ctxt, DP_UUID(ctxt->bic_pool_id), rc);
 	} else {
 		D_ASSERT(ba->bca_blob != NULL);
-		D_DEBUG(DB_MGMT, "Successfully opened blobID "DF_U64" for xs:%p"
-			" pool:"DF_UUID" blob:%p\n", blob_id, xs_ctxt,
-			DP_UUID(ctxt->bic_pool_id), ba->bca_blob);
+		D_DEBUG(DB_MGMT,
+			"Successfully opened blobID " DF_U64 " for xs:%p pool:" DF_UUID " blob:%p",
+			blob_id, xs_ctxt, DP_UUID(ctxt->bic_pool_id), ba->bca_blob);
 		ctxt->bic_blob = ba->bca_blob;
 	}
 
@@ -906,8 +898,8 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 			D_ASSERT(data_blobid == SPDK_BLOBID_INVALID);
 			return 0;
 		} else if (rc) {
-			D_ERROR("Qeury data blob for pool "DF_UUID" tgt:%u failed. "DF_RC"\n",
-				DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
+			DL_ERROR(rc, "Qeury data blob for pool " DF_UUID " tgt:%u failed",
+				 DP_UUID(pool_id), xs_ctxt->bxc_tgt_id);
 			return rc;
 		}
 
@@ -967,13 +959,13 @@ close_wal:
 close_wal_ioctxt:
 	rc1 = bio_ioctxt_close(bio_mc->mc_wal);
 	if (rc1)
-		D_ERROR("Failed to close wal ioctxt. %d\n", rc1);
+		D_ERROR("Failed to close wal ioctxt. %d", rc1);
 close_meta:
 	meta_close(bio_mc);
 close_meta_ioctxt:
 	rc1 = bio_ioctxt_close(bio_mc->mc_meta);
 	if (rc1)
-		D_ERROR("Failed to close meta ioctxt. %d\n", rc1);
+		D_ERROR("Failed to close meta ioctxt. %d", rc1);
 free_mem:
 	D_FREE(bio_mc);
 
@@ -990,14 +982,13 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 
 	D_ASSERT(!ctxt->bic_opening);
 	if (ctxt->bic_blob == NULL) {
-		D_ERROR("Blob is already closed\n");
+		D_ERROR("Blob is already closed");
 		return -DER_ALREADY;
 	} else if (ctxt->bic_closing) {
-		D_ERROR("The blob is in closing\n");
+		D_ERROR("The blob is in closing");
 		return -DER_AGAIN;
 	} else if (ctxt->bic_inflight_dmas) {
-		D_ERROR("There are %u in-flight blob IOs\n",
-			ctxt->bic_inflight_dmas);
+		D_ERROR("There are %u in-flight blob IOs", ctxt->bic_inflight_dmas);
 		return -DER_BUSY;
 	}
 
@@ -1009,8 +1000,7 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 	D_ASSERT(ctxt->bic_xs_ctxt != NULL);
 	bbs = ctxt->bic_xs_blobstore->bxb_blobstore;
 
-	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p\n", ctxt->bic_blob,
-		ctxt->bic_xs_ctxt);
+	D_DEBUG(DB_MGMT, "Closing blob %p for xs:%p", ctxt->bic_blob, ctxt->bic_xs_ctxt);
 
 	ctxt->bic_closing = 1;
 	ba->bca_inflights = 1;
@@ -1027,11 +1017,11 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 	ctxt->bic_closing = 0;
 
 	if (rc != 0) {
-		D_ERROR("Close blob %p failed for xs:%p rc:%d\n",
-			ctxt->bic_blob, ctxt->bic_xs_ctxt, rc);
+		D_ERROR("Close blob %p failed for xs:%p rc:%d", ctxt->bic_blob, ctxt->bic_xs_ctxt,
+			rc);
 	} else {
-		D_DEBUG(DB_MGMT, "Successfully closed blob %p for xs:%p\n",
-			ctxt->bic_blob, ctxt->bic_xs_ctxt);
+		D_DEBUG(DB_MGMT, "Successfully closed blob %p for xs:%p", ctxt->bic_blob,
+			ctxt->bic_xs_ctxt);
 		ctxt->bic_blob = NULL;
 	}
 
@@ -1129,8 +1119,8 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	channel = ioctxt->bic_xs_blobstore->bxb_io_channel;
 
 	if (!is_blob_valid(ioctxt)) {
-		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_closing);
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d", ioctxt->bic_blob,
+			ioctxt->bic_closing);
 		return -DER_NO_HDL;
 	}
 
@@ -1138,8 +1128,8 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MGMT, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
-		ioctxt->bic_blob, pg_off, pg_cnt);
+	D_DEBUG(DB_MGMT, "Unmapping blob %p pgoff:" DF_U64 " pgcnt:" DF_U64, ioctxt->bic_blob,
+		pg_off, pg_cnt);
 
 	ioctxt->bic_inflight_dmas++;
 	ba->bca_inflights = 1;
@@ -1154,8 +1144,8 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 	ioctxt->bic_inflight_dmas--;
 
 	if (rc) {
-		D_ERROR("Unmap blob %p failed for xs: %p rc:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+		D_ERROR("Unmap blob %p failed for xs: %p rc:%d", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt, rc);
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
 			goto skip_media_error;
@@ -1165,8 +1155,8 @@ bio_blob_unmap(struct bio_io_context *ioctxt, uint64_t off, uint64_t len)
 		spdk_thread_send_msg(owner_thread(mem->mem_bs), bio_media_error,
 				     mem);
 	} else
-		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+		D_DEBUG(DB_MGMT, "Successfully unmapped blob %p for xs:%p", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt);
 
 skip_media_error:
 	blob_cp_arg_fini(ba);
@@ -1193,8 +1183,8 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 	channel = ioctxt->bic_xs_blobstore->bxb_io_channel;
 
 	if (!is_blob_valid(ioctxt)) {
-		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_closing);
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d", ioctxt->bic_blob,
+			ioctxt->bic_closing);
 		return -DER_NO_HDL;
 	}
 
@@ -1220,8 +1210,8 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 		pg_off = (uint64_t)unmap_iov->iov_buf;
 		pg_cnt = unmap_iov->iov_len;
 
-		D_DEBUG(DB_IO, "Unmapping blob %p pgoff:"DF_U64" pgcnt:"DF_U64"\n",
-			ioctxt->bic_blob, pg_off, pg_cnt);
+		D_DEBUG(DB_IO, "Unmapping blob %p pgoff:" DF_U64 " pgcnt:" DF_U64, ioctxt->bic_blob,
+			pg_off, pg_cnt);
 
 		spdk_blob_io_unmap(ioctxt->bic_blob, channel,
 				   page2io_unit(ioctxt, pg_off, blk_sz),
@@ -1238,8 +1228,7 @@ blob_unmap_sgl(struct bio_io_context *ioctxt, d_sg_list_t *unmap_sgl, uint32_t b
 	if (rc) {
 		struct media_error_msg	*mem;
 
-		D_ERROR("Unmap blob %p for xs: %p failed. "DF_RC"\n",
-			ioctxt->bic_blob, xs_ctxt, DP_RC(rc));
+		DL_ERROR(rc, "Unmap blob %p for xs: %p failed", ioctxt->bic_blob, xs_ctxt);
 
 		D_ALLOC_PTR(mem);
 		if (mem == NULL)
@@ -1291,8 +1280,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	uint16_t		 dev_type = DAOS_MEDIA_NVME;
 	int			 rc = 0;
 
-	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p\n",
-		ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+	D_DEBUG(DB_MGMT, "Writing header blob:%p, xs:%p", ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
 	/* check that all VOS blob header vars are set */
 	D_ASSERT(uuid_is_null(bio_bh->bbh_pool) == 0);
@@ -1309,8 +1297,8 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	/* Query per-server metadata to get blobID for this pool:target */
 	rc = smd_pool_get_blob(bio_bh->bbh_pool, bio_bh->bbh_vos_id, SMD_DEV_TYPE_DATA, &blob_id);
 	if (rc) {
-		D_ERROR("Failed to find blobID for xs:%p, pool:"DF_UUID"\n",
-			ioctxt->bic_xs_ctxt, DP_UUID(bio_bh->bbh_pool));
+		D_ERROR("Failed to find blobID for xs:%p, pool:" DF_UUID, ioctxt->bic_xs_ctxt,
+			DP_UUID(bio_bh->bbh_pool));
 		return rc;
 	}
 

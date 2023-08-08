@@ -199,7 +199,7 @@ static void
 	while (rpc_srv.shutdown == 0) {
 		rc = crt_progress(*p_ctx, 1000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed %d\n", rc);
+			D_ERROR("crt_progress failed %d", rc);
 			break;
 		}
 	}
@@ -578,7 +578,7 @@ srv_rpc_init(void)
 
 	} while (rc != 0);
 	if (rc == 0 && rpc_srv.target_multitier_grp != NULL) {
-		D_DEBUG(DB_ALL, "testing multitier io.\n");
+		D_DEBUG(DB_ALL, "testing multitier io");
 		srv_rpc_multitier_io();
 	} else {
 		dbg("multitier group attachment failed:=%d", rc);

@@ -62,7 +62,7 @@ crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 		*data = NULL;
 		break;
 	default:
-		D_ERROR("bad proc_op %d.\n", proc_op);
+		D_ERROR("bad proc_op %d", proc_op);
 		return -DER_INVAL;
 	}
 
@@ -171,8 +171,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t **data)
 		if (rc != 0)
 			return rc;
 		if (nr > DAOS_PROP_ENTRIES_MAX_NR) {
-			D_ERROR("invalid entries nr %d (> %d).\n",
-				nr, DAOS_PROP_ENTRIES_MAX_NR);
+			D_ERROR("invalid entries nr %d (> %d)", nr, DAOS_PROP_ENTRIES_MAX_NR);
 			return -DER_INVAL;
 		}
 		prop = daos_prop_alloc(nr);
@@ -201,7 +200,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t **data)
 		D_FREE(prop);
 		return 0;
 	default:
-		D_ERROR("bad proc_op %d.\n", proc_op);
+		D_ERROR("bad proc_op %d", proc_op);
 		return -DER_INVAL;
 	}
 }

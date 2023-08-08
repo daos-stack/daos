@@ -62,7 +62,7 @@ drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
 		*callp = NULL;
 
 	if (ctx == NULL || callp == NULL) {
-		D_ERROR("Can't build a call from NULL context\n");
+		D_ERROR("Can't build a call from NULL context");
 		return -DER_INVAL;
 	}
 
@@ -146,8 +146,7 @@ unixcomm_close(struct unixcomm *handle)
 	D_FREE(handle);
 
 	if (ret < 0) {
-		D_ERROR("Failed to close socket fd %d, errno=%d\n",
-			fd, errno);
+		D_ERROR("Failed to close socket fd %d, errno=%d", fd, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -169,7 +168,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	if (comm->fd < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to open socket, errno=%d\n", rc);
+		D_ERROR("Failed to open socket, errno=%d", rc);
 		D_FREE(comm);
 		return daos_errno2der(rc);
 	}
@@ -177,8 +176,7 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	if (fcntl(comm->fd, F_SETFL, flags) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to set flags on socket fd %d, errno=%d\n",
-			comm->fd, rc);
+		D_ERROR("Failed to set flags on socket fd %d, errno=%d", comm->fd, rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -189,8 +187,8 @@ new_unixcomm_socket(int flags, struct unixcomm **newcommp)
 	if (fchmod(comm->fd, S_IRUSR|S_IWUSR) != 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to set access permissions on socket fd %d, errno=%d(%s)\n",
-			comm->fd, rc, strerror(rc));
+		D_ERROR("Failed to set access permissions on socket fd %d, errno=%d(%s)", comm->fd,
+			rc, strerror(rc));
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -227,8 +225,8 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (connect(handle->fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
-			address.sun_path, rc, strerror(rc));
+		D_ERROR("Failed to connect to %s, errno=%d(%s)", address.sun_path, rc,
+			strerror(rc));
 		unixcomm_close(handle);
 		return daos_errno2der(rc);
 	}
@@ -255,8 +253,8 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (bind(comm->fd, (struct sockaddr *)&address, sizeof(struct sockaddr_un)) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d\n",
-			sockaddr, comm->fd, rc);
+		D_ERROR("Failed to bind socket at '%.4096s', fd=%d, errno=%d", sockaddr, comm->fd,
+			rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -264,8 +262,7 @@ unixcomm_listen(char *sockaddr, int flags, struct unixcomm **newcommp)
 	if (listen(comm->fd, SOMAXCONN) < 0) {
 		int rc = errno;
 
-		D_ERROR("Failed to start listening on socket fd %d, errno=%d\n",
-			comm->fd, rc);
+		D_ERROR("Failed to start listening on socket fd %d, errno=%d", comm->fd, rc);
 		unixcomm_close(comm);
 		return daos_errno2der(rc);
 	}
@@ -286,8 +283,8 @@ unixcomm_accept(struct unixcomm *listener)
 
 	comm->fd = accept(listener->fd, NULL, NULL);
 	if (comm->fd < 0) {
-		D_ERROR("Failed to accept connection on listener fd %d, "
-			"errno=%d\n", listener->fd, errno);
+		D_ERROR("Failed to accept connection on listener fd %d, errno=%d", listener->fd,
+			errno);
 		D_FREE(comm);
 		return NULL;
 	}
@@ -313,8 +310,7 @@ unixcomm_send(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	bsent = sendmsg(hndl->fd, &msg, 0);
 	if (bsent < 0) {
-		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d\n",
-			hndl->fd, errno);
+		D_ERROR("Failed to sendmsg on socket fd %d, errno=%d", hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (sent != NULL)
@@ -342,8 +338,7 @@ unixcomm_recv(struct unixcomm *hndl, uint8_t *buffer, size_t buflen,
 
 	brcvd = recvmsg(hndl->fd, &msg, 0);
 	if (brcvd < 0) {
-		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d\n",
-			hndl->fd, errno);
+		D_ERROR("Failed to recvmsg on socket fd %d, errno=%d", hndl->fd, errno);
 		ret = daos_errno2der(errno);
 	} else {
 		if (rcvd != NULL)
@@ -360,7 +355,7 @@ drpc_marshal_call(Drpc__Call *msg, uint8_t **bytes)
 	uint8_t	*buf;
 
 	if (!msg) {
-		D_ERROR("NULL Drpc__Call\n");
+		D_ERROR("NULL Drpc__Call");
 		return -DER_INVAL;
 	}
 
@@ -498,8 +493,7 @@ drpc_listen(char *sockaddr, drpc_handler_t handler)
 	int		rc;
 
 	if (sockaddr == NULL || handler == NULL) {
-		D_ERROR("Bad input, sockaddr=%p, handler=%p\n",
-			sockaddr, handler);
+		D_ERROR("Bad input, sockaddr=%p, handler=%p", sockaddr, handler);
 		return NULL;
 	}
 
@@ -550,7 +544,7 @@ drpc_accept(struct drpc *listener_ctx)
 	struct unixcomm	*comm;
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
-		D_ERROR("dRPC context is not a listener\n");
+		D_ERROR("dRPC context is not a listener");
 		return NULL;
 	}
 
@@ -613,7 +607,7 @@ get_incoming_call(struct drpc *ctx, Drpc__Call **call)
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (*call == NULL) {
-		D_ERROR("Couldn't unpack message into Drpc__Call\n");
+		D_ERROR("Couldn't unpack message into Drpc__Call");
 		return -DER_PROTO;
 	}
 
@@ -638,12 +632,12 @@ int
 drpc_recv_call(struct drpc *session_ctx, Drpc__Call **call)
 {
 	if (call == NULL) {
-		D_ERROR("Call pointer is NULL\n");
+		D_ERROR("Call pointer is NULL");
 		return -DER_INVAL;
 	}
 
 	if (!drpc_is_valid_listener(session_ctx)) {
-		D_ERROR("dRPC context isn't a valid listener\n");
+		D_ERROR("dRPC context isn't a valid listener");
 		return -DER_INVAL;
 	}
 
@@ -668,12 +662,12 @@ int
 drpc_send_response(struct drpc *session_ctx, Drpc__Response *resp)
 {
 	if (resp == NULL) {
-		D_ERROR("Response was NULL\n");
+		D_ERROR("Response was NULL");
 		return -DER_INVAL;
 	}
 
 	if (!drpc_is_valid_listener(session_ctx)) {
-		D_ERROR("dRPC context isn't a valid listener\n");
+		D_ERROR("dRPC context isn't a valid listener");
 		return -DER_INVAL;
 	}
 
@@ -698,27 +692,26 @@ drpc_close(struct drpc *ctx)
 	uint32_t	new_count;
 
 	if (!ctx || !ctx->comm) {
-		D_ERROR("Context is already closed\n");
+		D_ERROR("Context is already closed");
 		return -DER_INVAL;
 	}
 
 	if (ctx->ref_count == 0) {
-		D_ERROR("Ref count is already zero\n");
+		D_ERROR("Ref count is already zero");
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)\n",
-		ctx->ref_count);
+	D_DEBUG(DB_MGMT, "Decrementing refcount (%u)", ctx->ref_count);
 	ctx->ref_count--;
 
 	new_count = ctx->ref_count;
 
 	if (new_count == 0) {
-		D_DEBUG(DB_MGMT, "Closing dRPC socket fd=%d\n", ctx->comm->fd);
+		D_DEBUG(DB_MGMT, "Closing dRPC socket fd=%d", ctx->comm->fd);
 
 		ret = unixcomm_close(ctx->comm);
 		if (ret != 0)
-			D_ERROR("Failed to close dRPC socket (rc=%d)\n", ret);
+			D_ERROR("Failed to close dRPC socket (rc=%d)", ret);
 		D_FREE(ctx);
 	}
 	return 0;
@@ -738,13 +731,12 @@ drpc_add_ref(struct drpc *ctx)
 	int rc = 0;
 
 	if (ctx == NULL) {
-		D_ERROR("Context is null\n");
+		D_ERROR("Context is null");
 		return -DER_INVAL;
 	}
 
 	if (ctx->ref_count == UINT_MAX) {
-		D_ERROR("Can't increment current ref count (count=%u)\n",
-			ctx->ref_count);
+		D_ERROR("Can't increment current ref count (count=%u)", ctx->ref_count);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

@@ -249,23 +249,21 @@ create_pool(struct cmd_info *cinfo)
 
 	rc = alloc_pool(&cinfo->key[0], true, &known_pool);
 	if (rc < 0) {
-		D_ERROR("Could not create pool: rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not create pool");
 		return rc;
 	}
 
 	fd = open(known_pool->kp_path, O_CREAT | O_RDWR, 0600);
 	if (fd < 0) {
 		rc = daos_errno2der(errno);
-		D_ERROR("Could not create pool file %s, rc=" DF_RC "\n", known_pool->kp_path,
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not create pool file %s", known_pool->kp_path);
 		goto free_mem;
 	}
 
 	rc = fallocate(fd, 0, 0, 4ULL * 1024 * 1024 * 1024);
 	if (rc) {
 		rc = daos_errno2der(errno);
-		D_ERROR("Could not allocate pool file %s, rc=" DF_RC "\n", known_pool->kp_path,
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not allocate pool file %s", known_pool->kp_path);
 		close(fd);
 		goto free_mem;
 	}
@@ -274,31 +272,29 @@ create_pool(struct cmd_info *cinfo)
 
 	rc = vos_pool_create(known_pool->kp_path, known_pool->kp_uuid, 0, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("Could not create vos pool at %s, rc=" DF_RC "\n", known_pool->kp_path,
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not create vos pool at %s", known_pool->kp_path);
 		goto free_mem;
 	}
 
 	rc = vos_pool_open(known_pool->kp_path, known_pool->kp_uuid, 0, &known_pool->kp_poh);
 	if (rc != 0) {
-		D_ERROR("Could not open vos pool at %s, rc=" DF_RC "\n", known_pool->kp_path,
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not open vos pool at %s", known_pool->kp_path);
 		goto destroy_pool;
 	}
 
 	rc = vos_cont_create(known_pool->kp_poh, known_pool->kp_uuid);
 	if (rc != 0) {
-		D_ERROR("Could not create vos container, rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not create vos container");
 		goto close_pool;
 	}
 
 	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, &known_pool->kp_coh);
 	if (rc != 0) {
 		goto close_pool;
-		D_ERROR("Could not open vos container, rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not open vos container");
 	}
 
-	D_INFO("Created pool and container at %s, uuid=" DF_UUID "\n", known_pool->kp_path,
+	D_INFO("Created pool and container at %s, uuid=" DF_UUID, known_pool->kp_path,
 	       DP_UUID(known_pool->kp_uuid));
 
 	current_open = known_pool;
@@ -325,7 +321,7 @@ open_pool(struct cmd_info *cinfo)
 
 	rc = alloc_pool(&cinfo->key[0], false, &known_pool);
 	if (rc < 0) {
-		D_ERROR("Could not open pool: rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not open pool");
 		return rc;
 	}
 
@@ -333,18 +329,17 @@ open_pool(struct cmd_info *cinfo)
 
 	rc = vos_pool_open(known_pool->kp_path, known_pool->kp_uuid, 0, &known_pool->kp_poh);
 	if (rc != 0) {
-		D_ERROR("Could not open vos pool at %s, rc=" DF_RC "\n", known_pool->kp_path,
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not open vos pool at %s", known_pool->kp_path);
 		goto out;
 	}
 
 	rc = vos_cont_open(known_pool->kp_poh, known_pool->kp_uuid, &known_pool->kp_coh);
 	if (rc != 0) {
-		D_ERROR("Could not open vos container, rc=" DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not open vos container");
 		goto close_pool;
 	}
 
-	D_INFO("Opened pool and container at %s, uuid=" DF_UUID "\n", known_pool->kp_path,
+	D_INFO("Opened pool and container at %s, uuid=" DF_UUID, known_pool->kp_path,
 	       DP_UUID(known_pool->kp_uuid));
 	current_open = known_pool;
 	return 0;
@@ -366,7 +361,7 @@ close_pool(struct cmd_info *cinfo)
 	current_open->kp_coh = DAOS_HDL_INVAL;
 	current_open->kp_poh = DAOS_HDL_INVAL;
 
-	D_INFO("Closed pool and container uuid=" DF_UUID "\n", DP_UUID(current_open->kp_uuid));
+	D_INFO("Closed pool and container uuid=" DF_UUID, DP_UUID(current_open->kp_uuid));
 	current_open = NULL;
 	return 0;
 }
@@ -397,7 +392,7 @@ punch_key(struct cmd_info *cinfo)
 	/* Write the original value (under) */
 	rc = vos_obj_punch(current_open->kp_coh, oid, d_hlc_get(), 0, 0, &dkey, 0, NULL, NULL);
 
-	D_INFO("Punch %s in pool and container uuid=" DF_UUID ", rc=" DF_RC "\n", cinfo->key,
+	D_INFO("Punch %s in pool and container uuid=" DF_UUID ": " DF_RC, cinfo->key,
 	       DP_UUID(current_open->kp_uuid), DP_RC(rc));
 	return rc;
 }
@@ -410,7 +405,7 @@ discard(struct cmd_info *cinfo)
 
 	rc = vos_discard(current_open->kp_coh, NULL, &epr, NULL, NULL);
 
-	D_INFO("Discard pool and container uuid=" DF_UUID ", rc=" DF_RC "\n",
+	D_INFO("Discard pool and container uuid=" DF_UUID ": " DF_RC,
 	       DP_UUID(current_open->kp_uuid), DP_RC(rc));
 	return rc;
 }
@@ -424,13 +419,12 @@ print_size(struct cmd_info *cinfo)
 	rc = vos_pool_query(current_open->kp_poh, &pinfo);
 
 	if (rc != 0) {
-		D_ERROR("Could not query pool uuid=" DF_UUID ", rc=" DF_RC "\n",
-			DP_UUID(current_open->kp_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Could not query pool uuid=" DF_UUID, DP_UUID(current_open->kp_uuid));
 		return rc;
 	}
 
-	D_INFO("Size query for pool uuid=" DF_UUID " got"
-	       " scm={sys=" DF_U64 ",free=" DF_U64 ",total=" DF_U64 "}\n",
+	D_INFO("Size query for pool uuid=" DF_UUID " got scm={sys=" DF_U64 ",free=" DF_U64
+	       ",total=" DF_U64 "}",
 	       DP_UUID(current_open->kp_uuid), SCM_SYS(&pinfo.pif_space),
 	       SCM_FREE(&pinfo.pif_space), SCM_TOTAL(&pinfo.pif_space));
 
@@ -550,12 +544,12 @@ write_key(struct cmd_info *cinfo)
 		epr.epr_hi = d_hlc_get();
 
 		D_INFO("begin %s " DF_U64 " bytes from " DF_U64 " in %s at " DF_X64
-		       " in pool and container uuid=" DF_UUID "\n",
+		       " in pool and container uuid=" DF_UUID,
 		       op_info[cinfo->type].oi_str, rex.rx_nr, rex.rx_idx, cinfo->key, epr.epr_hi,
 		       DP_UUID(current_open->kp_uuid));
 
 		if (cinfo->type == REMOVE_ONE || cinfo->type == REMOVE_ALL) {
-			D_INFO("epoch range is " DF_X64 "-" DF_X64 "\n", epr.epr_lo, epr.epr_hi);
+			D_INFO("epoch range is " DF_X64 "-" DF_X64, epr.epr_lo, epr.epr_hi);
 			/* Remove range */
 			rc = vos_obj_array_remove(current_open->kp_coh, oid, &epr, &dkey,
 						  &iod.iod_name, &rex);
@@ -571,7 +565,7 @@ write_key(struct cmd_info *cinfo)
 		}
 
 		D_INFO("end   %s " DF_U64 " bytes from " DF_U64 " in %s at " DF_X64
-		       " in pool and container uuid=" DF_UUID ", rc=" DF_RC "\n",
+		       " in pool and container uuid=" DF_UUID ": " DF_RC,
 		       op_info[cinfo->type].oi_str, rex.rx_nr, rex.rx_idx, cinfo->key, epr.epr_hi,
 		       DP_UUID(current_open->kp_uuid), DP_RC(rc));
 
@@ -601,7 +595,7 @@ aggregate(struct cmd_info *cinfo)
 
 	in_agg = 0;
 
-	D_INFO("Aggregate pool and container uuid=" DF_UUID ", rc=" DF_RC "\n",
+	D_INFO("Aggregate pool and container uuid=" DF_UUID ": " DF_RC,
 	       DP_UUID(current_open->kp_uuid), DP_RC(rc));
 
 	return rc;
@@ -970,7 +964,7 @@ run_vos_command(const char *arg0, const char *cmd)
 
 	if (abit_start() != 0) {
 		free_args();
-		D_ERROR("Failed to init abt\n");
+		D_ERROR("Failed to init abt");
 		return 1;
 	}
 

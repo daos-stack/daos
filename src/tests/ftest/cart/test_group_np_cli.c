@@ -226,14 +226,14 @@ clean_up:
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
 		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "joined progress thread.\n");
+	D_DEBUG(DB_TEST, "joined progress thread");
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
 
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "exiting.\n");
+	D_DEBUG(DB_TEST, "exiting");
 
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);

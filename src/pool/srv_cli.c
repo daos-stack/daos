@@ -61,7 +61,7 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (pool == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_DEBUG(DB_TRACE, "after alloc "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_TRACE, "after alloc " DF_UUIDF, DP_UUID(pool_uuid));
 	uuid_copy(pool->dp_pool, pool_uuid);
 	uuid_copy(pool->dp_pool_hdl, poh_uuid);
 	pool->dp_capas = flags;
@@ -76,13 +76,13 @@ dsc_pool_open(uuid_t pool_uuid, uuid_t poh_uuid, unsigned int flags,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_TRACE, "before update "DF_UUIDF"\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_TRACE, "before update " DF_UUIDF, DP_UUID(pool_uuid));
 	rc = dc_pool_map_update(pool, map, true);
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_MD, DF_UUID": create: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(pool_uuid), DP_UUID(pool->dp_pool_hdl), flags);
+	D_DEBUG(DB_MD, DF_UUID ": create: hdl=" DF_UUIDF " flags=%x", DP_UUID(pool_uuid),
+		DP_UUID(pool->dp_pool_hdl), flags);
 
 	dc_pool_hdl_link(pool); /* +1 ref */
 	dc_pool2hdl(pool, ph);  /* +1 ref */
@@ -204,8 +204,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0) {
-		D_ERROR(DF_PRE": initialize replicated service client: "DF_RC"\n",
-			DP_PRE(uuid, cbs), DP_RC(rc));
+		DL_ERROR(rc, DF_PRE ": initialize replicated service client", DP_PRE(uuid, cbs));
 		return rc;
 	}
 
@@ -230,20 +229,19 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		ep.ep_grp = NULL;
 		rc = rsvc_client_choose(&client, &ep);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": choose pool service replica: "DF_RC"\n", DP_PRE(uuid, cbs),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_PRE ": choose pool service replica", DP_PRE(uuid, cbs));
 			break;
 		}
 
 		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, &rpc);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": create RPC: "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			DL_ERROR(rc, DF_PRE ": create RPC", DP_PRE(uuid, cbs));
 			break;
 		}
 
 		rc = cbs->pscc_init(uuid, rpc, arg);
 		if (rc != 0) {
-			D_ERROR(DF_PRE": initialize RPC: "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			DL_ERROR(rc, DF_PRE ": initialize RPC", DP_PRE(uuid, cbs));
 			crt_req_decref(rpc);
 			break;
 		}
@@ -282,7 +280,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 					      rc == 0 ? &out->po_hint : NULL);
 		if (rc == RSVC_CLIENT_PROCEED && !daos_rpc_retryable_rc(out->po_rc)) {
 			rc = cbs->pscc_consume(uuid, rpc, arg);
-			D_DEBUG(DB_TRACE, DF_PRE": consume: %d\n", DP_PRE(uuid, cbs), rc);
+			D_DEBUG(DB_TRACE, DF_PRE ": consume: %d", DP_PRE(uuid, cbs), rc);
 			if (rc == DSC_POOL_SVC_CALL_AGAIN_NOW) {
 				backoff = 0;
 			} else if (rc != DSC_POOL_SVC_CALL_AGAIN) {
@@ -308,7 +306,7 @@ time_out:
 			if (t < deadline)
 				dss_sleep(deadline - t);
 			rc = -DER_TIMEDOUT;
-			D_ERROR(DF_PRE": "DF_RC"\n", DP_PRE(uuid, cbs), DP_RC(rc));
+			DL_ERROR(rc, DF_PRE, DP_PRE(uuid, cbs));
 			break;
 		}
 
@@ -360,15 +358,13 @@ process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_
 
 	rc = pool_map_create(map_buf, map_version, &map);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create local pool map, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create local pool map", DP_UUID(pool_uuid));
 		return rc;
 	}
 
 	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get num disabled tgts, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to get num disabled tgts", DP_UUID(pool_uuid));
 		goto out;
 	}
 	info->pi_ndisabled = num_disabled;
@@ -378,12 +374,11 @@ process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_
 
 		rc = pool_map_get_ranks(pool_uuid, map, get_enabled, ranks);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": pool_map_get_ranks() failed, "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": pool_map_get_ranks() failed", DP_UUID(pool_uuid));
 			goto out;
 		}
-		D_DEBUG(DB_MD, DF_UUID": found %u %s ranks in pool map\n",
-			DP_UUID(pool_uuid), (*ranks)->rl_nr, get_enabled ? "ENABLED" : "DISABLED");
+		D_DEBUG(DB_MD, DF_UUID ": found %u %s ranks in pool map", DP_UUID(pool_uuid),
+			(*ranks)->rl_nr, get_enabled ? "ENABLED" : "DISABLED");
 	}
 
 	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
@@ -409,11 +404,11 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 		arg->pqa_map_size = out->pqo_map_buf_size;
 		return DSC_POOL_SVC_CALL_AGAIN_NOW;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query pool, "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to query pool", DP_UUID(pool_uuid));
 		return rc < 0 ? rc : -DER_PROTO;
 	}
 
-	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID ": Successfully queried pool", DP_UUID(pool_uuid));
 
 	rc = process_query_result(arg->pqa_ranks, arg->pqa_info, pool_uuid,
 				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
@@ -423,8 +418,7 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	if (arg->pqa_upgrade_layout_ver)
 		*arg->pqa_upgrade_layout_ver = out->pqo_upgrade_layout_ver;
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to process pool query results", DP_UUID(pool_uuid));
 
 	return rc;
 }

@@ -254,7 +254,7 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 			} while (isset(tgts_used, tgt_idx));
 
 			setbit(tgts_used, tgt_idx);
-			D_DEBUG(DB_PL, "selected tgt %d\n", tgt_idx);
+			D_DEBUG(DB_PL, "selected tgt %d", tgt_idx);
 			D_ASSERTF(isclr(dom_full, (uint32_t)(curr_dom - root_pos)),
 				  "selected_tgt %u\n", (uint32_t)(curr_dom - root_pos));
 			range_set = tgt_isset_range(root_pos->do_targets, tgts_used,
@@ -262,14 +262,14 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 			if (range_set) {
 				/* Used up all targets in this domain */
 				setbit(dom_full, curr_dom - root_pos);
-				D_DEBUG(DB_PL, "dom %d used up\n", (int)(curr_dom - root_pos));
+				D_DEBUG(DB_PL, "dom %d used up", (int)(curr_dom - root_pos));
 				/* Check and set if all of its parent are full */
 				while(top != -1) {
 					if (is_dom_full(dom_stack[top], root_pos, dom_full,
 							exclude_new)) {
 						uint32_t off = dom_stack[top] - root_pos;
 
-						D_DEBUG(DB_PL, "dom %u used up\n", off);
+						D_DEBUG(DB_PL, "dom %u used up", off);
 						setbit(dom_full, off);
 					}
 					--top;
@@ -298,8 +298,9 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 						/* all domains within the PD are full, ignore the
 						 * PD restrict.
 						 */
-						D_DEBUG(DB_PL, "PD[%d] all doms are full, weak the "
-							"PD restrict\n",
+						D_DEBUG(DB_PL,
+							"PD[%d] all doms are full, weak the PD "
+							"restrict",
 							(int)(curr_dom - root_pos));
 						curr_pd = root_pos;
 						curr_dom = curr_pd;
@@ -311,8 +312,7 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 					return;
 				}
 				setbit(dom_full, curr_dom - root_pos);
-				D_DEBUG(DB_PL, "used up dom %d\n",
-					(int)(curr_dom - root_pos));
+				D_DEBUG(DB_PL, "used up dom %d", (int)(curr_dom - root_pos));
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				curr_dom = dom_stack[top--];
 				continue;
@@ -330,8 +330,9 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 						 * domain range has been used up (see above check
 						 * for dom_full bitmap).
 						 */
-						D_DEBUG(DB_PL, "PD[%d] all doms are full, weak the "
-							"PD restrict\n",
+						D_DEBUG(DB_PL,
+							"PD[%d] all doms are full, weak the PD "
+							"restrict",
 							(int)(curr_dom - root_pos));
 						curr_pd = root_pos;
 						curr_dom = curr_pd;
@@ -342,7 +343,7 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 					return;
 				}
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
-				D_DEBUG(DB_PL, "set grp_used %d\n", (int)(curr_dom - root_pos));
+				D_DEBUG(DB_PL, "set grp_used %d", (int)(curr_dom - root_pos));
 				curr_dom = dom_stack[top--];
 				continue;
 			}
@@ -358,7 +359,7 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 				for (idx = start_dom; idx <= end_dom; ++idx)
 					if (!isset(dom_full, idx)) {
 						clrbit(dom_used, idx);
-						D_DEBUG(DB_PL, "clrbit dom_used %d\n", idx);
+						D_DEBUG(DB_PL, "clrbit dom_used %d", idx);
 					}
 				if (top == -1)
 					curr_dom = curr_pd;
@@ -383,7 +384,7 @@ __get_target_v1(struct pool_domain *root_pos, struct pool_domain *curr_pd,
 			/* Mark this domain as used */
 			if (curr_dom == curr_pd && curr_pd != root_pos)
 				setbit(dom_used, (int)(curr_dom - root_pos));
-			D_DEBUG(DB_PL, "selected dom %d\n", start_dom + selected_dom);
+			D_DEBUG(DB_PL, "selected dom %d", start_dom + selected_dom);
 			setbit(dom_used, start_dom + selected_dom);
 			setbit(dom_cur_grp_used, start_dom + selected_dom);
 			D_ASSERT(top < MAX_STACK - 1);
@@ -479,8 +480,7 @@ reset_dom_cur_grp_v1(struct pool_domain *root, struct pool_domain *curr_pd,
 
 	tree = curr_pd;
 	dom_nr = 1;
-	D_DEBUG(DB_PL, "bitmap resetting... curr_pd at dom[%d] (0 is root)\n",
-		(int)(curr_pd - root));
+	D_DEBUG(DB_PL, "bitmap resetting... curr_pd at dom[%d] (0 is root)", (int)(curr_pd - root));
 	/* Walk through the failure domain to reset full, current_group and tgts used bits */
 	for (; tree != NULL && tree->do_comp.co_type >= fdom_lvl; tree = tree[0].do_children) {
 		uint32_t start_dom = tree - root;
@@ -746,8 +746,8 @@ retry:
 			if (range_set) {
 				/* Used up all targets in this domain */
 				setbit(dom_occupied, curr_dom - root_pos);
-				D_DEBUG(DB_PL, "dom %p %d used up\n",
-					dom_occupied, (int)(curr_dom - root_pos));
+				D_DEBUG(DB_PL, "dom %p %d used up", dom_occupied,
+					(int)(curr_dom - root_pos));
 			}
 
 			/* Found target (which may be available or not) */
@@ -774,8 +774,7 @@ retry:
 					return;
 				}
 				setbit(dom_occupied, curr_dom - root_pos);
-				D_DEBUG(DB_PL, "used up dom %d\n",
-					(int)(curr_dom - root_pos));
+				D_DEBUG(DB_PL, "used up dom %d", (int)(curr_dom - root_pos));
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				curr_dom = dom_stack[top--];
 				continue;

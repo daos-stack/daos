@@ -158,8 +158,7 @@ ds_pool_prop_default_init(void)
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
-		D_DEBUG(DB_MGMT,
-			"Initializing default ACL pool prop\n");
+		D_DEBUG(DB_MGMT, "Initializing default ACL pool prop");
 		entry->dpe_val_ptr = ds_sec_alloc_default_daos_pool_acl();
 		if (entry->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
@@ -174,7 +173,7 @@ ds_pool_prop_default_fini(void)
 
 	entry = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_ACL);
 	if (entry != NULL) {
-		D_DEBUG(DB_MGMT, "Freeing default ACL pool prop\n");
+		D_DEBUG(DB_MGMT, "Freeing default ACL pool prop");
 		D_FREE(entry->dpe_val_ptr);
 	}
 }

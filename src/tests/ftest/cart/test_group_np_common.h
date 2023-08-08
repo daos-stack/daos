@@ -154,7 +154,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 		e_reply->ret = -DER_MISC;
 		e_reply->room_no = -1;
 	} else {
-		D_DEBUG(DB_ALL, "No fault injected.\n");
+		D_DEBUG(DB_ALL, "No fault injected");
 	}
 
 	rc = crt_reply_send(rpc_req);
@@ -313,8 +313,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 		if (cb_info->cci_rc != 0) {
 			D_FREE(test_ping_rpc_req_input->name);
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d", rpc_req->cr_opc, cb_info->cci_rc);
 			break;
 		}
 		DBG_PRINT("%s checkin result - ret: %d, room_no: %d, "
@@ -335,8 +334,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(swim_status_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d", rpc_req->cr_opc, cb_info->cci_rc);
 			break;
 		}
 		DBG_PRINT("swim_status result - rank: %d, exp_status: %d, "
@@ -357,8 +355,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(shutdown_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d", rpc_req->cr_opc, cb_info->cci_rc);
 			break;
 		}
 		DBG_PRINT("shutdown result - rank: %d, result: %d.\n",
@@ -376,8 +373,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(disable_swim_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d", rpc_req->cr_opc, cb_info->cci_rc);
 			break;
 		}
 		DBG_PRINT("disable_swim result - rank: %d, result: %d.\n",
@@ -395,8 +391,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		if (ping_delay_rpc_req_output == NULL)
 			return;
 		if (cb_info->cci_rc != 0) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d", rpc_req->cr_opc, cb_info->cci_rc);
 			D_FREE(ping_delay_rpc_req_input->name);
 			break;
 		}
@@ -547,7 +542,7 @@ send_rpc_check_in(crt_group_t *remote_group, int rank, int tag)
 		buffer = NULL;
 	} else {
 		D_ALLOC(buffer, 256);
-		D_INFO("not injecting fault.\n");
+		D_INFO("not injecting fault");
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
@@ -556,11 +551,11 @@ send_rpc_check_in(crt_group_t *remote_group, int rank, int tag)
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
 	rpc_req_input->bool_val = true;
-	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
-		"%d, name: %s, age: %d, days: %d, bool_val %d.\n",
-		rank, server_ep.ep_tag, rpc_req_input->name,
-		rpc_req_input->age, rpc_req_input->days,
-		rpc_req_input->bool_val);
+	D_DEBUG(DB_TEST,
+		"client(rank %d) sending checkin rpc with tag %d, name: %s, age: %d, days: %d, "
+		"bool_val %d",
+		rank, server_ep.ep_tag, rpc_req_input->name, rpc_req_input->age,
+		rpc_req_input->days, rpc_req_input->bool_val);
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
@@ -621,13 +616,9 @@ parse_verify_swim_status_arg(char *source)
 			strcpy(cC, cursor);
 			cC[groupArray[g].rm_eo] = 0;
 			D_DEBUG(DB_TEST,
-				"parse_verify_swim_status_arg, match %u, "
-					 "group %u: [%2u-%2u]: %s\n",
-					 m,
-					 g,
-					 groupArray[g].rm_so,
-					 groupArray[g].rm_eo,
-					 cC + groupArray[g].rm_so);
+				"parse_verify_swim_status_arg, match %u, group %u: [%2u-%2u]: %s",
+				m, g, groupArray[g].rm_so, groupArray[g].rm_eo,
+				cC + groupArray[g].rm_so);
 
 			if (g == 1) {
 				/* avoid checkpatch warning */
@@ -648,8 +639,7 @@ parse_verify_swim_status_arg(char *source)
 						       groupArray[g].rm_so));
 				} else {
 					/* avoid checkpatch warning */
-					D_ERROR("Use 'dead' or 'alive' for "
-						"swim status label.\n");
+					D_ERROR("Use 'dead' or 'alive' for swim status label");
 				}
 
 				/* "d(ead)?"=1, a(live)?=0 as
@@ -695,7 +685,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 	D_ASSERT(arg_str != NULL);
 	if (strnlen(arg_str, CRT_CTL_MAX_ARG_STR_LEN) >=
 				CRT_CTL_MAX_ARG_STR_LEN) {
-		D_ERROR("arg string too long.\n");
+		D_ERROR("arg string too long");
 		return;
 	}
 
@@ -704,14 +694,14 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		return;
 	}
 
-	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	D_DEBUG(DB_TRACE, "arg_str %s", arg_str);
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
 		ptr = strchr(token, '-');
 		if (ptr == NULL) {
 			num_ranks_l++;
 			if (num_ranks_l > MAX_NUM_RANKS) {
-				D_ERROR("Too many target ranks.\n");
+				D_ERROR("Too many target ranks");
 				return;
 			}
 			ranks[index] = atoi(token);
@@ -720,14 +710,14 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 			continue;
 		}
 		if (ptr == token || ptr == token + strlen(token)) {
-			D_ERROR("Invalid rank range.\n");
+			D_ERROR("Invalid rank range");
 			return;
 		}
 		rstart = atoi(token);
 		rend = atoi(ptr + 1);
 		num_ranks_l += (rend - rstart + 1);
 		if (num_ranks_l > MAX_NUM_RANKS) {
-			D_ERROR("Too many target ranks.\n");
+			D_ERROR("Too many target ranks");
 			return;
 		}
 		for (i = rstart; i < rend + 1; i++) {

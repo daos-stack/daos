@@ -114,7 +114,7 @@ static void *progress_thread(void *arg)
 	do {
 		rc = crt_progress(crt_ctx, 1);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d", rc);
 			break;
 		}
 
@@ -193,8 +193,7 @@ rpc_err_init(void)
 	int		rc = 0;
 	uint32_t	flag;
 
-	D_DEBUG(DB_TEST, "local group: %s, target group: %s\n",
-		rpc_err.re_local_group_name,
+	D_DEBUG(DB_TEST, "local group: %s, target group: %s", rpc_err.re_local_group_name,
 		rpc_err.re_target_group_name);
 
 	rc = d_log_init();
@@ -303,10 +302,9 @@ rpc_err_rpc_issue()
 		D_ASSERTF(rpc_req_input != NULL, "crt_req_get() failed. "
 			  "rpc_req_input: %p\n", rpc_req_input);
 		rpc_req_input->magic = random()%100;
-		D_DEBUG(DB_TEST, "client rank %d sending magic number %d to "
-			"rank %d, tag %d.\n",
-			rpc_err.re_my_rank, rpc_req_input->magic,
-			server_ep.ep_rank, server_ep.ep_tag);
+		D_DEBUG(DB_TEST, "client rank %d sending magic number %d to rank %d, tag %d",
+			rpc_err.re_my_rank, rpc_req_input->magic, server_ep.ep_rank,
+			server_ep.ep_tag);
 
 		rc = crt_req_send(rpc_req, client_cb, &rpc_err);
 		D_ASSERTF(rc == 0, "crt_req_send() failed, rc %d\n", rc);
@@ -331,9 +329,9 @@ rpc_err_rpc_issue()
 		/* Wait twice for each target here as two RPCs are sent for
 		 * each target in the loop above.
 		 */
-		D_DEBUG(DB_TEST, "Waiting on reply %d\n", i * 2);
+		D_DEBUG(DB_TEST, "Waiting on reply %d", i * 2);
 		sem_wait(&rpc_err.re_all_done);
-		D_DEBUG(DB_TEST, "Waiting on reply %d\n", (i * 2) + 1);
+		D_DEBUG(DB_TEST, "Waiting on reply %d", (i * 2) + 1);
 		sem_wait(&rpc_err.re_all_done);
 	}
 }
@@ -382,8 +380,7 @@ rpc_err_test_run(void)
 		rc = crt_group_size(rpc_err.re_target_group,
 			       &rpc_err.re_target_group_size);
 		D_ASSERTF(rc == 0, "crt_group_size() failed. rc: %d\n", rc);
-		D_DEBUG(DB_TEST, "sizeof %s is %d\n",
-			rpc_err.re_target_group_name,
+		D_DEBUG(DB_TEST, "sizeof %s is %d", rpc_err.re_target_group_name,
 			rpc_err.re_target_group_size);
 	}
 

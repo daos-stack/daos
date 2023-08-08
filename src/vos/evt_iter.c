@@ -20,7 +20,7 @@ evt_validate_options(unsigned int options)
 		return 0;
 
 	/* EVT_ITER_SKIP* should be used only with EVT_ITER_VISIBLE */
-	D_ERROR("Misuse of EVT_ITER_SKIP_\n");
+	D_ERROR("Misuse of EVT_ITER_SKIP_");
 	return -DER_INVAL;
 }
 
@@ -46,7 +46,7 @@ evt_iter_prepare(daos_handle_t toh, unsigned int options,
 
 	if (options & EVT_ITER_EMBEDDED) {
 		if (tcx->tc_ref != 1) {
-			D_ERROR("Cannot share embedded iterator\n");
+			D_ERROR("Cannot share embedded iterator");
 			D_GOTO(out, rc = -DER_BUSY);
 		}
 
@@ -189,7 +189,7 @@ evt_iter_probe_find(struct evt_iterator *iter, const struct evt_rect *rect)
 static int
 evt_iter_is_ready(struct evt_iterator *iter)
 {
-	D_DEBUG(DB_TRACE, "iterator state is %d\n", iter->it_state);
+	D_DEBUG(DB_TRACE, "iterator state is %d", iter->it_state);
 
 	switch (iter->it_state) {
 	default:
@@ -377,7 +377,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	}
 
 	if (opc != EVT_ITER_FIND) {
-		D_ERROR("Unknown op code for evt iterator: %d\n", opc);
+		D_ERROR("Unknown op code for evt iterator: %d", opc);
 		return -DER_NOSYS;
 	}
 
@@ -389,8 +389,8 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	iter->it_index = index;
 	entry = evt_ent_array_get(iter->it_entries, index);
 
-	D_DEBUG(DB_TRACE, "probe ent "DF_EXT" Update ent "DF_EXT"\n",
-		DP_EXT(&rect->rc_ex), DP_EXT(&entry->en_sel_ext));
+	D_DEBUG(DB_TRACE, "probe ent " DF_EXT " Update ent " DF_EXT, DP_EXT(&rect->rc_ex),
+		DP_EXT(&entry->en_sel_ext));
 out:
 	iter->it_state = EVT_ITER_READY;
 	return evt_iter_skip(tcx, iter);
@@ -582,7 +582,7 @@ int evt_iter_delete(daos_handle_t ih, struct evt_entry *ent)
 	if (!evt_filter_rect(&iter->it_filter, &rect, true))
 		goto out;
 
-	D_DEBUG(DB_TRACE, "Skipping to next unfiltered entry\n");
+	D_DEBUG(DB_TRACE, "Skipping to next unfiltered entry");
 
 	/* Skip to first unfiltered entry */
 	evt_iter_move(tcx, iter);
@@ -622,12 +622,12 @@ evt_iter_corrupt(daos_handle_t ih)
 			 trace->tr_node + offsetof(struct evt_desc, dc_ex_addr),
 			 sizeof(*desc) - offsetof(struct evt_desc, dc_ex_addr));
 	if (rc != 0) {
-		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "umem_tx_add failed");
 		rc = evt_tx_end(tcx, rc);
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted");
 	BIO_ADDR_SET_CORRUPTED(&desc->dc_ex_addr);
 	rc = evt_tx_end(tcx, rc);
 

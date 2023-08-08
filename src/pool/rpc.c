@@ -345,7 +345,7 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH;
 			break;
 		default:
-			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
+			D_ERROR("ignore bad dpt_type %d", entry->dpe_type);
 			break;
 		}
 	}

@@ -60,8 +60,7 @@ ds_iom_create(struct bio_desc *biod, daos_iod_t *iods, uint32_t iods_nr, uint32_
 		for (r = 0; r < iod->iod_nr; r++) {
 			daos_recx_t recx = iod->iod_recxs[r];
 
-			D_DEBUG(DB_CSUM, "processing recx[%d]: "DF_RECX"\n",
-				r, DP_RECX(recx));
+			D_DEBUG(DB_CSUM, "processing recx[%d]: " DF_RECX, r, DP_RECX(recx));
 			rec_idx = recx.rx_idx;
 
 			while (rec_idx <= recx.rx_idx + recx.rx_nr - 1) {

@@ -160,19 +160,19 @@ get_self_uri(struct host *h, int rank)
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_context_create(&ctx);
 	if (rc != 0) {
-		D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_context_create() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_self_uri_get(0, &uri);
 	if (rc != 0) {
-		D_ERROR("crt_self_uri_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_self_uri_get() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -183,13 +183,13 @@ get_self_uri(struct host *h, int rank)
 
 	rc = crt_context_destroy(ctx, 1);
 	if (rc != 0) {
-		D_ERROR("ctx_context_destroy() failed; rc=%d\n", rc);
+		D_ERROR("ctx_context_destroy() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed; rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed; rc=%d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -215,8 +215,7 @@ generate_group_file(int world_size, struct host *h)
 	tmp_fd = mkstemp(grp_info_template);
 
 	if (tmp_fd == -1) {
-		D_ERROR("mkstemp() failed on %s, error: %s\n",
-			grp_info_template, strerror(errno));
+		D_ERROR("mkstemp() failed on %s, error: %s", grp_info_template, strerror(errno));
 		return -1;
 	}
 
@@ -282,13 +281,13 @@ int main(int argc, char **argv)
 
 	hostbuf = calloc(sizeof(*hostbuf), 1);
 	if (!hostbuf) {
-		D_ERROR("Failed to allocate hostbuf\n");
+		D_ERROR("Failed to allocate hostbuf");
 		D_GOTO(exit, rc = -1);
 	}
 
 	recv_buf = calloc(sizeof(struct host), world_size);
 	if (!recv_buf) {
-		D_ERROR("Failed to allocate recv_buf\n");
+		D_ERROR("Failed to allocate recv_buf");
 		D_GOTO(exit, rc = -1);
 	}
 
@@ -296,7 +295,7 @@ int main(int argc, char **argv)
 	hostbuf->my_rank = my_rank;
 	rc = get_self_uri(hostbuf, my_rank);
 	if (rc != 0) {
-		D_ERROR("Failed to retrieve self uri\n");
+		D_ERROR("Failed to retrieve self uri");
 		D_GOTO(exit, rc);
 	}
 
@@ -305,7 +304,7 @@ int main(int argc, char **argv)
 	/* Generate group configuration file */
 	rc = generate_group_file(world_size, recv_buf);
 	if (rc != 0) {
-		D_ERROR("generate_group_file() failed\n");
+		D_ERROR("generate_group_file() failed");
 		D_GOTO(exit, rc);
 	}
 
@@ -330,10 +329,8 @@ exit:
 		rc = execvp(g_opt.app_to_exec, &argv[g_opt.app_args_indx]);
 
 		if (rc == -1)
-			D_ERROR("execvp('%s') failed: %s; rc=%d\n",
-				g_opt.app_to_exec,
-				strerror(errno),
-				rc);
+			D_ERROR("execvp('%s') failed: %s; rc=%d", g_opt.app_to_exec,
+				strerror(errno), rc);
 	}
 
 	return 0;

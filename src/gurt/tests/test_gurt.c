@@ -665,7 +665,7 @@ test_log(void **state)
 	rc = d_log_setmasks(logmask, -1);
 	rc_dbgbit = d_log_getdbgbit(&dbg_mask, "trace");
 	if (rc_dbgbit < 0)
-		D_ERROR("Unable to get debug bit mask for trace\n");
+		D_ERROR("Unable to get debug bit mask for trace");
 	assert_int_equal(dbg_mask, (uint64_t)(rc));
 	D_FREE(logmask);
 
@@ -684,7 +684,7 @@ test_log(void **state)
 	current_dbgmask = dbg_mask & ~DLOG_DBG;
 	rc_dbgbit = d_log_getdbgbit(&dbg_mask, "test");
 	if (rc_dbgbit < 0)
-		D_ERROR("Unable to get debug bit mask for test\n");
+		D_ERROR("Unable to get debug bit mask for test");
 	dbg_mask |= current_dbgmask;
 	assert_int_equal(dbg_mask, (uint64_t)(rc));
 	D_FREE(logmask);
@@ -704,14 +704,14 @@ test_log(void **state)
 	setenv("DD_MASK", "test1", 1);
 	d_log_sync_mask();
 
-	D_INFO("This message should appear\n");
-	D_DEBUG(DB_TEST1, "This message should appear\n");
-	D_DEBUG(DB_TEST2, "This message should NOT appear\n");
+	D_INFO("This message should appear");
+	D_DEBUG(DB_TEST1, "This message should appear");
+	D_DEBUG(DB_TEST2, "This message should NOT appear");
 	assert_int_not_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 #undef D_LOGFAC
 #define D_LOGFAC	DD_FAC(foo)
-	D_DEBUG(DB_TEST1, "This message should NOT appear\n");
+	D_DEBUG(DB_TEST1, "This message should NOT appear");
 	assert_int_equal(D_LOG_ENABLED(DB_TEST2), 0);
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	d_log_sync_mask();
@@ -720,13 +720,13 @@ test_log(void **state)
 	d_log_sync_mask();
 	assert_int_equal(D_LOG_ENABLED(DB_TEST1), 0);
 	assert_int_not_equal(D_LOG_ENABLED(DB_TEST2), 0);
-	D_DEBUG(DB_TEST2, "This message should appear\n");
-	D_DEBUG(DB_TEST1, "This message should NOT appear\n");
+	D_DEBUG(DB_TEST2, "This message should appear");
+	D_DEBUG(DB_TEST1, "This message should NOT appear");
 	D_CDEBUG(0, DB_TEST1, DB_TEST2, "This message should appear\n");
 	D_CDEBUG(1, DB_TEST1, DB_TEST2, "This message should NOT appear\n");
 	D_CDEBUG(0, DB_TEST2, DB_TEST1, "This message should NOT appear\n");
 	D_CDEBUG(1, DB_TEST2, DB_TEST1, "This message should appear\n");
-	D_TRACE_INFO(&DB_TEST2, "This message should appear\n");
+	D_TRACE_INFO(&DB_TEST2, "This message should appear");
 	D_TRACE_DEBUG(DB_TEST1, &DB_TEST1, "This message should NOT appear\n");
 	D_TRACE_DEBUG(DB_TEST2, &DB_TEST1, "This message should appear\n");
 #undef D_LOGFAC

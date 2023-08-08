@@ -29,18 +29,18 @@ d_fd_tree_init(struct d_fd_tree *tree, const uint32_t *compressed,
 	       const uint32_t compressed_len)
 {
 	if (compressed == NULL) {
-		D_ERROR("null compressed fd tree\n");
+		D_ERROR("null compressed fd tree");
 		return -DER_INVAL;
 	}
 
 	if (compressed_len < FD_TREE_TUPLE_LEN) {
-		D_ERROR("compressed len=%u, less than minimum %u\n",
-			compressed_len, FD_TREE_TUPLE_LEN);
+		D_ERROR("compressed len=%u, less than minimum %u", compressed_len,
+			FD_TREE_TUPLE_LEN);
 		return -DER_INVAL;
 	}
 
 	if (tree == NULL) {
-		D_ERROR("null pointer for result\n");
+		D_ERROR("null pointer for result");
 		return -DER_INVAL;
 	}
 
@@ -56,7 +56,7 @@ get_next_domain(struct d_fd_tree *tree, struct d_fd_node *next)
 	struct d_fault_domain *fd;
 
 	if ((tree->fdt_idx + FD_TREE_TUPLE_LEN) > tree->fdt_len) {
-		D_ERROR("fault domain tree is truncated\n");
+		D_ERROR("fault domain tree is truncated");
 		return -DER_TRUNC;
 	}
 
@@ -107,12 +107,12 @@ d_fd_tree_next(struct d_fd_tree *tree, struct d_fd_node *next)
 	bool		ranks_done;
 
 	if (tree == NULL || next == NULL) {
-		D_ERROR("incoming ptr is null\n");
+		D_ERROR("incoming ptr is null");
 		return -DER_INVAL;
 	}
 
 	if (tree_not_initialized(tree)) {
-		D_ERROR("fault domain tree not initialized\n");
+		D_ERROR("fault domain tree not initialized");
 		return -DER_UNINIT;
 	}
 
@@ -123,7 +123,7 @@ d_fd_tree_next(struct d_fd_tree *tree, struct d_fd_node *next)
 		return -DER_NONEXIST;
 
 	if (tree->fdt_idx >= tree->fdt_len) {
-		D_ERROR("fault domain tree is truncated\n");
+		D_ERROR("fault domain tree is truncated");
 		return -DER_TRUNC;
 	}
 
@@ -139,12 +139,12 @@ int
 d_fd_tree_reset(struct d_fd_tree *tree)
 {
 	if (tree == NULL) {
-		D_ERROR("fault domain tree is null\n");
+		D_ERROR("fault domain tree is null");
 		return -DER_INVAL;
 	}
 
 	if (tree_not_initialized(tree)) {
-		D_ERROR("fault domain tree is not initialized\n");
+		D_ERROR("fault domain tree is not initialized");
 		return -DER_UNINIT;
 	}
 
@@ -168,15 +168,13 @@ d_fd_get_exp_num_domains(uint32_t compressed_len, uint32_t exp_num_ranks,
 	min_len = FD_TREE_TUPLE_LEN + exp_num_ranks;
 
 	if (compressed_len < min_len) {
-		D_ERROR("len = %u, needed minimum = %u)\n", compressed_len,
-			min_len);
+		D_ERROR("len = %u, needed minimum = %u)", compressed_len, min_len);
 		return -DER_INVAL;
 	}
 
 	domain_len = compressed_len - exp_num_ranks;
 	if (domain_len % FD_TREE_TUPLE_LEN != 0) {
-		D_ERROR("domain_len = %u is not a multiple of %u\n",
-			domain_len, FD_TREE_TUPLE_LEN);
+		D_ERROR("domain_len = %u is not a multiple of %u", domain_len, FD_TREE_TUPLE_LEN);
 		return -DER_INVAL;
 	}
 

@@ -35,8 +35,7 @@ dc_debug_set_params(tse_task_t *task)
 	args = dc_task_get_args(task);
 	rc = dc_mgmt_sys_attach(args->grp, &cp_arg.sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp %s, rc "DF_RC"\n", args->grp,
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to attach to grp %s", args->grp);
 		rc = -DER_INVAL;
 		goto out_task;
 	}
@@ -51,8 +50,7 @@ dc_debug_set_params(tse_task_t *task)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_SVC_RIP) failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "crt_req_create(MGMT_SVC_RIP) failed");
 		D_GOTO(err_grp, rc);
 	}
 
@@ -73,8 +71,7 @@ dc_debug_set_params(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
-	D_DEBUG(DB_MGMT, "set parameter %d/%u/"DF_U64"\n", args->rank,
-		args->key_id, args->value);
+	D_DEBUG(DB_MGMT, "set parameter %d/%u/" DF_U64, args->rank, args->key_id, args->value);
 
 	return daos_rpc_send(rpc, task);
 
@@ -100,7 +97,7 @@ dc_debug_add_mark(const char *mark)
 
 	rc = dc_mgmt_sys_attach(NULL, &sys);
 	if (rc != 0) {
-		D_ERROR("failed to attach to grp rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to attach to grp");
 		return -DER_INVAL;
 	}
 
@@ -111,7 +108,7 @@ dc_debug_add_mark(const char *mark)
 			      DAOS_MGMT_VERSION);
 	rc = crt_req_create(daos_get_crt_ctx(), &ep, opc, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_create failed");
 		D_GOTO(err_grp, rc);
 	}
 
@@ -121,7 +118,7 @@ dc_debug_add_mark(const char *mark)
 	/** send the request */
 	rc = daos_rpc_send_wait(rpc);
 err_grp:
-	D_DEBUG(DB_MGMT, "mgmt mark: rc "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MGMT, "mgmt mark: " DF_RC, DP_RC(rc));
 	dc_mgmt_sys_detach(sys);
 	return rc;
 

@@ -130,8 +130,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 	D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + DAE_MBS_DSIZE(dae));
 	if (dsp == NULL) {
-		D_ERROR("Hit uncommitted DTX "DF_DTI" at %d: lid=%d, "
-			"but fail to alloc DRAM.\n",
+		D_ERROR("Hit uncommitted DTX " DF_DTI " at %d: lid=%d, but fail to alloc DRAM",
 			DP_DTI(&DAE_XID(dae)), pos, DAE_LID(dae));
 		return -DER_NOMEM;
 	}
@@ -165,11 +164,12 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 
 out:
 	D_DEBUG(DB_IO,
-		"%s hit uncommitted DTX "DF_DTI" at %d: dth %p (dist %s), lid=%d, flags %x/%x, "
-		"ver %u/%u, may need %s retry.\n", hit_again ? "Repeat" : "First",
-		DP_DTI(&DAE_XID(dae)), pos, dth, dth != NULL && dth->dth_dist ? "yes" : "no",
-		DAE_LID(dae), DAE_FLAGS(dae), DAE_MBS_FLAGS(dae), DAE_VER(dae),
-		dth != NULL ? dth->dth_ver : 0, s_try ? "server" : "client");
+		"%s hit uncommitted DTX " DF_DTI
+		" at %d: dth %p (dist %s), lid=%d, flags %x/%x, ver %u/%u, may need %s retry",
+		hit_again ? "Repeat" : "First", DP_DTI(&DAE_XID(dae)), pos, dth,
+		dth != NULL && dth->dth_dist ? "yes" : "no", DAE_LID(dae), DAE_FLAGS(dae),
+		DAE_MBS_FLAGS(dae), DAE_VER(dae), dth != NULL ? dth->dth_ver : 0,
+		s_try ? "server" : "client");
 
 	return -DER_INPROGRESS;
 }
@@ -314,7 +314,7 @@ dtx_act_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		 *
 		 *	Currently, the 1st case is more suspected.
 		 */
-		D_ERROR("The TX ID "DF_DTI" may be reused for epoch "DF_X64" vs "DF_X64"\n",
+		D_ERROR("The TX ID " DF_DTI " may be reused for epoch " DF_X64 " vs " DF_X64,
 			DP_DTI(&DAE_XID(dae_old)), DAE_EPOCH(dae_old), DAE_EPOCH(dae_new));
 		return -DER_TX_ID_REUSED;
 	}
@@ -433,7 +433,7 @@ vos_dtx_table_register(void)
 	rc = dbtree_class_register(VOS_BTR_DTX_ACT_TABLE, 0,
 				   &dtx_active_btr_ops);
 	if (rc != 0) {
-		D_ERROR("Failed to register DTX active dbtree: %d\n", rc);
+		D_ERROR("Failed to register DTX active dbtree: %d", rc);
 		return rc;
 	}
 
@@ -441,7 +441,7 @@ vos_dtx_table_register(void)
 				   BTR_FEAT_SKIP_LEAF_REBAL,
 				   &dtx_committed_btr_ops);
 	if (rc != 0)
-		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
+		D_ERROR("Failed to register DTX committed dbtree: %d", rc);
 
 	return rc;
 }
@@ -543,8 +543,8 @@ dtx_ilog_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	ilog_close(loh);
 
 	if (rc != 0)
-		D_ERROR("Failed to release ilog rec for "DF_DTI", abort %s: "DF_RC"\n",
-			DP_DTI(&DAE_XID(dae)), abort ? "yes" : "no", DP_RC(rc));
+		DL_ERROR(rc, "Failed to release ilog rec for " DF_DTI ", abort %s",
+			 DP_DTI(&DAE_XID(dae)), abort ? "yes" : "no");
 
 	return rc;
 }
@@ -612,8 +612,8 @@ do_dtx_rec_release(struct umem_instance *umm, struct vos_container *cont,
 	default:
 		/* On-disk data corruption case. */
 		rc = -DER_IO;
-		D_ERROR("Unknown DTX "DF_DTI" type %u\n",
-			DP_DTI(&DAE_XID(dae)), dtx_umoff_flag2type(rec));
+		D_ERROR("Unknown DTX " DF_DTI " type %u", DP_DTI(&DAE_XID(dae)),
+			dtx_umoff_flag2type(rec));
 		break;
 	}
 
@@ -790,8 +790,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		D_ASSERT(dae->dae_preparing == 0);
 
 		if (vos_dae_is_abort(dae)) {
-			D_ERROR("NOT allow to commit an aborted DTX "DF_DTI"\n",
-				DP_DTI(dti));
+			D_ERROR("NOT allow to commit an aborted DTX " DF_DTI, DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
 
@@ -904,7 +903,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
-		D_ERROR("No space when create active DTX table.\n");
+		D_ERROR("No space when create active DTX table");
 		return -DER_NOSPACE;
 	}
 
@@ -942,8 +941,8 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	cont_df->cd_dtx_active_tail = dbd_off;
 
-	D_DEBUG(DB_IO, "Allocated DTX active blob %p ("UMOFF_PF") for cont "DF_UUID"\n",
-		dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+	D_DEBUG(DB_IO, "Allocated DTX active blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+		UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 
 	return 0;
 }
@@ -1005,8 +1004,8 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	dae->dae_dbd = dbd;
 	dae->dae_dth = dth;
 
-	D_DEBUG(DB_IO, "Allocated new lid DTX: "DF_DTI" lid=%d dae=%p"
-		" dae_dbd=%p\n", DP_DTI(&dth->dth_xid), DAE_LID(dae), dae, dbd);
+	D_DEBUG(DB_IO, "Allocated new lid DTX: " DF_DTI " lid=%d dae=%p dae_dbd=%p",
+		DP_DTI(&dth->dth_xid), DAE_LID(dae), dae, dbd);
 
 	d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
 	d_iov_set(&riov, dae, sizeof(*dae));
@@ -1128,7 +1127,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	case DTX_RT_ILOG:
 		break;
 	default:
-		D_ERROR("Unexpected DTX type %u\n", type);
+		D_ERROR("Unexpected DTX type %u", type);
 		/* Everything is available to PURGE, even if it belongs to some
 		 * uncommitted DTX that may be garbage because of corruption.
 		 */
@@ -1156,8 +1155,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	found = lrua_lookupx(cont->vc_dtx_array, (entry & DTX_LID_SOLO_MASK) - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
-		D_DEBUG(DB_TRACE,
-			"Entry %d "DF_U64" not in lru array, it must be committed\n",
+		D_DEBUG(DB_TRACE, "Entry %d " DF_U64 " not in lru array, it must be committed",
 			entry, epoch);
 
 		return ALB_AVAILABLE_CLEAN;
@@ -1175,7 +1173,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
 		 */
-		D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) aggregated\n",
+		D_WARN("DTX " DF_DTI " (%u) still references the data, cannot be (VOS) aggregated",
 		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
 
 		return ALB_AVAILABLE_DIRTY;
@@ -1190,7 +1188,7 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 
 	if (vos_dae_is_commit(dae) || DAE_FLAGS(dae) & DTE_PARTIAL_COMMITTED) {
 		if (entry & DTX_LID_SOLO_FLAG && dae->dae_committing) {
-			D_DEBUG(DB_IO, "Hit in-committing solo DTX "DF_DTI", "DF_X64":"DF_X64"\n",
+			D_DEBUG(DB_IO, "Hit in-committing solo DTX " DF_DTI ", " DF_X64 ":" DF_X64,
 				DP_DTI(&DAE_XID(dae)), DAE_EPOCH(dae), cont->vc_solo_dtx_epoch);
 
 			/* For solo 'committing' DTX, do not return ALB_AVAILABLE_CLEAN. Otherwise,
@@ -1531,8 +1529,10 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "Register DTX record for "DF_DTI
-		": lid=%d entry %p, type %d, %s ilog entry, rc %d\n", DP_DTI(&dth->dth_xid),
+	D_DEBUG(DB_TRACE,
+		"Register DTX record for " DF_DTI
+		": lid=%d entry %p, type %d, %s ilog entry, rc %d",
+		DP_DTI(&dth->dth_xid),
 		dth->dth_ent == NULL ? 0 : DAE_LID((struct vos_dtx_act_ent *)dth->dth_ent),
 		dth->dth_ent, type, dth->dth_modify_shared ? "has" : "has not", rc);
 
@@ -1568,8 +1568,7 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
 	found = lrua_lookupx(cont->vc_dtx_array, entry - DTX_LID_RESERVED,
 			     epoch, &dae);
 	if (!found) {
-		D_WARN("Could not find active DTX record for lid=%d, epoch="
-		       DF_U64"\n", entry, epoch);
+		D_WARN("Could not find active DTX record for lid=%d, epoch=" DF_U64, entry, epoch);
 		return;
 	}
 
@@ -1704,8 +1703,8 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 			D_ALLOC_NZ(dae->dae_oids, size);
 			if (dae->dae_oids == NULL) {
 				/* Not fatal. */
-				D_WARN("No DRAM to store ACT DTX OIDs "
-				       DF_DTI"\n", DP_DTI(&DAE_XID(dae)));
+				D_WARN("No DRAM to store ACT DTX OIDs " DF_DTI,
+				       DP_DTI(&DAE_XID(dae)));
 				dae->dae_oid_cnt = 0;
 			} else {
 				memcpy(dae->dae_oids, dth->dth_oid_array, size);
@@ -1722,8 +1721,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 	} else {
 		rec_off = umem_zalloc(umm, DAE_MBS_DSIZE(dae));
 		if (umoff_is_null(rec_off)) {
-			D_ERROR("No space to store DTX mbs "
-				DF_DTI"\n", DP_DTI(&DAE_XID(dae)));
+			D_ERROR("No space to store DTX mbs " DF_DTI, DP_DTI(&DAE_XID(dae)));
 			return -DER_NOSPACE;
 		}
 
@@ -1739,8 +1737,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 		size = sizeof(umem_off_t) * count;
 		rec_off = umem_zalloc(umm, size);
 		if (umoff_is_null(rec_off)) {
-			D_ERROR("No space to store active DTX "DF_DTI"\n",
-				DP_DTI(&DAE_XID(dae)));
+			D_ERROR("No space to store active DTX " DF_DTI, DP_DTI(&DAE_XID(dae)));
 			return -DER_NOSPACE;
 		}
 
@@ -1933,7 +1930,7 @@ vos_dtx_load_mbs(daos_handle_t coh, struct dtx_id *dti, struct dtx_memberships *
 	}
 
 	if (rc != 0)
-		D_ERROR("Failed to load mbs for "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
+		DL_ERROR(rc, "Failed to load mbs for " DF_DTI, DP_DTI(dti));
 
 	return rc;
 }
@@ -2025,8 +2022,7 @@ new_blob:
 	/* Need new @dbd */
 	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
-		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
-			count, DP_DTI(&dtis[cur]));
+		D_ERROR("No space to store committed DTX %d " DF_DTI, count, DP_DTI(&dtis[cur]));
 		fatal = true;
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
@@ -2063,8 +2059,8 @@ new_blob:
 			D_GOTO(out, fatal = true);
 	}
 
-	D_DEBUG(DB_IO, "Allocated DTX committed blob %p ("UMOFF_PF") for cont "DF_UUID"\n",
-		dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
+	D_DEBUG(DB_IO, "Allocated DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+		UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 
 	cont_df->cd_dtx_committed_tail = dbd_off;
 	allocated = true;
@@ -2106,9 +2102,8 @@ vos_dtx_post_handle(struct vos_container *cont,
 			rc = dbtree_delete(cont->vc_dtx_committed_hdl,
 					   BTR_PROBE_EQ, &kiov, NULL);
 			if (rc != 0 && rc != -DER_NONEXIST) {
-				D_WARN("Failed to rollback cmt DTX entry "
-				       DF_DTI": "DF_RC"\n",
-				       DP_DTI(&DCE_XID(dces[i])), DP_RC(rc));
+				DL_WARN(rc, "Failed to rollback cmt DTX entry " DF_DTI,
+					DP_DTI(&DCE_XID(dces[i])));
 				dces[i]->dce_invalid = 1;
 			}
 		}
@@ -2144,8 +2139,8 @@ vos_dtx_post_handle(struct vos_container *cont,
 			 * as 'committed' or 'aborted'. That will consume some
 			 * DRAM until server restart.
 			 */
-			D_WARN("Cannot remove DTX "DF_DTI" from active table: "
-			       DF_RC"\n", DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
+			DL_WARN(rc, "Cannot remove DTX " DF_DTI " from active table",
+				DP_DTI(&DAE_XID(daes[i])));
 
 			D_ASSERT(daes[i]->dae_preparing == 0);
 
@@ -2277,7 +2272,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("NOT allow to abort a committed DTX (1) "DF_DTI"\n", DP_DTI(dti));
+			D_ERROR("NOT allow to abort a committed DTX (1) " DF_DTI, DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
 	}
@@ -2287,7 +2282,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 
 	dae = riov.iov_buf;
 	if (vos_dae_is_commit(dae)) {
-		D_ERROR("NOT allow to abort a committed DTX (2) "DF_DTI"\n", DP_DTI(dti));
+		D_ERROR("NOT allow to abort a committed DTX (2) " DF_DTI, DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -2312,7 +2307,7 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 		 *	 directly set dae->dae_aborting to notify the prepare sponsor that the DTX
 		 *	 should be aborted after its prepare done.
 		 */
-		D_WARN("Trying to abort in preparing DTX "DF_DTI" by race\n", DP_DTI(dti));
+		D_WARN("Trying to abort in preparing DTX " DF_DTI " by race", DP_DTI(dti));
 		dae->dae_aborting = 1;
 	} else {
 		rc = vos_dtx_abort_internal(cont, dae, false);
@@ -2344,7 +2339,7 @@ vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t f
 	if (rc == -DER_NONEXIST) {
 		rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
 		if (rc == 0) {
-			D_ERROR("Not allow to set flag %s on committed (1) DTX entry "DF_DTI"\n",
+			D_ERROR("Not allow to set flag %s on committed (1) DTX entry " DF_DTI,
 				vos_dtx_flags2name(flags), DP_DTI(dti));
 			D_GOTO(out, rc = -DER_NO_PERM);
 		}
@@ -2359,9 +2354,9 @@ vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t f
 
 	if ((dae->dae_committable && (flags & (DTE_CORRUPTED | DTE_ORPHAN))) ||
 	    dae->dae_committing || dae->dae_committed || vos_dae_is_abort(dae)) {
-		D_ERROR("Not allow to set flag %s on the %s DTX entry "DF_DTI"\n",
-			vos_dtx_flags2name(flags),
-			vos_dae_is_abort(dae) ? "abort" : "commit", DP_DTI(dti));
+		D_ERROR("Not allow to set flag %s on the %s DTX entry " DF_DTI,
+			vos_dtx_flags2name(flags), vos_dae_is_abort(dae) ? "abort" : "commit",
+			DP_DTI(dti));
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
@@ -2402,8 +2397,8 @@ vos_dtx_set_flags(daos_handle_t coh, struct dtx_id dtis[], int count, uint32_t f
 
 	/* Only allow set single flags. */
 	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN && flags != DTE_PARTIAL_COMMITTED) {
-		D_ERROR("Try to set unrecognized flags %x on DTX "DF_DTI", count %u\n",
-			flags, DP_DTI(&dtis[0]), count);
+		D_ERROR("Try to set unrecognized flags %x on DTX " DF_DTI ", count %u", flags,
+			DP_DTI(&dtis[0]), count);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -2457,8 +2452,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to TX begin for DTX aggregation "UMOFF_PF": "
-			DF_RC"\n", UMOFF_P(dbd_off), DP_RC(rc));
+		DL_ERROR(rc, "Failed to TX begin for DTX aggregation " UMOFF_PF, UMOFF_P(dbd_off));
 		return rc;
 	}
 
@@ -2473,9 +2467,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
 				   &kiov, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST) {
-			D_ERROR("Failed to remove entry for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
+			DL_ERROR(rc, "Failed to remove entry for DTX aggregation " UMOFF_PF,
+				 UMOFF_P(dbd_off));
 			goto out;
 		}
 
@@ -2488,8 +2481,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_newest_aggregated,
 				     sizeof(cont_df->cd_newest_aggregated));
 		if (rc != 0) {
-			D_ERROR("Failed to refresh epoch for DTX aggregation "UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
+			DL_ERROR(rc, "Failed to refresh epoch for DTX aggregation " UMOFF_PF,
+				 UMOFF_P(dbd_off));
 			goto out;
 		}
 
@@ -2506,9 +2499,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_tail,
 				     sizeof(cont_df->cd_dtx_committed_tail));
 		if (rc != 0) {
-			D_ERROR("Failed to update tail for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
+			DL_ERROR(rc, "Failed to update tail for DTX aggregation " UMOFF_PF,
+				 UMOFF_P(dbd_off));
 			goto out;
 		}
 
@@ -2517,9 +2509,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 		rc = umem_tx_add_ptr(umm, &tmp->dbd_prev,
 				     sizeof(tmp->dbd_prev));
 		if (rc != 0) {
-			D_ERROR("Failed to update prev for DTX aggregation "
-				UMOFF_PF": "DF_RC"\n",
-				UMOFF_P(dbd_off), DP_RC(rc));
+			DL_ERROR(rc, "Failed to update prev for DTX aggregation " UMOFF_PF,
+				 UMOFF_P(dbd_off));
 			goto out;
 		}
 
@@ -2529,9 +2520,8 @@ vos_dtx_aggregate(daos_handle_t coh)
 	rc = umem_tx_add_ptr(umm, &cont_df->cd_dtx_committed_head,
 			     sizeof(cont_df->cd_dtx_committed_head));
 	if (rc != 0) {
-		D_ERROR("Failed to update head for DTX aggregation "
-			UMOFF_PF": "DF_RC"\n",
-			UMOFF_P(dbd_off), DP_RC(rc));
+		DL_ERROR(rc, "Failed to update head for DTX aggregation " UMOFF_PF,
+			 UMOFF_P(dbd_off));
 		goto out;
 	}
 
@@ -2650,14 +2640,12 @@ vos_dtx_mark_sync(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch)
 	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc != 0) {
-		D_ERROR(DF_UOID" fail to mark sync: rc = "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
+		DL_ERROR(rc, DF_UOID " fail to mark sync", DP_UOID(oid));
 		return rc;
 	}
 
 	if (obj->obj_df != NULL && obj->obj_df->vo_sync < epoch) {
-		D_INFO("Update sync epoch "DF_U64" => "DF_U64
-		       " for the obj "DF_UOID"\n",
+		D_INFO("Update sync epoch " DF_U64 " => " DF_U64 " for the obj " DF_UOID,
 		       obj->obj_sync_epoch, epoch, DP_UOID(oid));
 
 		obj->obj_sync_epoch = epoch;
@@ -2698,13 +2686,13 @@ vos_dtx_act_reindex(struct vos_container *cont)
 				continue;
 
 			if (daos_is_zero_dti(&dae_df->dae_xid)) {
-				D_WARN("Hit zero active DTX entry.\n");
+				D_WARN("Hit zero active DTX entry");
 				continue;
 			}
 
 			if (dae_df->dae_lid < DTX_LID_RESERVED) {
-				D_ERROR("Corruption in DTX table found, lid=%d"
-					" is invalid\n", dae_df->dae_lid);
+				D_ERROR("Corruption in DTX table found, lid=%d is invalid",
+					dae_df->dae_lid);
 				D_GOTO(out, rc = -DER_IO);
 			}
 			rc = lrua_allocx_inplace(cont->vc_dtx_array,
@@ -2712,22 +2700,19 @@ vos_dtx_act_reindex(struct vos_container *cont)
 					 dae_df->dae_epoch, &dae);
 			if (rc != 0) {
 				if (rc == -DER_NOMEM) {
-					D_ERROR("Not enough memory for DTX "
-						"table\n");
+					D_ERROR("Not enough memory for DTX table");
 				} else {
-					D_ERROR("Corruption in DTX table found,"
-						" lid=%d is invalid rc="DF_RC
-						"\n", dae_df->dae_lid,
-						DP_RC(rc));
+					DL_ERROR(rc,
+						 "Corruption in DTX table found, lid=%d is invalid",
+						 dae_df->dae_lid);
 					rc = -DER_IO;
 				}
 				D_GOTO(out, rc);
 			}
 			D_ASSERT(dae != NULL);
 
-			D_DEBUG(DB_TRACE, "Re-indexed lid DTX: "DF_DTI
-				" lid=%d\n", DP_DTI(&DAE_XID(dae)),
-				DAE_LID(dae));
+			D_DEBUG(DB_TRACE, "Re-indexed lid DTX: " DF_DTI " lid=%d",
+				DP_DTI(&DAE_XID(dae)), DAE_LID(dae));
 
 			memcpy(&dae->dae_base, dae_df, sizeof(dae->dae_base));
 			dae->dae_df_off = umem_ptr2off(umm, dae_df);
@@ -2813,7 +2798,7 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 	for (i = 0; i < dbd->dbd_count; i++) {
 		if (daos_is_zero_dti(&dbd->dbd_committed_data[i].dce_xid) ||
 		    dbd->dbd_committed_data[i].dce_epoch == 0) {
-			D_WARN("Skip invalid committed DTX entry\n");
+			D_WARN("Skip invalid committed DTX entry");
 			continue;
 		}
 
@@ -2896,9 +2881,8 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 
 		if (rc != 0) {
 			if (rc != -DER_NONEXIST) {
-				D_ERROR("Fail to remove DTX entry "DF_DTI":"
-					DF_RC"\n",
-					DP_DTI(&dth->dth_xid), DP_RC(rc));
+				DL_ERROR(rc, "Fail to remove DTX entry " DF_DTI,
+					 DP_DTI(&dth->dth_xid));
 
 				dae = dth->dth_ent;
 				if (dae != NULL) {
@@ -3090,8 +3074,7 @@ out:
 			vos_dtx_cleanup_internal(dth);
 		}
 
-		D_ERROR("Failed to pin DTX entry for "DF_DTI": "DF_RC"\n",
-			DP_DTI(&dth->dth_xid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to pin DTX entry for " DF_DTI, DP_DTI(&dth->dth_xid));
 	}
 
 	return rc;
@@ -3170,8 +3153,8 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 	if (daos_handle_is_valid(cont->vc_dtx_active_hdl)) {
 		rc = dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
 		if (rc != 0) {
-			D_ERROR("Failed to destroy active DTX tree for "DF_UUID": "DF_RC"\n",
-				DP_UUID(cont->vc_id), DP_RC(rc));
+			DL_ERROR(rc, "Failed to destroy active DTX tree for " DF_UUID,
+				 DP_UUID(cont->vc_id));
 			return rc;
 		}
 
@@ -3184,8 +3167,8 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
 			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE, NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active array for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to re-create DTX active array for " DF_UUID,
+			 DP_UUID(cont->vc_id));
 		return rc;
 	}
 
@@ -3193,15 +3176,14 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 				      &cont->vc_dtx_active_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_active_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX active tree for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to re-create DTX active tree for " DF_UUID,
+			 DP_UUID(cont->vc_id));
 		return rc;
 	}
 
 	rc = vos_dtx_act_reindex(cont);
 	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX table for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_ERROR(rc, "Fail to reindex active DTX table for " DF_UUID, DP_UUID(cont->vc_id));
 		return rc;
 	}
 
@@ -3209,8 +3191,8 @@ cmt:
 	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl)) {
 		rc = dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 		if (rc != 0) {
-			D_ERROR("Failed to destroy committed DTX tree for "DF_UUID": "DF_RC"\n",
-				DP_UUID(cont->vc_id), DP_RC(rc));
+			DL_ERROR(rc, "Failed to destroy committed DTX tree for " DF_UUID,
+				 DP_UUID(cont->vc_id));
 			return rc;
 		}
 
@@ -3228,12 +3210,12 @@ cmt:
 				      &cont->vc_dtx_committed_btr, DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to re-create DTX committed tree for "DF_UUID": "DF_RC"\n",
-			DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to re-create DTX committed tree for " DF_UUID,
+			 DP_UUID(cont->vc_id));
 		return rc;
 	}
 
-	D_DEBUG(DB_TRACE, "Reset DTX cache for "DF_UUID"\n", DP_UUID(cont->vc_id));
+	D_DEBUG(DB_TRACE, "Reset DTX cache for " DF_UUID, DP_UUID(cont->vc_id));
 
 	return 0;
 }

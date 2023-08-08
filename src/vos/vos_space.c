@@ -63,15 +63,15 @@ vos_space_sys_init(struct vos_pool *pool)
 		POOL_NVME_SYS(pool) = 0;
 
 	if ((POOL_SCM_SYS(pool) * 2) > scm_tot) {
-		D_WARN("Disable SCM space reserving for tiny pool:"DF_UUID" "
-		       "sys["DF_U64"] > tot["DF_U64"]\n",
+		D_WARN("Disable SCM space reserving for tiny pool:" DF_UUID " sys[" DF_U64
+		       "] > tot[" DF_U64 "]",
 		       DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
 		POOL_SCM_SYS(pool) = 0;
 	}
 
 	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
-		D_WARN("Disable NVMe space reserving for tiny Pool:"DF_UUID" "
-		       "sys["DF_U64"] > tot["DF_U64"]\n",
+		D_WARN("Disable NVMe space reserving for tiny Pool:" DF_UUID " sys[" DF_U64
+		       "] > tot[" DF_U64 "]",
 		       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
 		POOL_NVME_SYS(pool) = 0;
 	}
@@ -100,10 +100,9 @@ vos_space_sys_set(struct vos_pool *pool, daos_size_t *space_sys)
 	POOL_NVME_SYS(pool)	+= space_sys[DAOS_MEDIA_NVME];
 	return 0;
 error:
-	D_ERROR("Pool:"DF_UUID" Too large reserved size. SCM: tot["DF_U64"], "
-		"sys["DF_U64"], rsrv["DF_U64"] NVMe: tot["DF_U64"], "
-		"sys["DF_U64"], rsrv["DF_U64"]\n", DP_UUID(pool->vp_id),
-		scm_tot, POOL_SCM_SYS(pool), space_sys[DAOS_MEDIA_SCM],
+	D_ERROR("Pool:" DF_UUID " Too large reserved size. SCM: tot[" DF_U64 "], sys[" DF_U64
+		"], rsrv[" DF_U64 "] NVMe: tot[" DF_U64 "], sys[" DF_U64 "], rsrv[" DF_U64 "]",
+		DP_UUID(pool->vp_id), scm_tot, POOL_SCM_SYS(pool), space_sys[DAOS_MEDIA_SCM],
 		nvme_tot, POOL_NVME_SYS(pool), space_sys[DAOS_MEDIA_NVME]);
 
 	/* Rollback old value */
@@ -131,8 +130,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	rc = umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
 	if (rc) {
 		rc = umem_tx_errno(rc);
-		D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Query pool:" DF_UUID " SCM space failed", DP_UUID(pool->vp_id));
 		return rc;
 	}
 
@@ -141,8 +139,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	 * could be a PMDK defect.
 	 */
 	if (SCM_TOTAL(vps) < scm_used) {
-		D_CRIT("scm_sz:"DF_U64" < scm_used:"DF_U64"\n",
-		       SCM_TOTAL(vps), scm_used);
+		D_CRIT("scm_sz:" DF_U64 " < scm_used:" DF_U64, SCM_TOTAL(vps), scm_used);
 		SCM_FREE(vps) = 0;
 	} else {
 		SCM_FREE(vps) = SCM_TOTAL(vps) - scm_used;
@@ -159,8 +156,7 @@ vos_space_query(struct vos_pool *pool, struct vos_pool_space *vps, bool slow)
 	/* Query NVMe free space */
 	rc = vea_query(pool->vp_vea_info, attr, stat);
 	if (rc) {
-		D_ERROR("Query pool:"DF_UUID" NVMe space failed. "DF_RC"\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Query pool:" DF_UUID " NVMe space failed", DP_UUID(pool->vp_id));
 		return rc;
 	}
 
@@ -282,8 +278,7 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 
 	rc = vos_space_query(pool, &vps, false);
 	if (rc) {
-		D_ERROR("Query pool:"DF_UUID" space failed. "DF_RC"\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Query pool:" DF_UUID " space failed", DP_UUID(pool->vp_id));
 		return rc;
 	}
 
@@ -325,8 +320,9 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 
 		if (SCM_FREE(&vps) < (rb_reserve + POOL_SCM_HELD(pool) +
 				      space_est[DAOS_MEDIA_SCM])) {
-			D_ERROR("Insufficient SCM space due to check "DF_U64" bytes (%u percent) "
-				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
+			D_ERROR("Insufficient SCM space due to check " DF_U64
+				" bytes (%u percent) reserved for rebuild",
+				rb_reserve, pool->vp_space_rb);
 			goto error;
 		}
 
@@ -336,8 +332,9 @@ vos_space_hold(struct vos_pool *pool, uint64_t flags, daos_key_t *dkey,
 		rb_reserve = NVME_TOTAL(&vps) * pool->vp_space_rb / 100;
 		/* 'NVMe held' has already been excluded from 'NVMe free' */
 		if (NVME_FREE(&vps) < (rb_reserve + space_est[DAOS_MEDIA_NVME])) {
-			D_ERROR("Insufficient NVMe space due to check "DF_U64" bytes (%u percent) "
-				"reserved for rebuild.\n", rb_reserve, pool->vp_space_rb);
+			D_ERROR("Insufficient NVMe space due to check " DF_U64
+				" bytes (%u percent) reserved for rebuild",
+				rb_reserve, pool->vp_space_rb);
 			goto error;
 		}
 	}
@@ -350,11 +347,13 @@ success:
 
 	return 0;
 error:
-	D_ERROR("Pool:"DF_UUID" is full. space_rb:%u\n", DP_UUID(pool->vp_id), pool->vp_space_rb);
-	D_ERROR("SCM:  free["DF_U64"/"DF_U64"], sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
+	D_ERROR("Pool:" DF_UUID " is full. space_rb:%u", DP_UUID(pool->vp_id), pool->vp_space_rb);
+	D_ERROR("SCM:  free[" DF_U64 "/" DF_U64 "], sys[" DF_U64 "], hld[" DF_U64 "], est[" DF_U64
+		"]",
 		SCM_FREE(&vps), SCM_TOTAL(&vps), SCM_SYS(&vps), POOL_SCM_HELD(pool),
 		space_est[DAOS_MEDIA_SCM]);
-	D_ERROR("NVMe: free["DF_U64"/"DF_U64"], sys["DF_U64"], hld["DF_U64"], est["DF_U64"]\n",
+	D_ERROR("NVMe: free[" DF_U64 "/" DF_U64 "], sys[" DF_U64 "], hld[" DF_U64 "], est[" DF_U64
+		"]",
 		NVME_FREE(&vps), NVME_TOTAL(&vps), NVME_SYS(&vps), POOL_NVME_HELD(pool),
 		space_est[DAOS_MEDIA_NVME]);
 
@@ -397,8 +396,8 @@ vos_space_update_metrics(struct vos_pool *pool)
 		rc = umempobj_get_heapusage(pool->vp_umm.umm_pool, &scm_used);
 		if (rc) {
 			rc = umem_tx_errno(rc);
-			D_ERROR("Query pool:"DF_UUID" SCM space failed. "DF_RC"\n",
-				DP_UUID(pool->vp_id), DP_RC(rc));
+			DL_ERROR(rc, "Query pool:" DF_UUID " SCM space failed",
+				 DP_UUID(pool->vp_id));
 		} else {
 			d_tm_set_gauge(vpm->vp_space_metrics.vsm_scm_used, scm_used);
 		}
@@ -411,8 +410,8 @@ vos_space_update_metrics(struct vos_pool *pool)
 
 		rc = vea_query(pool->vp_vea_info, &va, NULL);
 		if (rc) {
-			D_ERROR("Query Pool:"DF_UUID" NVMe space failed. "DF_RC"\n",
-				DP_UUID(pool->vp_id), DP_RC(rc));
+			DL_ERROR(rc, "Query Pool:" DF_UUID " NVMe space failed",
+				 DP_UUID(pool->vp_id));
 		}
 
 		nvme_used = (va.va_tot_blks - va.va_free_blks) * va.va_blk_sz;

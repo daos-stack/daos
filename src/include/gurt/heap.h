@@ -259,7 +259,7 @@ static inline int
 d_binheap_size(struct d_binheap *h)
 {
 	if (h == NULL) {
-		D_ERROR("invalid NULL heap.\n");
+		D_ERROR("invalid NULL heap");
 		return -DER_INVAL;
 	}
 

@@ -285,7 +285,7 @@ alloc_node(struct critnib *__restrict c)
 
 		D_ALLOC_PTR_NZ(n);
 		if (n == NULL)
-			D_CRIT("Malloc!\n");
+			D_CRIT("Malloc!");
 
 		return n;
 	}
@@ -324,7 +324,7 @@ alloc_leaf(struct critnib *__restrict c)
 
 		D_ALLOC_PTR_NZ(k);
 		if (k == NULL)
-			D_CRIT("Malloc!\n");
+			D_CRIT("Malloc!");
 
 		return k;
 	}

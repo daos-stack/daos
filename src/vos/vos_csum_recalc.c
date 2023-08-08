@@ -67,7 +67,7 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 	bool		match;
 
 	if (recalc->cr_phy_off && DAOS_FAIL_CHECK(DAOS_VOS_AGG_MW_THRESH)) {
-		D_INFO("CHECKSUM merge window failure injection.\n");
+		D_INFO("CHECKSUM merge window failure injection");
 		return false;
 	}
 
@@ -113,8 +113,8 @@ csum_agg_verify(struct csum_recalc *recalc, struct dcs_csum_info *new_csum,
 		       &recalc->cr_phy_csum->cs_csum[j * new_csum->cs_len],
 		       new_csum->cs_nr * new_csum->cs_len) == 0;
 	if (!match) {
-		D_ERROR("calc ("DF_CI") != phy ("DF_CI")\n",
-			DP_CI(*new_csum), DP_CI(*recalc->cr_phy_csum));
+		D_ERROR("calc (" DF_CI ") != phy (" DF_CI ")", DP_CI(*new_csum),
+			DP_CI(*recalc->cr_phy_csum));
 	}
 	return match;
 }

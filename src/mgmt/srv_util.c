@@ -29,7 +29,7 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 
 	rc = crt_group_version(NULL /* grp */, &version_current);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_DEBUG(DB_MGMT, "current=%u in=%u in_nservers=%d\n", version_current, version, nservers);
+	D_DEBUG(DB_MGMT, "current=%u in=%u in_nservers=%d", version_current, version, nservers);
 	if (version <= version_current) {
 		rc = 0;
 		goto out;
@@ -62,11 +62,11 @@ ds_mgmt_group_update(struct server_entry *servers, int nservers, uint32_t versio
 	rc = crt_group_primary_modify(NULL /* grp */, &info->dmi_ctx, 1 /* num_ctxs */, ranks,
 				      incarnations, uris, CRT_GROUP_MOD_OP_REPLACE, version);
 	if (rc != 0) {
-		D_ERROR("failed to update group: %u -> %u: %d\n", version_current, version, rc);
+		D_ERROR("failed to update group: %u -> %u: %d", version_current, version, rc);
 		goto out;
 	}
 
-	D_INFO("updated group: %u -> %u: %d ranks\n", version_current, version, nservers);
+	D_INFO("updated group: %u -> %u: %d ranks", version_current, version, nservers);
 out:
 	if (uris != NULL)
 		D_FREE(uris);

@@ -118,21 +118,20 @@ db_open_create(struct sys_db *db, bool try_create)
 			goto failed;
 		}
 	} else if (access(vdb->db_file, F_OK) != 0) {
-		D_DEBUG(DB_IO, "%s doesn't exist, bypassing vos_pool_open\n",
-			vdb->db_file);
+		D_DEBUG(DB_IO, "%s doesn't exist, bypassing vos_pool_open", vdb->db_file);
 		rc = -DER_NONEXIST;
 		goto failed;
 	} else if (access(vdb->db_file, R_OK | W_OK) != 0) {
 		rc = -DER_NO_PERM;
-		D_CRIT("No access to existing db file %s\n", vdb->db_file);
+		D_CRIT("No access to existing db file %s", vdb->db_file);
 		goto failed;
 	}
-	D_DEBUG(DB_IO, "Opening %s, try_create=%d\n", vdb->db_file, try_create);
+	D_DEBUG(DB_IO, "Opening %s, try_create=%d", vdb->db_file, try_create);
 	if (try_create) {
 		rc = vos_pool_create(vdb->db_file, vdb->db_pool, SYS_DB_SIZE, 0,
 				     VOS_POF_SYSDB, &vdb->db_poh);
 		if (rc) {
-			D_CRIT("sys pool create error: "DF_RC"\n", DP_RC(rc));
+			D_CRIT("sys pool create error: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 	} else {
@@ -142,7 +141,7 @@ db_open_create(struct sys_db *db, bool try_create)
 			 * The access checks above should ensure the file
 			 * exists.
 			 */
-			D_CRIT("sys pool open error: "DF_RC"\n", DP_RC(rc));
+			D_CRIT("sys pool open error: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 	}
@@ -150,13 +149,13 @@ db_open_create(struct sys_db *db, bool try_create)
 	if (try_create) {
 		rc = vos_cont_create(vdb->db_poh, vdb->db_cont);
 		if (rc) {
-			D_CRIT("sys cont create error: "DF_RC"\n", DP_RC(rc));
+			D_CRIT("sys cont create error: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 	}
 	rc = vos_cont_open(vdb->db_poh, vdb->db_cont, &vdb->db_coh);
 	if (rc) {
-		D_CRIT("sys cont open error: "DF_RC"\n", DP_RC(rc));
+		D_CRIT("sys cont open error: " DF_RC, DP_RC(rc));
 		goto failed;
 	}
 
@@ -167,15 +166,13 @@ db_open_create(struct sys_db *db, bool try_create)
 		ver = SYS_DB_VERSION;
 		rc = db_upsert(db, SYS_DB_MD, &key, &val);
 		if (rc) {
-			D_CRIT("Failed to set version for sysdb: "DF_RC"\n",
-			       DP_RC(rc));
+			D_CRIT("Failed to set version for sysdb: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 	} else {
 		rc = db_fetch(db, SYS_DB_MD, &key, &val);
 		if (rc) {
-			D_CRIT("Failed to read sysdb version: "DF_RC"\n",
-			       DP_RC(rc));
+			D_CRIT("Failed to read sysdb version: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 
@@ -359,7 +356,7 @@ vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 
 	rc = asprintf(&vos_db.db_path, "%s/%s", db_path, SYS_DB_DIR);
 	if (rc < 0) {
-		D_ERROR("Generate sysdb path failed. %d\n", rc);
+		D_ERROR("Generate sysdb path failed. %d", rc);
 		return -DER_NOMEM;
 	}
 
@@ -368,7 +365,7 @@ vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 
 	rc = asprintf(&vos_db.db_file, "%s/%s", vos_db.db_path, db_name);
 	if (rc < 0) {
-		D_ERROR("Generate sysdb filename failed. %d\n", rc);
+		D_ERROR("Generate sysdb filename failed. %d", rc);
 		rc = -DER_NOMEM;
 		goto failed;
 	}
@@ -404,15 +401,14 @@ vos_db_init_ex(const char *db_path, const char *db_name, bool force_create, bool
 	for (create = 0; create <= 1; create++) {
 		rc = db_open_create(&vos_db.db_pub, !!create);
 		if (rc == 0) {
-			D_DEBUG(DB_IO, "successfully open system DB\n");
+			D_DEBUG(DB_IO, "successfully open system DB");
 			break;
 		}
 		if (create || rc != -DER_NONEXIST) {
-			D_ERROR("Failed to open/create(%d) sys DB: "DF_RC"\n",
-				create, DP_RC(rc));
+			DL_ERROR(rc, "Failed to open/create(%d) sys DB", create);
 			goto failed;
 		}
-		D_DEBUG(DB_DF, "Try to create system DB\n");
+		D_DEBUG(DB_DF, "Try to create system DB");
 	}
 	return 0;
 failed:
@@ -434,7 +430,7 @@ vos_db_fini(void)
 
 			rc = vos_pool_destroy_ex(vos_db.db_file, vos_db.db_pool, 0);
 			if (rc != 0)
-				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
+				D_ERROR(DF_UUID ": failed to destroy %s: %d",
 					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);
 		}
 		free(vos_db.db_file);

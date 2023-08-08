@@ -44,15 +44,13 @@ dss_drpc_thread(void *varg)
 	/* Establish a private connection to avoid dRPC concurrency problems. */
 	rc = drpc_connect(dss_drpc_path, &ctx);
 	if (rc != 0) {
-		D_ERROR("failed to connect to dRPC server at %s: "DF_RC"\n",
-			dss_drpc_path, DP_RC(rc));
+		DL_ERROR(rc, "failed to connect to dRPC server at %s", dss_drpc_path);
 		goto out;
 	}
 
 	rc = drpc_call_create(ctx, arg->cta_module, arg->cta_method, &call);
 	if (rc != 0) {
-		D_ERROR("failed to create dRPC %d/%d: "DF_RC"\n",
-			arg->cta_module, arg->cta_method, DP_RC(rc));
+		DL_ERROR(rc, "failed to create dRPC %d/%d", arg->cta_module, arg->cta_method);
 		goto out_ctx;
 	}
 	call->body.data = arg->cta_req;
@@ -63,8 +61,7 @@ dss_drpc_thread(void *varg)
 
 	rc = drpc_call(ctx, flags, call, &resp);
 	if (rc != 0) {
-		D_ERROR("failed to invoke dRPC %d/%d: "DF_RC"\n",
-			arg->cta_module, arg->cta_method, DP_RC(rc));
+		DL_ERROR(rc, "failed to invoke dRPC %d/%d", arg->cta_module, arg->cta_method);
 		goto out_call;
 	}
 
@@ -117,14 +114,14 @@ dss_drpc_call(int32_t module, int32_t method, void *req, size_t req_size,
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
 	sched_req = sched_req_get(&attr, ABT_THREAD_NULL);
 	if (sched_req == NULL) {
-		D_ERROR("failed to get sched req\n");
+		D_ERROR("failed to get sched req");
 		return -DER_NOMEM;
 	}
 
 	/* Create a thread to avoid blocking the current xstream. */
 	rc = pthread_create(&thread, NULL /* attr */, dss_drpc_thread, &arg);
 	if (rc != 0) {
-		D_ERROR("failed to create thread for dRPC: %d "DF_RC"\n", rc,
+		D_ERROR("failed to create thread for dRPC: %d " DF_RC, rc,
 			DP_RC(daos_errno2der(rc)));
 		rc = daos_errno2der(rc);
 		return rc;
@@ -189,8 +186,7 @@ drpc_notify_ready(void)
 	if (rc != 0)
 		goto out_reqb;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n",
-			dresp->status);
+		D_ERROR("received erroneous dRPC response: %d", dresp->status);
 		rc = -DER_IO;
 	}
 
@@ -270,8 +266,7 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 		D_GOTO(out, rc = -DER_NOMEM);
 	uuid_unparse_lower(pool_uuid, gps_req.uuid);
 
-	D_DEBUG(DB_MGMT, "fetching svc_ranks for "DF_UUID"\n",
-		DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, "fetching svc_ranks for " DF_UUID, DP_UUID(pool_uuid));
 
 	req_size = srv__get_pool_svc_req__get_packed_size(&gps_req);
 	D_ALLOC(req, req_size);
@@ -284,8 +279,7 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (rc != 0)
 		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n",
-			dresp->status);
+		D_ERROR("received erroneous dRPC response: %d", dresp->status);
 		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
@@ -295,19 +289,17 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (alloc.oom) {
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	} else if (gps_resp == NULL) {
-		D_ERROR("failed to unpack resp (get pool svc)\n");
+		D_ERROR("failed to unpack resp (get pool svc)");
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	}
 
 	if (gps_resp->status != 0) {
 		if (gps_resp->status == -DER_NONEXIST) /* not an error */
-			D_DEBUG(DB_MGMT, "pool svc "DF_UUID" not found: "
-				DF_RC"\n",
+			D_DEBUG(DB_MGMT, "pool svc " DF_UUID " not found: " DF_RC,
 				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
 		else
-			D_ERROR("failure fetching svc_ranks for "DF_UUID": "
-				DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(gps_resp->status));
+			DL_ERROR(gps_resp->status, "failure fetching svc_ranks for " DF_UUID,
+				 DP_UUID(pool_uuid));
 		D_GOTO(out_resp, rc = gps_resp->status);
 	}
 
@@ -316,8 +308,7 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	if (ranks == NULL)
 		D_GOTO(out_resp, rc = -DER_NOMEM);
 
-	D_DEBUG(DB_MGMT, "fetched %d svc_ranks for "DF_UUID"\n",
-		ranks->rl_nr, DP_UUID(pool_uuid));
+	D_DEBUG(DB_MGMT, "fetched %d svc_ranks for " DF_UUID, ranks->rl_nr, DP_UUID(pool_uuid));
 	*svc_ranks = ranks;
 
 out_resp:
@@ -349,7 +340,7 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	if (frq.label == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s\n", label);
+	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s", label);
 
 	req_size = srv__pool_find_by_label_req__get_packed_size(&frq);
 	D_ALLOC(req, req_size);
@@ -362,8 +353,7 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	if (rc != 0)
 		goto out_req;
 	if (dresp->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("received erroneous dRPC response: %d\n",
-			dresp->status);
+		D_ERROR("received erroneous dRPC response: %d", dresp->status);
 		D_GOTO(out_dresp, rc = -DER_IO);
 	}
 
@@ -373,24 +363,22 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	if (alloc.oom) {
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	} else if (frsp == NULL) {
-		D_ERROR("failed to unpack resp (get pool svc)\n");
+		D_ERROR("failed to unpack resp (get pool svc)");
 		D_GOTO(out_dresp, rc = -DER_NOMEM);
 	}
 
 	if (frsp->status != 0) {
 		if (frsp->status == -DER_NONEXIST) /* not an error */
-			D_DEBUG(DB_MGMT, "pool %s not found, "DF_RC"\n",
-				frq.label, DP_RC(frsp->status));
+			D_DEBUG(DB_MGMT, "pool %s not found: " DF_RC, frq.label,
+				DP_RC(frsp->status));
 		else
-			D_ERROR("failure finding pool %s, "DF_RC"\n",
-				frq.label, DP_RC(frsp->status));
+			DL_ERROR(frsp->status, "failure finding pool %s", frq.label);
 		D_GOTO(out_resp, rc = frsp->status);
 	}
 
 	rc = uuid_parse(frsp->uuid, pool_uuid);
 	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", frsp->uuid,
-			DP_RC(rc));
+		DL_ERROR(rc, "Unable to parse pool UUID %s", frsp->uuid);
 		D_GOTO(out_resp, rc = -DER_IO);
 	}
 
@@ -399,8 +387,8 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	if (ranks == NULL)
 		D_GOTO(out_resp, rc = -DER_NOMEM);
 	*svc_ranks = ranks;
-	D_DEBUG(DB_MGMT, "pool %s: UUID="DF_UUID", %u svc replicas\n",
-		frq.label, DP_UUID(pool_uuid), ranks->rl_nr);
+	D_DEBUG(DB_MGMT, "pool %s: UUID=" DF_UUID ", %u svc replicas", frq.label,
+		DP_UUID(pool_uuid), ranks->rl_nr);
 
 out_resp:
 	srv__pool_find_by_label_resp__free_unpacked(frsp, &alloc.alloc);

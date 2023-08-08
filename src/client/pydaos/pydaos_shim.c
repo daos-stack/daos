@@ -53,8 +53,8 @@ static int
 __is_magic_valid(int input)
 {
 	if (input != PY_SHIM_MAGIC_NUMBER) {
-		D_ERROR("MAGIC number does not match, expected %d got %d\n",
-			PY_SHIM_MAGIC_NUMBER, input);
+		D_ERROR("MAGIC number does not match, expected %d got %d", PY_SHIM_MAGIC_NUMBER,
+			input);
 		return 0;
 	}
 
@@ -111,7 +111,7 @@ __shim_handle__daos_init(PyObject *self, PyObject *args)
 			use_glob_eq = 1;
 			ret = daos_eq_create(&glob_eq);
 			if (ret) {
-				D_ERROR("Failed to create global eq, "DF_RC"\n", DP_RC(ret));
+				DL_ERROR(ret, "Failed to create global eq");
 				use_glob_eq = 0;
 			}
 		}
@@ -128,7 +128,7 @@ __shim_handle__daos_fini(PyObject *self, PyObject *args)
 	if (use_glob_eq) {
 		rc =  daos_eq_destroy(glob_eq, DAOS_EQ_DESTROY_FORCE);
 		if (rc)
-			D_ERROR("Failed to destroy global eq, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to destroy global eq");
 		use_glob_eq = 0;
 	}
 
@@ -202,7 +202,7 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
 		rc = -DER_INVAL;
-		D_ERROR("Container is not a python container: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Container is not a python container");
 		goto out;
 	}
 
@@ -210,13 +210,13 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid entry in properties for root object ID: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid entry in properties for root object ID");
 		goto out;
 	}
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid root object ID in properties: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid root object ID in properties");
 		goto out;
 	}
 
@@ -248,17 +248,17 @@ out:
 		if (daos_handle_is_valid(oh)) {
 			rc2 = daos_kv_close(oh, NULL);
 			if (rc2)
-				D_ERROR("daos_kv_close() Failed "DF_RC"\n", DP_RC(rc2));
+				DL_ERROR(rc2, "daos_kv_close() Failed");
 		}
 		if (daos_handle_is_valid(coh)) {
 			rc2 = daos_cont_close(coh, NULL);
 			if (rc2)
-				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+				DL_ERROR(rc2, "daos_cont_close() Failed");
 		}
 		if (daos_handle_is_valid(poh)) {
 			rc2 = daos_pool_disconnect(poh, NULL);
 			if (rc2)
-				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+				DL_ERROR(rc2, "daos_pool_disconnect() Failed");
 		}
 	}
 
@@ -370,7 +370,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	if (hdl->alloc.hi >= MAX_OID_HI) {
 		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_cont_alloc_oids() failed");
 			goto out;
 		}
 		if (hdl->alloc.lo == 0)
@@ -505,7 +505,7 @@ oit_mark(daos_handle_t oh, daos_handle_t oit)
 
 			rc = daos_oit_mark(oit, entry.oid, &marker, NULL);
 			if (rc) {
-				D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "daos_oit_mark() failed");
 				goto out;
 			}
 		}
@@ -576,7 +576,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
 		rc = -DER_INVAL;
-		D_ERROR("Container is not a python container: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Container is not a python container");
 		goto out;
 	}
 
@@ -584,13 +584,13 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
 	if (entry == NULL) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid entry in properties for root object ID: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid entry in properties for root object ID");
 		goto out;
 	}
 	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
 	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid root object ID in properties: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid root object ID in properties");
 		goto out;
 	}
 
@@ -598,7 +598,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	/** Open root object */
 	rc = daos_kv_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
 	if (rc) {
-		D_ERROR("daos_kv_open() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_kv_open() failed");
 		goto out;
 	}
 
@@ -606,7 +606,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 	d_iov_set(&marker, &mark_data, sizeof(mark_data));
 	rc = daos_oit_mark(oit, roots->cr_oids[0], &marker, NULL);
 	if (rc) {
-		D_ERROR("daos_oit_mark() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_oit_mark() failed");
 		goto out;
 	}
 
@@ -621,7 +621,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 		nr_entries = ITER_NR;
 		rc = daos_oit_list_unmarked(oit, oids, &nr_entries, &anchor, NULL);
 		if (rc) {
-			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_oit_list_unmarked() failed");
 			goto out;
 		}
 
@@ -647,7 +647,7 @@ cont_check(int ret, char *pool, char *cont, int flags)
 			rc = daos_kv_put(oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, oid_name,
 					 sizeof(dentry), &dentry, NULL);
 			if (rc) {
-				D_ERROR("daos_kv_put() failed: "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "daos_kv_put() failed");
 				goto out;
 			}
 		}

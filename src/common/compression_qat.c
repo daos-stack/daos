@@ -50,7 +50,7 @@ deflate_init(void **daos_dc_ctx, uint16_t level,
 	uint16_t dc_level_index = level - 1;
 
 	if (dc_level_index >= ARRAY_SIZE(qat_dc_level)) {
-		D_ERROR("Invalid qat compression level: %d\n", level);
+		D_ERROR("Invalid qat compression level: %d", level);
 		return DC_STATUS_INVALID_LEVEL;
 	}
 

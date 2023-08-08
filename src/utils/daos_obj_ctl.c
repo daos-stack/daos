@@ -384,7 +384,7 @@ cont_fini(struct credit_context *tsc)
 
 	rc = daos_cont_close(tsc->tsc_coh, NULL);
 	if (rc)
-		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_cont_close() Failed");
 
 	/* NB: no container destroy at here, it will be destroyed by pool
 	 * destroy later. This is because container destroy could be too
@@ -460,9 +460,9 @@ daos_shell(struct cmd_args_s *ap)
 		uuid_copy(ctl_ctx.tsc_cont_uuid, ap->c_uuid);
 	}
 
-	D_INFO("\tDAOS system name: %s\n", ap->sysname);
-	D_INFO("\tpool UUID: "DF_UUIDF"\n", DP_UUID(ctl_ctx.tsc_pool_uuid));
-	D_INFO("\tcont UUID: "DF_UUIDF"\n", DP_UUID(ctl_ctx.tsc_cont_uuid));
+	D_INFO("\tDAOS system name: %s", ap->sysname);
+	D_INFO("\tpool UUID: " DF_UUIDF, DP_UUID(ctl_ctx.tsc_pool_uuid));
+	D_INFO("\tcont UUID: " DF_UUIDF, DP_UUID(ctl_ctx.tsc_cont_uuid));
 
 	ctl_ctx.tsc_cred_vsize	= 1024;	/* long enough for console input */
 	ctl_ctx.tsc_cred_nr	= -1;	/* sync mode all the time */

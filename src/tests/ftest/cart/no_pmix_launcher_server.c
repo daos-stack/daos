@@ -45,53 +45,52 @@ int main(int argc, char **argv)
 	DBG_PRINT("Server starting up\n");
 	rc = crt_init("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
-		D_ERROR("Failed to lookup group\n");
+		D_ERROR("Failed to lookup group");
 		assert(0);
 	}
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
-			my_rank, rc);
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d", my_rank, rc);
 		assert(0);
 	}
 
 	rc = crt_context_create(&crt_ctx[0]);
 	if (rc != 0) {
-		D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_context_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = pthread_create(&progress_thread[0], 0,
 			    crtu_progress_fn, &crt_ctx[0]);
 	if (rc != 0) {
-		D_ERROR("pthread_create() failed; rc=%d\n", rc);
+		D_ERROR("pthread_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (opts->is_swim_enabled) {
 		rc = crt_swim_init(0);
 		if (rc != 0) {
-			D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
+			D_ERROR("crt_swim_init() failed; rc=%d", rc);
 			assert(0);
 		}
 	}
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
-		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		D_ERROR("CRT_L_GRP_CFG was not set");
 		assert(0);
 	}
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
-		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_rank_uri_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -99,7 +98,7 @@ int main(int argc, char **argv)
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
 				       true);
 	if (rc != 0) {
-		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -109,20 +108,20 @@ int main(int argc, char **argv)
 
 	rc = crt_group_size(NULL, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_size() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);
+		D_ERROR("crt_proto_register() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	for (i = 1; i < NUM_SERVER_CTX; i++) {
 		rc = crt_context_create(&crt_ctx[i]);
 		if (rc != 0) {
-			D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+			D_ERROR("crt_context_create() failed; rc=%d", rc);
 			assert(0);
 		}
 	}
@@ -131,7 +130,7 @@ int main(int argc, char **argv)
 		rc = pthread_create(&progress_thread[i], 0,
 				    crtu_progress_fn, &crt_ctx[i]);
 		if (rc != 0) {
-			D_ERROR("pthread_create() failed; rc=%d\n", rc);
+			D_ERROR("pthread_create() failed; rc=%d", rc);
 			assert(0);
 		}
 	}
@@ -142,7 +141,7 @@ int main(int argc, char **argv)
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed with rc=%d", rc);
 		assert(0);
 	}
 

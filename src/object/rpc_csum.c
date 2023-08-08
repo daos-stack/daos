@@ -53,8 +53,7 @@ proc_struct_dcs_csum_info_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	PROC(uint16_t, &csum->cs_len);
 
 	if (csum->cs_buf_len < csum->cs_len * csum->cs_nr) {
-		D_ERROR("invalid csum buf len %iu < csum len %hu\n",
-			csum->cs_buf_len, csum->cs_len);
+		D_ERROR("invalid csum buf len %iu < csum len %hu", csum->cs_buf_len, csum->cs_len);
 		return -DER_HG;
 	}
 

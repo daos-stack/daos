@@ -57,7 +57,7 @@ vec_reserve(void *vec, size_t ncapacity, size_t s)
 
 	D_REALLOC_NZ(tbuf, vecp->buffer, s * ncap);
 	if (tbuf == NULL) {
-		D_CRIT("Realloc!\n");
+		D_CRIT("Realloc!");
 		return -1;
 	}
 	vecp->buffer = tbuf;

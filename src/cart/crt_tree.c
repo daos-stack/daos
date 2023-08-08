@@ -27,7 +27,7 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	rc = d_rank_list_dup_sort_uniq(&grp_rank_list, membs);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup failed, rc " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "d_rank_list_dup failed");
 		D_GOTO(out, rc);
 	}
 	D_ASSERT(grp_rank_list != NULL);
@@ -37,9 +37,8 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		d_rank_list_filter(filter_ranks, grp_rank_list,
 				   false /* exclude */);
 		if (grp_rank_list->rl_nr != filter_ranks->rl_nr) {
-			D_ERROR("%u/%u filter ranks (inverted) out of group\n",
-				filter_ranks->rl_nr - grp_rank_list->rl_nr,
-				filter_ranks->rl_nr);
+			D_ERROR("%u/%u filter ranks (inverted) out of group",
+				filter_ranks->rl_nr - grp_rank_list->rl_nr, filter_ranks->rl_nr);
 			d_rank_list_free(grp_rank_list);
 			grp_rank_list = NULL;
 			D_GOTO(out, rc = -DER_OOG);
@@ -48,8 +47,8 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		d_rank_list_filter(filter_ranks, grp_rank_list,
 				   true /* exclude */);
 		if (grp_rank_list->rl_nr == 0) {
-			D_DEBUG(DB_TRACE, "d_rank_list_filter(group %s) "
-				"get empty.\n", grp_priv->gp_pub.cg_grpid);
+			D_DEBUG(DB_TRACE, "d_rank_list_filter(group %s) get empty",
+				grp_priv->gp_pub.cg_grpid);
 			d_rank_list_free(grp_rank_list);
 			grp_rank_list = NULL;
 			D_GOTO(out, rc = 0);
@@ -59,18 +58,16 @@ crt_get_filtered_grp_rank_list(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	rc = d_idx_in_rank_list(grp_rank_list, root, grp_root);
 	if (rc != 0) {
-		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
-			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, rc);
+		D_ERROR("d_idx_in_rank_list (group %s, rank %d), failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, rc);
 		d_rank_list_free(grp_rank_list);
 		D_GOTO(out, rc);
 	}
 
 	rc = d_idx_in_rank_list(grp_rank_list, self, grp_self);
 	if (rc != 0) {
-		D_ERROR("d_idx_in_rank_list (group %s, rank %d), "
-			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			self, rc);
+		D_ERROR("d_idx_in_rank_list (group %s, rank %d), failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, self, rc);
 		d_rank_list_free(grp_rank_list);
 		D_GOTO(out, rc);
 	}
@@ -121,7 +118,7 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (nchildren == NULL) {
-		D_ERROR("invalid parameter of NULL nchildren.\n");
+		D_ERROR("invalid parameter of NULL nchildren");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -135,13 +132,12 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_size, &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);
 	if (rc != 0) {
-		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
-			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		D_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty.\n",
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s) get empty",
 			grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -150,9 +146,8 @@ crt_tree_get_nchildren(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
 				       nchildren);
 	if (rc != 0)
-		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
-			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 
 out:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
@@ -190,16 +185,15 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 		*ver_match = (bool)(grp_ver == grp_priv->gp_membs_ver);
 
 		if (*ver_match == false) {
-			D_DEBUG(DB_ALL,
-				"Version mismatch. Passed: %u current:%u\n",
-				grp_ver, grp_priv->gp_membs_ver);
+			D_DEBUG(DB_ALL, "Version mismatch. Passed: %u current:%u", grp_ver,
+				grp_priv->gp_membs_ver);
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (children_rank_list == NULL) {
-		D_ERROR("invalid parameter of NULL children_rank_list.\n");
+		D_ERROR("invalid parameter of NULL children_rank_list");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -212,15 +206,14 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);
 	if (rc != 0) {
-		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
-			"self %d) failed, rc " DF_RC "\n",
-			grp_priv->gp_pub.cg_grpid, root, self, DP_RC(rc));
+		DL_ERROR(rc, "crt_get_filtered_grp_rank_list(group %s, root %d, self %d) failed",
+			 grp_priv->gp_pub.cg_grpid, root, self);
 		D_GOTO(out, rc);
 	}
 
 	if (grp_rank_list == NULL) {
-		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) "
-			"get empty.\n", grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) get empty",
+			grp_priv->gp_pub.cg_grpid);
 		*children_rank_list = NULL;
 		D_GOTO(out, rc);
 	}
@@ -230,9 +223,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	rc = tops->to_get_children_cnt(grp_size, tree_ratio, grp_root, grp_self,
 				       &nchildren);
 	if (rc != 0) {
-		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) "
-			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+		D_ERROR("to_get_children_cnt (group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -251,9 +243,8 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	rc = tops->to_get_children(grp_size, tree_ratio, grp_root, grp_self,
 				   tree_children);
 	if (rc != 0) {
-		D_ERROR("to_get_children (group %s, root %d, self %d) "
-			"failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+		D_ERROR("to_get_children (group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 		d_rank_list_free(result_rank_list);
 		D_FREE(tree_children);
 		D_GOTO(out, rc);
@@ -290,7 +281,7 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self);
 	if (parent_rank == NULL) {
-		D_ERROR("invalid parameter of NULL parent_rank.\n");
+		D_ERROR("invalid parameter of NULL parent_rank");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -304,14 +295,13 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 					    &grp_size, &grp_root, &grp_self,
 					    &grp_rank_list, &allocated);
 	if (rc != 0) {
-		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, "
-			"self %d) failed, rc: %d.\n", grp_priv->gp_pub.cg_grpid,
-			root, self, rc);
+		D_ERROR("crt_get_filtered_grp_rank_list(group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 		D_GOTO(out, rc);
 	}
 	if (grp_rank_list == NULL) {
-		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) "
-			"get empty.\n", grp_priv->gp_pub.cg_grpid);
+		D_DEBUG(DB_TRACE, "crt_get_filtered_grp_rank_list(group %s) get empty",
+			grp_priv->gp_pub.cg_grpid);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -319,8 +309,8 @@ crt_tree_get_parent(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	rc = tops->to_get_parent(grp_size, tree_ratio, grp_root, grp_self,
 				 &tree_parent);
 	if (rc != 0) {
-		D_ERROR("to_get_parent (group %s, root %d, self %d) failed, "
-			"rc: %d.\n", grp_priv->gp_pub.cg_grpid, root, self, rc);
+		D_ERROR("to_get_parent (group %s, root %d, self %d) failed, rc: %d",
+			grp_priv->gp_pub.cg_grpid, root, self, rc);
 	}
 
 	*parent_rank = grp_rank_list->rl_ranks[tree_parent];

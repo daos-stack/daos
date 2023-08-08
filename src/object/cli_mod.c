@@ -48,19 +48,18 @@ dc_obj_init(void)
 		rc = daos_rpc_register(&obj_proto_fmt_1, OBJ_PROTO_CLI_COUNT, NULL,
 				       DAOS_OBJ_MODULE);
 	} else {
-		D_ERROR("%d version object RPC not supported.\n", dc_obj_proto_version);
+		D_ERROR("%d version object RPC not supported", dc_obj_proto_version);
 		rc = -DER_PROTO;
 	}
 
 	if (rc) {
-		D_ERROR("failed to register daos %d version obj RPCs: "DF_RC"\n",
-			dc_obj_proto_version, DP_RC(rc));
+		DL_ERROR(rc, "failed to register daos %d version obj RPCs", dc_obj_proto_version);
 		D_GOTO(out_class, rc);
 	}
 
 	rc = obj_ec_codec_init();
 	if (rc) {
-		D_ERROR("failed to obj_ec_codec_init: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to obj_ec_codec_init");
 		if (dc_obj_proto_version == DAOS_OBJ_VERSION - 1)
 			daos_rpc_unregister(&obj_proto_fmt_0);
 		else
@@ -70,7 +69,7 @@ dc_obj_init(void)
 
 	tx_verify_rdg = false;
 	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
-	D_INFO("%s TX redundancy group verification\n", tx_verify_rdg ? "Enable" : "Disable");
+	D_INFO("%s TX redundancy group verification", tx_verify_rdg ? "Enable" : "Disable");
 
 out_class:
 	if (rc)

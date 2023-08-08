@@ -19,24 +19,22 @@ static int verify_ctl_in_args(struct crt_ctl_ep_ls_in *in_args)
 	int			rc = 0;
 
 	if (in_args->cel_grp_id == NULL) {
-		D_ERROR("invalid parameter, NULL input grp_id.\n");
+		D_ERROR("invalid parameter, NULL input grp_id");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (crt_validate_grpid(in_args->cel_grp_id) != 0) {
-		D_ERROR("srv_grpid contains invalid characters "
-			"or is too long\n");
+		D_ERROR("srv_grpid contains invalid characters or is too long");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 
 	if (!crt_grp_id_identical(in_args->cel_grp_id,
 				  grp_priv->gp_pub.cg_grpid)) {
-		D_ERROR("RPC request has wrong grp_id: %s\n",
-			in_args->cel_grp_id);
+		D_ERROR("RPC request has wrong grp_id: %s", in_args->cel_grp_id);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (in_args->cel_rank != grp_priv->gp_self) {
-		D_ERROR("RPC request has wrong rank: %d\n", in_args->cel_rank);
+		D_ERROR("RPC request has wrong rank: %d", in_args->cel_rank);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -65,8 +63,8 @@ crt_ctl_fill_buffer_cb(d_list_t *rlink, void *arg)
 			continue;
 
 		if (*idx >= uri_cache->max_count) {
-			D_ERROR("grp_cache index %u out of range [0, %u].\n",
-				*idx, uri_cache->max_count);
+			D_ERROR("grp_cache index %u out of range [0, %u]", *idx,
+				uri_cache->max_count);
 			D_GOTO(out, rc = -DER_OVERFLOW);
 		}
 
@@ -121,7 +119,7 @@ out:
 	out_args->cguc_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "sent reply to get uri cache request\n");
+	D_DEBUG(DB_TRACE, "sent reply to get uri cache request");
 	D_FREE(uri_cache.grp_cache);
 }
 
@@ -138,7 +136,7 @@ crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req)
 		D_GOTO(out, rc);
 
 	if (gethostname(hostname, MAX_HOSTNAME_SIZE) != 0) {
-		D_ERROR("gethostname() failed with errno %d\n", errno);
+		D_ERROR("gethostname() failed with errno %d", errno);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -148,7 +146,7 @@ out:
 	out_args->cgh_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send() failed with rc %d\n", rc);
+		D_ERROR("crt_reply_send() failed with rc %d", rc);
 }
 
 void
@@ -168,7 +166,7 @@ out:
 	out_args->cgp_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send() failed with rc %d\n", rc);
+		D_ERROR("crt_reply_send() failed with rc %d", rc);
 }
 
 void
@@ -216,8 +214,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 		if (rc != 0) {
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: "
-				"%d.\n", ctx->cc_idx, rc);
+			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: %d", ctx->cc_idx, rc);
 			D_GOTO(out, rc);
 		}
 		addr_buf_len += str_size;
@@ -241,8 +238,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 		D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
 		if (rc != 0) {
-			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: "
-				"%d.\n", ctx->cc_idx, rc);
+			D_ERROR("context (idx %d), crt_hg_get_addr failed rc: %d", ctx->cc_idx, rc);
 			break;
 		}
 
@@ -254,13 +250,13 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 	D_ASSERT(count <= addr_buf_len);
 
-	D_DEBUG(DB_TRACE, "out_args->cel_ctx_num %d\n", out_args->cel_ctx_num);
+	D_DEBUG(DB_TRACE, "out_args->cel_ctx_num %d", out_args->cel_ctx_num);
 	d_iov_set(&out_args->cel_addr_str, addr_buf, count);
 
 out:
 	out_args->cel_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "sent reply to endpoint list request\n");
+	D_DEBUG(DB_TRACE, "sent reply to endpoint list request");
 	D_FREE(addr_buf);
 }

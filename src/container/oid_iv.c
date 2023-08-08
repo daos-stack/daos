@@ -77,14 +77,14 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_range	*avail;
 
 	if (src == NULL) {
-		D_DEBUG(DB_TRACE, "delete entry iv_entry %p\n", iv_entry);
+		D_DEBUG(DB_TRACE, "delete entry iv_entry %p", iv_entry);
 		iv_entry->iv_to_delete = 1;
 		return 0;
 	}
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
-	D_DEBUG(DB_MD, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu", dss_self_rank(), num_oids);
 	D_ASSERT(num_oids != 0);
 
 	entry = iv_entry->iv_value.sg_iovs[0].iov_buf;
@@ -107,8 +107,8 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 
 	/** Set the number of oids to what was asked for. */
 	oids->num_oids = num_oids;
-	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu avail %zu/%zu\n", dss_self_rank(),
-		oids->oid, oids->num_oids, avail->oid, avail->num_oids);
+	D_DEBUG(DB_MD, "%u: ON REFRESH %zu/%zu avail %zu/%zu", dss_self_rank(), oids->oid,
+		oids->num_oids, avail->oid, avail->num_oids);
 
 out:
 	ABT_mutex_unlock(entry->lock);
@@ -136,9 +136,9 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	oids = src->sg_iovs[0].iov_buf;
 	num_oids = oids->num_oids;
 
-	D_DEBUG(DB_TRACE, "%u: ON UPDATE, num_oids = %zu\n", myrank, num_oids);
-	D_DEBUG(DB_MD, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64 "\n",
-		myrank, avail->num_oids, avail->oid);
+	D_DEBUG(DB_TRACE, "%u: ON UPDATE, num_oids = %zu", myrank, num_oids);
+	D_DEBUG(DB_MD, "%u: ENTRY NUM OIDS = %zu, oid = %" PRIu64, myrank, avail->num_oids,
+		avail->oid);
 
 	if (ns_entry->ns->iv_master_rank == myrank) {
 		struct oid_iv_key *key;
@@ -146,20 +146,19 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 		key = key2priv(&ns_entry->iv_key);
 		rc = ds_cont_oid_fetch_add(key->po_uuid, key->key_id, num_oids, &avail->oid);
 		if (rc) {
-			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to fetch and update max_oid");
 			D_GOTO(err_lock, rc);
 		}
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
-		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %"PRIu64"\n", myrank, avail->oid);
+		D_DEBUG(DB_MD, "%u: ROOT MAX_OID = %" PRIu64, myrank, avail->oid);
 		priv->num_oids = 0;
 		ABT_mutex_unlock(entry->lock);
 		return 0;
 	}
 
 	if (avail->num_oids >= num_oids) {
-		D_DEBUG(DB_TRACE, "%u: IDs available\n", myrank);
+		D_DEBUG(DB_TRACE, "%u: IDs available", myrank);
 		/** set the oid value in the iv value */
 		oids->oid = avail->oid;
 		oids->num_oids = num_oids;
@@ -184,8 +183,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 	/** Keep track of how much this node originally requested */
 	priv->num_oids = num_oids;
 
-	D_DEBUG(DB_TRACE, "%u: IDs not available, FORWARD %zu oids\n",
-		myrank, oids->num_oids);
+	D_DEBUG(DB_TRACE, "%u: IDs not available, FORWARD %zu oids", myrank, oids->num_oids);
 
 	/** entry->lock will be released in on_refresh() */
 	return -DER_IVCB_FORWARD;
@@ -200,7 +198,7 @@ oid_iv_ent_get(struct ds_iv_entry *entry, void **_priv)
 {
 	struct oid_iv_priv	*priv;
 
-	D_DEBUG(DB_TRACE, "%u: OID GET\n", dss_self_rank());
+	D_DEBUG(DB_TRACE, "%u: OID GET", dss_self_rank());
 
 	D_ALLOC_PTR(priv);
 	if (priv == NULL)
@@ -214,7 +212,7 @@ static void
 oid_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
 	D_ASSERT(priv != NULL);
-	D_DEBUG(DB_TRACE, "%u: ON PUT\n", dss_self_rank());
+	D_DEBUG(DB_TRACE, "%u: ON PUT", dss_self_rank());
 	D_FREE(priv);
 }
 
@@ -309,9 +307,8 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	struct oid_iv_range	*oids;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF"/"DF_UUIDF" num_oids %"
-		PRIu64"\n", dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid),
-		num_oids);
+	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID " DF_UUIDF "/" DF_UUIDF " num_oids %" PRIu64,
+		dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid), num_oids);
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_OID;
@@ -326,7 +323,7 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	rc = ds_iv_update(ns, &key, value, 0, CRT_IV_SYNC_NONE,
 			  CRT_IV_SYNC_BIDIRECTIONAL, true /* retry */);
 	if (rc)
-		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "iv update failed");
 
 	return rc;
 }
@@ -347,8 +344,7 @@ oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
 
 	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0, false);
 	if (rc)
-		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
-			DP_UUID(cont_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " iv invalidate failed", DP_UUID(cont_uuid));
 
 	return rc;
 

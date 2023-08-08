@@ -72,14 +72,12 @@ rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov)
 
 	/* iov_len (head) */
 	if (p + sizeof(rdb_iov_size_t) > buf + len) {
-		D_ERROR("truncated iov_len (head): %zu < %zu\n", len,
-			sizeof(rdb_iov_size_t));
+		D_ERROR("truncated iov_len (head): %zu < %zu", len, sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	v.iov_len = *(const rdb_iov_size_t *)p;
 	if (v.iov_len > rdb_iov_max) {
-		D_ERROR("invalid iov_len (head): "DF_U64" > "DF_U64"\n",
-			v.iov_len, rdb_iov_max);
+		D_ERROR("invalid iov_len (head): " DF_U64 " > " DF_U64, v.iov_len, rdb_iov_max);
 		return -DER_IO;
 	}
 	v.iov_buf_len = v.iov_len;
@@ -87,8 +85,7 @@ rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov)
 	/* iov_buf */
 	if (v.iov_len != 0) {
 		if (p + v.iov_len > buf + len) {
-			D_ERROR("truncated iov_buf: %zu < %zu\n", buf + len - p,
-				v.iov_len);
+			D_ERROR("truncated iov_buf: %zu < %zu", buf + len - p, v.iov_len);
 			return -DER_IO;
 		}
 		v.iov_buf = (void *)p;
@@ -96,13 +93,13 @@ rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov)
 	}
 	/* iov_len (tail) */
 	if (p + sizeof(rdb_iov_size_t) > buf + len) {
-		D_ERROR("truncated iov_len (tail): %zu < %zu\n", buf + len - p,
+		D_ERROR("truncated iov_len (tail): %zu < %zu", buf + len - p,
 			sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	if (*(const rdb_iov_size_t *)p != v.iov_len) {
-		D_ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
-			v.iov_len, *(const rdb_iov_size_t *)p);
+		D_ERROR("inconsistent iov_lens: " DF_U64 " != %u", v.iov_len,
+			*(const rdb_iov_size_t *)p);
 		return -DER_IO;
 	}
 	p += sizeof(rdb_iov_size_t);
@@ -119,23 +116,20 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 
 	/* iov_len (tail) */
 	if (p - sizeof(rdb_iov_size_t) < buf_end - len) {
-		D_ERROR("truncated iov_len (tail): %zu < %zu\n", len,
-			sizeof(rdb_iov_size_t));
+		D_ERROR("truncated iov_len (tail): %zu < %zu", len, sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	p -= sizeof(rdb_iov_size_t);
 	v.iov_len = *(const rdb_iov_size_t *)p;
 	if (v.iov_len > rdb_iov_max) {
-		D_ERROR("invalid iov_len (tail): "DF_U64" > "DF_U64"\n",
-			v.iov_len, rdb_iov_max);
+		D_ERROR("invalid iov_len (tail): " DF_U64 " > " DF_U64, v.iov_len, rdb_iov_max);
 		return -DER_IO;
 	}
 	v.iov_buf_len = v.iov_len;
 	/* iov_buf */
 	if (v.iov_len != 0) {
 		if (p - v.iov_len < buf_end - len) {
-			D_ERROR("truncated iov_buf: %zu < %zu\n",
-				p - (buf_end - len), v.iov_len);
+			D_ERROR("truncated iov_buf: %zu < %zu", p - (buf_end - len), v.iov_len);
 			return -DER_IO;
 		}
 		p -= v.iov_len;
@@ -143,14 +137,14 @@ rdb_decode_iov_backward(const void *buf_end, size_t len, d_iov_t *iov)
 	}
 	/* iov_len (head) */
 	if (p - sizeof(rdb_iov_size_t) < buf_end - len) {
-		D_ERROR("truncated iov_len (head): %zu < %zu\n",
-			p - (buf_end - len), sizeof(rdb_iov_size_t));
+		D_ERROR("truncated iov_len (head): %zu < %zu", p - (buf_end - len),
+			sizeof(rdb_iov_size_t));
 		return -DER_IO;
 	}
 	p -= sizeof(rdb_iov_size_t);
 	if (*(const rdb_iov_size_t *)p != v.iov_len) {
-		D_ERROR("inconsistent iov_lens: "DF_U64" != %u\n",
-			v.iov_len, *(const rdb_iov_size_t *)p);
+		D_ERROR("inconsistent iov_lens: " DF_U64 " != %u", v.iov_len,
+			*(const rdb_iov_size_t *)p);
 		return -DER_IO;
 	}
 	*iov = v;
@@ -329,7 +323,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 
 	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc) {
-		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "prep io descriptor error");
 		goto out;
 	}
 
@@ -375,9 +369,10 @@ rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, dao
 			       NULL /* recx */, NULL /* max_write */, 0 /* cell sz */,
 			       0 /* stripe sz */, NULL /* dth */);
 	if (rc != 0) {
-		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
-			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,
-			uoid.id_pub.hi, epoch, DP_RC(rc));
+		DL_ERROR(rc,
+			 "vos_obj_query_key((rdb,vos) oids=(" DF_U64 ",lo=" DF_U64 ", hi=" DF_U64
+			 "), epoch=" DF_U64 " ...) failed",
+			 oid, uoid.id_pub.lo, uoid.id_pub.hi, epoch);
 	}
 
 	return rc;
@@ -577,8 +572,7 @@ rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp)
 
 	rc = vos_pool_query_space(db->d_uuid, &vps);
 	if (rc) {
-		D_ERROR(DF_UUID": failed to query vos pool space: "DF_RC"\n",
-			DP_UUID(db->d_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to query vos pool space", DP_UUID(db->d_uuid));
 		return rc;
 	}
 

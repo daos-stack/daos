@@ -69,7 +69,7 @@ call_abt_method(void *arg, enum AbtThreadCreateType flag,
 						  newthread);
 	} else {
 		rc = ABT_ERR_INV_ARG;
-		D_ERROR("unsupported ABT_thread_create[_...]() API type\n");
+		D_ERROR("unsupported ABT_thread_create[_...]() API type");
 	}
 	return rc;
 }
@@ -83,9 +83,7 @@ void mmap_stack_wrapper(void *arg)
 
 	ABT_key_set(stack_key, desc);
 
-	D_DEBUG(DB_MEM,
-		"New ULT with stack_desc %p running on CPU=%d\n",
-		desc, sched_getcpu());
+	D_DEBUG(DB_MEM, "New ULT with stack_desc %p running on CPU=%d", desc, sched_getcpu());
 	desc->thread_func(desc->thread_arg);
 }
 
@@ -106,7 +104,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		rc = call_abt_method(arg, flag, thread_func, thread_arg,
 				     attr, newthread);
 		if (unlikely(rc != ABT_SUCCESS))
-			D_ERROR("Failed to create ULT : %d\n", rc);
+			D_ERROR("Failed to create ULT : %d", rc);
 		D_GOTO(out_err, rc);
 	}
 
@@ -119,17 +117,17 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
 			if (unlikely(rc != ABT_SUCCESS))
-				D_ERROR("Failed to create ULT : %d\n", rc);
+				D_ERROR("Failed to create ULT : %d", rc);
 			D_GOTO(out_err, rc);
 		}
 		/* only one mmap()'ed stack size allowed presently */
 		if (stack_size > MMAPED_ULT_STACK_SIZE)
-			D_WARN("We do not support stacks > %u\n", MMAPED_ULT_STACK_SIZE);
+			D_WARN("We do not support stacks > %u", MMAPED_ULT_STACK_SIZE);
 		stack_size = MMAPED_ULT_STACK_SIZE;
 	} else {
 		rc = ABT_thread_attr_create(&new_attr);
 		if (rc != ABT_SUCCESS) {
-			D_ERROR("Create ABT thread attr failed: %d\n", rc);
+			D_ERROR("Create ABT thread attr failed: %d", rc);
 			return rc;
 		}
 		attr = new_attr;
@@ -148,7 +146,8 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd from free list, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+			"mmap()'ed stack %p of size %zd from free list, in pool=%p, remaining free "
+			"stacks in pool=" DF_U64 ", on CPU=%d",
 			stack, stack_size, sp_alloc, sp_alloc->sp_free_stacks, sched_getcpu());
 	} else {
 		/* XXX this test is racy, but if max_nb_mmap_stacks value is
@@ -157,13 +156,14 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		 * nb_mmap_stacks to significantly exceed max_nb_mmap_stacks ...
 		 */
 		if (nb_mmap_stacks >= max_nb_mmap_stacks) {
-			D_INFO("nb_mmap_stacks (%d) > max_nb_mmap_stacks (%d), so using Argobots standard method for stack allocation\n",
+			D_INFO("nb_mmap_stacks (%d) > max_nb_mmap_stacks (%d), so using Argobots "
+			       "standard method for stack allocation",
 			       nb_mmap_stacks, max_nb_mmap_stacks);
 			/* let's try Argobots standard way ... */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
 			if (unlikely(rc != ABT_SUCCESS))
-				D_ERROR("Failed to create ULT : %d\n", rc);
+				D_ERROR("Failed to create ULT : %d", rc);
 			D_GOTO(out_err, rc);
 		}
 
@@ -171,13 +171,13 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p, on CPU=%d\n",
+			D_ERROR("Failed to mmap() stack of size %zd : %s, in pool=%p, on CPU=%d",
 				stack_size, strerror(errno), sp_alloc, sched_getcpu());
 			/* let's try Argobots standard way ... */
 			rc = call_abt_method(arg, flag, thread_func, thread_arg,
 					     attr, newthread);
 			if (unlikely(rc != ABT_SUCCESS))
-				D_ERROR("Failed to create ULT : %d\n", rc);
+				D_ERROR("Failed to create ULT : %d", rc);
 			D_GOTO(out_err, rc);
 		}
 
@@ -194,7 +194,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 		mmap_stack_desc->sp = sp_alloc;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd has been allocated, in pool=%p, on CPU=%d\n",
+			"mmap()'ed stack %p of size %zd has been allocated, in pool=%p, on CPU=%d",
 			stack, stack_size, sp_alloc, sched_getcpu());
 	}
 
@@ -208,7 +208,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 
 	rc = ABT_thread_attr_set_stack(attr, stack, usable_stack_size);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to set stack attrs : %d\n", rc);
+		D_ERROR("Failed to set stack attrs : %d", rc);
 		D_GOTO(out_err, rc);
 	}
 
@@ -218,7 +218,7 @@ mmap_stack_thread_create_common(struct stack_pool *sp_alloc, void (*free_stack_c
 	rc = call_abt_method(arg, flag, mmap_stack_wrapper, mmap_stack_desc,
 			     attr, newthread);
 	if (unlikely(rc != ABT_SUCCESS)) {
-		D_ERROR("Failed to create ULT : %d\n", rc);
+		D_ERROR("Failed to create ULT : %d", rc);
 		D_GOTO(out_err, rc);
 	}
 out_err:
@@ -282,8 +282,8 @@ free_stack(void *arg)
 	    sp->sp_free_stacks / nb_mmap_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
 		rc = munmap(desc->stack, desc->stack_size);
 		if (rc != 0) {
-			D_ERROR("Failed to munmap() %p stack of size %zd : %s\n",
-				desc->stack, desc->stack_size, strerror(errno));
+			D_ERROR("Failed to munmap() %p stack of size %zd : %s", desc->stack,
+				desc->stack_size, strerror(errno));
 			/* re-queue it on free list instead to leak it */
 			d_list_add_tail(&desc->stack_list, &sp->sp_stack_free_list);
 			++sp->sp_free_stacks;
@@ -291,7 +291,8 @@ free_stack(void *arg)
 		} else {
 			atomic_fetch_sub(&nb_mmap_stacks, 1);
 			D_DEBUG(DB_MEM,
-				"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
+				"mmap()'ed stack %p of size %zd munmap()'ed, in pool=%p, remaining "
+				"free stacks in pool=" DF_U64 ", on CPU=%d",
 				desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
 				sched_getcpu());
 		}
@@ -300,9 +301,9 @@ free_stack(void *arg)
 		++sp->sp_free_stacks;
 		atomic_fetch_add(&nb_free_stacks, 1);
 		D_DEBUG(DB_MEM,
-			"mmap()'ed stack %p of size %zd on free list, in pool=%p, remaining free stacks in pool="DF_U64", on CPU=%d\n",
-			desc->stack, desc->stack_size, sp, sp->sp_free_stacks,
-			sched_getcpu());
+			"mmap()'ed stack %p of size %zd on free list, in pool=%p, remaining free "
+			"stacks in pool=" DF_U64 ", on CPU=%d",
+			desc->stack, desc->stack_size, sp, sp->sp_free_stacks, sched_getcpu());
 	}
 }
 
@@ -311,12 +312,12 @@ stack_pool_create(struct stack_pool **sp)
 {
 	D_ALLOC(*sp, sizeof(struct stack_pool));
 	if (*sp == NULL) {
-		D_DEBUG(DB_MEM, "unable to allocate a stack pool\n");
+		D_DEBUG(DB_MEM, "unable to allocate a stack pool");
 		return -DER_NOMEM;
 	}
 	(*sp)->sp_free_stacks = 0;
 	D_INIT_LIST_HEAD(&(*sp)->sp_stack_free_list);
-	D_DEBUG(DB_MEM, "pool %p has been allocated\n", *sp);
+	D_DEBUG(DB_MEM, "pool %p has been allocated", *sp);
 	return 0;
 }
 
@@ -329,14 +330,14 @@ void stack_pool_destroy(struct stack_pool *sp)
 		D_DEBUG(DB_MEM, "munmap() of pool %p, desc %p, stack %p of size %zu, ",
 			sp, desc, desc->stack, desc->stack_size);
 		rc = munmap(desc->stack, desc->stack_size);
-		D_DEBUG(DB_MEM, "has been %ssuccessfully munmap()'ed%s%s\n",
-			(rc ? "un" : ""), (rc ? " : " : ""), (rc ? strerror(errno) : ""));
+		D_DEBUG(DB_MEM, "has been %ssuccessfully munmap()'ed%s%s", (rc ? "un" :),
+			(rc ? " : " :), (rc ? strerror(errno) :));
 		--sp->sp_free_stacks;
 		atomic_fetch_sub(&nb_mmap_stacks, 1);
 		atomic_fetch_sub(&nb_free_stacks, 1);
 	}
 	D_ASSERT(sp->sp_free_stacks == 0);
-	D_DEBUG(DB_MEM, "pool %p has been freed\n", sp);
+	D_DEBUG(DB_MEM, "pool %p has been freed", sp);
 	D_FREE(sp);
 }
 #endif

@@ -256,7 +256,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	krec = vos_rec2krec(tins, rec);
 	rc = ilog_create(&tins->ti_umm, &krec->kr_ilog);
 	if (rc != 0) {
-		D_ERROR("Failure to create incarnation log\n");
+		D_ERROR("Failure to create incarnation log");
 		return rc;
 	}
 
@@ -667,8 +667,7 @@ svt_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (skey->sk_minor_epc <= irec->ir_minor_epc)
 		return -DER_NO_PERM;
 
-	D_DEBUG(DB_IO, "Overwrite epoch "DF_X64".%d\n", skey->sk_epoch,
-		skey->sk_minor_epc);
+	D_DEBUG(DB_IO, "Overwrite epoch " DF_X64 ".%d", skey->sk_epoch, skey->sk_minor_epc);
 
 	rc = svt_rec_free_internal(tins, rec, true);
 	if (rc != 0)
@@ -816,11 +815,11 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 	if (krec->kr_bmap & unexpected_flag) {
 		if (flags & SUBTR_CREATE) {
-			D_ERROR("Mixing single value and array not allowed\n");
+			D_ERROR("Mixing single value and array not allowed");
 			rc = -DER_NO_PERM;
 			goto out;
 		}
-		D_DEBUG(DB_TRACE, "Attempt to fetch wrong value type\n");
+		D_DEBUG(DB_TRACE, "Attempt to fetch wrong value type");
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -834,7 +833,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 						    pool, sub_toh);
 		}
 		if (rc != 0)
-			D_ERROR("Failed to open tree: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to open tree");
 
 		goto out;
 	}
@@ -851,7 +850,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
 				     sizeof(*krec));
 		if (rc != 0) {
-			D_ERROR("Failed to add key record to transaction: " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to add key record to transaction");
 			goto out;
 		}
 	}
@@ -861,8 +860,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 			feats |= EVT_FEAT_DYNAMIC_ROOT;
 		rc = evt_create(&krec->kr_evt, feats, VOS_EVT_ORDER, uma, &cbs, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create evtree: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to create evtree");
 			goto out;
 		}
 	} else {
@@ -883,14 +881,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 		ta = obj_tree_find_attr(tclass);
 
-		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
-			ta->ta_name, tree_feats);
+		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x" DF_X64, ta->ta_name, tree_feats);
 
 		rc = dbtree_create_inplace_ex(ta->ta_class, tree_feats,
 					      ta->ta_order, uma, &krec->kr_btr,
 					      coh, pool, sub_toh);
 		if (rc != 0) {
-			D_ERROR("Failed to create btree: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to create btree");
 			goto out;
 		}
 	}
@@ -932,7 +929,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	if (krecp != NULL)
 		*krecp = NULL;
 
-	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
+	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d", flags, tclass);
 	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
 		D_GOTO(out, rc = -DER_INVAL);
 
@@ -955,7 +952,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 			  NULL, &riov);
 	switch (rc) {
 	default:
-		D_ERROR("fetch failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "fetch failed");
 		goto out;
 	case 0:
 		krec = rbund.rb_krec;
@@ -986,7 +983,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		/* use BTR_PROBE_BYPASS to avoid probe again */
 		rc = dbtree_upsert(toh, BTR_PROBE_BYPASS, intent, key, &riov, NULL);
 		if (rc) {
-			D_ERROR("Failed to upsert: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to upsert");
 			goto out;
 		}
 		krec = rbund.rb_krec;
@@ -1123,7 +1120,7 @@ key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
 
 	rc = vos_key_mark_agg(obj->obj_cont, krec, epoch);
 done:
-	VOS_TX_LOG_FAIL(rc, "Failed to punch key: "DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to punch key: " DF_RC, DP_RC(rc));
 
 	return rc;
 }
@@ -1150,7 +1147,7 @@ obj_tree_init(struct vos_object *obj)
 		uint64_t tree_feats = 0;
 		enum daos_otype_t type;
 
-		D_DEBUG(DB_DF, "Create btree for object\n");
+		D_DEBUG(DB_DF, "Create btree for object");
 
 		type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
 		if (daos_is_dkey_uint64_type(type))
@@ -1165,7 +1162,7 @@ obj_tree_init(struct vos_object *obj)
 					      vos_obj2pool(obj),
 					      &obj->obj_toh);
 	} else {
-		D_DEBUG(DB_DF, "Open btree for object\n");
+		D_DEBUG(DB_DF, "Open btree for object");
 		rc = dbtree_open_inplace_ex(&obj->obj_df->vo_tree,
 					    vos_obj2uma(obj),
 					    vos_cont2hdl(obj->obj_cont),
@@ -1173,7 +1170,7 @@ obj_tree_init(struct vos_object *obj)
 	}
 
 	if (rc)
-		D_ERROR("obj_tree_init failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "obj_tree_init failed");
 	return rc;
 }
 
@@ -1203,11 +1200,10 @@ obj_tree_register(void)
 		rc = dbtree_class_register(ta->ta_class, ta->ta_feats,
 					   ta->ta_ops);
 		if (rc != 0) {
-			D_ERROR("Failed to register %s: "DF_RC"\n", ta->ta_name,
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to register %s", ta->ta_name);
 			break;
 		}
-		D_DEBUG(DB_TRACE, "Register tree type %s\n", ta->ta_name);
+		D_DEBUG(DB_TRACE, "Register tree type %s", ta->ta_name);
 	}
 	return rc;
 }
@@ -1236,8 +1232,7 @@ obj_tree_find_attr(unsigned tree_class)
 	for (i = 0;; i++) {
 		struct vos_btr_attr *ta = &vos_btr_attrs[i];
 
-		D_DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d\n",
-			ta->ta_class, tree_class);
+		D_DEBUG(DB_TRACE, "ta->ta_class: %d, tree_class: %d", ta->ta_class, tree_class);
 
 		if (ta->ta_class == tree_class)
 			return ta;

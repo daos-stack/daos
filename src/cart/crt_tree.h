@@ -95,8 +95,7 @@ crt_tree_topo_valid(int tree_topo)
 					   tree_ratio <= CRT_TREE_MAX_RATIO))) {
 		valid = true;
 	} else {
-		D_ERROR("invalid parameter, tree_type %d, tree_ratio %d.\n",
-			tree_type, tree_ratio);
+		D_ERROR("invalid parameter, tree_type %d, tree_ratio %d", tree_type, tree_ratio);
 		valid = false;
 	}
 

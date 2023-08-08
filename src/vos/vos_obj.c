@@ -181,8 +181,7 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 	uint32_t	 write_flag = 0;
 
 	if (vos_ts_set_check_conflict(ts_set, epr->epr_hi)) {
-		D_DEBUG(DB_IO, "Failed to punch key: "DF_RC"\n",
-			DP_RC(-DER_TX_RESTART));
+		D_DEBUG(DB_IO, "Failed to punch key: " DF_RC, DP_RC(-DER_TX_RESTART));
 		return -DER_TX_RESTART;
 	}
 
@@ -212,16 +211,14 @@ vos_propagate_check(struct vos_object *obj, umem_off_t *known_key, daos_handle_t
 		/** tree is now empty, set the flags so we can punch
 		 *  the parent
 		 */
-		D_DEBUG(DB_TRACE, "%s tree empty, punching parent\n",
-			tree_name);
+		D_DEBUG(DB_TRACE, "%s tree empty, punching parent", tree_name);
 		vos_ts_set_append_vflags(ts_set, punch_flag);
 		vos_ts_set_append_cflags(ts_set, write_flag);
 
 		return 1;
 	}
 
-	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: "DF_RC"\n",
-			DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not check emptiness on punch: " DF_RC, DP_RC(rc));
 
 	return rc;
 }
@@ -279,8 +276,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 			      dkey, SUBTR_CREATE, DAOS_INTENT_PUNCH,
 			      &krec, &toh, ts_set);
 	if (rc) {
-		D_ERROR("Error preparing dkey: rc="DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Error preparing dkey");
 		D_GOTO(out, rc);
 	}
 
@@ -302,8 +298,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 				    flags, ts_set, &krec->kr_known_akey, &info->ki_dkey,
 				    &info->ki_akey);
 		if (rc != 0) {
-			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
-					DF_RC"\n", DP_RC(rc));
+			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: " DF_RC, DP_RC(rc));
 			break;
 		}
 	}
@@ -426,8 +421,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		bound = epoch;
 	}
 
-	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
-		DP_UOID(oid), epr.epr_hi);
+	D_DEBUG(DB_IO, "Punch " DF_UOID ", epoch " DF_X64, DP_UOID(oid), epr.epr_hi);
 
 	cont = vos_hdl2cont(coh);
 
@@ -516,8 +510,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 reset:
 	if (rc != 0)
-		D_DEBUG(DB_IO, "Failed to punch object "DF_UOID": rc = %d\n",
-			DP_UOID(oid), rc);
+		D_DEBUG(DB_IO, "Failed to punch object " DF_UOID ": rc = %d", DP_UOID(oid), rc);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		/** We must prevent underpunch with regular I/O */
@@ -570,7 +563,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Container is not open\n");
+		D_ERROR("Container is not open");
 		return -DER_INVAL;
 	}
 	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
@@ -582,8 +575,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 			return 0;
 		}
 
-		D_ERROR("Could not hold object oid=" DF_UOID " rc=" DF_RC "\n", DP_UOID(oid),
-			DP_RC(rc));
+		DL_ERROR(rc, "Could not hold object oid=" DF_UOID, DP_UOID(oid));
 		return rc;
 	}
 
@@ -593,8 +585,8 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
-		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
-			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: " DF_RC, DP_UOID(oid),
+			DP_KEY(dkey), DP_RC(rc));
 		goto out;
 	}
 
@@ -606,14 +598,13 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 			daos_anchor_set_eof(anchor);
 			goto out;
 		}
-		D_ERROR("Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY " rc=" DF_RC "\n",
-			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		DL_ERROR(rc, "Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY, DP_UOID(oid),
+			 DP_KEY(dkey));
 		D_GOTO(out, rc);
 	}
 
 	rc = dbtree_key2anchor(toh, akey, anchor);
-	D_DEBUG(DB_TRACE,
-		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+	D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: " DF_RC,
 		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
 
 	key_tree_release(toh, false);
@@ -639,7 +630,7 @@ vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete
 		return 0;
 
 	if (rc) {
-		D_ERROR("Failed to hold object: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to hold object");
 		return rc;
 	}
 
@@ -649,7 +640,7 @@ vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete
 
 	rc = vos_oi_delete(cont, obj->obj_id, only_delete_entry);
 	if (rc)
-		D_ERROR("Failed to delete object: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to delete object");
 
 	rc = umem_tx_end(umm, rc);
 
@@ -693,19 +684,19 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		return 0;
 
 	if (rc) {
-		D_ERROR("object hold error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "object hold error");
 		return rc;
 	}
 
 	rc = umem_tx_begin(umm, NULL);
 	if (rc) {
-		D_ERROR("memory TX start error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "memory TX start error");
 		goto out;
 	}
 
 	rc = obj_tree_init(obj);
 	if (rc) {
-		D_ERROR("init dkey tree error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "init dkey tree error");
 		goto out_tx;
 	}
 
@@ -715,7 +706,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 				      dkey, 0, DAOS_INTENT_PUNCH, NULL,
 				      &toh, NULL);
 		if (rc) {
-			D_ERROR("open akey tree error: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "open akey tree error");
 			goto out_tx;
 		}
 	} else { /* delete dkey */
@@ -725,7 +716,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 
 	rc = key_tree_delete(obj, toh, key);
 	if (rc) {
-		D_ERROR("delete key error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "delete key error");
 		goto out_tree;
 	}
 	/* fall through */
@@ -785,8 +776,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		return rc;
 
 	if (rc != 0) {
-		D_ERROR("Cannot load the prepare key tree: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Cannot load the prepare key tree");
 		return rc;
 	}
 
@@ -942,7 +932,7 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	rc = key_iter_fetch_helper(oiter, &rbund, &keybuf, NULL);
 
 	if (rc != 0) {
-		D_ERROR("Could not fetch key: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not fetch key");
 		return rc;
 	}
 
@@ -1009,7 +999,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 
 	rc = key_iter_fetch(oiter, ent, anchor, true, flags);
 	if (rc != 0) {
-		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: "DF_RC"\n", DP_RC(rc));
+		VOS_TX_TRACE_FAIL(rc, "Failed to fetch the entry: " DF_RC, DP_RC(rc));
 		return rc;
 	}
 
@@ -1019,8 +1009,8 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 
 	/* else: has akey as condition */
 	if (epr->epr_lo != epr->epr_hi || (oiter->it_flags & VOS_IT_PUNCHED)) {
-		D_ERROR("Cannot support epoch range for conditional iteration "
-			"because it is not clearly defined.\n");
+		D_ERROR("Cannot support epoch range for conditional iteration because it is not "
+			"clearly defined");
 		return -DER_INVAL; /* XXX simplify it for now */
 	}
 
@@ -1028,8 +1018,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent, daos_anchor_t 
 			      &ent->ie_key, 0, vos_iter_intent(&oiter->it_iter),
 			      NULL, &toh, NULL);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "can't load the akey tree: "DF_RC"\n",
-			DP_RC(rc));
+		D_DEBUG(DB_IO, "can't load the akey tree: " DF_RC, DP_RC(rc));
 		return rc;
 	}
 
@@ -1081,8 +1070,7 @@ retry:
 	}
 	D_ASSERT(rc <= 0 || (rc & (VOS_ITER_CB_EXIT | VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD |
 				   VOS_ITER_CB_ABORT)) != 0);
-	VOS_TX_TRACE_FAIL(rc, "match failed, rc="DF_RC"\n",
-			  DP_RC(rc));
+	VOS_TX_TRACE_FAIL(rc, "match failed: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -1158,8 +1146,7 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		return 0;
 
 failed:
-	VOS_TX_LOG_FAIL(rc, "Could not prepare akey iterator "DF_RC"\n",
-			DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not prepare akey iterator: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -1206,8 +1193,7 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	/* see BTR_ITER_EMBEDDED for the details */
 	rc = dbtree_iter_prepare(sv_toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
 	if (rc != 0)
-		D_DEBUG(DB_IO, "Cannot prepare singv iterator: "DF_RC"\n",
-			DP_RC(rc));
+		D_DEBUG(DB_IO, "Cannot prepare singv iterator: " DF_RC, DP_RC(rc));
 	key_tree_release(sv_toh, false);
  failed_1:
 	key_tree_release(ak_toh, false);
@@ -1345,7 +1331,7 @@ singv_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor, uint32_t fla
 		if (memcmp(anchor, &tmp, sizeof(tmp)) == 0)
 			return 0;
 
-		D_DEBUG(DB_IO, "Can't find the provided anchor\n");
+		D_DEBUG(DB_IO, "Can't find the provided anchor");
 		/**
 		 * the original recx has been merged/discarded, so we need to
 		 * call singv_iter_probe_epr() and check if the current record
@@ -1515,8 +1501,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
 	if (rc != 0) {
-		D_DEBUG(DB_IO, "Cannot prepare recx iterator : "DF_RC"\n",
-			DP_RC(rc));
+		D_DEBUG(DB_IO, "Cannot prepare recx iterator: " DF_RC, DP_RC(rc));
 	}
 	key_tree_release(rx_toh, true);
  failed:
@@ -1675,8 +1660,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
 			  &oiter->it_obj, ts_set);
 	if (rc != 0) {
-		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: "DF_RC
-				"\n", DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not hold object to iterate: " DF_RC, DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
@@ -1688,7 +1672,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	switch (type) {
 	default:
-		D_ERROR("unknown iterator type %d.\n", type);
+		D_ERROR("unknown iterator type %d", type);
 		rc = -DER_INVAL;
 		break;
 
@@ -1734,20 +1718,18 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 		D_ASSERT(0);
 	case VOS_ITER_RECX:
 	case VOS_ITER_SINGLE:
-		D_ERROR("Iterator type has no subtree\n");
+		D_ERROR("Iterator type has no subtree");
 		return -DER_INVAL;
 	case VOS_ITER_DKEY:
 		if (type != VOS_ITER_AKEY) {
-			D_ERROR("Invalid nested iterator type for "
-				"VOS_ITER_DKEY: %d\n", type);
+			D_ERROR("Invalid nested iterator type for VOS_ITER_DKEY: %d", type);
 			return -DER_INVAL;
 		}
 		break;
 	case VOS_ITER_AKEY:
 		if (type != VOS_ITER_RECX &&
 		    type != VOS_ITER_SINGLE) {
-			D_ERROR("Invalid nested iterator type for "
-				"VOS_ITER_AKEY: %d\n", type);
+			D_ERROR("Invalid nested iterator type for VOS_ITER_AKEY: %d", type);
 			return -DER_INVAL;
 		}
 	};
@@ -1755,8 +1737,8 @@ vos_obj_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	rc = key_iter_fetch_root(oiter, type, info);
 
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor "
-			"subtree: rc="DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_TRACE, "Failed to fetch and initialize cursor subtree: " DF_RC,
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -1788,7 +1770,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 		 *  This function should only be called after a successful
 		 *  probe.
 		 */
-		D_ERROR("Could not hold object: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not hold object");
 		return rc;
 	}
 
@@ -1858,7 +1840,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 
 	switch (type) {
 	default:
-		D_ERROR("unknown iterator type %d.\n", type);
+		D_ERROR("unknown iterator type %d", type);
 		rc = -DER_INVAL;
 		goto failed;
 
@@ -1873,8 +1855,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 					vos_cont2hdl(obj->obj_cont),
 					vos_obj2pool(obj), &toh);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = "DF_RC"\n", DP_RC(rc));
+			D_DEBUG(DB_TRACE, "Failed to open tree for iterator: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 		rc = dbtree_iter_prepare(toh, BTR_ITER_EMBEDDED,
@@ -1886,8 +1867,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 				      vos_cont2hdl(obj->obj_cont));
 		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
 		if (rc) {
-			D_DEBUG(DB_TRACE, "Failed to open tree for iterator:"
-				" rc = "DF_RC"\n", DP_RC(rc));
+			D_DEBUG(DB_TRACE, "Failed to open tree for iterator: " DF_RC, DP_RC(rc));
 			goto failed;
 		}
 		recx2filter(&filter, &info->ii_recx);
@@ -1903,8 +1883,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	key_tree_release(toh, type == VOS_ITER_RECX);
 
 	if (rc != 0) {
-		D_DEBUG(DB_TRACE, "Failed to prepare iterator: rc = "DF_RC"\n",
-			DP_RC(rc));
+		D_DEBUG(DB_TRACE, "Failed to prepare iterator: " DF_RC, DP_RC(rc));
 		goto failed;
 	}
 
@@ -2099,7 +2078,7 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 	/* Fetch the key/value for the current iter cursor */
 	rc = dbtree_iter_fetch(oiter->it_hdl, &key, &val, &anchor);
 	if (rc != 0) {
-		D_ERROR("dbtree_iter_fetch failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "dbtree_iter_fetch failed");
 		rc = umem_tx_end(umm, rc);
 		return rc;
 	}
@@ -2108,12 +2087,12 @@ sv_iter_corrupt(struct vos_obj_iter *oiter)
 	rc = umem_tx_add(umm, rbund.rb_off + addr_offset,
 			 sizeof(*irec) - addr_offset);
 	if (rc != 0) {
-		D_ERROR("umem_tx_add failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "umem_tx_add failed");
 		rc = umem_tx_end(umm, rc);
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted\n");
+	D_DEBUG(DB_IO, "Setting record bio_addr flag to corrupted");
 	irec = umem_off2ptr(umm, rbund.rb_off);
 	BIO_ADDR_SET_CORRUPTED(&irec->ir_ex_addr);
 
@@ -2157,8 +2136,7 @@ vos_obj_iter_check_punch(daos_handle_t ih)
 		goto exit;
 
 	/* Incarnation log is empty, delete the object */
-	D_DEBUG(DB_IO, "Moving %s to gc heap\n",
-		iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
+	D_DEBUG(DB_IO, "Moving %s to gc heap", iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 
 	rc = dbtree_iter_delete(oiter->it_hdl, obj->obj_cont);
 	D_ASSERT(rc != -DER_NONEXIST);
@@ -2208,7 +2186,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */
 		delete = true;
-		D_DEBUG(DB_IO, "Removing %s from tree\n",
+		D_DEBUG(DB_IO, "Removing %s from tree",
 			iter->it_type == VOS_ITER_DKEY ? "dkey" : "akey");
 
 		/* XXX: The value tree may be not empty because related prepared transaction can

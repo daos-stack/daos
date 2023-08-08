@@ -1003,7 +1003,7 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			 num_visible = 0;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER", ea_ent_nr %d.\n",
+	D_DEBUG(DB_TRACE, "Sorting array with filter " DF_FILTER ", ea_ent_nr %d",
 		DP_FILTER(filter), ent_array->ea_ent_nr);
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
@@ -1073,7 +1073,7 @@ evt_hdl2tcx(daos_handle_t toh)
 
 	tcx = (struct evt_context *)toh.cookie;
 	if (tcx->tc_magic != EVT_HDL_ALIVE) {
-		D_WARN("Invalid tree handle %x\n", tcx->tc_magic);
+		D_WARN("Invalid tree handle %x", tcx->tc_magic);
 		return NULL;
 	}
 	return tcx;
@@ -1159,8 +1159,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to setup mem class %d", uma->uma_id);
 		D_GOTO(failed, rc);
 	}
 
@@ -1178,7 +1177,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 
 	} else {
 		if (root->tr_pool_uuid != umem_get_uuid(evt_umm(tcx))) {
-			D_ERROR("Mixing pools in same evtree not allowed\n");
+			D_ERROR("Mixing pools in same evtree not allowed");
 			rc = -DER_INVAL;
 			goto failed;
 		}
@@ -1206,10 +1205,10 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		tcx->tc_ops = evt_policies[2];
 		break;
 	default:
-		D_ERROR("Bad sort policy specified: %#x\n", policy);
+		D_ERROR("Bad sort policy specified: %#x", policy);
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
-	D_DEBUG(DB_TRACE, "EVTree sort policy is %#x\n", policy);
+	D_DEBUG(DB_TRACE, "EVTree sort policy is %#x", policy);
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
@@ -1320,7 +1319,7 @@ evt_node_entry_free(struct evt_context *tcx, struct evt_node_entry *ne)
 
 	return 0;
 out:
-	D_ERROR("Failed to release entry: " DF_RC "\n", DP_RC(rc));
+	DL_ERROR(rc, "Failed to release entry");
 	return rc;
 }
 
@@ -1501,7 +1500,7 @@ evt_node_destroy(struct evt_context *tcx, umem_off_t nd_off, int level,
 			rc = evt_node_destroy(tcx, nd->tn_child[i], level + 1,
 					      &empty);
 			if (rc) {
-				D_ERROR("destroy failed: " DF_RC "\n", DP_RC(rc));
+				DL_ERROR(rc, "destroy failed");
 				goto out;
 			}
 
@@ -2084,8 +2083,7 @@ evt_insert_or_split(struct evt_context *tcx, const struct evt_entry_in *ent_new,
  out:
 	return 0;
  failed:
-	D_ERROR("Failed to insert entry to level %d: "DF_RC"\n", level,
-		DP_RC(rc));
+	DL_ERROR(rc, "Failed to insert entry to level %d", level);
 	return rc;
 }
 
@@ -2255,8 +2253,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		return -DER_NO_HDL;
 
 	if (tcx->tc_inob && entry->ei_inob && tcx->tc_inob != entry->ei_inob) {
-		D_ERROR("Variable record size not supported in evtree:"
-			" %d != %d\n", entry->ei_inob, tcx->tc_inob);
+		D_ERROR("Variable record size not supported in evtree: %d != %d", entry->ei_inob,
+			tcx->tc_inob);
 		return -DER_INVAL;
 	}
 
@@ -2272,7 +2270,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			D_ASSERT(csum_bufp == NULL);
 			return evt_large_hole_insert(toh, entry);
 		}
-		D_ERROR("Extent is too large\n");
+		D_ERROR("Extent is too large");
 		/** The update isn't a punch, just reject it as too large */
 		return -DER_NO_PERM;
 	}
@@ -2716,11 +2714,10 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				 * properly.
 				 */
 				if (range_overlap != RT_OVERLAP_SAME) {
-					D_ERROR("Same epoch partial "
-						"overwrite not supported:"
-						DF_RECT" overlaps with "DF_RECT
-						"\n", DP_RECT(rect),
-						DP_RECT(&rtmp));
+					D_ERROR(
+					    "Same epoch partial overwrite not supported:" DF_RECT
+					    " overlaps with " DF_RECT,
+					    DP_RECT(rect), DP_RECT(&rtmp));
 					rc = -DER_VOS_PARTIAL_UPDATE;
 					goto out;
 				}
@@ -2962,11 +2959,11 @@ evt_has_data(struct evt_root *root, struct umem_attr *uma)
 	rc = 0; /* Assume there is no data */
 	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
 		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
-			D_INFO("Found orphaned extent "DF_ENT"\n", DP_ENT(ent));
+			D_INFO("Found orphaned extent " DF_ENT, DP_ENT(ent));
 			rc = 1;
 			break;
 		}
-		D_DEBUG(DB_IO, "Ignoring "DF_ENT"\n", DP_ENT(ent));
+		D_DEBUG(DB_IO, "Ignoring " DF_ENT, DP_ENT(ent));
 	}
 out:
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
@@ -3003,12 +3000,12 @@ evt_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	int		    rc;
 
 	if (!(feats & (EVT_AGG_MASK | EVT_FEATS_SUPPORTED))) {
-		D_ERROR("Unknown feature bits "DF_X64"\n", feats);
+		D_ERROR("Unknown feature bits " DF_X64, feats);
 		return -DER_INVAL;
 	}
 
 	if (order < EVT_ORDER_MIN || order > EVT_ORDER_MAX) {
-		D_ERROR("Invalid tree order %d\n", order);
+		D_ERROR("Invalid tree order %d", order);
 		return -DER_INVAL;
 	}
 
@@ -3211,9 +3208,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 				return rc;
 
 			reuse = true;
-			D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
-				"off "UMOFF_PF" (1)\n",
-				i, nd->tn_nr, UMOFF_P(off));
+			D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, off " UMOFF_PF " (1)", i,
+				nd->tn_nr, UMOFF_P(off));
 		}
 
 		break;
@@ -3234,8 +3230,7 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 					return rc;
 
 				reuse = true;
-				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, "
-					"off "UMOFF_PF" (2)\n",
+				D_DEBUG(DB_TRACE, "reuse slot at %d, nr %d, off " UMOFF_PF " (2)",
 					i, nd->tn_nr, UMOFF_P(off));
 				i = nd->tn_nr - 1;
 			}
@@ -3254,8 +3249,8 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 		evt_rect_write(&ne->ne_rect, &ent->ei_rect);
 
 		if (csum_buf_size > 0) {
-			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes "
-						"for checksum", csum_buf_size);
+			D_DEBUG(DB_TRACE, "Allocating an extra %d bytes for checksum",
+				csum_buf_size);
 		}
 		desc_off = umem_zalloc(evt_umm(tcx), desc_size);
 		if (UMOFF_IS_NULL(desc_off))
@@ -3842,7 +3837,7 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
 		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
-		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n", DP_RECT(&entry.ei_rect));
+		D_DEBUG(DB_IO, "Insert removal record " DF_RECT, DP_RECT(&entry.ei_rect));
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
 		rc = evt_insert(toh, &entry, NULL);
@@ -3902,7 +3897,7 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 
 	if (csum->cs_buf_len < csum_buf_len) {
 		D_ERROR("Issue copying checksum. Source (%d) is larger than destination (%" PRIu64
-			")\n",
+			")",
 			csum->cs_buf_len, csum_buf_len);
 	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
@@ -3989,7 +3984,7 @@ evt_overhead_get(int alloc_overhead, int tree_order,
 	int order_idx;
 
 	if (ovhd == NULL) {
-		D_ERROR("Invalid ovhd argument\n");
+		D_ERROR("Invalid ovhd argument");
 		return -DER_INVAL;
 	}
 
@@ -4059,7 +4054,7 @@ evt_feats_set(struct evt_root *root, struct umem_instance *umm, uint64_t feats)
 		return 0;
 
 	if ((feats & ~EVT_AGG_MASK) != (root->tr_feats & EVT_FEATS_SUPPORTED)) {
-		D_ERROR("Attempt to set internal features denied "DF_X64"\n", feats);
+		D_ERROR("Attempt to set internal features denied " DF_X64, feats);
 		return -DER_INVAL;
 	}
 

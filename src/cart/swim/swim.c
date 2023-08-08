@@ -50,7 +50,7 @@ swim_ping_timeout_default(void)
 void
 swim_period_set(uint64_t val)
 {
-	D_DEBUG(DB_TRACE, "swim_prot_period_len set as %lu\n", val);
+	D_DEBUG(DB_TRACE, "swim_prot_period_len set as %lu", val);
 	swim_prot_period_len = val;
 }
 
@@ -63,7 +63,7 @@ swim_period_get(void)
 void
 swim_suspect_timeout_set(uint64_t val)
 {
-	D_DEBUG(DB_TRACE, "swim_suspect_timeout set as %lu\n", val);
+	D_DEBUG(DB_TRACE, "swim_suspect_timeout set as %lu", val);
 	swim_suspect_timeout = val;
 }
 
@@ -76,7 +76,7 @@ swim_suspect_timeout_get(void)
 void
 swim_ping_timeout_set(uint64_t val)
 {
-	D_DEBUG(DB_TRACE, "swim_ping_timeout set as %lu\n", val);
+	D_DEBUG(DB_TRACE, "swim_ping_timeout set as %lu", val);
 	swim_ping_timeout = val;
 }
 
@@ -713,7 +713,7 @@ swim_init(swim_id_t self_id, struct swim_ops *swim_ops, void *data)
 	rc = SWIM_MUTEX_CREATE(ctx->sc_mutex, NULL);
 	if (rc != 0) {
 		D_FREE(ctx);
-		D_DEBUG(DB_TRACE, "SWIM_MUTEX_CREATE(): %s\n", strerror(rc));
+		D_DEBUG(DB_TRACE, "SWIM_MUTEX_CREATE(): %s", strerror(rc));
 		D_GOTO(out, ctx = NULL);
 	}
 
@@ -788,7 +788,7 @@ swim_fini(struct swim_context *ctx)
 
 	rc = SWIM_MUTEX_DESTROY(ctx->sc_mutex);
 	if (rc != 0)
-		D_DEBUG(DB_TRACE, "SWIM_MUTEX_DESTROY(): %s\n", strerror(rc));
+		D_DEBUG(DB_TRACE, "SWIM_MUTEX_DESTROY(): %s", strerror(rc));
 
 	D_FREE(ctx);
 }

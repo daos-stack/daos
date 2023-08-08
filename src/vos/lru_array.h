@@ -407,7 +407,7 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 	*entryp = NULL;
 
 	if (idx >= array->la_count) {
-		D_ERROR("Index %d is out of range\n", idx);
+		D_ERROR("Index %d is out of range", idx);
 		return -DER_INVAL;
 	}
 
@@ -422,7 +422,7 @@ lrua_allocx_inplace_(struct lru_array *array, uint32_t idx, uint64_t key,
 
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key != key && entry->le_key != 0) {
-		D_ERROR("Cannot allocated idx %d in place\n", idx);
+		D_ERROR("Cannot allocated idx %d in place", idx);
 		return -DER_NO_PERM;
 	}
 

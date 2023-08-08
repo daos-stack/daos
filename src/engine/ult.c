@@ -53,7 +53,7 @@ collective_func(void *varg)
 
 	rc = ABT_future_set(f_arg->dfa_future, (void *)a_args);
 	if (rc != ABT_SUCCESS)
-		D_ERROR("future set failure %d\n", rc);
+		D_ERROR("future set failure %d", rc);
 }
 
 /* Reduce the return codes into the first element. */
@@ -105,13 +105,13 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 
 	if (ops->co_reduce_arg_alloc != NULL &&
 	    ops->co_reduce_arg_free == NULL) {
-		D_DEBUG(DB_MD, "Free callback missing for reduce args\n");
+		D_DEBUG(DB_MD, "Free callback missing for reduce args");
 		return -DER_INVAL;
 	}
 
 	if (dss_tgt_nr == 0) {
 		/* May happen when the server is shutting down. */
-		D_DEBUG(DB_TRACE, "no xstreams\n");
+		D_DEBUG(DB_TRACE, "no xstreams");
 		return -DER_CANCELED;
 	}
 
@@ -164,7 +164,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 					break;
 
 			if (i < args->ca_exclude_tgts_cnt) {
-				D_DEBUG(DB_TRACE, "Skip tgt %d\n", tid);
+				D_DEBUG(DB_TRACE, "Skip tgt %d", tid);
 				rc = ABT_future_set(future, (void *)stream);
 				D_ASSERTF(rc == ABT_SUCCESS, "%d\n", rc);
 				continue;
@@ -184,7 +184,7 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 				rc1 = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
 				D_ASSERT(rc1 == ABT_SUCCESS);
 
-				D_DEBUG(DB_TRACE, "Create collective ult with stacksize %d\n",
+				D_DEBUG(DB_TRACE, "Create collective ult with stacksize %d",
 					DSS_DEEP_STACK_SZ);
 
 			} else {
@@ -431,7 +431,7 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 		rc = ABT_thread_attr_set_stacksize(attr, stack_size);
 		D_ASSERT(rc == ABT_SUCCESS);
 
-		D_DEBUG(DB_TRACE, "Create ult stacksize is %zd\n", stack_size);
+		D_DEBUG(DB_TRACE, "Create ult stacksize is %zd", stack_size);
 	} else {
 		attr = ABT_THREAD_ATTR_NULL;
 	}

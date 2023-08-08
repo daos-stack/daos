@@ -136,7 +136,7 @@ dss_tls_init(int tag, int xs_id, int tgt_id)
 
 	rc = pthread_setspecific(dss_tls_key, dtls);
 	if (rc) {
-		D_ERROR("failed to initialize tls: %d\n", rc);
+		D_ERROR("failed to initialize tls: %d", rc);
 		dss_thread_local_storage_fini(dtls);
 		D_FREE(dtls);
 		return NULL;

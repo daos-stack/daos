@@ -395,15 +395,14 @@ memblock_run_default_nallocs(uint32_t *size_idx, uint16_t flags,
 			nallocs = (uint32_t)
 				(RUN_DEFAULT_SIZE_BYTES(*size_idx) / unit_size);
 			/* run was constructed with fewer chunks (minus one) */
-			D_INFO("run:%lu constructed with fewer chunks:%u\n",
-				  unit_size, *size_idx);
+			D_INFO("run:%lu constructed with fewer chunks:%u", unit_size, *size_idx);
 		} else {
 			/*
 			 * run was constructed with fewer units than optimal,
 			 * this might lead to inefficient memory utilization!
 			 */
-			D_INFO("run:%lu constructed with fewer units:%u than optimal:%u\n",
-				unit_size, RUN_DEFAULT_BITMAP_NBITS, nallocs);
+			D_INFO("run:%lu constructed with fewer units:%u than optimal:%u", unit_size,
+			       RUN_DEFAULT_BITMAP_NBITS, nallocs);
 
 			nallocs = RUN_DEFAULT_BITMAP_NBITS;
 		}

@@ -44,9 +44,8 @@ do_shard_update_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 	int				rc1 = 0;
 
 	if (orw_parent->orw_map_ver < orwo->orw_map_version) {
-		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
-			DP_UOID(orw_parent->orw_oid), orw_parent->orw_map_ver,
-			orwo->orw_map_version);
+		D_DEBUG(DB_IO, DF_UOID ": map_ver stale (%d < %d)", DP_UOID(orw_parent->orw_oid),
+			orw_parent->orw_map_ver, orwo->orw_map_version);
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = orwo->orw_ret;
@@ -92,8 +91,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	if (DAOS_FAIL_CHECK(DAOS_OBJ_TGT_IDX_CHANGE)) {
 		/* to trigger retry on all other shards */
 		if (shard != daos_fail_value_get()) {
-			D_DEBUG(DB_TRACE, "complete shard %d update as "
-				"-DER_TIMEDOUT.\n", shard);
+			D_DEBUG(DB_TRACE, "complete shard %d update as -DER_TIMEDOUT", shard);
 			D_GOTO(out, rc = -DER_TIMEDOUT);
 		}
 	}
@@ -115,7 +113,7 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 			    DAOS_OBJ_RPC_TGT_UPDATE, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_create failed");
 		D_GOTO(out, rc);
 	}
 
@@ -131,12 +129,12 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
 	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
 
-	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
-		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_TRACE, DF_UOID " forwarding to rank:%d tag:%d", DP_UOID(orw->orw_oid),
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
 	rc = crt_req_send(req, shard_update_req_cb, remote_arg);
 	if (rc != 0) {
 		D_ASSERT(sub->dss_comp == 1);
-		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_send failed");
 	}
 	sent_rpc = true;
 out:
@@ -161,9 +159,8 @@ do_shard_punch_req_cb(crt_rpc_t *req, struct obj_remote_cb_arg *arg, int rc)
 	int				rc1 = 0;
 
 	if (opi_parent->opi_map_ver < opo->opo_map_version) {
-		D_DEBUG(DB_IO, DF_UOID": map_ver stale (%d < %d).\n",
-			DP_UOID(opi_parent->opi_oid), opi_parent->opi_map_ver,
-			opo->opo_map_version);
+		D_DEBUG(DB_IO, DF_UOID ": map_ver stale (%d < %d)", DP_UOID(opi_parent->opi_oid),
+			opi_parent->opi_map_ver, opo->opo_map_version);
 		rc1 = -DER_STALE;
 	} else {
 		rc1 = opo->opo_ret;
@@ -227,7 +224,7 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_create failed");
 		D_GOTO(out, rc);
 	}
 
@@ -245,14 +242,14 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi->opi_dti_cos.ca_count = dth->dth_dti_cos_count;
 	opi->opi_dti_cos.ca_arrays = dth->dth_dti_cos;
 
-	D_DEBUG(DB_IO, DF_UOID" forwarding to rank:%d tag:%d st_flags %x flags %x/"DF_X64".\n",
+	D_DEBUG(DB_IO, DF_UOID " forwarding to rank:%d tag:%d st_flags %x flags %x/" DF_X64,
 		DP_UOID(opi->opi_oid), tgt_ep.ep_rank, tgt_ep.ep_tag, shard_tgt->st_flags,
 		opi->opi_flags, opi->opi_api_flags);
 
 	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
 	if (rc != 0) {
 		D_ASSERT(sub->dss_comp == 1);
-		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_send failed");
 	}
 	return rc;
 
@@ -349,8 +346,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep,
 			    DAOS_OBJ_RPC_CPD, &req);
 	if (rc != 0) {
-		D_ERROR("CPD crt_req_create failed, idx %u: "DF_RC"\n",
-			idx, DP_RC(rc));
+		DL_ERROR(rc, "CPD crt_req_create failed, idx %u", idx);
 		D_GOTO(out, rc);
 	}
 
@@ -380,7 +376,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	dcsr_dcs->dcs_type_base = ds_obj_cpd_get_reqs_type(dca->dca_rpc, dca->dca_idx);
 	if (dcsr_dcs->dcs_type_base != DCST_BULK_REQ) {
 		if (unlikely(dcsr_dcs->dcs_type_base != DCST_REQ_CLI)) {
-			D_ERROR("Unknown CPD RPC sub requests dispatch type %u\n",
+			D_ERROR("Unknown CPD RPC sub requests dispatch type %u",
 				dcsr_dcs->dcs_type_base);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
@@ -397,7 +393,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	dcde_dcs->dcs_type_base = ds_obj_cpd_get_ents_type(dca->dca_rpc, dca->dca_idx);
 	if (dcde_dcs->dcs_type_base != DCST_BULK_ENT) {
 		if (unlikely(dcde_dcs->dcs_type_base != DCST_ENT)) {
-			D_ERROR("Unknown CPD RPC dispatch ent type %u\n", dcde_dcs->dcs_type_base);
+			D_ERROR("Unknown CPD RPC dispatch ent type %u", dcde_dcs->dcs_type_base);
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -416,14 +412,13 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	oci->oci_disp_ents.ca_arrays = dcde_dcs;
 	oci->oci_disp_ents.ca_count = 1;
 
-	D_DEBUG(DB_TRACE, "Forwarding CPD RPC to rank:%d tag:%d idx %u for DXT "
-		DF_DTI"\n",
+	D_DEBUG(DB_TRACE, "Forwarding CPD RPC to rank:%d tag:%d idx %u for DXT " DF_DTI,
 		tgt_ep.ep_rank, tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
 
 	rc = crt_req_send(req, shard_cpd_req_cb, remote_arg);
 	if (rc != 0) {
 		D_ASSERT(sub->dss_comp == 1);
-		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_send failed");
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,

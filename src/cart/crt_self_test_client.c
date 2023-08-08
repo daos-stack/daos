@@ -175,8 +175,7 @@ close_session_cb(const struct crt_cb_info *cb_info)
 	D_ASSERT(g_data != NULL);
 
 	if (cb_info->cci_rc != 0)
-		D_WARN("Close session failed for endpoint=%u:%u\n",
-		       endpt->rank, endpt->tag);
+		D_WARN("Close session failed for endpoint=%u:%u", endpt->rank, endpt->tag);
 
 	/* Decrement the number of in-flight RPCs now that this one is done */
 	ST_DEC_NUM_INFLIGHT();
@@ -226,10 +225,10 @@ static void close_sessions(void)
 				     CRT_OPC_SELF_TEST_CLOSE_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
-			D_WARN("Failed to close session %ld on endpoint=%u:%u;"
-			       " crt_req_created failed with ret = %d\n",
-			       g_data->endpts[i].session_id,
-			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+			D_WARN("Failed to close session %ld on endpoint=%u:%u; crt_req_created "
+			       "failed with ret = %d",
+			       g_data->endpts[i].session_id, local_endpt.ep_rank,
+			       local_endpt.ep_tag, ret);
 
 			/* Mark the node as evicted (likely already done) */
 			g_data->endpts[i].evicted = 1;
@@ -251,8 +250,7 @@ static void close_sessions(void)
 		ret = crt_req_send(new_rpc, close_session_cb,
 				   &g_data->endpts[i]);
 		if (ret != 0) {
-			D_WARN("crt_req_send failed for endpoint=%u:%u;"
-			       " ret = %d\n",
+			D_WARN("crt_req_send failed for endpoint=%u:%u; ret = %d",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
 			g_data->endpts[i].session_id = -1;
@@ -340,7 +338,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		failed_endpts = 0;
 		do {
 			if (failed_endpts >= g_data->num_endpts) {
-				D_ERROR("No non-evicted endpoints remaining\n");
+				D_ERROR("No non-evicted endpoints remaining");
 				D_SPIN_UNLOCK(&g_data->ctr_lock);
 				/************** UNLOCK: ctr_lock **************/
 				D_GOTO(abort, ret = -DER_UNREACH);
@@ -383,8 +381,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 		ret = crt_req_create(g_data->crt_ctx, &local_endpt,
 				     opcode, &new_rpc);
 		if (ret != 0) {
-			D_WARN("crt_req_create failed for endpoint=%u:%u;"
-			       " ret = %d\n",
+			D_WARN("crt_req_create failed for endpoint=%u:%u; ret = %d",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
 			goto try_again;
@@ -451,21 +448,20 @@ send_rpc:
 
 		ret = d_gettime(&cb_args->sent_time);
 		if (ret != 0) {
-			D_ERROR("d_gettime failed; ret = %d\n", ret);
+				D_ERROR("d_gettime failed; ret = %d", ret);
 
-			/* Free the RPC request that was created but not sent */
-			RPC_PUB_DECREF(new_rpc);
-			D_GOTO(abort, ret = -DER_MISC);
+				/* Free the RPC request that was created but not sent */
+				RPC_PUB_DECREF(new_rpc);
+				D_GOTO(abort, ret = -DER_MISC);
 		}
 
 		/* Send the RPC */
 		ret = crt_req_send(new_rpc, test_rpc_cb, cb_args);
 		if (ret != 0) {
-			D_WARN("crt_req_send failed for endpoint=%u:%u;"
-			       " ret = %d\n",
-			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
+				D_WARN("crt_req_send failed for endpoint=%u:%u; ret = %d",
+				       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
-			goto try_again;
+				goto try_again;
 		}
 
 		/* RPC sent successfully */
@@ -477,8 +473,8 @@ try_again:
 		 * Something must be wrong with this endpoint
 		 * Mark it as evicted and try a different one instead
 		 */
-		D_WARN("Marking endpoint endpoint=%u:%u as evicted\n",
-		       local_endpt.ep_rank, local_endpt.ep_tag);
+		D_WARN("Marking endpoint endpoint=%u:%u as evicted", local_endpt.ep_rank,
+		       local_endpt.ep_tag);
 
 		/*
 		 * No need to lock g_data->ctr_lock here
@@ -506,7 +502,7 @@ abort:
 		/* Record the time right when we finished this size */
 		ret = d_gettime(&g_data->time_stop);
 		if (ret != 0)
-			D_ERROR("d_gettime failed; ret = %d\n", ret);
+				D_ERROR("d_gettime failed; ret = %d", ret);
 
 		close_sessions();
 	}
@@ -535,7 +531,7 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 	/* Record latency of this RPC */
 	ret = d_gettime(&now);
 	if (ret != 0) {
-		D_ERROR("d_gettime failed; ret = %d\n", ret);
+		D_ERROR("d_gettime failed; ret = %d", ret);
 		return;
 	}
 
@@ -547,8 +543,7 @@ test_rpc_cb(const struct crt_cb_info *cb_info)
 
 	/* If this endpoint was evicted during the RPC, mark it as so */
 	if (cb_info->cci_rc == -DER_OOG) {
-		D_WARN("Test RPC failed with -DER_OOG for endpoint=%u:%u;"
-		       " marking it as evicted\n",
+		D_WARN("Test RPC failed with -DER_OOG for endpoint=%u:%u; marking it as evicted",
 		       cb_args->endpt->rank, cb_args->endpt->tag);
 		/*
 		 * No need to lock g_data->ctr_lock here
@@ -577,7 +572,7 @@ static void launch_test_rpcs(void)
 	/* Record the time right when we start processing this size */
 	ret = d_gettime(&g_data->time_start);
 	if (ret != 0) {
-		D_ERROR("d_gettime failed; ret = %d\n", ret);
+		D_ERROR("d_gettime failed; ret = %d", ret);
 		/* No point in continuing if time is broken */
 		close_sessions();
 	}
@@ -606,15 +601,15 @@ open_session_cb(const struct crt_cb_info *cb_info)
 
 	/* If this endpoint returned any kind of error, mark it is evicted */
 	if (cb_info->cci_rc != 0) {
-		D_WARN("Got cci_rc = %d while opening session with endpoint"
-		       " %u:%u - removing it from the list of endpoints\n",
+		D_WARN("Got cci_rc = %d while opening session with endpoint %u:%u - removing it "
+		       "from the list of endpoints",
 		       cb_info->cci_rc, endpt->rank, endpt->tag);
 		/* Nodes with evicted=1 are skipped for the rest of the test */
 		endpt->evicted = 1;
 		endpt->session_id = -1;
 	} else if (*session_id < 0) {
-		D_WARN("Got invalid session id = %ld from endpoint %u:%u -\n"
-		       " removing it from the list of endpoints\n",
+		D_WARN("Got invalid session id = %ld from endpoint %u:%u -\n removing it from the "
+		       "list of endpoints",
 		       *session_id, endpt->rank, endpt->tag);
 		endpt->evicted = 1;
 		endpt->session_id = -1;
@@ -672,8 +667,7 @@ static void open_sessions(void)
 				     CRT_OPC_SELF_TEST_OPEN_SESSION,
 				     &new_rpc);
 		if (ret != 0) {
-			D_WARN("crt_req_create failed for endpoint=%u:%u;"
-			       " ret = %d\n",
+			D_WARN("crt_req_create failed for endpoint=%u:%u; ret = %d",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
 			g_data->endpts[i].session_id = -1;
@@ -710,8 +704,7 @@ static void open_sessions(void)
 		ret = crt_req_send(new_rpc, open_session_cb,
 				   &g_data->endpts[i]);
 		if (ret != 0) {
-			D_WARN("crt_req_send failed for endpoint=%u:%u;"
-			       " ret = %d\n",
+			D_WARN("crt_req_send failed for endpoint=%u:%u; ret = %d",
 			       local_endpt.ep_rank, local_endpt.ep_tag, ret);
 
 			g_data->endpts[i].session_id = -1;
@@ -799,28 +792,27 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	/* Validate the input */
 	if (((args->endpts.iov_buf_len & 0x7) != 0) ||
 	    (args->endpts.iov_buf_len == 0)) {
-		D_ERROR("Invalid IOV length - must be a multiple of 8 bytes\n");
+		D_ERROR("Invalid IOV length - must be a multiple of 8 bytes");
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
 	    args->reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
-		D_ERROR("Invalid self-test bulk type;"
-			" only send/get reply/put are supported\n");
+		D_ERROR("Invalid self-test bulk type; only send/get reply/put are supported");
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->max_inflight == 0) {
-		D_ERROR("Max in-flight must be greater than zero\n");
+		D_ERROR("Max in-flight must be greater than zero");
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->rep_count == 0) {
-		D_ERROR("Rep count must be greater than zero\n");
+		D_ERROR("Rep count must be greater than zero");
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if ((args->buf_alignment < CRT_ST_BUF_ALIGN_MIN ||
 	     args->buf_alignment > CRT_ST_BUF_ALIGN_MAX) &&
 	     args->buf_alignment != CRT_ST_BUF_ALIGN_DEFAULT) {
-		D_ERROR("Buf alignment must be in the range [%d:%d]\n",
-			CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MAX);
+		D_ERROR("Buf alignment must be in the range [%d:%d]", CRT_ST_BUF_ALIGN_MIN,
+			CRT_ST_BUF_ALIGN_MAX);
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 
@@ -832,7 +824,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	 *   collected, free those results and start a new session.
 	 */
 	if (g_data != NULL && g_data->test_complete == 0) {
-		D_ERROR("Failed to start a new test run - one still exists\n");
+		D_ERROR("Failed to start a new test run - one still exists");
 		D_GOTO(send_reply, ret = -DER_BUSY);
 	} else {
 		free_g_data();
@@ -886,8 +878,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	ret = crt_bulk_create(g_data->crt_ctx, &g_data->rep_latencies_sg_list,
 			      CRT_BULK_RO, &g_data->rep_latencies_bulk_hdl);
 	if (ret != 0) {
-		D_ERROR("Failed to allocate latencies bulk handle; ret = %d\n",
-			ret);
+		D_ERROR("Failed to allocate latencies bulk handle; ret = %d", ret);
 		D_GOTO(fail_cleanup, ret);
 	}
 	D_ASSERT(g_data->rep_latencies_bulk_hdl != CRT_BULK_NULL);
@@ -981,8 +972,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 					      &cb_args->sg_list,
 					      perms, &cb_args->bulk_hdl);
 			if (ret != 0) {
-				D_ERROR("crt_bulk_create failed; ret = %d\n",
-					ret);
+				D_ERROR("crt_bulk_create failed; ret = %d", ret);
 				D_GOTO(fail_cleanup, ret);
 			}
 			D_ASSERT(cb_args->bulk_hdl != CRT_BULK_NULL);
@@ -1010,7 +1000,7 @@ send_reply:
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d", ret);
 
 	D_MUTEX_UNLOCK(&g_data_lock);
 	/******************* UNLOCK: g_data_lock *******************/
@@ -1029,14 +1019,13 @@ static int status_req_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	res->status = CRT_ST_STATUS_TEST_COMPLETE;
 
 	if (cb_info->bci_rc != 0) {
-		D_ERROR("BULK_PUT of latency results failed; bci_rc=%d\n",
-			cb_info->bci_rc);
+		D_ERROR("BULK_PUT of latency results failed; bci_rc=%d", cb_info->bci_rc);
 		res->status = cb_info->bci_rc;
 	}
 
 	ret = crt_reply_send(cb_info->bci_bulk_desc->bd_rpc);
 	if (ret != 0)
-		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d", ret);
 
 	RPC_PUB_DECREF(cb_info->bci_bulk_desc->bd_rpc);
 
@@ -1097,8 +1086,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 
 		ret = crt_bulk_get_len(*bulk_hdl_in, &bulk_in_len);
 		if (ret != 0) {
-			D_ERROR("Failed to get bulk handle length; ret = %d\n",
-				ret);
+			D_ERROR("Failed to get bulk handle length; ret = %d", ret);
 			res->status = ret;
 			D_GOTO(send_rpc, res->status = ret);
 		}
@@ -1106,10 +1094,8 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 		/* Validate the bulk handle length from the caller */
 		if (bulk_in_len != (g_data->rep_count *
 				    sizeof(g_data->rep_latencies[0]))) {
-			D_ERROR("Bulk handle length mismatch (%zu != %zu)\n",
-				bulk_in_len,
-				(g_data->rep_count *
-				 sizeof(g_data->rep_latencies[0])));
+			D_ERROR("Bulk handle length mismatch (%zu != %zu)", bulk_in_len,
+				(g_data->rep_count * sizeof(g_data->rep_latencies[0])));
 			D_GOTO(send_rpc, res->status = ret);
 		}
 
@@ -1124,8 +1110,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 		ret = crt_bulk_transfer(&bulk_desc, status_req_bulk_put_cb,
 					res, NULL);
 		if (ret != 0) {
-			D_ERROR("bulk transfer of latencies failed; ret = %d\n",
-				ret);
+			D_ERROR("bulk transfer of latencies failed; ret = %d", ret);
 			D_GOTO(send_rpc, res->status = ret);
 		}
 
@@ -1144,7 +1129,7 @@ crt_self_test_status_req_handler(crt_rpc_t *rpc_req)
 send_rpc:
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		D_ERROR("crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("crt_reply_send failed; ret = %d", ret);
 
 	RPC_PUB_DECREF(rpc_req);
 

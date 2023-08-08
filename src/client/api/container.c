@@ -45,7 +45,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 
 	redunc_prop = daos_prop_alloc(1);
 	if (redunc_prop == NULL) {
-		D_ERROR("failed to allocate redunc_prop "DF_RC"\n", DP_RC(-DER_NOMEM));
+		DL_ERROR(-DER_NOMEM, "failed to allocate redunc_prop");
 		return -DER_NOMEM;
 	}
 	redunc_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
@@ -56,7 +56,7 @@ cont_inherit_redunc_fac(daos_handle_t poh, daos_prop_t *cont_prop,
 		daos_prop_free(redunc_prop);
 		if (*merged_prop == NULL) {
 			rc = -DER_NOMEM;
-			D_ERROR("failed to merge cont_prop and redunc_prop "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed to merge cont_prop and redunc_prop");
 		}
 	} else {
 		*merged_prop = redunc_prop;
@@ -81,7 +81,7 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
-		D_ERROR("Invalid container properties.\n");
+		D_ERROR("Invalid container properties");
 		return -DER_INVAL;
 	}
 
@@ -128,7 +128,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 
 	label_prop = daos_prop_alloc(1);
 	if (label_prop == NULL) {
-		D_ERROR("failed to allocate label_prop\n");
+		D_ERROR("failed to allocate label_prop");
 		return -DER_NOMEM;
 	}
 	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
@@ -139,7 +139,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 	if (cont_prop) {
 		merged_props = daos_prop_merge(cont_prop, label_prop);
 		if (merged_props == NULL) {
-			D_ERROR("failed to merge cont_prop and label_prop\n");
+			D_ERROR("failed to merge cont_prop and label_prop");
 			rc = -DER_NOMEM;
 			goto out_prop;
 		}
@@ -147,7 +147,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 
 	rc = daos_cont_create(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
-		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
+		DL_ERROR(rc, "daos_cont_create label=%s failed", label);
 		goto out_merged_props;
 	}
 
@@ -255,7 +255,7 @@ daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,
 
 	DAOS_API_ARG_ASSERT(*args, CONT_QUERY);
 	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, false)) {
-		D_ERROR("invalid cont_prop parameter.\n");
+		D_ERROR("invalid cont_prop parameter");
 		return -DER_INVAL;
 	}
 
@@ -279,7 +279,7 @@ daos_cont_get_acl(daos_handle_t coh, daos_prop_t **acl_prop, daos_event_t *ev)
 	int		rc;
 
 	if (acl_prop == NULL) {
-		D_ERROR("invalid acl_prop parameter\n");
+		D_ERROR("invalid acl_prop parameter");
 		return -DER_INVAL;
 	}
 
@@ -309,7 +309,7 @@ daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev)
 
 	DAOS_API_ARG_ASSERT(*args, CONT_SET_PROP);
 	if (prop != NULL && !daos_prop_valid(prop, false, true)) {
-		D_ERROR("invalid prop parameter.\n");
+		D_ERROR("invalid prop parameter");
 		return -DER_INVAL;
 	}
 
@@ -381,7 +381,7 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 	int		rc;
 
 	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("invalid acl parameter\n");
+		D_ERROR("invalid acl parameter");
 		return -DER_INVAL;
 	}
 
@@ -407,7 +407,7 @@ daos_cont_update_acl(daos_handle_t coh, struct daos_acl *acl, daos_event_t *ev)
 
 	DAOS_API_ARG_ASSERT(*args, CONT_UPDATE_ACL);
 	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("invalid acl parameter.\n");
+		D_ERROR("invalid acl parameter");
 		return -DER_INVAL;
 	}
 
@@ -455,7 +455,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 
 	if (user != NULL) {
 		if (!daos_acl_principal_is_valid(user)) {
-			D_ERROR("user principal invalid\n");
+			D_ERROR("user principal invalid");
 			return -DER_INVAL;
 		}
 
@@ -464,7 +464,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 
 	if (group != NULL) {
 		if (!daos_acl_principal_is_valid(group)) {
-			D_ERROR("group principal invalid\n");
+			D_ERROR("group principal invalid");
 			return -DER_INVAL;
 		}
 
@@ -472,7 +472,7 @@ daos_cont_set_owner(daos_handle_t coh, d_string_t user, d_string_t group,
 	}
 
 	if (nr == 0) {
-		D_ERROR("user or group required\n");
+		D_ERROR("user or group required");
 		return -DER_INVAL;
 	}
 

@@ -78,8 +78,7 @@ dss_module_load(const char *modname)
 	int			 rc;
 
 	if (strlen(modname) > DSS_MODNAME_MAX_LEN) {
-		D_ERROR("modname %s is too long > %d\n",
-			modname, DSS_MODNAME_MAX_LEN);
+		D_ERROR("modname %s is too long > %d", modname, DSS_MODNAME_MAX_LEN);
 		return -DER_INVAL;
 	}
 
@@ -87,7 +86,7 @@ dss_module_load(const char *modname)
 	sprintf(name, "lib%s.so", modname);
 	handle = dlopen(name, RTLD_LAZY | RTLD_GLOBAL);
 	if (handle == NULL) {
-		D_ERROR("cannot load %s: %s\n", name, dlerror());
+		D_ERROR("cannot load %s: %s", name, dlerror());
 		return -DER_INVAL;
 	}
 
@@ -108,15 +107,14 @@ dss_module_load(const char *modname)
 	/* check for errors */
 	err = dlerror();
 	if (err != NULL) {
-		D_ERROR("failed to load %s: %s\n", modname, err);
+		D_ERROR("failed to load %s: %s", modname, err);
 		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 	lmod->lm_dss_mod = smod;
 
 	/* check module name is consistent */
 	if (strcmp(smod->sm_name, modname) != 0) {
-		D_ERROR("inconsistent module name %s != %s\n", modname,
-			smod->sm_name);
+		D_ERROR("inconsistent module name %s != %s", modname, smod->sm_name);
 		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
@@ -147,8 +145,7 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 	/* initialize the module */
 	rc = smod->sm_init();
 	if (rc) {
-		D_ERROR("failed to init %s: "DF_RC"\n", smod->sm_name,
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to init %s", smod->sm_name);
 		D_GOTO(err_lmod, rc = -DER_INVAL);
 	}
 
@@ -160,8 +157,7 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 		rc = daos_rpc_register(smod->sm_proto_fmt[i], smod->sm_cli_count[i],
 				       smod->sm_handlers[i], smod->sm_mod_id);
 		if (rc) {
-			D_ERROR("failed to register RPC for %s: "DF_RC"\n",
-				smod->sm_name, DP_RC(rc));
+			DL_ERROR(rc, "failed to register RPC for %s", smod->sm_name);
 			D_GOTO(err_mod_init, rc);
 		}
 	}
@@ -169,8 +165,7 @@ dss_module_init_one(struct loaded_mod *lmod, uint64_t *mod_facs)
 	/* register dRPC handlers */
 	rc = drpc_hdlr_register_all(smod->sm_drpc_handlers);
 	if (rc) {
-		D_ERROR("failed to register dRPC for %s: "DF_RC"\n",
-			smod->sm_name, DP_RC(rc));
+		DL_ERROR(rc, "failed to register dRPC for %s", smod->sm_name);
 		D_GOTO(err_rpc, rc);
 	}
 
@@ -208,14 +203,14 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	for (i = 0; i < smod->sm_proto_count; i++) {
 		rc = daos_rpc_unregister(smod->sm_proto_fmt[i]);
 		if (rc) {
-			D_ERROR("failed to unregister RPC "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed to unregister RPC");
 			return rc;
 		}
 	}
 
 	rc = drpc_hdlr_unregister_all(smod->sm_drpc_handlers);
 	if (rc != 0) {
-		D_ERROR("Failed to unregister dRPC "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to unregister dRPC");
 	}
 
 	dss_unregister_key(smod->sm_key);
@@ -224,7 +219,7 @@ dss_module_unload_internal(struct loaded_mod *lmod)
 	/* finalize the module */
 	rc = smod->sm_fini();
 	if (rc) {
-		D_ERROR("module finalization failed for: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "module finalization failed for");
 		return rc;
 	}
 
@@ -305,8 +300,7 @@ dss_module_setup_all(void)
 			continue;
 		rc = m->sm_setup();
 		if (rc != 0) {
-			D_ERROR("failed to set up module %s: %d\n", m->sm_name,
-				rc);
+			D_ERROR("failed to set up module %s: %d", m->sm_name, rc);
 			break;
 		}
 	}
@@ -320,28 +314,27 @@ dss_module_cleanup_all(void)
 	struct loaded_mod      *mod;
 	int			rc = 0;
 
-	D_INFO("Cleaning up all loaded modules\n");
+	D_INFO("Cleaning up all loaded modules");
 	D_MUTEX_LOCK(&loaded_mod_list_lock);
-	D_INFO("Iterating through loaded modules list\n");
+	D_INFO("Iterating through loaded modules list");
 	d_list_for_each_entry_reverse(mod, &loaded_mod_list, lm_lk) {
 		struct dss_module *m = mod->lm_dss_mod;
 
 		if (m->sm_cleanup == NULL) {
-			D_INFO("Module %s: no sm_cleanup func\n", m->sm_name);
+			D_INFO("Module %s: no sm_cleanup func", m->sm_name);
 			continue;
 		}
-		D_INFO("Module %s: invoke sm_cleanup func\n", m->sm_name);
+		D_INFO("Module %s: invoke sm_cleanup func", m->sm_name);
 		rc = m->sm_cleanup();
 		if (rc != 0) {
-			D_ERROR("failed to clean up module %s: "DF_RC"\n",
-				m->sm_name, DP_RC(rc));
+			DL_ERROR(rc, "failed to clean up module %s", m->sm_name);
 			/** continue clean-ups regardless ... */
 		}
-		D_INFO("Module %s: cleaned up\n", m->sm_name);
+		D_INFO("Module %s: cleaned up", m->sm_name);
 	}
-	D_INFO("Done iterating through loaded modules list\n");
+	D_INFO("Done iterating through loaded modules list");
 	D_MUTEX_UNLOCK(&loaded_mod_list_lock);
-	D_INFO("Done cleaning up all loaded modules\n");
+	D_INFO("Done cleaning up all loaded modules");
 	return rc;
 }
 
@@ -399,8 +392,8 @@ dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 		metrics[mod->lm_dss_mod->sm_mod_id] = met->dmm_init(path,
 								    tgt_id);
 		if (metrics[mod->lm_dss_mod->sm_mod_id] == NULL) {
-			D_ERROR("failed to allocate per-pool metrics for module"
-				" %s\n", mod->lm_dss_mod->sm_name);
+			D_ERROR("failed to allocate per-pool metrics for module %s",
+				mod->lm_dss_mod->sm_name);
 			dss_module_fini_metrics(tag, metrics);
 			return -DER_NOMEM;
 		}

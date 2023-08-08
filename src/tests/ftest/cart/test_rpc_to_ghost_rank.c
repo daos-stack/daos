@@ -110,7 +110,7 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 		e_reply->ret = -DER_MISC;
 		e_reply->room_no = -1;
 	} else {
-		D_DEBUG(DB_ALL, "No fault injected.\n");
+		D_DEBUG(DB_ALL, "No fault injected");
 	}
 
 	rc = crt_reply_send(rpc_req);
@@ -174,9 +174,8 @@ completion_cb_common(const struct crt_cb_info *cb_info)
 			return;
 		if (cb_info->cci_rc != -DER_UNREACH && cb_info->cci_rc != -DER_TIMEDOUT &&
 		    cb_info->cci_rc != -DER_HG) {
-			D_ERROR("rpc (opc: %#x) failed, rc: %d, "
-				"expecting rc: %d.\n",
-				rpc_req->cr_opc, cb_info->cci_rc, -DER_UNREACH);
+			D_ERROR("rpc (opc: %#x) failed, rc: %d, expecting rc: %d", rpc_req->cr_opc,
+				cb_info->cci_rc, -DER_UNREACH);
 			D_FREE(rpc_req_input->name);
 			D_ASSERT(0);
 			break;
@@ -345,7 +344,7 @@ check_in(crt_group_t *target_group, int rank)
 		buffer = NULL;
 	} else {
 		D_ALLOC(buffer, 256);
-		D_INFO("not injecting fault.\n");
+		D_INFO("not injecting fault");
 	}
 
 	D_ASSERTF(buffer != NULL, "Cannot allocate memory.\n");
@@ -354,11 +353,11 @@ check_in(crt_group_t *target_group, int rank)
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
 	rpc_req_input->bool_val = true;
-	D_DEBUG(DB_TEST, "client(rank %d) sending checkin rpc with tag "
-		"%d, name: %s, age: %d, days: %d, bool_val %d.\n",
-		test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name,
-		rpc_req_input->age, rpc_req_input->days,
-		rpc_req_input->bool_val);
+	D_DEBUG(DB_TEST,
+		"client(rank %d) sending checkin rpc with tag %d, name: %s, age: %d, days: %d, "
+		"bool_val %d",
+		test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name, rpc_req_input->age,
+		rpc_req_input->days, rpc_req_input->bool_val);
 
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, completion_cb_common, NULL);
@@ -412,7 +411,7 @@ test_fini()
 		rc = pthread_join(test_g.t_tid[ii], NULL);
 		if (rc != 0)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-		D_DEBUG(DB_TEST, "joined progress thread %d.\n", ii);
+		D_DEBUG(DB_TEST, "joined progress thread %d", ii);
 	}
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);

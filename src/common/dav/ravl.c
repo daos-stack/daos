@@ -49,7 +49,7 @@ ravl_new_sized(ravl_compare *compare, size_t data_size)
 
 	D_ALLOC_PTR_NZ(r);
 	if (r == NULL) {
-		D_CRIT("Malloc!\n");
+		D_CRIT("Malloc!");
 		return r;
 	}
 
@@ -167,7 +167,7 @@ ravl_new_node(struct ravl *ravl, ravl_constr constr, const void *arg)
 
 	D_ALLOC_NZ(n, (sizeof(*n) + ravl->data_size));
 	if (n == NULL) {
-		D_CRIT("Malloc!\n");
+		D_CRIT("Malloc!");
 		return n;
 	}
 

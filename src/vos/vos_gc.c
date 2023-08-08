@@ -88,8 +88,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	if (rc)
 		goto failed;
 
-	D_DEBUG(DB_TRACE, "drain btree for %s, creds=%d\n",
-		gc->gc_name, *credits);
+	D_DEBUG(DB_TRACE, "drain btree for %s, creds=%d", gc->gc_name, *credits);
 	rc = dbtree_drain(toh, credits, vos_hdl2cont(coh), empty);
 	dbtree_close(toh);
 	if (rc)
@@ -97,10 +96,10 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_ASSERT(*credits >= 0);
 	D_ASSERT(*empty || *credits == 0);
-	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
+	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain %s btree: " DF_RC "\n", gc->gc_name, DP_RC(rc));
+	DL_ERROR(rc, "Failed to drain %s btree", gc->gc_name);
 	return rc;
 }
 
@@ -125,7 +124,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	if (rc)
 		goto failed;
 
-	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d\n", gc->gc_name, *credits);
+	D_DEBUG(DB_TRACE, "drain %s evtree, creds=%d", gc->gc_name, *credits);
 	rc = evt_drain(toh, credits, empty);
 	D_ASSERT(evt_close(toh) == 0);
 	if (rc)
@@ -133,10 +132,10 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 
 	D_ASSERT(*credits >= 0);
 	D_ASSERT(*empty || *credits == 0);
-	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
+	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain evtree %s: " DF_RC "\n", gc->gc_name, DP_RC(rc));
+	DL_ERROR(rc, "Failed to drain evtree %s", gc->gc_name);
 	return rc;
 }
 
@@ -165,7 +164,7 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	}
 
 	if (rc) {
-		D_ERROR("%s drain failed: "DF_RC"\n", gc->gc_name, DP_RC(rc));
+		DL_ERROR(rc, "%s drain failed", gc->gc_name);
 		return rc;
 	}
 
@@ -570,7 +569,7 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 		bag->bag_item_nr--;
 	}
 
-	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
+	D_DEBUG(DB_TRACE, "GC released a %s", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
 		rc = gc->gc_free(gc, pool, addr);
@@ -616,8 +615,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	struct vos_gc_item	 item;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
-		gc_type2name(type), item_off);
+	D_DEBUG(DB_TRACE, "Add %s addr=" DF_X64, gc_type2name(type), item_off);
 
 	if (pool->vp_dying)
 		return 0; /* OK to ignore because the pool is being deleted */
@@ -626,8 +624,7 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	item.it_args = args;
 	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
 	if (rc) {
-		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to add item, pool=" DF_UUID, DP_UUID(pool->vp_id));
 		return rc;
 	}
 
@@ -680,8 +677,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
-		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
-			DP_UUID(pool->vp_id), DP_RC(rc));
+		DL_ERROR(rc, "Failed to start transacton for " DF_UUID, DP_UUID(pool->vp_id));
 		if (cont != NULL)
 			vos_cont_decref(cont);
 		return rc;
@@ -692,16 +688,15 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		struct vos_gc_item *item;
 		bool		    empty = false;
 
-		D_DEBUG(DB_TRACE, "GC=%s cont=%p credits=%d/%d\n", gc->gc_name,
-			cont, creds, *credits);
+		D_DEBUG(DB_TRACE, "GC=%s cont=%p credits=%d/%d", gc->gc_name, cont, creds,
+			*credits);
 
 		item = gc_get_item(gc, pool, cont);
 
 		if (item == NULL) {
 			if (cont != NULL) {
 				if (gc->gc_type == GC_OBJ) { /* top level GC */
-					D_DEBUG(DB_TRACE, "container %p objects"
-						" reclaimed\n", cont);
+					D_DEBUG(DB_TRACE, "container %p objects reclaimed", cont);
 					vos_cont_decref(cont);
 					cont = gc_get_container(pool);
 					/* take a ref on new cont */
@@ -711,11 +706,11 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 					continue;
 				}
 			} else if (gc->gc_type == GC_CONT) { /* top level GC */
-				D_DEBUG(DB_TRACE, "Nothing to reclaim\n");
+				D_DEBUG(DB_TRACE, "Nothing to reclaim");
 				*empty_ret = true;
 				break;
 			}
-			D_DEBUG(DB_TRACE, "GC=%s is empty\n", gc->gc_name);
+			D_DEBUG(DB_TRACE, "GC=%s is empty", gc->gc_name);
 			gc++; /* try upper level tree */
 			continue;
 		}
@@ -726,7 +721,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
 		if (rc < 0) {
-			D_ERROR("GC=%s error: " DF_RC "\n", gc->gc_name, DP_RC(rc));
+			DL_ERROR(rc, "GC=%s error", gc->gc_name);
 			break;
 		}
 
@@ -734,14 +729,13 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			/* item can be released and removed from bin */
 			rc = gc_free_item(gc, pool, cont, item);
 			if (rc) {
-				D_ERROR("GC=%s free item error: "DF_RC"\n", gc->gc_name, DP_RC(rc));
+				DL_ERROR(rc, "GC=%s free item error", gc->gc_name);
 				break;
 			}
 			creds--;
 		}
 
-		D_DEBUG(DB_TRACE, "GC=%s credits=%d empty=%d\n",
-			gc->gc_name, creds, empty);
+		D_DEBUG(DB_TRACE, "GC=%s credits=%d empty=%d", gc->gc_name, creds, empty);
 
 		if (rc == 1) {
 			/** We moved some container entries to the pool,
@@ -762,8 +756,7 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		 */
 		gc--;
 	}
-	D_DEBUG(DB_TRACE,
-		"pool="DF_UUID", creds origin=%d, current=%d, rc=%s\n",
+	D_DEBUG(DB_TRACE, "pool=" DF_UUID ", creds origin=%d, current=%d, rc=%s",
 		DP_UUID(pool->vp_id), *credits, creds, d_errstr(rc));
 
 	rc = umem_tx_end(&pool->vp_umm, rc);
@@ -798,8 +791,7 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 	int		size;
 	int		rc;
 
-	D_DEBUG(DB_IO, "Init garbage bins for pool="DF_UUID"\n",
-		DP_UUID(pd->pd_id));
+	D_DEBUG(DB_IO, "Init garbage bins for pool=" DF_UUID, DP_UUID(pd->pd_id));
 
 	for (i = 0; i < GC_MAX; i++) {
 		struct vos_gc_bin_df *bin = &pd->pd_gc_bins[i];
@@ -832,8 +824,7 @@ gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd)
 {
 	int	i;
 
-	D_DEBUG(DB_IO, "Init garbage bins for cont="DF_UUID"\n",
-		DP_UUID(cd->cd_id));
+	D_DEBUG(DB_IO, "Init garbage bins for cont=" DF_UUID, DP_UUID(cd->cd_id));
 
 	for (i = 0; i < GC_CONT; i++) {
 		struct vos_gc_bin_df *bin = &cd->cd_gc_bins[i];
@@ -877,8 +868,7 @@ gc_add_pool(struct vos_pool *pool)
 {
 	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
 
-	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
-		DP_UUID(pool->vp_id));
+	D_DEBUG(DB_TRACE, "Register pool=" DF_UUID " for GC", DP_UUID(pool->vp_id));
 
 	D_ASSERT(d_list_empty(&pool->vp_gc_link));
 
@@ -919,16 +909,10 @@ gc_log_pool(struct vos_pool *pool)
 	struct vos_gc_stat *stat = &pool->vp_gc_stat;
 
 	D_DEBUG(DB_TRACE,
-		"Pool="DF_UUID", GC reclaimed:\n"
-		"  containers = "DF_U64"\n"
-		"  objects    = "DF_U64"\n"
-		"  dkeys      = "DF_U64"\n"
-		"  akeys      = "DF_U64"\n"
-		"  singvs     = "DF_U64"\n"
-		"  recxs      = "DF_U64"\n",
-		DP_UUID(pool->vp_id),
-		stat->gs_conts, stat->gs_objs,
-		stat->gs_dkeys, stat->gs_akeys,
+		"Pool=" DF_UUID ", GC reclaimed:\n  containers = " DF_U64 "\n  objects    = " DF_U64
+		"\n  dkeys      = " DF_U64 "\n  akeys      = " DF_U64 "\n  singvs     = " DF_U64
+		"\n  recxs      = " DF_U64,
+		DP_UUID(pool->vp_id), stat->gs_conts, stat->gs_objs, stat->gs_dkeys, stat->gs_akeys,
 		stat->gs_singvs, stat->gs_recxs);
 }
 
@@ -949,7 +933,7 @@ vos_gc_run(int *credits)
 
 	creds = *credits;
 	if (creds < GC_CREDS_MIN || creds > GC_CREDS_MAX) {
-		D_ERROR("Invalid credits=%d\n", creds);
+		D_ERROR("Invalid credits=%d", creds);
 		return -DER_INVAL;
 	}
 
@@ -966,25 +950,22 @@ vos_gc_run(int *credits)
 		bool		 empty = false;
 
 		pool = d_list_entry(pools->next, struct vos_pool, vp_gc_link);
-		D_DEBUG(DB_TRACE, "GC pool="DF_UUID", creds=%d\n",
-			DP_UUID(pool->vp_id), creds);
+		D_DEBUG(DB_TRACE, "GC pool=" DF_UUID ", creds=%d", DP_UUID(pool->vp_id), creds);
 
 		rc = gc_reclaim_pool(pool, &creds, &empty);
 		if (rc) {
-			D_ERROR("GC pool="DF_UUID" error=%s\n",
-				DP_UUID(pool->vp_id), d_errstr(rc));
+			D_ERROR("GC pool=" DF_UUID " error=%s", DP_UUID(pool->vp_id), d_errstr(rc));
 			break;
 		}
 		checked++;
 		if (empty) {
-			D_DEBUG(DB_TRACE,
-				"Deregister pool="DF_UUID", empty=%d\n",
+			D_DEBUG(DB_TRACE, "Deregister pool=" DF_UUID ", empty=%d",
 				DP_UUID(pool->vp_id), empty);
 			gc_log_pool(pool);
 			gc_del_pool(pool);
 
 		} else {
-			D_DEBUG(DB_TRACE, "Re-add pool="DF_UUID", opened=%d\n",
+			D_DEBUG(DB_TRACE, "Re-add pool=" DF_UUID ", opened=%d",
 				DP_UUID(pool->vp_id), pool->vp_opened);
 
 			d_list_move_tail(&pool->vp_gc_link, pools);
@@ -993,8 +974,8 @@ vos_gc_run(int *credits)
 		if (creds == 0)
 			break; /* consumed all credits */
 	}
-	D_DEBUG(DB_TRACE, "checked %d pools, consumed %d/%d credits\n",
-		checked, *credits - creds, *credits);
+	D_DEBUG(DB_TRACE, "checked %d pools, consumed %d/%d credits", checked, *credits - creds,
+		*credits);
 
 	*credits = creds;
 	return rc;
@@ -1017,13 +998,12 @@ gc_wait(void)
 		total += creds;
 		rc = vos_gc_run(&creds);
 		if (rc) {
-			D_CRIT("GC failed %s\n", d_errstr(rc));
+			D_CRIT("GC failed %s", d_errstr(rc));
 			return;
 		}
 
 		if (creds != 0) {
-			D_DEBUG(DB_TRACE, "Consumed %d credits\n",
-				total - creds);
+			D_DEBUG(DB_TRACE, "Consumed %d credits", total - creds);
 			return;
 		}
 	}
@@ -1050,7 +1030,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	total = *credits;
 	rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
-		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
+		D_CRIT("gc_reclaim_pool failed: " DF_RC, DP_RC(rc));
 		return 0; /* caller can't do anything for it */
 	}
 	total -= *credits; /* subtract the remained credits */
@@ -1140,7 +1120,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		total += creds;
 		rc = vos_gc_pool_tight(poh, &creds);
 		if (rc) {
-			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "GC pool failed");
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */
@@ -1151,13 +1131,13 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 			break; /* consumed all credits */
 
 		if (vos_gc_yield(&param)) {
-			D_DEBUG(DB_TRACE, "GC pool run aborted\n");
+			D_DEBUG(DB_TRACE, "GC pool run aborted");
 			break;
 		}
 	}
 
 	if (total != 0) /* did something */
-		D_DEBUG(DB_TRACE, "GC consumed %d credits\n", total);
+		D_DEBUG(DB_TRACE, "GC consumed %d credits", total);
 
 	D_ASSERT(tls->vtl_gc_running > 0);
 	tls->vtl_gc_running--;
@@ -1195,7 +1175,7 @@ vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_fl
 
 	rc = vea_flush(pool->vp_vea_info, force, nr_flush, nr_flushed);
 	if (rc)
-		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "VEA flush failed");
 
 	return rc;
 }

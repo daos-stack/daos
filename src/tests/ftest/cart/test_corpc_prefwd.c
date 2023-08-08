@@ -32,7 +32,7 @@ corpc_pre_forward(crt_rpc_t *rpc, void *arg)
 	DBG_PRINT("Pre-forward called\n");
 
 	if (hdlr_called == true) {
-		D_ERROR("Handler called before pre-forward callback\n");
+		D_ERROR("Handler called before pre-forward callback");
 		assert(0);
 	}
 
@@ -61,7 +61,7 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 
 	DBG_PRINT("Handler called\n");
 	if (pre_forward_called == false) {
-		D_ERROR("Handler called before pre-forward callback\n");
+		D_ERROR("Handler called before pre-forward callback");
 		assert(0);
 	}
 
@@ -146,7 +146,7 @@ int main(void)
 	rc = pthread_create(&progress_thread, 0,
 			    crtu_progress_fn, &g_main_ctx);
 	if (rc != 0) {
-		D_ERROR("pthread_create() failed; rc=%d\n", rc);
+		D_ERROR("pthread_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -154,14 +154,13 @@ int main(void)
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
-			my_rank, rc);
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d", my_rank, rc);
 		assert(0);
 	}
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
-		D_ERROR("Failed to lookup group\n");
+		D_ERROR("Failed to lookup group");
 		assert(0);
 	}
 
@@ -169,21 +168,21 @@ int main(void)
 	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				       true);
 	if (rc != 0) {
-		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (my_rank == 0) {
 		rc = crt_group_ranks_get(grp, &rank_list);
 		if (rc != 0) {
-			D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+			D_ERROR("crt_group_ranks_get() failed; rc=%d", rc);
 			assert(0);
 		}
 
 		rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list,
 					 0, 1, 50, 100.0);
 		if (rc != 0) {
-			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+			D_ERROR("wait_for_ranks() failed; rc=%d", rc);
 			assert(0);
 		}
 
@@ -206,7 +205,7 @@ int main(void)
 
 	if (my_rank != 0) {
 		if (!post_reply_called) {
-			D_ERROR("post_reply callback was not called\n");
+			D_ERROR("post_reply callback was not called");
 			assert(0);
 		}
 	}

@@ -292,9 +292,8 @@ ring_buf_create(struct pl_ring_map *rimap, struct ring_buf **buf_pp)
 			rdom->rd_targets[j].rt_comp =
 					&doms[i].do_targets[j].ta_comp;
 
-		D_DEBUG(DB_PL, "Found %d targets for %s[%d]\n",
-			rdom->rd_target_nr, pool_domain_name(&doms[i]),
-			doms[i].do_comp.co_id);
+		D_DEBUG(DB_PL, "Found %d targets for %s[%d]", rdom->rd_target_nr,
+			pool_domain_name(&doms[i]), doms[i].do_comp.co_id);
 
 		buf->rb_target_nr += rdom->rd_target_nr;
 		rdom++;
@@ -339,9 +338,8 @@ ring_domain_shuffle(struct ring_domain *rdom, unsigned int seed)
 	int		    nr;
 	int		    i;
 
-	D_DEBUG(DB_PL, "Sort %d targets of %s[%d] by version\n",
-		rdom->rd_target_nr, pool_comp_name(rdom->rd_comp),
-		rdom->rd_comp->co_id);
+	D_DEBUG(DB_PL, "Sort %d targets of %s[%d] by version", rdom->rd_target_nr,
+		pool_comp_name(rdom->rd_comp), rdom->rd_comp->co_id);
 
 	sorter.rs_targets = rtargets;
 	daos_array_sort(&sorter, rdom->rd_target_nr, false,
@@ -388,7 +386,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		return -DER_NOMEM;
 
 	sorter.rs_domains = buf->rb_domains;
-	D_DEBUG(DB_PL, "Sort domains by version\n");
+	D_DEBUG(DB_PL, "Sort domains by version");
 	daos_array_sort(&sorter, buf->rb_domain_nr, false,
 			&ring_domain_ver_sops);
 
@@ -438,7 +436,7 @@ ring_buf_shuffle(struct pl_ring_map *rimap, unsigned int seed,
 		}
 	}
 
-	D_DEBUG(DB_PL, "Copy scratch buffer\n");
+	D_DEBUG(DB_PL, "Copy scratch buffer");
 	memcpy(buf->rb_domains, scratch, buf->rb_domain_nr * sizeof(*scratch));
 	D_FREE(scratch);
 	return 0;
@@ -458,8 +456,7 @@ ring_create(struct pl_ring_map *rimap, unsigned int index,
 	int		    j;
 	int		    rc;
 
-	D_DEBUG(DB_PL, "Create ring %d [%d targets] for rimap\n",
-		index, rimap->rmp_target_nr);
+	D_DEBUG(DB_PL, "Create ring %d [%d targets] for rimap", index, rimap->rmp_target_nr);
 
 	rc = ring_buf_shuffle(rimap, index + 1, buf);
 	if (rc < 0)
@@ -555,8 +552,7 @@ ring_map_build(struct pl_ring_map *rimap, struct pl_map_init_attr *mia)
 			goto out;
 	}
 
-	D_DEBUG(DB_PL, "Built %d rings for placement map\n",
-		rimap->rmp_ring_nr);
+	D_DEBUG(DB_PL, "Built %d rings for placement map", rimap->rmp_ring_nr);
  out:
 	ring_buf_destroy(buf);
 	return rc;
@@ -586,7 +582,7 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 	int		i;
 	unsigned int	tg_per_dom;
 
-	D_DEBUG(DB_PL, "Build consistent hash for ring map\n");
+	D_DEBUG(DB_PL, "Build consistent hash for ring map");
 	D_ALLOC_ARRAY(rimap->rmp_target_hashes, rimap->rmp_target_nr);
 	if (rimap->rmp_target_hashes == NULL)
 		return -DER_NOMEM;
@@ -603,8 +599,8 @@ ring_map_hash_build(struct pl_ring_map *rimap)
 
 	range = 1ULL << rimap->rmp_target_hbits;
 
-	D_DEBUG(DB_PL, "domanis %d, targets %d, hash range is 0-0x"DF_X64"\n",
-		rimap->rmp_domain_nr, rimap->rmp_target_nr, range);
+	D_DEBUG(DB_PL, "domanis %d, targets %d, hash range is 0-0x" DF_X64, rimap->rmp_domain_nr,
+		rimap->rmp_target_nr, range);
 
 	/* create consistent hash for targets */
 	stride = (double)range / rimap->rmp_target_nr;
@@ -639,9 +635,8 @@ ring_map_create(struct pool_map *poolmap, struct pl_map_init_attr *mia,
 	int		    rc;
 
 	D_ASSERT(mia->ia_ring.ring_nr > 0);
-	D_DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d\n",
-		pool_comp_type2str(mia->ia_ring.domain),
-		mia->ia_ring.ring_nr);
+	D_DEBUG(DB_PL, "Create ring map: domain %s, ring_nr: %d",
+		pool_comp_type2str(mia->ia_ring.domain), mia->ia_ring.ring_nr);
 
 	D_ALLOC_PTR(rimap);
 	if (rimap == NULL)
@@ -794,9 +789,8 @@ ring_obj_spec_place_begin(struct pl_ring_map *rimap, daos_obj_id_t oid,
 	if (i == rimap->rmp_target_nr)
 		return -DER_INVAL;
 
-
-	D_DEBUG(DB_PL, "create obj with rank/tgt %d/%d pl pos %d\n",
-		daos_oclass_sr_get_rank(oid), daos_oclass_st_get_tgt(oid), i);
+	D_DEBUG(DB_PL, "create obj with rank/tgt %d/%d pl pos %d", daos_oclass_sr_get_rank(oid),
+		daos_oclass_st_get_tgt(oid), i);
 	*begin = i;
 
 	return 0;
@@ -818,8 +812,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	oc_attr = daos_oclass_attr_find(oid, &nr_grps);
 
 	if (oc_attr == NULL) {
-		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
-			DP_OID(oid));
+		D_ERROR("Can not find obj class, invalid oid=" DF_OID, DP_OID(oid));
 		return -DER_INVAL;
 	}
 
@@ -829,8 +822,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 
 		rc = ring_obj_spec_place_begin(rimap, oid, &rop->rop_begin);
 		if (rc) {
-			D_ERROR("special oid "DF_OID" failed: rc %d\n",
-				DP_OID(oid), rc);
+			D_ERROR("special oid " DF_OID " failed: rc %d", DP_OID(oid), rc);
 			return rc;
 		}
 	} else {
@@ -866,10 +858,9 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	D_ASSERT(rop->rop_grp_nr > 0);
 	D_ASSERT(rop->rop_grp_size > 0);
 
-	D_DEBUG(DB_PL,
-		"obj="DF_OID"/%u begin=%u dist=%u grp_size=%u grp_nr=%d\n",
-		DP_OID(oid), rop->rop_shard_id, rop->rop_begin, rop->rop_dist,
-		rop->rop_grp_size, rop->rop_grp_nr);
+	D_DEBUG(DB_PL, "obj=" DF_OID "/%u begin=%u dist=%u grp_size=%u grp_nr=%d", DP_OID(oid),
+		rop->rop_shard_id, rop->rop_begin, rop->rop_dist, rop->rop_grp_size,
+		rop->rop_grp_nr);
 
 	return 0;
 }
@@ -938,9 +929,8 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 	if (DEBUG_DUMP_RING_MAP == 0)
 		return;
 
-	D_DEBUG(DB_PL, "ring map: ver %d, nrims %d, domain_nr %d, "
-		"tgt_nr %d\n", pl_map_version(&rimap->rmp_map),
-		rimap->rmp_ring_nr, rimap->rmp_domain_nr,
+	D_DEBUG(DB_PL, "ring map: ver %d, nrims %d, domain_nr %d, tgt_nr %d",
+		pl_map_version(&rimap->rmp_map), rimap->rmp_ring_nr, rimap->rmp_domain_nr,
 		rimap->rmp_target_nr);
 
 	if (!dump_rings)
@@ -952,7 +942,7 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 	for (index = 0; index < rimap->rmp_ring_nr; index++) {
 		ring = &rimap->rmp_rings[index];
 
-		D_DEBUG(DB_PL, "ring[%d]\n", index);
+		D_DEBUG(DB_PL, "ring[%d]", index);
 		for (i = period = 0; i < rimap->rmp_target_nr; i++) {
 			int pos = ring->ri_targets[i].pt_pos;
 
@@ -964,7 +954,7 @@ ring_map_dump(struct pl_map *map, bool dump_rings)
 			period++;
 			if (period == rimap->rmp_domain_nr) {
 				period = 0;
-				D_DEBUG(DB_PL, "\n");
+				D_DEBUG(DB_PL, );
 			}
 		}
 	}
@@ -1010,12 +1000,12 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		l_shard = &layout->ol_shards[f_shard->fs_shard_idx];
 
 		spare_avail = ring_remap_next_spare(rimap, rop, &spare_idx);
-		D_DEBUG(DB_PL, "obj:"DF_OID", select spare:%d grp_size:%u, "
-			"grp_nr:%u, begin:%u, spare:%u spare id %d\n",
-			DP_OID(md->omd_id), spare_avail, rop->rop_grp_size,
-			rop->rop_grp_nr, rop->rop_begin, spare_idx,
-			spare_avail ?
-			tgts[plts[spare_idx].pt_pos].ta_comp.co_id : -1);
+		D_DEBUG(DB_PL,
+			"obj:" DF_OID
+			", select spare:%d grp_size:%u, grp_nr:%u, begin:%u, spare:%u spare id %d",
+			DP_OID(md->omd_id), spare_avail, rop->rop_grp_size, rop->rop_grp_nr,
+			rop->rop_begin, spare_idx,
+			spare_avail ? tgts[plts[spare_idx].pt_pos].ta_comp.co_id : -1);
 
 		if (!spare_avail)
 			ring_map_dump(&rimap->rmp_map, true);
@@ -1096,7 +1086,7 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 		obj_layout_dump(md->omd_id, layout);
 out:
 	if (rc)
-		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ring_obj_layout_fill failed");
 	return rc;
 }
 
@@ -1114,14 +1104,13 @@ ring_obj_place(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *m
 
 	rc = ring_obj_placement_get(rimap, md, shard_md, &rop);
 	if (rc) {
-		D_ERROR("ring_obj_placement_get failed, rc "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "ring_obj_placement_get failed");
 		return rc;
 	}
 
 	rc = pl_obj_layout_alloc(rop.rop_grp_size, rop.rop_grp_nr, &layout);
 	if (rc) {
-		D_ERROR("pl_obj_layout_alloc failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "pl_obj_layout_alloc failed");
 		return rc;
 	}
 
@@ -1129,7 +1118,7 @@ ring_obj_place(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_md *m
 	rc = ring_obj_layout_fill(map, md, &rop, layout, &remap_list,
 				  for_reint);
 	if (rc) {
-		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ring_obj_layout_fill failed");
 		pl_obj_layout_free(layout);
 		remap_list_free_all(&remap_list);
 		return rc;
@@ -1159,8 +1148,8 @@ ring_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver, struct daos_ob
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < rebuild_ver) {
-		D_ERROR("pl_map version(%u) < rebuild version(%u)\n",
-			pl_map_version(map), rebuild_ver);
+		D_ERROR("pl_map version(%u) < rebuild version(%u)", pl_map_version(map),
+			rebuild_ver);
 		return -DER_INVAL;
 	}
 
@@ -1169,8 +1158,7 @@ ring_obj_find_rebuild(struct pl_map *map, uint32_t gl_layout_ver, struct daos_ob
 		return rc;
 
 	if (rop.rop_grp_size == 1) {
-		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
-			DP_OID(md->omd_id));
+		D_DEBUG(DB_PL, "Not replicated object " DF_OID, DP_OID(md->omd_id));
 		return 0;
 	}
 
@@ -1227,8 +1215,8 @@ ring_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 
 	/* Caller should guarantee the pl_map is up-to-date */
 	if (pl_map_version(map) < reint_ver) {
-		D_ERROR("pl_map version(%u) < reintegration version(%u)\n",
-			pl_map_version(map), reint_ver);
+		D_ERROR("pl_map version(%u) < reintegration version(%u)", pl_map_version(map),
+			reint_ver);
 		return -DER_INVAL;
 	}
 
@@ -1237,8 +1225,7 @@ ring_obj_find_reint(struct pl_map *map, uint32_t gl_layout_ver, struct daos_obj_
 		return rc;
 
 	if (rop.rop_grp_size == 1) {
-		D_DEBUG(DB_PL, "Not replicated object "DF_OID"\n",
-			DP_OID(md->omd_id));
+		D_DEBUG(DB_PL, "Not replicated object " DF_OID, DP_OID(md->omd_id));
 		return 0;
 	}
 

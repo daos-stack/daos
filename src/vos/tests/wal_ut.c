@@ -16,11 +16,11 @@ ut_mc_fini(struct bio_ut_args *args)
 
 	rc = bio_mc_close(args->bua_mc);
 	if (rc)
-		D_ERROR("UT MC close failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "UT MC close failed");
 
 	rc = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, 0);
 	if (rc)
-		D_ERROR("UT MC destroy failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "UT MC destroy failed");
 }
 
 static int
@@ -31,16 +31,16 @@ ut_mc_init(struct bio_ut_args *args, uint64_t meta_sz, uint64_t wal_sz, uint64_t
 	uuid_generate(args->bua_pool_id);
 	rc = bio_mc_create(args->bua_xs_ctxt, args->bua_pool_id, meta_sz, wal_sz, data_sz, 0);
 	if (rc) {
-		D_ERROR("UT MC create failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "UT MC create failed");
 		return rc;
 	}
 
 	rc = bio_mc_open(args->bua_xs_ctxt, args->bua_pool_id, 0, &args->bua_mc);
 	if (rc) {
-		D_ERROR("UT MC open failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "UT MC open failed");
 		ret = bio_mc_destroy(args->bua_xs_ctxt, args->bua_pool_id, 0);
 		if (ret)
-			D_ERROR("UT MC destroy failed. "DF_RC"\n", DP_RC(ret));
+			DL_ERROR(ret, "UT MC destroy failed");
 	}
 
 	return rc;
@@ -898,7 +898,7 @@ wal_ut_setup(void **state)
 
 	rc = ut_init(&ut_args);
 	if (rc) {
-		D_ERROR("UT init failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "UT init failed");
 		return rc;
 	}
 

@@ -159,7 +159,7 @@ need_checkpoint(struct ds_pool_child *child, struct chkpt_ctx *ctx, uint64_t *st
 	sleep_time -= elapsed;
 do_sleep:
 	D_DEBUG(DB_IO,
-		"Checkpoint ULT to sleep for %d ms. Used blocks %d/%d, threshold=%d, mode=%s\n",
+		"Checkpoint ULT to sleep for %d ms. Used blocks %d/%d, threshold=%d, mode=%s",
 		sleep_time, ctx->cc_used_blocks, ctx->cc_total_blocks, ctx->cc_max_used_blocks,
 		pool->sp_checkpoint_mode == DAOS_CHECKPOINT_TIMED
 		    ? "timed"
@@ -190,7 +190,7 @@ chkpt_ult(void *arg)
 
 	rc = ABT_eventual_create(0, &ctx.cc_eventual);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create ABT eventual: %d\n", dss_abterr2der(rc));
+		D_ERROR("Failed to create ABT eventual: %d", dss_abterr2der(rc));
 		return;
 	}
 
@@ -208,13 +208,13 @@ chkpt_ult(void *arg)
 
 		rc = vos_pool_checkpoint(poh);
 		if (rc == -DER_SHUTDOWN) {
-			D_ERROR("tgt_id %d shutting down. Checkpointer should quit\n",
+			D_ERROR("tgt_id %d shutting down. Checkpointer should quit",
 				ctx.cc_dmi->dmi_tgt_id);
 			break;
 		}
 		if (rc != 0) {
-			D_ERROR("Issue with VOS checkpoint (tgt_id: %d): " DF_RC "\n",
-				ctx.cc_dmi->dmi_tgt_id, DP_RC(rc));
+			DL_ERROR(rc, "Issue with VOS checkpoint (tgt_id: %d)",
+				 ctx.cc_dmi->dmi_tgt_id);
 		}
 		start = 0;
 	}
@@ -241,8 +241,8 @@ ds_start_chkpt_ult(struct ds_pool_child *child)
 	sched_req_attr_init(&attr, SCHED_REQ_GC, &child->spc_uuid);
 	child->spc_chkpt_req = sched_create_ult(&attr, chkpt_ult, child, DSS_DEEP_STACK_SZ);
 	if (child->spc_chkpt_req == NULL) {
-		D_ERROR(DF_UUID "[%d]: Failed to create checkpoint ULT.\n",
-			DP_UUID(child->spc_uuid), dmi->dmi_tgt_id);
+		D_ERROR(DF_UUID "[%d]: Failed to create checkpoint ULT", DP_UUID(child->spc_uuid),
+			dmi->dmi_tgt_id);
 		return -DER_NOMEM;
 	}
 

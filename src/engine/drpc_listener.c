@@ -64,7 +64,7 @@ drpc_listener_run(void *arg)
 	D_ASSERT(arg != NULL);
 	ctx = (struct drpc_progress_context *)arg;
 
-	D_INFO("Starting dRPC listener\n");
+	D_INFO("Starting dRPC listener");
 	set_listener_running(true);
 	while (is_listener_running()) {
 		int rc;
@@ -72,14 +72,13 @@ drpc_listener_run(void *arg)
 		/* wait a second */
 		rc = drpc_progress(ctx, 1000);
 		if (rc != DER_SUCCESS && rc != -DER_TIMEDOUT) {
-			D_ERROR("dRPC listener progress error: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "dRPC listener progress error");
 		}
 
 		ABT_thread_yield();
 	}
 
-	D_INFO("Closing down dRPC listener\n");
+	D_INFO("Closing down dRPC listener");
 	drpc_progress_context_close(ctx);
 }
 
@@ -97,14 +96,13 @@ setup_listener_ctx(struct drpc_progress_context **new_ctx)
 	unlink(sockpath);
 	listener = drpc_listen(sockpath, drpc_hdlr_process_msg);
 	if (listener == NULL) {
-		D_ERROR("Failed to create listener socket at '%s'\n",
-			sockpath);
+		D_ERROR("Failed to create listener socket at '%s'", sockpath);
 		return -DER_MISC;
 	}
 
 	*new_ctx = drpc_progress_context_create(listener);
 	if (*new_ctx == NULL) {
-		D_ERROR("Failed to create drpc_progress_context\n");
+		D_ERROR("Failed to create drpc_progress_context");
 		drpc_close(listener);
 		return -DER_NOMEM;
 	}
@@ -123,7 +121,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 
 	rc = setup_listener_ctx(&ctx);
 	if (rc != 0) {
-		D_ERROR("Listener setup failed, aborting ULT creation\n");
+		D_ERROR("Listener setup failed, aborting ULT creation");
 		return rc;
 	}
 
@@ -131,8 +129,7 @@ drpc_listener_start_ult(ABT_thread *thread)
 	rc = dss_ult_create(drpc_listener_run, (void *)ctx, DSS_XS_DRPC,
 			    0, 0, thread);
 	if (rc != 0) {
-		D_ERROR("Failed to create drpc listener ULT: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create drpc listener ULT");
 		drpc_progress_context_close(ctx);
 		return rc;
 	}
@@ -162,7 +159,7 @@ drpc_listener_init(void)
 	memset(&status, 0, sizeof(status));
 	rc = ABT_mutex_create(&status.running_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("Failed to create mutex\n");
+		D_ERROR("Failed to create mutex");
 		return dss_abterr2der(rc);
 	}
 
@@ -181,7 +178,7 @@ drpc_listener_stop(void)
 
 	rc = ABT_thread_join(status.thread);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT error re-joining thread: %d\n", rc);
+		D_ERROR("ABT error re-joining thread: %d", rc);
 		return dss_abterr2der(rc);
 	}
 
@@ -198,13 +195,13 @@ drpc_listener_fini(void)
 
 	tmp_rc = ABT_thread_free(&status.thread);
 	if (tmp_rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing thread: %d\n", tmp_rc);
+		D_ERROR("ABT error freeing thread: %d", tmp_rc);
 		rc = dss_abterr2der(tmp_rc);
 	}
 
 	tmp_rc = ABT_mutex_free(&status.running_mutex);
 	if (tmp_rc != ABT_SUCCESS) {
-		D_ERROR("ABT error freeing mutex: %d\n", tmp_rc);
+		D_ERROR("ABT error freeing mutex: %d", tmp_rc);
 		rc = dss_abterr2der(tmp_rc);
 	}
 

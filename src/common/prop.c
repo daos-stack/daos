@@ -29,8 +29,8 @@ daos_prop_alloc(uint32_t entries_nr)
 	daos_prop_t	*prop;
 
 	if (entries_nr > DAOS_PROP_ENTRIES_MAX_NR) {
-		D_ERROR("cannot create daos_prop_t with %d entries(> %d).\n",
-			entries_nr, DAOS_PROP_ENTRIES_MAX_NR);
+		D_ERROR("cannot create daos_prop_t with %d entries(> %d)", entries_nr,
+			DAOS_PROP_ENTRIES_MAX_NR);
 		return NULL;
 	}
 
@@ -140,7 +140,7 @@ daos_prop_merge2(daos_prop_t *old_prop, daos_prop_t *new_prop, daos_prop_t **out
 	struct daos_prop_entry	*entry;
 
 	if (old_prop == NULL || new_prop == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		return -DER_INVAL;
 	}
 
@@ -209,14 +209,13 @@ str_valid(const char *str, const char *prop_name, size_t max_len)
 	size_t len;
 
 	if (unlikely(str == NULL)) {
-		D_ERROR("invalid NULL %s\n", prop_name);
+		D_ERROR("invalid NULL %s", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
-			max_len);
+		D_ERROR("invalid %s len=%lu, max=%lu", prop_name, len, max_len);
 		return false;
 	}
 
@@ -261,21 +260,20 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 	int			i;
 
 	if (prop == NULL) {
-		D_ERROR("NULL properties\n");
+		D_ERROR("NULL properties");
 		return false;
 	}
 	if (prop->dpp_nr > DAOS_PROP_ENTRIES_MAX_NR) {
-		D_ERROR("invalid ddp_nr %d (> %d).\n",
-			prop->dpp_nr, DAOS_PROP_ENTRIES_MAX_NR);
+		D_ERROR("invalid ddp_nr %d (> %d)", prop->dpp_nr, DAOS_PROP_ENTRIES_MAX_NR);
 		return false;
 	}
 	if (prop->dpp_nr == 0) {
 		if (prop->dpp_entries != NULL)
-			D_ERROR("invalid properties, NON-NULL dpp_entries with zero dpp_nr.\n");
+			D_ERROR("invalid properties, NON-NULL dpp_entries with zero dpp_nr");
 		return prop->dpp_entries == NULL;
 	}
 	if (prop->dpp_entries == NULL) {
-		D_ERROR("invalid properties, NULL dpp_entries with non-zero dpp_nr.\n");
+		D_ERROR("invalid properties, NULL dpp_entries with non-zero dpp_nr");
 		return false;
 	}
 	for (i = 0; i < prop->dpp_nr; i++) {
@@ -286,14 +284,13 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		if (pool) {
 			if (type <= DAOS_PROP_PO_MIN ||
 			    type >= DAOS_PROP_PO_MAX) {
-				D_ERROR("invalid type %d for pool.\n", type);
+				D_ERROR("invalid type %d for pool", type);
 				return false;
 			}
 		} else {
 			if (type <= DAOS_PROP_CO_MIN ||
 			    type >= DAOS_PROP_CO_MAX) {
-				D_ERROR("invalid type %d for container.\n",
-					type);
+				D_ERROR("invalid type %d for container", type);
 				return false;
 			}
 		}
@@ -305,7 +302,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
 			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
-				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
+D_ERROR("invalid label \"%s\, prop->dpp_entries[i].dpe_str);
 				return false;
 			}
 			break;
@@ -327,14 +324,14 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_SPACE_RB:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > 100) {
-				D_ERROR("invalid space_rb "DF_U64".\n", val);
+				D_ERROR("invalid space_rb " DF_U64, val);
 				return false;
 			}
 			break;
 		case DAOS_PROP_PO_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
 			if (!daos_rf_is_valid(val)) {
-				D_ERROR("invalid rf "DF_U64"\n", val);
+				D_ERROR("invalid rf " DF_U64, val);
 				return false;
 			}
 			break;
@@ -343,7 +340,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != PO_COMP_TP_ROOT &&
 			    val != PO_COMP_TP_GRP) {
-				D_ERROR("invalid perf domain "DF_U64".\n", val);
+				D_ERROR("invalid perf domain " DF_U64, val);
 				return false;
 			}
 			break;
@@ -357,8 +354,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_UPGRADE_STATUS:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > DAOS_UPGRADE_STATUS_COMPLETED) {
-				D_ERROR("invalid pool upgrade status "DF_U64".\n",
-					val);
+				D_ERROR("invalid pool upgrade status " DF_U64, val);
 				return false;
 			}
 			break;
@@ -369,7 +365,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_RECLAIM_SNAPSHOT &&
 			    val != DAOS_RECLAIM_BATCH &&
 			    val != DAOS_RECLAIM_TIME) {
-				D_ERROR("invalid reclaim "DF_U64".\n", val);
+				D_ERROR("invalid reclaim " DF_U64, val);
 				return false;
 			}
 			break;
@@ -390,7 +386,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_SCRUB_MODE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= DAOS_SCRUB_MODE_INVALID) {
-				D_ERROR("invalid scrub mode: "DF_U64"\n", val);
+				D_ERROR("invalid scrub mode: " DF_U64, val);
 				return false;
 			}
 			break;
@@ -403,7 +399,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_SVC_REDUN_FAC:
 			val = prop->dpp_entries[i].dpe_val;
 			if (!daos_svc_rf_is_valid(val)) {
-				D_ERROR("invalid svc_rf "DF_U64"\n", val);
+				D_ERROR("invalid svc_rf " DF_U64, val);
 				return false;
 			}
 			break;
@@ -411,7 +407,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
-				D_ERROR("invalid layout type "DF_U64".\n", val);
+				D_ERROR("invalid layout type " DF_U64, val);
 				return false;
 			}
 			break;
@@ -420,8 +416,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_CSUM:
 			val = prop->dpp_entries[i].dpe_val;
 			if (!daos_cont_csum_prop_is_valid(val)) {
-				D_ERROR("invalid checksum type "DF_U64".\n",
-					val);
+				D_ERROR("invalid checksum type " DF_U64, val);
 				return false;
 			}
 			break;
@@ -429,7 +424,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			/** Chunk size is encoded on 32 bits */
 			val = prop->dpp_entries[i].dpe_val;
 			if (val >= (1ULL << 32)) {
-				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB\n", val);
+				D_ERROR("invalid chunk size " DF_U64 ". Should be < 2GiB", val);
 				return false;
 			}
 			break;
@@ -440,7 +435,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val != DAOS_PROP_CO_CSUM_SV_OFF &&
 			    val != DAOS_PROP_CO_CSUM_SV_ON) {
-				D_ERROR("invalid csum server verify property " DF_U64 ".\n", val);
+				D_ERROR("invalid csum server verify property " DF_U64, val);
 				return false;
 			}
 			break;
@@ -449,15 +444,15 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			if (val != DAOS_PROP_CO_DEDUP_OFF &&
 			    val != DAOS_PROP_CO_DEDUP_MEMCMP &&
 			    val != DAOS_PROP_CO_DEDUP_HASH) {
-				D_ERROR("invalid deduplication parameter " DF_U64 ".\n", val);
+				D_ERROR("invalid deduplication parameter " DF_U64, val);
 				return false;
 			}
 			break;
 		case DAOS_PROP_CO_DEDUP_THRESHOLD:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val < 4096 || val >= (1ULL << 32)) {
-				D_ERROR("invalid deduplication threshold "DF_U64
-					". Should be >= 4KiB and < 4GiB\n",
+				D_ERROR("invalid deduplication threshold " DF_U64
+					". Should be >= 4KiB and < 4GiB",
 					val);
 				return false;
 			}
@@ -471,8 +466,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_REDUN_RF2 &&
 			    val != DAOS_PROP_CO_REDUN_RF3 &&
 			    val != DAOS_PROP_CO_REDUN_RF4) {
-				D_ERROR("invalid redundancy factor "DF_U64".\n",
-					val);
+				D_ERROR("invalid redundancy factor " DF_U64, val);
 				return false;
 			}
 			break;
@@ -480,10 +474,9 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			val = prop->dpp_entries[i].dpe_val;
 			if (val < DAOS_PROP_CO_REDUN_MIN ||
 			    val > DAOS_PROP_CO_REDUN_MAX) {
-				D_ERROR("invalid redundancy level "DF_U64
-					", must be within [%d - %d]\n",
-					val, DAOS_PROP_CO_REDUN_RANK,
-					DAOS_PROP_CO_REDUN_MAX);
+				D_ERROR("invalid redundancy level " DF_U64
+					", must be within [%d - %d]",
+					val, DAOS_PROP_CO_REDUN_RANK, DAOS_PROP_CO_REDUN_MAX);
 				return false;
 			}
 			break;
@@ -496,7 +489,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE2 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE3 &&
 			    val != DAOS_PROP_CO_COMPRESS_DEFLATE4) {
-				D_ERROR("invalid compression parameter " DF_U64 ".\n", val);
+				D_ERROR("invalid compression parameter " DF_U64, val);
 				return false;
 			}
 			break;
@@ -510,7 +503,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			    val != DAOS_PROP_CO_ENCRYPT_AES_CBC256 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM128 &&
 			    val != DAOS_PROP_CO_ENCRYPT_AES_GCM256) {
-				D_ERROR("invalid encryption parameter " DF_U64 ".\n", val);
+				D_ERROR("invalid encryption parameter " DF_U64, val);
 				return false;
 			}
 			break;
@@ -519,15 +512,14 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			daos_prop_val_2_co_status(val, &co_status);
 			if (co_status.dcs_status != DAOS_PROP_CO_HEALTHY &&
 			    co_status.dcs_status != DAOS_PROP_CO_UNCLEAN) {
-				D_ERROR("invalid container status %d\n",
-					co_status.dcs_status);
+				D_ERROR("invalid container status %d", co_status.dcs_status);
 				return false;
 			}
 			break;
 		case DAOS_PROP_PO_CHECKPOINT_MODE:
 			val = prop->dpp_entries[i].dpe_val;
 			if (val > DAOS_CHECKPOINT_LAZY) {
-				D_ERROR("invalid checkpoint mode: " DF_U64 "\n", val);
+				D_ERROR("invalid checkpoint mode: " DF_U64, val);
 				return false;
 			}
 			break;
@@ -542,7 +534,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_CO_OBJ_VERSION:
 			break;
 		default:
-			D_ERROR("invalid dpe_type %d.\n", type);
+			D_ERROR("invalid dpe_type %d", type);
 			return false;
 		}
 	}
@@ -600,7 +592,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 
 		rc = d_rank_list_dup(&dst_list, svc_list);
 		if (rc) {
-			D_ERROR("failed dup rank list: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed dup rank list");
 			return rc;
 		}
 		entry_dup->dpe_val_ptr = dst_list;
@@ -608,7 +600,7 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
 	case DAOS_PROP_CO_ROOTS:
 		rc = daos_prop_entry_dup_co_roots(entry_dup, entry);
 		if (rc) {
-			D_ERROR("failed to dup roots: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed to dup roots");
 			return rc;
 		}
 		break;
@@ -705,7 +697,7 @@ daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_siz
 	if (entry == NULL)
 		return -DER_INVAL;
 	if (!daos_prop_has_str(entry)) {
-		D_ERROR("Entry type does not expect a string value\n");
+		D_ERROR("Entry type does not expect a string value");
 		return -DER_INVAL;
 	}
 	D_FREE(entry->dpe_str);
@@ -737,7 +729,7 @@ daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_siz
 	if (entry == NULL)
 		return -DER_INVAL;
 	if (!daos_prop_has_ptr(entry)) {
-		D_ERROR("Entry type does not expect a ptr value\n");
+		D_ERROR("Entry type does not expect a ptr value");
 		return -DER_INVAL;
 	}
 	D_FREE(entry->dpe_val_ptr);
@@ -799,12 +791,12 @@ daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply)
 	int			 rc = 0;
 
 	if (prop_req == NULL) {
-		D_ERROR("no prop in req.\n");
+		D_ERROR("no prop in req");
 		return -DER_INVAL;
 	}
 	if (prop_reply == NULL || prop_reply->dpp_nr == 0 ||
 	    prop_reply->dpp_entries == NULL) {
-		D_ERROR("no prop or empty prop in reply.\n");
+		D_ERROR("no prop or empty prop in reply");
 		return -DER_PROTO;
 	}
 	if (prop_req->dpp_nr == 0) {
@@ -975,7 +967,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 		return 0;
 
 	if (entry1->dpe_val_ptr == NULL || entry2->dpe_val_ptr == NULL) {
-		D_ERROR("ACL mismatch, NULL ptr\n");
+		D_ERROR("ACL mismatch, NULL ptr");
 		return -DER_MISMATCH;
 	}
 
@@ -986,12 +978,12 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	acl2_size = daos_acl_get_size(acl2);
 
 	if (acl1_size != acl2_size) {
-		D_ERROR("ACL len mismatch, %lu != %lu\n", acl1_size, acl2_size);
+		D_ERROR("ACL len mismatch, %lu != %lu", acl1_size, acl2_size);
 		return -DER_MISMATCH;
 	}
 
 	if (memcmp(acl1, acl2, acl1_size) != 0) {
-		D_ERROR("ACL content mismatch\n");
+		D_ERROR("ACL content mismatch");
 		return -DER_MISMATCH;
 	}
 
@@ -1078,7 +1070,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		else if (!strcmp(val, "4"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF4;
 		else {
-			D_ERROR("presently supported redundancy factors (rf) are [0-4]\n");
+			D_ERROR("presently supported redundancy factors (rf) are [0-4]");
 			rc = -DER_INVAL;
 		}
 	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
@@ -1104,10 +1096,10 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OBJ_VERSION) == 0) {
-		D_ERROR("Property %s is read only\n", name);
+		D_ERROR("Property %s is read only", name);
 		rc = -DER_INVAL;
 	} else {
-		D_ERROR("Property %s is invalid\n", name);
+		D_ERROR("Property %s is invalid", name);
 		rc = -DER_INVAL;
 	}
 
@@ -1140,7 +1132,7 @@ daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **_prop)
 	D_FREE(local);
 
 	if (n == 0) {
-		D_ERROR("Invalid property format %s\n", str);
+		D_ERROR("Invalid property format %s", str);
 		return -DER_INVAL;
 	}
 

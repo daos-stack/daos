@@ -16,10 +16,8 @@ dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_o
 	struct daos_csummer	*csummer_copy = NULL;
 	int			 rc;
 
-	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
-				       "csum_type: %d, csum_enabled: %s\n",
-		DP_C_OID_DKEY(oid, dkey),
-		csummer, props.dcp_csum_type,
+	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, csum_type: %d, csum_enabled: %s",
+		DP_C_OID_DKEY(oid, dkey), csummer, props.dcp_csum_type,
 		DP_BOOL(props.dcp_csum_enabled));
 
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
@@ -52,7 +50,7 @@ dc_obj_csum_update(struct daos_csummer *csummer, struct cont_props props, daos_o
 	if (rc != 0) {
 		daos_csummer_free_ci(csummer_copy, dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_csummer_calc_iods error");
 		return rc;
 	}
 	daos_csummer_destroy(&csummer_copy);
@@ -107,7 +105,7 @@ dc_obj_csum_fetch(struct daos_csummer *csummer, daos_key_t *dkey, daos_iod_t *io
 				    true, layout,
 				    -1, iod_csums);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc_iods error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_csummer_calc_iods error");
 		daos_csummer_free_ci(csummer_copy, dkey_csum);
 		daos_csummer_destroy(&csummer_copy);
 		return rc;
@@ -177,9 +175,9 @@ iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 		return rc;
 
 	if (sgl_idx.iov_idx >= sgl->sg_nr) {
-		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset "DF_U64
-			", offset "DF_U64", tgt_idx %d\n", sgl_idx.iov_idx,
-			sgl_idx.iov_offset, off, siod->siod_tgt_idx);
+		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset " DF_U64 ", offset " DF_U64
+			", tgt_idx %d",
+			sgl_idx.iov_idx, sgl_idx.iov_offset, off, siod->siod_tgt_idx);
 		return -DER_IO;
 	}
 
@@ -221,7 +219,7 @@ store_csum(d_iov_t *csum_iov,
 		}
 
 		if (csum_iov_too_small) {
-			D_DEBUG(DB_CSUM, "IOV is too small\n");
+			D_DEBUG(DB_CSUM, "IOV is too small");
 			csum_iov->iov_len += ci_size(iod_csum->ic_data[c]);
 		}
 	}
@@ -271,7 +269,7 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 
 	singv_los = dc_rw_cb_singv_lo_get(args->iods, args->sgls, args->iod_nr, args->reasb_req);
 
-	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY" VERIFY %d iods dkey_hash "DF_U64"\n",
+	D_DEBUG(DB_CSUM, DF_C_UOID_DKEY " VERIFY %d iods dkey_hash " DF_U64,
 		DP_C_UOID_DKEY(args->oid, args->dkey), args->iod_nr, args->dkey_hash);
 
 	for (i = 0; i < args->iod_nr; i++) {
@@ -302,8 +300,8 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 			rc = iod_sgl_copy(iod, &args->sgls[i], &shard_iod, &shard_sgl,
 					  args->oiods[i].oiod_siods, args->shard_offs[i]);
 			if (rc != 0) {
-				D_ERROR("iod_sgl_copy failed (obj: "DF_OID"): "DF_RC"\n",
-					DP_OID(args->oid.id_pub), DP_RC(rc));
+				DL_ERROR(rc, "iod_sgl_copy failed (obj: " DF_OID ")",
+					 DP_OID(args->oid.id_pub));
 				D_FREE(iovs_alloc);
 				break;
 			}
@@ -326,19 +324,16 @@ dc_rw_cb_csum_verify(struct dc_csum_veriry_args *args)
 		if (rc != 0) {
 
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
-				D_ERROR("Data Verification failed (object: "
-					DF_C_UOID_DKEY" shard %d): "DF_RC"\n",
-					DP_C_UOID_DKEY(args->oid, args->dkey),
-					args->shard_idx,
-					DP_RC(rc));
+				DL_ERROR(rc,
+					 "Data Verification failed (object: " DF_C_UOID_DKEY
+					 " shard %d)",
+					 DP_C_UOID_DKEY(args->oid, args->dkey), args->shard_idx);
 			} else  if (iod->iod_type == DAOS_IOD_ARRAY) {
-				D_ERROR("Data Verification failed (object: "
-					DF_C_UOID_DKEY" shard %d, extent: "
-					DF_RECX"): "
-					DF_RC"\n",
-					DP_C_UOID_DKEY(args->oid, args->dkey),
-					args->shard_idx, DP_RECX(iod->iod_recxs[0]),
-					DP_RC(rc));
+				DL_ERROR(rc,
+					 "Data Verification failed (object: " DF_C_UOID_DKEY
+					 " shard %d, extent: " DF_RECX ")",
+					 DP_C_UOID_DKEY(args->oid, args->dkey), args->shard_idx,
+					 DP_RECX(iod->iod_recxs[0]));
 			}
 
 			break;

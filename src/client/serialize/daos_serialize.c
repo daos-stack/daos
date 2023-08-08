@@ -32,33 +32,33 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 
 	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(daos_obj_id_t));
 	if (attr_dtype < 0) {
-		D_ERROR("failed to create attribute datatype\n");
+		D_ERROR("failed to create attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "lo", HOFFSET(daos_obj_id_t, lo), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid low\n");
+		D_ERROR("failed to insert oid low");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "hi", HOFFSET(daos_obj_id_t, hi), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid high\n");
+		D_ERROR("failed to insert oid high");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create attribute dataspace\n");
+		D_ERROR("failed to create attribute dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute\n");
+		D_ERROR("failed to create attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
-		D_ERROR("failed to write attribute\n");
+		D_ERROR("failed to write attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 out:
@@ -94,35 +94,35 @@ serialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 	acl = (struct daos_acl *)entry->dpe_val_ptr;
 	rc = daos_acl_to_strs(acl, &acl_strs, &len_acl);
 	if (rc != 0) {
-		D_ERROR("failed to convert acl to strs "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to convert acl to strs");
 		D_GOTO(out, rc);
 	}
 	attr_dims[0] = len_acl;
 	attr_dtype = H5Tcopy(H5T_C_S1);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to create attribute datatype\n");
+		D_ERROR("failed to create attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tset_size(attr_dtype, H5T_VARIABLE);
 	if (status < 0) {
-		D_ERROR("failed to set attribute datatype size\n");
+		D_ERROR("failed to set attribute datatype size");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create dataspace\n");
+		D_ERROR("failed to create dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace,
 			      H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute\n");
+		D_ERROR("failed to create attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, acl_strs);
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to write attributes "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to write attributes");
 		D_GOTO(out, rc);
 	}
 out:
@@ -159,35 +159,35 @@ serialize_str(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str
 	attr_dims[0] = 1;
 	attr_dtype = H5Tcopy(H5T_C_S1);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to create datatype\n");
+		D_ERROR("failed to create datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tset_size(attr_dtype, (entry->dpe_str ? strlen(entry->dpe_str) : 0) + 1);
 	if (status < 0) {
-		D_ERROR("failed to set datatype size\n");
+		D_ERROR("failed to set datatype size");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tset_strpad(attr_dtype, H5T_STR_NULLTERM);
 	if (status < 0) {
-		D_ERROR("failed to set string pad on datatype\n");
+		D_ERROR("failed to set string pad on datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create dataspace\n");
+		D_ERROR("failed to create dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace,
 			      H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute\n");
+		D_ERROR("failed to create attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, entry->dpe_str ? entry->dpe_str : "");
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to write attribute "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to write attribute");
 		D_GOTO(out, rc);
 	}
 out:
@@ -215,24 +215,24 @@ serialize_uint(hid_t file_id, uint64_t val, const char *prop_str)
 	attr_dims[0] = 1;
 	attr_dtype = H5Tcopy(H5T_NATIVE_UINT64);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to attribute datatype\n");
+		D_ERROR("failed to attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create dataspace\n");
+		D_ERROR("failed to create dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype,
 			      attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute\n");
+		D_ERROR("failed to create attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, &val);
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to write attr "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to write attr");
 		D_GOTO(out, rc);
 	}
 out:
@@ -371,9 +371,9 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			}
 		} else {
 			rc = -DER_INVAL;
-			D_ERROR("Serialization of this container property "
-				"%s type is not supported "DF_RC"\n",
-				prop_str, DP_RC(rc));
+			DL_ERROR(
+			    rc, "Serialization of this container property %s type is not supported",
+			    prop_str);
 		}
 	}
 out:
@@ -405,7 +405,7 @@ daos_cont_serialize_attrs(hid_t file_id, hid_t *usr_attr_memtype,
 	dims[0] = num_attrs;
 	dspace = H5Screate_simple(1, dims, NULL);
 	if (dspace < 0) {
-		D_ERROR("failed to create dataspace\n");
+		D_ERROR("failed to create dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -413,7 +413,7 @@ daos_cont_serialize_attrs(hid_t file_id, hid_t *usr_attr_memtype,
 	dset = H5Dcreate(file_id, SERIALIZE_ATTR_DSET, *usr_attr_memtype,
 			 dspace, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 	if (dset < 0) {
-		D_ERROR("failed to create dataset\n");
+		D_ERROR("failed to create dataset");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -433,7 +433,7 @@ daos_cont_serialize_attrs(hid_t file_id, hid_t *usr_attr_memtype,
 	status = H5Dwrite(dset, *usr_attr_memtype, H5S_ALL,
 			  H5S_ALL, H5P_DEFAULT, attr_data);
 	if (status < 0) {
-		D_ERROR("failed to write to dataset\n");
+		D_ERROR("failed to write to dataset");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 out:
@@ -466,12 +466,12 @@ daos_cont_serialize_md(char *filename, daos_prop_t *props, int num_attrs,
 
 	file_id = H5Fcreate(filename, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
 	if (file_id < 0) {
-		D_ERROR("failed to write to metadata file: %s\n", filename);
+		D_ERROR("failed to write to metadata file: %s", filename);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	rc = daos_cont_serialize_props(file_id, props);
 	if (rc != 0) {
-		D_ERROR("failed to serialize cont layout "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to serialize cont layout");
 		D_GOTO(out, rc);
 	}
 
@@ -481,45 +481,44 @@ daos_cont_serialize_md(char *filename, daos_prop_t *props, int num_attrs,
 		usr_attr_memtype = H5Tcreate(H5T_COMPOUND,
 					     sizeof(struct usr_attr));
 		if (usr_attr_memtype < 0) {
-			D_ERROR("failed to create memory datatype\n");
+			D_ERROR("failed to create memory datatype");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 
 		usr_attr_name_vtype = H5Tcopy(H5T_C_S1);
 		if (usr_attr_name_vtype < 0) {
-			D_ERROR("failed to create variable datatype\n");
+			D_ERROR("failed to create variable datatype");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		status = H5Tset_size(usr_attr_name_vtype, H5T_VARIABLE);
 		if (status < 0) {
-			D_ERROR("failed to set datatype size\n");
+			D_ERROR("failed to set datatype size");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		usr_attr_val_vtype = H5Tvlen_create(H5T_NATIVE_OPAQUE);
 		if (usr_attr_val_vtype < 0) {
-			D_ERROR("failed to variable length type\n");
+			D_ERROR("failed to variable length type");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		status = H5Tinsert(usr_attr_memtype, "Attribute Name",
 				   HOFFSET(struct usr_attr, attr_name),
 				   usr_attr_name_vtype);
 		if (status < 0) {
-			D_ERROR("failed to insert into compound datatype\n");
+			D_ERROR("failed to insert into compound datatype");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		status = H5Tinsert(usr_attr_memtype, "Attribute Value",
 				   HOFFSET(struct usr_attr, attr_val),
 				   usr_attr_val_vtype);
 		if (status < 0) {
-			D_ERROR("failed to insert into compound datatype\n");
+			D_ERROR("failed to insert into compound datatype");
 			D_GOTO(out, rc = -DER_MISC);
 		}
 		rc = daos_cont_serialize_attrs(file_id, &usr_attr_memtype,
 					       num_attrs, names, buffers,
 					       sizes);
 		if (rc != 0) {
-			D_ERROR("failed to serialize usr attributes "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to serialize usr attributes");
 			D_GOTO(out, rc);
 		}
 	}
@@ -544,17 +543,17 @@ deserialize_str(hid_t file_id, char **str, const char *prop_str)
 
 	cont_attr = H5Aopen(file_id, prop_str, H5P_DEFAULT);
 	if (cont_attr < 0) {
-		D_ERROR("failed to open attribute\n");
+		D_ERROR("failed to open attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to get attribute datatype\n");
+		D_ERROR("failed to get attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	buf_size = H5Tget_size(attr_dtype);
 	if (buf_size == 0) {
-		D_ERROR("failed to get size of datatype\n");
+		D_ERROR("failed to get size of datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
@@ -565,7 +564,7 @@ deserialize_str(hid_t file_id, char **str, const char *prop_str)
 	status = H5Aread(cont_attr, attr_dtype, *str);
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to read property attribute %s "DF_RC"\n", *str, DP_RC(rc));
+		DL_ERROR(rc, "failed to read property attribute %s", *str);
 		D_GOTO(out, rc);
 	}
 out:
@@ -586,17 +585,17 @@ deserialize_uint(hid_t file_id, uint64_t *val, const char *prop_str)
 
 	cont_attr = H5Aopen(file_id, prop_str, H5P_DEFAULT);
 	if (cont_attr < 0) {
-		D_ERROR("failed to open attribute\n");
+		D_ERROR("failed to open attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to get attribute datatype\n");
+		D_ERROR("failed to get attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Aread(cont_attr, attr_dtype, val);
 	if (status < 0) {
-		D_ERROR("failed to read attribute\n");
+		D_ERROR("failed to read attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 out:
@@ -624,7 +623,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 	roots_exist = H5Aexists(file_id, prop_str);
 	if (roots_exist < 0) {
 		/* Actual error  */
-		D_ERROR("failed to check if attribute exists\n");
+		D_ERROR("failed to check if attribute exists");
 		D_GOTO(out, rc = -DER_MISC);
 	} else if (roots_exist == 0) {
 		/* Does not exist, but that's okay. */
@@ -633,22 +632,22 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 	cont_attr = H5Aopen(file_id, prop_str, H5P_DEFAULT);
 	if (cont_attr < 0) {
 		/* Should be able to open attribute if it exists */
-		D_ERROR("failed to open attribute\n");
+		D_ERROR("failed to open attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to get attribute type\n");
+		D_ERROR("failed to get attribute type");
 		D_GOTO(out_attr, rc = -DER_MISC);
 	}
 	attr_dspace = H5Aget_space(cont_attr);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to get attribute dataspace\n");
+		D_ERROR("failed to get attribute dataspace");
 		D_GOTO(out_dtype, rc = -DER_MISC);
 	}
 	ndims = H5Sget_simple_extent_dims(attr_dspace, attr_dims, NULL);
 	if (ndims < 0) {
-		D_ERROR("failed to get dimensions of dataspace\n");
+		D_ERROR("failed to get dimensions of dataspace");
 		D_GOTO(out_dspace, rc = -DER_MISC);
 	}
 	D_ALLOC_PTR(roots);
@@ -656,7 +655,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_GOTO(out_dspace, rc = -DER_NOMEM);
 	status = H5Aread(cont_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
-		D_ERROR("failed to read property attribute %s\n", prop_str);
+		D_ERROR("failed to read property attribute %s", prop_str);
 		D_GOTO(out_roots, rc = -DER_MISC);
 	}
 	entry->dpe_val_ptr = roots;
@@ -698,7 +697,7 @@ deserialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 	acl_exist = H5Aexists(file_id, prop_str);
 	if (acl_exist < 0) {
 		/* Actual error  */
-		D_ERROR("failed to check if attribute exists\n");
+		D_ERROR("failed to check if attribute exists");
 		D_GOTO(out, rc = -DER_MISC);
 	} else if (acl_exist == 0) {
 		/* Does not exist, but that's okay. */
@@ -712,17 +711,17 @@ deserialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 	}
 	attr_dtype = H5Aget_type(cont_attr);
 	if (attr_dtype < 0) {
-		D_ERROR("failed to get attribute datatype\n");
+		D_ERROR("failed to get attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	attr_dspace = H5Aget_space(cont_attr);
 	if (status < 0) {
-		D_ERROR("failed to get dataspace\n");
+		D_ERROR("failed to get dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	ndims = H5Sget_simple_extent_dims(attr_dspace, attr_dims, NULL);
 	if (ndims < 0) {
-		D_ERROR("failed to get number of dimensions\n");
+		D_ERROR("failed to get number of dimensions");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	D_ALLOC(rdata, attr_dims[0] * sizeof(char *));
@@ -731,23 +730,23 @@ deserialize_acl(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 	}
 	attr_dtype = H5Tcopy(H5T_C_S1);
 	if (status < 0) {
-		D_ERROR("failed to copy attribute datatype size\n");
+		D_ERROR("failed to copy attribute datatype size");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tset_size(attr_dtype, H5T_VARIABLE);
 	if (status < 0) {
-		D_ERROR("failed to set attribute datatype size\n");
+		D_ERROR("failed to set attribute datatype size");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Aread(cont_attr, attr_dtype, rdata);
 	if (status < 0) {
-		D_ERROR("failed to read attribute\n");
+		D_ERROR("failed to read attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	/* convert acl strings back to struct acl, then store in entry */
 	rc = daos_acl_from_strs(rdata, (size_t)attr_dims[0], &acl);
 	if (rc != 0) {
-		D_ERROR("failed to convert acl strs "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to convert acl strs");
 		D_GOTO(out, rc);
 	}
 	entry->dpe_val_ptr = (void *)acl;
@@ -1086,7 +1085,7 @@ out:
 	if (close_cont) {
 		rc2 = daos_cont_close(coh, NULL);
 		if (rc2)
-			D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+			DL_ERROR(rc2, "daos_cont_close() Failed");
 	}
 	if (rc != 0 && prop != NULL)
 		daos_prop_free(prop);
@@ -1108,13 +1107,12 @@ daos_cont_deserialize_props(daos_handle_t poh, char *filename,
 
 	file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
 	if (file_id < 0) {
-		D_ERROR("failed to open metadata file: %s\n", filename);
+		D_ERROR("failed to open metadata file: %s", filename);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	rc = deserialize_props(poh, file_id, props, cont_type);
 	if (rc != 0) {
-		D_ERROR("failed to deserialize cont props "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to deserialize cont props");
 		D_GOTO(out, rc);
 	}
 out:
@@ -1144,22 +1142,22 @@ deserialize_attrs(hid_t file_id, uint64_t *_num_attrs,
 	/* Read the user attributes */
 	dset = H5Dopen(file_id, "User Attributes", H5P_DEFAULT);
 	if (dset < 0) {
-		D_ERROR("failed to open User Attributes Dataset\n");
+		D_ERROR("failed to open User Attributes Dataset");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	dspace = H5Dget_space(dset);
 	if (dspace < 0) {
-		D_ERROR("failed to get dataspace\n");
+		D_ERROR("failed to get dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	vtype = H5Dget_type(dset);
 	if (vtype < 0) {
-		D_ERROR("failed to get datatype\n");
+		D_ERROR("failed to get datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	num_dims = H5Sget_simple_extent_dims(dspace, dims, NULL);
 	if (num_dims < 0) {
-		D_ERROR("failed to get number of dimensions\n");
+		D_ERROR("failed to get number of dimensions");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	num_attrs = dims[0];
@@ -1169,7 +1167,7 @@ deserialize_attrs(hid_t file_id, uint64_t *_num_attrs,
 	}
 	status = H5Dread(dset, vtype, H5S_ALL, H5S_ALL, H5P_DEFAULT, attr_data);
 	if (status < 0) {
-		D_ERROR("failed to read attribute dataset\n");
+		D_ERROR("failed to read attribute dataset");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	D_ALLOC(names, num_attrs * sizeof(char *));
@@ -1225,7 +1223,7 @@ daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 
 	file_id = H5Fopen(filename, H5F_ACC_RDONLY, H5P_DEFAULT);
 	if (file_id < 0) {
-		D_ERROR("failed to open metadata file: %s\n", filename);
+		D_ERROR("failed to open metadata file: %s", filename);
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attrs_exist = H5Lexists(file_id, "User Attributes", H5P_DEFAULT);
@@ -1233,8 +1231,7 @@ daos_cont_deserialize_attrs(char *filename, uint64_t *num_attrs,
 		rc = deserialize_attrs(file_id, num_attrs, names,
 				       buffers, sizes);
 		if (rc != 0) {
-			D_ERROR("failed to deserialize user attrs "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to deserialize user attrs");
 			D_GOTO(out, rc);
 		}
 	}

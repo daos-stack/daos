@@ -276,7 +276,7 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 		res                 = pipeline_part_checkop(part_type, part_type_s, child_part_type,
 							    child_part_type_s);
 		if (!res) {
-			D_ERROR("part %zu: wrong part type %.*s operand for part type %.*s\n", *p,
+			D_ERROR("part %zu: wrong part type %.*s operand for part type %.*s", *p,
 				(int)child_part_type_s, child_part_type, (int)part_type_s,
 				part_type);
 			return res;
@@ -286,7 +286,7 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 		    child_num_constants > 1 &&
 		    (!is_comp_logical_func(part_type, part_type_s) ||
 		     !strncmp(part_type, "DAOS_FILTER_FUNC_LIKE", part_type_s))) {
-			D_ERROR("part %zu: CONST array can't be operand of part type %.*s\n", *p,
+			D_ERROR("part %zu: CONST array can't be operand of part type %.*s", *p,
 				(int)part_type_s, part_type);
 			return false;
 		}
@@ -298,8 +298,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 			 * we can use child_data_type here because we make sure the child is not a
 			 * function
 			 */
-			D_ERROR("part %zu: wrong data type %.*s operand for part type %.*s\n",
-				*p, (int)child_data_type_s, child_data_type, (int)part_type_s,
+			D_ERROR("part %zu: wrong data type %.*s operand for part type %.*s", *p,
+				(int)child_data_type_s, child_data_type, (int)part_type_s,
 				part_type);
 			return false;
 		}
@@ -315,8 +315,8 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 		if (is_comp_logical_func(part_type, part_type_s) ||
 		    is_arith_func(part_type, part_type_s)) {
 			if (!child_data_type_s) {
-				D_ERROR("part %zu: no data type for operand of part type %.*s\n",
-					*p, (int)part_type_s, part_type);
+				D_ERROR("part %zu: no data type for operand of part type %.*s", *p,
+					(int)part_type_s, part_type);
 				return false;
 			}
 			if (!*data_type_s) {
@@ -328,10 +328,10 @@ pipeline_filter_checkops(daos_filter_t *ftr, size_t *p, char **data_type, size_t
 				if (!types_are_the_same(*data_type, *data_type_s,
 							child_data_type, child_data_type_s)) {
 					D_ERROR("part %zu: data type mismatch (%.*s vs %.*s) for "
-						"operand of part type %.*s\n", *p,
-						(int)child_data_type_s, child_data_type,
-						(int)*data_type_s, *data_type,
-						(int)part_type_s, part_type);
+						"operand of part type %.*s",
+						*p, (int)child_data_type_s, child_data_type,
+						(int)*data_type_s, *data_type, (int)part_type_s,
+						part_type);
 					return false;
 				}
 			}
@@ -368,7 +368,7 @@ pipeline_filter_check_array_constants(daos_filter_t *ftr, size_t *p)
 
 		if (!strncmp(child_part_type, "DAOS_FILTER_CONST", child_part_type_s) &&
 		    child_num_constants > 1 && i < num_operands - 1) {
-			D_ERROR("part %zu: CONST array should always be the last operand\n", *p);
+			D_ERROR("part %zu: CONST array should always be the last operand", *p);
 			return false;
 		}
 
@@ -405,7 +405,8 @@ do_checks_for_string_constants(size_t ft, size_t pa, daos_filter_part_t *part)
 			}
 			if (!eos_found) {
 				D_ERROR("filter %zu, part %zu, const %zu: CSTRING constant does "
-					"not terminate in \\0\n", ft, pa, k);
+					"not terminate in \\0",
+					ft, pa, k);
 				return -DER_INVAL;
 			}
 		}
@@ -419,8 +420,8 @@ do_checks_for_string_constants(size_t ft, size_t pa, daos_filter_part_t *part)
 			string_size = (size_t *)part->constant[k].iov_buf;
 			if (*string_size > part->constant[k].iov_len - sizeof(size_t)) {
 				D_ERROR("filter %zu, part %zu, const %zu: size of STRING constant "
-					"%zu is larger than (.iov_len - %zu) %zu\n", ft,
-					pa, k, *string_size, sizeof(size_t),
+					"%zu is larger than (.iov_len - %zu) %zu",
+					ft, pa, k, *string_size, sizeof(size_t),
 					part->constant[k].iov_len - sizeof(size_t));
 				return -DER_INVAL;
 			}
@@ -454,7 +455,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	/** 0 */
 
 	if (pipeline == NULL) {
-		D_ERROR("pipeline object is NULL\n");
+		D_ERROR("pipeline object is NULL");
 		return -DER_INVAL;
 	}
 
@@ -463,7 +464,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 	for (i = 0; i < pipeline->num_filters; i++) {
 		if (strncmp((char *)pipeline->filters[i]->filter_type.iov_buf,
 			    "DAOS_FILTER_CONDITION", pipeline->filters[i]->filter_type.iov_len)) {
-			D_ERROR("filter %zu: filter type is not DAOS_FILTER_CONDITION\n", i);
+			D_ERROR("filter %zu: filter type is not DAOS_FILTER_CONDITION", i);
 			return -DER_INVAL;
 		}
 	}
@@ -471,7 +472,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		if (strncmp((char *)pipeline->aggr_filters[i]->filter_type.iov_buf,
 			    "DAOS_FILTER_AGGREGATION",
 			    pipeline->aggr_filters[i]->filter_type.iov_len)) {
-			D_ERROR("aggr_filter %zu: filter type is not DAOS_FILTER_AGGREGATION\n", i);
+			D_ERROR("aggr_filter %zu: filter type is not DAOS_FILTER_AGGREGATION", i);
 			return -DER_INVAL;
 		}
 	}
@@ -508,8 +509,8 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			res = pipeline_part_chk_type((char *)part->part_type.iov_buf,
 						     part->part_type.iov_len, is_aggr);
 			if (!res) {
-				D_ERROR("filter %zu, part %zu: part type %.*s is not supported\n",
-					i, p, (int)part->part_type.iov_len,
+				D_ERROR("filter %zu, part %zu: part type %.*s is not supported", i,
+					p, (int)part->part_type.iov_len,
 					(char *)part->part_type.iov_buf);
 				return -DER_NOSYS;
 			}
@@ -527,7 +528,8 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			}
 			if (rc != 0) {
 				D_ERROR("filter %zu, part %zu: part has an incorrect number of "
-					"operands\n", i, p);
+					"operands",
+					i, p);
 				return rc;
 			}
 			num_parts += part->num_operands;
@@ -537,7 +539,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			if (strncmp((char *)part->part_type.iov_buf, "DAOS_FILTER_FUN",
 				    strlen("DAOS_FILTER_FUN")) &&
 			    !part->data_type.iov_len) {
-				D_ERROR("filter %zu, part %zu: no data type defined\n", i, p);
+				D_ERROR("filter %zu, part %zu: no data type defined", i, p);
 				return -DER_INVAL;
 			}
 
@@ -557,8 +559,8 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 			res = pipeline_part_chk_data_type((char *)part->data_type.iov_buf,
 							  part->data_type.iov_len);
 			if (!res) {
-				D_ERROR("filter %zu, part %zu: data type %.*s is not supported\n",
-					i, p, (int)part->data_type.iov_len,
+				D_ERROR("filter %zu, part %zu: data type %.*s is not supported", i,
+					p, (int)part->data_type.iov_len,
 					(char *)part->data_type.iov_buf);
 				return -DER_NOSYS;
 			}
@@ -566,7 +568,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		/** 3 (continued) */
 
 		if (num_parts != ftr->num_parts) {
-			D_ERROR("filter %zu: mismatch between counted parts %u and .num_parts %u\n",
+			D_ERROR("filter %zu: mismatch between counted parts %u and .num_parts %u",
 				i, num_parts, ftr->num_parts);
 			return -DER_INVAL;
 		}
@@ -579,7 +581,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		if (ftr->num_parts > 0) {
 			res = pipeline_filter_checkops(ftr, &p, &data_type, &data_type_s);
 			if (!res) {
-				D_ERROR("filter %zu: wrong type for some part operands\n", i);
+				D_ERROR("filter %zu: wrong type for some part operands", i);
 				return -DER_INVAL;
 			}
 		}
@@ -590,7 +592,7 @@ d_pipeline_check(daos_pipeline_t *pipeline)
 		if (ftr->num_parts > 0) {
 			res = pipeline_filter_check_array_constants(ftr, &p);
 			if (!res) {
-				D_ERROR("filter %zu: array of constants placed in wrong operand\n",
+				D_ERROR("filter %zu: array of constants placed in wrong operand",
 					i);
 				return -DER_INVAL;
 			}

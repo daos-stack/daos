@@ -116,7 +116,7 @@ end:
 destroy:
 	umempobj_close(ctx->uc_uma.uma_pool);
 	if (remove(ctx->uc_pool_name) != 0)
-		D_ERROR("Failed to remove %s: %s\n", ctx->uc_pool_name, strerror(errno));
+		D_ERROR("Failed to remove %s: %s", ctx->uc_pool_name, strerror(errno));
 free_ctx:
 	D_FREE(ctx);
 	return rc;
@@ -180,13 +180,13 @@ utest_utx_destroy(struct utest_context *utx)
 	/* Ok, PMEM is a bit more complicated */
 	rc = utest_tx_begin(utx);
 	if (rc != 0) {
-		D_ERROR("Problem in tx begin\n");
+		D_ERROR("Problem in tx begin");
 		return rc;
 	}
 
 	rc = utest_tx_add_ptr(utx, root);
 	if (rc != 0) {
-		D_ERROR("Problem in tx add\n");
+		D_ERROR("Problem in tx add");
 		goto end;
 	}
 
@@ -195,7 +195,7 @@ utest_utx_destroy(struct utest_context *utx)
 end:
 	rc = utest_tx_end(utx, rc);
 	if (rc != 0) {
-		D_ERROR("Problem in tx end\n");
+		D_ERROR("Problem in tx end");
 		return rc;
 	}
 
@@ -204,7 +204,7 @@ end:
 
 	umempobj_close(utx->uc_uma.uma_pool);
 	if (remove(utx->uc_pool_name) != 0) {
-		D_ERROR("Failed to remove %s: %s\n", utx->uc_pool_name, strerror(errno));
+		D_ERROR("Failed to remove %s: %s", utx->uc_pool_name, strerror(errno));
 		rc = -DER_IO;
 	}
 	D_FREE(utx);
@@ -322,11 +322,11 @@ utest_check_mem_increase(struct utest_context *utx)
 		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
-		D_ERROR("Get SCM Usage failed\n");
+		D_ERROR("Get SCM Usage failed");
 		return rc;
 	}
 	if (utx->prev_value > scm_used) {
-		D_ERROR("SCM Usage not increased\n");
+		D_ERROR("SCM Usage not increased");
 		return 1;
 	}
 	return 0;
@@ -344,11 +344,11 @@ utest_check_mem_decrease(struct utest_context *utx)
 		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
-		D_ERROR("Get SCM Usage failed\n");
+		D_ERROR("Get SCM Usage failed");
 		return rc;
 	}
 	if (utx->prev_value < scm_used) {
-		D_ERROR("SCM Usage not decreased\n");
+		D_ERROR("SCM Usage not decreased");
 		return 1;
 	}
 	return 0;
@@ -366,11 +366,11 @@ utest_check_mem_initial_status(struct utest_context *utx)
 		return 0;
 	rc = utest_get_scm_used_space(utx, &scm_used);
 	if (rc) {
-		D_ERROR("Get SCM Usage failed\n");
+		D_ERROR("Get SCM Usage failed");
 		return rc;
 	}
 	if (utx->initial_value != scm_used) {
-		D_ERROR("SCM not freed up in full\n");
+		D_ERROR("SCM not freed up in full");
 		return 1;
 	}
 	return 0;

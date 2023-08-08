@@ -201,8 +201,8 @@ query_normal_recx(struct open_query *query, daos_recx_t *recx)
 	recx->rx_idx = entry.en_sel_ext.ex_lo;
 	recx->rx_nr = entry.en_sel_ext.ex_hi - entry.en_sel_ext.ex_lo + 1;
 
-	D_DEBUG(DB_TRACE, "query recx "DF_U64"/"DF_U64" : "DF_RC"\n", recx->rx_idx,
-		recx->rx_nr, DP_RC(rc));
+	D_DEBUG(DB_TRACE, "query recx " DF_U64 "/" DF_U64 ": " DF_RC, recx->rx_idx, recx->rx_nr,
+		DP_RC(rc));
 fini:
 	close_rc = evt_iter_finish(ih);
 	if (close_rc != 0)
@@ -284,7 +284,7 @@ ent2recx(daos_recx_t *recx, const struct evt_entry *ent)
 {
 	recx->rx_idx = ent->en_sel_ext.ex_lo;
 	recx->rx_nr = ent->en_sel_ext.ex_hi - ent->en_sel_ext.ex_lo + 1;
-	D_DEBUG(DB_TRACE, "ec_recx size is "DF_X64"\n", recx->rx_idx + recx->rx_nr);
+	D_DEBUG(DB_TRACE, "ec_recx size is " DF_X64, recx->rx_idx + recx->rx_nr);
 }
 
 static bool
@@ -455,8 +455,8 @@ next:
 			prc = evt_iter_next(pih);
 	}
 
-	D_DEBUG(DB_TRACE, "query recx "DF_U64"/"DF_U64" : "DF_RC"\n", recx->rx_idx,
-		recx->rx_nr, DP_RC(rc));
+	D_DEBUG(DB_TRACE, "query recx " DF_U64 "/" DF_U64 ": " DF_RC, recx->rx_idx, recx->rx_nr,
+		DP_RC(rc));
 	close_rc = evt_iter_finish(pih);
 	if (close_rc != 0)
 		rc = close_rc;
@@ -592,8 +592,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		*max_write = 0;
 
 	if ((flags & VOS_GET_MAX) && (flags & VOS_GET_MIN)) {
-		D_ERROR("Ambiguous query.  Please select either VOS_GET_MAX"
-			" or VOS_GET_MIN\n");
+		D_ERROR("Ambiguous query.  Please select either VOS_GET_MAX or VOS_GET_MIN");
 		return -DER_INVAL;
 	}
 
@@ -602,14 +601,14 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 			max_write_only = true;
 			goto query_write;
 		}
-		D_ERROR("No query type.  Please select either VOS_GET_MAX"
-			" or VOS_GET_MIN or pass non-NULL max_write\n");
+		D_ERROR("No query type.  Please select either VOS_GET_MAX or VOS_GET_MIN or pass "
+			"non-NULL max_write");
 		return -DER_INVAL;
 	}
 
 	if ((flags & (VOS_GET_DKEY | VOS_GET_AKEY | VOS_GET_RECX)) == 0) {
-		D_ERROR("No tree queried.  Please select one or more of"
-			" VOS_GET_DKEY, VOS_GET_AKEY, or VOS_GET_RECX\n");
+		D_ERROR("No tree queried.  Please select one or more of VOS_GET_DKEY, "
+			"VOS_GET_AKEY, or VOS_GET_RECX");
 		return -DER_INVAL;
 	}
 query_write:
@@ -625,7 +624,7 @@ query_write:
 	} else {
 		if (flags & VOS_GET_DKEY) {
 			if (dkey == NULL) {
-				D_ERROR("dkey can't be NULL with VOS_GET_DKEY\n");
+				D_ERROR("dkey can't be NULL with VOS_GET_DKEY");
 				D_GOTO(free_query, rc = -DER_INVAL);
 			}
 			daos_anchor_set_zero(&query->qt_dkey_anchor);
@@ -635,7 +634,7 @@ query_write:
 
 		if (flags & VOS_GET_AKEY) {
 			if (akey == NULL) {
-				D_ERROR("akey can't be NULL with VOS_GET_AKEY\n");
+				D_ERROR("akey can't be NULL with VOS_GET_AKEY");
 				D_GOTO(free_query, rc = -DER_INVAL);
 			}
 
@@ -645,7 +644,7 @@ query_write:
 
 		if (flags & VOS_GET_RECX) {
 			if (recx == NULL) {
-				D_ERROR("recx can't be NULL with VOS_GET_RECX\n");
+				D_ERROR("recx can't be NULL with VOS_GET_RECX");
 				D_GOTO(free_query, rc = -DER_INVAL);
 			}
 
@@ -660,8 +659,7 @@ query_write:
 	vos_dth_set(dth, is_sysdb);
 	rc = vos_ts_set_allocate(&query->qt_ts_set, 0, cflags, nr_akeys, dth, is_sysdb);
 	if (rc != 0) {
-		D_ERROR("Failed to allocate timestamp set: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to allocate timestamp set");
 		goto free_query;
 	}
 
@@ -690,12 +688,12 @@ query_write:
 	obj_type = daos_obj_id2type(obj->obj_df->vo_id.id_pub);
 	if ((flags & VOS_GET_DKEY) && !daos_is_dkey_uint64_type(obj_type)) {
 		rc = -DER_INVAL;
-		D_ERROR("Only integer dkey supported for query\n");
+		D_ERROR("Only integer dkey supported for query");
 		goto out;
 	}
 	if ((flags & VOS_GET_AKEY) && !daos_is_akey_uint64_type(obj_type)) {
 		rc = -DER_INVAL;
-		D_ERROR("Only integer akey supported for query\n");
+		D_ERROR("Only integer akey supported for query");
 		goto out;
 	}
 

@@ -241,11 +241,9 @@ cc_verify_orig_extents(struct csum_context *ctx)
 		match = daos_csummer_csum_compare(csummer, csum,
 						  verify->tv_csum, csum_len);
 		if (!match) {
-			D_ERROR("[%d] Original extent corrupted. "
-				"Calculated ("DF_CI_BUF") != "
-				"Stored ("DF_CI_BUF")\n",
-				v, DP_CI_BUF(csum, csum_len),
-				DP_CI_BUF(verify->tv_csum, csum_len));
+			D_ERROR("[%d] Original extent corrupted. Calculated (" DF_CI_BUF
+				") != Stored (" DF_CI_BUF ")",
+				v, DP_CI_BUF(csum, csum_len), DP_CI_BUF(verify->tv_csum, csum_len));
 			return -DER_CSUM;
 		}
 	}
@@ -623,7 +621,7 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_
 			continue;
 		}
 		if (!ci_is_valid(dcs_csum_info_get(biov_csums, j++))) {
-			D_ERROR("Invalid csum for biov %d.\n", i);
+			D_ERROR("Invalid csum for biov %d", i);
 			return -DER_CSUM;
 		}
 	}
@@ -642,7 +640,7 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_
 			C_TRACE("Adding csums for recx %d: "DF_RECX"\n", i, DP_RECX(*recx));
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0)
-				D_ERROR("Failed to add csum for recx"DF_RECX": %d\n",
+				D_ERROR("Failed to add csum for recx" DF_RECX ": %d",
 					DP_RECX(*recx), rc);
 		}
 	}
@@ -708,8 +706,7 @@ ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		 */
 		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for dkey: "
-				DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_csummer_verify_key error for dkey");
 			return rc;
 		}
 	}
@@ -721,22 +718,22 @@ ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		if (!csum_iod_is_supported(iod))
 			continue;
 
-		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY "iod[%d]: " DF_C_IOD ", csum_nr: %d",
 			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
 
 		if (csum->ic_nr > 0)
-			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
+			D_DEBUG(DB_CSUM, "first data csum: " DF_CI, DP_CI(*csum->ic_data));
 
 		rc = daos_csummer_verify_key(csummer,
 					     &iod->iod_name,
 					     &csum->ic_akey);
 		if (rc != 0) {
-			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
-					       "failed for akey: "DF_KEY", csum: "DF_CI", "
-					       "error: "DF_RC"\n",
-				DP_C_UOID_DKEY(*uoid, dkey), i,
-				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
-				DP_CI(csum->ic_akey), DP_RC(rc));
+			DL_ERROR(rc,
+				 DF_C_UOID_DKEY "iod[%d]: " DF_C_IOD
+						" verify_key failed for akey: " DF_KEY
+						", csum: " DF_CI ", error",
+				 DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod),
+				 DP_KEY(&iod->iod_name), DP_CI(csum->ic_akey));
 			return rc;
 		}
 	}

@@ -297,7 +297,7 @@ fs_recreate_sb_hdlr(struct cmd_args_s *ap)
 
 	rc = dfs_recreate_sb(ap->cont, &attr);
 	if (rc)
-		D_ERROR("Failed to created DFS SB: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("Failed to created DFS SB: %d (%s)", rc, strerror(rc));
 	return rc;
 }
 

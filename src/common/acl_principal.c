@@ -97,20 +97,20 @@ daos_acl_principal_is_valid(const char *name)
 	enum validity_state	state = STATE_START;
 
 	if (name == NULL) {
-		D_INFO("Name was NULL\n");
+		D_INFO("Name was NULL");
 		return false;
 	}
 
 	len = strnlen(name, DAOS_ACL_MAX_PRINCIPAL_BUF_LEN);
 	if (len == 0 || len > DAOS_ACL_MAX_PRINCIPAL_LEN) {
-		D_INFO("Invalid len: %lu\n", len);
+		D_INFO("Invalid len: %lu", len);
 		return false;
 	}
 
 	for (i = 0; i < (len + 1); i++) {
 		state = next_validity_state(state, name[i]);
 		if (state == STATE_INVALID) {
-			D_INFO("Name was badly formatted: %s\n", name);
+			D_INFO("Name was badly formatted: %s", name);
 			return false;
 		}
 	}
@@ -137,7 +137,7 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	char		*buf = NULL;
 
 	if (name == NULL) {
-		D_INFO("name pointer was NULL!\n");
+		D_INFO("name pointer was NULL!");
 		return -DER_INVAL;
 	}
 
@@ -145,12 +145,12 @@ daos_acl_uid_to_principal(uid_t uid, char **name)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getpwuid_r: %d\n", rc);
+		D_ERROR("Error from getpwuid_r: %d", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
 	if (result == NULL) {
-		D_INFO("No user for uid %u\n", uid);
+		D_INFO("No user for uid %u", uid);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -170,7 +170,7 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	char		*buf = NULL;
 
 	if (name == NULL) {
-		D_INFO("name pointer was NULL!\n");
+		D_INFO("name pointer was NULL!");
 		return -DER_INVAL;
 	}
 
@@ -178,12 +178,12 @@ daos_acl_gid_to_principal(gid_t gid, char **name)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getgrgid_r: %d\n", rc);
+		D_ERROR("Error from getgrgid_r: %d", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
 	if (result == NULL) {
-		D_INFO("No group for gid %u\n", gid);
+		D_INFO("No group for gid %u", gid);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -204,7 +204,7 @@ get_id_name_from_principal(const char *principal, char *name)
 	int num_matches;
 
 	if (!daos_acl_principal_is_valid(principal)) {
-		D_INFO("Invalid name format\n");
+		D_INFO("Invalid name format");
 		return -DER_INVAL;
 	}
 
@@ -214,7 +214,7 @@ get_id_name_from_principal(const char *principal, char *name)
 		 * This is a surprise - if it's formatted properly, we should
 		 * be able to extract the name.
 		 */
-		D_ERROR("Couldn't extract ID name from '%s'\n", principal);
+		D_ERROR("Couldn't extract ID name from '%s'", principal);
 		return -DER_INVAL;
 	}
 
@@ -231,7 +231,7 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	int		rc;
 
 	if (uid == NULL) {
-		D_INFO("NULL uid pointer\n");
+		D_INFO("NULL uid pointer");
 		return -DER_INVAL;
 	}
 
@@ -243,12 +243,12 @@ daos_acl_principal_to_uid(const char *principal, uid_t *uid)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getpwnam_r: %d\n", rc);
+		D_ERROR("Error from getpwnam_r: %d", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
 	if (result == NULL) {
-		D_INFO("User '%s' not found\n", username);
+		D_INFO("User '%s' not found", username);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -269,7 +269,7 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	int		rc;
 
 	if (gid == NULL) {
-		D_INFO("NULL gid pointer\n");
+		D_INFO("NULL gid pointer");
 		return -DER_INVAL;
 	}
 
@@ -281,12 +281,12 @@ daos_acl_principal_to_gid(const char *principal, gid_t *gid)
 	if (rc == -DER_NOMEM)
 		D_GOTO(out, rc);
 	if (rc != 0) {
-		D_ERROR("Error from getgrnam_r: %d\n", rc);
+		D_ERROR("Error from getgrnam_r: %d", rc);
 		D_GOTO(out, rc = d_errno2der(rc));
 	}
 
 	if (result == NULL) {
-		D_INFO("Group '%s' not found\n", grpname);
+		D_INFO("Group '%s' not found", grpname);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -374,14 +374,13 @@ daos_acl_principal_from_str(const char *principal_str,
 	const char	*p_name;
 
 	if (principal_str == NULL || type == NULL || name == NULL) {
-		D_INFO("Null input: principal_str=%p, type=%p, name=%p\n",
-		       principal_str, type, name);
+		D_INFO("Null input: principal_str=%p, type=%p, name=%p", principal_str, type, name);
 		return -DER_INVAL;
 	}
 
 	rc = get_principal_type_from_str(principal_str, type);
 	if (rc != 0) {
-		D_INFO("Badly-formatted principal string\n");
+		D_INFO("Badly-formatted principal string");
 		return rc;
 	}
 
@@ -399,7 +398,7 @@ daos_acl_principal_from_str(const char *principal_str,
 	 */
 	p_name = get_start_of_name(principal_str, *type);
 	if (!daos_acl_principal_is_valid(p_name)) {
-		D_INFO("Invalid principal name\n");
+		D_INFO("Invalid principal name");
 		return -DER_INVAL;
 	}
 

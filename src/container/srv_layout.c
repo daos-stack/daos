@@ -226,8 +226,7 @@ ds_cont_prop_default_init(void)
 
 	entry1 = daos_prop_entry_get(&cont_prop_default_v0, DAOS_PROP_CO_ACL);
 	if (entry1 != NULL) {
-		D_DEBUG(DB_MGMT,
-			"Initializing default ACL cont prop v0\n");
+		D_DEBUG(DB_MGMT, "Initializing default ACL cont prop v0");
 		entry1->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
 		if (entry1->dpe_val_ptr == NULL)
 			return -DER_NOMEM;
@@ -235,8 +234,7 @@ ds_cont_prop_default_init(void)
 
 	entry2 = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
 	if (entry2 != NULL) {
-		D_DEBUG(DB_MGMT,
-			"Initializing default ACL cont prop\n");
+		D_DEBUG(DB_MGMT, "Initializing default ACL cont prop");
 		entry2->dpe_val_ptr = ds_sec_alloc_default_daos_cont_acl();
 		if (entry2->dpe_val_ptr == NULL) {
 			if (entry1 != NULL)
@@ -254,13 +252,13 @@ ds_cont_prop_default_fini(void)
 
 	entry = daos_prop_entry_get(&cont_prop_default_v0, DAOS_PROP_CO_ACL);
 	if (entry != NULL) {
-		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop\n");
+		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop");
 		D_FREE(entry->dpe_val_ptr);
 	}
 
 	entry = daos_prop_entry_get(&cont_prop_default, DAOS_PROP_CO_ACL);
 	if (entry != NULL) {
-		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop\n");
+		D_DEBUG(DB_MGMT, "Freeing default ACL cont prop");
 		D_FREE(entry->dpe_val_ptr);
 	}
 }

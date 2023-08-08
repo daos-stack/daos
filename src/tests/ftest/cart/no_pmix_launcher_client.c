@@ -75,31 +75,31 @@ int main(int argc, char **argv)
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {
-		D_ERROR("sem_init() failed; rc=%d\n", rc);
+		D_ERROR("sem_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_init(NULL, 0);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);
+		D_ERROR("crt_proto_register() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_group_view_create("server_grp", &grp);
 	if (!grp || rc != 0) {
-		D_ERROR("Failed to create group view; rc=%d\n", rc);
+		D_ERROR("Failed to create group view; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_context_create(&crt_ctx);
 	if (rc != 0) {
-		D_ERROR("crt_context_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_context_create() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -113,38 +113,38 @@ int main(int argc, char **argv)
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx, grp, -1, true);
 	if (rc != 0) {
-		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_size() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_ranks_get() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	if (rank_list->rl_nr != grp_size) {
-		D_ERROR("rank_list differs in size. expected %d got %d\n",
-			grp_size, rank_list->rl_nr);
+		D_ERROR("rank_list differs in size. expected %d got %d", grp_size,
+			rank_list->rl_nr);
 		assert(0);
 	}
 
 	rc = crt_group_psr_set(grp, rank_list->rl_ranks[0]);
 	if (rc != 0) {
-		D_ERROR("crt_group_psr_set() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_psr_set() failed; rc=%d", rc);
 		assert(0);
 	}
 
 	rc = crtu_wait_for_ranks(crt_ctx, grp, rank_list, NUM_SERVER_CTX - 1,
 				 NUM_SERVER_CTX, 60, 120);
 	if (rc != 0) {
-		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+		D_ERROR("wait_for_ranks() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -171,8 +171,7 @@ int main(int argc, char **argv)
 			rc = crt_req_create(crt_ctx, &server_ep,
 					RPC_PING, &rpc);
 			if (rc != 0) {
-				D_ERROR("crt_req_create() failed; rc=%d\n",
-					rc);
+				D_ERROR("crt_req_create() failed; rc=%d", rc);
 				assert(0);
 			}
 
@@ -201,7 +200,7 @@ int main(int argc, char **argv)
 		rc = crt_req_create(crt_ctx, &server_ep, RPC_SHUTDOWN,
 				&rpc);
 		if (rc != 0) {
-			D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+			D_ERROR("crt_req_create() failed; rc=%d", rc);
 			assert(0);
 		}
 
@@ -215,7 +214,7 @@ int main(int argc, char **argv)
 
 	rc = crt_group_view_destroy(grp);
 	if (rc != 0) {
-		D_ERROR("crt_group_view_destroy() failed; rc=%d\n", rc);
+		D_ERROR("crt_group_view_destroy() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -226,7 +225,7 @@ int main(int argc, char **argv)
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed with rc=%d", rc);
 		assert(0);
 	}
 

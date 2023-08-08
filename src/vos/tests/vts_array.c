@@ -169,8 +169,8 @@ update_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
 		  array->va_meta.vm_akey_size);
 
-	D_DEBUG(DB_IO, "Writing "DF_U64" records of size "DF_U64" at offset "
-		DF_U64"\n", nr, rec_size, offset);
+	D_DEBUG(DB_IO, "Writing " DF_U64 " records of size " DF_U64 " at offset " DF_U64, nr,
+		rec_size, offset);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
 			      &array->va_dkey, 1, &array->va_iod, NULL, sgls);
 }
@@ -212,8 +212,8 @@ fetch_array(struct vts_array *array, daos_epoch_t epoch, uint64_t dkey,
 	d_iov_set(&array->va_iod.iod_name, array->va_akey_value,
 		  array->va_meta.vm_akey_size);
 
-	D_DEBUG(DB_IO, "Reading "DF_U64" records of size "DF_U64" at offset "
-		DF_U64"\n", nr, rec_size, offset);
+	D_DEBUG(DB_IO, "Reading " DF_U64 " records of size " DF_U64 " at offset " DF_U64, nr,
+		rec_size, offset);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_iod, sgls);
 }
@@ -233,7 +233,7 @@ update_meta(struct vts_array *array, daos_epoch_t epoch,
 
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
-	D_DEBUG(DB_IO, "Writing metadata at epoch "DF_U64"\n", epoch);
+	D_DEBUG(DB_IO, "Writing metadata at epoch " DF_U64, epoch);
 	return vos_obj_update(array->va_coh, array->va_oid, epoch, 0, 0,
 			&array->va_dkey, 1, &array->va_sv_iod, NULL, &sgl);
 }
@@ -253,7 +253,7 @@ fetch_meta(struct vts_array *array, daos_epoch_t epoch,
 
 	d_iov_set(&array->va_sv_iod.iod_name, &akey, sizeof(akey));
 
-	D_DEBUG(DB_IO, "Reading metadata at epoch "DF_U64"\n", epoch);
+	D_DEBUG(DB_IO, "Reading metadata at epoch " DF_U64, epoch);
 	return vos_obj_fetch(array->va_coh, array->va_oid, epoch, 0,
 			     &array->va_dkey, 1, &array->va_sv_iod, &sgl);
 }
@@ -282,7 +282,7 @@ vts_array_alloc(daos_handle_t coh, daos_epoch_t epoch, daos_size_t record_size,
 	array_fini(&array, false);
 
 	if (rc != 0)
-		D_ERROR("Failed to create array: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create array");
 
 	return rc;
 }
@@ -373,22 +373,22 @@ vts_array_set_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t new_size)
 	/* Should probably put this in vos transaction but keep it simple for
 	 * now.
 	 */
-	D_DEBUG(DB_IO, "Getting the old array size\n");
+	D_DEBUG(DB_IO, "Getting the old array size");
 	rc = vts_array_get_size(aoh, epoch, &old_size);
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DB_IO, "Old size is "DF_U64"\n", old_size);
+	D_DEBUG(DB_IO, "Old size is " DF_U64, old_size);
 	if (old_size > new_size) {
-		D_DEBUG(DB_IO, "Truncate at "DF_U64"\n", new_size);
+		D_DEBUG(DB_IO, "Truncate at " DF_U64, new_size);
 		rc = vts_array_punch(aoh, epoch, new_size, old_size - new_size);
 		if (rc != 0)
 			return rc;
-		D_DEBUG(DB_IO, "Checking array size again\n");
+		D_DEBUG(DB_IO, "Checking array size again");
 		rc = vts_array_get_size(aoh, epoch, &old_size);
 		if (rc != 0)
 			return rc;
-		D_DEBUG(DB_IO, "Size is now "DF_U64"\n", old_size);
+		D_DEBUG(DB_IO, "Size is now " DF_U64, old_size);
 	}
 
 	if (old_size == new_size)

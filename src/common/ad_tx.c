@@ -248,13 +248,13 @@ static inline void
 act_item_add(struct ad_tx *tx, struct ad_act *it, int undo_or_redo)
 {
 	if (undo_or_redo == ACT_UNDO) {
-		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p undo\n",
-			act_opc2str(it->it_act.ac_opc), &it->it_act, tx);
+		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p undo", act_opc2str(it->it_act.ac_opc),
+			&it->it_act, tx);
 		d_list_add(&it->it_link, &tx->tx_undo);
 
 	} else {
-		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p redo\n",
-			act_opc2str(it->it_act.ac_opc), &it->it_act, tx);
+		D_DEBUG(DB_TRACE, "Add act %s (%p), to tx %p redo", act_opc2str(it->it_act.ac_opc),
+			&it->it_act, tx);
 		d_list_add_tail(&it->it_link, &tx->tx_redo);
 		tx->tx_redo_act_nr++;
 
@@ -435,7 +435,7 @@ tx_range_post(struct ad_tx *tx)
 
 		rc = ad_tx_snap(tx, ad_addr2ptr(bh, tmp->ar_off), tmp->ar_size, AD_TX_REDO);
 		if (rc) {
-			D_ERROR("ad_tx_snap failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "ad_tx_snap failed");
 			return rc;
 		}
 	}
@@ -475,7 +475,7 @@ ad_act_replay(struct ad_tx *tx, struct umem_action *act)
 {
 	int rc = 0;
 
-	D_DEBUG(DB_TRACE, "replay action=%s\n", act_opc2str(act->ac_opc));
+	D_DEBUG(DB_TRACE, "replay action=%s", act_opc2str(act->ac_opc));
 	switch (act->ac_opc) {
 	case UMEM_ACT_NOOP:
 		break;
@@ -511,12 +511,12 @@ ad_act_replay(struct ad_tx *tx, struct umem_action *act)
 		break;
 	default:
 		rc = -DER_INVAL;
-		D_ERROR("bad ac_opc %d\n", act->ac_opc);
+		D_ERROR("bad ac_opc %d", act->ac_opc);
 		break;
 	}
 
 	if (rc)
-		D_ERROR("Failed to replay %s, "DF_RC"\n", act_opc2str(act->ac_opc), DP_RC(rc));
+		DL_ERROR(rc, "Failed to replay %s", act_opc2str(act->ac_opc));
 
 	return rc;
 }
@@ -849,13 +849,13 @@ ad_tx_setbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	uint32_t		 end = pos + nbits - 1;
 
 	if (bmap == NULL) {
-		D_ERROR("empty bitmap\n");
+		D_ERROR("empty bitmap");
 		return -DER_INVAL;
 	}
 
 	/* if use cases cannot satisfy this requirement, need to add copybits action for undo */
 	if (!isclr_range(bmap, pos, end)) {
-		D_ERROR("bitmap already set in the range.\n");
+		D_ERROR("bitmap already set in the range");
 		return -DER_INVAL;
 	}
 
@@ -895,13 +895,13 @@ ad_tx_clrbits(struct ad_tx *tx, void *bmap, uint32_t pos, uint16_t nbits)
 	uint32_t	 end = pos + nbits - 1;
 
 	if (bmap == NULL) {
-		D_ERROR("empty bitmap\n");
+		D_ERROR("empty bitmap");
 		return -DER_INVAL;
 	}
 
 	/* if use cases cannot satisfy this requirement, need to add copybits action for undo */
 	if (!isset_range(bmap, pos, end)) {
-		D_ERROR("bitmap already cleared in the range.\n");
+		D_ERROR("bitmap already cleared in the range");
 		return -DER_INVAL;
 	}
 
@@ -974,7 +974,7 @@ tx_end(struct ad_tx *tx, int err)
 	if (rc == 0) {
 		ad_tx_stage_set(tx, UMEM_STAGE_ONCOMMIT);
 	} else {
-		D_DEBUG(DB_TRACE, "ad_tx_end(%d) failed, "DF_RC"\n", err, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "ad_tx_end(%d) failed: " DF_RC, err, DP_RC(rc));
 		tx->tx_last_errno = rc;
 		ad_tx_stage_set(tx, UMEM_STAGE_ONABORT);
 	}
@@ -1017,10 +1017,10 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 
 		utx->utx_ops = &ad_wal_tx_ops;
 		tx = umem_tx2ad_tx(utx);
-		D_DEBUG(DB_TRACE, "Allocated tx %p\n", tx);
+		D_DEBUG(DB_TRACE, "Allocated tx %p", tx);
 		rc = ad_tx_begin(bh, tx);
 		if (rc) {
-			D_ERROR("ad_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "ad_tx_begin failed");
 			D_FREE(utx);
 			return rc;
 		}
@@ -1028,7 +1028,7 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 		store = &blob->bb_store;
 		rc = store->stor_ops->so_wal_reserv(store, &tx_id);
 		if (rc) {
-			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "so_wal_reserv failed");
 			blob_decref(blob); /* drop ref taken in ad_tx_begin */
 			D_FREE(utx);
 			return rc;
@@ -1043,14 +1043,14 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 		ad_tx_id_set(tx, tx_id);
 		ad_tx_stage_set(tx, UMEM_STAGE_WORK);
 		tx_set(tx);
-		D_DEBUG(DB_TRACE, "TX "DF_U64" started\n", tx_id);
+		D_DEBUG(DB_TRACE, "TX " DF_U64 " started", tx_id);
 	} else {
 		D_ASSERTF(ad_tx_stage(tx) == UMEM_STAGE_WORK,
 			  "TX "DF_U64", bad stage %d\n", ad_tx_id(tx), ad_tx_stage(tx));
 
 		tx->tx_layer++;
 		if (blob != tx->tx_blob) {
-			D_ERROR("Nested TX for different blob\n");
+			D_ERROR("Nested TX for different blob");
 			rc = -DER_INVAL;
 			goto err_abort;
 		}
@@ -1059,12 +1059,12 @@ tx_begin(struct ad_blob_handle bh, struct umem_tx_stage_data *txd, struct ad_tx 
 				tx->tx_stage_cb = umem_stage_callback;
 				tx->tx_stage_cb_arg = txd;
 			} else if (txd != tx->tx_stage_cb_arg) {
-				D_ERROR("Cannot set different TX callback argument\n");
+				D_ERROR("Cannot set different TX callback argument");
 				rc = -DER_CANCELED;
 				goto err_abort;
 			}
 		}
-		D_DEBUG(DB_TRACE, "Nested TX "DF_U64", layer %d\n", ad_tx_id(tx), tx->tx_layer);
+		D_DEBUG(DB_TRACE, "Nested TX " DF_U64 ", layer %d", ad_tx_id(tx), tx->tx_layer);
 	}
 
 	*tx_pp = tx;
@@ -1163,10 +1163,10 @@ umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
 
 		rc = tx_range_add(tx, off, size, true);
 		if (rc) {
-			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "tx_range_add failed");
 			rc = ad_tx_free(tx, off);
 			if (rc)
-				D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "ad_tx_free failed");
 			return 0;
 		}
 
@@ -1188,7 +1188,7 @@ tx_add_internal(struct ad_tx *tx, void *ptr, size_t size, uint32_t flags)
 	if (flags & AD_TX_REDO) {
 		rc = tx_range_add(tx, blob_ptr2addr(tx->tx_blob, ptr), size, false);
 		if (rc) {
-			D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "tx_range_add failed");
 			return rc;
 		}
 	}
@@ -1281,7 +1281,7 @@ umo_tx_publish(struct umem_instance *umm, void *actv, int actv_cnt)
 		for (i = 0; i < actv_cnt; i++) {
 			rc = tx_range_add(tx, ractv[i].ra_off, ractv[i].ra_size, true);
 			if (rc) {
-				D_ERROR("tx_range_add failed, "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "tx_range_add failed");
 				break;
 			}
 		}
@@ -1299,14 +1299,14 @@ umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t l
 
 	rc = umo_tx_begin(umm, NULL);
 	if (rc) {
-		D_ERROR("umo_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "umo_tx_begin failed");
 		return NULL;
 	}
 
 	tx = tx_get();
 	rc = ad_tx_copy(tx, dest, len, src, AD_TX_UNDO);
 	if (rc) {
-		D_ERROR("ad_tx_copy failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ad_tx_copy failed");
 		goto failed;
 	}
 
@@ -1314,7 +1314,7 @@ umo_atomic_copy(struct umem_instance *umm, void *dest, const void *src, size_t l
 
 	rc = ad_tx_copy(tx, dest, len, src, AD_TX_REDO);
 	if (rc) {
-		D_ERROR("ad_tx_copy failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ad_tx_copy failed");
 		goto failed;
 	}
 
@@ -1343,7 +1343,7 @@ umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 
 	rc = umo_tx_begin(umm, NULL);
 	if (rc) {
-		D_ERROR("umo_tx_begin failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "umo_tx_begin failed");
 		return rc;
 	}
 	tx = tx_get();
@@ -1352,7 +1352,7 @@ umo_atomic_free(struct umem_instance *umm, umem_off_t umoff)
 
 	rc = ad_tx_free(tx, umoff);
 	if (rc) {
-		D_ERROR("ad_tx_free failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "ad_tx_free failed");
 		goto failed;
 	}
 

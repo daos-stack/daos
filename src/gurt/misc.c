@@ -124,7 +124,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 	int		 rc = 0;
 
 	if (dst == NULL) {
-		D_ERROR("Invalid parameter, dst: %p, src: %p.\n", dst, src);
+		D_ERROR("Invalid parameter, dst: %p, src: %p", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -165,7 +165,7 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	rc = d_rank_list_dup(dst, src);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup() failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "d_rank_list_dup() failed");
 		D_GOTO(out, 0);
 	}
 
@@ -187,9 +187,8 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 			for (j = i; j < rank_num; j++)
 				rank_list->rl_ranks[j - 1] =
 					rank_list->rl_ranks[j];
-			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
-				rank_list, i, rank_tmp);
+			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed identical rank[%d](%d)",
+				__FILE__, __LINE__, rank_list, i, rank_tmp);
 
 			i--;
 			rank_num--;
@@ -198,8 +197,8 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 	}
 	if (identical_num != 0) {
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
-			__FILE__, __LINE__, rank_list, identical_num);
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks", __FILE__, __LINE__,
+			rank_list, identical_num);
 	}
 
 out:
@@ -240,15 +239,15 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 		for (j = i; j < rank_num - 1; j++)
 			dst_set->rl_ranks[j] =
 				dst_set->rl_ranks[j + 1];
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
-			__FILE__, __LINE__, dst_set, i, rank);
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d)", __FILE__, __LINE__,
+			dst_set, i, rank);
 		/* as dst_set moved one item ahead */
 		i--;
 	}
 	if (filter_num != 0) {
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
-			__FILE__, __LINE__, dst_set, filter_num);
+		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks", __FILE__, __LINE__,
+			dst_set, filter_num);
 	}
 }
 
@@ -372,14 +371,14 @@ d_rank_list_copy(d_rank_list_t *dst, d_rank_list_t *src)
 	int		rc = DER_SUCCESS;
 
 	if (dst == NULL || src == NULL) {
-		D_ERROR("Nothing to do, dst: %p, src: %p.\n", dst, src);
+		D_ERROR("Nothing to do, dst: %p, src: %p", dst, src);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (dst->rl_nr != src->rl_nr) {
 		dst = d_rank_list_realloc(dst, src->rl_nr);
 		if (dst == NULL) {
-			D_ERROR("d_rank_list_realloc() failed.\n");
+			D_ERROR("d_rank_list_realloc() failed");
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 		dst->rl_nr = src->rl_nr;
@@ -467,11 +466,11 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	int		 rc = 0;
 
 	if (rank_list == NULL) {
-		D_ERROR("rank_list cannot be NULL\n");
+		D_ERROR("rank_list cannot be NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (!d_rank_list_find(rank_list, rank, &idx)) {
-		D_DEBUG(DB_TRACE, "Rank %d not in the rank list.\n", rank);
+		D_DEBUG(DB_TRACE, "Rank %d not in the rank list", rank);
 		D_GOTO(out, 0);
 	}
 	new_num = rank_list->rl_nr - 1;
@@ -482,7 +481,7 @@ d_rank_list_del(d_rank_list_t *rank_list, d_rank_t rank)
 	memmove(dest, src, num_bytes);
 	rank_list = d_rank_list_realloc(rank_list, new_num);
 	if (rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
+		D_ERROR("d_rank_list_realloc() failed");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 out:
@@ -498,7 +497,7 @@ d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
-		D_ERROR("d_rank_list_realloc() failed.\n");
+		D_ERROR("d_rank_list_realloc() failed");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 	new_rank_list->rl_ranks[old_num] = rank;
@@ -597,7 +596,7 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 
 	width = strnlen(name, name_len + 1);
 	if (width > name_len) {
-		D_ERROR("name parameter too long.\n");
+		D_ERROR("name parameter too long");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	width = 0;
@@ -610,8 +609,7 @@ d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
 	for (i = 0; i < rank_list->rl_nr; i++)
 		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
 	tmp_str[width - 1] = '\0';
-	D_DEBUG(DB_TRACE, "%s, %d ranks: %s\n",
-		name, rank_list->rl_nr, tmp_str);
+	D_DEBUG(DB_TRACE, "%s, %d ranks: %s", name, rank_list->rl_nr, tmp_str);
 	D_FREE(tmp_str);
 
 out:
@@ -799,13 +797,13 @@ d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated)
 
 		if (ret < 0) {
 			err = errno;
-			D_ERROR("rank set could not be serialized: %s (%d)\n", strerror(err), err);
+			D_ERROR("rank set could not be serialized: %s (%d)", strerror(err), err);
 			break;
 		}
 
 		if (ret >= remaining) {
 			err = EOVERFLOW;
-			D_WARN("rank set has been partially serialized\n");
+			D_WARN("rank set has been partially serialized");
 			break;
 		}
 
@@ -903,7 +901,7 @@ d_getenv_char(const char *env, char *char_val)
 		return;
 
 	if (!dis_single_char_str(env_val)) {
-		D_ERROR("ENV %s is not single character.\n", env_val);
+		D_ERROR("ENV %s is not single character", env_val);
 		return;
 	}
 	*char_val = *env_val;
@@ -931,12 +929,12 @@ d_getenv_int(const char *env, unsigned *int_val)
 		return;
 
 	if (!dis_integer_str(env_val)) {
-		D_ERROR("ENV %s is not integer.\n", env_val);
+		D_ERROR("ENV %s is not integer", env_val);
 		return;
 	}
 
 	value = atoi(env_val);
-	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
+	D_DEBUG(DB_TRACE, "get ENV %s as %d", env, value);
 	*int_val = value;
 }
 
@@ -951,13 +949,13 @@ d_getenv_uint64_t(const char *env, uint64_t *val)
 
 	env_val = getenv(env);
 	if (!env_val) {
-		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
+		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %" PRId64, env, *val);
 		return -DER_NONEXIST;
 	}
 
 	env_len = strnlen(env_val, 128);
 	if (env_len == 128) {
-		D_ERROR("ENV '%s' is invalid\n", env);
+		D_ERROR("ENV '%s' is invalid", env);
 		return -DER_INVAL;
 	}
 
@@ -967,11 +965,11 @@ d_getenv_uint64_t(const char *env, uint64_t *val)
 	matched = sscanf(env_val, "%"PRId64"%n", &new_val, &count);
 	if (matched == 1 && env_len == count) {
 		*val = new_val;
-		D_DEBUG(DB_TRACE, "ENV '%s' set to %"PRId64"\n", env, *val);
+		D_DEBUG(DB_TRACE, "ENV '%s' set to %" PRId64, env, *val);
 		return -DER_SUCCESS;
 	}
 
-	D_ERROR("ENV '%s' is invalid: '%s'\n", env, env_val);
+	D_ERROR("ENV '%s' is invalid: '%s'", env, env_val);
 	return -DER_INVAL;
 }
 

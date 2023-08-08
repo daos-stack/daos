@@ -90,25 +90,24 @@ static inline void
 sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
 	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes."
-			  "Idx: "DF_SGL_IDX"\n",
-		bytes, DP_SGL_IDX(sgl_idx));
+	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes.Idx: " DF_SGL_IDX, bytes,
+		DP_SGL_IDX(sgl_idx));
 
 	/** move to next iov if necessary */
 	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
 		sgl_idx->iov_idx++;
 		sgl_idx->iov_offset = 0;
-		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
+		D_DEBUG(DB_TRACE, "Moving to next iov in sgl");
 	}
-	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	D_DEBUG(DB_TRACE, "Idx: " DF_SGL_IDX, DP_SGL_IDX(sgl_idx));
 }
 
 static inline void *
 sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
 {
-	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	D_DEBUG(DB_TRACE, "Idx: " DF_SGL_IDX, DP_SGL_IDX(sgl_idx));
 	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
-		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
+		D_DEBUG(DB_TRACE, "Index too high. Returning NULL");
 		return NULL;
 	}
 	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
@@ -121,13 +120,13 @@ sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
 static inline void
 sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
-	D_DEBUG(DB_TRACE, "Before Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	D_DEBUG(DB_TRACE, "Before Idx: " DF_SGL_IDX, DP_SGL_IDX(sgl_idx));
 	if (sgl_idx->iov_offset + bytes >
 	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
 		sgl_idx->iov_idx++;
 		sgl_idx->iov_offset = 0;
 	}
-	D_DEBUG(DB_TRACE, "After Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	D_DEBUG(DB_TRACE, "After Idx: " DF_SGL_IDX, DP_SGL_IDX(sgl_idx));
 }
 
 /*
@@ -273,8 +272,7 @@ daos_wallclock_secs(void)
 
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc) {
-		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
-			rc, errno, strerror(errno));
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s)", rc, errno, strerror(errno));
 		return 0;
 	}
 
@@ -534,7 +532,7 @@ static inline int
 daos_errno2der(int err)
 {
 	if (err < 0) {
-		D_ERROR("error < 0 (%d)\n", err);
+		D_ERROR("error < 0 (%d)", err);
 		return -DER_UNKNOWN;
 	}
 
@@ -577,7 +575,7 @@ static inline int
 daos_der2errno(int err)
 {
 	if (err > 0) {
-		D_ERROR("error > 0 (%d)\n", err);
+		D_ERROR("error > 0 (%d)", err);
 		return EINVAL;
 	}
 

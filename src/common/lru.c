@@ -84,14 +84,14 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	struct daos_lru_cache	*lcache = NULL;
 	int			 rc = 0;
 
-	D_DEBUG(DB_TRACE, "Creating a new LRU cache of size (2^%d)\n", bits);
+	D_DEBUG(DB_TRACE, "Creating a new LRU cache of size (2^%d)", bits);
 
 	if (ops == NULL ||
 	    ops->lop_cmp_keys  == NULL ||
 	    ops->lop_rec_hash  == NULL ||
 	    ops->lop_alloc_ref == NULL ||
 	    ops->lop_free_ref  == NULL) {
-		D_ERROR("Error missing ops/mandatory-ops for LRU cache\n");
+		D_ERROR("Error missing ops/mandatory-ops for LRU cache");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -127,7 +127,7 @@ daos_lru_cache_destroy(struct daos_lru_cache *lcache)
 	if (lcache == NULL)
 		return;
 
-	D_DEBUG(DB_TRACE, "Destroying LRU cache\n");
+	D_DEBUG(DB_TRACE, "Destroying LRU cache");
 	d_hash_table_debug(&lcache->dlc_htable);
 	d_hash_table_destroy_inplace(&lcache->dlc_htable, true);
 	D_FREE(lcache);
@@ -182,12 +182,12 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 
 	d_list_for_each_entry_safe(llink, tmp, &cb_arg.list, ll_qlink) {
 		d_list_del_init(&llink->ll_qlink);
-		D_DEBUG(DB_TRACE, "Remove %p from LRU cache\n", llink);
+		D_DEBUG(DB_TRACE, "Remove %p from LRU cache", llink);
 		lru_del_evicted(lcache, llink);
 		count++;
 	}
-	D_DEBUG(DB_TRACE, "Evicted %u items, total count %u of %u\n",
-		count, lcache->dlc_count, lcache->dlc_csize);
+	D_DEBUG(DB_TRACE, "Evicted %u items, total count %u of %u", count, lcache->dlc_count,
+		lcache->dlc_csize);
 }
 
 int
@@ -221,7 +221,7 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_TRACE, "Inserting %p item into LRU Hash table\n", llink);
+	D_DEBUG(DB_TRACE, "Inserting %p item into LRU Hash table", llink);
 	llink->ll_evicted = 0;
 	llink->ll_ref	  = 1; /* 1 for caller */
 	llink->ll_ops	  = lcache->dlc_ops;

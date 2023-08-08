@@ -43,8 +43,7 @@ dtx_iter_fini(struct vos_iterator *iter)
 	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc != 0)
-			D_ERROR("oid_iter_fini failed: rc = "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "oid_iter_fini failed");
 	}
 
 	if (oiter->oit_cont != NULL)
@@ -63,7 +62,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	int			 rc;
 
 	if (type != VOS_ITER_DTX) {
-		D_ERROR("Expected Type: %d, got %d\n", VOS_ITER_DTX, type);
+		D_ERROR("Expected Type: %d, got %d", VOS_ITER_DTX, type);
 		return -DER_INVAL;
 	}
 
@@ -81,8 +80,7 @@ dtx_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 
 	rc = dbtree_iter_prepare(cont->vc_dtx_active_hdl, 0, &oiter->oit_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare DTX iteration: rc = "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to prepare DTX iteration");
 		dtx_iter_fini(&oiter->oit_iter);
 	} else {
 		*iter_pp = &oiter->oit_iter;
@@ -123,8 +121,7 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor, uint32_t next /
 		d_iov_set(&rec_iov, NULL, 0);
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 		if (rc != 0) {
-			D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Error while fetching DTX info");
 			goto out;
 		}
 
@@ -231,8 +228,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		d_iov_set(&rec_iov, NULL, 0);
 		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 		if (rc != 0) {
-			D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Error while fetching DTX info");
 			return rc;
 		}
 
@@ -282,8 +278,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 							    DAE_MBS_OFF(dae));
 	}
 
-	D_DEBUG(DB_IO, "DTX iterator fetch the one "DF_DTI"\n",
-		DP_DTI(&DAE_XID(dae)));
+	D_DEBUG(DB_IO, "DTX iterator fetch the one " DF_DTI, DP_DTI(&DAE_XID(dae)));
 
 	return 0;
 }
@@ -295,7 +290,7 @@ dtx_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 	if (op != VOS_ITER_PROC_OP_DELETE)
 		return -DER_NOSYS;
 
-	D_WARN("NOT allow to remove DTX entry via iteration!\n");
+	D_WARN("NOT allow to remove DTX entry via iteration!");
 
 	return -DER_NO_PERM;
 }

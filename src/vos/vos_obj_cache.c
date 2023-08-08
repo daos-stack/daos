@@ -66,8 +66,8 @@ obj_lop_alloc(void *key, unsigned int ksize, void *args,
 	lkey = (struct obj_lru_key *)key;
 	D_ASSERT(lkey != NULL);
 
-	D_DEBUG(DB_TRACE, "cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
+	D_DEBUG(DB_TRACE, "cont=" DF_UUID ", obj=" DF_UOID, DP_UUID(cont->vc_id),
+		DP_UOID(lkey->olk_oid));
 
 	D_ALLOC_PTR(obj);
 	if (!obj)
@@ -124,7 +124,7 @@ obj_lop_free(struct daos_llink *llink)
 {
 	struct vos_object	*obj;
 
-	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache\n");
+	D_DEBUG(DB_TRACE, "lru free callback for vos_obj_cache");
 
 	obj = container_of(llink, struct vos_object, obj_llink);
 	clean_object(obj);
@@ -137,9 +137,8 @@ obj_lop_print_key(void *key, unsigned int ksize)
 	struct obj_lru_key	*lkey = (struct obj_lru_key *)key;
 	struct vos_container	*cont = lkey->olk_cont;
 
-	D_DEBUG(DB_TRACE, "pool="DF_UUID" cont="DF_UUID", obj="DF_UOID"\n",
-		DP_UUID(cont->vc_pool->vp_id),
-		DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
+	D_DEBUG(DB_TRACE, "pool=" DF_UUID " cont=" DF_UUID ", obj=" DF_UOID,
+		DP_UUID(cont->vc_pool->vp_id), DP_UUID(cont->vc_id), DP_UOID(lkey->olk_oid));
 }
 
 static struct daos_llink_ops obj_lru_ops = {
@@ -155,11 +154,11 @@ vos_obj_cache_create(int32_t cache_size, struct daos_lru_cache **occ)
 {
 	int	rc;
 
-	D_DEBUG(DB_TRACE, "Creating an object cache %d\n", (1 << cache_size));
+	D_DEBUG(DB_TRACE, "Creating an object cache %d", (1 << cache_size));
 	rc = daos_lru_cache_create(cache_size, D_HASH_FT_NOLOCK,
 				   &obj_lru_ops, occ);
 	if (rc)
-		D_ERROR("Error in creating lru cache: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error in creating lru cache");
 	return rc;
 }
 
@@ -323,10 +322,11 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (create)
 		create_flag = cont;
 
-	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" layout %u create=%s epr="DF_X64"-"DF_X64"\n",
-		DP_UUID(cont->vc_id), DP_UOID(oid), oid.id_layout_ver,
-		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
+	D_DEBUG(DB_TRACE,
+		"Try to hold cont=" DF_UUID ", obj=" DF_UOID " layout %u create=%s epr=" DF_X64
+		"-" DF_X64,
+		DP_UUID(cont->vc_id), DP_UOID(oid), oid.id_layout_ver, create ? "true" : "false",
+		epr->epr_lo, epr->epr_hi);
 
 	/* Create the key for obj cache */
 	lkey.olk_cont = cont;
@@ -372,16 +372,14 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_X64"-"DF_X64"\n",
-		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
-		epr->epr_hi);
+	D_DEBUG(DB_TRACE, "%s Got empty obj " DF_UOID " epr=" DF_X64 "-" DF_X64,
+		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo, epr->epr_hi);
 
 	obj->obj_sync_epoch = 0;
 	if (!create) {
 		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
-				DP_UOID(oid));
+			D_DEBUG(DB_TRACE, "non exist oid " DF_UOID, DP_UOID(oid));
 			goto failed;
 		}
 	} else {
@@ -395,8 +393,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 		goto failed;
 
 	if (!obj->obj_df) {
-		D_DEBUG(DB_TRACE, "nonexistent obj "DF_UOID"\n",
-			DP_UOID(oid));
+		D_DEBUG(DB_TRACE, "nonexistent obj " DF_UOID, DP_UOID(oid));
 		D_GOTO(failed, rc = -DER_NONEXIST);
 	}
 
@@ -421,17 +418,16 @@ check_object:
 			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						epr->epr_hi, bound))
 				rc = -DER_TX_RESTART;
-			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
-				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
+			D_DEBUG(DB_TRACE, "Object " DF_UOID " not found at " DF_U64, DP_UOID(oid),
+				epr->epr_hi);
 			goto failed;
 		}
 
 		rc = vos_ilog_check(&obj->obj_ilog_info, epr, epr,
 				    visible_only);
 		if (rc != 0) {
-			D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "
-				DF_U64"-"DF_U64"\n", DP_UOID(oid), epr->epr_lo,
-				epr->epr_hi);
+			D_DEBUG(DB_TRACE, "Object " DF_UOID " not visible at " DF_U64 "-" DF_U64,
+				DP_UOID(oid), epr->epr_lo, epr->epr_hi);
 			if (!vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
 						 epr->epr_hi, bound))
 				goto failed;
@@ -456,9 +452,8 @@ check_object:
 	if (rc == -DER_NONEXIST && cond_mask)
 		goto out;
 	if (rc != 0) {
-		VOS_TX_LOG_FAIL(rc, "Could not update object "DF_UOID" at "
-				DF_U64 ": "DF_RC"\n", DP_UOID(oid), epr->epr_hi,
-				DP_RC(rc));
+		VOS_TX_LOG_FAIL(rc, "Could not update object " DF_UOID " at " DF_U64 ": " DF_RC,
+				DP_UOID(oid), epr->epr_hi, DP_RC(rc));
 		goto failed;
 	}
 
@@ -478,10 +473,10 @@ out:
 		 */
 		D_ASSERT(obj->obj_sync_epoch > 0);
 
-		D_INFO("Refuse %s obj "DF_UOID" because of the epoch "DF_U64
-		       " is not newer than the sync epoch "DF_U64"\n",
-		       intent == DAOS_INTENT_PUNCH ? "punch" : "update",
-		       DP_UOID(oid), epr->epr_hi, obj->obj_sync_epoch);
+		D_INFO("Refuse %s obj " DF_UOID " because of the epoch " DF_U64
+		       " is not newer than the sync epoch " DF_U64,
+		       intent == DAOS_INTENT_PUNCH ? "punch" : "update", DP_UOID(oid), epr->epr_hi,
+		       obj->obj_sync_epoch);
 		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
@@ -498,7 +493,7 @@ out:
 failed:
 	vos_obj_release(occ, obj, true);
 failed_2:
-	VOS_TX_LOG_FAIL(rc, "failed to hold object, rc="DF_RC"\n", DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "failed to hold object: " DF_RC, DP_RC(rc));
 
 	return	rc;
 }

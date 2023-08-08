@@ -57,13 +57,13 @@ request_credentials_via_drpc(Drpc__Response **response)
 	int		rc;
 
 	if (dc_agent_sockpath == NULL) {
-		D_ERROR("DAOS Socket Path is Uninitialized\n");
+		D_ERROR("DAOS Socket Path is Uninitialized");
 		return -DER_UNINIT;
 	}
 
 	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Can't connect to agent socket "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Can't connect to agent socket");
 		return rc;
 	}
 
@@ -72,7 +72,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
 			      &request);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Couldn't allocate dRPC call");
 		drpc_close(agent_socket);
 		return rc;
 	}
@@ -88,14 +88,13 @@ static int
 process_credential_response(Drpc__Response *response, d_iov_t *creds)
 {
 	if (response == NULL) {
-		D_ERROR("Response was null\n");
+		D_ERROR("Response was null");
 		return -DER_NOREPLY;
 	}
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
 		/* Recipient could not parse our message */
-		D_ERROR("Agent credential drpc request failed: %d\n",
-			response->status);
+		D_ERROR("Agent credential drpc request failed: %d", response->status);
 		return -DER_MISC;
 	}
 
@@ -133,28 +132,27 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (cred_resp == NULL) {
-		D_ERROR("Body was not a GetCredentialResp\n");
+		D_ERROR("Body was not a GetCredentialResp");
 		return -DER_PROTO;
 	}
 
 	if (cred_resp->status != 0) {
-		D_ERROR("dRPC call reported failure, status=%d\n",
-			cred_resp->status);
+		D_ERROR("dRPC call reported failure, status=%d", cred_resp->status);
 		D_GOTO(out, rc = cred_resp->status);
 	}
 
 	if (cred_resp->cred == NULL) {
-		D_ERROR("No cred included\n");
+		D_ERROR("No cred included");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
 	if (cred_resp->cred->token == NULL) {
-		D_ERROR("Credential did not include token\n");
+		D_ERROR("Credential did not include token");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
 	if (cred_resp->cred->verifier == NULL) {
-		D_ERROR("Credential did not include verifier\n");
+		D_ERROR("Credential did not include verifier");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -196,14 +194,14 @@ acl_from_prop(daos_prop_t *prop, uint32_t prop_type, struct daos_acl **acl_out)
 
 	entry = daos_prop_entry_get(prop, prop_type);
 	if (entry == NULL) {
-		D_ERROR("no %s ACL in property\n", type_str);
+		D_ERROR("no %s ACL in property", type_str);
 		return -DER_INVAL;
 	}
 	acl = (struct daos_acl *)entry->dpe_val_ptr;
 
 	rc = daos_acl_validate(acl);
 	if (rc != 0) {
-		D_ERROR("%s ACL is invalid\n", type_str);
+		D_ERROR("%s ACL is invalid", type_str);
 		return rc;
 	}
 
@@ -221,7 +219,7 @@ get_owner_str_from_prop(daos_prop_t *prop, uint32_t prop_type)
 
 	entry = daos_prop_entry_get(prop, prop_type);
 	if (entry == NULL) {
-		D_ERROR("no entry for %d in property\n", prop_type);
+		D_ERROR("no entry for %d in property", prop_type);
 		return NULL;
 	}
 
@@ -246,13 +244,13 @@ get_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32_t gr
 
 	ownership.user = get_owner_str_from_prop(prop, owner_prop);
 	if (ownership.user == NULL) {
-		D_ERROR("couldn't get owner user (%d) from prop\n", owner_prop);
+		D_ERROR("couldn't get owner user (%d) from prop", owner_prop);
 		return -DER_INVAL;
 	}
 
 	ownership.group = get_owner_str_from_prop(prop, group_prop);
 	if (ownership.group == NULL) {
-		D_ERROR("couldn't get owner group (%d) from prop\n", group_prop);
+		D_ERROR("couldn't get owner group (%d) from prop", group_prop);
 		return -DER_INVAL;
 	}
 
@@ -278,7 +276,7 @@ fill_user_info(uid_t uid, gid_t *gids, size_t nr_gids, struct acl_user *user_inf
 
 	rc = daos_acl_uid_to_principal(uid, &user_info->user);
 	if (rc != 0) {
-		D_ERROR("failed to convert uid %d to an ACL principal: "DF_RC"\n", uid, DP_RC(rc));
+		DL_ERROR(rc, "failed to convert uid %d to an ACL principal", uid);
 		D_GOTO(err_out, rc);
 	}
 
@@ -290,8 +288,7 @@ fill_user_info(uid_t uid, gid_t *gids, size_t nr_gids, struct acl_user *user_inf
 	for (i = 0; i < nr_gids; i++) {
 		rc = daos_acl_gid_to_principal(gids[i], &user_info->groups[i]);
 		if (rc != 0) {
-			D_ERROR("failed to convert gid %d to an ACL principal: "DF_RC"\n", gids[i],
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to convert gid %d to an ACL principal", gids[i]);
 			D_GOTO(err_userinfo, rc);
 		}
 		user_info->nr_groups++;
@@ -315,17 +312,17 @@ get_user_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32
 	int		rc;
 
 	if (prop == NULL) {
-		D_ERROR("null property parameter\n");
+		D_ERROR("null property parameter");
 		return -DER_INVAL;
 	}
 
 	if (gids == NULL && nr_gids > 0) {
-		D_ERROR("null gids array with nr_gids=%lu\n", nr_gids);
+		D_ERROR("null gids array with nr_gids=%lu", nr_gids);
 		return -DER_INVAL;
 	}
 
 	if (perms == NULL) {
-		D_ERROR("null perms parameter\n");
+		D_ERROR("null perms parameter");
 		return -DER_INVAL;
 	}
 
@@ -334,13 +331,13 @@ get_user_perms(daos_prop_t *prop, uint32_t acl_prop, uint32_t owner_prop, uint32
 
 	rc = fill_user_info(uid, gids, nr_gids, &user_info);
 	if (rc != 0) {
-		D_ERROR("failed to convert uid/gids into ACL principals, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to convert uid/gids into ACL principals");
 		D_GOTO(out, rc);
 	}
 
 	rc = get_perms(prop, acl_prop, owner_prop, group_prop, &user_info, min_owner_perms, perms);
 	if (rc != 0)
-		D_ERROR("failed to collect pool permissions, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to collect pool permissions");
 
 	free_user_info_strings(&user_info);
 out:

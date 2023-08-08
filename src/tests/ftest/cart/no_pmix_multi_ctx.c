@@ -79,13 +79,13 @@ my_crtu_progress_fn(void *data)
 		DBG_PRINT("Context creation sanity check passed\n");
 		grp = crt_group_lookup(NULL);
 		if (!grp) {
-			D_ERROR("Failed to lookup group\n");
+			D_ERROR("Failed to lookup group");
 			assert(0);
 		}
 
 		rc = crt_rank_uri_get(grp, 0, 0, &my_uri);
 		if (rc != 0) {
-			D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+			D_ERROR("crt_rank_uri_get() failed; rc=%d", rc);
 			assert(0);
 		}
 
@@ -93,8 +93,7 @@ my_crtu_progress_fn(void *data)
 		for (i = 1; i < (NUM_RANKS + 1); i++) {
 			rc = crt_group_primary_rank_add(crt_ctx[0], grp, i, my_uri);
 			if (rc != 0) {
-				D_ERROR("crt_group_primary_rank_add() failed; rc=%d\n",
-					rc);
+				D_ERROR("crt_group_primary_rank_add() failed; rc=%d", rc);
 				assert(0);
 			}
 		}
@@ -122,7 +121,7 @@ int main(int argc, char **argv)
 
 	rc = crt_init(0, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -137,7 +136,7 @@ int main(int argc, char **argv)
 
 	rc = crt_rank_self_set(0, 1 /* group_version_min */);
 	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(0) failed; rc=%d\n", rc);
+		D_ERROR("crt_rank_self_set(0) failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -155,7 +154,7 @@ int main(int argc, char **argv)
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed with rc=%d", rc);
 		assert(0);
 	}
 

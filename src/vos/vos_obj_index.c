@@ -93,8 +93,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		obj->vo_sync	= 0;
 		rc = ilog_create(&tins->ti_umm, &obj->vo_ilog);
 		if (rc != 0) {
-			D_ERROR("Failure to create incarnation log: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failure to create incarnation log");
 			return rc;
 		}
 	} else {
@@ -114,8 +113,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	if (dtx_is_valid_handle(dth))
 		dth->dth_sync = 1;
 
-	D_DEBUG(DB_TRACE, "alloc "DF_UOID" rec "DF_X64"\n",
-		DP_UOID(obj->vo_id), rec->rec_off);
+	D_DEBUG(DB_TRACE, "alloc " DF_UOID " rec " DF_X64, DP_UOID(obj->vo_id), rec->rec_off);
 	return 0;
 }
 
@@ -151,8 +149,7 @@ oi_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		vos_ilog_desc_cbs_init(&cbs, tins->ti_coh);
 		rc = ilog_destroy(umm, &cbs, &obj->vo_ilog);
 		if (rc != 0) {
-			D_ERROR("Failed to destroy incarnation log: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "Failed to destroy incarnation log");
 			return rc;
 		}
 
@@ -172,8 +169,7 @@ oi_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	struct vos_obj_df	*obj;
 
 	obj = umem_off2ptr(&tins->ti_umm, rec->rec_off);
-	D_DEBUG(DB_TRACE, "fetch "DF_UOID" rec "DF_X64"\n",
-		DP_UOID(obj->vo_id), rec->rec_off);
+	D_DEBUG(DB_TRACE, "fetch " DF_UOID " rec " DF_X64, DP_UOID(obj->vo_id), rec->rec_off);
 
 	D_ASSERT(val_iov != NULL);
 	d_iov_set(val_iov, obj, sizeof(struct vos_obj_df));
@@ -256,8 +252,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	struct ilog_desc_cbs	 cbs;
 	int			 rc;
 
-	D_DEBUG(DB_TRACE, "Lookup obj "DF_UOID" in the OI table.\n",
-		DP_UOID(oid));
+	D_DEBUG(DB_TRACE, "Lookup obj " DF_UOID " in the OI table", DP_UOID(oid));
 
 	rc = vos_oi_find(cont, oid, &obj, ts_set);
 	if (rc == 0)
@@ -266,8 +261,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 		return rc;
 
 	/* Object ID not found insert it to the OI tree */
-	D_DEBUG(DB_TRACE, "Object "DF_UOID" not found adding it..\n",
-		DP_UOID(oid));
+	D_DEBUG(DB_TRACE, "Object " DF_UOID " not found adding it", DP_UOID(oid));
 
 	d_iov_set(&val_iov, NULL, 0);
 	d_iov_set(&key_iov, &oid, sizeof(oid));
@@ -275,7 +269,7 @@ vos_oi_find_alloc(struct vos_container *cont, daos_unit_oid_t oid,
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			   &key_iov, &val_iov, NULL);
 	if (rc) {
-		D_ERROR("Failed to update Key for Object index\n");
+		D_ERROR("Failed to update Key for Object index");
 		return rc;
 	}
 	obj = val_iov.iov_buf;
@@ -316,8 +310,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	daos_epoch_range_t	 epr = {0, epoch};
 	int			 rc = 0;
 
-	D_DEBUG(DB_TRACE, "Punch obj "DF_UOID", epoch="DF_U64".\n",
-		DP_UOID(oid), epoch);
+	D_DEBUG(DB_TRACE, "Punch obj " DF_UOID ", epoch=" DF_U64, DP_UOID(oid), epoch);
 
 	rc = vos_ilog_punch(cont, &obj->vo_ilog, &epr, bound, NULL,
 			    info, ts_set, true,
@@ -326,8 +319,7 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc == 0 && vos_ts_set_check_conflict(ts_set, epoch))
 		rc = -DER_TX_RESTART;
 
-	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: "DF_RC"\n",
-			DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Failed to update incarnation log entry: " DF_RC, DP_RC(rc));
 
 	return rc;
 }
@@ -349,7 +341,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_
 	d_iov_t		key_iov;
 	int		rc = 0;
 
-	D_DEBUG(DB_TRACE, "Delete obj "DF_UOID"\n", DP_UOID(oid));
+	D_DEBUG(DB_TRACE, "Delete obj " DF_UOID, DP_UOID(oid));
 
 	arg.cont = cont;
 	if (only_delete_entry)
@@ -362,7 +354,7 @@ vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool only_delete_
 		return 0;
 
 	if (rc != 0) {
-		D_ERROR("Failed to delete object, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to delete object");
 		return rc;
 	}
 	return 0;
@@ -397,7 +389,7 @@ vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 	if (rc == -DER_NONEXIST)
 		return 0;
 	if (rc) {
-		D_ERROR("dbtree fetch "DF_UOID": %d\n", DP_UOID(oid), rc);
+		D_ERROR("dbtree fetch " DF_UOID ": %d", DP_UOID(oid), rc);
 		return rc;
 	}
 
@@ -406,7 +398,7 @@ vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 	rc = dbtree_upsert(cont->vc_btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			   &key_iov, &val_iov, &val_iov);
 	if (rc)
-		D_ERROR("dbtree upsert "DF_UOID": %d\n", DP_UOID(oid), rc);
+		D_ERROR("dbtree upsert " DF_UOID ": %d", DP_UOID(oid), rc);
 
 	return rc;
 }
@@ -431,7 +423,7 @@ oi_iter_fini(struct vos_iterator *iter)
 	if (daos_handle_is_valid(oiter->oit_hdl)) {
 		rc = dbtree_iter_finish(oiter->oit_hdl);
 		if (rc)
-			D_ERROR("oid_iter_fini failed:"DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "oid_iter_fini failed");
 	}
 
 	if (oiter->oit_cont != NULL)
@@ -481,15 +473,14 @@ oi_iter_nested_tree_fetch(struct vos_iterator *iter, vos_iter_type_t type,
 	D_ASSERT(iter->it_type == VOS_ITER_OBJ);
 
 	if (type != VOS_ITER_DKEY) {
-		D_DEBUG(DB_TRACE, "Expected VOS_ITER_DKEY nested iterator type,"
-			" got %d\n", type);
+		D_DEBUG(DB_TRACE, "Expected VOS_ITER_DKEY nested iterator type, got %d", type);
 		return -DER_INVAL;
 	}
 
 	d_iov_set(&rec_iov, NULL, 0);
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, NULL);
 	if (rc != 0) {
-		D_ERROR("Error while fetching oid info: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error while fetching oid info");
 		return rc;
 	}
 
@@ -519,8 +510,7 @@ oi_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	int			rc = 0;
 
 	if (type != VOS_ITER_OBJ) {
-		D_ERROR("Expected Type: %d, got %d\n",
-			VOS_ITER_OBJ, type);
+		D_ERROR("Expected Type: %d, got %d", VOS_ITER_OBJ, type);
 		return -DER_INVAL;
 	}
 
@@ -656,7 +646,7 @@ next:
 	if (rc == -DER_NONEXIST) /* Non-existence isn't a failure */
 		return rc;
 
-	VOS_TX_LOG_FAIL(rc, "iterator %s failed, rc="DF_RC"\n", str, DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "iterator %s failed: " DF_RC, str, DP_RC(rc));
 
 	return rc;
 }
@@ -748,11 +738,11 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS)
-			D_DEBUG(DB_TRACE, "Cannot fetch oid info because of "
-				"conflict modification: "DF_RC"\n", DP_RC(rc));
-		else
-			D_ERROR("Error while fetching oid info: "DF_RC"\n",
+			D_DEBUG(DB_TRACE,
+				"Cannot fetch oid info because of conflict modification: " DF_RC,
 				DP_RC(rc));
+		else
+			DL_ERROR(rc, "Error while fetching oid info");
 		return rc;
 	}
 
@@ -783,7 +773,7 @@ oi_iter_process(struct vos_iterator *iter, vos_iter_proc_op_t op, void *args)
 	rc = umem_tx_end(vos_cont2umm(oiter->oit_cont), rc);
 
 	if (rc != 0)
-		D_ERROR("Failed to delete oid entry: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to delete oid entry");
 exit:
 	return rc;
 }
@@ -821,14 +811,12 @@ oi_iter_check_punch(daos_handle_t ih)
 		goto exit;
 
 	/* Incarnation log is empty, delete the object */
-	D_DEBUG(DB_IO, "Moving object "DF_UOID" to gc heap\n",
-		DP_UOID(oid));
+	D_DEBUG(DB_IO, "Moving object " DF_UOID " to gc heap", DP_UOID(oid));
 	/* Evict the object from cache */
 	rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 				  oiter->oit_cont, oid);
 	if (rc != 0)
-		D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
-			DP_UOID(oid), DP_RC(rc));
+		DL_ERROR(rc, "Could not evict object " DF_UOID, DP_UOID(oid));
 	del_arg.cont = oiter->oit_cont;
 	del_arg.only_delete_entry = 0;
 	rc = dbtree_iter_delete(oiter->oit_hdl, &del_arg);
@@ -874,8 +862,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 				&oiter->oit_ilog_info);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */
-		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
-			DP_UOID(oid));
+		D_DEBUG(DB_IO, "Removing object " DF_UOID " from tree", DP_UOID(oid));
 		delete = true;
 
 		/* XXX: The dkey tree may be not empty because related prepared transaction can
@@ -886,8 +873,7 @@ oi_iter_aggregate(daos_handle_t ih, bool range_discard)
 		rc = vos_obj_evict_by_oid(vos_obj_cache_current(oiter->oit_cont->vc_pool->vp_sysdb),
 					  oiter->oit_cont, oid);
 		if (rc != 0)
-			D_ERROR("Could not evict object "DF_UOID" "DF_RC"\n",
-				DP_UOID(oid), DP_RC(rc));
+			DL_ERROR(rc, "Could not evict object " DF_UOID, DP_UOID(oid));
 		rc = dbtree_iter_delete(oiter->oit_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
 	} else if (rc == -DER_NONEXIST) {
@@ -923,11 +909,10 @@ vos_obj_tab_register()
 {
 	int	rc;
 
-	D_DEBUG(DB_DF, "Registering class for OI table Class: %d\n",
-		VOS_BTR_OBJ_TABLE);
+	D_DEBUG(DB_DF, "Registering class for OI table Class: %d", VOS_BTR_OBJ_TABLE);
 
 	rc = dbtree_class_register(VOS_BTR_OBJ_TABLE, 0, &oi_btr_ops);
 	if (rc)
-		D_ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed");
 	return rc;
 }

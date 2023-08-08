@@ -35,7 +35,7 @@ dma_alloc_chunk(unsigned int cnt)
 	D_ASSERT(bytes > 0);
 
 	if (DAOS_FAIL_CHECK(DAOS_NVME_ALLOCBUF_ERR)) {
-		D_ERROR("Injected DMA buffer allocation error.\n");
+		D_ERROR("Injected DMA buffer allocation error");
 		return NULL;
 	}
 
@@ -149,56 +149,55 @@ dma_metrics_init(struct bio_dma_buffer *bdb, int tgt_id)
 	rc = d_tm_add_metric(&stats->bds_chks_tot, D_TM_GAUGE, "Total chunks", "chunk",
 			     "dmabuff/total_chunks/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create total_chunks telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create total_chunks telemetry");
 
 	for (i = BIO_CHK_TYPE_IO; i < BIO_CHK_TYPE_MAX; i++) {
 		snprintf(desc, sizeof(desc), "Used chunks (%s)", chk_type2str(i));
 		rc = d_tm_add_metric(&stats->bds_chks_used[i], D_TM_GAUGE, desc, "chunk",
 				     "dmabuff/used_chunks_%s/tgt_%d", chk_type2str(i), tgt_id);
 		if (rc)
-			D_WARN("Failed to create used_chunks_%s telemetry: "DF_RC"\n",
-			       chk_type2str(i), DP_RC(rc));
+			DL_WARN(rc, "Failed to create used_chunks_%s telemetry", chk_type2str(i));
 	}
 
 	rc = d_tm_add_metric(&stats->bds_bulk_grps, D_TM_GAUGE, "Total bulk grps", "grp",
 			     "dmabuff/bulk_grps/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create total_bulk_grps telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create total_bulk_grps telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_active_iods, D_TM_GAUGE, "Active requests", "req",
 			     "dmabuff/active_reqs/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create active_requests telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create active_requests telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_queued_iods, D_TM_GAUGE, "Queued requests", "req",
 			     "dmabuff/queued_reqs/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create queued_requests telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create queued_requests telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_grab_errs, D_TM_COUNTER, "Grab buffer errors", "err",
 			     "dmabuff/grab_errs/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create grab_errs telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create grab_errs telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_grab_retries, D_TM_STATS_GAUGE, "Grab buffer retry count",
 			     "retry", "dmabuff/grab_retries/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create grab_retries telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create grab_retries telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_wal_sz, D_TM_STATS_GAUGE, "WAL tx size",
 			     "bytes", "dmabuff/wal_sz/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create WAL size telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create WAL size telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_wal_qd, D_TM_STATS_GAUGE, "WAL tx QD",
 			     "commits", "dmabuff/wal_qd/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create WAL QD telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create WAL QD telemetry");
 
 	rc = d_tm_add_metric(&stats->bds_wal_waiters, D_TM_STATS_GAUGE, "WAL waiters",
 			     "transactions", "dmabuff/wal_waiters/tgt_%d", tgt_id);
 	if (rc)
-		D_WARN("Failed to create WAL waiters telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create WAL waiters telemetry");
 }
 
 struct bio_dma_buffer *
@@ -313,14 +312,14 @@ iod_dma_wait(struct bio_desc *biod)
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_self_polling) {
-		D_DEBUG(DB_IO, "Self poll completion\n");
+		D_DEBUG(DB_IO, "Self poll completion");
 		rc = xs_poll_completion(xs_ctxt, &biod->bd_inflights, 0);
 		if (rc)
-			D_ERROR("Self poll completion failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Self poll completion failed");
 	} else if (biod->bd_inflights != 0) {
 		rc = ABT_eventual_wait(biod->bd_dma_done, NULL);
 		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT eventual wait failed. %d\n", rc);
+			D_ERROR("ABT eventual wait failed. %d", rc);
 	}
 }
 
@@ -399,9 +398,8 @@ iod_release_buffer(struct bio_desc *biod)
 		D_ASSERT(chunk->bdc_bulk_grp == NULL);
 		chunk->bdc_ref--;
 
-		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d "
-			"type:%u\n", chunk, chunk->bdc_ptr, chunk->bdc_pg_idx,
-			chunk->bdc_ref, dma_chunk_is_huge(chunk),
+		D_DEBUG(DB_IO, "Release chunk:%p[%p] idx:%u ref:%u huge:%d type:%u", chunk,
+			chunk->bdc_ptr, chunk->bdc_pg_idx, chunk->bdc_ref, dma_chunk_is_huge(chunk),
 			chunk->bdc_type);
 
 		if (dma_chunk_is_huge(chunk)) {
@@ -470,22 +468,20 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 					iov->iov_len : iov->iov_buf_len;
 
 		if (buf_len <= arg->ca_iov_off) {
-			D_ERROR("Invalid iov[%d] "DF_U64"/"DF_U64" %d\n",
-				arg->ca_iov_idx, arg->ca_iov_off,
-				buf_len, biod->bd_type);
+			D_ERROR("Invalid iov[%d] " DF_U64 "/" DF_U64 " %d", arg->ca_iov_idx,
+				arg->ca_iov_off, buf_len, biod->bd_type);
 			return -DER_INVAL;
 		}
 
 		if (iov->iov_buf == NULL) {
-			D_ERROR("Invalid iov[%d], iov_buf is NULL\n",
-				arg->ca_iov_idx);
+			D_ERROR("Invalid iov[%d], iov_buf is NULL", arg->ca_iov_idx);
 			return -DER_INVAL;
 		}
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (arg->ca_size_tot) {
 			if ((nob + arg->ca_size_copied) > arg->ca_size_tot) {
-				D_ERROR("Copy size %u is not aligned with IOVs %u/"DF_U64"\n",
+				D_ERROR("Copy size %u is not aligned with IOVs %u/" DF_U64,
 					arg->ca_size_tot, arg->ca_size_copied, nob);
 				return -DER_INVAL;
 			}
@@ -493,8 +489,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		}
 
 		if (addr != NULL) {
-			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
-				addr, nob);
+			D_DEBUG(DB_TRACE, "bio copy %p size %zd", addr, nob);
 			bio_memcpy(biod, media, addr, iov->iov_buf +
 					arg->ca_iov_off, nob);
 			addr += nob;
@@ -532,7 +527,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 			return 0;
 	}
 
-	D_DEBUG(DB_TRACE, "Consumed all iovs, "DF_U64" bytes left\n", size);
+	D_DEBUG(DB_TRACE, "Consumed all iovs, " DF_U64 " bytes left", size);
 	return -DER_REC2BIG;
 }
 
@@ -601,8 +596,8 @@ chunk_reserve(struct bio_dma_chunk *chk, unsigned int chk_pg_idx,
 	if (chk_pg_idx + pg_cnt > bio_chk_sz)
 		return NULL;
 
-	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u\n",
-		chk, chk->bdc_ptr, chk_pg_idx, pg_cnt, pg_off);
+	D_DEBUG(DB_TRACE, "Reserved on chunk:%p[%p], idx:%u, cnt:%u, off:%u", chk, chk->bdc_ptr,
+		chk_pg_idx, pg_cnt, pg_off);
 
 	chk->bdc_pg_idx = chk_pg_idx + pg_cnt;
 	return chk->bdc_ptr + (chk_pg_idx << BIO_DMA_PAGE_SHIFT) + pg_off;
@@ -774,7 +769,7 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	if (cur_pg != prev_pg_end)
 		return false;
 
-	D_DEBUG(DB_TRACE, "merging IOVs: ["DF_U64", "DF_U64"), ["DF_U64", "DF_U64")\n",
+	D_DEBUG(DB_TRACE, "merging IOVs: [" DF_U64 ", " DF_U64 "), [" DF_U64 ", " DF_U64 ")",
 		last_rg->brr_off, last_rg->brr_end, off, end);
 
 	if (last_rg->brr_off < off)
@@ -793,7 +788,7 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	if (end > last_rg->brr_end)
 		last_rg->brr_end = end;
 
-	D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n", bio_iov2raw_buf(biov));
+	D_DEBUG(DB_TRACE, "Consecutive reserve %p", bio_iov2raw_buf(biov));
 	return true;
 }
 
@@ -825,7 +820,7 @@ iod_pad_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg, unsigned 
 	bio_iov_set_raw_buf(biov, payload);
 	*chk_off = off;	/* Set for current region */
 
-	D_DEBUG(DB_TRACE, "Padding reserve %p.\n", bio_iov2raw_buf(biov));
+	D_DEBUG(DB_TRACE, "Padding reserve %p", bio_iov2raw_buf(biov));
 	return true;
 }
 
@@ -883,8 +878,8 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, chk->bdc_ptr + pg_off);
 		chk_pg_idx = 0;
 
-		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u\n",
-			chk, chk->bdc_ptr, pg_cnt, pg_off);
+		D_DEBUG(DB_IO, "Huge chunk:%p[%p], cnt:%u, off:%u", chk, chk->bdc_ptr, pg_cnt,
+			pg_off);
 
 		goto add_region;
 	}
@@ -893,9 +888,8 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 
 	/* First, try consecutive reserve from the last reserved region */
 	if (last_rg) {
-		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
-			last_rg->brr_chk, last_rg->brr_pg_idx,
-			last_rg->brr_off, last_rg->brr_end);
+		D_DEBUG(DB_TRACE, "Last region %p:%d [" DF_U64 "," DF_U64 ")", last_rg->brr_chk,
+			last_rg->brr_pg_idx, last_rg->brr_off, last_rg->brr_end);
 
 		chk = last_rg->brr_chk;
 		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
@@ -921,8 +915,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
 		if (bio_iov2raw_buf(biov) != NULL) {
-			D_DEBUG(DB_IO, "Last chunk reserve %p.\n",
-				bio_iov2raw_buf(biov));
+			D_DEBUG(DB_IO, "Last chunk reserve %p", bio_iov2raw_buf(biov));
 			goto add_region;
 		}
 	}
@@ -939,8 +932,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx,
 							pg_cnt, pg_off));
 		if (bio_iov2raw_buf(biov) != NULL) {
-			D_DEBUG(DB_IO, "Current chunk reserve %p.\n",
-				bio_iov2raw_buf(biov));
+			D_DEBUG(DB_IO, "Current chunk reserve %p", bio_iov2raw_buf(biov));
 			goto add_chunk;
 		}
 	}
@@ -954,7 +946,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 		if (rc == -DER_AGAIN)
 			biod->bd_retry = 1;
 		else
-			D_ERROR("Failed to get idle chunk. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to get idle chunk");
 
 		return rc;
 	}
@@ -972,8 +964,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	bio_iov_set_raw_buf(biov,
 			    chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 	if (bio_iov2raw_buf(biov) != NULL) {
-		D_DEBUG(DB_IO, "New chunk reserve %p.\n",
-			bio_iov2raw_buf(biov));
+		D_DEBUG(DB_IO, "New chunk reserve %p", bio_iov2raw_buf(biov));
 		goto add_chunk;
 	}
 
@@ -1049,7 +1040,7 @@ rw_completion(void *cb_arg, int err)
 
 		D_ALLOC_PTR(mem);
 		if (mem == NULL) {
-			D_ERROR("NVMe I/O error report is skipped\n");
+			D_ERROR("NVMe I/O error report is skipped");
 			goto done;
 		}
 		mem->mem_err_type = (biod->bd_type == BIO_IOD_TYPE_UPDATE) ? MET_WRITE : MET_READ;
@@ -1067,7 +1058,7 @@ done:
 			iod_release_buffer(biod);
 			dma_drop_iod(iod_dma_buf(biod));
 		}
-		D_DEBUG(DB_IO, "DMA complete, type:%d\n", biod->bd_type);
+		D_DEBUG(DB_IO, "DMA complete, type:%d", biod->bd_type);
 	}
 }
 
@@ -1115,8 +1106,8 @@ scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
 	payload += rg->brr_chk_off;
 
-	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p len:"DF_U64"\n",
-		biod->bd_type, payload, rg->brr_end - rg->brr_off);
+	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p len:" DF_U64, biod->bd_type, payload,
+		rg->brr_end - rg->brr_off);
 
 	bio_memcpy(biod, DAOS_MEDIA_SCM, umem_off2ptr(umem, rg->brr_off),
 		   payload, rg->brr_end - rg->brr_off);
@@ -1144,7 +1135,7 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 	/* No locking for BS state query here is tolerable */
 	if (bxb->bxb_blobstore->bb_state == BIO_BS_STATE_FAULTY) {
-		D_ERROR("Blobstore is marked as FAULTY.\n");
+		D_ERROR("Blobstore is marked as FAULTY");
 		if (biod->bd_type == BIO_IOD_TYPE_FETCH || glb_criteria.fc_enabled)
 			biod->bd_result = -DER_NVME_IO;
 		else
@@ -1153,8 +1144,8 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 	}
 
 	if (!is_blob_valid(biod->bd_ctxt)) {
-		D_ERROR("Blobstore is invalid. blob:%p, closing:%d\n",
-			blob, biod->bd_ctxt->bic_closing);
+		D_ERROR("Blobstore is invalid. blob:%p, closing:%d", blob,
+			biod->bd_ctxt->bic_closing);
 		biod->bd_result = -DER_NO_HDL;
 		return;
 	}
@@ -1178,9 +1169,10 @@ nvme_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 
 		rw_cnt = (pg_cnt > bio_chk_sz) ? bio_chk_sz : pg_cnt;
 
-		D_DEBUG(DB_IO, "%s blob:%p payload:%p, pg_idx:"DF_U64", pg_cnt:"DF_U64"/"DF_U64"\n",
-			biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read",
-			blob, payload, pg_idx, pg_cnt, rw_cnt);
+		D_DEBUG(DB_IO,
+			"%s blob:%p payload:%p, pg_idx:" DF_U64 ", pg_cnt:" DF_U64 "/" DF_U64,
+			biod->bd_type == BIO_IOD_TYPE_UPDATE ? "Write" : "Read", blob, payload,
+			pg_idx, pg_cnt, rw_cnt);
 
 		D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
 		if (biod->bd_type == BIO_IOD_TYPE_UPDATE)
@@ -1213,7 +1205,7 @@ dma_rw(struct bio_desc *biod)
 	biod->bd_inflights = 1;
 
 	D_ASSERT(biod->bd_type < BIO_IOD_TYPE_GETBUF);
-	D_DEBUG(DB_IO, "DMA start, type:%d\n", biod->bd_type);
+	D_DEBUG(DB_IO, "DMA start, type:%d", biod->bd_type);
 
 	for (i = 0; i < rsrvd_dma->brd_rg_cnt; i++) {
 		rg = &rsrvd_dma->brd_regions[i];
@@ -1232,7 +1224,7 @@ dma_rw(struct bio_desc *biod)
 
 	if (!biod->bd_async_post) {
 		iod_dma_wait(biod);
-		D_DEBUG(DB_IO, "Wait DMA done, type:%d\n", biod->bd_type);
+		D_DEBUG(DB_IO, "Wait DMA done, type:%d", biod->bd_type);
 	}
 }
 
@@ -1328,10 +1320,10 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 		return;
 
 	bdb->bdb_dump_ts = cur;
-	D_EMIT("DMA buffer isn't sufficient to sustain current workload, "
-	       "enlarge the nr_hugepages in server YAML if possible.\n");
+	D_EMIT("DMA buffer isn't sufficient to sustain current workload, enlarge the nr_hugepages "
+	       "in server YAML if possible");
 
-	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, queued_iods:%u, used:%u,%u,%u\n",
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, queued_iods:%u, used:%u,%u,%u",
 	       bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max, bdb->bdb_active_iods,
 	       bdb->bdb_queued_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 	       bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL], bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
@@ -1346,10 +1338,10 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 		bulk_grps++;
 		bulk_chunks += bbg->bbg_chk_cnt;
 
-		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u\n",
-		       i, bbg->bbg_bulk_pgs, bbg->bbg_chk_cnt);
+		D_EMIT("bulk_grp %d: bulk_size:%u, chunks:%u", i, bbg->bbg_bulk_pgs,
+		       bbg->bbg_chk_cnt);
 	}
-	D_EMIT("bulk_grps:%d, bulk_chunks:%d\n", bulk_grps, bulk_chunks);
+	D_EMIT("bulk_grps:%d, bulk_chunks:%d", bulk_grps, bulk_chunks);
 }
 
 static int
@@ -1384,8 +1376,8 @@ retry:
 
 		biod->bd_retry = 0;
 		if (!iod_should_retry(biod, bdb)) {
-			D_ERROR("Per-xstream DMA buffer isn't large enough "
-				"to satisfy large IOD %p\n", biod);
+			D_ERROR("Per-xstream DMA buffer isn't large enough to satisfy large IOD %p",
+				biod);
 			goto out;
 		}
 
@@ -1395,11 +1387,11 @@ retry:
 		}
 
 		retry_cnt++;
-		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d\n", biod, retry_cnt);
+		D_DEBUG(DB_IO, "IOD %p waits for active IODs. %d", biod, retry_cnt);
 
 		iod_fifo_wait(biod, bdb);
 
-		D_DEBUG(DB_IO, "IOD %p finished waiting. %d\n", biod, retry_cnt);
+		D_DEBUG(DB_IO, "IOD %p finished waiting. %d", biod, retry_cnt);
 
 		goto retry;
 	}
@@ -1632,7 +1624,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 
 	for (i = 0; i < bsgl_in->bs_nr; i++) {
 		if (bio_addr_is_hole(&bsgl_in->bs_iovs[i].bi_addr)) {
-			D_ERROR("Read/write a hole isn't allowed\n");
+			D_ERROR("Read/write a hole isn't allowed");
 			return -DER_INVAL;
 		}
 	}
@@ -1659,7 +1651,7 @@ bio_rwv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl_in,
 
 	rc = bio_iod_copy(biod, sgl, 1 /* single sgl */);
 	if (rc)
-		D_ERROR("Copy biod failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Copy biod failed");
 
 	/* release DMA buffer, write data back to NVMe device for write */
 	rc = bio_iod_post(biod, rc);
@@ -1678,11 +1670,11 @@ bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
 
 	rc = bio_rwv(ioctxt, bsgl, sgl, false);
 	if (rc)
-		D_ERROR("Readv to blob:%p failed for xs:%p, rc:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+		D_ERROR("Readv to blob:%p failed for xs:%p, rc:%d", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt, rc);
 	else
-		D_DEBUG(DB_IO, "Readv to blob %p for xs:%p successfully\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+		D_DEBUG(DB_IO, "Readv to blob %p for xs:%p successfully", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt);
 
 	return rc;
 }
@@ -1695,11 +1687,11 @@ bio_writev(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
 
 	rc = bio_rwv(ioctxt, bsgl, sgl, true);
 	if (rc)
-		D_ERROR("Writev to blob:%p failed for xs:%p, rc:%d\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
+		D_ERROR("Writev to blob:%p failed for xs:%p, rc:%d", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt, rc);
 	else
-		D_DEBUG(DB_IO, "Writev to blob %p for xs:%p successfully\n",
-			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
+		D_DEBUG(DB_IO, "Writev to blob %p for xs:%p successfully", ioctxt->bic_blob,
+			ioctxt->bic_xs_ctxt);
 
 	return rc;
 }
@@ -1723,13 +1715,11 @@ bio_rw(struct bio_io_context *ioctxt, bio_addr_t addr, d_iov_t *iov,
 
 	rc = bio_rwv(ioctxt, &bsgl, &sgl, update);
 	if (rc)
-		D_ERROR("%s to blob:%p failed for xs:%p, rc:%d\n",
-			update ? "Write" : "Read", ioctxt->bic_blob,
-			ioctxt->bic_xs_ctxt, rc);
+		D_ERROR("%s to blob:%p failed for xs:%p, rc:%d", update ? "Write" : "Read",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt, rc);
 	else
-		D_DEBUG(DB_IO, "%s to blob %p for xs:%p successfully\n",
-			update ? "Write" : "Read", ioctxt->bic_blob,
-			ioctxt->bic_xs_ctxt);
+		D_DEBUG(DB_IO, "%s to blob %p for xs:%p successfully", update ? "Write" : "Read",
+			ioctxt->bic_blob, ioctxt->bic_xs_ctxt);
 
 	return rc;
 }

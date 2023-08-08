@@ -214,9 +214,9 @@ out:
 		  dra->dra_opc, drr->drr_rank, drr->drr_tag, rc);
 
 	D_DEBUG(DB_TRACE,
-		"DTX req for opc %x (req %p future %p) got reply from %d/%d: "
-		"epoch :"DF_X64", rc %d.\n", dra->dra_opc, req,
-		dra->dra_future, drr->drr_rank, drr->drr_tag,
+		"DTX req for opc %x (req %p future %p) got reply from %d/%d: epoch :" DF_X64
+		", rc %d",
+		dra->dra_opc, req, dra->dra_future, drr->drr_rank, drr->drr_tag,
 		din != NULL ? din->di_epoch : 0, drr->drr_result);
 }
 
@@ -267,9 +267,9 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 		rc = crt_req_send(req, dtx_req_cb, drr);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x to %d/%d (req %p future %p) sent "
-		"epoch "DF_X64" : rc %d.\n", dra->dra_opc, drr->drr_rank,
-		drr->drr_tag, req, dra->dra_future,
+	D_DEBUG(DB_TRACE,
+		"DTX req for opc %x to %d/%d (req %p future %p) sent epoch " DF_X64 " : rc %d",
+		dra->dra_opc, drr->drr_rank, drr->drr_tag, req, dra->dra_future,
 		din != NULL ? din->di_epoch : 0, rc);
 
 	if (rc != 0 && drr->drr_comp == 0) {
@@ -298,8 +298,7 @@ dtx_req_list_cb(void **args)
 				/* As long as one target has committed the DTX,
 				 * then the DTX is committable on all targets.
 				 */
-				D_DEBUG(DB_TRACE,
-					"The DTX "DF_DTI" has been committed on %d/%d.\n",
+				D_DEBUG(DB_TRACE, "The DTX " DF_DTI " has been committed on %d/%d",
 					DP_DTI(&drr->drr_dti[0]), drr->drr_rank, drr->drr_tag);
 				return;
 			case -DER_EXCLUDED:
@@ -326,7 +325,7 @@ dtx_req_list_cb(void **args)
 				break;
 			}
 
-			D_DEBUG(DB_TRACE, "The DTX "DF_DTI" RPC req result %d, status is %d.\n",
+			D_DEBUG(DB_TRACE, "The DTX " DF_DTI " RPC req result %d, status is %d",
 				DP_DTI(&drr->drr_dti[0]), drr->drr_result, dra->dra_result);
 		}
 	} else {
@@ -391,12 +390,12 @@ dtx_req_list_send(struct dtx_common_args *dca, daos_epoch_t epoch, int len)
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &dra->dra_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed for opc %x, len = %d: "
-			"rc = %d.\n", dra->dra_opc, len, rc);
+		D_ERROR("ABT_future_create failed for opc %x, len = %d: rc = %d", dra->dra_opc, len,
+			rc);
 		return dss_abterr2der(rc);
 	}
 
-	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p start.\n", dra->dra_opc, dra->dra_future);
+	D_DEBUG(DB_TRACE, "DTX req for opc %x, future %p start", dra->dra_opc, dra->dra_future);
 
 	d_list_for_each_entry(drr, &dca->dca_head, drr_link) {
 		drr->drr_parent = dra;
@@ -539,9 +538,8 @@ dtx_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head, int *
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
 		if (rc != 1) {
-			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
-			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
-			       mbs->dm_flags);
+			D_WARN("Cannot find target %u at %d/%d, flags %x", mbs->dm_tgts[i].ddt_id,
+			       i, mbs->dm_tgt_cnt, mbs->dm_flags);
 			D_GOTO(out, rc = -DER_UNINIT);
 		}
 
@@ -829,12 +827,12 @@ out:
 		D_FREE(dca.dca_dtis);
 
 	if (rc != 0 || rc1 != 0)
-		D_ERROR("Failed to commit DTX entries "DF_DTI", count %d, %s committed: %d %d\n",
+		D_ERROR("Failed to commit DTX entries " DF_DTI ", count %d, %s committed: %d %d",
 			DP_DTI(&dtes[0]->dte_xid), count,
 			dra->dra_committed > 0 ? "partial" : "nothing", rc, rc1);
 	else
-		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI", count %d\n",
-			DP_DTI(&dtes[0]->dte_xid), count);
+		D_DEBUG(DB_IO, "Commit DTXs " DF_DTI ", count %d", DP_DTI(&dtes[0]->dte_xid),
+			count);
 
 	return rc != 0 ? rc : rc1;
 }
@@ -948,8 +946,8 @@ again:
 			 * is not fatal, the caller or related request
 			 * sponsor can retry sometime later.
 			 */
-			D_WARN("Failed to find DTX leader for "DF_DTI", ver %d: "DF_RC"\n",
-			       DP_DTI(&dsp->dsp_xid), pool->sp_map_version, DP_RC(rc));
+			DL_WARN(rc, "Failed to find DTX leader for " DF_DTI ", ver %d",
+				DP_DTI(&dsp->dsp_xid), pool->sp_map_version);
 			if (for_io)
 				goto out;
 
@@ -979,8 +977,8 @@ again:
 		if (target->ta_comp.co_status != PO_COMP_ST_UP &&
 		    target->ta_comp.co_status != PO_COMP_ST_UPIN) {
 			if (unlikely(++count % 10 == 3))
-				D_WARN("Get stale DTX leader %u/%u (st: %x) for "DF_DTI
-				       " %d times, maybe dead loop\n",
+				D_WARN("Get stale DTX leader %u/%u (st: %x) for " DF_DTI
+				       " %d times, maybe dead loop",
 				       target->ta_comp.co_rank, target->ta_comp.co_id,
 				       target->ta_comp.co_status, DP_DTI(&dsp->dsp_xid), count);
 			goto again;
@@ -1118,9 +1116,10 @@ next2:
 			if (dsp->dsp_status == -DER_TX_UNCERTAIN) {
 				rc1 = vos_dtx_set_flags(cont->sc_hdl, &dsp->dsp_xid, 1, DTE_ORPHAN);
 				if (rc1 != -DER_NONEXIST && rc1 != -DER_NO_PERM) {
-					D_ERROR("Hit uncertain (may be leaked) DTX "
-						DF_DTI", mark it as orphan: "DF_RC"\n",
-						DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
+					DL_ERROR(rc1,
+						 "Hit uncertain (may be leaked) DTX " DF_DTI
+						 ", mark it as orphan",
+						 DP_DTI(&dsp->dsp_xid));
 					if (rc == 0)
 						rc = -DER_TX_UNCERTAIN;
 				}
@@ -1133,7 +1132,7 @@ next2:
 				if (rc1 != DTX_ST_COMMITTED && rc1 != DTX_ST_ABORTED &&
 				    rc1 != -DER_NONEXIST) {
 					if (!for_io)
-						D_INFO("Hit some long-time DTX "DF_DTI", %d\n",
+						D_INFO("Hit some long-time DTX " DF_DTI ", %d",
 						       DP_DTI(&dsp->dsp_xid), rc1);
 					else if (rc == 0)
 						rc = -DER_INPROGRESS;

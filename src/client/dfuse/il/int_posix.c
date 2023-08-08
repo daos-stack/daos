@@ -95,7 +95,7 @@ ioil_shrink_pool(struct ioil_pool *pool)
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_pool_disconnect() failed");
 			return rc;
 		}
 		pool->iop_poh = DAOS_HDL_INVAL;
@@ -118,7 +118,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
-			D_ERROR("dfs_umount() failed, %d\n", rc);
+			D_ERROR("dfs_umount() failed, %d", rc);
 			return rc;
 		}
 		cont->ioc_dfs = NULL;
@@ -127,7 +127,7 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_cont_close() failed, " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "daos_cont_close() failed");
 			return rc;
 		}
 		cont->ioc_coh = DAOS_HDL_INVAL;
@@ -168,9 +168,9 @@ ioil_initialize_fd_table(int max_fds)
 	rc = vector_init(&fd_table, sizeof(struct fd_entry), max_fds,
 			 entry_array_close);
 	if (rc != 0)
-		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = "DF_RC,
-				DP_RC(rc));
+		DFUSE_LOG_ERROR(
+		    "Could not allocate file descriptor table, disabling kernel bypass: " DF_RC,
+		    DP_RC(rc));
 	return rc;
 }
 
@@ -293,8 +293,8 @@ ioil_init(void)
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
-				", disabling kernel bypass");
+		DFUSE_LOG_ERROR(
+		    "Could not get process file descriptor limit, disabling kernel bypass");
 		return;
 	}
 
@@ -309,8 +309,7 @@ ioil_init(void)
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
 	if (rc != 0) {
-		DFUSE_LOG_ERROR("Could not create fd_table, "
-				"disabling kernel bypass, rc = "DF_RC,
+		DFUSE_LOG_ERROR("Could not create fd_table, disabling kernel bypass: " DF_RC,
 				DP_RC(rc));
 		return;
 	}
@@ -325,7 +324,7 @@ ioil_init(void)
 static void
 ioil_show_summary()
 {
-	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	D_INFO("Performed %" PRIu64 " reads and %" PRIu64 " writes from %" PRIu64 " files",
 	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
@@ -403,9 +402,8 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	}
 
 	if (hsd_reply.fsr_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  hsd_reply.fsr_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected %d got %d", fd,
+				  DFUSE_IOCTL_VERSION, hsd_reply.fsr_version);
 		return EIO;
 	}
 
@@ -546,9 +544,8 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 	}
 
 	if (hs_reply.fsr_version != DFUSE_IOCTL_VERSION) {
-		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected "
-				  "%d got %d", fd, DFUSE_IOCTL_VERSION,
-				  hs_reply.fsr_version);
+		DFUSE_LOG_WARNING("ioctl version mismatch (fd=%d): expected %d got %d", fd,
+				  DFUSE_IOCTL_VERSION, hs_reply.fsr_version);
 		return EIO;
 	}
 
@@ -592,8 +589,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 
 	rc = daos_cont_global2local(pool->iop_poh, iov, &cont->ioc_coh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use cont handle "DF_RC,
-				  DP_RC(rc));
+		DFUSE_LOG_WARNING("Failed to use cont handle: " DF_RC, DP_RC(rc));
 		D_FREE(iov.iov_buf);
 		return daos_der2errno(rc);
 	}
@@ -708,7 +704,7 @@ call_daos_init(int fd)
 
 	rc = daos_init();
 	if (rc) {
-		DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
+		DFUSE_LOG_DEBUG("daos_init() failed: " DF_RC, DP_RC(rc));
 		goto out;
 	}
 	rcb = true;
@@ -818,7 +814,7 @@ open_cont:
 			D_GOTO(shrink, rc = rcb);
 		}
 	} else if (rc != 0) {
-		D_ERROR("ioil_fetch_cont_handles() failed: %d (%s)\n", rc, strerror(rc));
+		D_ERROR("ioil_fetch_cont_handles() failed: %d (%s)", rc, strerror(rc));
 		D_GOTO(shrink, rc);
 	}
 
@@ -1009,15 +1005,13 @@ dfuse_open(const char *pathname, int flags, ...)
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
-		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
-				"%d. intercepted, fstat=%d, bypass=%s",
-				pathname, flags, mode, fd, entry.fd_fstat,
-				bypass_status[entry.fd_status]);
+		DFUSE_LOG_DEBUG(
+		    "open(pathname=%s, flags=0%o, mode=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+		    pathname, flags, mode, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = "
-				"%d. intercepted, fstat=%d, bypass=%s",
-				pathname, flags, fd, entry.fd_fstat,
-				bypass_status[entry.fd_status]);
+		DFUSE_LOG_DEBUG(
+		    "open(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s", pathname,
+		    flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 
 	return fd;
 }
@@ -1063,15 +1057,14 @@ dfuse_openat(int dirfd, const char *pathname, int flags, ...)
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
-		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o, mode=0%o) = "
-				"%d. intercepted, fstat=%d, bypass=%s",
+		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o, mode=0%o) = %d. intercepted, "
+				"fstat=%d, bypass=%s",
 				pathname, flags, mode, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o) = "
-				"%d. intercepted, fstat=%d, bypass=%s",
-				pathname, flags, fd, entry.fd_fstat,
-				bypass_status[entry.fd_status]);
+		DFUSE_LOG_DEBUG(
+		    "openat(pathname=%s, flags=0%o) = %d. intercepted, fstat=%d, bypass=%s",
+		    pathname, flags, fd, entry.fd_fstat, bypass_status[entry.fd_status]);
 	return fd;
 }
 
@@ -1219,10 +1212,8 @@ dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 	if (rc != 0)
 		goto do_real_pread;
 
-	DFUSE_LOG_DEBUG("pread(fd=%d, buf=%p, count=%zu, "
-			"offset=%zd) intercepted, bypass=%s", fd,
-			buf, count, offset,
-			bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("pread(fd=%d, buf=%p, count=%zu, offset=%zd) intercepted, bypass=%s", fd,
+			buf, count, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pread;
@@ -1257,9 +1248,8 @@ dfuse_write(int fd, const void *buf, size_t len)
 	/* This function might get called from daos logging itself so do not log anything until
 	 * after the disabled check above or the logging will recurse and deadlock.
 	 */
-	DFUSE_LOG_DEBUG("write(fd=%d, buf=%p, len=%zu) "
-			"intercepted, bypass=%s", fd,
-			buf, len, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("write(fd=%d, buf=%p, len=%zu) intercepted, bypass=%s", fd, buf, len,
+			bypass_status[entry->fd_status]);
 
 	oldpos = entry->fd_pos;
 	bytes_written = pwrite_rpc(entry, buf, len, entry->fd_pos);
@@ -1286,10 +1276,8 @@ dfuse_pwrite(int fd, const void *buf, size_t count, off_t offset)
 	if (rc != 0)
 		goto do_real_pwrite;
 
-	DFUSE_LOG_DEBUG("pwrite(fd=%d, buf=%p, count=%zu, "
-			"offset=%zd) intercepted, bypass=%s", fd,
-			buf, count, offset,
-			bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("pwrite(fd=%d, buf=%p, count=%zu, offset=%zd) intercepted, bypass=%s", fd,
+			buf, count, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwrite;
@@ -1538,9 +1526,8 @@ dfuse_readv(int fd, const struct iovec *vector, int iovcnt)
 	if (rc != 0)
 		goto do_real_readv;
 
-	DFUSE_LOG_DEBUG("readv(fd=%d, vector=%p, iovcnt=%d) "
-			"intercepted, bypass=%s",
-			fd, vector, iovcnt, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("readv(fd=%d, vector=%p, iovcnt=%d) intercepted, bypass=%s", fd, vector,
+			iovcnt, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_readv;
@@ -1570,9 +1557,8 @@ dfuse_preadv(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	if (rc != 0)
 		goto do_real_preadv;
 
-	DFUSE_LOG_DEBUG("preadv(fd=%d, vector=%p, iovcnt=%d, "
-			"offset=%zd) intercepted, bypass=%s", fd, vector,
-			iovcnt, offset, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("preadv(fd=%d, vector=%p, iovcnt=%d, offset=%zd) intercepted, bypass=%s",
+			fd, vector, iovcnt, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_preadv;
@@ -1600,9 +1586,8 @@ dfuse_writev(int fd, const struct iovec *vector, int iovcnt)
 	if (rc != 0)
 		goto do_real_writev;
 
-	DFUSE_LOG_DEBUG("writev(fd=%d, vector=%p, iovcnt=%d) "
-			"intercepted, bypass=%s",
-			fd, vector, iovcnt, bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("writev(fd=%d, vector=%p, iovcnt=%d) intercepted, bypass=%s", fd, vector,
+			iovcnt, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_writev;
@@ -1632,10 +1617,8 @@ dfuse_pwritev(int fd, const struct iovec *vector, int iovcnt, off_t offset)
 	if (rc != 0)
 		goto do_real_pwritev;
 
-	DFUSE_LOG_DEBUG("pwritev(fd=%d, vector=%p, iovcnt=%d, "
-			"offset=%zd) intercepted, bypass=%s",
-			fd, vector, iovcnt, offset,
-			bypass_status[entry->fd_status]);
+	DFUSE_LOG_DEBUG("pwritev(fd=%d, vector=%p, iovcnt=%d, offset=%zd) intercepted, bypass=%s",
+			fd, vector, iovcnt, offset, bypass_status[entry->fd_status]);
 
 	if (drop_reference_if_disabled(entry))
 		goto do_real_pwritev;
@@ -1661,10 +1644,9 @@ dfuse_mmap(void *address, size_t length, int prot, int flags, int fd,
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d,"
-				" fd=%d, offset=%zd) "
-				"intercepted, disabling kernel bypass ", address,
-				length, prot, flags, fd, offset);
+		DFUSE_LOG_DEBUG("mmap(address=%p, length=%zu, prot=%d, flags=%d, fd=%d, "
+				"offset=%zd) intercepted, disabling kernel bypass ",
+				address, length, prot, flags, fd, offset);
 
 		if (entry->fd_pos != 0)
 			__real_lseek(fd, entry->fd_pos, SEEK_SET);
@@ -1773,9 +1755,8 @@ dfuse_dup2(int oldfd, int newfd)
 
 	rc = vector_dup(&fd_table, oldfd, realfd, &entry);
 	if (rc == 0 && entry != NULL) {
-		DFUSE_LOG_DEBUG("dup2(oldfd=%d, newfd=%d) = %d."
-				" intercepted, bypass=%s", oldfd, newfd,
-				realfd, bypass_status[entry->fd_status]);
+		DFUSE_LOG_DEBUG("dup2(oldfd=%d, newfd=%d) = %d. intercepted, bypass=%s", oldfd,
+				newfd, realfd, bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -1874,8 +1855,8 @@ dfuse_fcntl(int fd, int cmd, ...)
 		return __real_fcntl(fd, cmd, arg);
 
 	if (cmd == F_SETFL) { /* We don't support this flag for interception */
-		DFUSE_LOG_DEBUG("Removed IL entry for fd=%d: "
-				"F_SETFL not supported for kernel bypass", fd);
+		DFUSE_LOG_DEBUG(
+		    "Removed IL entry for fd=%d: F_SETFL not supported for kernel bypass", fd);
 
 		if (!drop_reference_if_disabled(entry)) {
 			/* Disable kernel bypass */
@@ -1901,10 +1882,9 @@ dfuse_fcntl(int fd, int cmd, ...)
 	/* Ok, newfd is a duplicate of fd */
 	rc = vector_dup(&fd_table, fd, newfd, &entry);
 	if (rc == 0 && entry != NULL) {
-		DFUSE_LOG_DEBUG("fcntl(fd=%d, cmd=%d "
-				"/* F_DUPFD* */, arg=%d) intercepted, bypass=%s",
-				fd, cmd, fdarg,
-				bypass_status[entry->fd_status]);
+		DFUSE_LOG_DEBUG(
+		    "fcntl(fd=%d, cmd=%d /* F_DUPFD* */, arg=%d) intercepted, bypass=%s", fd, cmd,
+		    fdarg, bypass_status[entry->fd_status]);
 		vector_decref(&fd_table, entry);
 	}
 
@@ -1992,23 +1972,23 @@ dfuse_freopen(const char *path, const char *mode, FILE *stream)
 
 	if (newfd == -1 || !check_ioctl_on_open(newfd, &new_entry, 0)) {
 		if (rc == 0) {
-			DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p"
-					"(fd=%d) = %p(fd=%d) intercepted",
-					path, mode, stream, oldfd, newstream, newfd);
+			DFUSE_LOG_DEBUG(
+			    "freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d) intercepted",
+			    path, mode, stream, oldfd, newstream, newfd);
 			vector_decref(&fd_table, old_entry);
 		}
 		return newstream;
 	}
 
 	if (rc == 0) {
-		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d)"
-				" intercepted",
-				path, mode, stream, oldfd, newstream, newfd);
+		DFUSE_LOG_DEBUG(
+		    "freopen(path='%s', mode=%s, stream=%p(fd=%d) = %p(fd=%d) intercepted", path,
+		    mode, stream, oldfd, newstream, newfd);
 		vector_decref(&fd_table, old_entry);
 	} else {
-		DFUSE_LOG_DEBUG("freopen(path='%s', mode=%s, stream=%p(fd=%d)) "
-				"= %p(fd=%d) intercepted",
-				path, mode, stream, oldfd, newstream, newfd);
+		DFUSE_LOG_DEBUG(
+		    "freopen(path='%s', mode=%s, stream=%p(fd=%d)) = %p(fd=%d) intercepted", path,
+		    mode, stream, oldfd, newstream, newfd);
 	}
 
 	return newstream;
@@ -2389,7 +2369,7 @@ dfuse_fputs(char *__str, FILE *stream)
 	if (drop_reference_if_disabled(entry))
 		goto do_real_fn;
 
-	D_ERROR("Unsupported function\n");
+	D_ERROR("Unsupported function");
 
 	entry->fd_err = ENOTSUP;
 

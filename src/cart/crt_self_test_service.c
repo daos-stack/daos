@@ -236,7 +236,7 @@ static int alloc_buf_entry(struct st_buf_entry **const return_entry,
 		ret = crt_bulk_create(crt_ctx, &new_entry->sg_list,
 				      perms, &new_entry->bulk_hdl);
 		if (ret != 0) {
-			D_ERROR("crt_bulk_create failed; ret=%d\n", ret);
+			D_ERROR("crt_bulk_create failed; ret=%d", ret);
 			D_FREE(new_entry->buf);
 			D_FREE(new_entry);
 			return ret;
@@ -293,8 +293,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	/* Validate session parameters */
 	if (args->send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
 	    args->reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
-		D_ERROR("Sending BULK_PUT and/or replying with BULK_GET"
-			" are not supported\n");
+		D_ERROR("Sending BULK_PUT and/or replying with BULK_GET are not supported");
 		D_GOTO(send_rpc, *reply_session_id = -1);
 	}
 
@@ -321,7 +320,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 		/* Allocate the new entry (and bulk handle if applicable) */
 		ret = alloc_buf_entry(&new_entry, new_session, rpc_req->cr_ctx);
 		if (ret != 0) {
-			D_ERROR("Failed to allocate buf_entry; ret=%d\n", ret);
+			D_ERROR("Failed to allocate buf_entry; ret=%d", ret);
 			D_GOTO(send_rpc, *reply_session_id = -1);
 		}
 
@@ -364,7 +363,7 @@ crt_self_test_open_session_handler(crt_rpc_t *rpc_req)
 	}
 
 	if (session_id == g_last_session_id) {
-		D_ERROR("self-test: No test sessions available to reserve\n");
+		D_ERROR("self-test: No test sessions available to reserve");
 		*reply_session_id = -1;
 	} else {
 		/* Success - found an unused session ID */
@@ -389,7 +388,7 @@ send_rpc:
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		D_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("self-test: crt_reply_send failed; ret = %d", ret);
 }
 
 void
@@ -411,7 +410,7 @@ crt_self_test_close_session_handler(crt_rpc_t *rpc_req)
 	/* Find the session if it exists */
 	del_session = find_session(session_id, &prev);
 	if (del_session == NULL) {
-		D_ERROR("Self-test session %ld not found\n", session_id);
+		D_ERROR("Self-test session %ld not found", session_id);
 		goto send_rpc;
 	}
 
@@ -428,7 +427,7 @@ send_rpc:
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		D_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("self-test: crt_reply_send failed; ret = %d", ret);
 }
 
 void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
@@ -462,7 +461,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 
 	ret = crt_reply_send(rpc_req);
 	if (ret != 0)
-		D_ERROR("self-test: crt_reply_send failed; ret = %d\n", ret);
+		D_ERROR("self-test: crt_reply_send failed; ret = %d", ret);
 
 	/*
 	 * If a buffer was pulled off the stack, re-add it now that it has
@@ -490,7 +489,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	 */
 	ret = crt_req_decref(rpc_req);
 	if (ret != 0)
-		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
+		D_ERROR("crt_req_decref failed; ret=%d", ret);
 }
 
 int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
@@ -506,7 +505,7 @@ int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 
 	/* Check for errors and proceed regardless */
 	if (cb_info->bci_rc != 0)
-		D_ERROR("BULK_GET failed; bci_rc=%d\n", cb_info->bci_rc);
+		D_ERROR("BULK_GET failed; bci_rc=%d", cb_info->bci_rc);
 
 	crt_self_test_msg_send_reply(cb_info->bci_bulk_desc->bd_rpc,
 				     buf_entry, 1);
@@ -528,7 +527,7 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 
 	/* Check for errors and proceed regardless */
 	if (cb_info->bci_rc != 0)
-		D_ERROR("BULK_GET failed; bci_rc=%d\n", cb_info->bci_rc);
+		D_ERROR("BULK_GET failed; bci_rc=%d", cb_info->bci_rc);
 
 	buf_entry = cb_info->bci_arg;
 	bulk_desc_in = cb_info->bci_bulk_desc;
@@ -547,8 +546,7 @@ int crt_self_test_msg_bulk_get_cb(const struct crt_bulk_cb_info *cb_info)
 					crt_self_test_msg_bulk_put_cb,
 					buf_entry, NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
+			D_ERROR("self-test service BULK_GET failed; ret=%d", ret);
 			crt_self_test_msg_send_reply(bulk_desc_in->bd_rpc,
 						     NULL, 1);
 		}
@@ -611,7 +609,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 
 	session = find_session(session_id, NULL);
 	if (session == NULL) {
-		D_ERROR("Unable to locate session_id %ld\n", session_id);
+		D_ERROR("Unable to locate session_id %ld", session_id);
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return;
 	}
@@ -624,14 +622,14 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	/* Now that we have the session, do a little more validation */
 	if (session->params.send_type == CRT_SELF_TEST_MSG_TYPE_BULK_PUT ||
 	    session->params.reply_type == CRT_SELF_TEST_MSG_TYPE_BULK_GET) {
-		D_ERROR("Only bulk send/GET reply/PUT are supported\n");
+		D_ERROR("Only bulk send/GET reply/PUT are supported");
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return;
 	}
 	if (rpc_req->cr_opc !=
 		crt_st_compute_opcode(session->params.send_type,
 				      session->params.reply_type)) {
-		D_ERROR("Opcode / self-test session params mismatch\n");
+		D_ERROR("Opcode / self-test session params mismatch");
 		crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 		return;
 	}
@@ -651,9 +649,8 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 
 		/* No buffers available currently, need to wait */
 		if (buf_entry == NULL) {
-			D_WARN("No self-test buffers available for session %ld,"
-			       " num allocated = %d."
-			       " This will decrease performance.\n",
+			D_WARN("No self-test buffers available for session %ld, num allocated = "
+			       "%d. This will decrease performance",
 			       session_id, session->params.num_buffers);
 
 			/*
@@ -678,8 +675,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 			ret = alloc_buf_entry(&buf_entry, session,
 					      rpc_req->cr_ctx);
 			if (ret != 0) {
-				D_ERROR("Failed to allocate buf_entry;"
-					" ret=%d\n", ret);
+				D_ERROR("Failed to allocate buf_entry; ret=%d", ret);
 				return;
 			}
 
@@ -708,8 +704,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 					crt_self_test_msg_bulk_get_cb,
 					buf_entry, NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
+			D_ERROR("self-test service BULK_GET failed; ret=%d", ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 			return;
 		}
@@ -737,8 +732,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 					crt_self_test_msg_bulk_put_cb,
 					buf_entry, NULL);
 		if (ret != 0) {
-			D_ERROR("self-test service BULK_GET failed; ret=%d\n",
-				ret);
+			D_ERROR("self-test service BULK_GET failed; ret=%d", ret);
 			crt_self_test_msg_send_reply(rpc_req, NULL, 1);
 			return;
 		}

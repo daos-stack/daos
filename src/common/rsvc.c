@@ -80,7 +80,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 {
 	int chosen = -1;
 
-	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D_DEBUG(DB_MD, DF_CLI, DP_CLI(client));
 	if (client->sc_leader_known && client->sc_leader_aliveness > 0) {
 		chosen = client->sc_leader_index;
 	} else if (client->sc_ranks->rl_nr > 0) {
@@ -91,7 +91,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	}
 
 	if (chosen == -1) {
-		D_DEBUG(DB_MD, "replica list empty\n");
+		D_DEBUG(DB_MD, "replica list empty");
 		return -DER_NOTREPLICA;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
@@ -129,8 +129,7 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 		} else {
 			client->sc_next = 0;
 		}
-		D_ERROR("removed rank %u from replica list due to "DF_RC"\n",
-			ep->ep_rank, DP_RC(rc));
+		DL_ERROR(rc, "removed rank %u from replica list due to", ep->ep_rank);
 	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
 		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
 		/* A leader stepping up may briefly reply NOTLEADER with hint.
@@ -145,8 +144,7 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * Gave up this leader. Start the hintless
 			 * search.
 			 */
-			D_DEBUG(DB_MD, "give up leader rank %u\n",
-				ep->ep_rank);
+			D_DEBUG(DB_MD, "give up leader rank %u", ep->ep_rank);
 			client->sc_next = client->sc_leader_index + 1;
 			client->sc_next %= client->sc_ranks->rl_nr;
 		}
@@ -165,22 +163,21 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	D_ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
 	if (from_leader && hint->sh_rank != ep->ep_rank) {
-		D_ERROR("empty or invalid hint from leader rank %u: hint.term="
-			DF_U64" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
-			hint->sh_rank);
+		D_ERROR("empty or invalid hint from leader rank %u: hint.term=" DF_U64
+			" hint.rank=%u",
+			ep->ep_rank, hint->sh_term, hint->sh_rank);
 		return;
 	}
 
 	if (client->sc_leader_known) {
 		if (hint->sh_term < client->sc_leader_term) {
-			D_DEBUG(DB_MD, "stale hint from rank %u: hint.term="
-				DF_U64" hint.rank=%u\n", ep->ep_rank,
-				hint->sh_term, hint->sh_rank);
+			D_DEBUG(DB_MD, "stale hint from rank %u: hint.term=" DF_U64 " hint.rank=%u",
+				ep->ep_rank, hint->sh_term, hint->sh_rank);
 			return;
 		} else if (hint->sh_term == client->sc_leader_term) {
 			if (ep->ep_rank == hint->sh_rank) {
 				if (client->sc_leader_aliveness < LEADER_ALIVENESS_MAX) {
-					D_DEBUG(DB_MD, "leader rank %u bump aliveness %u -> %u\n",
+					D_DEBUG(DB_MD, "leader rank %u bump aliveness %u -> %u",
 						hint->sh_rank, client->sc_leader_aliveness,
 						LEADER_ALIVENESS_MAX);
 					client->sc_leader_aliveness = LEADER_ALIVENESS_MAX;
@@ -196,14 +193,12 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	if (!found) {
 		int rc;
 
-		D_DEBUG(DB_MD, "unknown replica from rank %u: hint.term="DF_U64
-			" hint.rank=%u\n", ep->ep_rank, hint->sh_term,
-			hint->sh_rank);
+		D_DEBUG(DB_MD, "unknown replica from rank %u: hint.term=" DF_U64 " hint.rank=%u",
+			ep->ep_rank, hint->sh_term, hint->sh_rank);
 		/* Append the unknown rank to tolerate user mistakes. */
 		rc = daos_rank_list_append(client->sc_ranks, hint->sh_rank);
 		if (rc != 0) {
-			D_DEBUG(DB_MD, "failed to append new rank: "DF_RC"\n",
-				DP_RC(rc));
+			D_DEBUG(DB_MD, "failed to append new rank: " DF_RC, DP_RC(rc));
 			return;
 		}
 		client->sc_leader_index = client->sc_ranks->rl_nr - 1;
@@ -220,8 +215,8 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	 */
 	becoming_leader = (ep->ep_rank == hint->sh_rank);
 	client->sc_leader_aliveness = (from_leader || becoming_leader) ? LEADER_ALIVENESS_MAX : 1;
-	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
-		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
+	D_DEBUG(DB_MD, "new hint from rank %u: hint.term=" DF_U64 " hint.rank=%u", ep->ep_rank,
+		hint->sh_term, hint->sh_rank);
 }
 
 /**
@@ -242,41 +237,37 @@ int
 rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 			 int rc_crt, int rc_svc, const struct rsvc_hint *hint)
 {
-	D_DEBUG(DB_MD, DF_CLI"\n", DP_CLI(client));
+	D_DEBUG(DB_MD, DF_CLI, DP_CLI(client));
 	/*
 	 * Enumerate all cases of <rc_crt, rc_svc, hint>. Keep them at the same
 	 * indentation level, please.
 	 */
 	if (rc_crt == -DER_INVAL) {
-		D_DEBUG(DB_MD, "cart invalid argument for rank %u: rc_crt=%d\n",
-			ep->ep_rank, rc_crt);
+		D_DEBUG(DB_MD, "cart invalid argument for rank %u: rc_crt=%d", ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_PROCEED;
 	} else if (rc_crt == -DER_OOG) {
-		D_DEBUG(DB_MD, "rank %u out of group: rc_crt=%d\n",
-			ep->ep_rank, rc_crt);
+		D_DEBUG(DB_MD, "rank %u out of group: rc_crt=%d", ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_crt == -DER_UNREG) {
-		D_DEBUG(DB_MD, "rank %u RPC or protocol version not registered\n",
-			ep->ep_rank);
+		D_DEBUG(DB_MD, "rank %u RPC or protocol version not registered", ep->ep_rank);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_PROCEED;
 	} else if (rc_crt != 0) {
-		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
-			ep->ep_rank, rc_crt);
+		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d", ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER &&
 		   (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID))) {
-		D_DEBUG(DB_MD, "non-leader reply without hint from rank %u\n",
-			ep->ep_rank);
+		D_DEBUG(DB_MD, "non-leader reply without hint from rank %u", ep->ep_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (rc_svc == -DER_NOTLEADER) {
-		D_DEBUG(DB_MD, "non-leader reply with hint from rank %u: "
-			"hint.term="DF_U64" hint.rank=%u\n", ep->ep_rank,
-			hint->sh_term, hint->sh_rank);
+		D_DEBUG(DB_MD,
+			"non-leader reply with hint from rank %u: hint.term=" DF_U64
+			" hint.rank=%u",
+			ep->ep_rank, hint->sh_term, hint->sh_rank);
 		rsvc_client_process_error(client, rc_svc, ep);
 		rsvc_client_process_hint(client, hint, false /* !from_leader */,
 					 ep);
@@ -289,13 +280,14 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 		return RSVC_CLIENT_RECHOOSE;
 	} else if (hint == NULL || !(hint->sh_flags & RSVC_HINT_VALID)) {
 		/* This may happen if the service wasn't found. */
-		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: "
-			"rc_svc=%d\n", ep->ep_rank, rc_svc);
+		D_DEBUG(DB_MD, "\"leader\" reply without hint from rank %u: rc_svc=%d", ep->ep_rank,
+			rc_svc);
 		return RSVC_CLIENT_PROCEED;
 	} else {
-		D_DEBUG(DB_MD, "leader reply with hint from rank %u: hint.term="
-			DF_U64" hint.rank=%u rc_svc=%d\n", ep->ep_rank,
-			hint->sh_term, hint->sh_rank, rc_svc);
+		D_DEBUG(DB_MD,
+			"leader reply with hint from rank %u: hint.term=" DF_U64
+			" hint.rank=%u rc_svc=%d",
+			ep->ep_rank, hint->sh_term, hint->sh_rank, rc_svc);
 		rsvc_client_process_hint(client, hint, true /* from_leader */,
 					 ep);
 		return RSVC_CLIENT_PROCEED;
@@ -366,7 +358,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 
 	/* OK to access the struct? */
 	if (len < sizeof(*p)) {
-		D_ERROR("truncated buffer: %zu < %zu\n", len, sizeof(*p));
+		D_ERROR("truncated buffer: %zu < %zu", len, sizeof(*p));
 		return -DER_IO;
 	}
 	/* Magic matches? */
@@ -374,7 +366,7 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		if (p->scb_magic == D_SWAP32(rsvc_client_buf_magic)) {
 			swap = true;
 		} else {
-			D_ERROR("bad buffer magic: %x\n", p->scb_magic);
+			D_ERROR("bad buffer magic: %x", p->scb_magic);
 			return -DER_IO;
 		}
 	}
@@ -383,11 +375,11 @@ rsvc_client_decode(void *buf, size_t len, struct rsvc_client *client)
 		rsvc_client_buf_swap(p);
 	/* OK to access the ranks? */
 	if (p->scb_nranks == 0) {
-		D_ERROR("zero nranks\n");
+		D_ERROR("zero nranks");
 		return -DER_IO;
 	}
 	if (len < sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks) {
-		D_ERROR("truncated buffer: %zu < %zu\n", len,
+		D_ERROR("truncated buffer: %zu < %zu", len,
 			sizeof(*p) + sizeof(*p->scb_ranks) * p->scb_nranks);
 		return -DER_IO;
 	}

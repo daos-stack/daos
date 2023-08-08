@@ -21,7 +21,7 @@ stats_new(dav_obj_t *pop)
 
 	D_ALLOC_PTR_NZ(s);
 	if (s == NULL) {
-		D_CRIT("Malloc\n");
+		D_CRIT("Malloc");
 		return NULL;
 	}
 

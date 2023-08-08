@@ -157,7 +157,7 @@ is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
 	struct spdk_pci_addr    tmp;
 
 	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
-		D_ERROR("invalid transport address %s\n", pci_addr);
+		D_ERROR("invalid transport address %s", pci_addr);
 		return -DER_INVAL;
 	}
 
@@ -205,7 +205,7 @@ traddr_to_vmd(char *dst, const char *src)
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strchr(traddr_tmp, ch);
 	if (ptr == NULL) {
-		D_ERROR("Transport id not valid\n");
+		D_ERROR("Transport id not valid");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	position = ptr - traddr_tmp;
@@ -216,7 +216,7 @@ traddr_to_vmd(char *dst, const char *src)
 	while (*ptr != '\0') {
 		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
 		if (n < 0) {
-			D_ERROR("snprintf failed\n");
+			D_ERROR("snprintf failed");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 		if (vmd_addr_left_len > strnlen(addr_split, sizeof(addr_split) - 1)) {
@@ -254,7 +254,7 @@ traddr_to_vmd(char *dst, const char *src)
 	}
 	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
 	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
-		D_ERROR("snprintf failed\n");
+		D_ERROR("snprintf failed");
 		rc = -DER_INVAL;
 	}
 
@@ -285,7 +285,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 
 	*list = tmp2;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
-		D_ERROR("Invalid address %s\n", traddr);
+		D_ERROR("Invalid address %s", traddr);
 		return -DER_INVAL;
 	}
 
@@ -320,15 +320,14 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 
 	json = read_file(config_file, &json_size);
 	if (!json) {
-		D_ERROR("Read config file %s failed: '%s'\n",
-			config_file, strerror(errno));
+		D_ERROR("Read config file %s failed: '%s'", config_file, strerror(errno));
 		return -DER_INVAL;
 	}
 
 	rc = spdk_json_parse(json, json_size, NULL, 0, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc < 0) {
-		D_ERROR("Parsing config failed: %s\n", strerror(-rc));
+		D_ERROR("Parsing config failed: %s", strerror(-rc));
 		D_GOTO(free_json, rc = -DER_INVAL);
 	}
 
@@ -340,7 +339,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	rc = spdk_json_parse(json, json_size, values, values_cnt, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc != values_cnt) {
-		D_ERROR("Parsing config failed, want %zd values got %zd\n", values_cnt, rc);
+		D_ERROR("Parsing config failed, want %zd values got %zd", values_cnt, rc);
 		D_GOTO(free_values, rc = -DER_INVAL);
 	}
 
@@ -380,7 +379,7 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
 	if (rc < 0) {
-		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
+		D_ERROR("Failed to decode config entry: %s", strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -405,17 +404,17 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
 	if (rc < 0) {
-		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
+		D_ERROR("Failed to decode config entry: %s", strerror(-rc));
 		return -DER_INVAL;
 	}
 
 	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0) {
-		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
+		D_DEBUG(DB_MGMT, "skip config entry %s", cfg.method);
 		goto free_method;
 	}
 
 	if (cfg.params == NULL) {
-		D_ERROR("bad config entry %s with nil params\n", cfg.method);
+		D_ERROR("bad config entry %s with nil params", cfg.method);
 		D_GOTO(free_method, rc = -DER_INVAL);
 	}
 
@@ -429,7 +428,7 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 		if (spdk_json_strequal(key, "traddr")) {
 			value = json_value(key);
 			if (!value || value->len > SPDK_NVMF_TRADDR_MAX_LEN) {
-				D_ERROR("Invalid json value\n");
+				D_ERROR("Invalid json value");
 				D_GOTO(free_traddr, rc = -DER_INVAL);
 			}
 			memcpy(traddr, value->start, value->len);
@@ -447,18 +446,18 @@ add_traddrs_from_bdev_subsys(struct json_config_ctx *ctx, bool vmd_enabled,
 					 */
 					rc = traddr_to_vmd(traddr, traddr);
 					if (rc != 0) {
-						D_ERROR("Invalid traddr %s (rc: %d)\n", traddr, rc);
+						D_ERROR("Invalid traddr %s (rc: %d)", traddr, rc);
 						goto free_traddr;
 					}
 
-					D_DEBUG(DB_MGMT, "\t- VMD backing address reverted to "
-						"'%s'\n", traddr);
+					D_DEBUG(DB_MGMT, "\t- VMD backing address reverted to '%s'",
+						traddr);
 				}
 			}
 
 			rc = opts_add_pci_addr(opts, traddr);
 			if (rc != 0) {
-				D_ERROR("spdk env add pci: %d\n", rc);
+				D_ERROR("spdk env add pci: %d", rc);
 				goto free_traddr;
 			}
 		}
@@ -491,18 +490,18 @@ check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 	rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 				     SPDK_COUNTOF(config_entry_decoders), &cfg);
 	if (rc < 0) {
-		D_ERROR("Failed to decode config entry: %s\n", strerror(-rc));
+		D_ERROR("Failed to decode config entry: %s", strerror(-rc));
 		return -DER_INVAL;
 	}
 
 	if (strcmp(cfg.method, NVME_CONF_ATTACH_CONTROLLER) != 0 &&
 	    strcmp(cfg.method, NVME_CONF_AIO_CREATE) != 0) {
-		D_DEBUG(DB_MGMT, "skip config entry %s\n", cfg.method);
+		D_DEBUG(DB_MGMT, "skip config entry %s", cfg.method);
 		goto free_method;
 	}
 
 	if (cfg.params == NULL) {
-		D_ERROR("bad config entry %s with nil params\n", cfg.method);
+		D_ERROR("bad config entry %s with nil params", cfg.method);
 		D_GOTO(free_method, rc = -DER_INVAL);
 	}
 
@@ -516,16 +515,16 @@ check_name_from_bdev_subsys(struct json_config_ctx *ctx)
 		if (spdk_json_strequal(key, "name")) {
 			value = json_value(key);
 			if (!value || value->len > BDEV_NAME_MAX_LEN) {
-				D_ERROR("Invalid json value\n");
+				D_ERROR("Invalid json value");
 				D_GOTO(free_name, rc = -DER_INVAL);
 			}
 			memcpy(name, value->start, value->len);
 			name[value->len] = '\0';
 
-			D_DEBUG(DB_MGMT, "check bdev name: %s\n", name);
+			D_DEBUG(DB_MGMT, "check bdev name: %s", name);
 			rc = bdev_name2roles(name);
 			if (rc < 0) {
-				D_ERROR("bdev_name contains invalid roles: %s\n", name);
+				D_ERROR("bdev_name contains invalid roles: %s", name);
 				D_GOTO(free_name, rc);
 			}
 			roles |= rc;
@@ -552,11 +551,11 @@ decode_subsystem_configs(struct spdk_json_val *json_val, struct json_config_ctx 
 	rc = spdk_json_decode_object(json_val, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
 				     ctx);
 	if (rc < 0) {
-		D_ERROR("Failed to parse vmd subsystem: %s\n", strerror(-rc));
+		D_ERROR("Failed to parse vmd subsystem: %s", strerror(-rc));
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found\n", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -668,14 +667,14 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
 	if (rc < 0) {
-		D_ERROR("Failed to find subsystems key: %s\n", strerror(-rc));
+		D_ERROR("Failed to find subsystems key: %s", strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Get first subsystem */
 	ctx->subsystems_it = spdk_json_array_first(ctx->subsystems);
 	if (ctx->subsystems_it == NULL) {
-		D_ERROR("Empty subsystems section\n");
+		D_ERROR("Empty subsystems section");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -684,7 +683,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 		rc = spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
 					     SPDK_COUNTOF(subsystem_decoders), ctx);
 		if (rc < 0) {
-			D_ERROR("Failed to parse subsystem configuration: %s\n", strerror(-rc));
+			D_ERROR("Failed to parse subsystem configuration: %s", strerror(-rc));
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -699,7 +698,7 @@ bio_add_allowed_alloc(const char *nvme_conf, struct spdk_env_opts *opts, int *ro
 	};
 
 	if (bdev_ss == NULL) {
-		D_ERROR("Config is missing bdev subsystem\n");
+		D_ERROR("Config is missing bdev subsystem");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -740,7 +739,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	rc = spdk_json_find(ctx->values, "daos_data", NULL, &daos_data,
 			    SPDK_JSON_VAL_OBJECT_BEGIN);
 	if (rc < 0) {
-		D_ERROR("Failed to find 'daos_data' key: %s\n", strerror(-rc));
+		D_ERROR("Failed to find 'daos_data' key: %s", strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -748,14 +747,14 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	rc = spdk_json_decode_object(daos_data, daos_data_decoders,
 				     SPDK_COUNTOF(daos_data_decoders), ctx);
 	if (rc < 0) {
-		D_ERROR("Failed to parse 'daos_data' entry: %s\n", strerror(-rc));
+		D_ERROR("Failed to parse 'daos_data' entry: %s", strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	/* Get 'config' array first configuration entry */
 	ctx->config_it = spdk_json_array_first(ctx->config);
 	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "Empty 'daos_data' section\n");
+		D_DEBUG(DB_MGMT, "Empty 'daos_data' section");
 		D_GOTO(out, rc = 1); /* non-fatal */
 	}
 
@@ -763,7 +762,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 		rc = spdk_json_decode_object(ctx->config_it, config_entry_decoders,
 					     SPDK_COUNTOF(config_entry_decoders), cfg);
 		if (rc < 0) {
-			D_ERROR("Failed to decode 'config' entry: %s\n", strerror(-rc));
+			D_ERROR("Failed to decode 'config' entry: %s", strerror(-rc));
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -775,7 +774,7 @@ decode_daos_data(const char *nvme_conf, const char *method_name, struct config_e
 	}
 
 	if (ctx->config_it == NULL) {
-		D_DEBUG(DB_MGMT, "No '%s' entry\n", method_name);
+		D_DEBUG(DB_MGMT, "No '%s' entry", method_name);
 		rc = 1; /* non-fatal */
 	}
 out:
@@ -797,12 +796,12 @@ get_hotplug_busid_range(const char *nvme_conf)
 				     SPDK_COUNTOF(busid_range_decoders),
 				     &hotplug_busid_range);
 	if (rc < 0) {
-		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_HOTPLUG_RANGE,
+		D_ERROR("Failed to decode '%s' entry: %s)", NVME_CONF_SET_HOTPLUG_RANGE,
 			strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_DEBUG(DB_MGMT, "'%s' read from config: %X-%X\n", NVME_CONF_SET_HOTPLUG_RANGE,
+	D_DEBUG(DB_MGMT, "'%s' read from config: %X-%X", NVME_CONF_SET_HOTPLUG_RANGE,
 		hotplug_busid_range.begin, hotplug_busid_range.end);
 out:
 	if (cfg.method != NULL)
@@ -816,17 +815,17 @@ static bool
 hotplug_filter_fn(const struct spdk_pci_addr *addr)
 {
 	if (hotplug_busid_range.end == 0 || hotplug_busid_range.begin > hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X, invalid range\n",
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X, invalid range",
 			addr->bus);
 		return true; /* allow if no or invalid range specified */
 	}
 
 	if (addr->bus >= hotplug_busid_range.begin && addr->bus <= hotplug_busid_range.end) {
-		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X\n", addr->bus);
+		D_DEBUG(DB_MGMT, "hotplug filter accept event on bus-id %X", addr->bus);
 		return true;
 	}
 
-	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %X\n", addr->bus);
+	D_DEBUG(DB_MGMT, "hotplug filter refuse event on bus-id %X", addr->bus);
 	return false;
 }
 
@@ -872,15 +871,15 @@ bio_read_accel_props(const char *nvme_conf)
 				     SPDK_COUNTOF(accel_props_decoders),
 				     &accel_props);
 	if (rc < 0) {
-		D_ERROR("Failed to decode '%s' entry (%s)\n", NVME_CONF_SET_ACCEL_PROPS,
+		D_ERROR("Failed to decode '%s' entry (%s)", NVME_CONF_SET_ACCEL_PROPS,
 			strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_DEBUG(DB_MGMT, "'%s' read from config, setting: %s, capabilities: move=%s,crc=%s\n",
-	       NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
-	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
-	       CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
+	D_DEBUG(DB_MGMT, "'%s' read from config, setting: %s, capabilities: move=%s,crc=%s",
+		NVME_CONF_SET_ACCEL_PROPS, accel_props.engine,
+		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_MOVE) ? "true" : "false",
+		CHK_FLAG(accel_props.opt_mask, NVME_ACCEL_FLAG_CRC) ? "true" : "false");
 
 	/* TODO: do something useful with acceleration engine properties */
 out:
@@ -914,7 +913,7 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 				     SPDK_COUNTOF(rpc_srv_decoders),
 				     &rpc_srv_settings);
 	if (rc < 0) {
-		D_ERROR("Failed to decode '%s' entry: %s)\n", NVME_CONF_SET_SPDK_RPC_SERVER,
+		D_ERROR("Failed to decode '%s' entry: %s)", NVME_CONF_SET_SPDK_RPC_SERVER,
 			strerror(-rc));
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -922,7 +921,7 @@ bio_read_rpc_srv_settings(const char *nvme_conf, bool *enable, const char **sock
 	*enable = rpc_srv_settings.enable;
 	*sock_addr = rpc_srv_settings.sock_addr;
 
-	D_DEBUG(DB_MGMT, "'%s' read from config: enabled=%d, addr %s\n",
+	D_DEBUG(DB_MGMT, "'%s' read from config: enabled=%d, addr %s",
 		NVME_CONF_SET_SPDK_RPC_SERVER, *enable, (char *)*sock_addr);
 out:
 	if (cfg.method != NULL)

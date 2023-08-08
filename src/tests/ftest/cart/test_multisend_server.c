@@ -25,13 +25,13 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	int	rc;
 
 	if (info->bci_rc != 0) {
-		D_ERROR("Bulk transfer failed with rc=%d\n", info->bci_rc);
+		D_ERROR("Bulk transfer failed with rc=%d", info->bci_rc);
 		error_exit();
 	}
 
 	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	if (rc != 0) {
-		D_ERROR("Failed to send response\n");
+		D_ERROR("Failed to send response");
 		error_exit();
 	}
 
@@ -96,14 +96,14 @@ handler_ping(crt_rpc_t *rpc)
 		rc = crt_bulk_transfer(&bulk_desc, bulk_transfer_done_cb,
 				       dst, NULL);
 		if (rc != 0) {
-			D_ERROR("transfer failed; rc=%d\n", rc);
+			D_ERROR("transfer failed; rc=%d", rc);
 			error_exit();
 		}
 	} else {
 		output->rc = rc;
 		rc = crt_reply_send(rpc);
 		if (rc != 0) {
-			D_ERROR("reply failed; rc=%d\n", rc);
+			D_ERROR("reply failed; rc=%d", rc);
 			error_exit();
 		}
 	}
@@ -136,7 +136,7 @@ test_run(d_rank_t my_rank)
 
 	rc = pthread_join(test.tg_tid[0], NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "joined progress thread.\n");
+	D_DEBUG(DB_TRACE, "joined progress thread");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
@@ -151,7 +151,7 @@ test_run(d_rank_t my_rank)
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-	D_DEBUG(DB_TRACE, "exiting.\n");
+	D_DEBUG(DB_TRACE, "exiting");
 }
 
 int

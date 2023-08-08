@@ -46,7 +46,7 @@ query_cb(struct crt_proto_query_cb_info *cb_info)
 	high_ver = cb_info->pq_arg;
 
 	D_ASSERT(cb_info->pq_arg != NULL);
-	D_ERROR("query_cb() failed, cb_info->pq_rc: %d.\n", cb_info->pq_rc);
+	D_ERROR("query_cb() failed, cb_info->pq_rc: %d", cb_info->pq_rc);
 	D_ASSERT(cb_info->pq_rc == DER_SUCCESS);
 
 	*high_ver = cb_info->pq_ver;
@@ -178,7 +178,7 @@ test_run()
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "joined progress thread.\n");
+	D_DEBUG(DB_TRACE, "joined progress thread");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
@@ -187,7 +187,7 @@ test_run()
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-	D_DEBUG(DB_TRACE, "exiting.\n");
+	D_DEBUG(DB_TRACE, "exiting");
 }
 
 int

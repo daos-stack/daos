@@ -12,8 +12,7 @@ void
 daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 {
 	if (props == NULL || cont_prop == NULL) {
-		D_DEBUG(DB_TRACE, "No props to set, props=%p, cont_prop=%p\n",
-			props, cont_prop);
+		D_DEBUG(DB_TRACE, "No props to set, props=%p, cont_prop=%p", props, cont_prop);
 		return;
 	}
 

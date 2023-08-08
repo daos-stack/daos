@@ -62,7 +62,7 @@ realloc_set(void **buf, size_t s)
 
 	D_REALLOC_NZ(tbuf, *buf, s);
 	if (tbuf == NULL) {
-		D_CRIT("Realloc!\n");
+		D_CRIT("Realloc!");
 		return -1;
 	}
 	*buf = tbuf;

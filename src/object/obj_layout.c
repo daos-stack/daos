@@ -76,7 +76,8 @@ obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint3
 		for (i = 0; i < grp_size; i++) {
 			tgts[i] = new_layout->ol_shards[grp_start + i].po_target;
 			shards[i] = grp_start + i;
-			D_DEBUG(DB_TRACE, "i %d tgts[i] %u shards %u grp_size %u\n", i, tgts[i], shards[i], grp_size);
+			D_DEBUG(DB_TRACE, "i %d tgts[i] %u shards %u grp_size %u", i, tgts[i],
+				shards[i], grp_size);
 		}
 		D_GOTO(out, rc = grp_size);
 	}

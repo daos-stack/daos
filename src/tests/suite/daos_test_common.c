@@ -217,7 +217,7 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_REDUN_LVL) == NULL) {
 			redun_lvl_prop = daos_prop_alloc(1);
 			if (redun_lvl_prop == NULL) {
-				D_ERROR("failed to allocate prop\n");
+				D_ERROR("failed to allocate prop");
 				return -DER_NOMEM;
 			}
 			redun_lvl_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
@@ -226,7 +226,7 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 			if (co_prop) {
 				merged_props = daos_prop_merge(co_prop, redun_lvl_prop);
 				if (merged_props == NULL) {
-					D_ERROR("failed to merge cont_prop and redun_lvl_prop\n");
+					D_ERROR("failed to merge cont_prop and redun_lvl_prop");
 					daos_prop_free(redun_lvl_prop);
 					return -DER_NOMEM;
 				}

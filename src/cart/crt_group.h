@@ -295,8 +295,8 @@ crt_grp_priv_addref(struct crt_grp_priv *grp_priv)
 	refcount = ++grp_priv->gp_refcount;
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
-	D_DEBUG(DB_TRACE, "service group (%s), refcount increased to %d.\n",
-		grp_priv->gp_pub.cg_grpid, refcount);
+	D_DEBUG(DB_TRACE, "service group (%s), refcount increased to %d", grp_priv->gp_pub.cg_grpid,
+		refcount);
 }
 
 /*
@@ -313,8 +313,8 @@ crt_grp_priv_decref(struct crt_grp_priv *grp_priv)
 	D_RWLOCK_WRLOCK(&grp_priv->gp_rwlock);
 	D_ASSERT(grp_priv->gp_refcount >= 1);
 	grp_priv->gp_refcount--;
-	D_DEBUG(DB_TRACE, "group (%s), decref to %d.\n",
-		grp_priv->gp_pub.cg_grpid, grp_priv->gp_refcount);
+	D_DEBUG(DB_TRACE, "group (%s), decref to %d", grp_priv->gp_pub.cg_grpid,
+		grp_priv->gp_refcount);
 	if (grp_priv->gp_refcount == 0)
 		destroy = true;
 
@@ -342,8 +342,8 @@ crt_grp_psr_set(struct crt_grp_priv *grp_priv, d_rank_t psr_rank,
 			rc = -DER_NOMEM;
 	}
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
-	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s.\n",
-		grp_priv->gp_pub.cg_grpid, psr_rank, psr_addr);
+	D_DEBUG(DB_TRACE, "group %s, set psr rank %d, uri %s", grp_priv->gp_pub.cg_grpid, psr_rank,
+		psr_addr);
 	return rc;
 }
 

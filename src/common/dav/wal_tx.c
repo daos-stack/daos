@@ -117,49 +117,43 @@ dav_wal_tx_submit(struct dav_obj *dav_hdl, struct umem_wal_tx *utx, void *data)
 		ua = &wa->wa_act;
 		switch (ua->ac_opc) {
 		case UMEM_ACT_COPY:
-			D_DEBUG(DB_TRACE,
-				"%s: ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu\n",
-				pathname, id,
-				ua->ac_copy.addr / PAGESIZE, ua->ac_copy.addr % PAGESIZE,
+			D_DEBUG(DB_TRACE, "%s: ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu", pathname,
+				id, ua->ac_copy.addr / PAGESIZE, ua->ac_copy.addr % PAGESIZE,
 				ua->ac_copy.size);
 			break;
 		case UMEM_ACT_COPY_PTR:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_COPY_PTR txid=%lu, (p,o)=%lu,%lu size=%lu ptr=0x%lx\n",
-				pathname, id,
-				ua->ac_copy_ptr.addr / PAGESIZE, ua->ac_copy_ptr.addr % PAGESIZE,
-				ua->ac_copy_ptr.size, ua->ac_copy_ptr.ptr);
+				"%s: ACT_COPY_PTR txid=%lu, (p,o)=%lu,%lu size=%lu ptr=0x%lx",
+				pathname, id, ua->ac_copy_ptr.addr / PAGESIZE,
+				ua->ac_copy_ptr.addr % PAGESIZE, ua->ac_copy_ptr.size,
+				ua->ac_copy_ptr.ptr);
 			break;
 		case UMEM_ACT_ASSIGN:
-			D_DEBUG(DB_TRACE,
-				"%s: ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u\n",
-				pathname, id,
-				ua->ac_assign.addr / PAGESIZE, ua->ac_assign.addr % PAGESIZE,
-				ua->ac_assign.size);
+			D_DEBUG(DB_TRACE, "%s: ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u",
+				pathname, id, ua->ac_assign.addr / PAGESIZE,
+				ua->ac_assign.addr % PAGESIZE, ua->ac_assign.size);
 			break;
 		case UMEM_ACT_SET:
-			D_DEBUG(DB_TRACE,
-				"%s: ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
-				pathname, id,
-				ua->ac_set.addr / PAGESIZE, ua->ac_set.addr % PAGESIZE,
-				ua->ac_set.size, ua->ac_set.val);
+			D_DEBUG(DB_TRACE, "%s: ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u",
+				pathname, id, ua->ac_set.addr / PAGESIZE,
+				ua->ac_set.addr % PAGESIZE, ua->ac_set.size, ua->ac_set.val);
 			break;
 		case UMEM_ACT_SET_BITS:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_SET_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
-				pathname, id,
-				ua->ac_op_bits.addr / PAGESIZE, ua->ac_op_bits.addr % PAGESIZE,
-				ua->ac_op_bits.pos, ua->ac_op_bits.num);
+				"%s: ACT_SET_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u",
+				pathname, id, ua->ac_op_bits.addr / PAGESIZE,
+				ua->ac_op_bits.addr % PAGESIZE, ua->ac_op_bits.pos,
+				ua->ac_op_bits.num);
 			break;
 		case UMEM_ACT_CLR_BITS:
 			D_DEBUG(DB_TRACE,
-				"%s: ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
-				pathname, id,
-				ua->ac_op_bits.addr / PAGESIZE, ua->ac_op_bits.addr % PAGESIZE,
-				ua->ac_op_bits.pos, ua->ac_op_bits.num);
+				"%s: ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u",
+				pathname, id, ua->ac_op_bits.addr / PAGESIZE,
+				ua->ac_op_bits.addr % PAGESIZE, ua->ac_op_bits.pos,
+				ua->ac_op_bits.num);
 			break;
 		default:
-			D_ERROR("%s: unknown opc %d\n", dav_hdl->do_path, ua->ac_opc);
+			D_ERROR("%s: unknown opc %d", dav_hdl->do_path, ua->ac_opc);
 			ASSERT(0);
 		}
 	}
@@ -442,9 +436,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 
 	switch (act->ac_opc) {
 	case UMEM_ACT_COPY:
-		D_DEBUG(DB_TRACE,
-			"ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu\n",
-			tx_id,
+		D_DEBUG(DB_TRACE, "ACT_COPY txid=%lu, (p,o)=%lu,%lu size=%lu", tx_id,
 			act->ac_copy.addr / PAGESIZE, act->ac_copy.addr % PAGESIZE,
 			act->ac_copy.size);
 		off = act->ac_copy.addr;
@@ -454,9 +446,7 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		memcpy(dst, src, size);
 		break;
 	case UMEM_ACT_ASSIGN:
-		D_DEBUG(DB_TRACE,
-			"ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u\n",
-			tx_id,
+		D_DEBUG(DB_TRACE, "ACT_ASSIGN txid=%lu, (p,o)=%lu,%lu size=%u", tx_id,
 			act->ac_assign.addr / PAGESIZE, act->ac_assign.addr % PAGESIZE,
 			act->ac_assign.size);
 		off = act->ac_assign.addr;
@@ -467,11 +457,9 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		memcpy(dst, src, size);
 		break;
 	case UMEM_ACT_SET:
-		D_DEBUG(DB_TRACE,
-			"ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u\n",
-			tx_id,
-			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE,
-			act->ac_set.size, act->ac_set.val);
+		D_DEBUG(DB_TRACE, "ACT_SET txid=%lu, (p,o)=%lu,%lu size=%u val=%u", tx_id,
+			act->ac_set.addr / PAGESIZE, act->ac_set.addr % PAGESIZE, act->ac_set.size,
+			act->ac_set.val);
 		off = act->ac_set.addr;
 		dst = base + off;
 		size = act->ac_set.size;
@@ -480,10 +468,8 @@ dav_wal_replay_cb(uint64_t tx_id, struct umem_action *act, void *arg)
 		break;
 	case UMEM_ACT_SET_BITS:
 	case UMEM_ACT_CLR_BITS:
-		D_DEBUG(DB_TRACE,
-			"ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u\n",
-			tx_id,
-			act->ac_op_bits.addr / PAGESIZE, act->ac_op_bits.addr % PAGESIZE,
+		D_DEBUG(DB_TRACE, "ACT_CLR_BITS txid=%lu, (p,o)=%lu,%lu bit_pos=%u num_bits=%u",
+			tx_id, act->ac_op_bits.addr / PAGESIZE, act->ac_op_bits.addr % PAGESIZE,
 			act->ac_op_bits.pos, act->ac_op_bits.num);
 		off = act->ac_op_bits.addr;
 		size = sizeof(uint64_t);

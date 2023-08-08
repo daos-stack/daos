@@ -35,8 +35,7 @@ mgmt_get_bs_state_cp(tse_task_t *task, void *data)
 	arg = (struct mgmt_get_bs_state_arg *)data;
 
 	if (rc) {
-		D_ERROR("RPC error while querying blobstore state: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "RPC error while querying blobstore state");
 		D_GOTO(out, rc);
 	}
 
@@ -44,7 +43,7 @@ mgmt_get_bs_state_cp(tse_task_t *task, void *data)
 	D_ASSERT(bs_out != NULL);
 	rc = bs_out->bs_rc;
 	if (rc) {
-		D_ERROR("MGMT_GET_BS_STATE replied failed, rc: %d\n", rc);
+		D_ERROR("MGMT_GET_BS_STATE replied failed, rc: %d", rc);
 		D_GOTO(out, rc);
 	}
 	*arg->state = bs_out->bs_state;
@@ -75,7 +74,7 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 
 	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
 	if (rc != 0) {
-		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_ERROR("cannot attach to DAOS system: %s", args->grp);
 		D_GOTO(out, rc);
 	}
 
@@ -87,8 +86,7 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 
 	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create(MGMT_GET_BS_STATE failed, rc: %d.\n",
-			rc);
+		D_ERROR("crt_req_create(MGMT_GET_BS_STATE failed, rc: %d", rc);
 		D_GOTO(out_grp, rc);
 	}
 
@@ -108,8 +106,7 @@ dc_mgmt_get_bs_state(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_put_req, rc);
 
-	D_DEBUG(DB_MGMT, "getting internal blobstore state in DAOS system:%s\n",
-		args->grp);
+	D_DEBUG(DB_MGMT, "getting internal blobstore state in DAOS system:%s", args->grp);
 
 	return daos_rpc_send(rpc_req, task);
 

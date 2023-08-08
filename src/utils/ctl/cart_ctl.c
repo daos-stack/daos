@@ -148,7 +148,7 @@ parse_rank_string(char *arg_str, d_rank_t *ranks, int *num_ranks)
 		return;
 	}
 
-	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	D_DEBUG(DB_TRACE, "arg_str %s", arg_str);
 
 	token = strtok_r(arg_str, ",", &saveptr);
 	while (token != NULL) {
@@ -200,7 +200,7 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 	if (strnlen(arg_str, MAX_ARG_LEN) >= MAX_ARG_LEN)
 		error_exit("attribute string too long (max=%d)\n", MAX_ARG_LEN);
 
-	D_DEBUG(DB_TRACE, "arg_str %s\n", arg_str);
+	D_DEBUG(DB_TRACE, "arg_str %s", arg_str);
 
 	token = strtok_r(arg_str, ",", &saveptr);
 	if (token == NULL)
@@ -704,8 +704,8 @@ ctl_init()
 			ctl_fill_rpc_args(rpc_req, i);
 		}
 
-		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d\n",
-			rpc_req, ep.ep_rank, ep.ep_tag, i);
+		D_DEBUG(DB_NET, "rpc_req %p rank %d tag %d seq %d", rpc_req, ep.ep_rank, ep.ep_tag,
+			i);
 
 		rc = crt_req_send(rpc_req, ctl_cli_cb, &info);
 		if (rc != 0)

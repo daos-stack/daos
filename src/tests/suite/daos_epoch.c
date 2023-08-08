@@ -44,8 +44,8 @@ io_for_aggregation(test_arg_t *arg, daos_handle_t coh, daos_handle_t ths[],
 			memset(rec, 0, REC_MAX_LEN);
 			snprintf(rec, REC_MAX_LEN, VAL_FMT, (unsigned long)i);
 			rec_size = strnlen(rec, REC_MAX_LEN);
-			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%d %s'\n",
-				i, dkey, (int)rec_size, rec);
+			D_DEBUG(DF_MISC, "  d-key[%d] '%s' val '%d %s'", i, dkey, (int)rec_size,
+				rec);
 			insert_single(dkey, akey, 1100, rec, rec_size, ths[i],
 				      &req);
 

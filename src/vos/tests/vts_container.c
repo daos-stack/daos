@@ -260,8 +260,7 @@ co_uuid_iter_test(struct vc_test_args *arg)
 		}
 
 		if (!uuid_is_null(ent.ie_couuid)) {
-			D_DEBUG(DB_TRACE,
-				"COUUID:"DF_UUID"\n", DP_UUID(ent.ie_couuid));
+			D_DEBUG(DB_TRACE, "COUUID:" DF_UUID, DP_UUID(ent.ie_couuid));
 			nr++;
 		}
 

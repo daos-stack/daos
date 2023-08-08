@@ -33,7 +33,7 @@ alloc_ace_with_access(enum daos_acl_principal_type type, uint64_t permissions)
 
 	ace = daos_ace_create(type, NULL);
 	if (ace == NULL) {
-		D_ERROR("Failed to allocate default ACE type %d\n", type);
+		D_ERROR("Failed to allocate default ACE type %d", type);
 		return NULL;
 	}
 
@@ -79,7 +79,7 @@ ds_sec_alloc_default_daos_cont_acl(void)
 
 	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
 	if (acl == NULL)
-		D_ERROR("Failed to allocate default ACL for cont properties\n");
+		D_ERROR("Failed to allocate default ACL for cont properties");
 
 	return acl;
 }
@@ -102,7 +102,7 @@ ds_sec_alloc_default_daos_pool_acl(void)
 
 	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
 	if (acl == NULL)
-		D_ERROR("Failed to allocate default ACL for pool properties\n");
+		D_ERROR("Failed to allocate default ACL for pool properties");
 
 	return acl;
 }
@@ -144,17 +144,17 @@ get_token_from_validation_response(Drpc__Response *response,
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (resp == NULL) {
-		D_ERROR("Response body was not a ValidateCredResp\n");
+		D_ERROR("Response body was not a ValidateCredResp");
 		return -DER_PROTO;
 	}
 
 	if (resp->status != 0) {
-		D_ERROR("Response reported failed status: %d\n", resp->status);
+		D_ERROR("Response reported failed status: %d", resp->status);
 		D_GOTO(out, rc = resp->status);
 	}
 
 	if (resp->token == NULL || resp->token->data.data == NULL) {
-		D_ERROR("Response missing a valid auth token\n");
+		D_ERROR("Response missing a valid auth token");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -222,7 +222,7 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 
 	rc = drpc_connect(ds_sec_server_socket_path, &server_socket);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Couldn't connect to daos_server socket: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Couldn't connect to daos_server socket");
 		return rc;
 	}
 
@@ -243,12 +243,12 @@ static int
 process_validation_response(Drpc__Response *response, Auth__Token **token)
 {
 	if (response == NULL) {
-		D_ERROR("Response was NULL\n");
+		D_ERROR("Response was NULL");
 		return -DER_NOREPLY;
 	}
 
 	if (response->status != DRPC__STATUS__SUCCESS) {
-		D_ERROR("dRPC response error: %d\n", response->status);
+		D_ERROR("dRPC response error: %d", response->status);
 		return -DER_MISC;
 	}
 
@@ -265,7 +265,7 @@ ds_sec_validate_credentials(d_iov_t *creds, Auth__Token **token)
 	    token == NULL ||
 	    creds->iov_buf_len == 0 ||
 	    creds->iov_buf == NULL) {
-		D_ERROR("Credential iov invalid\n");
+		D_ERROR("Credential iov invalid");
 		return -DER_INVAL;
 	}
 
@@ -304,7 +304,7 @@ get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 
 	if (token->flavor != AUTH__FLAVOR__AUTH_SYS) {
-		D_ERROR("Credential auth flavor not supported\n");
+		D_ERROR("Credential auth flavor not supported");
 		return -DER_PROTO;
 	}
 
@@ -313,7 +313,7 @@ get_auth_sys_payload(Auth__Token *token, Auth__Sys **payload)
 	if (alloc.oom)
 		return -DER_NOMEM;
 	if (*payload == NULL) {
-		D_ERROR("Invalid auth_sys payload\n");
+		D_ERROR("Invalid auth_sys payload");
 		return -DER_PROTO;
 	}
 
@@ -375,7 +375,7 @@ get_sec_capas_for_token(Auth__Token *token, struct d_ownership *ownership, struc
 
 	rc = get_acl_permissions(acl, ownership, &user_info, owner_min_perms, &perms, &is_owner);
 	if (rc != 0) {
-		D_ERROR("failed to get user permissions: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to get user permissions");
 		D_GOTO(out, rc);
 	}
 
@@ -397,7 +397,7 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 	Auth__Sys		*authsys;
 
 	if (token == NULL || machine == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		return -DER_INVAL;
 	}
 
@@ -406,7 +406,7 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 		return rc;
 
 	if (authsys->machinename == protobuf_c_empty_string) {
-		D_ERROR("Malformed AuthSys token missing machinename\n");
+		D_ERROR("Malformed AuthSys token missing machinename");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -415,7 +415,7 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 	machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN+1);
 
 	if (machine_size > MAXHOSTNAMELEN) {
-		D_ERROR("hostname provided by the agent is too large\n");
+		D_ERROR("hostname provided by the agent is too large");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -442,14 +442,13 @@ ds_sec_cred_get_origin(d_iov_t *cred, char **machine)
 	Auth__Token	*token;
 
 	if (cred == NULL || machine == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		return -DER_INVAL;
 	}
 
 	rc = ds_sec_validate_credentials(cred, &token);
 	if (rc != 0) {
-		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to validate credentials");
 		return rc;
 	}
 	rc = get_sec_origin_for_token(token, machine);
@@ -469,32 +468,31 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 
 	if (cred == NULL || ownership == NULL || acl == NULL ||
 	    capas == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		return -DER_INVAL;
 	}
 
 	if (!is_ownership_valid(ownership)) {
-		D_ERROR("Invalid ownership\n");
+		D_ERROR("Invalid ownership");
 		return -DER_INVAL;
 	}
 
 	/* Pool flags are mutually exclusive */
 	if ((flags != DAOS_PC_RO) && (flags != DAOS_PC_RW) &&
 	    (flags != DAOS_PC_EX)) {
-		D_ERROR("Invalid flags\n");
+		D_ERROR("Invalid flags");
 		return -DER_INVAL;
 	}
 
 	rc = daos_acl_validate(acl);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Invalid ACL: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid ACL");
 		return rc;
 	}
 
 	rc = ds_sec_validate_credentials(cred, &token);
 	if (rc != 0) {
-		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to validate credentials");
 		return rc;
 	}
 
@@ -567,7 +565,7 @@ unpack_token_from_cred(d_iov_t *cred)
 	unpacked = auth__credential__unpack(&alloc.alloc, cred->iov_buf_len,
 					    cred->iov_buf);
 	if (alloc.oom || unpacked == NULL) {
-		D_ERROR("Couldn't unpack credential\n");
+		D_ERROR("Couldn't unpack credential");
 		return NULL;
 	}
 
@@ -588,27 +586,27 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *
 	uint64_t	owner_min_perms = CONT_OWNER_MIN_PERMS;
 
 	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		return -DER_INVAL;
 	}
 
 	if (!is_ownership_valid(ownership)) {
-		D_ERROR("Invalid ownership\n");
+		D_ERROR("Invalid ownership");
 		return -DER_INVAL;
 	}
 
 	if (!dc_cont_open_flags_valid(flags)) {
-		D_ERROR("Invalid flags\n");
+		D_ERROR("Invalid flags");
 		return -DER_INVAL;
 	}
 
 	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("Invalid ACL\n");
+		D_ERROR("Invalid ACL");
 		return -DER_INVAL;
 	}
 
 	if (cred->iov_buf == NULL) {
-		D_ERROR("Credential data is NULL\n");
+		D_ERROR("Credential data is NULL");
 		return -DER_INVAL;
 	}
 
@@ -674,7 +672,7 @@ ds_sec_cont_can_delete(uint64_t pool_flags, d_iov_t *cred,
 
 	rc = ds_sec_cont_get_capabilities(cont_flags, cred, ownership, acl, &capas);
 	if (rc != 0) {
-		D_ERROR("failed to get container capabilities: %d\n", rc);
+		D_ERROR("failed to get container capabilities: %d", rc);
 		return false;
 	}
 
@@ -778,7 +776,7 @@ ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y)
 
 	if (cred_x == NULL || cred_y == NULL || cred_x->iov_buf == NULL ||
 	    cred_y->iov_buf == NULL) {
-		D_ERROR("NULL input\n");
+		D_ERROR("NULL input");
 		rc = -DER_INVAL;
 		goto out;
 	}

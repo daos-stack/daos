@@ -29,7 +29,7 @@ map_ranks_init(const struct pool_map *map, unsigned int status, d_rank_list_t *r
 	nnodes = pool_map_find_nodes((struct pool_map *)map,
 				      PO_COMP_ID_ALL, &domains);
 	if (nnodes == 0) {
-		D_ERROR("no nodes in pool map\n");
+		D_ERROR("no nodes in pool map");
 		return -DER_IO;
 	}
 
@@ -107,16 +107,15 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT, &excluded);
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create rank list: %d", DP_UUID(pool->sp_uuid), rc);
 		return rc;
 	}
 
 	if (excluded_list != NULL && excluded_list->rl_nr > 0) {
 		rc = daos_rank_list_merge(&excluded, excluded_list);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to merge rank list: %d\n",
-				DP_UUID(pool->sp_uuid), rc);
+			D_ERROR(DF_UUID ": failed to merge rank list: %d", DP_UUID(pool->sp_uuid),
+				rc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -436,7 +435,7 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 			goto out;
 	}
 
-	D_DEBUG(DB_MD, "desired=%u undesired=%u objective=%d\n", desired->rl_nr, undesired->rl_nr,
+	D_DEBUG(DB_MD, "desired=%u undesired=%u objective=%d", desired->rl_nr, undesired->rl_nr,
 		objective);
 
 	/*
@@ -849,7 +848,7 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "Lookup "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
+		D_DEBUG(DB_MD, "Lookup " DF_UUID ": %d", DP_UUID(pool_uuid), rc);
 		return 0;
 	}
 
@@ -866,8 +865,7 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 out_lock:
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to create rank list: %d\n",
-			DP_UUID(pool->sp_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create rank list: %d", DP_UUID(pool->sp_uuid), rc);
 
 	ds_pool_put(pool);
 	return rc;
@@ -885,7 +883,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 	*tgts_cnt = 0;
 	rc = ds_pool_lookup(pool_uuid, &pool);
 	if (pool == NULL || pool->sp_map == NULL) {
-		D_DEBUG(DB_MD, "pool look "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
+		D_DEBUG(DB_MD, "pool look " DF_UUID ": %d", DP_UUID(pool_uuid), rc);
 		D_GOTO(output, rc = 0);
 	}
 
@@ -895,7 +893,7 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 	 */
 	rc = crt_group_rank(NULL, &myrank);
 	if (rc) {
-		D_ERROR("Can not get rank "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Can not get rank");
 		D_GOTO(output, rc);
 	}
 
@@ -945,7 +943,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	/* Get pool map to check the target status */
 	pool_child = ds_pool_child_lookup(pool_id);
 	if (pool_child == NULL) {
-		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
+		D_ERROR(DF_UUID ": Pool cache not found", DP_UUID(pool_id));
 		/*
 		 * The SMD pool info could be inconsistent with global pool
 		 * info when pool creation/destroy partially succeed or fail.
@@ -968,8 +966,8 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		nr = pool_map_find_target_by_rank_idx(pool->sp_map, rank,
 						      tgt_ids[i], &target);
 		if (nr != 1) {
-			D_ERROR(DF_UUID": Failed to get rank:%u, idx:%d\n",
-				DP_UUID(pool_id), rank, tgt_ids[i]);
+			D_ERROR(DF_UUID ": Failed to get rank:%u, idx:%d", DP_UUID(pool_id), rank,
+				tgt_ids[i]);
 			rc = -DER_NONEXIST;
 			break;
 		}
@@ -997,8 +995,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		*pl_rank = pool->sp_iv_ns->iv_master_rank;
 	} else {
 		*pl_rank = -1;
-		D_ERROR(DF_UUID": Pool IV NS isn't initialized\n",
-			DP_UUID(pool_id));
+		D_ERROR(DF_UUID ": Pool IV NS isn't initialized", DP_UUID(pool_id));
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
@@ -1099,10 +1096,8 @@ update_targets_ult(void *arg)
 		rc = dsc_pool_tgt_exclude(uta->uta_pool_id, NULL /* grp */,
 					  &svc, &tgt_list);
 	if (rc)
-		D_ERROR(DF_UUID": %s targets failed. "DF_RC"\n",
-			DP_UUID(uta->uta_pool_id),
-			uta->uta_reint ? "Reint" : "Exclude",
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": %s targets failed", DP_UUID(uta->uta_pool_id),
+			 uta->uta_reint ? "Reint" : "Exclude");
 
 	free_update_targets_arg(uta);
 }
@@ -1128,8 +1123,7 @@ update_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 
 	rc = dss_ult_create(update_targets_ult, uta, DSS_XS_SELF, 0, 0, NULL);
 	if (rc) {
-		D_ERROR(DF_UUID": Failed to start targets updating ULT. %d\n",
-			DP_UUID(pool_id), rc);
+		D_ERROR(DF_UUID ": Failed to start targets updating ULT. %d", DP_UUID(pool_id), rc);
 		free_update_targets_arg(uta);
 	}
 
@@ -1150,7 +1144,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
-		D_ERROR("Failed to list pools: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to list pools");
 		return rc;
 	}
 
@@ -1163,17 +1157,15 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			 * All affected targets are in expected state, it's safe
 			 * to transit BIO BS state to now.
 			 */
-			D_DEBUG(DB_MGMT, DF_UUID": Targets are all in %s\n",
-				DP_UUID(pool_info->spi_id),
-				reint ? "UP/UPIN" : "DOWN/DOWNOUT");
+			D_DEBUG(DB_MGMT, DF_UUID ": Targets are all in %s",
+				DP_UUID(pool_info->spi_id), reint ? "UP/UPIN" : "DOWN/DOWNOUT");
 			break;
 		case 1:
 			/*
 			 * Some affected targets are not in expected state,
 			 * need to send exclude/reint RPC.
 			 */
-			D_DEBUG(DB_MGMT, DF_UUID": Trigger targets %s.\n",
-				DP_UUID(pool_info->spi_id),
+			D_DEBUG(DB_MGMT, DF_UUID ": Trigger targets %s", DP_UUID(pool_info->spi_id),
 				reint ? "reint" : "exclude");
 			rc = update_pool_targets(pool_info->spi_id, tgt_ids,
 						 tgt_cnt, reint, pl_rank);
@@ -1182,7 +1174,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 			break;
 		default:
 			/* Errors */
-			D_ERROR(DF_UUID": Check targets status failed: %d\n",
+			D_ERROR(DF_UUID ": Check targets status failed: %d",
 				DP_UUID(pool_info->spi_id), ret);
 			if (rc >= 0)
 				rc = ret;
@@ -1193,8 +1185,7 @@ nvme_reaction(int *tgt_ids, int tgt_cnt, bool reint)
 		smd_pool_free_info(pool_info);
 	}
 
-	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d\n",
-		tgt_cnt, rc);
+	D_DEBUG(DB_MGMT, "Faulty reaction done. tgt_cnt:%d, rc:%d", tgt_cnt, rc);
 	return rc;
 }
 

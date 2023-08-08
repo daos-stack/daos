@@ -273,7 +273,7 @@ palloc_heap_action_exec(struct palloc_heap *heap,
 {
 #ifdef DAV_EXTRA_DEBUG
 	if (act->m.m_ops->get_state(&act->m) == act->new_state) {
-		D_CRIT("invalid operation or heap corruption\n");
+		D_CRIT("invalid operation or heap corruption");
 		ASSERT(0);
 	}
 #endif
@@ -304,7 +304,7 @@ palloc_restore_free_chunk_state(struct palloc_heap *heap,
 			if (errno == EEXIST)
 				FATAL("duplicate runtime chunk state, possible double free");
 			else
-				D_CRIT("unable to track runtime chunk state\n");
+				D_CRIT("unable to track runtime chunk state");
 		}
 		heap_bucket_release(b);
 	}

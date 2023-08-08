@@ -78,15 +78,14 @@ daos_eq_lib_init()
 
 	rc = crt_init_opt(NULL, 0, daos_crt_init_opt_get(false, 1));
 	if (rc != 0) {
-		D_ERROR("failed to initialize crt: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to initialize crt");
 		D_GOTO(unlock, rc);
 	}
 
 	/* use a global shared context for all eq for now */
 	rc = crt_context_create(&daos_eq_ctx);
 	if (rc != 0) {
-		D_ERROR("failed to create client context: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create client context");
 		D_GOTO(crt, rc);
 	}
 
@@ -115,8 +114,7 @@ daos_eq_lib_fini()
 	if (daos_eq_ctx != NULL) {
 		rc = crt_context_destroy(daos_eq_ctx, 1 /* force */);
 		if (rc != 0) {
-			D_ERROR("failed to destroy client context: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to destroy client context");
 			return rc;
 		}
 		daos_eq_ctx = NULL;
@@ -135,7 +133,7 @@ daos_eq_lib_fini()
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("failed to shutdown crt: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to shutdown crt");
 		D_GOTO(unlock, rc);
 	}
 
@@ -400,12 +398,12 @@ daos_event_launch(struct daos_event *ev)
 	int				  rc = 0;
 
 	if (evx->evx_status != DAOS_EVS_READY) {
-		D_ERROR("Event status should be INIT: %d\n", evx->evx_status);
+		D_ERROR("Event status should be INIT: %d", evx->evx_status);
 		return -DER_NO_PERM;
 	}
 
 	if (evx->evx_nchild > evx->evx_nchild_running + evx->evx_nchild_comp) {
-		D_ERROR("Launch all children before launch the parent.\n");
+		D_ERROR("Launch all children before launch the parent");
 		rc = -DER_NO_PERM;
 		goto out;
 	}
@@ -413,13 +411,13 @@ daos_event_launch(struct daos_event *ev)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
-			D_ERROR("Can't find eq from handle %"PRIu64"\n", evx->evx_eqh.cookie);
+			D_ERROR("Can't find eq from handle %" PRIu64, evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 		if (eqx->eqx_finalizing) {
-			D_ERROR("Event queue is in progress of finalizing\n");
+			D_ERROR("Event queue is in progress of finalizing");
 			rc = -DER_NONEXIST;
 			goto out;
 		}
@@ -455,7 +453,7 @@ daos_event_parent_barrier(struct daos_event *ev)
 	struct daos_event_private	*evx = daos_ev2evx(ev);
 
 	if (evx->evx_nchild == 0) {
-		D_ERROR("Can't start a parent event with no children\n");
+		D_ERROR("Can't start a parent event with no children");
 		return -DER_INVAL;
 	}
 
@@ -586,7 +584,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		epa.eqx = daos_eq_lookup(evx->evx_eqh);
 		if (epa.eqx == NULL) {
-			D_ERROR("Can't find eq from handle %"PRIu64"\n", evx->evx_eqh.cookie);
+			D_ERROR("Can't find eq from handle %" PRIu64, evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 	}
@@ -599,7 +597,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt progress failed with");
 		return rc;
 	}
 
@@ -634,7 +632,7 @@ daos_eq_create(daos_handle_t *eqh)
 
 	rc = crt_context_create(&eqx->eqx_ctx);
 	if (rc) {
-		D_WARN("Failed to create CART context; using the global one, "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create CART context; using the global one");
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
@@ -703,7 +701,7 @@ eq_progress_cb(void *arg)
 	if (epa->eqx->eqx_finalizing) { /* no new event is coming */
 		D_ASSERT(d_list_empty(&eq->eq_running));
 		D_MUTEX_UNLOCK(&epa->eqx->eqx_lock);
-		D_ERROR("EQ Progress called while EQ is finalizing\n");
+		D_ERROR("EQ Progress called while EQ is finalizing");
 		return -DER_NONEXIST;
 	}
 
@@ -732,7 +730,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	/** look up private eq */
 	epa.eqx = daos_eq_lookup(eqh);
 	if (epa.eqx == NULL) {
-		D_ERROR("Invalid EQ handle %"PRIu64"\n", eqh.cookie);
+		D_ERROR("Invalid EQ handle %" PRIu64, eqh.cookie);
 		return -DER_NONEXIST;
 	}
 
@@ -748,7 +746,7 @@ daos_eq_poll(daos_handle_t eqh, int wait_running, int64_t timeout,
 	daos_eq_putref(epa.eqx);
 
 	if (rc != 0 && rc != -DER_TIMEDOUT) {
-		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt progress failed with");
 		return rc;
 	}
 
@@ -767,7 +765,7 @@ daos_eq_query(daos_handle_t eqh, daos_eq_query_t query,
 
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
-		D_ERROR("Invalid EQ handle %"PRIu64"\n", eqh.cookie);
+		D_ERROR("Invalid EQ handle %" PRIu64, eqh.cookie);
 		return -DER_NONEXIST;
 	}
 
@@ -830,14 +828,14 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
-		D_ERROR("eqh nonexist.\n");
+		D_ERROR("eqh nonexist");
 		return -DER_NONEXIST;
 	}
 
 	D_MUTEX_LOCK(&eqx->eqx_lock);
 
 	if (eqx->eqx_finalizing) {
-		D_ERROR("eqx_finalizing.\n");
+		D_ERROR("eqx_finalizing");
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -862,8 +860,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
-			D_ERROR("failed to flush client context: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to flush client context");
 			return rc;
 		}
 	}
@@ -875,7 +872,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 		D_ASSERT(evx->evx_parent == NULL);
 		rc = daos_event_abort_locked(eqx, evx);
 		if (rc) {
-			D_ERROR("Failed to abort event\n");
+			D_ERROR("Failed to abort event");
 			goto out;
 		}
 	}
@@ -894,7 +891,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (eqx->eqx_ctx != daos_eq_ctx) {
 		rc = crt_context_destroy(eqx->eqx_ctx, (flags & DAOS_EQ_DESTROY_FORCE));
 		if (rc) {
-			D_ERROR("Failed to destroy CART context for EQ: " DF_RC "\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to destroy CART context for EQ");
 			goto out;
 		}
 	}
@@ -995,14 +992,13 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		parent_evx = daos_ev2evx(parent);
 
 		if (parent_evx->evx_status != DAOS_EVS_READY) {
-			D_ERROR("Parent event is not initialized or is already "
-				"running/aborted: %d\n",
+			D_ERROR("Parent event is not initialized or is already running/aborted: %d",
 				parent_evx->evx_status);
 			return -DER_INVAL;
 		}
 
 		if (parent_evx->evx_parent != NULL) {
-			D_ERROR("Can't nest event\n");
+			D_ERROR("Can't nest event");
 			return -DER_NO_PERM;
 		}
 
@@ -1018,7 +1014,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		evx->evx_eqh = eqh;
 		eqx = daos_eq_lookup(eqh);
 		if (eqx == NULL) {
-			D_ERROR("Invalid EQ handle %"PRIx64"\n", eqh.cookie);
+			D_ERROR("Invalid EQ handle %" PRIx64, eqh.cookie);
 			return -DER_NONEXIST;
 		}
 		/* inherit transport context from event queue */
@@ -1027,8 +1023,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 		daos_eq_putref(eqx);
 	} else {
 		if (daos_sched_g.ds_udata == NULL) {
-			D_ERROR("The DAOS client library is not initialized: "DF_RC"\n",
-				DP_RC(-DER_UNINIT));
+			DL_ERROR(-DER_UNINIT, "The DAOS client library is not initialized");
 			return -DER_UNINIT;
 		}
 		evx->evx_ctx = daos_eq_ctx;
@@ -1061,7 +1056,7 @@ daos_event_fini(struct daos_event *ev)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
-			D_ERROR("Invalid EQ handle %"PRIu64"\n", evx->evx_eqh.cookie);
+			D_ERROR("Invalid EQ handle %" PRIu64, evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 		eq = daos_eqx2eq(eqx);
@@ -1091,7 +1086,7 @@ daos_event_fini(struct daos_event *ev)
 		if (tmp->evx_status != DAOS_EVS_READY &&
 		    tmp->evx_status != DAOS_EVS_COMPLETED &&
 		    tmp->evx_status != DAOS_EVS_ABORTED) {
-			D_ERROR("Child event %p launched: %d\n", daos_evx2ev(tmp), tmp->evx_status);
+			D_ERROR("Child event %p launched: %d", daos_evx2ev(tmp), tmp->evx_status);
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -1101,7 +1096,7 @@ daos_event_fini(struct daos_event *ev)
 
 		rc = daos_event_fini(daos_evx2ev(tmp));
 		if (rc < 0) {
-			D_ERROR("Failed to finalize child event "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to finalize child event");
 			goto out_unlocked;
 		}
 
@@ -1115,13 +1110,13 @@ daos_event_fini(struct daos_event *ev)
 	/* If it is a child event, delete it from parent list */
 	if (evx->evx_parent != NULL) {
 		if (d_list_empty(&evx->evx_link)) {
-			D_ERROR("Event not linked to its parent\n");
+			D_ERROR("Event not linked to its parent");
 			rc = -DER_INVAL;
 			goto out;
 		}
 
 		if (evx->evx_parent->evx_status != DAOS_EVS_READY) {
-			D_ERROR("Parent event not init or launched: %d\n",
+			D_ERROR("Parent event not init or launched: %d",
 				evx->evx_parent->evx_status);
 			rc = -DER_INVAL;
 			goto out;
@@ -1189,7 +1184,7 @@ daos_event_abort(struct daos_event *ev)
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
 		if (eqx == NULL) {
-			D_ERROR("Invalid EQ handle %"PRIu64"\n", evx->evx_eqh.cookie);
+			D_ERROR("Invalid EQ handle %" PRIu64, evx->evx_eqh.cookie);
 			return -DER_NONEXIST;
 		}
 		D_MUTEX_LOCK(&eqx->eqx_lock);
@@ -1217,14 +1212,14 @@ daos_event_priv_reset(void)
 	if (ev_thpriv_is_init) {
 		rc = daos_event_fini(&ev_thpriv);
 		if (rc) {
-			D_ERROR("Failed to finalize thread private event "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to finalize thread private event");
 			return rc;
 		}
 	}
 
 	rc = daos_event_init(&ev_thpriv, DAOS_HDL_INVAL, NULL);
 	if (rc) {
-		D_ERROR("Failed to initialize thread private event "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to initialize thread private event");
 		return rc;
 	}
 	return 0;
@@ -1246,7 +1241,7 @@ daos_event_priv_get(daos_event_t **ev)
 	}
 
 	if (evx->evx_status != DAOS_EVS_READY) {
-		D_CRIT("private event is inuse, status=%d\n", evx->evx_status);
+		D_CRIT("private event is inuse, status=%d", evx->evx_status);
 		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
@@ -1287,7 +1282,7 @@ daos_event_priv_wait()
 		if (rc == -DER_TIMEDOUT)
 			continue;
 
-		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt progress failed with");
 
 		/** other progress failure; op should fail with that err. */
 		break;

@@ -392,7 +392,7 @@ btr_rec_verify_delete(umem_off_t *rec, d_iov_t *key)
 
 	if ((srec->sr_key_len != key->iov_len) ||
 	    (memcmp(srec->sr_key, key->iov_buf, key->iov_len) != 0)) {
-		D_ERROR("Preserved record mismatch while delete\n");
+		D_ERROR("Preserved record mismatch while delete");
 		return -1;
 	}
 
@@ -513,7 +513,7 @@ sk_btr_kv_operate(void **state)
 			break;
 
 		case BTR_OPC_LOOKUP:
-			D_DEBUG(DB_TEST, "Looking for %s\n", key);
+			D_DEBUG(DB_TEST, "Looking for %s", key);
 
 			d_iov_set(&val_iov, NULL, 0); /* get address */
 			rc = dbtree_lookup(sk_toh, &key_iov, &val_iov);

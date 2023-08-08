@@ -98,8 +98,7 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	d_rank_t	  rank;
 	int		  rc;
 
-	D_DEBUG(DB_REBUILD, "rank %d master rank %d\n", src_iv->riv_rank,
-		src_iv->riv_master_rank);
+	D_DEBUG(DB_REBUILD, "rank %d master rank %d", src_iv->riv_rank, src_iv->riv_master_rank);
 
 	if (src_iv->riv_master_rank == -1)
 		return -DER_NOTLEADER;
@@ -141,19 +140,20 @@ rebuild_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				rgt->rgt_abort = 1;
 			}
 		}
-		D_DEBUG(DB_REBUILD, "update rebuild "DF_UUID" ver %d gen %u"
-			" toberb_obj/rb_obj/rec/global state/status/rank/abort "
-			DF_U64"/"DF_U64"/"DF_U64"/%d/%d/%d/%d\n",
-			DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver,
-			rgt->rgt_rebuild_gen, rgt->rgt_status.rs_toberb_obj_nr,
-			rgt->rgt_status.rs_obj_nr, rgt->rgt_status.rs_rec_nr,
-			rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
-			src_iv->riv_rank, rgt->rgt_abort);
+		D_DEBUG(
+		    DB_REBUILD,
+		    "update rebuild " DF_UUID
+		    " ver %d gen %u toberb_obj/rb_obj/rec/global state/status/rank/abort " DF_U64
+		    "/" DF_U64 "/" DF_U64 "/%d/%d/%d/%d",
+		    DP_UUID(rgt->rgt_pool_uuid), rgt->rgt_rebuild_ver, rgt->rgt_rebuild_gen,
+		    rgt->rgt_status.rs_toberb_obj_nr, rgt->rgt_status.rs_obj_nr,
+		    rgt->rgt_status.rs_rec_nr, rgt->rgt_status.rs_state, rgt->rgt_status.rs_errno,
+		    src_iv->riv_rank, rgt->rgt_abort);
 	}
 	rgt_put(rgt);
 out:
-	D_DEBUG(DB_TRACE, "pool "DF_UUID" master_rank %d\n",
-		DP_UUID(dst_iv->riv_pool_uuid), dst_iv->riv_master_rank);
+	D_DEBUG(DB_TRACE, "pool " DF_UUID " master_rank %d", DP_UUID(dst_iv->riv_pool_uuid),
+		dst_iv->riv_master_rank);
 
 	return 0;
 }
@@ -187,23 +187,22 @@ rebuild_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 	if (dst_iv->riv_global_done || dst_iv->riv_global_scan_done ||
 	    dst_iv->riv_stable_epoch || dst_iv->riv_dtx_resyc_version) {
-		D_DEBUG(DB_REBUILD, DF_UUID"/%u/%u/"DF_U64" gsd/gd/stable/ver %d/%d/"DF_X64"/%u\n",
-			DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver,
-			src_iv->riv_rebuild_gen, src_iv->riv_leader_term,
-			dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
-			dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
+		D_DEBUG(
+		    DB_REBUILD, DF_UUID "/%u/%u/" DF_U64 " gsd/gd/stable/ver %d/%d/" DF_X64 "/%u",
+		    DP_UUID(src_iv->riv_pool_uuid), src_iv->riv_ver, src_iv->riv_rebuild_gen,
+		    src_iv->riv_leader_term, dst_iv->riv_global_scan_done, dst_iv->riv_global_done,
+		    dst_iv->riv_stable_epoch, dst_iv->riv_global_dtx_resyc_version);
 
 		if (rpt->rt_stable_epoch == 0)
 			rpt->rt_stable_epoch = dst_iv->riv_stable_epoch;
 		else if (rpt->rt_stable_epoch != dst_iv->riv_stable_epoch)
-			D_WARN("leader change stable epoch from "DF_U64" to "
-			       DF_U64 "\n", rpt->rt_stable_epoch,
-			       dst_iv->riv_stable_epoch);
+			D_WARN("leader change stable epoch from " DF_U64 " to " DF_U64,
+			       rpt->rt_stable_epoch, dst_iv->riv_stable_epoch);
 		rpt->rt_global_done = dst_iv->riv_global_done;
 		rpt->rt_global_scan_done = dst_iv->riv_global_scan_done;
 		if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver &&
 		    dst_iv->riv_global_dtx_resyc_version >= rpt->rt_rebuild_ver) {
-			D_DEBUG(DB_REBUILD, DF_UUID" signal global wait cond\n",
+			D_DEBUG(DB_REBUILD, DF_UUID " signal global wait cond",
 				DP_UUID(src_iv->riv_pool_uuid));
 			ABT_mutex_lock(rpt->rt_lock);
 			ABT_cond_signal(rpt->rt_global_dtx_wait_cond);
@@ -254,7 +253,7 @@ rebuild_iv_fetch(void *ns, struct rebuild_iv *rebuild_iv)
 	key.class_id = IV_REBUILD;
 	rc = ds_iv_fetch(ns, &key, &sgl, true /* retry */);
 	if (rc)
-		D_ERROR("iv fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "iv fetch failed");
 
 	return rc;
 }

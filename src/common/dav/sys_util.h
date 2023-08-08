@@ -185,7 +185,7 @@ util_spin_init(os_spinlock_t *lock, int pshared)
 
 	if (tmp) {
 		errno = tmp;
-		D_CRIT("spin_init!\n");
+		D_CRIT("spin_init!");
 	}
 	return tmp;
 }

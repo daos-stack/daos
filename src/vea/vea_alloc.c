@@ -86,8 +86,7 @@ reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	inc_stats(vsi, STAT_RESRV_HINT, 1);
 
-	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
-		resrvd->vre_blk_cnt);
+	D_DEBUG(DB_IO, "[" DF_U64 ", %u]", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
 
 	return 0;
 }
@@ -118,7 +117,7 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	if (rc == -DER_NONEXIST) {
 		return 0;
 	} else if (rc) {
-		D_ERROR("Search size class:%u failed. "DF_RC"\n", blk_cnt, DP_RC(rc));
+		DL_ERROR(rc, "Search size class:%u failed", blk_cnt);
 		return rc;
 	}
 
@@ -142,7 +141,7 @@ reserve_small(struct vea_space_info *vsi, uint32_t blk_cnt,
 	resrvd->vre_blk_cnt = blk_cnt;
 	inc_stats(vsi, STAT_RESRV_SMALL, 1);
 
-	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
+	D_DEBUG(DB_IO, "[" DF_U64 ", %u]", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
 
 	return rc;
 }
@@ -165,8 +164,8 @@ reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 	entry = container_of(root, struct vea_entry, ve_node);
 
 	D_ASSERT(entry->ve_ext.vfe_blk_cnt > vfc->vfc_large_thresh);
-	D_DEBUG(DB_IO, "largest free extent ["DF_U64", %u]\n",
-	       entry->ve_ext.vfe_blk_off, entry->ve_ext.vfe_blk_cnt);
+	D_DEBUG(DB_IO, "largest free extent [" DF_U64 ", %u]", entry->ve_ext.vfe_blk_off,
+		entry->ve_ext.vfe_blk_cnt);
 
 	/* The largest free extent can't satisfy huge allocate request */
 	if (entry->ve_ext.vfe_blk_cnt < blk_cnt)
@@ -226,8 +225,7 @@ reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 
 	inc_stats(vsi, STAT_RESRV_LARGE, 1);
 
-	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off,
-		resrvd->vre_blk_cnt);
+	D_DEBUG(DB_IO, "[" DF_U64 ", %u]", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
 
 	return 0;
 }
@@ -257,8 +255,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	btr_hdl = vsi->vsi_md_free_btr;
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
 
-	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
-		vfe->vfe_blk_off, vfe->vfe_blk_cnt);
+	D_DEBUG(DB_IO, "Persistent alloc [" DF_U64 ", %u]", vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 
 	/* Fetch & operate on the in-tree record */
 	d_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
@@ -268,8 +265,8 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key_in, &key_out,
 			  &val);
 	if (rc) {
-		D_ERROR("failed to find extent ["DF_U64", %u]\n",
-			vfe->vfe_blk_off, vfe->vfe_blk_cnt);
+		D_ERROR("failed to find extent [" DF_U64 ", %u]", vfe->vfe_blk_off,
+			vfe->vfe_blk_cnt);
 		return rc;
 	}
 
@@ -284,9 +281,8 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	vfe_end = vfe->vfe_blk_off + vfe->vfe_blk_cnt;
 
 	if (found->vfe_blk_off > vfe->vfe_blk_off || found_end < vfe_end) {
-		D_ERROR("mismatched extent ["DF_U64", %u] ["DF_U64", %u]\n",
-			found->vfe_blk_off, found->vfe_blk_cnt,
-			vfe->vfe_blk_off, vfe->vfe_blk_cnt);
+		D_ERROR("mismatched extent [" DF_U64 ", %u] [" DF_U64 ", %u]", found->vfe_blk_off,
+			found->vfe_blk_cnt, vfe->vfe_blk_off, vfe->vfe_blk_cnt);
 		return -DER_INVAL;
 	}
 

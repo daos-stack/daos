@@ -48,7 +48,7 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 	buf[DF_MAX_BUF - 1] = 0; /* Shut up any static analyzers */
 
 	if (ds_notify_ras_event == NULL) {
-		D_CRIT("%s\n", buf);
+		D_CRIT("%s", buf);
 		return;
 	}
 
@@ -140,8 +140,7 @@ vos_bio_addr_free(struct vos_pool *pool, bio_addr_t *addr, daos_size_t nob)
 
 		rc = vea_free(pool->vp_vea_info, blk_off, blk_cnt);
 		if (rc)
-			D_ERROR("Error on block ["DF_U64", %u] free. "DF_RC"\n",
-				blk_off, blk_cnt, DP_RC(rc));
+			DL_ERROR(rc, "Error on block [" DF_U64 ", %u] free", blk_off, blk_cnt);
 	}
 	return rc;
 }
@@ -438,36 +437,34 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	D_INIT_LIST_HEAD(&tls->vtl_gc_pools);
 	rc = vos_obj_cache_create(LRU_CACHE_BITS, &tls->vtl_ocache);
 	if (rc) {
-		D_ERROR("Error in creating object cache\n");
+		D_ERROR("Error in creating object cache");
 		goto failed;
 	}
 
 	rc = d_uhash_create(D_HASH_FT_NOLOCK, VOS_POOL_HHASH_BITS,
 			    &tls->vtl_pool_hhash);
 	if (rc) {
-		D_ERROR("Error in creating POOL ref hash: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Error in creating POOL ref hash");
 		goto failed;
 	}
 
 	rc = d_uhash_create(D_HASH_FT_NOLOCK | D_HASH_FT_EPHEMERAL,
 			    VOS_CONT_HHASH_BITS, &tls->vtl_cont_hhash);
 	if (rc) {
-		D_ERROR("Error in creating CONT ref hash: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Error in creating CONT ref hash");
 		goto failed;
 	}
 
 	rc = umem_init_txd(&tls->vtl_txd);
 	if (rc) {
-		D_ERROR("Error in creating txd: %d\n", rc);
+		D_ERROR("Error in creating txd: %d", rc);
 		goto failed;
 	}
 
 	if (tags & DAOS_TGT_TAG) {
 		rc = vos_ts_table_alloc(&tls->vtl_ts_table);
 		if (rc) {
-			D_ERROR("Error in creating timestamp table: %d\n", rc);
+			D_ERROR("Error in creating timestamp table: %d", rc);
 			goto failed;
 		}
 	}
@@ -481,8 +478,7 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 			     " reconstruction", "entries",
 			     "io/dtx/committed/tgt_%u", tgt_id);
 	if (rc)
-		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create committed cnt sensor");
 
 	return tls;
 failed:
@@ -520,19 +516,19 @@ vos_mod_init(void)
 
 	rc = vos_pool_settings_init(bio_nvme_configured(SMD_DEV_TYPE_META));
 	if (rc != 0) {
-		D_ERROR("VOS pool setting initialization error\n");
+		D_ERROR("VOS pool setting initialization error");
 		return rc;
 	}
 
 	rc = vos_cont_tab_register();
 	if (rc) {
-		D_ERROR("VOS CI btree initialization error\n");
+		D_ERROR("VOS CI btree initialization error");
 		return rc;
 	}
 
 	rc = vos_dtx_table_register();
 	if (rc) {
-		D_ERROR("DTX btree initialization error\n");
+		D_ERROR("DTX btree initialization error");
 		return rc;
 	}
 
@@ -542,19 +538,19 @@ vos_mod_init(void)
 	 */
 	rc = vos_obj_tab_register();
 	if (rc) {
-		D_ERROR("VOS OI btree initialization error\n");
+		D_ERROR("VOS OI btree initialization error");
 		return rc;
 	}
 
 	rc = obj_tree_register();
 	if (rc) {
-		D_ERROR("Failed to register vos trees\n");
+		D_ERROR("Failed to register vos trees");
 		return rc;
 	}
 
 	rc = vos_ilog_init();
 	if (rc)
-		D_ERROR("Failed to initialize incarnation log capability\n");
+		D_ERROR("Failed to initialize incarnation log capability");
 
 	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
@@ -563,12 +559,11 @@ vos_mod_init(void)
 	if (vos_agg_nvme_thresh > 1)
 		vos_agg_nvme_thresh = (vos_agg_nvme_thresh / 2) * 2;
 
-	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
-	       vos_agg_nvme_thresh, VOS_BLK_SZ);
+	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu)", vos_agg_nvme_thresh,
+	       VOS_BLK_SZ);
 
 	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
-	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
-
+	D_INFO("DKEY punch propagation is %s", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
 	return rc;
 }
@@ -647,7 +642,7 @@ vos_metrics_alloc(const char *path, int tgt_id)
 			     "EPR scan duration", NULL, "%s/%s/epr_duration/tgt_%u",
 			     path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'epr_duration' telemetry: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'epr_duration' telemetry");
 
 	/* VOS aggregation scanned/skipped/deleted objs/dkeys/akeys */
 	for (i = 0; i < AGG_OP_MERGE; i++) {
@@ -656,61 +651,58 @@ vos_metrics_alloc(const char *path, int tgt_id)
 				     "%s/%s/obj_%s/tgt_%u", path, VOS_AGG_DIR,
 				     agg_op2str(i), tgt_id);
 		if (rc)
-			D_WARN("Failed to create 'obj_%s' telemetry : "DF_RC"\n",
-			       agg_op2str(i), DP_RC(rc));
+			DL_WARN(rc, "Failed to create 'obj_%s' telemetry", agg_op2str(i));
 
 		snprintf(desc, sizeof(desc), "%s dkeys", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_dkey[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/dkey_%s/tgt_%u", path, VOS_AGG_DIR,
 				     agg_op2str(i), tgt_id);
 		if (rc)
-			D_WARN("Failed to create 'dkey_%s' telemetry : "DF_RC"\n",
-			       agg_op2str(i), DP_RC(rc));
+			DL_WARN(rc, "Failed to create 'dkey_%s' telemetry", agg_op2str(i));
 
 		snprintf(desc, sizeof(desc), "%s akeys", agg_op2str(i));
 		rc = d_tm_add_metric(&vam->vam_akey[i], D_TM_COUNTER, desc, NULL,
 				     "%s/%s/akey_%s/tgt_%u", path, VOS_AGG_DIR,
 				     agg_op2str(i), tgt_id);
 		if (rc)
-			D_WARN("Failed to create 'akey_%s' telemetry : "DF_RC"\n",
-			       agg_op2str(i), DP_RC(rc));
+			DL_WARN(rc, "Failed to create 'akey_%s' telemetry", agg_op2str(i));
 	}
 
 	/* VOS aggregation hit uncommitted entries */
 	rc = d_tm_add_metric(&vam->vam_uncommitted, D_TM_COUNTER, "uncommitted entries", NULL,
 			     "%s/%s/uncommitted/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'uncommitted' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'uncommitted' telemetry");
 
 	/* VOS aggregation hit CSUM errors */
 	rc = d_tm_add_metric(&vam->vam_csum_errs, D_TM_COUNTER, "CSUM errors", NULL,
 			     "%s/%s/csum_errors/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'csum_errors' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'csum_errors' telemetry");
 
 	/* VOS aggregation SV deletions */
 	rc = d_tm_add_metric(&vam->vam_del_sv, D_TM_COUNTER, "deleted single values", NULL,
 			     "%s/%s/deleted_sv/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'deleted_sv' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'deleted_sv' telemetry");
 
 	/* VOS aggregation EV deletions */
 	rc = d_tm_add_metric(&vam->vam_del_ev, D_TM_COUNTER, "deleted array values", NULL,
 			     "%s/%s/deleted_ev/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'deleted_ev' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'deleted_ev' telemetry");
 
 	/* VOS aggregation total merged recx */
 	rc = d_tm_add_metric(&vam->vam_merge_recs, D_TM_COUNTER, "total merged recs", NULL,
 			     "%s/%s/merged_recs/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'merged_recs' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'merged_recs' telemetry");
 
 	/* VOS aggregation total merged size */
 	rc = d_tm_add_metric(&vam->vam_merge_size, D_TM_COUNTER, "total merged size", "bytes",
 			     "%s/%s/merged_size/tgt_%u", path, VOS_AGG_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'merged_size' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'merged_size' telemetry");
 
 	/* Metrics related to VOS checkpointing */
 	vos_chkpt_metrics_init(&vp_metrics->vp_chkpt_metrics, path, tgt_id);
@@ -719,13 +711,13 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	rc = d_tm_add_metric(&vsm->vsm_scm_used, D_TM_GAUGE, "SCM space used", "bytes",
 			     "%s/%s/scm_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'scm_used' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'scm_used' telemetry");
 
 	/* VOS space NVME used metric */
 	rc = d_tm_add_metric(&vsm->vsm_nvme_used, D_TM_GAUGE, "NVME space used", "bytes",
 			     "%s/%s/nvme_used/tgt_%u", path, VOS_SPACE_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'nvme_used' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'nvme_used' telemetry");
 
 	/* Initialize the vos_space_metrics timeout counter */
 	vsm->vsm_last_update_ts = 0;
@@ -734,27 +726,27 @@ vos_metrics_alloc(const char *path, int tgt_id)
 	rc = d_tm_add_metric(&brm->vrh_size, D_TM_GAUGE, "WAL replay size", "bytes",
 			     "%s/%s/replay_size/tgt_%u", path, VOS_RH_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'replay_size' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'replay_size' telemetry");
 
 	rc = d_tm_add_metric(&brm->vrh_time, D_TM_GAUGE, "WAL replay time", "us",
 			     "%s/%s/replay_time/tgt_%u", path, VOS_RH_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'replay_time' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'replay_time' telemetry");
 
 	rc = d_tm_add_metric(&brm->vrh_entries, D_TM_COUNTER, "Number of log entries", NULL,
 			     "%s/%s/replay_entries/tgt_%u", path, VOS_RH_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'replay_entries' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'replay_entries' telemetry");
 
 	rc = d_tm_add_metric(&brm->vrh_count, D_TM_COUNTER, "Number of WAL replays", NULL,
 			     "%s/%s/replay_count/tgt_%u", path, VOS_RH_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'replay_count' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'replay_count' telemetry");
 
 	rc = d_tm_add_metric(&brm->vrh_tx_cnt, D_TM_COUNTER, "Number of replayed transactions",
 			     NULL, "%s/%s/replay_transactions/tgt_%u", path, VOS_RH_DIR, tgt_id);
 	if (rc)
-		D_WARN("Failed to create 'replay_transactions' telemetry : "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create 'replay_transactions' telemetry");
 
 	return vp_metrics;
 }
@@ -921,7 +913,7 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 
 	rc = bio_xsctxt_alloc(&self_mode.self_xs_ctxt, tgt_id, true);
 	if (rc) {
-		D_ERROR("Failed to allocate NVMe context. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to allocate NVMe context");
 		goto failed;
 	}
 
@@ -937,14 +929,13 @@ vos_self_init(const char *db_path, bool use_sys_db, int tgt_id)
 	}
 	switch (vos_evt_feats & EVT_FEATS_SUPPORTED) {
 	case EVT_FEAT_SORT_SOFF:
-		D_INFO("Using start offset sort for evtree\n");
+		D_INFO("Using start offset sort for evtree");
 		break;
 	case EVT_FEAT_SORT_DIST_EVEN:
-		D_INFO("Using distance sort for evtree with even split\n");
+		D_INFO("Using distance sort for evtree with even split");
 		break;
 	default:
-		D_INFO("Using distance with closest side split for evtree "
-		       "(default)\n");
+		D_INFO("Using distance with closest side split for evtree (default)");
 	}
 
 	self_mode.self_ref = 1;

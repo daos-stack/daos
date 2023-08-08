@@ -37,14 +37,14 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 
 	D_ASSERT(d_bdev);
 	if (d_bdev->bb_removed) {
-		D_ERROR("Old dev "DF_UUID"(%s) is hot removed\n", DP_UUID(d_bdev->bb_uuid),
+		D_ERROR("Old dev " DF_UUID "(%s) is hot removed", DP_UUID(d_bdev->bb_uuid),
 			d_bdev->bb_name);
 		return -DER_INVAL;
 	}
 
 	rc = smd_dev_set_state(d_bdev->bb_uuid, SMD_DEV_NORMAL);
 	if (rc) {
-		D_ERROR("Set device state failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Set device state failed");
 		return rc;
 	}
 
@@ -93,7 +93,7 @@ blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
 	boa->boa_blob_id = blob_id;
 	ABT_eventual_set(boa->boa_eventual, NULL, 0);
 	if (rc)
-		D_ERROR("Create blob failed. %d\n", rc);
+		D_ERROR("Create blob failed. %d", rc);
 }
 
 static void
@@ -104,7 +104,7 @@ blob_delete_cp(void *cb_arg, int rc)
 	boa->boa_rc = daos_errno2der(-rc);
 	ABT_eventual_set(boa->boa_eventual, NULL, 0);
 	if (rc)
-		D_ERROR("Delete blob failed. %d\n", rc);
+		D_ERROR("Delete blob failed. %d", rc);
 }
 
 static int
@@ -121,8 +121,7 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 	cluster_sz = spdk_bs_get_cluster_size(bs);
 
 	if (blob_sz < cluster_sz) {
-		D_ERROR("Invalid blob size "DF_U64", cluster size "DF_U64"\n",
-			blob_sz, cluster_sz);
+		D_ERROR("Invalid blob size " DF_U64 ", cluster size " DF_U64, blob_sz, cluster_sz);
 		return -DER_INVAL;
 	}
 
@@ -138,13 +137,13 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Wait eventual failed");
 		goto out;
 	}
 
 	rc = boa.boa_rc;
 	if (rc)
-		D_ERROR("Create blob failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Create blob failed");
 	else
 		*blob_id = boa.boa_blob_id;
 out:
@@ -168,14 +167,13 @@ delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
 	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Wait eventual failed");
 		goto out;
 	}
 
 	rc = boa.boa_rc;
 	if (rc)
-		D_ERROR("Delete blob("DF_U64") failed. "DF_RC"\n",
-			blob_id, DP_RC(rc));
+		DL_ERROR(rc, "Delete blob(" DF_U64 ") failed", blob_id);
 out:
 	ABT_eventual_free(&boa.boa_eventual);
 	return rc;
@@ -206,8 +204,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
 			    false, false, NULL, NULL);
 	if (bs == NULL) {
-		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
-			DP_UUID(d_bdev->bb_uuid));
+		D_ERROR("Failed to load blobstore for new dev " DF_UUID, DP_UUID(d_bdev->bb_uuid));
 		return -DER_INVAL;
 	}
 
@@ -249,9 +246,8 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		 *	 handle this once DAOS-5134 is fixed.
 		 */
 		if (!found_tgt) {
-			D_ERROR("No blobs from "DF_UUID" on dev "DF_UUID"\n",
-				DP_UUID(pool_info->spi_id),
-				DP_UUID(d_bdev->bb_uuid));
+			D_ERROR("No blobs from " DF_UUID " on dev " DF_UUID,
+				DP_UUID(pool_info->spi_id), DP_UUID(d_bdev->bb_uuid));
 			rc = -DER_NOSYS;
 			goto out;
 		}
@@ -275,8 +271,7 @@ free_blob_list(struct bio_xs_context *xs_ctxt, d_list_t *blob_list,
 	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
 			    false, false, NULL, NULL);
 	if (bs == NULL)
-		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
-			DP_UUID(d_bdev->bb_uuid));
+		D_ERROR("Failed to load blobstore for new dev " DF_UUID, DP_UUID(d_bdev->bb_uuid));
 
 free:
 	d_list_for_each_entry_safe(created, tmp, blob_list, bi_link) {
@@ -316,12 +311,12 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 
 	/* Check if the new device is unplugged */
 	if (new_dev->bb_removed) {
-		D_ERROR("New dev "DF_UUID"(%s) is hot removed\n",
-			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
+		D_ERROR("New dev " DF_UUID "(%s) is hot removed", DP_UUID(new_dev->bb_uuid),
+			new_dev->bb_name);
 		return -DER_INVAL;
 	} else if (new_dev->bb_replacing) {
-		D_ERROR("New dev "DF_UUID"(%s) is in replacing\n",
-			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
+		D_ERROR("New dev " DF_UUID "(%s) is in replacing", DP_UUID(new_dev->bb_uuid),
+			new_dev->bb_name);
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
@@ -333,23 +328,22 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	/* Create existing blobs on new device */
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
-		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to list pools in SMD");
 		goto pool_list_out;
 	}
 
 	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
 			      &blob_list);
 	if (rc) {
-		D_ERROR("Failed to create old blobs. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create old blobs");
 		goto out;
 	}
 
 	/* Replace old device with new device in SMD */
 	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, &pool_list);
 	if (rc) {
-		D_ERROR("Failed to replace dev: "DF_UUID" -> "DF_UUID", "
-			""DF_RC"\n", DP_UUID(old_dev->bb_uuid),
-			DP_UUID(new_dev->bb_uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to replace dev: " DF_UUID " -> " DF_UUID,
+			 DP_UUID(old_dev->bb_uuid), DP_UUID(new_dev->bb_uuid));
 		goto out;
 	}
 
@@ -397,22 +391,20 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	/* Sanity check over old device */
 	rc = smd_dev_get_by_id(old_dev_id, &old_info);
 	if (rc) {
-		D_ERROR("Lookup old dev "DF_UUID" in SMD failed. "DF_RC"\n",
-			DP_UUID(old_dev_id), DP_RC(rc));
+		DL_ERROR(rc, "Lookup old dev " DF_UUID " in SMD failed", DP_UUID(old_dev_id));
 		return rc;
 	}
 
 	if (old_info->sdi_state != SMD_DEV_FAULTY) {
-		D_ERROR("Old dev "DF_UUID" isn't in faulty state(%d)\n",
-			DP_UUID(old_dev_id), old_info->sdi_state);
+		D_ERROR("Old dev " DF_UUID " isn't in faulty state(%d)", DP_UUID(old_dev_id),
+			old_info->sdi_state);
 		rc = -DER_INVAL;
 		goto out;
 	}
 
 	old_dev = lookup_dev_by_id(old_dev_id);
 	if (old_dev == NULL) {
-		D_ERROR("Failed to find old dev "DF_UUID"\n",
-			DP_UUID(old_dev_id));
+		D_ERROR("Failed to find old dev " DF_UUID, DP_UUID(old_dev_id));
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -422,8 +414,7 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 
 	/* Read bb_state from init xstream */
 	if (bbs->bb_state != BIO_BS_STATE_OUT) {
-		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
-			DP_UUID(old_dev->bb_uuid),
+		D_ERROR("Old dev " DF_UUID " isn't in %s state (%s)", DP_UUID(old_dev->bb_uuid),
 			bio_state_enum_to_str(BIO_BS_STATE_OUT),
 			bio_state_enum_to_str(bbs->bb_state));
 		rc = -DER_BUSY;
@@ -439,22 +430,19 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
 	/* Sanity check over new device */
 	rc = smd_dev_get_by_id(new_dev_id, &new_info);
 	if (rc == 0) {
-		D_ERROR("New dev "DF_UUID" is already used by DAOS\n",
-			DP_UUID(new_dev_id));
+		D_ERROR("New dev " DF_UUID " is already used by DAOS", DP_UUID(new_dev_id));
 
 		D_ASSERT(new_info != NULL);
 		rc = -DER_INVAL;
 		goto out;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("Lookup new dev "DF_UUID" in SMD failed. "DF_RC"\n",
-			DP_UUID(new_dev_id), DP_RC(rc));
+		DL_ERROR(rc, "Lookup new dev " DF_UUID " in SMD failed", DP_UUID(new_dev_id));
 		goto out;
 	}
 
 	new_dev = lookup_dev_by_id(new_dev_id);
 	if (new_dev == NULL) {
-		D_ERROR("Failed to find new dev "DF_UUID"\n",
-			DP_UUID(new_dev_id));
+		D_ERROR("Failed to find new dev " DF_UUID, DP_UUID(new_dev_id));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -492,7 +480,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 
 		D_STRNDUP(b_info->bdi_traddr, traddr, end - traddr);
 		if (b_info->bdi_traddr == NULL) {
-			D_ERROR("Failed to alloc traddr %s\n", traddr);
+			D_ERROR("Failed to alloc traddr %s", traddr);
 			return -DER_NOMEM;
 		}
 	}
@@ -513,7 +501,7 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 
 	bdev = spdk_bdev_get_by_name(dev_name);
 	if (bdev == NULL) {
-		D_ERROR("Failed to get SPDK bdev for %s\n", dev_name);
+		D_ERROR("Failed to get SPDK bdev for %s", dev_name);
 		return -DER_NONEXIST;
 	}
 
@@ -523,20 +511,20 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	json = spdk_json_write_begin(json_write_cb, b_info,
 				     SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
-		D_ERROR("Failed to alloc SPDK json context\n");
+		D_ERROR("Failed to alloc SPDK json context");
 		return -DER_NOMEM;
 	}
 
 	rc = spdk_bdev_dump_info_json(bdev, json);
 	if (rc != 0) {
-		D_ERROR("Failed to dump config from SPDK bdev (%s)\n", spdk_strerror(-rc));
+		D_ERROR("Failed to dump config from SPDK bdev (%s)", spdk_strerror(-rc));
 		rc = daos_errno2der(-rc);
 	}
 
 	spdk_json_write_end(json);
 
 	if (!rc && b_info->bdi_traddr == NULL) {
-		D_ERROR("Failed to get traddr for %s\n", dev_name);
+		D_ERROR("Failed to get traddr for %s", dev_name);
 		rc = -DER_INVAL;
 	}
 
@@ -615,7 +603,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	rc = smd_dev_list(&s_dev_list, dev_cnt);
 	if (rc) {
-		D_ERROR("Failed to get SMD dev list "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to get SMD dev list");
 		return rc;
 	}
 
@@ -629,7 +617,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 		b_info = alloc_dev_info(d_bdev->bb_uuid, dev_name, s_info);
 		if (b_info == NULL) {
-			D_ERROR("Failed to allocate device info\n");
+			D_ERROR("Failed to allocate device info");
 			rc = -DER_NOMEM;
 			goto out;
 		}
@@ -656,12 +644,11 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 	 * it for sanity check.
 	 */
 	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
-		D_ERROR("Found unexpected device "DF_UUID" in SMD\n",
-			DP_UUID(s_info->sdi_id));
+		D_ERROR("Found unexpected device " DF_UUID " in SMD", DP_UUID(s_info->sdi_id));
 
 		b_info = alloc_dev_info(s_info->sdi_id, NULL, s_info);
 		if (b_info == NULL) {
-			D_ERROR("Failed to allocate device info\n");
+			D_ERROR("Failed to allocate device info");
 			rc = -DER_NOMEM;
 			goto out;
 		}
@@ -701,14 +688,13 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	pci_dev_type = spdk_pci_device_get_type(pci_device);
 	if (pci_dev_type == NULL) {
-		D_ERROR("nil pci device type returned\n");
+		D_ERROR("nil pci device type returned");
 		opts->status = -DER_MISC;
 		return;
 	}
 
 	if (strncmp(pci_dev_type, BIO_DEV_TYPE_VMD, strlen(BIO_DEV_TYPE_VMD)) != 0) {
-		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s), can't manage LEDs\n",
-			pci_dev_type);
+		D_DEBUG(DB_MGMT, "Found non-VMD device type (%s), can't manage LEDs", pci_dev_type);
 		opts->status = -DER_NOSYS;
 		return;
 	}
@@ -721,7 +707,7 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 
 	rc = spdk_pci_addr_fmt(addr_buf, sizeof(addr_buf), &pci_device->addr);
 	if (rc != 0) {
-		D_ERROR("Failed to format VMD's PCI address (%s)\n", spdk_strerror(-rc));
+		D_ERROR("Failed to format VMD's PCI address (%s)", spdk_strerror(-rc));
 		opts->status = -DER_INVAL;
 		return;
 	}
@@ -729,13 +715,13 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	/* First check the current state of the VMD LED */
 	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
 	if (spdk_unlikely(rc != 0)) {
-		D_ERROR("Failed to retrieve the state of the LED on %s (%s)\n", addr_buf,
+		D_ERROR("Failed to retrieve the state of the LED on %s (%s)", addr_buf,
 			spdk_strerror(-rc));
 		opts->status = -DER_NOSYS;
 		return;
 	}
 
-	D_DEBUG(DB_MGMT, "led on dev %s has state: %s (action: %s, new state: %s)\n", addr_buf,
+	D_DEBUG(DB_MGMT, "led on dev %s has state: %s (action: %s, new state: %s)", addr_buf,
 		LED_STATE_NAME(cur_led_state), LED_ACTION_NAME(opts->action),
 		LED_STATE_NAME(opts->led_state));
 
@@ -748,17 +734,17 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 		break;
 	case CTL__LED_ACTION__RESET:
 		/* Reset intercepted earlier in call-stack and converted to set */
-		D_ERROR("Reset action is not supported\n");
+		D_ERROR("Reset action is not supported");
 		opts->status = -DER_INVAL;
 		return;
 	default:
-		D_ERROR("Unrecognized LED action requested\n");
+		D_ERROR("Unrecognized LED action requested");
 		opts->status = -DER_INVAL;
 		return;
 	}
 
 	if (cur_led_state == (enum spdk_vmd_led_state)opts->led_state) {
-		D_DEBUG(DB_MGMT, "VMD device %s LED state already in state %s\n", addr_buf,
+		D_DEBUG(DB_MGMT, "VMD device %s LED state already in state %s", addr_buf,
 			LED_STATE_NAME(opts->led_state));
 		return;
 	}
@@ -766,23 +752,21 @@ led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 	/* Set the LED to the new state */
 	rc = spdk_vmd_set_led_state(pci_device, (enum spdk_vmd_led_state)opts->led_state);
 	if (spdk_unlikely(rc != 0)) {
-		D_ERROR("Failed to set the VMD LED state on %s (%s)\n", addr_buf,
-			spdk_strerror(-rc));
+		D_ERROR("Failed to set the VMD LED state on %s (%s)", addr_buf, spdk_strerror(-rc));
 		opts->status = -DER_NOSYS;
 		return;
 	}
 
 	rc = spdk_vmd_get_led_state(pci_device, &cur_led_state);
 	if (rc != 0) {
-		D_ERROR("Failed to get the VMD LED state on %s (%s)\n", addr_buf,
-			spdk_strerror(-rc));
+		D_ERROR("Failed to get the VMD LED state on %s (%s)", addr_buf, spdk_strerror(-rc));
 		opts->status = -DER_NOSYS;
 		return;
 	}
 
 	/* Verify the correct state is set */
 	if (cur_led_state != (enum spdk_vmd_led_state)opts->led_state) {
-		D_ERROR("Unexpected LED state on %s, want %s got %s\n", addr_buf,
+		D_ERROR("Unexpected LED state on %s, want %s got %s", addr_buf,
 			LED_STATE_NAME(opts->led_state), LED_STATE_NAME(cur_led_state));
 		opts->status = -DER_INVAL;
 	}
@@ -802,7 +786,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 
 	rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
 	if (rc != 0) {
-		D_ERROR("Failed to format PCI address (%s)\n", spdk_strerror(-rc));
+		D_ERROR("Failed to format PCI address (%s)", spdk_strerror(-rc));
 		return -DER_INVAL;
 	}
 
@@ -810,7 +794,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 
 	rc = bio_dev_list(xs_ctxt, &dev_list, &dev_list_cnt);
 	if (rc != 0) {
-		D_ERROR("Error getting BIO device list\n");
+		D_ERROR("Error getting BIO device list");
 		return rc;
 	}
 
@@ -819,7 +803,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		if (dev_info->bdi_traddr == NULL) {
-			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
+			D_ERROR("No transport address for dev:" DF_UUID ", unable to verify state",
 				DP_UUID(dev_info->bdi_dev_id));
 			rc = -DER_INVAL;
 			goto out;
@@ -832,7 +816,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 			if (expiry_time != NULL) {
 				d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
 				if (d_bdev == NULL) {
-					D_ERROR("Failed to find dev "DF_UUID"\n",
+					D_ERROR("Failed to find dev " DF_UUID,
 						DP_UUID(dev_info->bdi_dev_id));
 					rc = -DER_NONEXIST;
 					goto out;
@@ -872,7 +856,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	D_ASSERT(is_init_xstream(xs_ctxt));
 
 	if (state == NULL) {
-		D_ERROR("LED state receiver is NULL\n");
+		D_ERROR("LED state receiver is NULL");
 		return -DER_INVAL;
 	}
 
@@ -898,7 +882,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		is_faulty = false;
 		rc = check_faulty(xs_ctxt, pci_addr, &is_faulty);
 		if (rc != 0) {
-			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
+			D_ERROR("Reset LED failed during check for faulty devices (%d)", rc);
 			return rc;
 		}
 		if (is_faulty)
@@ -907,7 +891,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 			opts.led_state = CTL__LED_STATE__OFF;
 		break;
 	default:
-		D_ERROR("invalid action supplied: %d\n", action);
+		D_ERROR("invalid action supplied: %d", action);
 		return -DER_INVAL;
 	}
 
@@ -915,12 +899,12 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 
 	if (opts.status != 0) {
 		if (opts.status != -DER_NOSYS)
-			D_ERROR("LED %s failed (target state: %s): %s\n", LED_ACTION_NAME(action),
+			D_ERROR("LED %s failed (target state: %s): %s", LED_ACTION_NAME(action),
 				LED_STATE_NAME(*state), spdk_strerror(opts.status));
 		return opts.status;
 	}
 	if (!opts.all_devices && !opts.finished) {
-		D_ERROR("Device could not be found\n");
+		D_ERROR("Device could not be found");
 		return -DER_NONEXIST;
 	}
 
@@ -932,7 +916,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 			rc = set_timer(xs_ctxt, pci_addr,
 				       (duration != 0) ? d_timeus_secdiff(0) + duration : 0);
 			if (rc != 0) {
-				D_ERROR("Recording LED start time failed (%d)\n", rc);
+				D_ERROR("Recording LED start time failed (%d)", rc);
 				return rc;
 			}
 		}
@@ -941,7 +925,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		/* Clear LED start time on bdevs as identify state has been reset */
 		rc = set_timer(xs_ctxt, pci_addr, 0);
 		if (rc != 0) {
-			D_ERROR("Clearing LED start time failed (%d)\n", rc);
+			D_ERROR("Clearing LED start time failed (%d)", rc);
 			return rc;
 		}
 		break;
@@ -949,7 +933,7 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		break;
 	}
 	if (!opts.all_devices && !opts.finished) {
-		D_ERROR("Device could not be found\n");
+		D_ERROR("Device could not be found");
 		return -DER_NONEXIST;
 	}
 
@@ -970,19 +954,19 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 
 	d_bdev = lookup_dev_by_id(dev_uuid);
 	if (d_bdev == NULL) {
-		D_ERROR("Failed to find dev "DF_UUID"\n", DP_UUID(dev_uuid));
+		D_ERROR("Failed to find dev " DF_UUID, DP_UUID(dev_uuid));
 		return -DER_NONEXIST;
 	}
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
 	if (rc) {
-		D_ERROR("Unable to get traddr for device:%s\n", d_bdev->bb_name);
+		D_ERROR("Unable to get traddr for device:%s", d_bdev->bb_name);
 		return -DER_INVAL;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
-		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
+		D_ERROR("Unable to parse PCI address for device %s (%s)", b_info.bdi_traddr,
 			spdk_strerror(-rc));
 		rc = -DER_INVAL;
 	}
@@ -1012,7 +996,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 		if (tr_addr != NULL) {
 			rc = spdk_pci_addr_fmt(tr_addr, ADDR_STR_MAX_LEN + 1, &pci_addr);
 			if (rc != 0) {
-				D_ERROR("Failed to write VMD's PCI address (%s)\n",
+				D_ERROR("Failed to write VMD's PCI address (%s)",
 					spdk_strerror(-rc));
 				return -DER_INVAL;
 			}
@@ -1020,7 +1004,7 @@ bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, u
 	} else {
 		rc = spdk_pci_addr_parse(&pci_addr, tr_addr);
 		if (rc != 0) {
-			D_ERROR("Unable to parse PCI address for device %s (%s)\n", tr_addr,
+			D_ERROR("Unable to parse PCI address for device %s (%s)", tr_addr,
 				spdk_strerror(-rc));
 			return -DER_INVAL;
 		}

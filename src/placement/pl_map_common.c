@@ -77,8 +77,8 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_status = tgt->ta_comp.co_status;
 	f_new->fs_data = data;
 
-	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
-		tgt->ta_comp.co_status, for_reint ? "yes" : "no");
+	D_DEBUG(DB_PL, "tgt %u status %u reint %s", tgt->ta_comp.co_id, tgt->ta_comp.co_status,
+		for_reint ? "yes" : "no");
 	if (!for_reint) {
 		f_new->fs_tgt_id = -1;
 		remap_add_one(remap_list, f_new);
@@ -114,13 +114,12 @@ remap_dump(d_list_t *remap_list, struct daos_obj_md *md,
 {
 	struct failed_shard *f_shard;
 
-	D_DEBUG(DB_PL, "remap list for "DF_OID", %s, ver %d\n",
-		DP_OID(md->omd_id), comment, md->omd_ver);
+	D_DEBUG(DB_PL, "remap list for " DF_OID ", %s, ver %d", DP_OID(md->omd_id), comment,
+		md->omd_ver);
 
 	d_list_for_each_entry(f_shard, remap_list, fs_list) {
-		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u tgt %d\n",
-			f_shard->fs_fseq, f_shard->fs_shard_idx,
-			f_shard->fs_status, f_shard->fs_tgt_id);
+		D_DEBUG(DB_PL, "fseq:%u, shard_idx:%u status:%u tgt %d", f_shard->fs_fseq,
+			f_shard->fs_shard_idx, f_shard->fs_status, f_shard->fs_tgt_id);
 	}
 }
 
@@ -143,9 +142,8 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 		*grp_size = domain_nr;
 
 	if (*grp_size > domain_nr) {
-		D_ERROR("obj="DF_OID": grp size (%u) (%u) is larger than "
-			"domain nr (%u)\n", DP_OID(oid), *grp_size,
-			DAOS_OBJ_REPL_MAX, domain_nr);
+		D_ERROR("obj=" DF_OID ": grp size (%u) (%u) is larger than domain nr (%u)",
+			DP_OID(oid), *grp_size, DAOS_OBJ_REPL_MAX, domain_nr);
 		return -DER_INVAL;
 	}
 
@@ -226,10 +224,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 				(*idx)++;
 			}
 		} else {
-			D_DEBUG(DB_REBUILD, ""DF_OID" skip idx %u"
-				"fseq:%d(status:%d)? rbd_ver:%d\n",
-				DP_OID(md->omd_id), f_shard->fs_shard_idx,
-				f_shard->fs_fseq, f_shard->fs_status, r_ver);
+			D_DEBUG(DB_REBUILD, DF_OID " skip idx %ufseq:%d(status:%d)? rbd_ver:%d",
+				DP_OID(md->omd_id), f_shard->fs_shard_idx, f_shard->fs_fseq,
+				f_shard->fs_status, r_ver);
 		}
 	}
 
@@ -262,17 +259,15 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 
 	/* The selected spare target is down as well */
 	if (need_remap_comp(&spare_tgt->ta_comp, allow_status)) {
-		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
-			".\n", DP_TARGET(spare_tgt));
+		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET, DP_TARGET(spare_tgt));
 
 		/* If the spare target fseq > the current object pool
 		 * version, the current failure shard will be handled
 		 * by the following rebuild.
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
-			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
-				DP_OID(md->omd_id), DP_TARGET(spare_tgt),
-				md->omd_ver);
+			D_DEBUG(DB_PL, DF_OID ", " DF_TARGET ", ver: %d", DP_OID(md->omd_id),
+				DP_TARGET(spare_tgt), md->omd_ver);
 			spare_avail = false;
 			goto next_fail;
 		}
@@ -283,7 +278,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * and try next spare in the placement.
 		 */
 		if (spare_tgt->ta_comp.co_fseq <= f_shard->fs_fseq) {
-			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u shard f_seq %u\n",
+			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u shard f_seq %u",
 				spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_fseq,
 				f_shard->fs_fseq);
 			return 0; /* try next spare */
@@ -307,12 +302,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		d_list_del_init(&f_shard->fs_list);
 		remap_add_one(remap_list, f_shard);
 
-		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to remamp_list\n",
+		D_DEBUG(DB_PL, "failed shard (" DF_FAILEDSHARD ") added to remamp_list",
 			DP_FAILEDSHARD(*f_shard));
 
-		D_DEBUG(DB_PL, "spare_tgt %u status %u f_seq %u try next.\n",
-			spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_status,
-			spare_tgt->ta_comp.co_fseq);
+		D_DEBUG(DB_PL, "spare_tgt %u status %u f_seq %u try next", spare_tgt->ta_comp.co_id,
+			spare_tgt->ta_comp.co_status, spare_tgt->ta_comp.co_fseq);
 		return 0; /* try next spare */
 	}
 

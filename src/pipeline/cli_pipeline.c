@@ -106,7 +106,7 @@ pipeline_comp_cb(tse_task_t *task, void *data)
 	cb_args  = (struct pipeline_comp_cb_args *)data;
 	api_args = cb_args->api_args;
 	if (task->dt_result != 0)
-		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d\n", task, task->dt_result);
+		D_DEBUG(DB_IO, "pipeline_comp_db task=%p result=%d", task, task->dt_result);
 
 	anchor_check_eof(api_args->anchor, cb_args->oca, cb_args->total_shards,
 			 cb_args->total_replicas);
@@ -134,7 +134,7 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 	opc      = opc_get(rpc->cr_opc);
 
 	if (ret != 0) {
-		D_ERROR("RPC %d failed, " DF_RC "\n", opc, DP_RC(ret));
+		DL_ERROR(ret, "RPC %d failed", opc);
 		D_GOTO(out, ret);
 	}
 
@@ -157,9 +157,9 @@ pipeline_shard_run_cb(tse_task_t *task, void *data)
 		if (rc == -DER_NONEXIST)
 			D_GOTO(out, rc = 0);
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n", rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d", rpc, opc, rc);
 		else
-			D_ERROR("rpc %p RPC %d failed: %d\n", rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: %d", rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -298,7 +298,7 @@ shard_pipeline_run_task(tse_task_t *task)
 	poh  = dc_cont_hdl2pool_hdl(coh);
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL) {
-		D_WARN("Cannot find valid pool\n");
+		D_WARN("Cannot find valid pool");
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 	rc = dc_cont_tgt_idx2ptr(coh, args->pra_target, &map_tgt);
@@ -541,17 +541,17 @@ pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool, struct daos_obj_
 
 	map = pl_map_find(pool->dp_pool, obj_md->omd_id);
 	if (map == NULL) {
-		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		D_DEBUG(DB_PL, "Cannot find valid placement map");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = pl_obj_place(map, 0, obj_md, 0, NULL, layout);
 	pl_map_decref(map);
 	if (rc != 0) {
-		D_DEBUG(DB_PL, "Failed to generate object layout\n");
+		D_DEBUG(DB_PL, "Failed to generate object layout");
 		D_GOTO(out, rc);
 	}
-	D_DEBUG(DB_PL, "Place object on %d targets ver %d\n", (*layout)->ol_nr, (*layout)->ol_ver);
+	D_DEBUG(DB_PL, "Place object on %d targets ver %d", (*layout)->ol_nr, (*layout)->ol_ver);
 	D_ASSERT((*layout)->ol_nr == (*layout)->ol_grp_size * (*layout)->ol_grp_nr);
 
 out:
@@ -608,7 +608,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	poh  = dc_cont_hdl2pool_hdl(coh);
 	pool = dc_hdl2pool(poh);
 	if (pool == NULL) {
-		D_WARN("Cannot find valid pool\n");
+		D_WARN("Cannot find valid pool");
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 	obj_md.omd_ver = dc_pool_get_version(pool);
@@ -632,11 +632,11 @@ dc_pipeline_run(tse_task_t *api_task)
 
 	oca = daos_oclass_attr_find(obj_md.omd_id, &nr_grps);
 	if (oca == NULL) {
-		D_DEBUG(DB_PL, "Failed to find oclass attr\n");
+		D_DEBUG(DB_PL, "Failed to find oclass attr");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (daos_oclass_is_ec(oca)) {
-		D_DEBUG(DB_PL, "EC objects not supported for pipelines\n");
+		D_DEBUG(DB_PL, "EC objects not supported for pipelines");
 		D_GOTO(out, rc = -DER_NOTSUPPORTED);
 	}
 
@@ -665,7 +665,7 @@ dc_pipeline_run(tse_task_t *api_task)
 	rc = tse_task_register_comp_cb(api_task, pipeline_comp_cb, &comp_cb_args,
 				       sizeof(comp_cb_args));
 	if (rc != 0) {
-		D_ERROR("task %p, register_comp_cb " DF_RC "\n", api_task, DP_RC(rc));
+		DL_ERROR(rc, "task %p, register_comp_cb", api_task);
 		tse_task_stack_pop(api_task, sizeof(struct pipeline_auxi_args));
 		D_GOTO(out, rc);
 	}

@@ -155,7 +155,7 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
-		D_ERROR("Unknown method\n");
+		D_ERROR("Unknown method");
 	}
 }
 
@@ -187,7 +187,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
-	D_DEBUG(DB_MGMT, "ps_rank=%u, key_id=0x%x, value=0x%"PRIx64", extra=0x%"PRIx64"\n",
+	D_DEBUG(DB_MGMT, "ps_rank=%u, key_id=0x%x, value=0x%" PRIx64 ", extra=0x%" PRIx64,
 		ps_in->ps_rank, ps_in->ps_key_id, ps_in->ps_value, ps_in->ps_value_extra);
 
 	if (ps_in->ps_rank != -1) {
@@ -197,8 +197,7 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 			rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 						ps_in->ps_value_extra);
 		if (rc)
-			D_ERROR("Set parameter failed key_id %d: rc %d\n",
-				ps_in->ps_key_id, rc);
+			D_ERROR("Set parameter failed key_id %d: rc %d", ps_in->ps_key_id, rc);
 		D_GOTO(out, rc);
 	}
 
@@ -262,7 +261,7 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 
 	crt_req_decref(tc_req);
 out:
-	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MGMT, "profile hdlr: " DF_RC, DP_RC(rc));
 	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
@@ -301,7 +300,7 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 
 	crt_req_decref(tc_req);
 out:
-	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MGMT, "mark hdlr: " DF_RC, DP_RC(rc));
 	out = crt_reply_get(rpc);
 	out->m_rc = rc;
 	crt_reply_send(rpc);
@@ -352,24 +351,22 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
-	D_DEBUG(DB_MGMT, "get svcranks for pool "DF_UUIDF"\n",
-		DP_UUID(in->gsr_puuid));
+	D_DEBUG(DB_MGMT, "get svcranks for pool " DF_UUIDF, DP_UUID(in->gsr_puuid));
 
 	out = crt_reply_get(rpc);
 
 	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
 	if (rc == -DER_NONEXIST) /* not an error */
-		D_DEBUG(DB_MGMT, DF_UUID": get_pool_svc_ranks() upcall failed, "
-			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+		D_DEBUG(DB_MGMT, DF_UUID ": get_pool_svc_ranks() upcall failed: " DF_RC,
+			DP_UUID(in->gsr_puuid), DP_RC(rc));
 	else if (rc != 0)
-		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
-			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": get_pool_svc_ranks() upcall failed",
+			 DP_UUID(in->gsr_puuid));
 	out->gsr_rc = rc;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR(DF_UUID": crt_reply_send() failed, "DF_RC"\n",
-			DP_UUID(in->gsr_puuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": crt_reply_send() failed", DP_UUID(in->gsr_puuid));
 
 	d_rank_list_free(out->gsr_ranks);
 }
@@ -383,8 +380,8 @@ void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
-	D_DEBUG(DB_MGMT, "find pool uuid:"DF_UUID", lbl %s\n",
-		DP_UUID(in->pfi_puuid), in->pfi_label);
+	D_DEBUG(DB_MGMT, "find pool uuid:" DF_UUID ", lbl %s", DP_UUID(in->pfi_puuid),
+		in->pfi_label);
 
 	out = crt_reply_get(rpc);
 
@@ -395,19 +392,17 @@ void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
 		rc = ds_get_pool_svc_ranks(in->pfi_puuid, &out->pfo_ranks);
 	}
 	if (rc == -DER_NONEXIST) /* not an error */
-		D_DEBUG(DB_MGMT, DF_UUID": %s: ds_pool_find() not found, "
-			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
-			DP_RC(rc));
+		D_DEBUG(DB_MGMT, DF_UUID ": %s: ds_pool_find() not found: " DF_RC,
+			DP_UUID(in->pfi_puuid), in->pfi_label, DP_RC(rc));
 	else if (rc != 0)
-		D_ERROR(DF_UUID": %s: ds_pool_find_bylabel() upcall failed, "
-			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": %s: ds_pool_find_bylabel() upcall failed",
+			 DP_UUID(in->pfi_puuid), in->pfi_label);
 	out->pfo_rc = rc;
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR(DF_UUID": %s: crt_reply_send() failed, "DF_RC"\n",
-			DP_UUID(in->pfi_puuid), in->pfi_label, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": %s: crt_reply_send() failed", DP_UUID(in->pfi_puuid),
+			 in->pfi_label);
 
 	d_rank_list_free(out->pfo_ranks);
 }
@@ -421,7 +416,7 @@ ds_mgmt_init()
 	if (rc != 0)
 		return rc;
 
-	D_DEBUG(DB_MGMT, "successful init call\n");
+	D_DEBUG(DB_MGMT, "successful init call");
 	return 0;
 }
 
@@ -430,7 +425,7 @@ ds_mgmt_fini()
 {
 	ds_mgmt_system_module_fini();
 
-	D_DEBUG(DB_MGMT, "successful fini call\n");
+	D_DEBUG(DB_MGMT, "successful fini call");
 	return 0;
 }
 

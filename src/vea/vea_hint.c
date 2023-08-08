@@ -63,8 +63,8 @@ hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
 		return 0;
 	}
 
-	D_ERROR("unexpected transient hint "DF_U64" ["DF_U64", "DF_U64"] %u\n",
-		hint->vhc_seq, seq_min, seq_max, seq_cnt);
+	D_ERROR("unexpected transient hint " DF_U64 " [" DF_U64 ", " DF_U64 "] %u", hint->vhc_seq,
+		seq_min, seq_max, seq_cnt);
 
 	return -DER_INVAL;
 }
@@ -102,7 +102,7 @@ hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
 		return 0;
 	}
 error:
-	D_ERROR("unexpected persistent hint "DF_U64" ["DF_U64", "DF_U64"] %u\n",
+	D_ERROR("unexpected persistent hint " DF_U64 " [" DF_U64 ", " DF_U64 "] %u",
 		hint->vhc_pd->vhd_seq, seq_min, seq_max, seq_cnt);
 
 	return -DER_INVAL;

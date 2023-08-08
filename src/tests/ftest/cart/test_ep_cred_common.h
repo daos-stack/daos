@@ -58,11 +58,11 @@ ping_hdlr_0(crt_rpc_t *rpc_req)
 	int		rc;
 	struct ping_in	*input;
 
-	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	D_DEBUG(DB_TRACE, "entered %s()", __func__);
 
 	input = crt_req_get(rpc_req);
 	if (input->pi_delay != 0) {
-		D_DEBUG(DB_TRACE, "sleep for %d\n", input->pi_delay);
+		D_DEBUG(DB_TRACE, "sleep for %d", input->pi_delay);
 		sleep(input->pi_delay);
 	}
 
@@ -75,7 +75,7 @@ ping_hdlr_1(crt_rpc_t *rpc_req)
 {
 	int rc;
 
-	D_DEBUG(DB_TRACE, "entered %s().\n", __func__);
+	D_DEBUG(DB_TRACE, "entered %s()", __func__);
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 }

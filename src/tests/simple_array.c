@@ -523,12 +523,12 @@ main(int argc, char **argv)
 	/** close container */
 	rc = daos_cont_close(coh, NULL);
 	if (rc)
-		D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_cont_close() Failed");
 
 	/** disconnect from pool & destroy it */
 	rc = daos_pool_disconnect(poh, NULL);
 	if (rc)
-		D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_pool_disconnect() Failed");
 	if (rank == 0)
 		/** free allocated storage */
 		pool_destroy();

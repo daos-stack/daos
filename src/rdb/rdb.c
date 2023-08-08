@@ -50,7 +50,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas: caller_term="DF_X64"\n",
+	D_DEBUG(DB_MD, DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64,
 		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term);
 
 	/*
@@ -110,8 +110,7 @@ out_pool_hdl:
 		vos_pool_close(pool);
 		rc_tmp = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 		if (rc_tmp != 0)
-			D_ERROR(DF_UUID": failed to destroy %s: %d\n",
-				DP_UUID(uuid), path, rc_tmp);
+			D_ERROR(DF_UUID ": failed to destroy %s: %d", DP_UUID(uuid), path, rc_tmp);
 	}
 out:
 	return rc;
@@ -130,8 +129,7 @@ rdb_destroy(const char *path, const uuid_t uuid)
 
 	rc = vos_pool_destroy_ex(path, (unsigned char *)uuid, VOS_POF_RDB);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to destroy %s: "DF_RC"\n",
-			DP_UUID(uuid), path, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to destroy %s", DP_UUID(uuid), path);
 	return rc;
 }
 
@@ -245,8 +243,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
-		D_ERROR(DF_UUID": failed to allocate db object\n",
-			DP_UUID(uuid));
+		D_ERROR(DF_UUID ": failed to allocate db object", DP_UUID(uuid));
 		rc = -DER_NOMEM;
 		goto err;
 	}
@@ -260,22 +257,21 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 
 	rc = ABT_mutex_create(&db->d_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB": failed to create mutex: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create mutex: %d", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
 		goto err_db;
 	}
 
 	rc = ABT_mutex_create(&db->d_raft_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB": failed to create raft mutex: %d\n",
-			DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create raft mutex: %d", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
 		goto err_mutex;
 	}
 
 	rc = ABT_cond_create(&db->d_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB": failed to create ref CV: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create ref CV: %d", DP_DB(db), rc);
 		rc = dss_abterr2der(rc);
 		goto err_raft_mutex;
 	}
@@ -296,8 +292,7 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 	 */
 	rc = vos_pool_query_space(db->d_uuid, &vps);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to query vos pool space: "DF_RC"\n",
-			DP_DB(db), DP_RC(rc));
+		DL_ERROR(rc, DF_DB ": failed to query vos pool space", DP_DB(db));
 		goto err_kvss;
 	}
 	rdb_extra_sys[DAOS_MEDIA_SCM] = 0;
@@ -307,19 +302,18 @@ rdb_open_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid, uint6
 			     ((SCM_FREE(&vps) - SCM_SYS(&vps)) * 52) / 100;
 		rc = vos_pool_space_sys_set(db->d_pool, &rdb_extra_sys[0]);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to reserve more vos pool SCM "
-				DF_U64" : "DF_RC"\n", DP_DB(db),
-				rdb_extra_sys[DAOS_MEDIA_SCM], DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to reserve more vos pool SCM " DF_U64,
+				 DP_DB(db), rdb_extra_sys[DAOS_MEDIA_SCM]);
 			goto err_kvss;
 		}
 	} else {
-		D_WARN(DF_DB": vos pool SCM not reserved for SLC: "
-		       "free="DF_U64 "sys="DF_U64"\n", DP_DB(db),
-		       SCM_FREE(&vps), SCM_SYS(&vps));
+		D_WARN(DF_DB ": vos pool SCM not reserved for SLC: free=" DF_U64 "sys=" DF_U64,
+		       DP_DB(db), SCM_FREE(&vps), SCM_SYS(&vps));
 	}
-	D_DEBUG(DB_MD, DF_DB": vos pool SCM: tot: "DF_U64" free: "DF_U64
-		" vos-rsvd: "DF_U64" rdb-rsvd-slc: "DF_U64"\n", DP_DB(db),
-		SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
+	D_DEBUG(DB_MD,
+		DF_DB ": vos pool SCM: tot: " DF_U64 " free: " DF_U64 " vos-rsvd: " DF_U64
+		      " rdb-rsvd-slc: " DF_U64,
+		DP_DB(db), SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
 		rdb_extra_sys[DAOS_MEDIA_SCM]);
 
 	db->d_nospc_ts = daos_getutime();
@@ -376,7 +370,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": opening db %s: caller_term="DF_X64"\n", DP_UUID(uuid), path,
+	D_DEBUG(DB_MD, DF_UUID ": opening db %s: caller_term=" DF_X64, DP_UUID(uuid), path,
 		caller_term);
 
 	/*
@@ -393,16 +387,14 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 				     "%s: incompatible DB UUID: "DF_UUIDF"\n", path, DP_UUID(uuid));
 		goto err;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid),
-			path, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to open %s", DP_UUID(uuid), path);
 		goto err;
 	}
 	ABT_thread_yield();
 
 	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to open metadata container: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to open metadata container", DP_UUID(uuid));
 		goto err_pool;
 	}
 
@@ -410,12 +402,11 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
 	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
 	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_UUID": not fully initialized\n", DP_UUID(uuid));
+		D_ERROR(DF_UUID ": not fully initialized", DP_UUID(uuid));
 		rc = -DER_DF_INVAL;
 		goto err_mc;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to look up UUID: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to look up UUID", DP_UUID(uuid));
 		goto err_mc;
 	}
 
@@ -432,8 +423,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 		rc = -DER_DF_INCOMPT;
 		goto err_mc;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
-			DP_UUID(uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to look up layout version", DP_UUID(uuid));
 		goto err_mc;
 	}
 	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
@@ -452,7 +442,7 @@ rdb_open(const char *path, const uuid_t uuid, uint64_t caller_term, struct rdb_c
 	if (rc != 0)
 		goto err_mc;
 
-	D_DEBUG(DB_MD, DF_DB": opened db %s %p\n", DP_DB(db), path, db);
+	D_DEBUG(DB_MD, DF_DB ": opened db %s %p", DP_DB(db), path, db);
 	*storagep = rdb_to_storage(db);
 	return 0;
 
@@ -483,7 +473,7 @@ rdb_close(struct rdb_storage *storage)
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
-	D_DEBUG(DB_MD, DF_DB": closed db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB ": closed db %p", DP_DB(db), db);
 	D_FREE(db);
 }
 
@@ -528,7 +518,7 @@ rdb_start(struct rdb_storage *storage, struct rdb **dbp)
 
 	db->d_use_leases = rdb_get_use_leases();
 
-	D_DEBUG(DB_MD, DF_DB": started db %p: use_leases=%d\n", DP_DB(db), db, db->d_use_leases);
+	D_DEBUG(DB_MD, DF_DB ": started db %p: use_leases=%d", DP_DB(db), db, db->d_use_leases);
 	*dbp = db;
 	return 0;
 }
@@ -545,7 +535,7 @@ rdb_stop(struct rdb *db, struct rdb_storage **storagep)
 {
 	bool deleted;
 
-	D_DEBUG(DB_MD, DF_DB": stopping db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB ": stopping db %p", DP_DB(db), db);
 
 	ABT_mutex_lock(rdb_hash_lock);
 	deleted = d_hash_rec_delete(&rdb_hash, db->d_uuid, sizeof(uuid_t));
@@ -554,7 +544,7 @@ rdb_stop(struct rdb *db, struct rdb_storage **storagep)
 
 	rdb_raft_stop(db);
 
-	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
+	D_DEBUG(DB_MD, DF_DB ": stopped db %p", DP_DB(db), db);
 	*storagep = rdb_to_storage(db);
 }
 
@@ -587,8 +577,7 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 	int	i;
 	int	rc;
 
-	D_DEBUG(DB_MD, DF_DB": Adding %d replicas\n",
-		DP_DB(db), replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB ": Adding %d replicas", DP_DB(db), replicas->rl_nr);
 
 	ABT_mutex_lock(db->d_raft_mutex);
 
@@ -602,8 +591,8 @@ rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas)
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_add_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to add rank %u: "DF_RC"\n", DP_DB(db),
-				replicas->rl_ranks[i], DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to add rank %u", DP_DB(db),
+				 replicas->rl_ranks[i]);
 			break;
 		}
 	}
@@ -632,8 +621,7 @@ rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 	int	i;
 	int	rc;
 
-	D_DEBUG(DB_MD, DF_DB": Removing %d replicas\n",
-		DP_DB(db), replicas->rl_nr);
+	D_DEBUG(DB_MD, DF_DB ": Removing %d replicas", DP_DB(db), replicas->rl_nr);
 
 	ABT_mutex_lock(db->d_raft_mutex);
 
@@ -647,8 +635,8 @@ rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas)
 	for (i = 0; i < replicas->rl_nr; ++i) {
 		rc = rdb_raft_remove_replica(db, replicas->rl_ranks[i]);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to remove rank %u: "DF_RC"\n", DP_DB(db),
-				replicas->rl_ranks[i], DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to remove rank %u", DP_DB(db),
+				 replicas->rl_ranks[i]);
 			break;
 		}
 	}
@@ -780,7 +768,7 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	struct rdb_chkpt_record *dcr   = &db->d_chkpt_record;
 	struct umem_store       *store = dcr->dcr_store;
 
-	D_DEBUG(DB_MD, DF_DB ": commit >= " DF_X64 "\n", DP_DB(db), wait_id);
+	D_DEBUG(DB_MD, DF_DB ": commit >= " DF_X64, DP_DB(db), wait_id);
 
 	if (wait_id == 0) {
 		/** Special case, checkpoint needs to yield to allow progress */
@@ -791,15 +779,15 @@ rdb_chkpt_wait(void *arg, uint64_t wait_id, uint64_t *commit_id)
 	if (store->stor_ops->so_wal_id_cmp(store, dcr->dcr_commit_id, wait_id) >= 0)
 		goto out;
 
-	D_DEBUG(DB_MD, DF_DB ": wait for commit >= " DF_X64 "\n", DP_DB(db), wait_id);
+	D_DEBUG(DB_MD, DF_DB ": wait for commit >= " DF_X64, DP_DB(db), wait_id);
 	ABT_mutex_lock(db->d_chkpt_mutex);
 	dcr->dcr_waiting = 1;
 	dcr->dcr_wait_id = wait_id;
 	ABT_cond_wait(db->d_commit_cv, db->d_chkpt_mutex);
 	ABT_mutex_unlock(db->d_chkpt_mutex);
 out:
-	D_DEBUG(DB_MD, DF_DB ": commit " DF_X64 " is >= " DF_X64 "\n", DP_DB(db),
-		dcr->dcr_commit_id, wait_id);
+	D_DEBUG(DB_MD, DF_DB ": commit " DF_X64 " is >= " DF_X64, DP_DB(db), dcr->dcr_commit_id,
+		wait_id);
 	*commit_id = dcr->dcr_commit_id;
 }
 
@@ -824,17 +812,17 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 		if (used_blocks >= dcr->dcr_thresh) {
 			dcr->dcr_needed = 1;
 			D_DEBUG(DB_MD,
-				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint\n",
+				DF_DB ": used %u/%u exceeds threshold %u, triggering checkpoint",
 				DP_DB(db), used_blocks, total_blocks, dcr->dcr_thresh);
 			ABT_cond_broadcast(db->d_chkpt_cv);
 		}
-		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is idle\n", DP_DB(db),
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is idle", DP_DB(db),
 			commit_id);
 		return;
 	}
 
 	if (!dcr->dcr_waiting) {
-		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is not waiting\n",
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 ", chkpt is not waiting",
 			DP_DB(db), commit_id);
 		return;
 	}
@@ -843,12 +831,11 @@ rdb_chkpt_update(void *arg, uint64_t commit_id, uint32_t used_blocks, uint32_t t
 	if (store->stor_ops->so_wal_id_cmp(store, commit_id, dcr->dcr_wait_id) >= 0) {
 		dcr->dcr_waiting = 0;
 		D_DEBUG(DB_MD,
-			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64
-			      "\n",
+			DF_DB ": update commit = " DF_X64 ", waking checkpoint waiting for " DF_X64,
 			DP_DB(db), commit_id, dcr->dcr_wait_id);
 		ABT_cond_broadcast(db->d_commit_cv);
 	} else {
-		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64 "\n", DP_DB(db), commit_id);
+		D_DEBUG(DB_MD, DF_DB ": update commit = " DF_X64, DP_DB(db), commit_id);
 	}
 }
 
@@ -861,13 +848,13 @@ rdb_chkpt_enabled(struct rdb *db)
 		return dcr->dcr_enabled == 1;
 
 	if (!vos_pool_needs_checkpoint(db->d_pool)) {
-		D_DEBUG(DB_MD, DF_DB ": checkpointing is disabled for rdb replica\n", DP_DB(db));
+		D_DEBUG(DB_MD, DF_DB ": checkpointing is disabled for rdb replica", DP_DB(db));
 		dcr->dcr_init    = 1;
 		dcr->dcr_enabled = 0;
 		return false;
 	}
 
-	D_DEBUG(DB_MD, DF_DB ": checkpointing is enabled for rdb replica\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB ": checkpointing is enabled for rdb replica", DP_DB(db));
 	vos_pool_checkpoint_init(db->d_pool, rdb_chkpt_update, rdb_chkpt_wait, db, &dcr->dcr_store);
 
 	dcr->dcr_enabled = 1;
@@ -891,7 +878,7 @@ rdb_chkptd(void *arg)
 	struct rdb *db = arg;
 	struct rdb_chkpt_record *dcr = &db->d_chkpt_record;
 
-	D_DEBUG(DB_MD, DF_DB ": checkpointd starting\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB ": checkpointd starting", DP_DB(db));
 	/** ABT_cond_timedwait uses CLOCK_REALTIME internally so we have to use it but using
 	 *  COARSE version should be fine.  CLOCK_MONOTONIC might be completely different
 	 *  because it's not affected by system changes.
@@ -919,14 +906,13 @@ rdb_chkptd(void *arg)
 		dcr->dcr_idle = 0;
 		rc            = vos_pool_checkpoint(db->d_pool);
 		if (rc != 0) {
-			D_ERROR(DF_DB ": failed to checkpoint: rc=" DF_RC "\n", DP_DB(db),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_DB ": failed to checkpoint", DP_DB(db));
 			break;
 		}
 		db->d_chkpt_record.dcr_needed = 0;
 		clock_gettime(CLOCK_REALTIME_COARSE, &last);
 	}
-	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping\n", DP_DB(db));
+	D_DEBUG(DB_MD, DF_DB ": checkpointd stopping", DP_DB(db));
 	rdb_chkpt_fini(db);
 }
 
@@ -942,12 +928,12 @@ rdb_chkptd_stop(struct rdb *db)
 	case CHKPT_NONE:
 		return;
 	case CHKPT_ULT:
-		D_DEBUG(DB_MD, DF_DB ": Stopping chkptd ULT\n", DP_DB(db));
+		D_DEBUG(DB_MD, DF_DB ": Stopping chkptd ULT", DP_DB(db));
 		dcr->dcr_stop = 1;
 		ABT_cond_broadcast(db->d_chkpt_cv);
 		rc = ABT_thread_free(&db->d_chkptd);
 		D_ASSERTF(rc == 0, "free rdb_chkptd: rc=%d\n", rc);
-		D_DEBUG(DB_MD, DF_DB ": Stopped chkptd ULT\n", DP_DB(db));
+		D_DEBUG(DB_MD, DF_DB ": Stopped chkptd ULT", DP_DB(db));
 		/** Fall through */
 	case CHKPT_COMMIT_CV:
 		ABT_cond_free(&db->d_commit_cv);
@@ -974,28 +960,28 @@ rdb_chkptd_start(struct rdb *db)
 
 	rc = ABT_mutex_create(&db->d_chkpt_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB ": failed to create checkpoint mutex: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create checkpoint mutex: %d", DP_DB(db), rc);
 		D_GOTO(error, rc = dss_abterr2der(rc));
 	}
 	dcr->dcr_state = CHKPT_MUTEX;
 
 	rc = ABT_cond_create(&db->d_chkpt_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB ": failed to create checkpoint main CV: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create checkpoint main CV: %d", DP_DB(db), rc);
 		D_GOTO(error, rc = dss_abterr2der(rc));
 	}
 	dcr->dcr_state = CHKPT_MAIN_CV;
 
 	rc = ABT_cond_create(&db->d_commit_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR(DF_DB ": failed to create checkpoint commit CV: %d\n", DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to create checkpoint commit CV: %d", DP_DB(db), rc);
 		D_GOTO(error, rc = dss_abterr2der(rc));
 	}
 	dcr->dcr_state = CHKPT_COMMIT_CV;
 
 	rc = dss_ult_create(rdb_chkptd, db, DSS_XS_SELF, 0, DSS_DEEP_STACK_SZ, &db->d_chkptd);
 	if (rc != 0) {
-		D_ERROR(DF_DB ": failed to start chkptd ULT: " DF_RC "\n", DP_DB(db), DP_RC(rc));
+		DL_ERROR(rc, DF_DB ": failed to start chkptd ULT", DP_DB(db));
 		goto error;
 	}
 	dcr->dcr_state = CHKPT_ULT;

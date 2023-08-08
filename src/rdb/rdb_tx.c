@@ -198,7 +198,7 @@ rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
 
 	/* critical */
 	if (p + sizeof(uint32_t) > buf + len) {
-		D_ERROR("truncated hdr: %zu < %zu\n", len, sizeof(uint32_t));
+		D_ERROR("truncated hdr: %zu < %zu", len, sizeof(uint32_t));
 		return -DER_IO;
 	}
 	out.critical = *(const uint32_t *)p;
@@ -267,7 +267,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 
 	/* opc */
 	if (p + sizeof(uint8_t) > buf + len) {
-		D_ERROR("truncated opc: %zu < %zu\n", len, sizeof(uint8_t));
+		D_ERROR("truncated opc: %zu < %zu", len, sizeof(uint8_t));
 		return -DER_IO;
 	}
 	o.dto_opc = *(const uint8_t *)p;
@@ -275,14 +275,14 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 	/* kvs */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_kvs);
 	if (n < 0) {
-		D_ERROR("failed to decode kvs\n");
+		D_ERROR("failed to decode kvs");
 		return n;
 	}
 	p += n;
 	/* key */
 	n = rdb_decode_iov(p, buf + len - p, &o.dto_key);
 	if (n < 0) {
-		D_ERROR("failed to decode key\n");
+		D_ERROR("failed to decode key");
 		return n;
 	}
 	p += n;
@@ -290,7 +290,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		/* value */
 		n = rdb_decode_iov(p, buf + len - p, &o.dto_value);
 		if (n < 0) {
-			D_ERROR("failed to decode value\n");
+			D_ERROR("failed to decode value");
 			return n;
 		}
 		p += n;
@@ -298,7 +298,7 @@ rdb_tx_op_decode(const void *buf, size_t len, struct rdb_tx_op *op)
 		   o.dto_opc == RDB_TX_CREATE) {
 		/* attr */
 		if (p + sizeof(struct rdb_kvs_attr) > buf + len) {
-			D_ERROR("truncated attr: %zu < %zu\n", buf + len - p,
+			D_ERROR("truncated attr: %zu < %zu", buf + len - p,
 				sizeof(struct rdb_kvs_attr));
 			return -DER_IO;
 		}
@@ -409,8 +409,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 	ABT_mutex_lock(tx->dt_db->d_raft_mutex);
 	rc = rdb_tx_leader_check(tx);
 	if (rc != 0) {
-		D_ERROR(DF_DB": leader check: "DF_RC"\n", DP_DB(tx->dt_db),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_DB ": leader check", DP_DB(tx->dt_db));
 		goto out_lock;
 	}
 
@@ -422,7 +421,7 @@ rdb_tx_commit(struct rdb_tx *tx)
 check_space:
 		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to query free space\n", DP_DB(tx->dt_db));
+			D_ERROR(DF_DB ": failed to query free space", DP_DB(tx->dt_db));
 			goto out_lock;
 		}
 		nchecks++;
@@ -431,27 +430,34 @@ check_space:
 			uint64_t		idx = 0;
 
 			if (nchecks > 1) {
-				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not append! "
-				       "scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+				D_DEBUG(DB_TRACE,
+					DF_DB
+					": nearly out of space, do not append! scm_left=" DF_U64,
+					DP_DB(tx->dt_db), scm_remaining);
 				D_GOTO(out_lock, rc = -DER_NOSPACE);
 			}
 
 			/* Compact applied entries (not too often). May recover enough space. */
 			if ((daos_getutime() - tx->dt_db->d_nospc_ts) < RDB_NOSPC_ERR_INTVL_USEC) {
-				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
-					"early to trigger compaction\n", DP_DB(tx->dt_db));
+				D_DEBUG(
+				    DB_TRACE,
+				    DF_DB
+				    ": nearly out of space, but too early to trigger compaction",
+				    DP_DB(tx->dt_db));
 				goto check_space;	/* will return via nchecks test above */
 			}
-			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, compact log before retry! "
-				"scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+			D_DEBUG(DB_TRACE,
+				DF_DB
+				": nearly out of space, compact log before retry! scm_left=" DF_U64,
+				DP_DB(tx->dt_db), scm_remaining);
 			rc = rdb_raft_trigger_compaction(tx->dt_db, true /* compact_all */, &idx);
 			if (rc != 0) {
-				D_WARN(DF_DB": failed to trigger compaction!\n", DP_DB(tx->dt_db));
+				D_WARN(DF_DB ": failed to trigger compaction!", DP_DB(tx->dt_db));
 				D_GOTO(out_lock, rc = -DER_NOSPACE);
 			}
 			while ((idx != 0) && (tx->dt_db->d_lc_record.dlr_aggregated < idx)) {
 				sched_cond_wait(tx->dt_db->d_compacted_cv, tx->dt_db->d_raft_mutex);
-				D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64", need "DF_U64"\n",
+				D_DEBUG(DB_TRACE, DF_DB ": compacted to " DF_U64 ", need " DF_U64,
 					DP_DB(tx->dt_db), tx->dt_db->d_lc_record.dlr_aggregated,
 					idx);
 			}
@@ -465,8 +471,8 @@ check_space:
 			goto check_space;
 		}
 
-		D_DEBUG(DB_TRACE, DF_DB": %s append tx entry to raft log, scm_left="DF_U64"\n",
-			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" : "",
+		D_DEBUG(DB_TRACE, DF_DB ": %s append tx entry to raft log, scm_left=" DF_U64,
+			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" :,
 			scm_remaining);
 	}
 
@@ -675,8 +681,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	/* Convert the KVS class into the object ID class. */
 	rc = rdb_oid_class(class, &oid_class);
 	if (rc != 0) {
-		D_ERROR(DF_DB": unknown KVS class %x: %d\n", DP_DB(db), class,
-			rc);
+		D_ERROR(DF_DB ": unknown KVS class %x: %d", DP_DB(db), class, rc);
 		return rc;
 	}
 
@@ -686,8 +691,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	if (rc == 0) {
 		return -DER_EXIST;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR(DF_DB": failed to check KVS existence: %d\n", DP_DB(db),
-			rc);
+		D_ERROR(DF_DB ": failed to check KVS existence: %d", DP_DB(db), rc);
 		return rc;
 	}
 
@@ -697,16 +701,14 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 			   &value);
 	if (rc == -DER_NONEXIST) {
 		oid_number = RDB_LC_OID_NEXT_INIT;
-		D_DEBUG(DB_MD, DF_DB": initialized rdb_lc_oid_next to "DF_U64
-			"\n", DP_DB(db), oid_number);
+		D_DEBUG(DB_MD, DF_DB ": initialized rdb_lc_oid_next to " DF_U64, DP_DB(db),
+			oid_number);
 	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up next object number: %d\n",
-			DP_DB(db), rc);
+		D_ERROR(DF_DB ": failed to look up next object number: %d", DP_DB(db), rc);
 		return rc;
 	}
 	if ((oid_number & RDB_OID_CLASS_MASK) != 0) {
-		D_ERROR(DF_DB": invalid next object number: "DF_X64"\n",
-			DP_DB(db), oid_number);
+		D_ERROR(DF_DB ": invalid next object number: " DF_X64, DP_DB(db), oid_number);
 		return -DER_IO;
 	}
 	oid = oid_class | oid_number;
@@ -716,8 +718,8 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, 1 /* n */,
 			   &rdb_lc_oid_next, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update next object number"DF_X64
-			": %d\n", DP_DB(db), oid_number, rc);
+		D_ERROR(DF_DB ": failed to update next object number" DF_X64 ": %d", DP_DB(db),
+			oid_number, rc);
 		return rc;
 	}
 
@@ -726,8 +728,7 @@ rdb_tx_apply_create(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	rc = rdb_lc_update(db->d_lc, index, parent, crit, 1 /* n */,
 			   key, &value);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update parent KVS: %d\n", DP_DB(db),
-			rc);
+		D_ERROR(DF_DB ": failed to update parent KVS: %d", DP_DB(db), rc);
 		return rc;
 	}
 
@@ -747,24 +748,22 @@ rdb_tx_apply_destroy(struct rdb *db, uint64_t index, rdb_oid_t parent,
 	rc = rdb_lc_lookup(db->d_lc, index, parent, key, &value);
 	if (rc != 0) {
 		if (rc != -DER_NONEXIST)
-			D_ERROR(DF_DB": failed to check KVS existence: %d\n",
-				DP_DB(db), rc);
+			D_ERROR(DF_DB ": failed to check KVS existence: %d", DP_DB(db), rc);
 		return rc;
 	}
 
 	/* Punch the key in the parent object. */
 	rc = rdb_lc_punch(db->d_lc, index, parent, 1 /* n */, key);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update parent KVS "DF_X64": %d\n",
-			DP_DB(db), parent, rc);
+		D_ERROR(DF_DB ": failed to update parent KVS " DF_X64 ": %d", DP_DB(db), parent,
+			rc);
 		return rc;
 	}
 
 	/* Punch the KVS object. */
 	rc = rdb_lc_punch(db->d_lc, index, oid, 0 /* n */, NULL /* akeys */);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to punch KVS "DF_X64": %d\n", DP_DB(db),
-			oid, rc);
+		D_ERROR(DF_DB ": failed to punch KVS " DF_X64 ": %d", DP_DB(db), oid, rc);
 		return rc;
 	}
 
@@ -779,8 +778,7 @@ rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 
 	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value);
 	if (rc != 0)
-		D_ERROR(DF_DB ": failed to update KVS " DF_X64 ": " DF_RC "\n", DP_DB(db), kvs,
-			DP_RC(rc));
+		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
 	return rc;
 }
 
@@ -792,8 +790,7 @@ rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 
 	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		D_ERROR(DF_DB ": failed to update KVS " DF_X64 ": %d", DP_DB(db), kvs, rc);
 	return rc;
 }
 
@@ -804,7 +801,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 	rdb_path_t	victim_path;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": "DF_TX_OP"\n", DP_DB(db), DP_TX_OP(op));
+	D_DEBUG(DB_TRACE, DF_DB ": " DF_TX_OP, DP_DB(db), DP_TX_OP(op));
 
 	if (op->dto_opc != RDB_TX_CREATE_ROOT &&
 	    op->dto_opc != RDB_TX_DESTROY_ROOT) {
@@ -859,8 +856,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 					 &op->dto_key);
 		break;
 	default:
-		D_ERROR(DF_DB": unknown update operation %u\n",
-			DP_DB(db), op->dto_opc);
+		D_ERROR(DF_DB ": unknown update operation %u", DP_DB(db), op->dto_opc);
 		rc = -DER_IO;
 	}
 	if (rc != 0)
@@ -882,8 +878,7 @@ rdb_tx_apply_op(struct rdb *db, uint64_t index, struct rdb_tx_op *op, bool crit)
 		rc_tmp = rdb_kvs_lookup(db, &victim_path, index,
 					false /* alloc */, &victim);
 		if (rc_tmp == 0) {
-			D_DEBUG(DB_TRACE, DF_DB": evicting kvs %p\n",
-				DP_DB(db), victim);
+			D_DEBUG(DB_TRACE, DF_DB ": evicting kvs %p", DP_DB(db), victim);
 			rdb_kvs_evict(db, victim);
 			rdb_kvs_put(db, victim);
 		}
@@ -925,8 +920,7 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 
 	rc = rdb_scm_left(db, &scm_remaining);
 	if (rc != 0) {
-		D_ERROR(DF_DB": could not query free space: "DF_RC"\n",
-			DP_DB(db), DP_RC(rc));
+		DL_ERROR(rc, DF_DB ": could not query free space", DP_DB(db));
 		return rc;
 	}
 
@@ -935,8 +929,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 
 		n = rdb_tx_hdr_decode(p, sizeof(struct rdb_tx_hdr), &hdr);
 		if (n < 0) {
-			D_ERROR(DF_DB": invalid header: buf=%p, len="DF_U64"\n",
-				DP_DB(db), buf, sizeof(struct rdb_tx_hdr));
+			D_ERROR(DF_DB ": invalid header: buf=%p, len=" DF_U64, DP_DB(db), buf,
+				sizeof(struct rdb_tx_hdr));
 			rc = n;
 			return rc;
 		}
@@ -948,32 +942,33 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		 * Warn only when critically low on space.
 		 */
 		if (!crit && (scm_remaining < RDB_CRITICAL_FREE_SPACE)) {
-			D_WARN(DF_DB": space is tight! index "DF_U64" buf=%p "
-			       "len="DF_U64" crit=%d scm_left="DF_U64"\n",
+			D_WARN(DF_DB ": space is tight! index " DF_U64 " buf=%p len=" DF_U64
+				     " crit=%d scm_left=" DF_U64,
 			       DP_DB(db), index, buf, len, crit, scm_remaining);
 		}
 	}
 
-	D_DEBUG(DB_TRACE, DF_DB": applying index "DF_U64": buf=%p len="DF_U64
-		" crit=%d, scm_left="DF_U64"\n", DP_DB(db), index, buf, len,
-		crit, scm_remaining);
+	D_DEBUG(DB_TRACE,
+		DF_DB ": applying index " DF_U64 ": buf=%p len=" DF_U64
+		      " crit=%d, scm_left=" DF_U64,
+		DP_DB(db), index, buf, len, crit, scm_remaining);
 
 	while (p < buf + len) {
 		struct rdb_tx_op	op;
 
 		n = rdb_tx_op_decode(p, buf + len - p, &op);
 		if (n < 0) {
-			D_ERROR(DF_DB": invalid entry format: buf=%p len="DF_U64
-				" p=%p\n", DP_DB(db), buf, len, p);
+			D_ERROR(DF_DB ": invalid entry format: buf=%p len=" DF_U64 " p=%p",
+				DP_DB(db), buf, len, p);
 			rc = n;
 			break;
 		}
 		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
-				D_ERROR(DF_DB ": failed to apply entry " DF_U64
-					      " op %u <%td, %zd>: " DF_RC "\n",
-					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
+				DL_ERROR(
+				    rc, DF_DB ": failed to apply entry " DF_U64 " op %u <%td, %zd>",
+				    DP_DB(db), index, op.dto_opc, p - buf, n);
 			break;
 		}
 		p += n;
@@ -993,8 +988,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		rdb_kvs_cache_evict(db->d_kvss);
 		rc_tmp = rdb_lc_discard(db->d_lc, index, index);
 		if (rc_tmp != 0) {
-			D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n",
-				DP_DB(db), index, DP_RC(rc_tmp));
+			DL_ERROR(rc_tmp, DF_DB ": failed to discard entry " DF_U64, DP_DB(db),
+				 index);
 			if (rdb_tx_deterministic_error(rc))
 				return rc_tmp;
 			else
@@ -1140,8 +1135,9 @@ rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key_out)
 		return rc;
 	rc = rdb_lc_query_key_max(db->d_lc, i, s->de_object, key_out);
 	if (rc != 0) {
-		D_ERROR(DF_DB": rdb_lc_query_key_max index="DF_U64", d_applied="DF_U64", rdb_oid="
-			DF_U64"\n", DP_DB(db), i, db->d_applied, s->de_object);
+		D_ERROR(DF_DB ": rdb_lc_query_key_max index=" DF_U64 ", d_applied=" DF_U64
+			      ", rdb_oid=" DF_U64,
+			DP_DB(db), i, db->d_applied, s->de_object);
 	}
 	rdb_tx_query_post(tx, s);
 	return rc;

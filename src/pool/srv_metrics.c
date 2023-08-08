@@ -46,7 +46,7 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 			     "Last time the pool started", NULL,
 			     "%s/started_at", path);
 	if (rc != 0) /* Probably a bad sign, but not fatal */
-		D_WARN("Failed to create started_timestamp metric: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create started_timestamp metric");
 	else
 		d_tm_record_timestamp(started);
 
@@ -54,31 +54,31 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 			     "Total number of pool handle evict operations", "ops",
 			     "%s/ops/pool_evict", path);
 	if (rc != 0)
-		D_WARN("Failed to create evict hdl counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create evict hdl counter");
 
 	rc = d_tm_add_metric(&metrics->connect_total, D_TM_COUNTER,
 			     "Total number of processed pool connect operations", "ops",
 			     "%s/ops/pool_connect", path);
 	if (rc != 0)
-		D_WARN("Failed to create pool connect counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create pool connect counter");
 
 	rc = d_tm_add_metric(&metrics->disconnect_total, D_TM_COUNTER,
 			     "Total number of processed pool disconnect operations", "ops",
 			     "%s/ops/pool_disconnect", path);
 	if (rc != 0)
-		D_WARN("Failed to create pool disconnect counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create pool disconnect counter");
 
 	rc = d_tm_add_metric(&metrics->query_total, D_TM_COUNTER,
 			     "Total number of processed pool query operations", "ops",
 			     "%s/ops/pool_query", path);
 	if (rc != 0)
-		D_WARN("Failed to create pool query counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create pool query counter");
 
 	rc = d_tm_add_metric(&metrics->query_space_total, D_TM_COUNTER,
 			     "Total number of processed pool query (with space) operations", "ops",
 			     "%s/ops/pool_query_space", path);
 	if (rc != 0)
-		D_WARN("Failed to create pool query space counter: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create pool query space counter");
 
 	return metrics;
 }
@@ -134,8 +134,8 @@ ds_pool_metrics_start(struct ds_pool *pool)
 	/** create new shmem space for per-pool metrics */
 	rc = d_tm_add_ephemeral_dir(NULL, get_pool_dir_size(), pool->sp_path);
 	if (rc != 0) {
-		D_WARN(DF_UUID ": failed to create metrics dir for pool: "
-		       DF_RC "\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
+		DL_WARN(rc, DF_UUID ": failed to create metrics dir for pool",
+			DP_UUID(pool->sp_uuid));
 		return rc;
 	}
 
@@ -143,13 +143,13 @@ ds_pool_metrics_start(struct ds_pool *pool)
 	rc = dss_module_init_metrics(DAOS_SYS_TAG, pool->sp_metrics,
 				     pool->sp_path, -1);
 	if (rc != 0) {
-		D_WARN(DF_UUID ": failed to initialize module metrics: "
-		       DF_RC"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
+		DL_WARN(rc, DF_UUID ": failed to initialize module metrics",
+			DP_UUID(pool->sp_uuid));
 		ds_pool_metrics_stop(pool);
 		return rc;
 	}
 
-	D_INFO(DF_UUID ": created metrics for pool\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID ": created metrics for pool", DP_UUID(pool->sp_uuid));
 
 	return 0;
 }
@@ -168,10 +168,10 @@ ds_pool_metrics_stop(struct ds_pool *pool)
 
 	rc = d_tm_del_ephemeral_dir(pool->sp_path);
 	if (rc != 0) {
-		D_WARN(DF_UUID ": failed to remove pool metrics dir for pool: "
-		       DF_RC"\n", DP_UUID(pool->sp_uuid), DP_RC(rc));
+		DL_WARN(rc, DF_UUID ": failed to remove pool metrics dir for pool",
+			DP_UUID(pool->sp_uuid));
 		return;
 	}
 
-	D_INFO(DF_UUID ": destroyed ds_pool metrics\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID ": destroyed ds_pool metrics", DP_UUID(pool->sp_uuid));
 }

@@ -73,7 +73,7 @@ dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc)
 
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "send reply failed");
 
 	return rc;
 }

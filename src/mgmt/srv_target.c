@@ -125,7 +125,7 @@ dir_fsync(const char *path)
 
 	rc = fsync(fd);
 	if (rc < 0) {
-		D_ERROR("failed to fync %s: %d\n", path, errno);
+		D_ERROR("failed to fync %s: %d", path, errno);
 		rc = daos_errno2der(errno);
 	}
 
@@ -148,7 +148,7 @@ destroy_cb(const char *path, const struct stat *sb, int flag,
 	else
 		rc = unlink(path);
 	if (rc)
-		D_ERROR("failed to remove %s\n", path);
+		D_ERROR("failed to remove %s", path);
 	return rc;
 }
 
@@ -199,7 +199,7 @@ common_pool_iterate(const char *path, int (*cb)(uuid_t uuid, void *arg), void *a
 
 	storage = opendir(path);
 	if (storage == NULL) {
-		D_ERROR("failed to open %s: %d\n", path, errno);
+		D_ERROR("failed to open %s: %d", path, errno);
 		return daos_errno2der(errno);
 	}
 
@@ -212,8 +212,7 @@ common_pool_iterate(const char *path, int (*cb)(uuid_t uuid, void *arg), void *a
 		entry = readdir(storage);
 		if (entry == NULL) {
 			if (errno != 0) {
-				D_ERROR("failed to read %s: %d\n",
-					path, errno);
+				D_ERROR("failed to read %s: %d", path, errno);
 				rc = daos_errno2der(errno);
 			}
 			break;
@@ -234,7 +233,7 @@ common_pool_iterate(const char *path, int (*cb)(uuid_t uuid, void *arg), void *a
 
 	rc_tmp = closedir(storage);
 	if (rc_tmp != 0) {
-		D_ERROR("failed to close %s: %d\n", path, errno);
+		D_ERROR("failed to close %s: %d", path, errno);
 		rc_tmp = daos_errno2der(errno);
 	}
 
@@ -274,11 +273,11 @@ cleanup_leftover_cb(uuid_t uuid, void *arg)
 	struct d_uuid		 id;
 
 	/* destroy blobIDs */
-	D_DEBUG(DB_MGMT, "Clear SPDK blobs for pool "DF_UUID"\n", DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Clear SPDK blobs for pool " DF_UUID, DP_UUID(uuid));
 	uuid_copy(id.uuid, uuid);
 	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc != 0) {
-		D_ERROR("tgt_kill_pool, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "tgt_kill_pool");
 		return rc;
 	}
 
@@ -304,11 +303,11 @@ cleanup_dead_list(d_list_t *dead_list, const char *path)
 		d_list_del_init(&dp->dp_link);
 		D_FREE(dp);
 		if (rc) {
-			D_ERROR("failed to gen path\n");
+			D_ERROR("failed to gen path");
 			continue;
 		}
 
-		D_INFO("Cleanup leftover pool: %s\n", dead_dir);
+		D_INFO("Cleanup leftover pool: %s", dead_dir);
 		(void)subtree_destroy(dead_dir);
 		(void)rmdir(dead_dir);
 		D_FREE(dead_dir);
@@ -325,8 +324,7 @@ cleanup_leftover_pools(bool zombie_only)
 
 	rc = zombie_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
-		D_ERROR("failed to delete SPDK blobs for ZOMBIES pools: "
-			"%d, will try again\n", rc);
+		D_ERROR("failed to delete SPDK blobs for ZOMBIES pools: %d, will try again", rc);
 	cleanup_dead_list(&dead_list, zombies_path);
 
 	if (zombie_only)
@@ -334,8 +332,7 @@ cleanup_leftover_pools(bool zombie_only)
 
 	rc = newborn_pool_iterate(cleanup_leftover_cb, &dead_list);
 	if (rc)
-		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: "
-			"%d, will try again\n", rc);
+		D_ERROR("failed to delete SPDK blobs for NEWBORNS pools: %d, will try again", rc);
 	cleanup_dead_list(&dead_list, newborns_path);
 }
 
@@ -355,8 +352,7 @@ tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb
 	/** generate path to the target directory */
 	rc = ds_mgmt_tgt_file(pool_uuid, NULL, NULL, &pool_path);
 	if (rc) {
-		D_ERROR("newborn path_gen failed for "DF_UUID": "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, "newborn path_gen failed for " DF_UUID, DP_UUID(pool_uuid));
 		goto out;
 	}
 
@@ -369,15 +365,13 @@ tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb
 	rc = path_gen(pool_uuid, newborns_path, NULL,
 		      NULL, &pool_newborn_path);
 	if (rc) {
-		D_ERROR(DF_UUID": path_gen failed for: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": path_gen failed for", DP_UUID(pool_uuid));
 		goto out;
 	}
 	rc = mkdir(pool_newborn_path, 0700);
 	if (rc < 0 && errno != EEXIST) {
 		rc = daos_errno2der(errno);
-		D_ERROR("failed to created pool directory: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to created pool directory");
 		/* avoid tgt_destroy(), nothing to do */
 		D_FREE(pool_newborn_path);
 		goto out;
@@ -387,8 +381,7 @@ tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb
 	rc = tgt_vos_preallocate_parallel(pool_uuid, scm_size, tgt_nr,
 					  &dummy_cancel_state);
 	if (rc) {
-		D_ERROR(DF_UUID": failed to create tgt vos files: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create tgt vos files", DP_UUID(pool_uuid));
 		goto out;
 	}
 
@@ -396,24 +389,21 @@ tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb
 		rc = path_gen(pool_uuid, newborns_path, RDB_FILE"pool",
 			      NULL, &rdb_path);
 		if (rdb_path == NULL) {
-			D_ERROR(DF_UUID": cannot retrieve rdb file info: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": cannot retrieve rdb file info", DP_UUID(pool_uuid));
 			rc = -DER_NONEXIST;
 			goto out;
 		}
 		fd = open(rdb_path, O_RDWR|O_CREAT, 0600);
 		if (fd < 0) {
 			rc = daos_errno2der(errno);
-			D_ERROR("failed to create/open the vos file %s:"DF_RC"\n",
-				rdb_path, DP_RC(rc));
+			DL_ERROR(rc, "failed to create/open the vos file %s", rdb_path);
 			goto out;
 		}
 		rc = fallocate(fd, 0, 0, rdb_blob_sz);
 		close(fd);
 		if (rc) {
 			rc = daos_errno2der(errno);
-			D_ERROR("fallocate on rdb file %s failed:"DF_RC"\n",
-				rdb_path, DP_RC(rc));
+			DL_ERROR(rc, "fallocate on rdb file %s failed", rdb_path);
 			goto out;
 		}
 		D_FREE(rdb_path);
@@ -423,8 +413,7 @@ tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb
 	rc = rename(pool_newborn_path, pool_path);
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to rename pool directory: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to rename pool directory", DP_UUID(pool_uuid));
 		goto out;
 	}
 
@@ -453,7 +442,7 @@ recreate_pooltgts()
 	D_INIT_LIST_HEAD(&pool_list);
 	rc = smd_pool_list(&pool_list, &pool_list_cnt);
 	if (rc != 0) {
-		D_ERROR("Failed to get pool info list from SMD\n");
+		D_ERROR("Failed to get pool info list from SMD");
 		return rc;
 	}
 
@@ -461,22 +450,21 @@ recreate_pooltgts()
 		/* Cleanup Newborns */
 		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
 		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
-			D_INFO("cleaning up newborn pool "DF_UUID"\n",
-			       DP_UUID(pool_info->spi_id));
+			D_INFO("cleaning up newborn pool " DF_UUID, DP_UUID(pool_info->spi_id));
 			uuid_copy(id.uuid, pool_info->spi_id);
 			rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 			if (rc) {
-				D_ERROR("failed to cleanup newborn pool "DF_UUID": "DF_RC"\n",
-					DP_UUID(pool_info->spi_id), DP_RC(rc));
+				DL_ERROR(rc, "failed to cleanup newborn pool " DF_UUID,
+					 DP_UUID(pool_info->spi_id));
 			}
 			continue;
 		}
 
-		D_INFO("recreating files for pool "DF_UUID"\n", DP_UUID(pool_info->spi_id));
+		D_INFO("recreating files for pool " DF_UUID, DP_UUID(pool_info->spi_id));
 		rc = smd_rdb_get_blob_sz(pool_info->spi_id, &rdb_blob_sz);
 		if (rc && (rc != -DER_NONEXIST)) {
-			D_ERROR(DF_UUID": failed to extract the size of rdb file: "DF_RC"\n",
-				DP_UUID(pool_info->spi_id), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": failed to extract the size of rdb file",
+				 DP_UUID(pool_info->spi_id));
 			goto out;
 		}
 		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
@@ -511,7 +499,7 @@ ds_mgmt_tgt_setup(void)
 	/** create NEWBORNS directory if it does not exist already */
 	rc = mkdir(newborns_path, S_IRWXU);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create NEWBORNS dir: %d\n", errno);
+		D_ERROR("failed to create NEWBORNS dir: %d", errno);
 		umask(stored_mode);
 		D_GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
@@ -519,7 +507,7 @@ ds_mgmt_tgt_setup(void)
 	/** create ZOMBIES directory if it does not exist already */
 	rc = mkdir(zombies_path, S_IRWXU);
 	if (rc < 0 && errno != EEXIST) {
-		D_ERROR("failed to create ZOMBIES dir: %d\n", errno);
+		D_ERROR("failed to create ZOMBIES dir: %d", errno);
 		umask(stored_mode);
 		D_GOTO(err_zombies, rc = daos_errno2der(errno));
 	}
@@ -531,7 +519,7 @@ ds_mgmt_tgt_setup(void)
 	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
 		rc = recreate_pooltgts();
 		if (rc) {
-			D_ERROR("failed to create pool tgts: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "failed to create pool tgts");
 			goto err_zombies;
 		}
 	}
@@ -544,14 +532,14 @@ ds_mgmt_tgt_setup(void)
 
 	rc = ABT_mutex_create(&pooltgts->dpt_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create pooltgts mutex: %d\n", rc);
+		D_ERROR("failed to create pooltgts mutex: %d", rc);
 		rc = dss_abterr2der(rc);
 		goto err_pooltgts;
 	}
 
 	rc = ABT_cond_create(&pooltgts->dpt_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create pooltgts cv: %d\n", rc);
+		D_ERROR("failed to create pooltgts cv: %d", rc);
 		rc = dss_abterr2der(rc);
 		goto err_mutex;
 	}
@@ -559,21 +547,18 @@ ds_mgmt_tgt_setup(void)
 					 NULL /* priv */, &pooltgts_hops,
 					 &pooltgts->dpt_creates_ht);
 	if (rc) {
-		D_ERROR("failed to create hash table (creates) "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create hash table (creates)");
 		goto err_cv;
 	}
 
 	rc = subtree_destroy(newborns_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again\n",
-			rc);
+		D_ERROR("failed to cleanup NEWBORNS dir: %d, will try again", rc);
 	rc = subtree_destroy(zombies_path);
 	if (rc)
 		/** only log error, will try again next time */
-		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again\n",
-			rc);
+		D_ERROR("failed to cleanup ZOMBIES dir: %d, will try again", rc);
 	return 0;
 
 err_cv:
@@ -597,8 +582,7 @@ ds_mgmt_tgt_cleanup(void)
 
 	rc = d_hash_table_destroy_inplace(&pooltgts->dpt_creates_ht, true);
 	if (rc) {
-		D_ERROR("failed to destroy table: dpt_creates_ht: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to destroy table: dpt_creates_ht");
 	}
 	ABT_cond_free(&pooltgts->dpt_cv);
 	ABT_mutex_free(&pooltgts->dpt_mutex);
@@ -640,8 +624,8 @@ tgt_vos_create_one(void *varg)
 	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
 			     vpa->vpa_scm_size, vpa->vpa_nvme_size, 0, NULL);
 	if (rc)
-		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
-			DP_UUID(vpa->vpa_uuid), path, rc);
+		D_ERROR(DF_UUID ": failed to init vos pool %s: %d", DP_UUID(vpa->vpa_uuid), path,
+			rc);
 
 	D_FREE(path);
 	return rc;
@@ -658,13 +642,12 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	if (rc)
 		goto out;
 
-	D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n", DP_UUID(uuid), path);
+	D_DEBUG(DB_MGMT, DF_UUID ": creating vos file %s", DP_UUID(uuid), path);
 
 	fd = open(path, O_CREAT|O_RDWR, 0600);
 	if (fd < 0) {
 		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to create vos file %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create vos file %s", DP_UUID(uuid), path);
 		goto out;
 	}
 
@@ -680,9 +663,8 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	rc = fallocate(fd, 0, 0, scm_size);
 	if (rc) {
 		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to allocate vos file %s with "
-			"size: "DF_U64": "DF_RC"\n",
-			DP_UUID(uuid), path, scm_size, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to allocate vos file %s with size: " DF_U64,
+			 DP_UUID(uuid), path, scm_size);
 		goto out;
 	}
 
@@ -691,8 +673,7 @@ tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 	fd = -1;
 	if (rc) {
 		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to sync vos pool %s: "
-			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to sync vos pool %s", DP_UUID(uuid), path);
 		goto out;
 	}
 out:
@@ -734,7 +715,7 @@ tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
 		rc = pthread_cancel(entry->tvt_tid);
 		if (rc) {
 			rc = daos_errno2der(rc);
-			D_ERROR("pthread_cancel failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "pthread_cancel failed");
 		}
 	}
 
@@ -742,7 +723,7 @@ tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
 		rc = pthread_join(entry->tvt_tid, NULL);
 		if (rc) {
 			rc = daos_errno2der(rc);
-			D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "pthread_join failed");
 		}
 	}
 }
@@ -788,9 +769,9 @@ tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool
 				    &entry->tvt_args);
 		if (rc) {
 			saved_rc = daos_errno2der(rc);
-			D_ERROR(DF_UUID": failed to create thread for target file "
-				"creation: "DF_RC"\n", DP_UUID(uuid),
-				DP_RC(saved_rc));
+			DL_ERROR(saved_rc,
+				 DF_UUID ": failed to create thread for target file creation",
+				 DP_UUID(uuid));
 			goto out;
 		}
 		d_list_add_tail(&entry->tvt_link, &thrds_list_head);
@@ -814,7 +795,7 @@ tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool
 				rc = res;
 			else {
 				rc = daos_errno2der(rc);
-				D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "pthread_join failed");
 			}
 			if (!saved_rc && rc)
 				saved_rc = rc;
@@ -920,8 +901,8 @@ tgt_create_preallocate(void *arg)
 		 * failed
 		 */
 		rc = dir_fsync(tca->tca_path);
-		D_DEBUG(DB_MGMT, "reuse existing tca_path: %s, dir_fsync rc: "DF_RC"\n",
-			tca->tca_path, DP_RC(rc));
+		D_DEBUG(DB_MGMT, "reuse existing tca_path: %s, dir_fsync: " DF_RC, tca->tca_path,
+			DP_RC(rc));
 	} else if (errno == ENOENT) { /** target doesn't exist, create one */
 		/** create the pool directory under NEWBORNS */
 		rc = path_gen(tca->tca_ptrec->dptr_uuid, newborns_path, NULL,
@@ -932,8 +913,7 @@ tgt_create_preallocate(void *arg)
 		rc = mkdir(tca->tca_newborn, 0700);
 		if (rc < 0 && errno != EEXIST) {
 			rc = daos_errno2der(errno);
-			D_ERROR("failed to created pool directory: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to created pool directory");
 			/* avoid tgt_destroy(), nothing to do */
 			D_FREE(tca->tca_newborn);
 			goto out;
@@ -984,8 +964,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	/** incoming request buffer */
 	tc_in = crt_req_get(tc_req);
-	D_DEBUG(DB_MGMT, DF_UUID": processing rpc %p\n",
-		DP_UUID(tc_in->tc_pool_uuid), tc_req);
+	D_DEBUG(DB_MGMT, DF_UUID ": processing rpc %p", DP_UUID(tc_in->tc_pool_uuid), tc_req);
 
 	/** reply buffer */
 	tc_out = crt_reply_get(tc_req);
@@ -1006,15 +985,14 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 			       &tca.tca_ptrec->dptr_hlink, true);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
 	if (rc == -DER_EXIST) {
-		D_ERROR(DF_UUID": already creating or cleaning up\n",
-			DP_UUID(tc_in->tc_pool_uuid));
+		D_ERROR(DF_UUID ": already creating or cleaning up", DP_UUID(tc_in->tc_pool_uuid));
 		D_GOTO(out_rec, rc = -DER_AGAIN);
 	} else if (rc) {
-		D_ERROR(DF_UUID": failed insert dpt_creates_ht: "DF_RC"\n",
-			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed insert dpt_creates_ht",
+			 DP_UUID(tc_in->tc_pool_uuid));
 		goto out_rec;
 	}
-	D_DEBUG(DB_MGMT, DF_UUID": record inserted to dpt_creates_ht\n",
+	D_DEBUG(DB_MGMT, DF_UUID ": record inserted to dpt_creates_ht",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
 
 	tca.tca_scm_size  = tc_in->tc_scm_size;
@@ -1023,9 +1001,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	rc = pthread_create(&thread, NULL, tgt_create_preallocate, &tca);
 	if (rc) {
 		rc = daos_errno2der(rc);
-		D_ERROR(DF_UUID": failed to create thread for target file "
-			"creation: "DF_RC"\n", DP_UUID(tc_in->tc_pool_uuid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create thread for target file creation",
+			 DP_UUID(tc_in->tc_pool_uuid));
 		goto out;
 	}
 
@@ -1034,13 +1011,12 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 		/* Cancel thread if tgt destroy occurs before done. */
 		if (!canceled_thread && tca.tca_ptrec->cancel_create) {
-			D_DEBUG(DB_MGMT, DF_UUID": received cancel request\n",
+			D_DEBUG(DB_MGMT, DF_UUID ": received cancel request",
 				DP_UUID(tc_in->tc_pool_uuid));
 			rc = pthread_cancel(thread);
 			if (rc) {
 				rc = daos_errno2der(rc);
-				D_ERROR("pthread_cancel failed: "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "pthread_cancel failed");
 				break;
 			}
 			canceled_thread = true;
@@ -1056,15 +1032,15 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	}
 	/* check the result of tgt_create_preallocate() */
 	if (rc == -DER_CANCELED) {
-		D_DEBUG(DB_MGMT, DF_UUID": tgt preallocate thread canceled\n",
+		D_DEBUG(DB_MGMT, DF_UUID ": tgt preallocate thread canceled",
 			DP_UUID(tc_in->tc_pool_uuid));
 		goto out;
 	} else if (rc) {
-		D_ERROR(DF_UUID": tgt preallocate thread failed, "DF_RC"\n",
-			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": tgt preallocate thread failed",
+			 DP_UUID(tc_in->tc_pool_uuid));
 		goto out;
 	} else {
-		D_INFO(DF_UUID": tgt preallocate thread succeeded\n", DP_UUID(tc_in->tc_pool_uuid));
+		D_INFO(DF_UUID ": tgt preallocate thread succeeded", DP_UUID(tc_in->tc_pool_uuid));
 	}
 
 	if (tca.tca_newborn != NULL) {
@@ -1077,8 +1053,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
 		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
 		if (rc) {
-			D_ERROR(DF_UUID": thread collective tgt_vos_create_one failed, "DF_RC"\n",
-				DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": thread collective tgt_vos_create_one failed",
+				 DP_UUID(tc_in->tc_pool_uuid));
 			goto out;
 		}
 
@@ -1086,8 +1062,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		rc = rename(tca.tca_newborn, tca.tca_path);
 		if (rc < 0) {
 			rc = daos_errno2der(errno);
-			D_ERROR("failed to rename pool directory: "DF_RC"\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to rename pool directory");
 			goto out;
 		}
 
@@ -1109,11 +1084,10 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 	rc = ds_pool_start(tc_in->tc_pool_uuid);
 	if (rc) {
-		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
-			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to start pool", DP_UUID(tc_in->tc_pool_uuid));
 		D_GOTO(out, rc);
 	} else {
-		D_INFO(DF_UUID": started pool\n", DP_UUID(tc_in->tc_pool_uuid));
+		D_INFO(DF_UUID ": started pool", DP_UUID(tc_in->tc_pool_uuid));
 	}
 out:
 	if (rc && tca.tca_newborn != NULL) {
@@ -1123,7 +1097,7 @@ out:
 		 */
 		(void)tgt_destroy(tca.tca_ptrec->dptr_uuid,
 				  tca.tca_newborn);
-		D_DEBUG(DB_MGMT, DF_UUID": cleaned up failed create targets\n",
+		D_DEBUG(DB_MGMT, DF_UUID ": cleaned up failed create targets",
 			DP_UUID(tc_in->tc_pool_uuid));
 	}
 	D_FREE(tca.tca_newborn);
@@ -1133,7 +1107,7 @@ out:
 			     &tca.tca_ptrec->dptr_hlink);
 	ABT_cond_signal(pooltgts->dpt_cv);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	D_DEBUG(DB_MGMT, DF_UUID" record removed from dpt_creates_ht\n",
+	D_DEBUG(DB_MGMT, DF_UUID " record removed from dpt_creates_ht",
 		DP_UUID(tca.tca_ptrec->dptr_uuid));
 out_rec:
 	D_FREE(tca.tca_ptrec);
@@ -1161,8 +1135,7 @@ tgt_destroy_cleanup(void *arg)
 	rc = rename(tda->tda_path, zombie);
 	if (rc < 0) {
 		rc = daos_errno2der(errno);
-		D_ERROR("Failed to rename %s to %s: "DF_RC"\n",
-			tda->tda_path, zombie, DP_RC(rc));
+		DL_ERROR(rc, "Failed to rename %s to %s", tda->tda_path, zombie);
 		goto out;
 	}
 
@@ -1178,8 +1151,7 @@ tgt_destroy_cleanup(void *arg)
 		(void)subtree_destroy(zombie);
 		(void)rmdir(zombie);
 	} else {
-		D_INFO("Defer cleanup for lingering pool:"DF_UUID"\n",
-		       DP_UUID(tda->tda_id.uuid));
+		D_INFO("Defer cleanup for lingering pool:" DF_UUID, DP_UUID(tda->tda_id.uuid));
 	}
 out:
 	D_FREE(zombie);
@@ -1206,9 +1178,8 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	rc = pthread_create(&thread, NULL, tgt_destroy_cleanup, &tda);
 	if (rc) {
 		rc = daos_errno2der(errno);
-		D_ERROR(DF_UUID": failed to create thread for target file "
-			"cleanup: "DF_RC"\n", DP_UUID(pool_uuid),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to create thread for target file cleanup",
+			 DP_UUID(pool_uuid));
 		goto out;
 	}
 
@@ -1225,10 +1196,9 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	}
 out:
 	if (rc)
-		D_ERROR(DF_UUID": tgt_destroy_cleanup() thread failed, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": tgt_destroy_cleanup() thread failed", DP_UUID(pool_uuid));
 	else
-		D_INFO(DF_UUID": tgt_destroy_cleanup() thread finished\n", DP_UUID(pool_uuid));
+		D_INFO(DF_UUID ": tgt_destroy_cleanup() thread finished", DP_UUID(pool_uuid));
 	return rc;
 }
 
@@ -1245,8 +1215,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 
 	/** incoming request buffer */
 	td_in = crt_req_get(td_req);
-	D_DEBUG(DB_MGMT, DF_UUID": processing rpc %p\n",
-		DP_UUID(td_in->td_pool_uuid), td_req);
+	D_DEBUG(DB_MGMT, DF_UUID ": processing rpc %p", DP_UUID(td_in->td_pool_uuid), td_req);
 
 	/** reply buffer */
 	td_out = crt_reply_get(td_req);
@@ -1266,14 +1235,13 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 
 		ptrec = pooltgts_obj(rec);
 		nreqs++;
-		D_DEBUG(DB_MGMT, DF_UUID": busy creating tgts, ask to cancel "
-			"(request %u)\n", DP_UUID(td_in->td_pool_uuid), nreqs);
+		D_DEBUG(DB_MGMT, DF_UUID ": busy creating tgts, ask to cancel (request %u)",
+			DP_UUID(td_in->td_pool_uuid), nreqs);
 		ptrec->cancel_create = true;
 		ABT_cond_wait(pooltgts->dpt_cv, pooltgts->dpt_mutex);
 	} while (1);
 	ABT_mutex_unlock(pooltgts->dpt_mutex);
-	D_DEBUG(DB_MGMT, DF_UUID": ready to destroy targets\n",
-		DP_UUID(td_in->td_pool_uuid));
+	D_DEBUG(DB_MGMT, DF_UUID ": ready to destroy targets", DP_UUID(td_in->td_pool_uuid));
 
 	/*
 	 * If there is a local PS replica, its RDB file will be deleted later
@@ -1282,8 +1250,8 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	 */
 	rc = ds_pool_svc_stop(td_in->td_pool_uuid);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to stop pool service replica (if any): "DF_RC"\n",
-			DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": failed to stop pool service replica (if any)",
+			 DP_UUID(td_in->td_pool_uuid));
 		goto out;
 	}
 
@@ -1340,14 +1308,12 @@ ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc)
 
 	rc = dss_parameters_set(in->tps_key_id, in->tps_value);
 	if (rc == 0 && in->tps_key_id == DMG_KEY_FAIL_LOC) {
-		D_DEBUG(DB_MGMT, "Set param DMG_KEY_FAIL_VALUE=%"PRIu64"\n",
-			in->tps_value_extra);
+		D_DEBUG(DB_MGMT, "Set param DMG_KEY_FAIL_VALUE=%" PRIu64, in->tps_value_extra);
 		rc = dss_parameters_set(DMG_KEY_FAIL_VALUE,
 					in->tps_value_extra);
 	}
 	if (rc)
-		D_ERROR("Set parameter failed key_id %d: rc %d\n",
-			 in->tps_key_id, rc);
+		D_ERROR("Set parameter failed key_id %d: rc %d", in->tps_key_id, rc);
 
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;
@@ -1365,7 +1331,7 @@ tgt_profile_task(void *arg)
 	else
 		rc = srv_profile_stop();
 
-	D_DEBUG(DB_MGMT, "profile task: rc "DF_RC"\n", DP_RC(rc));
+	D_DEBUG(DB_MGMT, "profile task: " DF_RC, DP_RC(rc));
 	return rc;
 }
 
@@ -1401,7 +1367,7 @@ ds_mgmt_tgt_mark_hdlr(crt_rpc_t *rpc)
 	in = crt_req_get(rpc);
 	D_ASSERT(in != NULL);
 
-	D_DEBUG(DB_TRACE, "Mark trace %s.\n", in->m_mark);
+	D_DEBUG(DB_TRACE, "Mark trace %s", in->m_mark);
 
 	out = crt_reply_get(rpc);
 	out->m_rc = 0;

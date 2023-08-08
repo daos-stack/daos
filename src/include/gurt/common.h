@@ -651,8 +651,7 @@ d_gettime(struct timespec *t)
 
 	rc = _gurt_gettime(t);
 	if (rc != 0) {
-		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
-			rc, errno, strerror(errno));
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s)", rc, errno, strerror(errno));
 		rc = d_errno2der(errno);
 	}
 

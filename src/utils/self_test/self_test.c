@@ -76,7 +76,7 @@ static void *progress_fn(void *arg)
 	while (!g_shutdown_flag) {
 		ret = crt_progress(*crt_ctx, 1);
 		if (ret != 0 && ret != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed; ret = %d\n", ret);
+			D_ERROR("crt_progress failed; ret = %d", ret);
 			break;
 		}
 	};
@@ -108,7 +108,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		}
 		ret = crtu_dc_mgmt_net_cfg_setenv(dest_name);
 		if (ret != 0) {
-			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
+			D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d", ret);
 			return ret;
 		}
 	}
@@ -129,7 +129,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	ret = crt_context_create(crt_ctx);
 	if (ret != 0) {
-		D_ERROR("crt_context_create failed; ret = %d\n", ret);
+		D_ERROR("crt_context_create failed; ret = %d", ret);
 		return ret;
 	}
 	g_context_created = true;
@@ -137,7 +137,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	if (use_daos_agent_vars) {
 		ret = crt_group_view_create(dest_name, srv_grp);
 		if (!*srv_grp || ret != 0) {
-			D_ERROR("Failed to create group view; ret=%d\n", ret);
+			D_ERROR("Failed to create group view; ret=%d", ret);
 			assert(0);
 		}
 
@@ -157,7 +157,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	}
 
 	if (ret != 0) {
-		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
+		D_ERROR("crt_group_attach failed; ret = %d", ret);
 		return ret;
 	}
 
@@ -172,8 +172,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	ret = pthread_create(tid, NULL, progress_fn, crt_ctx);
 	if (ret != 0) {
-		D_ERROR("failed to create progress thread: %s\n",
-			strerror(errno));
+		D_ERROR("failed to create progress thread: %s", strerror(errno));
 		return -DER_MISC;
 	}
 
@@ -212,7 +211,7 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	ret = crt_rank_self_set(max_rank+1, 1 /* group_version_min */);
 	if (ret != 0) {
-		D_ERROR("crt_rank_self_set failed; ret = %d\n", ret);
+		D_ERROR("crt_rank_self_set failed; ret = %d", ret);
 		return ret;
 	}
 
@@ -550,9 +549,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 		ret = crt_req_create(crt_ctx, endpt, CRT_OPC_SELF_TEST_START,
 				     &new_rpc);
 		if (ret != 0) {
-			D_ERROR("Creating start RPC failed to endpoint"
-				" %u:%u; ret = %d\n", endpt->ep_rank,
-				endpt->ep_tag, ret);
+			D_ERROR("Creating start RPC failed to endpoint %u:%u; ret = %d",
+				endpt->ep_rank, endpt->ep_tag, ret);
 			ms_endpts[m_idx].test_failed = 1;
 			ms_endpts[m_idx].test_completed = 1;
 			continue;
@@ -571,9 +569,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 		ret = crt_req_send(new_rpc, start_test_cb,
 				   &ms_endpts[m_idx].reply.status);
 		if (ret != 0) {
-			D_ERROR("Failed to send start RPC to endpoint %u:%u; "
-				"ret = %d\n", endpt->ep_rank, endpt->ep_tag,
-				ret);
+			D_ERROR("Failed to send start RPC to endpoint %u:%u; ret = %d",
+				endpt->ep_rank, endpt->ep_tag, ret);
 			ms_endpts[m_idx].test_failed = 1;
 			ms_endpts[m_idx].test_completed = 1;
 			continue;
@@ -603,10 +600,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 	failed_count = 0;
 	for (m_idx = 0; m_idx < num_ms_endpts; m_idx++)
 		if (ms_endpts[m_idx].reply.status != 0) {
-			D_ERROR("Failed to launch self-test 1:many session on"
-				" %u:%u; ret = %d\n",
-				ms_endpts[m_idx].endpt.ep_rank,
-				ms_endpts[m_idx].endpt.ep_tag,
+			D_ERROR("Failed to launch self-test 1:many session on %u:%u; ret = %d",
+				ms_endpts[m_idx].endpt.ep_rank, ms_endpts[m_idx].endpt.ep_tag,
 				ms_endpts[m_idx].reply.status);
 			ms_endpts[m_idx].test_failed = 1;
 			ms_endpts[m_idx].test_completed = 1;
@@ -624,7 +619,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 	/* Check to make sure that at least one 1:many session was started */
 	if (failed_count >= num_ms_endpts) {
-		D_ERROR("Failed to launch any 1:many test sessions\n");
+		D_ERROR("Failed to launch any 1:many test sessions");
 		return ms_endpts[0].reply.status;
 	}
 
@@ -650,11 +645,9 @@ static int test_msg_size(crt_context_t crt_ctx,
 					     CRT_OPC_SELF_TEST_STATUS_REQ,
 					     &new_rpc);
 			if (ret != 0) {
-				D_ERROR("Creating status request RPC to"
-					" endpoint %u:%u; ret = %d\n",
+				D_ERROR("Creating status request RPC to endpoint %u:%u; ret = %d",
 					ms_endpts[m_idx].endpt.ep_rank,
-					ms_endpts[m_idx].endpt.ep_tag,
-					ret);
+					ms_endpts[m_idx].endpt.ep_tag, ret);
 				ms_endpts[m_idx].test_failed = 1;
 				ms_endpts[m_idx].test_completed = 1;
 				continue;
@@ -671,8 +664,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 			ret = crt_req_send(new_rpc, status_req_cb,
 					   &ms_endpts[m_idx].reply);
 			if (ret != 0) {
-				D_ERROR("Failed to send status RPC to endpoint"
-					" %u:%u; ret = %d\n",
+				D_ERROR("Failed to send status RPC to endpoint %u:%u; ret = %d",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag, ret);
 				ms_endpts[m_idx].test_failed = 1;
@@ -709,8 +701,8 @@ static int test_msg_size(crt_context_t crt_ctx,
 
 			switch (ms_endpts[m_idx].reply.status) {
 			case CRT_ST_STATUS_TEST_IN_PROGRESS:
-				D_DEBUG(DB_TEST, "Test still processing on "
-					"%u:%u - # RPCs remaining: %u\n",
+				D_DEBUG(DB_TEST,
+					"Test still processing on %u:%u - # RPCs remaining: %u",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
 					ms_endpts[m_idx].reply.num_remaining);
@@ -719,8 +711,7 @@ static int test_msg_size(crt_context_t crt_ctx,
 				ms_endpts[m_idx].test_completed = 1;
 				break;
 			default:
-				D_ERROR("Detected test failure on %u:%u -"
-					" ret = %d\n",
+				D_ERROR("Detected test failure on %u:%u - ret = %d",
 					ms_endpts[m_idx].endpt.ep_rank,
 					ms_endpts[m_idx].endpt.ep_tag,
 					ms_endpts[m_idx].reply.status);
@@ -845,20 +836,19 @@ static int run_self_test(struct st_size_params all_params[],
 			     attach_info_path, listen /* run as server */,
 			     use_daos_agent_vars);
 	if (ret != 0) {
-		D_ERROR("self_test_init failed; ret = %d\n", ret);
+		D_ERROR("self_test_init failed; ret = %d", ret);
 		D_GOTO(cleanup_nothread, ret);
 	}
 
 	/* Get the group/rank/tag for this application (self_endpt) */
 	ret = crt_group_rank(NULL, &self_endpt.ep_rank);
 	if (ret != 0) {
-		D_ERROR("crt_group_rank failed; ret = %d\n", ret);
+		D_ERROR("crt_group_rank failed; ret = %d", ret);
 		D_GOTO(cleanup, ret);
 	}
 	self_endpt.ep_grp = crt_group_lookup(CRT_SELF_TEST_GROUP_NAME);
 	if (self_endpt.ep_grp == NULL) {
-		D_ERROR("crt_group_lookup failed for group %s\n",
-			CRT_SELF_TEST_GROUP_NAME);
+		D_ERROR("crt_group_lookup failed for group %s", CRT_SELF_TEST_GROUP_NAME);
 		D_GOTO(cleanup, ret = -DER_NONEXIST);
 	}
 	self_endpt.ep_tag = 0;
@@ -976,8 +966,7 @@ static int run_self_test(struct st_size_params all_params[],
 				      CRT_BULK_RW,
 				      &latencies_bulk_hdl[m_idx]);
 		if (ret != 0) {
-			D_ERROR("Failed to allocate latencies bulk handle;"
-				" ret = %d\n", ret);
+			D_ERROR("Failed to allocate latencies bulk handle; ret = %d", ret);
 			D_GOTO(cleanup, ret);
 		}
 		D_ASSERT(latencies_bulk_hdl != CRT_BULK_NULL);
@@ -1006,12 +995,9 @@ static int run_self_test(struct st_size_params all_params[],
 				    &test_params, latencies, latencies_bulk_hdl,
 				    output_megabits);
 		if (ret != 0) {
-			D_ERROR("Testing message size (%d-%s %d-%s) failed;"
-				" ret = %d\n",
-				test_params.send_size,
-				crt_st_msg_type_str[test_params.send_type],
-				test_params.reply_size,
-				crt_st_msg_type_str[test_params.reply_type],
+			D_ERROR("Testing message size (%d-%s %d-%s) failed; ret = %d",
+				test_params.send_size, crt_st_msg_type_str[test_params.send_type],
+				test_params.reply_size, crt_st_msg_type_str[test_params.reply_type],
 				ret);
 			D_GOTO(cleanup, ret);
 		}
@@ -1022,7 +1008,7 @@ cleanup:
 	g_shutdown_flag = 1;
 
 	if (pthread_join(tid, NULL)) {
-		D_ERROR("Could not join progress thread\n");
+		D_ERROR("Could not join progress thread");
 		ret = -1;
 	}
 
@@ -1049,8 +1035,7 @@ cleanup_nothread:
 	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
-			D_ERROR("crt_group_detach failed; ret = %d\n",
-				cleanup_ret);
+			D_ERROR("crt_group_detach failed; ret = %d", cleanup_ret);
 		/* Make sure first error is returned, if applicable */
 		ret = ((ret == 0) ? cleanup_ret : ret);
 	}
@@ -1059,7 +1044,7 @@ cleanup_nothread:
 	if (g_context_created) {
 		cleanup_ret = crt_context_destroy(crt_ctx, 0);
 		if (cleanup_ret != 0)
-			D_ERROR("crt_context_destroy failed; ret = %d\n", cleanup_ret);
+			D_ERROR("crt_context_destroy failed; ret = %d", cleanup_ret);
 	}
 
 	/* Make sure first error is returned, if applicable */
@@ -1069,7 +1054,7 @@ cleanup_nothread:
 	if (g_cart_inited) {
 		cleanup_ret = crt_finalize();
 		if (cleanup_ret != 0)
-			D_ERROR("crt_finalize failed; ret = %d\n", cleanup_ret);
+			D_ERROR("crt_finalize failed; ret = %d", cleanup_ret);
 	}
 	/* Make sure first error is returned, if applicable */
 	ret = ((ret == 0) ? cleanup_ret : ret);
@@ -1439,10 +1424,8 @@ int parse_endpoint_string(char *const opt_arg,
 	     > (uint64_t)SELF_TEST_MAX_NUM_ENDPOINTS) ||
 	    (((uint64_t)*num_endpts + (uint64_t)num_ranks * (uint64_t)num_tags)
 	     > (uint64_t)SELF_TEST_MAX_NUM_ENDPOINTS)) {
-		D_ERROR("Too many endpoints - current=%u, "
-			"additional requested=%lu, max=%u\n",
-			*num_endpts,
-			(uint64_t)num_ranks * (uint64_t)num_tags,
+		D_ERROR("Too many endpoints - current=%u, additional requested=%lu, max=%u",
+			*num_endpts, (uint64_t)num_ranks * (uint64_t)num_tags,
 			SELF_TEST_MAX_NUM_ENDPOINTS);
 		D_GOTO(cleanup, ret = -DER_INVAL);
 	}

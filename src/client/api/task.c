@@ -277,7 +277,7 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 			       daos_get_crt_ctx(), timeout, sched_progress_cb,
 			       &args);
 	if (rc != 0 && rc != -DER_TIMEDOUT)
-		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt progress failed with");
 
 	return rc;
 }

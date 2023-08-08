@@ -61,25 +61,22 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 	rc = smd_db_fetch(table_name, &id, sizeof(id), &pool, sizeof(pool));
 	if (rc == 0) {
 		if (pool.sp_blob_sz != blob_sz) {
-			D_ERROR("Pool "DF_UUID" blob size mismatch. "
-				""DF_U64" != "DF_U64"\n",
-				DP_UUID(&id.uuid), pool.sp_blob_sz,
-				blob_sz);
+			D_ERROR("Pool " DF_UUID " blob size mismatch. " DF_U64 " != " DF_U64,
+				DP_UUID(&id.uuid), pool.sp_blob_sz, blob_sz);
 			rc = -DER_INVAL;
 			goto out;
 		}
 
 		if (pool.sp_tgt_cnt >= SMD_MAX_TGT_CNT) {
-			D_ERROR("Pool "DF_UUID" is assigned to too many "
-				"targets (%d)\n", DP_UUID(&id.uuid),
-				pool.sp_tgt_cnt);
+			D_ERROR("Pool " DF_UUID " is assigned to too many targets (%d)",
+				DP_UUID(&id.uuid), pool.sp_tgt_cnt);
 			rc = -DER_OVERFLOW;
 			goto out;
 		}
 
 		rc = smd_pool_find_tgt(&pool, tgt_id);
 		if (rc >= 0) {
-			D_ERROR("Dup target %d, idx: %d\n", tgt_id, rc);
+			D_ERROR("Dup target %d, idx: %d", tgt_id, rc);
 			rc = -DER_EXIST;
 			goto out;
 		}
@@ -100,15 +97,13 @@ pool_add_tgt(uuid_t pool_id, uint32_t tgt_id, uint64_t blob_id, char *table_name
 			pool.sp_flags |= SMD_POOL_IN_CREATION;
 
 	} else {
-		D_ERROR("Fetch pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch pool " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 
 	rc = smd_db_upsert(table_name, &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Update pool " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 out:
@@ -143,15 +138,13 @@ pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name)
 	smd_db_lock();
 	rc = smd_db_fetch(table_name, &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_ERROR("Fetch pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch pool " DF_UUID " failed", DP_UUID(id.uuid));
 		goto out;
 	}
 
 	rc = smd_pool_find_tgt(&pool, tgt_id);
 	if (rc < 0) {
-		D_ERROR("Pool "DF_UUID" target %d not found.\n",
-			DP_UUID(id.uuid), tgt_id);
+		D_ERROR("Pool " DF_UUID " target %d not found", DP_UUID(id.uuid), tgt_id);
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -166,15 +159,13 @@ pool_del_tgt(uuid_t pool_id, uint32_t tgt_id, char *table_name)
 		rc = smd_db_upsert(table_name, &id, sizeof(id),
 				   &pool, sizeof(pool));
 		if (rc) {
-			D_ERROR("Update pool "DF_UUID" failed: "DF_RC"\n",
-				DP_UUID(&id.uuid), DP_RC(rc));
+			DL_ERROR(rc, "Update pool " DF_UUID " failed", DP_UUID(&id.uuid));
 			goto out;
 		}
 	} else {
 		rc = smd_db_delete(table_name, &id, sizeof(id));
 		if (rc) {
-			D_ERROR("Delete pool "DF_UUID" failed: "DF_RC"\n",
-				DP_UUID(&id.uuid), DP_RC(rc));
+			DL_ERROR(rc, "Delete pool " DF_UUID " failed", DP_UUID(&id.uuid));
 			goto out;
 		}
 	}
@@ -249,8 +240,7 @@ smd_pool_get_info(uuid_t pool_id, struct smd_pool_info **pool_info)
 		/* META and WAL are optional */
 		rc = (rc == -DER_NONEXIST && st > SMD_DEV_TYPE_DATA) ? 0 : rc;
 		if (rc) {
-			D_ERROR("Fetch pool "DF_UUID" failed: "DF_RC"\n",
-				DP_UUID(&id.uuid), DP_RC(rc));
+			DL_ERROR(rc, "Fetch pool " DF_UUID " failed", DP_UUID(&id.uuid));
 			goto out;
 		}
 	}
@@ -286,8 +276,7 @@ pool_get_blob(uuid_t pool_id, uint32_t tgt_id, char *table_name, uint64_t *blob_
 
 	rc = smd_pool_find_tgt(&pool, tgt_id);
 	if (rc < 0) {
-		D_DEBUG(DB_MGMT, "Pool "DF_UUID" target %d not found.\n",
-			DP_UUID(id.uuid), tgt_id);
+		D_DEBUG(DB_MGMT, "Pool " DF_UUID " target %d not found", DP_UUID(id.uuid), tgt_id);
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -422,8 +411,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 	uuid_copy(id.uuid, info->spi_id);
 	rc = smd_db_fetch(TABLE_POOLS[st], &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_ERROR("Fetch pool "DF_UUID" failed. %d\n",
-			DP_UUID(&id.uuid), rc);
+		D_ERROR("Fetch pool " DF_UUID " failed. %d", DP_UUID(&id.uuid), rc);
 		return rc;
 	}
 
@@ -438,8 +426,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 		tgt_id = tgts[i];
 		tgt_idx = smd_pool_find_tgt(&pool, tgt_id);
 		if (tgt_idx < 0) {
-			D_ERROR("Invalid tgt %d for pool "DF_UUID"\n",
-				tgt_id, DP_UUID(&id.uuid));
+			D_ERROR("Invalid tgt %d for pool " DF_UUID, tgt_id, DP_UUID(&id.uuid));
 			return -DER_INVAL;
 		}
 		pool.sp_blobs[tgt_idx] = info->spi_blobs[st][tgt_idx];
@@ -447,8 +434,7 @@ smd_pool_replace_blobs_locked(struct smd_pool_info *info, int tgt_cnt,
 
 	rc = smd_db_upsert(TABLE_POOLS[st], &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_ERROR("Replace blobs for pool "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Replace blobs for pool " DF_UUID " failed", DP_UUID(&id.uuid));
 		return rc;
 	}
 	return rc;
@@ -468,8 +454,8 @@ smd_pool_mark_ready(uuid_t pool_id)
 	if (rc == -DER_NONEXIST) {
 		D_GOTO(out, rc = 0);
 	} else if (rc) {
-		D_ERROR("Failed to fetch smd entry of the meta blob for "DF_UUID". "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to fetch smd entry of the meta blob for " DF_UUID,
+			 DP_UUID(&id.uuid));
 		goto out;
 	}
 
@@ -477,8 +463,7 @@ smd_pool_mark_ready(uuid_t pool_id)
 
 	rc = smd_db_upsert(TABLE_POOLS[SMD_DEV_TYPE_META], &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_ERROR("Failed to make pool "DF_UUID" as ready in smd. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to make pool " DF_UUID " as ready in smd", DP_UUID(&id.uuid));
 		goto out;
 	}
 out:

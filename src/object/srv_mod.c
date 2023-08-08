@@ -33,7 +33,7 @@ obj_mod_init(void)
 
 	rc = obj_ec_codec_init();
 	if (rc) {
-		D_ERROR("failed to obj_ec_codec_init\n");
+		D_ERROR("failed to obj_ec_codec_init");
 		goto out_class;
 	}
 
@@ -44,7 +44,7 @@ out_class:
 out_utils:
 	obj_utils_fini();
 out:
-	D_ERROR("Object module init error: " DF_RC "\n", DP_RC(rc));
+	DL_ERROR(rc, "Object module init error");
 	return rc;
 }
 
@@ -98,8 +98,7 @@ obj_latency_tm_init(uint32_t opc, int tgt_id, struct d_tm_node_t **tm, char *op,
 
 		rc = d_tm_add_metric(&tm[i], D_TM_STATS_GAUGE, desc, "us", path);
 		if (rc)
-			D_WARN("Failed to create per-I/O size latency "
-			       "sensor: "DF_RC"\n", DP_RC(rc));
+			DL_WARN(rc, "Failed to create per-I/O size latency sensor");
 		D_FREE(path);
 
 		bucket_max <<= 1;
@@ -133,8 +132,7 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 				     "io/ops/%s/active/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create active counter: "DF_RC"\n",
-			       DP_RC(rc));
+			DL_WARN(rc, "Failed to create active counter");
 
 		if (opc == DAOS_OBJ_RPC_UPDATE ||
 		    opc == DAOS_OBJ_RPC_TGT_UPDATE ||
@@ -148,8 +146,7 @@ obj_tls_init(int tags, int xs_id, int tgt_id)
 				     "io/ops/%s/latency/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create latency sensor: "DF_RC"\n",
-			       DP_RC(rc));
+			DL_WARN(rc, "Failed to create latency sensor");
 	}
 
 	/**
@@ -257,8 +254,7 @@ obj_metrics_alloc(const char *path, int tgt_id)
 				     "ops", "%s/ops/%s/tgt_%u", path,
 				     obj_opc_to_str(opc), tgt_id);
 		if (rc)
-			D_WARN("Failed to create total counter: "DF_RC"\n",
-			       DP_RC(rc));
+			DL_WARN(rc, "Failed to create total counter");
 	}
 
 	/** Total number of silently restarted updates, of type counter */
@@ -266,55 +262,49 @@ obj_metrics_alloc(const char *path, int tgt_id)
 			     "total number of restarted update ops", "updates",
 			     "%s/restarted/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create restarted counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create restarted counter");
 
 	/** Total number of resent updates, of type counter */
 	rc = d_tm_add_metric(&metrics->opm_update_resent, D_TM_COUNTER,
 			     "total number of resent update RPCs", "updates",
 			     "%s/resent/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create resent counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create resent counter");
 
 	/** Total number of retry updates locally, of type counter */
 	rc = d_tm_add_metric(&metrics->opm_update_retry, D_TM_COUNTER,
 			     "total number of retried update RPCs", "updates",
 			     "%s/retry/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create retry cnt sensor: "DF_RC"\n", DP_RC(rc));
+		DL_WARN(rc, "Failed to create retry cnt sensor");
 
 	/** Total bytes read */
 	rc = d_tm_add_metric(&metrics->opm_fetch_bytes, D_TM_COUNTER,
 			     "total number of bytes fetched/read", "bytes",
 			     "%s/xferred/fetch/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes fetch counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create bytes fetch counter");
 
 	/** Total bytes written */
 	rc = d_tm_add_metric(&metrics->opm_update_bytes, D_TM_COUNTER,
 			     "total number of bytes updated/written", "bytes",
 			     "%s/xferred/update/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create bytes update counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create bytes update counter");
 
 	/** Total number of EC full-stripe update operations, of type counter */
 	rc = d_tm_add_metric(&metrics->opm_update_ec_full, D_TM_COUNTER,
 			     "total number of EC sull-stripe updates", "updates",
 			     "%s/EC_update/full_stripe/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create EC full stripe update counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create EC full stripe update counter");
 
 	/** Total number of EC partial update operations, of type counter */
 	rc = d_tm_add_metric(&metrics->opm_update_ec_partial, D_TM_COUNTER,
 			     "total number of EC sull-partial updates", "updates",
 			     "%s/EC_update/partial/tgt_%u", path, tgt_id);
 	if (rc)
-		D_WARN("Failed to create EC partial update counter: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create EC partial update counter");
 
 	return metrics;
 }

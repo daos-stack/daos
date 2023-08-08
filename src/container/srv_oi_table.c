@@ -78,7 +78,7 @@ cont_send_oit_bucket(struct oit_scan_args *oa, uint32_t bucket_id)
 	 * the same object ID (from different targets) can be overwritten
 	 * for many times in different epochs and consume way more space.
 	 */
-	D_DEBUG(DB_IO, "Store %d OIDs\n", bucket->ob_nr);
+	D_DEBUG(DB_IO, "Store %d OIDs", bucket->ob_nr);
 	rc = dsc_obj_update(oa->oa_oh, 0, &oa->oa_dkey, bucket->ob_nr,
 			    oa->oa_iods, oa->oa_sgls);
 	if (rc)
@@ -109,12 +109,12 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	 * check the previous OID should be safe here.
 	 */
 	if (daos_oid_cmp(oa->oa_pre_id, oid) == 0) {
-		D_DEBUG(DB_TRACE, "skip duplicate OID="DF_UOID"\n", DP_UOID(ent->ie_oid));
+		D_DEBUG(DB_TRACE, "skip duplicate OID=" DF_UOID, DP_UOID(ent->ie_oid));
 		return 0;
 	}
 	oa->oa_pre_id = oid;
 
-	D_DEBUG(DB_TRACE, "enumerate OID="DF_OID"\n", DP_OID(oid));
+	D_DEBUG(DB_TRACE, "enumerate OID=" DF_OID, DP_OID(oid));
 	bid = d_hash_murmur64((unsigned char *)&oid, sizeof(oid), 0) %
 			      oa->oa_max_buckets;
 	bucket = &oa->oa_buckets[bid];
@@ -125,7 +125,7 @@ cont_iter_obj_cb(daos_handle_t ch, vos_iter_entry_t *ent, vos_iter_type_t type,
 	}
 
 	/* bucket is full, store it now */
-	D_DEBUG(DB_TRACE, "Bucket is full, send OIDs\n");
+	D_DEBUG(DB_TRACE, "Bucket is full, send OIDs");
 	rc = cont_send_oit_bucket(oa, bid);
 	if (rc == 0) { /* store the current OID for the next send */
 		bucket->ob_oids[0] = oid;
@@ -186,7 +186,7 @@ cont_child_gather_oids(struct ds_cont_child *coc, uuid_t coh_uuid,
 
 	oa->oa_oit_id = oit_oid;
 	oa->oa_max_buckets = co_ver < 2 ? 1 : DAOS_OIT_BUCKET_MAX;
-	D_DEBUG(DB_IO, "OIT="DF_OID"\n", DP_OID(oa->oa_oit_id));
+	D_DEBUG(DB_IO, "OIT=" DF_OID, DP_OID(oa->oa_oit_id));
 
 	rc = dsc_obj_open(oa->oa_coh, oa->oa_oit_id, DAOS_OO_RW, &oa->oa_oh);
 	if (rc)

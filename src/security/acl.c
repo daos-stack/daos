@@ -23,7 +23,7 @@ get_perms_for_principal(struct daos_acl *acl, enum daos_acl_principal_type type,
 	struct daos_ace *ace;
 	int		rc;
 
-	D_DEBUG(DB_SEC, "Checking ACE for principal type %d\n", type);
+	D_DEBUG(DB_SEC, "Checking ACE for principal type %d", type);
 
 	rc = daos_acl_get_ace_for_principal(acl, type, name, &ace);
 	if (rc != 0)

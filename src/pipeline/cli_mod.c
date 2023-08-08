@@ -17,7 +17,7 @@ dc_pipeline_init(void)
 	rc = daos_rpc_register(&pipeline_proto_fmt, PIPELINE_PROTO_CLI_COUNT, NULL,
 			       DAOS_PIPELINE_MODULE);
 	if (rc != 0)
-		D_ERROR("failed to register DAOS pipeline RPCs: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to register DAOS pipeline RPCs");
 	return rc;
 }
 
@@ -28,5 +28,5 @@ dc_pipeline_fini(void)
 
 	rc = daos_rpc_unregister(&pipeline_proto_fmt);
 	if (rc != 0)
-		D_ERROR("failed to unregister DAOS pipeline RPCs: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to unregister DAOS pipeline RPCs");
 }

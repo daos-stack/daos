@@ -120,7 +120,7 @@ test_svc_step_up_cb(struct ds_rsvc *svc)
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_WARN("rank %u became leader of term "DF_U64"\n", rank, svc->s_term);
+	D_WARN("rank %u became leader of term " DF_U64, rank, svc->s_term);
 	return 0;
 }
 
@@ -132,8 +132,7 @@ test_svc_step_down_cb(struct ds_rsvc *svc)
 
 	rc = crt_group_rank(NULL, &rank);
 	D_ASSERTF(rc == 0, "%d\n", rc);
-	D_WARN("rank %u is no longer leader of term "DF_U64"\n", rank,
-	       svc->s_term);
+	D_WARN("rank %u is no longer leader of term " DF_U64, rank, svc->s_term);
 }
 
 static void
@@ -163,7 +162,7 @@ rdbt_test_util(void)
 	size_t		len2;
 	ssize_t		n;
 
-	D_WARN("encode/decode empty iov\n");
+	D_WARN("encode/decode empty iov");
 	v1 = empty;
 	len1 = rdb_encode_iov(&v1, NULL);
 	D_ASSERTF(len1 == sizeof(uint32_t) * 2, "%zu\n", len1);
@@ -175,7 +174,7 @@ rdbt_test_util(void)
 	iovok(&v2);
 	ioveq(&v1, &v2);
 
-	D_WARN("encode/decode non-empty iov\n");
+	D_WARN("encode/decode non-empty iov");
 	d_iov_set(&v1, buf1, strlen(buf1) + 1);
 	len1 = rdb_encode_iov(&v1, NULL);
 	D_ASSERTF(len1 == sizeof(uint32_t) * 2 + strlen(buf1) + 1, "%zu\n",
@@ -224,41 +223,41 @@ rdbt_test_path(void)
 	int				i;
 	int				rc;
 
-	D_WARN("RDB_STRING_KEY\n");
+	D_WARN("RDB_STRING_KEY");
 	D_ASSERTF(rdbt_key_foo.iov_len == strlen("foo") + 1, DF_U64"\n",
 		  rdbt_key_foo.iov_len);
 	D_ASSERTF(rdbt_key_foo.iov_buf_len == rdbt_key_foo.iov_len, DF_U64"\n",
 		  rdbt_key_foo.iov_buf_len);
 
-	D_WARN("init rdb path\n");
+	D_WARN("init rdb path");
 	MUST(rdb_path_init(&path));
 	iovok(&path);
 
-	D_WARN("pop empty rdb path\n");
+	D_WARN("pop empty rdb path");
 	rc = rdb_path_pop(&path);
 	D_ASSERTF(rc == -DER_NONEXIST, "%d\n", rc);
 
-	D_WARN("iterate empty rdb path\n");
+	D_WARN("iterate empty rdb path");
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
 	D_ASSERTF(arg.n == 0, "%d\n", arg.n);
 
-	D_WARN("push to rdb path\n");
+	D_WARN("push to rdb path");
 	for (i = 0; i < ARRAY_SIZE(keys); i++) {
 		MUST(rdb_path_push(&path, &keys[i]));
 		iovok(&path);
 	}
 
-	D_WARN("pop rdb path\n");
+	D_WARN("pop rdb path");
 	MUST(rdb_path_pop(&path));
 
-	D_WARN("iterate non-empty rdb path\n");
+	D_WARN("iterate non-empty rdb path");
 	arg.n = 0;
 	arg.keys = keys;
 	arg.nkeys = ARRAY_SIZE(keys) - 1; /* popped one already */
 	MUST(rdb_path_iterate(&path, rdbt_test_path_cb, &arg));
 	D_ASSERTF(arg.n == arg.nkeys, "%d\n", arg.n);
 
-	D_WARN("fini rdb path\n");
+	D_WARN("fini rdb path");
 	rdb_path_fini(&path);
 }
 
@@ -320,25 +319,24 @@ rdbt_ping(struct rsvc_hint *hintp)
 	struct ds_rsvc  *svc;
 	int		rc;
 
-	D_WARN("lookup leader\n");
+	D_WARN("lookup leader");
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_TEST, &test_svc_id, &svc,
 				   hintp);
 	if (rc != 0) {
 		if (rc == -DER_NOTLEADER) {
 			if (hintp->sh_flags & RSVC_HINT_VALID)
-				D_WARN("not leader; try rank %u\n",
-				       hintp->sh_rank);
+				D_WARN("not leader; try rank %u", hintp->sh_rank);
 			else
-				D_WARN("not leader\n");
+				D_WARN("not leader");
 		} else if (rc == -DER_NOTREPLICA) {
-			D_WARN("not a replica\n");
+			D_WARN("not a replica");
 		} else {
-			D_WARN("unknown error, rc=%d\n", rc);
+			D_WARN("unknown error, rc=%d", rc);
 		}
 	} else {
-		D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
-		       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
-		       hintp->sh_rank, hintp->sh_term);
+		D_WARN("leader, hint is %s valid, rank=%u, term=" DF_U64,
+		       ((hintp->sh_flags & RSVC_HINT_VALID) ?: "NOT"), hintp->sh_rank,
+		       hintp->sh_term);
 		ds_rsvc_put_leader(svc);
 	}
 
@@ -354,30 +352,28 @@ rdbt_create(struct rsvc_hint *hintp)
 	struct rdb_kvs_attr	attr;
 	int			rc;
 
-	D_WARN("lookup leader\n");
+	D_WARN("lookup leader");
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc,
 				   hintp);
 	if (rc != 0) {
 		if (rc == -DER_NOTLEADER) {
 			if (hintp->sh_flags & RSVC_HINT_VALID)
-				D_WARN("not leader; try rank %u\n",
-				       hintp->sh_rank);
+				D_WARN("not leader; try rank %u", hintp->sh_rank);
 			else
-				D_WARN("not leader\n");
+				D_WARN("not leader");
 		} else if (rc == -DER_NOTREPLICA) {
-			D_WARN("not a replica\n");
+			D_WARN("not a replica");
 		} else {
-			D_WARN("unknown error, rc=%d\n", rc);
+			D_WARN("unknown error, rc=%d", rc);
 		}
 		goto out;
 	}
 
-	D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
-	       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
-	       hintp->sh_rank, hintp->sh_term);
+	D_WARN("leader, hint is %s valid, rank=%u, term=" DF_U64,
+	       ((hintp->sh_flags & RSVC_HINT_VALID) ?: "NOT"), hintp->sh_rank, hintp->sh_term);
 	svc = rdbt_svc_obj(rsvc);
 
-	D_WARN("create KVSs and regular keys\n");
+	D_WARN("create KVSs and regular keys");
 	MUST(rdb_tx_begin(rsvc->s_db, RDB_NIL_TERM, &tx));
 	/* Create the root KVS. */
 	attr.dsa_class = RDB_KVS_GENERIC;
@@ -405,30 +401,28 @@ rdbt_destroy(struct rsvc_hint *hintp)
 	struct rdb_tx		tx;
 	int		rc;
 
-	D_WARN("lookup leader\n");
+	D_WARN("lookup leader");
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc,
 				   hintp);
 	if (rc != 0) {
 		if (rc == -DER_NOTLEADER) {
 			if (hintp->sh_flags & RSVC_HINT_VALID)
-				D_WARN("not leader; try rank %u\n",
-				       hintp->sh_rank);
+				D_WARN("not leader; try rank %u", hintp->sh_rank);
 			else
-				D_WARN("not leader\n");
+				D_WARN("not leader");
 		} else if (rc == -DER_NOTREPLICA) {
-			D_WARN("not a replica\n");
+			D_WARN("not a replica");
 		} else {
-			D_WARN("unknown error, rc=%d\n", rc);
+			D_WARN("unknown error, rc=%d", rc);
 		}
 		goto out;
 	}
 
-	D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
-	       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
-	       hintp->sh_rank, hintp->sh_term);
+	D_WARN("leader, hint is %s valid, rank=%u, term=" DF_U64,
+	       ((hintp->sh_flags & RSVC_HINT_VALID) ?: "NOT"), hintp->sh_rank, hintp->sh_term);
 	svc = rdbt_svc_obj(rsvc);
 
-	D_WARN("destroy KVSs\n");
+	D_WARN("destroy KVSs");
 	MUST(rdb_tx_begin(rsvc->s_db, RDB_NIL_TERM, &tx));
 	MUST(rdb_tx_destroy_kvs(&tx, &svc->rt_root_kvs_path, &rdbt_key_kvs1));
 	MUST(rdb_tx_destroy_root(&tx));
@@ -461,7 +455,7 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 	int			i;
 	int			rc;
 
-	D_WARN("lookup leader\n");
+	D_WARN("lookup leader");
 	rc = ds_rsvc_lookup_leader(DS_RSVC_CLASS_TEST, &test_svc_id,
 				   &rsvc, hintp);
 	if (rc != 0) {
@@ -472,33 +466,31 @@ rdbt_test_tx(bool update, enum rdbt_membership_op memb_op, uint64_t user_key,
 				goto proceed;
 			}
 			if (hintp->sh_flags & RSVC_HINT_VALID)
-				D_WARN("not leader; try rank %u\n",
-				       hintp->sh_rank);
+				D_WARN("not leader; try rank %u", hintp->sh_rank);
 			else
-				D_WARN("not leader\n");
+				D_WARN("not leader");
 		} else if (rc == -DER_NOTREPLICA) {
-			D_WARN("not a replica\n");
+			D_WARN("not a replica");
 		} else {
-			D_WARN("unknown error, rc=%d\n", rc);
+			D_WARN("unknown error, rc=%d", rc);
 		}
 		return rc;
 	}
 
 proceed:
-	D_WARN("leader, hint is %s valid, rank=%u, term="DF_U64"\n",
-	       ((hintp->sh_flags & RSVC_HINT_VALID) ? "" : "NOT"),
-	       hintp->sh_rank, hintp->sh_term);
+	D_WARN("leader, hint is %s valid, rank=%u, term=" DF_U64,
+	       ((hintp->sh_flags & RSVC_HINT_VALID) ?: "NOT"), hintp->sh_rank, hintp->sh_term);
 
 	svc = rdbt_svc_obj(rsvc);
 
 	if (update) {
-		D_WARN("commit empty tx\n");
+		D_WARN("commit empty tx");
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
 		MUST(rdb_tx_commit(&tx));
 		rdb_tx_end(&tx);
 
-		D_WARN("update: user record: (K=0x%"PRIx64", V="DF_U64")\n",
-		       user_key, user_val_in);
+		D_WARN("update: user record: (K=0x%" PRIx64 ", V=" DF_U64 ")", user_key,
+		       user_val_in);
 		MUST(rdb_tx_begin(svc->rt_rsvc.s_db, RDB_NIL_TERM, &tx));
 
 		/* verify KVS "kvs1" has been created in root KVS */
@@ -520,8 +512,7 @@ proceed:
 		}
 
 		/* If testing membership change, will cause tx commit to fail */
-		D_WARN("membership change op: %s\n",
-		       rdbt_membership_opname(memb_op));
+		D_WARN("membership change op: %s", rdbt_membership_opname(memb_op));
 		switch (memb_op) {
 		case RDBT_MEMBER_RESIGN:
 			/* Lose leadership */
@@ -546,7 +537,7 @@ proceed:
 	if (follower)
 		rdb_stop(rsvc->s_db, &storage);
 
-	D_WARN("query regular keys\n");
+	D_WARN("query regular keys");
 	if (follower)
 		MUST(rdb_tx_begin_local(storage, &tx));
 	else
@@ -584,8 +575,7 @@ proceed:
 	d_iov_set(&value, user_val_outp, sizeof(*user_val_outp));
 	MUST(rdb_tx_lookup(&tx, &svc->rt_kvs1_path, &key, &value));
 	MUST(rdb_tx_commit(&tx));
-	D_WARN("lookup: user record: (K=0x%"PRIx64", V="DF_U64")\n",
-	       user_key, *user_val_outp);
+	D_WARN("lookup: user record: (K=0x%" PRIx64 ", V=" DF_U64 ")", user_key, *user_val_outp);
 	rdb_tx_end(&tx);
 
 	if (follower) {
@@ -636,9 +626,9 @@ rdbt_init_handler(crt_rpc_t *rpc)
 	if (in->tii_nreplicas < ranks->rl_nr)
 		ranks->rl_nr = in->tii_nreplicas;
 
-	D_WARN("initializing rank %u: nreplicas=%u\n", rank, ranks->rl_nr);
+	D_WARN("initializing rank %u: nreplicas=%u", rank, ranks->rl_nr);
 	for (ri = 0; ri < ranks->rl_nr; ri++)
-		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
+		D_WARN("ranks[%u]=%u", ri, ranks->rl_ranks[ri]);
 
 	MUST(ds_rsvc_dist_start(DS_RSVC_CLASS_TEST, &test_svc_id, in->tii_uuid, ranks, RDB_NIL_TERM,
 				true /* create */, true /* bootstrap */, DB_CAP));
@@ -654,13 +644,13 @@ rdbt_fini_handler(crt_rpc_t *rpc)
 	d_rank_t		 ri;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("finalizing rank %u\n", rank);
+	D_WARN("finalizing rank %u", rank);
 	MUST(ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc));
 	MUST(rdb_get_ranks(rsvc->s_db, &ranks));
 	ds_rsvc_put(rsvc);
-	D_WARN("finalizing rank %u: nreplicas=%u\n", rank, ranks->rl_nr);
+	D_WARN("finalizing rank %u: nreplicas=%u", rank, ranks->rl_nr);
 	for (ri = 0; ri < ranks->rl_nr; ri++)
-		D_WARN("ranks[%u]=%u\n", ri, ranks->rl_ranks[ri]);
+		D_WARN("ranks[%u]=%u", ri, ranks->rl_ranks[ri]);
 
 	MUST(ds_rsvc_dist_stop(DS_RSVC_CLASS_TEST, &test_svc_id, ranks, NULL, RDB_NIL_TERM, true));
 	crt_reply_send(rpc);
@@ -674,12 +664,12 @@ rdbt_ping_handler(crt_rpc_t *rpc)
 	int			rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("testing rank %u: ping\n", rank);
+	D_WARN("testing rank %u: ping", rank);
 
 	rc = rdbt_ping(&out->tpo_hint);
 	out->tpo_rc = rc;
 
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	crt_reply_send(rpc);
 }
 
@@ -691,12 +681,12 @@ rdbt_create_handler(crt_rpc_t *rpc)
 	int			rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("rank %u: received create kvstores RPC\n", rank);
+	D_WARN("rank %u: received create kvstores RPC", rank);
 
 	rc = rdbt_create(&out->tco_hint);
 	out->tco_rc = rc;
 
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	crt_reply_send(rpc);
 }
 
@@ -708,12 +698,12 @@ rdbt_destroy_handler(crt_rpc_t *rpc)
 	int				rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("rank %u: received destroy kvstores RPC\n", rank);
+	D_WARN("rank %u: received destroy kvstores RPC", rank);
 
 	rc = rdbt_destroy(&out->tdo_hint);
 	out->tdo_rc = rc;
 
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	crt_reply_send(rpc);
 }
 
@@ -726,7 +716,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	int			rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("testing rank %u: update=%d %s\n", rank, in->tti_update,
+	D_WARN("testing rank %u: update=%d %s", rank, in->tti_update,
 	       rdbt_membership_opname(in->tti_memb_op));
 	rdbt_test_util();
 	rdbt_test_path();
@@ -734,7 +724,7 @@ rdbt_test_handler(crt_rpc_t *rpc)
 	rc = rdbt_test_tx(in->tti_update, in->tti_memb_op, in->tti_key,
 			  in->tti_val, &out->tto_val, &out->tto_hint);
 	out->tto_rc = rc;
-	D_WARN("rpc reply from rank %u: tto_rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: tto_rc=%d", rank, rc);
 	crt_reply_send(rpc);
 }
 
@@ -763,7 +753,7 @@ rdbt_replicas_add_handler(crt_rpc_t *rpc)
 	int				 rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("rank %u: replicas add RPC request\n", rank);
+	D_WARN("rank %u: replicas add RPC request", rank);
 	rc = daos_rank_list_dup(&ranks, in->rtmi_ranks);
 	if (rc != 0)
 		goto out;
@@ -773,7 +763,7 @@ rdbt_replicas_add_handler(crt_rpc_t *rpc)
 	out->rtmo_failed = ranks;
 
 out:
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	out->rtmo_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -788,7 +778,7 @@ rdbt_replicas_remove_handler(crt_rpc_t *rpc)
 	int				 rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("rank %u: replicas remove RPC request\n", rank);
+	D_WARN("rank %u: replicas remove RPC request", rank);
 	rc = daos_rank_list_dup(&ranks, in->rtmi_ranks);
 	if (rc != 0)
 		goto out;
@@ -797,7 +787,7 @@ rdbt_replicas_remove_handler(crt_rpc_t *rpc)
 	out->rtmo_failed = ranks;
 
 out:
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	out->rtmo_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -811,7 +801,7 @@ rdbt_start_election_handler(crt_rpc_t *rpc)
 	int				 rc;
 
 	MUST(crt_group_rank(NULL /* grp */, &rank));
-	D_WARN("rank %u calling new election\n", rank);
+	D_WARN("rank %u calling new election", rank);
 
 	rc = ds_rsvc_lookup(DS_RSVC_CLASS_TEST, &test_svc_id, &rsvc);
 	if (rc != 0)
@@ -821,7 +811,7 @@ rdbt_start_election_handler(crt_rpc_t *rpc)
 	ds_rsvc_put(rsvc);
 
 out:
-	D_WARN("rpc reply from rank %u: rc=%d\n", rank, rc);
+	D_WARN("rpc reply from rank %u: rc=%d", rank, rc);
 	out->rtse_rc = rc;
 	crt_reply_send(rpc);
 

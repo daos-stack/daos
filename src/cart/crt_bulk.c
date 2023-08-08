@@ -19,9 +19,9 @@ crt_sgl_valid(d_sg_list_t *sgl)
 
 	if (sgl == NULL || sgl->sg_nr == 0) {
 		if (sgl == NULL)
-			D_ERROR("invalid parameter, NULL sgl.\n");
+			D_ERROR("invalid parameter, NULL sgl");
 		else
-			D_ERROR("invalid parameter, zero sgl.sg_nr.\n");
+			D_ERROR("invalid parameter, zero sgl.sg_nr");
 		return false;
 	}
 
@@ -29,18 +29,16 @@ crt_sgl_valid(d_sg_list_t *sgl)
 	 * will internally allocate memory, temporarily not use this feature.
 	 */
 	if (sgl->sg_iovs == NULL) {
-		D_ERROR("invalid parameter, NULL sgl->sg_iovs.\n");
+		D_ERROR("invalid parameter, NULL sgl->sg_iovs");
 		return false;
 	}
 	for (i = 0; i < sgl->sg_nr; i++) {
 		iov = &sgl->sg_iovs[i];
 		if (iov->iov_buf == NULL || iov->iov_buf_len == 0) {
 			if (iov->iov_buf == NULL)
-				D_ERROR("invalid parameter, sg_iovs[%d]."
-					"iov_buf is NULL.\n", i);
+				D_ERROR("invalid parameter, sg_iovs[%d].iov_buf is NULL", i);
 			else
-				D_ERROR("invalid parameter, sg_iovs[%d]."
-					"iov_buf_len is 0.\n", i);
+				D_ERROR("invalid parameter, sg_iovs[%d].iov_buf_len is 0", i);
 			return false;
 		}
 	}
@@ -59,22 +57,21 @@ crt_bulk_desc_valid(struct crt_bulk_desc *bulk_desc)
 	     bulk_desc->bd_bulk_op != CRT_BULK_GET) ||
 	    bulk_desc->bd_len == 0) {
 		if (bulk_desc == NULL) {
-			D_ERROR("invalid parameter, NULL bulk_desc.\n");
+			D_ERROR("invalid parameter, NULL bulk_desc");
 			return false;
 		}
 		if (bulk_desc->bd_rpc == NULL) {
-			D_ERROR("invalid parameter, NULL bulk_desc->db_rpc.\n");
+			D_ERROR("invalid parameter, NULL bulk_desc->db_rpc");
 			return false;
 		}
 		if (bulk_desc->bd_rpc->cr_ctx == CRT_CONTEXT_NULL) {
-			D_ERROR("invalid parameter, NULL bulk_desc->db_rpc->dr_ctx.\n");
+			D_ERROR("invalid parameter, NULL bulk_desc->db_rpc->dr_ctx");
 			return false;
 		}
-		D_ERROR("invalid parameter, bulk_desc remote_hdl:%p,"
-			"local_hdl:%p, bulk_op:%d, len: "DF_U64".\n",
-			bulk_desc->bd_remote_hdl,
-			bulk_desc->bd_local_hdl,
-			bulk_desc->bd_bulk_op, bulk_desc->bd_len);
+		D_ERROR("invalid parameter, bulk_desc remote_hdl:%p,local_hdl:%p, bulk_op:%d, "
+			"len: " DF_U64,
+			bulk_desc->bd_remote_hdl, bulk_desc->bd_local_hdl, bulk_desc->bd_bulk_op,
+			bulk_desc->bd_len);
 		return false;
 	} else {
 		return true;
@@ -92,8 +89,8 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	    /* Now HG treats WO as invalid parameter */
 	    (bulk_perm != CRT_BULK_RW && bulk_perm != CRT_BULK_RO /* &&
 	     bulk_perm != CRT_BULK_WO */) || bulk_hdl == NULL) {
-		D_ERROR("invalid parameter, crt_ctx: %p, "
-			"crt_sgl_valid: %d, bulk_perm: %d, bulk_hdl: %p.\n",
+		D_ERROR("invalid parameter, crt_ctx: %p, crt_sgl_valid: %d, bulk_perm: %d, "
+			"bulk_hdl: %p",
 			crt_ctx, crt_sgl_valid(sgl), bulk_perm, bulk_hdl);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -101,8 +98,7 @@ crt_bulk_create(crt_context_t crt_ctx, d_sg_list_t *sgl,
 	ctx = crt_ctx;
 	rc = crt_hg_bulk_create(&ctx->cc_hg_ctx, sgl, bulk_perm, bulk_hdl);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_create() failed, rc: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "crt_hg_bulk_create() failed");
 
 out:
 	return rc;
@@ -115,13 +111,13 @@ crt_bulk_bind(crt_bulk_t bulk_hdl, crt_context_t crt_ctx)
 	int			rc = 0;
 
 	if (ctx == CRT_CONTEXT_NULL || bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL crt_ctx or bulk_hdl.\n");
+		D_ERROR("invalid parameter, NULL crt_ctx or bulk_hdl");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_bind(bulk_hdl, &ctx->cc_hg_ctx);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_bind() failed, rc: %d.\n", rc);
+		D_ERROR("crt_hg_bulk_bind() failed, rc: %d", rc);
 
 out:
 	return rc;
@@ -134,13 +130,13 @@ crt_bulk_addref(crt_bulk_t bulk_hdl)
 	hg_return_t hg_ret;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+		D_ERROR("invalid parameter, NULL bulk_hdl");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	hg_ret = HG_Bulk_ref_incr(bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_ref_incr failed, hg_ret: %d", hg_ret);
 		rc = crt_hgret_2_der(hg_ret);
 	}
 
@@ -155,13 +151,13 @@ crt_bulk_free(crt_bulk_t bulk_hdl)
 	hg_return_t hg_ret;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+		D_ERROR("invalid parameter, NULL bulk_hdl");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	hg_ret = HG_Bulk_free(bulk_hdl);
 	if (hg_ret != HG_SUCCESS) {
-		D_ERROR("HG_Bulk_free failed, hg_ret: %d.\n", hg_ret);
+		D_ERROR("HG_Bulk_free failed, hg_ret: %d", hg_ret);
 
 		rc = crt_hgret_2_der(hg_ret);
 	}
@@ -177,13 +173,13 @@ crt_bulk_transfer(struct crt_bulk_desc *bulk_desc, crt_bulk_cb_t complete_cb,
 	int			rc = 0;
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
-		D_ERROR("invalid parameter of bulk_desc.\n");
+		D_ERROR("invalid parameter of bulk_desc");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, false);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_transfer() failed, rc: " DF_RC ".\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_hg_bulk_transfer() failed");
 
 out:
 	return rc;
@@ -197,13 +193,13 @@ crt_bulk_bind_transfer(struct crt_bulk_desc *bulk_desc,
 	int			rc = 0;
 
 	if (!crt_bulk_desc_valid(bulk_desc)) {
-		D_ERROR("invalid parameter, bulk_desc not valid.\n");
+		D_ERROR("invalid parameter, bulk_desc not valid");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	rc = crt_hg_bulk_transfer(bulk_desc, complete_cb, arg, opid, true);
 	if (rc != 0)
-		D_ERROR("crt_hg_bulk_transfer() failed, rc: %d.\n", rc);
+		D_ERROR("crt_hg_bulk_transfer() failed, rc: %d", rc);
 
 out:
 	return rc;
@@ -215,12 +211,12 @@ crt_bulk_get_len(crt_bulk_t bulk_hdl, size_t *bulk_len)
 	hg_size_t hg_size;
 
 	if (bulk_len == NULL) {
-		D_ERROR("bulk_len is NULL\n");
+		D_ERROR("bulk_len is NULL");
 		return -DER_INVAL;
 	}
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("bulk_hdl is NULL\n");
+		D_ERROR("bulk_hdl is NULL");
 		return -DER_INVAL;
 	}
 
@@ -248,11 +244,11 @@ crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl)
 	int		rc = 0;
 
 	if (bulk_hdl == CRT_BULK_NULL) {
-		D_ERROR("invalid parameter, NULL bulk_hdl.\n");
+		D_ERROR("invalid parameter, NULL bulk_hdl");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	if (sgl == NULL) {
-		D_ERROR("invalid parameter, NULL sgl pointer.\n");
+		D_ERROR("invalid parameter, NULL sgl pointer");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

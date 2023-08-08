@@ -52,7 +52,7 @@ on_faulty(struct bio_blobstore *bbs)
 
 	rc = ract_ops->faulty_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
-		D_ERROR("Faulty reaction failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Faulty reaction failed");
 
 	return rc;
 }
@@ -81,8 +81,8 @@ teardown_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st)
 	}
 
 	if (opened_blobs) {
-		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs\n",
-			bxb->bxb_blobstore, opened_blobs);
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d opened blobs", bxb->bxb_blobstore,
+			opened_blobs);
 		return;
 	}
 
@@ -100,7 +100,7 @@ teardown_xstream(void *arg)
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
-		D_INFO("Abort xs teardown on server start/shutdown\n");
+		D_INFO("Abort xs teardown on server start/shutdown");
 		return;
 	}
 
@@ -116,12 +116,11 @@ unload_bs_cp(void *arg, int rc)
 
 	/* Unload blobstore may fail if the device is hot removed */
 	if (rc != 0)
-		D_ERROR("Failed to unload blobstore:%p, %d\n",
-			bbs, rc);
+		D_ERROR("Failed to unload blobstore:%p, %d", bbs, rc);
 
 	/* Stop accessing bbs, it could be freed on shutdown */
 	if (!is_server_started()) {
-		D_INFO("Abort bs unload on server start/shutdown\n");
+		D_INFO("Abort bs unload on server start/shutdown");
 		return;
 	}
 
@@ -159,8 +158,7 @@ on_teardown(struct bio_blobstore *bbs)
 
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_holdings != 0) {
-		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later.\n",
-			bbs, bbs->bb_holdings);
+		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later", bbs, bbs->bb_holdings);
 		ABT_mutex_unlock(bbs->bb_mutex);
 		return 1;
 	}
@@ -208,7 +206,7 @@ on_teardown(struct bio_blobstore *bbs)
 		return 0;
 
 	if (bbs->bb_loading || bbs->bb_unloading) {
-		D_DEBUG(DB_MGMT, "Blobstore %p is in %s\n", bbs,
+		D_DEBUG(DB_MGMT, "Blobstore %p is in %s", bbs,
 			bbs->bb_loading ? "loading" : "unloading");
 		return 1;
 	}
@@ -242,7 +240,7 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 	if (bxb->bxb_io_channel == NULL) {
 		bxb->bxb_io_channel = spdk_bs_alloc_io_channel(bbs->bb_bs);
 		if (bxb->bxb_io_channel == NULL) {
-			D_ERROR("Failed to create io channel for %p\n", bbs);
+			D_ERROR("Failed to create io channel for %p", bbs);
 			return;
 		}
 	}
@@ -261,8 +259,7 @@ setup_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st,
 	}
 
 	if (*closed_blobs)
-		D_DEBUG(DB_MGMT, "blobstore:%p has %d closed blobs\n",
-			bbs, *closed_blobs);
+		D_DEBUG(DB_MGMT, "blobstore:%p has %d closed blobs", bbs, *closed_blobs);
 	return;
 
 }
@@ -275,7 +272,7 @@ setup_xstream(void *arg)
 
 	D_ASSERT(xs_ctxt != NULL);
 	if (!is_server_started()) {
-		D_INFO("Abort xs setup on server start/shutdown\n");
+		D_INFO("Abort xs setup on server start/shutdown");
 		return;
 	}
 
@@ -301,12 +298,11 @@ load_bs_cp(void *arg, struct spdk_blob_store *bs, int rc)
 	struct bio_blobstore *bbs = arg;
 
 	if (rc != 0)
-		D_ERROR("Failed to load blobstore:%p, %d\n",
-			bbs, rc);
+		D_ERROR("Failed to load blobstore:%p, %d", bbs, rc);
 
 	/* Stop accessing bbs since it could be freed on shutdown */
 	if (!is_server_started()) {
-		D_INFO("Abort bs load on server start/shutdown\n");
+		D_INFO("Abort bs load on server start/shutdown");
 		return;
 	}
 
@@ -330,8 +326,7 @@ on_setup(struct bio_blobstore *bbs)
 
 	ABT_mutex_lock(bbs->bb_mutex);
 	if (bbs->bb_holdings != 0) {
-		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later.\n",
-			bbs, bbs->bb_holdings);
+		D_DEBUG(DB_MGMT, "Blobstore %p is inuse:%d, retry later", bbs, bbs->bb_holdings);
 		ABT_mutex_unlock(bbs->bb_mutex);
 		return 1;
 	}
@@ -343,7 +338,7 @@ on_setup(struct bio_blobstore *bbs)
 		goto bs_loaded;
 
 	if (bbs->bb_loading) {
-		D_DEBUG(DB_MGMT, "Blobstore %p is in loading\n", bbs);
+		D_DEBUG(DB_MGMT, "Blobstore %p is in loading", bbs);
 		return 1;
 	}
 
@@ -363,8 +358,7 @@ bs_loaded:
 					bio_bdev_event_cb, NULL,
 					&bdh->bdh_desc);
 		if (rc != 0) {
-			D_ERROR("Failed to open bdev %s, for %p, %d\n",
-				d_bdev->bb_name, bbs, rc);
+			D_ERROR("Failed to open bdev %s, for %p, %d", d_bdev->bb_name, bbs, rc);
 			return 1;
 		}
 		D_ASSERT(bdh->bdh_desc != NULL);
@@ -374,7 +368,7 @@ bs_loaded:
 	if (bdh->bdh_io_channel == NULL) {
 		bdh->bdh_io_channel = spdk_bdev_get_io_channel(bdh->bdh_desc);
 		if (bdh->bdh_io_channel == NULL) {
-			D_ERROR("Failed to get health channel for %p\n", bbs);
+			D_ERROR("Failed to get health channel for %p", bbs);
 			return 1;
 		}
 	}
@@ -445,15 +439,12 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 	}
 
 	if (rc) {
-		D_ERROR("Blobstore state transition error! tgt: %d, %s -> %s\n",
-			bbs->bb_owner_xs->bxc_tgt_id,
-			bio_state_enum_to_str(bbs->bb_state),
+		D_ERROR("Blobstore state transition error! tgt: %d, %s -> %s",
+			bbs->bb_owner_xs->bxc_tgt_id, bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
 	} else {
-		D_DEBUG(DB_MGMT, "Blobstore state transitioned. "
-			"tgt: %d, %s -> %s\n",
-			bbs->bb_owner_xs->bxc_tgt_id,
-			bio_state_enum_to_str(bbs->bb_state),
+		D_DEBUG(DB_MGMT, "Blobstore state transitioned. tgt: %d, %s -> %s",
+			bbs->bb_owner_xs->bxc_tgt_id, bio_state_enum_to_str(bbs->bb_state),
 			bio_state_enum_to_str(new_state));
 		/* Print a console message */
 		D_PRINT("Blobstore state transitioned. tgt: %d, %s -> %s\n",
@@ -472,8 +463,7 @@ bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state)
 
 			rc = smd_dev_set_state(dev_id, SMD_DEV_FAULTY);
 			if (rc)
-				D_ERROR("Set device state failed. "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "Set device state failed");
 		}
 	}
 	ABT_mutex_unlock(bbs->bb_mutex);
@@ -513,9 +503,9 @@ on_normal(struct bio_blobstore *bbs)
 
 	rc = ract_ops->reint_reaction(tgt_ids, tgt_cnt);
 	if (rc < 0)
-		D_ERROR("Reint reaction failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Reint reaction failed");
 	else if (rc > 0)
-		D_DEBUG(DB_MGMT, "Reint reaction is in-progress.");
+		D_DEBUG(DB_MGMT, "Reint reaction is in-progress");
 	else
 		bdev->bb_trigger_reint = false;
 }
@@ -583,25 +573,25 @@ bio_media_error(void *msg_arg)
 		/* Update unmap error counter */
 		dev_state->bio_unmap_errs++;
 		d_tm_inc_counter(bdh->bdh_unmap_errs, 1);
-		D_ERROR("Unmap error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		D_ERROR("Unmap error logged from tgt_id:%d", mem->mem_tgt_id);
 		break;
 	case MET_WRITE:
 		/* Update write I/O error counter */
 		dev_state->bio_write_errs++;
 		d_tm_inc_counter(bdh->bdh_write_errs, 1);
-		D_ERROR("Write error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		D_ERROR("Write error logged from tgt_id:%d", mem->mem_tgt_id);
 		break;
 	case MET_READ:
 		/* Update read I/O error counter */
 		dev_state->bio_read_errs++;
 		d_tm_inc_counter(bdh->bdh_read_errs, 1);
-		D_ERROR("Read error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		D_ERROR("Read error logged from tgt_id:%d", mem->mem_tgt_id);
 		break;
 	case MET_CSUM:
 		/* Update CSUM error counter */
 		dev_state->checksum_errs++;
 		d_tm_inc_counter(bdh->bdh_checksum_errs, 1);
-		D_ERROR("CSUM error logged from tgt_id:%d\n", mem->mem_tgt_id);
+		D_ERROR("CSUM error logged from tgt_id:%d", mem->mem_tgt_id);
 		break;
 	}
 
@@ -617,8 +607,7 @@ bio_media_error(void *msg_arg)
 		rc = ract_ops->ioerr_reaction(mem->mem_err_type,
 					      mem->mem_tgt_id);
 		if (rc < 0)
-			D_ERROR("Blobstore I/O error notification error. %d\n",
-				rc);
+			D_ERROR("Blobstore I/O error notification error. %d", rc);
 	}
 
 out:

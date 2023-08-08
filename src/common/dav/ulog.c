@@ -209,7 +209,7 @@ ulog_reserve(struct ulog *ulog,
 	ulog_extend_fn extend, struct ulog_next *next)
 {
 	if (!auto_reserve) {
-		D_CRIT("cannot auto reserve next ulog\n");
+		D_CRIT("cannot auto reserve next ulog");
 		return -1;
 	}
 

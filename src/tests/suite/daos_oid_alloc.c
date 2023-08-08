@@ -117,7 +117,7 @@ multi_cont_oid_allocator(void **state)
 			print_message("OID alloc failed (%d)\n", rc);
 			rc2 = daos_cont_close(coh, NULL);
 			if (rc2)
-				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+				DL_ERROR(rc2, "daos_cont_close() Failed");
 			goto verify_rc;
 		}
 

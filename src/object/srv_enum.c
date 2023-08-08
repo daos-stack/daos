@@ -22,14 +22,12 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 {
 	/* check if recxs is full */
 	if (arg->recxs_len >= arg->recxs_cap) {
-		D_DEBUG(DB_IO, "recx_len %d recx_cap %d\n",
-			arg->recxs_len, arg->recxs_cap);
+		D_DEBUG(DB_IO, "recx_len %d recx_cap %d", arg->recxs_len, arg->recxs_cap);
 		return 1;
 	}
 
 	if (arg->eprs_len >= arg->eprs_cap) {
-		D_DEBUG(DB_IO, "eprs_len %d eprs_cap %d\n",
-			arg->eprs_len, arg->eprs_cap);
+		D_DEBUG(DB_IO, "eprs_len %d eprs_cap %d", arg->eprs_len, arg->eprs_cap);
 		return 1;
 	}
 
@@ -42,14 +40,12 @@ fill_recxs(daos_handle_t ih, vos_iter_entry_t *key_ent,
 	if (arg->rsize == 0) {
 		arg->rsize = key_ent->ie_rsize;
 	} else if (arg->rsize != key_ent->ie_rsize) {
-		D_ERROR("different size "DF_U64" != "DF_U64"\n", arg->rsize,
-			key_ent->ie_rsize);
+		D_ERROR("different size " DF_U64 " != " DF_U64, arg->rsize, key_ent->ie_rsize);
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_IO, "Pack recxs "DF_U64"/"DF_U64" recxs_len %d size "
-		DF_U64"\n", key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		arg->recxs_len, arg->rsize);
+	D_DEBUG(DB_IO, "Pack recxs " DF_U64 "/" DF_U64 " recxs_len %d size " DF_U64,
+		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr, arg->recxs_len, arg->rsize);
 
 	arg->rnum++;
 	return 0;
@@ -70,8 +66,9 @@ is_sgl_full(struct ds_obj_enum_arg *arg, daos_size_t size)
 
 		if (iovs[arg->sgl_idx].iov_len + size >
 		    iovs[arg->sgl_idx].iov_buf_len) {
-			D_DEBUG(DB_IO, "current %dth iov buf is full"
-				" iov_len %zd size "DF_U64" buf_len %zd\n",
+			D_DEBUG(DB_IO,
+				"current %dth iov buf is full iov_len %zd size " DF_U64
+				" buf_len %zd",
 				arg->sgl_idx, iovs[arg->sgl_idx].iov_len, size,
 				iovs[arg->sgl_idx].iov_buf_len);
 			arg->sgl_idx++;
@@ -86,8 +83,7 @@ is_sgl_full(struct ds_obj_enum_arg *arg, daos_size_t size)
 
 	/* Check if the sgl is full */
 	if (arg->sgl_idx >= sgl->sg_nr) {
-		D_DEBUG(DB_IO, "full sgl %d/%d size " DF_U64"\n", arg->sgl_idx,
-			sgl->sg_nr, size);
+		D_DEBUG(DB_IO, "full sgl %d/%d size " DF_U64, arg->sgl_idx, sgl->sg_nr, size);
 		return 1;
 	}
 
@@ -121,8 +117,8 @@ fill_oid(daos_unit_oid_t oid, struct ds_obj_enum_arg *arg)
 
 	/* Append the object ID to iov. */
 	daos_iov_append(iov, &oid, sizeof(oid));
-	D_DEBUG(DB_IO, "Pack obj "DF_UOID" iov_len/sgl %zu/%d kds_len %d\n",
-		DP_UOID(oid), iov->iov_len, arg->sgl_idx, arg->kds_len);
+	D_DEBUG(DB_IO, "Pack obj " DF_UOID " iov_len/sgl %zu/%d kds_len %d", DP_UOID(oid),
+		iov->iov_len, arg->sgl_idx, arg->kds_len);
 	return 0;
 }
 
@@ -296,9 +292,10 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		iov->iov_len += pi_size;
 	}
 
-	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
-		DF_U64" punched eph num "DF_U64"\n", DP_KEY(&key_ent->ie_key),
-		iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
+	D_DEBUG(DB_IO,
+		"Pack key " DF_KEY " iov total %zd kds len %d eph " DF_U64
+		" punched eph num " DF_U64,
+		DP_KEY(&key_ent->ie_key), iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
 		key_ent->ie_punch);
 	return 0;
 }
@@ -345,8 +342,7 @@ csummer_verify_recx(struct daos_csummer *csummer, d_iov_t *data_to_verify,
 	rc = daos_csummer_verify_iod(csummer, &iod, &sgl,
 				     &iod_csum, NULL, 0, NULL);
 	if (rc != 0)
-		D_ERROR("Corruption found for recx "DF_RECX"\n",
-			DP_RECX(*recx));
+		D_ERROR("Corruption found for recx " DF_RECX, DP_RECX(*recx));
 
 	return rc;
 }
@@ -411,7 +407,7 @@ csummer_alloc_calc_recx_csum(struct daos_csummer *csummer, daos_recx_t *recx,
 				   recx->rx_nr, recx->rx_idx);
 
 	if (rc != 0) {
-		D_ERROR("Error calculating checksum: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error calculating checksum");
 		daos_csummer_free_ci(csummer, &csum_info);
 		return rc;
 	}
@@ -463,7 +459,7 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 
 		rc = arg->copy_data_cb(ih, &ent_to_verify, &data_to_verify);
 		if (rc != 0) {
-			D_ERROR("Issue copying data\n");
+			D_ERROR("Issue copying data");
 			return rc;
 		}
 
@@ -475,7 +471,7 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 
 		D_FREE(data_to_verify.iov_buf);
 		if (rc != 0) {
-			D_ERROR("Found corruption!\n");
+			D_ERROR("Found corruption!");
 			return rc;
 		}
 
@@ -483,20 +479,20 @@ csum_copy_inline(int type, vos_iter_entry_t *ent, struct ds_obj_enum_arg *arg,
 						  ent->ie_rsize, iov_out,
 						  &new_csum_info);
 		if (rc != 0) {
-			D_ERROR("Issue calculating checksum\n");
+			D_ERROR("Issue calculating checksum");
 			return rc;
 		}
 
 		rc = fill_data_csum(new_csum_info, &arg->csum_iov);
 		daos_csummer_free_ci(csummer, &new_csum_info);
 		if (rc != 0) {
-			D_ERROR("Issue filling csum data\n");
+			D_ERROR("Issue filling csum data");
 			return rc;
 		}
 	} else {
 		rc = fill_data_csum(&ent->ie_csum, &arg->csum_iov);
 		if (rc != 0) {
-			D_ERROR("Issue filling csum data\n");
+			D_ERROR("Issue filling csum data");
 			return rc;
 		}
 	}
@@ -693,14 +689,14 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 
 		rc = csum_copy_inline(type, key_ent, arg, ih, &iov_out);
 		if (rc != 0) {
-			D_ERROR("Issue copying csum\n");
+			D_ERROR("Issue copying csum");
 			return rc;
 		}
 
 		rc = arg->copy_data_cb(ih, key_ent, &iov_out);
 
 		if (rc != 0) {
-			D_ERROR("Copy recx data failed "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Copy recx data failed");
 		} else {
 			rec->rec_flags |= RECX_INLINE;
 			iovs[arg->sgl_idx].iov_len += data_size;
@@ -708,15 +704,13 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		}
 	}
 
-	D_DEBUG(DB_IO, "Pack rec "DF_U64"/"DF_U64
-		" rsize "DF_U64" ver %u kd_len "DF_U64" type %d sgl_idx %d/%zd "
-		"kds_len %d inline "DF_U64" epr "DF_U64"/"DF_U64"\n",
-		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr,
-		rec->rec_size, rec->rec_version,
-		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx,
-		iovs[arg->sgl_idx].iov_len, arg->kds_len,
-		rec->rec_flags & RECX_INLINE ? data_size : 0,
-		rec->rec_epr.epr_lo, rec->rec_epr.epr_hi);
+	D_DEBUG(DB_IO,
+		"Pack rec " DF_U64 "/" DF_U64 " rsize " DF_U64 " ver %u kd_len " DF_U64
+		" type %d sgl_idx %d/%zd kds_len %d inline " DF_U64 " epr " DF_U64 "/" DF_U64,
+		key_ent->ie_recx.rx_idx, key_ent->ie_recx.rx_nr, rec->rec_size, rec->rec_version,
+		arg->kds[arg->kds_len].kd_key_len, type, arg->sgl_idx, iovs[arg->sgl_idx].iov_len,
+		arg->kds_len, rec->rec_flags & RECX_INLINE ? data_size : 0, rec->rec_epr.epr_lo,
+		rec->rec_epr.epr_hi);
 
 	if (arg->last_type != type) {
 		arg->last_type = type;
@@ -788,6 +782,6 @@ ds_obj_enum_pack(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 	rc = iter_cb(param, type, recursive, anchors, enum_pack_cb, NULL,
 		     arg, dth);
 
-	D_DEBUG(DB_IO, "enum type %d rc %d\n", type, rc);
+	D_DEBUG(DB_IO, "enum type %d rc %d", type, rc);
 	return rc;
 }

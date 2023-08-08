@@ -69,7 +69,7 @@ crtu_drain_queue(crt_context_t ctx)
 	do {
 		rc = crt_progress(ctx, 1000000);
 		if (rc != 0 && rc != -DER_TIMEDOUT) {
-			D_ERROR("crt_progress failed rc: %d.\n", rc);
+			D_ERROR("crt_progress failed rc: %d", rc);
 			return rc;
 		}
 
@@ -77,7 +77,7 @@ crtu_drain_queue(crt_context_t ctx)
 			break;
 	} while (1);
 
-	D_DEBUG(DB_TEST, "Done draining queue\n");
+	D_DEBUG(DB_TEST, "Done draining queue");
 	return 0;
 }
 
@@ -127,7 +127,7 @@ crtu_progress_fn(void *data)
 
 	rc = crt_context_idx(*p_ctx, &idx);
 	if (rc != 0) {
-		D_ERROR("crt_context_idx() failed; rc=%d\n", rc);
+		D_ERROR("crt_context_idx() failed; rc=%d", rc);
 		assert(0);
 	}
 
@@ -168,12 +168,11 @@ ctl_client_cb(const struct crt_cb_info *info)
 		wfrs->num_ctx = out_ls_args->cel_ctx_num;
 		wfrs->rc = out_ls_args->cel_rc;
 
-		D_DEBUG(DB_TEST, "ctx_num: %d\n",
-			out_ls_args->cel_ctx_num);
+		D_DEBUG(DB_TEST, "ctx_num: %d", out_ls_args->cel_ctx_num);
 		addr_str = out_ls_args->cel_addr_str.iov_buf;
 		for (i = 0; i < out_ls_args->cel_ctx_num; i++) {
-			D_DEBUG(DB_TEST, "    %s\n", addr_str);
-				addr_str += (strlen(addr_str) + 1);
+			D_DEBUG(DB_TEST, "    %s", addr_str);
+			addr_str += (strlen(addr_str) + 1);
 		}
 	} else {
 		wfrs->rc = info->cci_rc;
@@ -319,13 +318,13 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
 
 	if (grp_cfg_file == NULL) {
-		D_ERROR("No config filename was passed\n");
+		D_ERROR("No config filename was passed");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
-		D_ERROR("Failed to open %s for reading\n", grp_cfg_file);
+		D_ERROR("Failed to open %s for reading", grp_cfg_file);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
@@ -343,8 +342,7 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 						parsed_rank, parsed_addr);
 
 		if (rc != 0) {
-			D_ERROR("Failed to add %d %s; rc=%d\n",
-				parsed_rank, parsed_addr, rc);
+			D_ERROR("Failed to add %d %s; rc=%d", parsed_rank, parsed_addr, rc);
 			break;
 		}
 	}
@@ -379,7 +377,7 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
 	if (rc != 0) {
-		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
+		D_ERROR("dc_get_attach_info() failed, rc=%d", rc);
 		D_GOTO(err_group, rc);
 	}
 
@@ -391,16 +389,12 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 						rank_uri->uri);
 
 		if (rc != 0) {
-			D_ERROR("failed to add rank %u URI %s to group %s: "
-				DF_RC"\n",
-				rank_uri->rank,
-				rank_uri->uri,
-				name,
-				DP_RC(rc));
+			DL_ERROR(rc, "failed to add rank %u URI %s to group %s", rank_uri->rank,
+				 rank_uri->uri, name);
 			goto err_group;
 		}
 
-		D_INFO("rank: %d uri: %s\n", rank_uri->rank, rank_uri->uri);
+		D_INFO("rank: %d uri: %s", rank_uri->rank, rank_uri->uri);
 	}
 
 err_group:
@@ -428,18 +422,18 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
 	if (rc != 0) {
-		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
+		D_ERROR("dc_get_attach_info() failed, rc=%d", rc);
 		D_GOTO(cleanup, rc);
 	}
 
 	/* These two are always set */
-	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_net_cfg_info.provider);
+	D_INFO("setenv CRT_PHY_ADDR_STR=%s", crt_net_cfg_info.provider);
 	rc = setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	sprintf(buf, "%d", crt_net_cfg_info.crt_ctx_share_addr);
-	D_INFO("setenv CRT_CTX_SHARE_ADDR=%d\n", crt_net_cfg_info.crt_ctx_share_addr);
+	D_INFO("setenv CRT_CTX_SHARE_ADDR=%d", crt_net_cfg_info.crt_ctx_share_addr);
 	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
@@ -448,17 +442,17 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (crt_net_cfg_info.srv_srx_set != -1) {
 		sprintf(buf, "%d", crt_net_cfg_info.srv_srx_set);
 		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
-		D_INFO("setenv FI_OFI_RXM_USE_SRX=%d\n", crt_net_cfg_info.srv_srx_set);
+		D_INFO("setenv FI_OFI_RXM_USE_SRX=%d", crt_net_cfg_info.srv_srx_set);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
-		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
+		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s", buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
-				"but server is unset!\n", cli_srx_set);
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, but server is unset!",
+				cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
@@ -468,41 +462,37 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (!crt_timeout) {
 		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
 		rc = setenv("CRT_TIMEOUT", buf, 1);
-		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
+		D_INFO("setenv CRT_TIMEOUT=%d", crt_net_cfg_info.crt_timeout);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
+		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s", crt_timeout);
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
-		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
+		D_INFO("Setting OFI_INTERFACE=%s", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT,
-			"Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_INTERFACE: %s", ofi_interface);
 	}
 
 	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_domain) {
 		rc = setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
-		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
+		D_INFO("Setting OFI_DOMAIN=%s", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s", ofi_domain);
 	}
 
-	D_INFO("CaRT env setup with:\n"
-		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
-		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
-		getenv("CRT_PHY_ADDR_STR"),
-		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+	D_INFO("CaRT env setup with:\n\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+	       "CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s",
+	       getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"), getenv("CRT_PHY_ADDR_STR"),
+	       getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
 
 cleanup:
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
@@ -611,18 +601,18 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_GOTO(out, rc);
 
 	if (!*rank_list) {
-		D_ERROR("Rank list is NULL\n");
+		D_ERROR("Rank list is NULL");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if ((*rank_list)->rl_nr != grp_size) {
-		D_ERROR("rank_list differs in size. expected %d got %d\n",
-			grp_size, (*rank_list)->rl_nr);
+		D_ERROR("rank_list differs in size. expected %d got %d", grp_size,
+			(*rank_list)->rl_nr);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if ((*rank_list)->rl_nr == 0) {
-		D_ERROR("Rank list is empty\n");
+		D_ERROR("Rank list is empty");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -632,7 +622,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 
 out:
 	if (rc != 0 && opts.assert_on_error) {
-		D_ERROR("Asserting due to an error\n");
+		D_ERROR("Asserting due to an error");
 		assert(0);
 	}
 
@@ -673,7 +663,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	*grp = crt_group_lookup(NULL);
 	if (!(*grp)) {
-		D_ERROR("Group lookup failed\n");
+		D_ERROR("Group lookup failed");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -714,7 +704,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 out:
 	if (opts.assert_on_error && rc != 0) {
-		D_ERROR("Failed to start server. Asserting\n");
+		D_ERROR("Failed to start server. Asserting");
 		assert(0);
 	}
 
@@ -731,7 +721,7 @@ crtu_log_msg_cb(const struct crt_cb_info *info)
 	struct crtu_log_msg_cb_resp	*resp;
 
 	if (info->cci_rc != 0) {
-		D_WARN("Add Log message CB failed\n");
+		D_WARN("Add Log message CB failed");
 		D_ASSERTF(info->cci_rc == 0,
 			  "Send Log RPC did not respond\n");
 	}
@@ -760,7 +750,7 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 
 	rc = crt_req_create(ctx, &ep, opcode, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create() failed. rc %d.\n", rc);
+		D_ERROR("crt_req_create() failed. rc %d", rc);
 		D_GOTO(exit, rc);
 	}
 
@@ -771,14 +761,14 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 	/* send the request */
 	rc = crt_req_send(rpc_req, crtu_log_msg_cb, &resp);
 	if (rc < 0) {
-		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
+		D_WARN("rpc failed, message: \"%s \"not sent", msg);
 		goto cleanup;
 	}
 
 	/* Wait for response */
 	rc = crtu_sem_timedwait(&resp.sem, 30, __LINE__);
 	if (rc < 0) {
-		D_WARN("Messaage logged timed out: %s\n", msg);
+		D_WARN("Messaage logged timed out: %s", msg);
 		crt_req_abort(rpc_req);
 		goto cleanup;
 	}
@@ -787,7 +777,7 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 cleanup:
 	crt_req_decref(rpc_req);
 exit:
-	D_INFO("Return code %d\n", rc);
+	D_INFO("Return code %d", rc);
 	return rc;
 }
 
@@ -808,7 +798,7 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 		if (opts.assert_on_error)
 			D_ASSERTF(rc == 0, "clock_gettime() failed at "
 				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
+		D_ERROR("clock_gettime() failed, rc = %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -818,7 +808,7 @@ crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
 		if (opts.assert_on_error)
 			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
 				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
+		D_ERROR("sem_timedwait() failed, rc = %d", rc);
 		D_GOTO(out, rc);
 	}
 out:

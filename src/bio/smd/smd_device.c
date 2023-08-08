@@ -30,12 +30,12 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
 			  &id_org, sizeof(id_org));
 	if (rc == 0) {
-		D_ERROR("Target %d is already bound to dev "DF_UUID"\n",
-			tgt_id, DP_UUID(&id_org.uuid));
+		D_ERROR("Target %d is already bound to dev " DF_UUID, tgt_id,
+			DP_UUID(&id_org.uuid));
 		rc = -DER_EXIST;
 		goto out;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("Get target %d failed. "DF_RC"\n", tgt_id, DP_RC(rc));
+		DL_ERROR(rc, "Get target %d failed", tgt_id);
 		goto out;
 	}
 
@@ -43,9 +43,8 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 	rc = smd_db_fetch(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc == 0) {
 		if (dev.sd_tgt_cnt >= SMD_MAX_TGT_CNT) {
-			D_ERROR("Dev "DF_UUID" is assigned to too many "
-				"targets (%d)\n", DP_UUID(&id.uuid),
-				dev.sd_tgt_cnt);
+			D_ERROR("Dev " DF_UUID " is assigned to too many targets (%d)",
+				DP_UUID(&id.uuid), dev.sd_tgt_cnt);
 			rc = -DER_OVERFLOW;
 			goto out;
 		}
@@ -56,8 +55,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 		dev.sd_tgt_cnt	= 1;
 		dev.sd_tgts[0]	= tgt_id;
 	} else {
-		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch dev " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 
@@ -68,15 +66,13 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 
 	rc = smd_db_upsert(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch dev " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out_tx;
 	}
 
 	rc = smd_db_upsert(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
-		D_ERROR("Update target %d failed: "DF_RC"\n",
-			tgt_id, DP_RC(rc));
+		DL_ERROR(rc, "Update target %d failed", tgt_id);
 		goto out_tx;
 	}
 out_tx:
@@ -118,20 +114,18 @@ smd_dev_set_state(uuid_t dev_id, enum smd_dev_state state)
 	smd_db_lock();
 	rc = smd_db_fetch(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch dev " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 
 	dev.sd_state = state;
 	rc = smd_db_upsert(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("SMD dev "DF_UUID" state set failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "SMD dev " DF_UUID " state set failed", DP_UUID(&id.uuid));
 		goto out;
 	}
-	D_DEBUG(DB_MGMT, "SMD dev "DF_UUID" state set to %s\n",
-		DP_UUID(&id.uuid), smd_dev_stat2str(state));
+	D_DEBUG(DB_MGMT, "SMD dev " DF_UUID " state set to %s", DP_UUID(&id.uuid),
+		smd_dev_stat2str(state));
 out:
 	smd_db_unlock();
 	return rc;
@@ -291,12 +285,11 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	uuid_copy(id.uuid, new_id);
 	rc = smd_db_fetch(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc == 0) {
-		D_ERROR("New dev "DF_UUID" is inuse\n", DP_UUID(&id.uuid));
+		D_ERROR("New dev " DF_UUID " is inuse", DP_UUID(&id.uuid));
 		rc = -DER_INVAL;
 		goto out;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("Fetch new dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch new dev " DF_UUID " failed", DP_UUID(id.uuid));
 		goto out;
 	}
 
@@ -304,21 +297,19 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	uuid_copy(id.uuid, old_id);
 	rc = smd_db_fetch(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Fetch dev " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 
 	/* Sanity check to old device */
 	if (dev.sd_state != SMD_DEV_FAULTY) {
-		D_ERROR("Dev "DF_UUID" isn't in faulty\n", DP_UUID(&id.uuid));
+		D_ERROR("Dev " DF_UUID " isn't in faulty", DP_UUID(&id.uuid));
 		rc = -DER_INVAL;
 		goto out;
 	}
 
 	if (dev.sd_tgt_cnt >= SMD_MAX_TGT_CNT || dev.sd_tgt_cnt == 0) {
-		D_ERROR("Invalid targets (%d) for dev "DF_UUID"\n",
-			dev.sd_tgt_cnt, DP_UUID(&id.uuid));
+		D_ERROR("Invalid targets (%d) for dev " DF_UUID, dev.sd_tgt_cnt, DP_UUID(&id.uuid));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -331,8 +322,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	/* Delete old device in device table */
 	rc = smd_db_delete(TABLE_DEV, &id, sizeof(id));
 	if (rc) {
-		D_ERROR("Failed to delete old dev "DF_UUID". "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to delete old dev " DF_UUID, DP_UUID(&id.uuid));
 		goto tx_end;
 	}
 
@@ -341,8 +331,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	dev.sd_state = SMD_DEV_NORMAL;
 	rc = smd_db_upsert(TABLE_DEV, &id, sizeof(id), &dev, sizeof(dev));
 	if (rc) {
-		D_ERROR("Failed to insert new dev "DF_UUID". "DF_RC"\n",
-			DP_UUID(&id.uuid), DP_RC(rc));
+		DL_ERROR(rc, "Failed to insert new dev " DF_UUID, DP_UUID(&id.uuid));
 		goto tx_end;
 	}
 
@@ -353,8 +342,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 		rc = smd_db_upsert(TABLE_TGTS[SMD_DEV_TYPE_DATA], &tgt_id, sizeof(tgt_id),
 				   &id, sizeof(id));
 		if (rc) {
-			D_ERROR("Update target %d failed. "DF_RC"\n",
-				tgt_id, DP_RC(rc));
+			DL_ERROR(rc, "Update target %d failed", tgt_id);
 			goto tx_end;
 		}
 	}
@@ -366,8 +354,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
 		rc = smd_pool_replace_blobs_locked(pool_info, dev.sd_tgt_cnt, &dev.sd_tgts[0]);
 		if (rc) {
-			D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",
-				DP_UUID(pool_info->spi_id), DP_RC(rc));
+			DL_ERROR(rc, "Update pool " DF_UUID " failed", DP_UUID(pool_info->spi_id));
 			goto tx_end;
 		}
 	}

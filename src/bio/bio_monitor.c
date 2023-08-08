@@ -98,11 +98,11 @@ bio_dev_set_faulty_internal(void *msg_arg)
 	D_ASSERT(bxb != NULL);
 	rc = bio_bs_state_set(bxb->bxb_blobstore, BIO_BS_STATE_FAULTY);
 	if (rc)
-		D_ERROR("BIO FAULTY state set failed, rc=%d\n", rc);
+		D_ERROR("BIO FAULTY state set failed, rc=%d", rc);
 
 	rc = bio_bs_state_transit(bxb->bxb_blobstore);
 	if (rc)
-		D_ERROR("State transition failed, rc=%d\n", rc);
+		D_ERROR("State transition failed, rc=%d", rc);
 
 	ABT_eventual_set(dsm->eventual, &rc, sizeof(rc));
 }
@@ -179,7 +179,7 @@ bio_get_bs_state(int *bs_state, uuid_t dev_uuid, struct bio_xs_context *xs)
 
 	bxb = bio_xs_blobstore_by_devid(xs, dev_uuid);
 	if (!bxb) {
-		D_ERROR("Failed to find BS for dev:"DF_UUID"\n", DP_UUID(dev_uuid));
+		D_ERROR("Failed to find BS for dev:" DF_UUID, DP_UUID(dev_uuid));
 		return -DER_NONEXIST;
 	}
 
@@ -254,7 +254,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc)
-		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
+		D_ERROR("NVMe status code/type: %d/%d", sc, sct);
 
 	/*Decrease in-flights on error or successful callback completion chain*/
 	dev_health->bdh_inflights--;
@@ -286,7 +286,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
-		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
+		D_ERROR("NVMe status code/type: %d/%d", sc, sct);
 		dev_health->bdh_inflights--;
 		goto out;
 	}
@@ -321,7 +321,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   get_spdk_err_log_page_completion,
 					   cb_arg);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (error log), rc:%d", rc);
 		dev_health->bdh_inflights--;
 	}
 
@@ -568,7 +568,7 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
-		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
+		D_ERROR("NVMe status code/type: %d/%d", sc, sct);
 		dev_health->bdh_inflights--;
 		goto out;
 	}
@@ -599,7 +599,7 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   get_spdk_identify_ctrlr_completion,
 					   cb_arg);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d", rc);
 		dev_health->bdh_inflights--;
 	}
 
@@ -628,7 +628,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	/* Additional NVMe status information */
 	spdk_bdev_io_get_nvme_status(bdev_io, &cdw0, &sct, &sc);
 	if (sc) {
-		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
+		D_ERROR("NVMe status code/type: %d/%d", sc, sct);
 		dev_health->bdh_inflights--;
 		goto out;
 	}
@@ -669,7 +669,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   get_spdk_intel_smart_log_completion,
 					   cb_arg);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (Intel smart log), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (Intel smart log), rc:%d", rc);
 		dev_health->bdh_inflights--;
 	}
 
@@ -702,13 +702,13 @@ is_bbs_faulty(struct bio_blobstore *bbs)
 		return false;
 
 	if (dev_stats->bio_read_errs + dev_stats->bio_write_errs > glb_criteria.fc_max_io_errs) {
-		D_ERROR("NVMe I/O errors %u/%u reached limit %u\n", dev_stats->bio_read_errs,
+		D_ERROR("NVMe I/O errors %u/%u reached limit %u", dev_stats->bio_read_errs,
 			dev_stats->bio_write_errs, glb_criteria.fc_max_io_errs);
 		return true;
 	}
 
 	if (dev_stats->checksum_errs > glb_criteria.fc_max_csum_errs) {
-		D_ERROR("NVME csum errors %u reached limit %u\n", dev_stats->checksum_errs,
+		D_ERROR("NVME csum errors %u reached limit %u", dev_stats->checksum_errs,
 			glb_criteria.fc_max_csum_errs);
 		return true;
 	}
@@ -729,7 +729,7 @@ auto_faulty_detect(struct bio_blobstore *bbs)
 
 	rc = bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
 	if (rc)
-		D_ERROR("Failed to set FAULTY state. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to set FAULTY state");
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
@@ -751,7 +751,7 @@ collect_raw_health_data(void *cb_arg)
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
-		D_ERROR("No bdev associated with device health descriptor\n");
+		D_ERROR("No bdev associated with device health descriptor");
 		return;
 	}
 
@@ -759,7 +759,7 @@ collect_raw_health_data(void *cb_arg)
 		return;
 
 	if (!spdk_bdev_io_type_supported(bdev, SPDK_BDEV_IO_TYPE_NVME_ADMIN)) {
-		D_ERROR("Bdev NVMe admin passthru not supported!\n");
+		D_ERROR("Bdev NVMe admin passthru not supported!");
 		return;
 	}
 
@@ -792,7 +792,7 @@ collect_raw_health_data(void *cb_arg)
 					   get_spdk_health_info_completion,
 					   cb_arg);
 	if (rc) {
-		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
+		D_ERROR("NVMe admin passthru (health log), rc:%d", rc);
 		dev_health->bdh_inflights--;
 	}
 }
@@ -828,7 +828,7 @@ bio_bs_monitor(struct bio_xs_context *xs_ctxt, enum smd_dev_type st, uint64_t no
 		auto_faulty_detect(bbs);
 		rc = bio_bs_state_transit(bbs);
 		if (rc)
-			D_ERROR("State transition on target %d failed. %d\n",
+			D_ERROR("State transition on target %d failed. %d",
 				bbs->bb_owner_xs->bxc_tgt_id, rc);
 	}
 
@@ -846,10 +846,10 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt, struct bio_blobstore *bb
 	/* Drain the in-flight request before putting I/O channel */
 	D_ASSERT(bdh->bdh_inflights < 2);
 	if (bdh->bdh_inflights > 0) {
-		D_INFO("Wait for health collecting done...\n");
+		D_INFO("Wait for health collecting done");
 		rc = xs_poll_completion(ctxt, &bdh->bdh_inflights, 0);
 		D_ASSERT(rc == 0);
-		D_INFO("Health collecting done...\n");
+		D_INFO("Health collecting done");
 	}
 
 	/* Free NVMe admin passthru DMA buffers */
@@ -941,7 +941,7 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
 				&bb->bb_dev_health.bdh_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		D_ERROR("Failed to open bdev %s, %d", bdev_name, rc);
 		rc = daos_errno2der(-rc);
 		goto free_smart_buf;
 	}
@@ -986,7 +986,7 @@ bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name)
 
 	D_ALLOC_PTR(binfo);
 	if (binfo == NULL) {
-		D_WARN("Failed to allocate binfo\n");
+		D_WARN("Failed to allocate binfo");
 		return;
 	}
 #define X(field, fname, desc, unit, type)				\
@@ -1025,7 +1025,7 @@ bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name)
 
 	D_ALLOC_PTR(binfo);
 	if (binfo == NULL) {
-		D_WARN("Failed to allocate binfo\n");
+		D_WARN("Failed to allocate binfo");
 		return;
 	}
 #define Y(field, fname, desc, unit, type)				\
@@ -1077,12 +1077,12 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 
 	rc = fill_in_traddr(&binfo, bdev_name);
 	if (rc || binfo.bdi_traddr == NULL) {
-		D_ERROR("Unable to get traddr for device:%s\n", bdev_name);
+		D_ERROR("Unable to get traddr for device:%s", bdev_name);
 		return;
 	}
 
 	if (spdk_pci_addr_parse(&opts.pci_addr, binfo.bdi_traddr)) {
-		D_ERROR("Unable to parse PCI address: %s\n", binfo.bdi_traddr);
+		D_ERROR("Unable to parse PCI address: %s", binfo.bdi_traddr);
 		goto free_traddr;
 	}
 
@@ -1091,7 +1091,7 @@ bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name)
 	spdk_pci_for_each_device(&opts, get_vendor_id);
 
 	if (opts.vid == 0)
-		D_ERROR("No vendor ID retrieved for device at address: %s\n", binfo.bdi_traddr);
+		D_ERROR("No vendor ID retrieved for device at address: %s", binfo.bdi_traddr);
 
 	bb->bb_dev_health.bdh_vendor_id = opts.vid;
 

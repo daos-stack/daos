@@ -30,13 +30,13 @@ srv_profile_start(char *path, int avg)
 
 	rc = crt_group_rank(NULL, &rank);
 	if (rc) {
-		D_ERROR("start dump ult failed: rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "start dump ult failed");
 		return rc;
 	}
 
 	rc = daos_profile_init(dp_p, path, avg, (int)rank, tgt_id);
 	if (rc) {
-		D_ERROR("profile init failed: rc "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "profile init failed");
 		return rc;
 	}
 

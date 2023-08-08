@@ -161,11 +161,11 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 	int	rc;
 
 	if (ops == NULL || ops->hop_compare == NULL) {
-		D_ERROR("invalid parameter, should pass in valid ops table.\n");
+		D_ERROR("invalid parameter, should pass in valid ops table");
 		return -DER_INVAL;
 	}
 	if (h == NULL) {
-		D_ERROR("invalid parameter of NULL heap pointer.\n");
+		D_ERROR("invalid parameter of NULL heap pointer");
 		return -DER_INVAL;
 	}
 
@@ -178,8 +178,7 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 	while (h->d_bh_hwm < count) { /* preallocate */
 	rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "d_binheap_grow() failed");
 			d_binheap_destroy_inplace(h);
 			return rc;
 		}
@@ -187,7 +186,7 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 
 	rc = dbh_lock_init(h);
 	if (rc != 0) {
-		D_ERROR("dbg_lock_init() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "dbg_lock_init() failed");
 		d_binheap_destroy_inplace(h);
 	}
 
@@ -202,11 +201,11 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 	int			 rc;
 
 	if (ops == NULL || ops->hop_compare == NULL) {
-		D_ERROR("invalid parameter, should pass in valid ops table.\n");
+		D_ERROR("invalid parameter, should pass in valid ops table");
 		return -DER_INVAL;
 	}
 	if (h == NULL) {
-		D_ERROR("invalid parameter of NULL heap 2nd level pointer.\n");
+		D_ERROR("invalid parameter of NULL heap 2nd level pointer");
 		return -DER_INVAL;
 	}
 
@@ -216,7 +215,7 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 
 	rc = d_binheap_create_inplace(feats, count, priv, ops, bh_created);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "d_binheap_create() failed");
 		D_FREE(bh_created);
 		return rc;
 	}
@@ -232,7 +231,7 @@ d_binheap_destroy_inplace(struct d_binheap *h)
 	uint32_t	idx0, idx1, n;
 
 	if (h == NULL) {
-		D_ERROR("ignore invalid parameter of NULL heap.\n");
+		D_ERROR("ignore invalid parameter of NULL heap");
 		return;
 	}
 
@@ -274,7 +273,7 @@ void
 d_binheap_destroy(struct d_binheap *h)
 {
 	if (h == NULL) {
-		D_ERROR("ignore invalid parameter of NULL heap.\n");
+		D_ERROR("ignore invalid parameter of NULL heap");
 		return;
 	}
 
@@ -313,7 +312,7 @@ d_binheap_find_locked(struct d_binheap *h, uint32_t idx)
 	struct d_binheap_node **node;
 
 	if (h == NULL) {
-		D_ERROR("ignore NULL heap.\n");
+		D_ERROR("ignore NULL heap");
 		return NULL;
 	}
 
@@ -460,7 +459,7 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	int				  rc;
 
 	if (h == NULL || e == NULL) {
-		D_ERROR("invalid parameter of NULL h or e.\n");
+		D_ERROR("invalid parameter of NULL h or e");
 		return -DER_INVAL;
 	}
 
@@ -471,8 +470,7 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (new_idx == h->d_bh_hwm) {
 		rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "d_binheap_grow() failed");
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
@@ -481,8 +479,7 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (h->d_bh_ops->hop_enter) {
 		rc = h->d_bh_ops->hop_enter(h, e);
 		if (rc != 0) {
-			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "d_bh_ops->hop_enter() failed");
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
@@ -509,7 +506,7 @@ d_binheap_remove_locked(struct d_binheap *h, struct d_binheap_node *e)
 	uint32_t			  n;
 
 	if (h == NULL || e == NULL) {
-		D_ERROR("invalid parameter of NULL h or e.\n");
+		D_ERROR("invalid parameter of NULL h or e");
 		return;
 	}
 
@@ -553,7 +550,7 @@ d_binheap_remove_root(struct d_binheap *h)
 	struct d_binheap_node *e;
 
 	if (h == NULL) {
-		D_ERROR("ignore NULL heap.\n");
+		D_ERROR("ignore NULL heap");
 		return NULL;
 	}
 

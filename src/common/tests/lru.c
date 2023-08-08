@@ -86,7 +86,7 @@ test_ref_hold(struct daos_lru_cache *cache,
 
 	rc = daos_lru_ref_hold(cache, key, size, (void *)1, link);
 	if (rc)
-		D_ERROR("Error in holding reference\n");
+		D_ERROR("Error in holding reference");
 
 	refs = container_of(*link, struct uint_ref, ur_llink);
 
@@ -113,7 +113,7 @@ main(int argc, char **argv)
 		return rc;
 
 	if (argc < 3) {
-		D_ERROR("<exec><size bits(^2)><num_keys>\n");
+		D_ERROR("<exec><size bits(^2)><num_keys>");
 		exit(-1);
 	}
 
@@ -122,7 +122,7 @@ main(int argc, char **argv)
 
 	if (csize < 0 || csize > INT_MAX) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid cell size\n");
+		D_ERROR("Invalid cell size");
 		D_GOTO(exit, rc);
 	}
 
@@ -138,7 +138,7 @@ main(int argc, char **argv)
 	 */
 	if (num_keys < 0 || num_keys > INT_MAX) {
 		rc = -DER_INVAL;
-		D_ERROR("Invalid number of keys\n");
+		D_ERROR("Invalid number of keys");
 		D_GOTO(exit, rc);
 	}
 

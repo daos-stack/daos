@@ -245,7 +245,7 @@ error_class_alloc:
 	if (id >= 0)
 		alloc_class_reservation_clear(ac, id);
 
-	D_CRIT("alloc_class_new failed\n");
+	D_CRIT("alloc_class_new failed");
 	return NULL;
 }
 

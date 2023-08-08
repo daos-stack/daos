@@ -96,7 +96,7 @@ operation_log_transient_init(struct operation_log *log)
 
 	D_ALLOC(src, (sizeof(struct ulog) + ULOG_BASE_SIZE));
 	if (src == NULL) {
-		D_CRIT("Zalloc!\n");
+		D_CRIT("Zalloc!");
 		return -1;
 	}
 
@@ -123,7 +123,7 @@ operation_log_persistent_init(struct operation_log *log,
 
 	D_ALLOC(src, (sizeof(struct ulog) + ULOG_BASE_SIZE));
 	if (src == NULL) {
-		D_CRIT("Zalloc!\n");
+		D_CRIT("Zalloc!");
 		return -1;
 	}
 
@@ -189,7 +189,7 @@ operation_new(struct ulog *ulog, size_t ulog_base_nbytes,
 
 	D_ALLOC_PTR(ctx);
 	if (ctx == NULL) {
-		D_CRIT("Zalloc!\n");
+		D_CRIT("Zalloc!");
 		goto error_ctx_alloc;
 	}
 
@@ -355,7 +355,7 @@ operation_merge_entry_add(struct operation_context *ctx,
 
 	if (VECQ_ENQUEUE(&ctx->merge_entries, entry) != 0) {
 		/* this is fine, only runtime perf will get slower */
-		D_CRIT("out of memory - unable to track entries\n");
+		D_CRIT("out of memory - unable to track entries");
 	}
 }
 

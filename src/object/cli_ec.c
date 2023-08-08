@@ -33,7 +33,7 @@ static int
 obj_ec_recxs_init(struct obj_ec_recx_array *recxs, uint32_t recx_nr)
 {
 	if (recxs->oer_recxs != NULL) {
-		D_ERROR("oer_recxs non-NULL, cannot init again.\n");
+		D_ERROR("oer_recxs non-NULL, cannot init again");
 		return -DER_INVAL;
 	}
 
@@ -286,16 +286,15 @@ obj_ec_recov_tgt_recx_nrs(struct dc_object *obj, struct obj_reasb_req *reasb_req
 	D_ASSERT(fail_info != NULL);
 	if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(oca)) {
 		rc = -DER_DATA_LOSS;
-		D_ERROR(DF_OID" efi_ntgts %d > parity_tgt_nr %d, "DF_RC"\n",
-			DP_OID(reasb_req->orr_oid), fail_info->efi_ntgts,
-			obj_ec_parity_tgt_nr(oca), DP_RC(rc));
+		DL_ERROR(rc, DF_OID " efi_ntgts %d > parity_tgt_nr %d", DP_OID(reasb_req->orr_oid),
+			 fail_info->efi_ntgts, obj_ec_parity_tgt_nr(oca));
 		goto out;
 	}
 
 	for (i = 0, tgt = obj_ec_shard_idx(obj, dkey_hash, 0);
 	     i < obj_ec_tgt_nr(oca); i++, tgt = (tgt + 1) % obj_ec_tgt_nr(oca)) {
 		if (obj_ec_tgt_in_err(fail_info->efi_tgt_list, fail_info->efi_ntgts, tgt)) {
-			D_DEBUG(DB_TRACE, "tgt %ui not available\n", tgt);
+			D_DEBUG(DB_TRACE, "tgt %ui not available", tgt);
 			continue;
 		}
 		tgt_recx_nrs[i]++;
@@ -579,7 +578,7 @@ codec_get(struct obj_reasb_req *reasb_req, daos_obj_id_t oid)
 
 	reasb_req->orr_codec = obj_ec_codec_get(daos_obj_id2class(oid));
 	if (reasb_req->orr_codec == NULL) {
-		D_ERROR("failed to get ec codec, oid "DF_OID".\n", DP_OID(oid));
+		D_ERROR("failed to get ec codec, oid " DF_OID, DP_OID(oid));
 		return NULL;
 	}
 	return reasb_req->orr_codec;
@@ -646,7 +645,7 @@ obj_ec_recx_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 						  codec, oca, cell_bytes,
 						  parity_buf);
 			if (rc) {
-				D_ERROR("stripe encoding failed rc %d.\n", rc);
+				D_ERROR("stripe encoding failed rc %d", rc);
 				goto out;
 			}
 			if (singv)
@@ -1353,10 +1352,9 @@ obj_ec_fail_info_parity_get(struct dc_object *obj, struct obj_reasb_req *reasb_r
 	}
 
 	if (nerrs > p || i == p) {
-		D_ERROR(DF_OID" %d failure, not recoverable.\n",
-			DP_OID(reasb_req->orr_oid), nerrs);
+		D_ERROR(DF_OID " %d failure, not recoverable", DP_OID(reasb_req->orr_oid), nerrs);
 		for (i = 0; i < nerrs; i++)
-			D_ERROR("fail tgt: %u\n", err_list[i]);
+			D_ERROR("fail tgt: %u", err_list[i]);
 
 		return -DER_DATA_LOSS;
 	}
@@ -1388,13 +1386,13 @@ obj_ec_fail_info_insert(struct obj_reasb_req *reasb_req, uint16_t fail_tgt)
 	nerrs = fail_info->efi_ntgts;
 	err_list[nerrs] = fail_tgt;
 	fail_info->efi_ntgts++;
-	D_DEBUG(DB_IO, DF_OID" insert fail_tgt %u fail num %u\n", DP_OID(reasb_req->orr_oid),
+	D_DEBUG(DB_IO, DF_OID " insert fail_tgt %u fail num %u", DP_OID(reasb_req->orr_oid),
 		fail_tgt, fail_info->efi_ntgts);
 	if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(reasb_req->orr_oca)) {
-		D_ERROR(DF_OID" %d failure, not recoverable.\n", DP_OID(reasb_req->orr_oid),
+		D_ERROR(DF_OID " %d failure, not recoverable", DP_OID(reasb_req->orr_oid),
 			fail_info->efi_ntgts);
 		for (i = 0; i < nerrs; i++)
-			D_ERROR("fail tgt: %u\n", err_list[i]);
+			D_ERROR("fail tgt: %u", err_list[i]);
 
 		return -DER_DATA_LOSS;
 	}
@@ -1434,7 +1432,7 @@ obj_ec_singv_encode(struct obj_ec_codec *codec, struct daos_oclass_attr *oca,
 
 	rc = obj_ec_recx_encode(codec, oca, iod, sgl, recxs);
 	if (rc) {
-		D_ERROR("obj_ec_recx_encode failed %d.\n", rc);
+		D_ERROR("obj_ec_recx_encode failed %d", rc);
 		D_GOTO(out, rc);
 	}
 out:
@@ -1534,8 +1532,8 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 			rc = obj_ec_fail_info_parity_get(obj, reasb_req, dkey_hash, &idx,
 							 NIL_BITMAP);
 			if (rc) {
-				D_ERROR(DF_OID " can not get parity failed, " DF_RC "\n",
-					DP_OID(reasb_req->orr_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_OID " can not get parity failed",
+					 DP_OID(reasb_req->orr_oid));
 				goto out;
 			}
 		} else {
@@ -1569,9 +1567,9 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 
 				if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(oca)) {
 					rc = -DER_DATA_LOSS;
-					D_ERROR(DF_OID" efi_ntgts %d > parity_tgt_nr %d, "DF_RC"\n",
-						DP_OID(reasb_req->orr_oid), fail_info->efi_ntgts,
-						obj_ec_parity_tgt_nr(oca), DP_RC(rc));
+					DL_ERROR(rc, DF_OID " efi_ntgts %d > parity_tgt_nr %d",
+						 DP_OID(reasb_req->orr_oid), fail_info->efi_ntgts,
+						 obj_ec_parity_tgt_nr(oca));
 					goto out;
 				}
 
@@ -1610,7 +1608,7 @@ obj_ec_singv_req_reasb(struct dc_object *obj, uint64_t dkey_hash, daos_iod_t *io
 		ec_recx_array->oer_stripe_total = 1;
 		codec = codec_get(reasb_req, obj->cob_md.omd_id);
 		if (codec == NULL) {
-			D_ERROR(DF_OID" can not get codec.\n", DP_OID(obj->cob_md.omd_id));
+			D_ERROR(DF_OID " can not get codec", DP_OID(obj->cob_md.omd_id));
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 
@@ -1666,8 +1664,7 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 
 	codec = codec_get(reasb_req, reasb_req->orr_oid);
 	if (codec == NULL) {
-		D_ERROR(DF_OID" can not get codec.\n",
-			DP_OID(reasb_req->orr_oid));
+		D_ERROR(DF_OID " can not get codec", DP_OID(reasb_req->orr_oid));
 		return -DER_INVAL;
 	}
 
@@ -1678,8 +1675,8 @@ obj_ec_encode(struct obj_reasb_req *reasb_req)
 					&reasb_req->orr_usgls[i],
 					&reasb_req->orr_recxs[i]);
 		if (rc) {
-			D_ERROR(DF_OID" obj_ec_recx_encode failed %d.\n",
-				DP_OID(reasb_req->orr_oid), rc);
+			D_ERROR(DF_OID " obj_ec_recx_encode failed %d", DP_OID(reasb_req->orr_oid),
+				rc);
 			return rc;
 		}
 	}
@@ -1727,7 +1724,7 @@ obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_
 						    sgls ? &sgls[i] : NULL,
 						    reasb_req, i, update);
 			if (rc) {
-				D_ERROR(DF_OID" singv_req_reasb failed %d.\n",
+				D_ERROR(DF_OID " singv_req_reasb failed %d",
 					DP_OID(obj->cob_md.omd_id), rc);
 				goto out;
 			}
@@ -1739,16 +1736,16 @@ obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_
 		rc = obj_ec_recx_scan(obj, &iods[i], sgls ? &sgls[i] : NULL,
 				      dkey_hash, reasb_req, i, update);
 		if (rc) {
-			D_ERROR(DF_OID" obj_ec_recx_scan failed %d.\n",
-				DP_OID(obj->cob_md.omd_id), rc);
+			D_ERROR(DF_OID " obj_ec_recx_scan failed %d", DP_OID(obj->cob_md.omd_id),
+				rc);
 			goto out;
 		}
 
 		rc = obj_ec_recx_reasb(obj, &iods[i], sgls ? &sgls[i] : NULL,
 				       dkey_hash, reasb_req, i, update);
 		if (rc) {
-			D_ERROR(DF_OID" obj_ec_recx_reasb failed %d.\n",
-				DP_OID(obj->cob_md.omd_id), rc);
+			D_ERROR(DF_OID " obj_ec_recx_reasb failed %d", DP_OID(obj->cob_md.omd_id),
+				rc);
 			goto out;
 		}
 	}
@@ -1782,7 +1779,7 @@ obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_
 	reasb_req->orr_singv_only = singv_only;
 	rc = obj_ec_encode(reasb_req);
 	if (rc) {
-		D_ERROR(DF_OID" obj_ec_encode failed %d.\n", DP_OID(obj->cob_md.omd_id), rc);
+		D_ERROR(DF_OID " obj_ec_encode failed %d", DP_OID(obj->cob_md.omd_id), rc);
 		goto out;
 	}
 
@@ -1804,8 +1801,7 @@ obj_ec_req_reasb(struct dc_object *obj, daos_iod_t *iods, uint64_t dkey_hash, d_
 					     obj_ec_tgt_nr(obj_get_oca(obj)) - 1,
 					     reasb_req->orr_tgt_nr, start_tgt, obj_get_oca(obj));
 		if (reasb_req->tgt_oiods == NULL) {
-			D_ERROR(DF_OID" obj_ec_tgt_oiod_init failed.\n",
-				DP_OID(obj->cob_md.omd_id));
+			D_ERROR(DF_OID " obj_ec_tgt_oiod_init failed", DP_OID(obj->cob_md.omd_id));
 			rc = -DER_NOMEM;
 			goto out;
 		}
@@ -2062,11 +2058,11 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 
 	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF))) {
 		rc = -DER_FETCH_AGAIN;
-		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "simulate parity list mismatch");
 	} else {
 		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
 		if (rc) {
-			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "got different parity lists");
 			daos_recx_ep_list_dump(parity_lists, nr);
 			daos_recx_ep_list_dump(recx_lists, nr);
 			goto out;
@@ -2164,8 +2160,7 @@ obj_ec_recov_codec_init(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 	D_ASSERT(nerrs > 0 && err_list != NULL);
 	if (nerrs > p) {
 		rc = -DER_DATA_LOSS;
-		D_ERROR(DF_OID " nerrs %d > p %d, " DF_RC "\n", DP_OID(obj->cob_md.omd_id), nerrs,
-			p, DP_RC(rc));
+		DL_ERROR(rc, DF_OID " nerrs %d > p %d", DP_OID(obj->cob_md.omd_id), nerrs, p);
 		return rc;
 	}
 
@@ -2201,7 +2196,7 @@ obj_ec_recov_codec_init(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 	/* if all parity targets failed, just reuse the encode gftbls */
 	if (recov->er_data_nerrs == 0 && recov->er_nerrs == p) {
 		memcpy(recov->er_gftbls, codec->ec_gftbls, k * p * 32);
-		D_DEBUG(DB_IO, "all parity tgts failed, reuse enc gftbls.\n");
+		D_DEBUG(DB_IO, "all parity tgts failed, reuse enc gftbls");
 		return 0;
 	}
 
@@ -2279,12 +2274,12 @@ obj_ec_stripe_list_add(struct daos_recx_ep_list *stripe_list,
 			continue;
 		}
 		if (recx_ep->re_ep != stripe_recx->re_ep) {
-			D_DEBUG(DB_IO, "overlapped recx with different shadow epoch, "
-				"["DF_U64", "DF_U64"]@"DF_X64", "
-				"["DF_U64", "DF_U64"]@"DF_X64"\n",
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
-				recx_ep->re_ep, stripe_recx->re_recx.rx_idx,
-				stripe_recx->re_recx.rx_nr, stripe_recx->re_ep);
+			D_DEBUG(DB_IO,
+				"overlapped recx with different shadow epoch, [" DF_U64 ", " DF_U64
+				"]@" DF_X64 ", [" DF_U64 ", " DF_U64 "]@" DF_X64,
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep,
+				stripe_recx->re_recx.rx_idx, stripe_recx->re_recx.rx_nr,
+				stripe_recx->re_ep);
 			/* It is possible that different shard fetches go to different parity
 			 * shards, they got recov_lists with different parity epoch in the case
 			 * vos aggregation happens asynchronously on different parity shards
@@ -2343,8 +2338,7 @@ obj_ec_stripe_list_init(struct obj_reasb_req *reasb_req)
 			rc = obj_ec_stripe_list_add(stripe_list,
 						    recx_list->re_items);
 			if (rc) {
-				D_ERROR("failed to add stripe "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "failed to add stripe");
 				goto out;
 			}
 		}
@@ -2361,8 +2355,7 @@ obj_ec_stripe_list_init(struct obj_reasb_req *reasb_req)
 			stripe_recx.re_recx.rx_nr = end - start;
 			rc = obj_ec_stripe_list_add(stripe_list, &stripe_recx);
 			if (rc) {
-				D_ERROR("failed to add stripe "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "failed to add stripe");
 				goto out;
 			}
 		}
@@ -2593,8 +2586,7 @@ obj_ec_recov_prep(struct dc_object *obj, struct obj_reasb_req *reasb_req,
 
 out:
 	if (rc)
-		D_ERROR(DF_OID " obj_ec_recov_prep failed, " DF_RC "\n", DP_OID(obj->cob_md.omd_id),
-			DP_RC(rc));
+		DL_ERROR(rc, DF_OID " obj_ec_recov_prep failed", DP_OID(obj->cob_md.omd_id));
 	return rc;
 }
 

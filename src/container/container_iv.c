@@ -52,7 +52,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL, &root_hdl);
 	if (rc != 0) {
-		D_ERROR("failed to create tree: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create tree");
 		return rc;
 	}
 
@@ -118,7 +118,7 @@ dbtree_empty(daos_handle_t root_hdl)
 		rc = dbtree_iterate(root_hdl, DAOS_INTENT_PUNCH, false,
 				    delete_iter_cb, NULL);
 		if (rc < 0) {
-			D_ERROR("dbtree iterate fails %d\n", rc);
+			D_ERROR("dbtree iterate fails %d", rc);
 			return rc;
 		}
 	}
@@ -162,15 +162,13 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 			snap_cnt = src->iv_snap.snap_cnt;
 		}
 
-		D_DEBUG(DB_MD, "snap_cnt "DF_U64":"DF_U64"\n",
-			snap_cnt, src->iv_snap.snap_cnt);
+		D_DEBUG(DB_MD, "snap_cnt " DF_U64 ":" DF_U64, snap_cnt, src->iv_snap.snap_cnt);
 		size = cont_iv_snap_ent_size(snap_cnt);
 		if (size > dst_sgl->sg_iovs[0].iov_buf_len) {
 			/* Return -1 so client can reallocate the buffer. */
 			dst->iv_snap.snap_cnt = (uint64_t)-1;
 			dst->iv_snap.snaps[0] = src->iv_snap.snap_cnt;
-			D_DEBUG(DB_MD, "%zd < %zd\n",
-				dst_sgl->sg_iovs[0].iov_buf_len, size);
+			D_DEBUG(DB_MD, "%zd < %zd", dst_sgl->sg_iovs[0].iov_buf_len, size);
 			return 0;
 		}
 
@@ -191,7 +189,7 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 		memcpy(&dst->iv_prop, &src->iv_prop, size);
 		break;
 	default:
-		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
+		D_ERROR("bad iv_class_id %d", entry->iv_class->iv_class_id);
 		return -DER_INVAL;
 	};
 
@@ -455,14 +453,12 @@ again:
 				rc = cont_iv_snap_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont snap iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "create cont snap iv entry failed");
 			} else if (class_id == IV_CONT_PROP) {
 				rc = cont_iv_prop_ent_create(entry, key);
 				if (rc == 0)
 					goto again;
-				D_ERROR("create cont prop iv entry failed "
-					""DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "create cont prop iv entry failed");
 			} else if (class_id == IV_CONT_CAPA) {
 				struct container_hdl	chdl;
 				int			rc1;
@@ -481,9 +477,9 @@ again:
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
 							      civ_key->cont_uuid, &prop);
 					if (rc) {
-						D_ERROR(DF_CONT "get prop: "DF_RC"\n",
-							DP_CONT(entry->ns->iv_pool_uuid,
-								civ_key->cont_uuid), DP_RC(rc));
+						DL_ERROR(rc, DF_CONT "get prop",
+							 DP_CONT(entry->ns->iv_pool_uuid,
+								 civ_key->cont_uuid));
 						D_GOTO(out, rc);
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -506,7 +502,7 @@ again:
 				}
 			}
 		}
-		D_DEBUG(DB_MGMT, "lookup cont: rc "DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_MGMT, "lookup cont: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -585,8 +581,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
-				D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "cont_iv_prop_g2l failed");
 				D_GOTO(out, rc);
 			}
 
@@ -804,7 +799,7 @@ cont_iv_snapshot_invalidate(void *ns, uuid_t cont_uuid, unsigned int shortcut,
 	key.class_id = IV_CONT_SNAP;
 	rc = ds_iv_invalidate(ns, &key, shortcut, sync_mode, 0, false);
 	if (rc)
-		D_ERROR("iv invalidate failed %d\n", rc);
+		D_ERROR("iv invalidate failed %d", rc);
 
 	return rc;
 }
@@ -830,8 +825,8 @@ retry:
 
 	if (iv_entry->iv_snap.snap_cnt == (uint64_t)(-1)) {
 		D_ASSERT(iv_entry->iv_snap.snaps[0] > snap_cnt);
-		D_DEBUG(DB_MD, DF_UUID" retry by snap_cnt "DF_U64"\n",
-			DP_UUID(cont_uuid), iv_entry->iv_snap.snaps[0]);
+		D_DEBUG(DB_MD, DF_UUID " retry by snap_cnt " DF_U64, DP_UUID(cont_uuid),
+			iv_entry->iv_snap.snaps[0]);
 		snap_cnt = iv_entry->iv_snap.snaps[0];
 		D_FREE(iv_entry);
 		goto retry;
@@ -906,7 +901,7 @@ retry:
 
 	if (iv_entry.iv_snap.snap_cnt == (uint64_t)(-1)) {
 		snap_cnt = iv_entry.iv_snap.snaps[0];
-		D_DEBUG(DB_MD, "retry with "DF_U64"\n", snap_cnt);
+		D_DEBUG(DB_MD, "retry with " DF_U64, snap_cnt);
 		goto retry;
 	}
 
@@ -976,14 +971,12 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 	} else {
 		*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 		if (*cont_hdl != NULL) {
-			D_DEBUG(DB_TRACE, "get hdl "DF_UUID"\n",
-				DP_UUID(cont_hdl_uuid));
+			D_DEBUG(DB_TRACE, "get hdl " DF_UUID, DP_UUID(cont_hdl_uuid));
 			return 0;
 		}
 	}
 
-	D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
-		DP_UUID(cont_hdl_uuid));
+	D_DEBUG(DB_TRACE, "Can not find " DF_UUID " hdl", DP_UUID(cont_hdl_uuid));
 
 	/* Fetch the capability from the leader. To avoid extra locks,
 	 * all metadatas are maintained by xstream 0, so let's create
@@ -1011,8 +1004,7 @@ cont_iv_hdl_fetch(uuid_t cont_hdl_uuid, uuid_t pool_uuid,
 
 	*cont_hdl = ds_cont_hdl_lookup(cont_hdl_uuid);
 	if (*cont_hdl == NULL) {
-		D_DEBUG(DB_TRACE, "Can not find "DF_UUID" hdl\n",
-			DP_UUID(cont_hdl_uuid));
+		D_DEBUG(DB_TRACE, "Can not find " DF_UUID " hdl", DP_UUID(cont_hdl_uuid));
 		D_GOTO(out_eventual, rc = -DER_NONEXIST);
 	}
 
@@ -1036,16 +1028,14 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
 	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
 	if (rc) {
-		D_ERROR(DF_UUID" op %d, crt_group_rank failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " op %d, crt_group_rank failed", DP_UUID(cont_uuid), op);
 		return rc;
 	}
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
 			    shortcut, sync_mode, true /* retry */);
 	if (rc)
-		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
-			DP_UUID(cont_uuid), op, DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " op %d, cont_iv_update failed", DP_UUID(cont_uuid), op);
 	return rc;
 }
 
@@ -1101,8 +1091,7 @@ cont_iv_invalidate(void *ns, uint32_t class_id, uuid_t cont_uuid, int mode)
 
 	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false);
 	if (rc)
-		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
-			DP_UUID(cont_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID " iv invalidate failed", DP_UUID(cont_uuid));
 
 	return rc;
 }
@@ -1115,24 +1104,24 @@ cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
 	/* delete all entries for this container */
 	rc = oid_iv_invalidate(ns, pool_uuid, cont_uuid);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete snap " DF_UUID, DP_UUID(cont_uuid));
 
 	/* delete all entries for this container */
 	rc = cont_iv_invalidate(ns, IV_CONT_SNAP, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete snap " DF_UUID, DP_UUID(cont_uuid));
 
 	rc = cont_iv_invalidate(ns, IV_CONT_PROP, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete prop "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete prop " DF_UUID, DP_UUID(cont_uuid));
 
 	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete agg epoch report "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete agg epoch report " DF_UUID, DP_UUID(cont_uuid));
 
 	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, CRT_IV_SYNC_NONE);
 	if (rc != 0)
-		D_DEBUG(DB_MD, "delete agg epoch boundary "DF_UUID"\n", DP_UUID(cont_uuid));
+		D_DEBUG(DB_MD, "delete agg epoch boundary " DF_UUID, DP_UUID(cont_uuid));
 
 	return 0;
 }
@@ -1432,13 +1421,13 @@ cont_iv_prop_fetch_ult(void *data)
 
 	rc = cont_iv_prop_g2l(&iv_entry->iv_prop, &prop_fetch);
 	if (rc) {
-		D_ERROR("cont_iv_prop_g2l failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "cont_iv_prop_g2l failed");
 		D_GOTO(out, rc);
 	}
 
 	rc = daos_prop_copy(prop, prop_fetch);
 	if (rc) {
-		D_ERROR("daos_prop_copy failed "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_prop_copy failed");
 		D_GOTO(out, rc);
 	}
 

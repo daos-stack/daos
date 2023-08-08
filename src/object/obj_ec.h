@@ -658,7 +658,7 @@ obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
 
 		rc = obj_iod_break(iod, oca);
 		if (rc != 0) {
-			D_ERROR("obj_iod_break failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "obj_iod_break failed");
 			return rc;
 		}
 		for (j = 0; j < iod->iod_nr; j++) {
@@ -750,14 +750,14 @@ obj_ec_parity_list_covered(struct daos_recx_ep_list *list_1, struct daos_recx_ep
 		for (j = 0; j < list_2->re_nr; j++) {
 			rep_2 = &list_2->re_items[j];
 			if (rep_1->re_rec_size != rep_2->re_rec_size) {
-				D_ERROR("mismatch rec_size %d:%d\n",
-					rep_1->re_rec_size, rep_2->re_rec_size);
+				D_ERROR("mismatch rec_size %d:%d", rep_1->re_rec_size,
+					rep_2->re_rec_size);
 				return false;
 			}
 			if (DAOS_RECX_COVERED(rep_1->re_recx, rep_2->re_recx))
 				break;
 			if (j == list_2->re_nr - 1) {
-				D_ERROR("not fully covered recx list\n");
+				D_ERROR("not fully covered recx list");
 				return false;
 			}
 		}
@@ -777,16 +777,16 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 		list_1 = &lists_1[i];
 		list_2 = &lists_2[i];
 		if (list_1->re_ep_valid != list_2->re_ep_valid) {
-			D_ERROR("got different ep_valid in EC data recovery\n");
+			D_ERROR("got different ep_valid in EC data recovery");
 			return -DER_IO;
 		}
 		if (list_1->re_nr != list_2->re_nr) {
 			if (obj_ec_parity_list_covered(list_1, list_2) ||
 			    obj_ec_parity_list_covered(list_2, list_1)) {
-				D_DEBUG(DB_IO, "parity list mismatch but fully covered\n");
+				D_DEBUG(DB_IO, "parity list mismatch but fully covered");
 				return -DER_FETCH_AGAIN;
 			}
-			D_ERROR("got different parity recx in EC data recovery\n");
+			D_ERROR("got different parity recx in EC data recovery");
 			return -DER_DATA_LOSS;
 		}
 		if (list_1->re_nr == 0)
@@ -796,7 +796,7 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			     list_2->re_items[j].re_recx.rx_idx) ||
 			    (list_1->re_items[j].re_recx.rx_nr !=
 			     list_2->re_items[j].re_recx.rx_nr)) {
-				D_ERROR("got different parity recx in EC data recovery\n");
+				D_ERROR("got different parity recx in EC data recovery");
 				return -DER_DATA_LOSS;
 			}
 			if (list_1->re_items[j].re_ep != list_2->re_items[j].re_ep)

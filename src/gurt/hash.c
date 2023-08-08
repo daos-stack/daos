@@ -350,8 +350,7 @@ ch_rec_insert(struct d_hash_table *htable, struct d_hash_bucket *bucket,
 		bucket->hb_dep++;
 		if (bucket->hb_dep > htable->ht_dep_max) {
 			htable->ht_dep_max = bucket->hb_dep;
-			D_DEBUG(DB_TRACE, "Max depth %d/%d/%d\n",
-				htable->ht_dep_max, htable->ht_nr,
+			D_DEBUG(DB_TRACE, "Max depth %d/%d/%d", htable->ht_dep_max, htable->ht_nr,
 				htable->ht_nr_max);
 		}
 	}
@@ -476,7 +475,7 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 	if (exclusive) {
 		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
 		if (tmp) {
-			D_DEBUG(DB_TRACE, "Dup key detected\n");
+			D_DEBUG(DB_TRACE, "Dup key detected");
 			D_GOTO(out_unlock, rc = -DER_EXIST);
 		}
 	}
@@ -798,9 +797,9 @@ d_hash_table_create_inplace(uint32_t feats, uint32_t bits, void *priv,
 
 	if (hops->hop_rec_hash == NULL && !(feats & D_HASH_FT_NOLOCK)) {
 		htable->ht_feats |= D_HASH_FT_GLOCK;
-		D_WARN("The d_hash_table_ops_t->hop_rec_hash() callback is "
-			"not provided!\nTherefore the whole hash table locking "
-			"will be used for backward compatibility.\n");
+		D_WARN(
+		    "The d_hash_table_ops_t->hop_rec_hash() callback is not provided!\nTherefore "
+		    "the whole hash table locking will be used for backward compatibility");
 	}
 
 	D_ALLOC_ARRAY(htable->ht_buckets, nr);
@@ -893,12 +892,11 @@ d_hash_table_traverse(struct d_hash_table *htable, d_hash_traverse_cb_t cb,
 	int			 rc = 0;
 
 	if (htable->ht_buckets == NULL) {
-		D_ERROR("d_hash_table %p not initialized (NULL buckets).\n",
-			htable);
+		D_ERROR("d_hash_table %p not initialized (NULL buckets)", htable);
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	if (cb == NULL) {
-		D_ERROR("invalid parameter, NULL cb.\n");
+		D_ERROR("invalid parameter, NULL cb");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -924,8 +922,7 @@ d_hash_table_is_empty(struct d_hash_table *htable)
 	bool		 is_empty = true;
 
 	if (htable->ht_buckets == NULL) {
-		D_ERROR("d_hash_table %p not initialized (NULL buckets).\n",
-			htable);
+		D_ERROR("d_hash_table %p not initialized (NULL buckets)", htable);
 		D_GOTO(out, 0);
 	}
 
@@ -951,7 +948,7 @@ d_hash_table_destroy_inplace(struct d_hash_table *htable, bool force)
 		bucket = &htable->ht_buckets[i];
 		while (!d_list_empty(&bucket->hb_head)) {
 			if (!force) {
-				D_DEBUG(DB_TRACE, "Warning, non-empty hash\n");
+				D_DEBUG(DB_TRACE, "Warning, non-empty hash");
 				D_GOTO(out, rc = -DER_BUSY);
 			}
 			d_hash_rec_delete_at(htable, bucket->hb_head.next);
@@ -1001,8 +998,8 @@ void
 d_hash_table_debug(struct d_hash_table *htable)
 {
 #if D_HASH_DEBUG
-	D_DEBUG(DB_TRACE, "max nr: %d, cur nr: %d, max_dep: %d\n",
-		htable->ht_nr_max, htable->ht_nr, htable->ht_dep_max);
+	D_DEBUG(DB_TRACE, "max nr: %d, cur nr: %d, max_dep: %d", htable->ht_nr_max, htable->ht_nr,
+		htable->ht_dep_max);
 #endif
 }
 
@@ -1184,8 +1181,7 @@ d_hhash_set_ptrtype(struct d_hhash *hhash)
 {
 	if (!d_hash_table_is_empty(&hhash->ch_htable) &&
 	    hhash->ch_ptrtype == false) {
-		D_ERROR("d_hash_table %p not empty with non-ptr objects.\n",
-			&hhash->ch_htable);
+		D_ERROR("d_hash_table %p not empty with non-ptr objects", &hhash->ch_htable);
 		return -DER_ALREADY;
 	}
 
@@ -1262,16 +1258,15 @@ d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key)
 		struct d_hlink *hlink = (struct d_hlink *)key;
 
 		if (hlink == NULL) {
-			D_ERROR("NULL PTR type key.\n");
+			D_ERROR("NULL PTR type key");
 			return NULL;
 		}
 		if (!d_hhash_is_ptrtype(hhash)) {
-			D_ERROR("invalid PTR type key being lookup in a "
-				"non ptr-based htable.\n");
+			D_ERROR("invalid PTR type key being lookup in a non ptr-based htable");
 			return NULL;
 		}
 		if (hlink->hl_key != key) {
-			D_ERROR("invalid PTR type key.\n");
+			D_ERROR("invalid PTR type key");
 			return NULL;
 		}
 
@@ -1288,8 +1283,7 @@ d_hhash_link_delete(struct d_hhash *hhash, struct d_hlink *hlink)
 {
 	if (d_hhash_key_isptr(hlink->hl_key)) {
 		if (!d_hhash_is_ptrtype(hhash)) {
-			D_ERROR("invalid PTR type key being lookup in a "
-				"non ptr-based htable.\n");
+			D_ERROR("invalid PTR type key being lookup in a non ptr-based htable");
 			return false;
 		}
 
@@ -1384,7 +1378,7 @@ uh_op_key_hash(struct d_hash_table *htable, const void *key, unsigned int ksize)
 	uint32_t		*retp	= (uint32_t *)lkey->uuid;
 
 	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
-	D_DEBUG(DB_TRACE, "uuid_key: "CF_UUID"\n", CP_UUID(lkey->uuid));
+	D_DEBUG(DB_TRACE, "uuid_key: " CF_UUID, CP_UUID(lkey->uuid));
 
 	return *retp;
 }
@@ -1408,8 +1402,7 @@ uh_op_key_cmp(struct d_hash_table *htable, d_list_t *link, const void *key,
 	bool			 res;
 
 	D_ASSERT(ksize == sizeof(struct d_uhash_bundle));
-	D_DEBUG(DB_TRACE, "Link key, Key:"CF_UUID","CF_UUID"\n",
-		CP_UUID(lkey->uuid),
+	D_DEBUG(DB_TRACE, "Link key, Key:" CF_UUID "," CF_UUID, CP_UUID(lkey->uuid),
 		CP_UUID(ulink->ul_uuid.uuid));
 
 	res = ((uuid_compare(ulink->ul_uuid.uuid, lkey->uuid)) == 0);
@@ -1505,7 +1498,7 @@ d_uhash_link_insert(struct d_hash_table *htable, struct d_uuid *key,
 	rc = d_hash_rec_insert(htable, (void *)&uhbund, sizeof(uhbund),
 			       &ulink->ul_link.rl_link, true);
 	if (rc)
-		D_ERROR("Error Inserting handle in UUID in-memory hash: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error Inserting handle in UUID in-memory hash");
 
 	return rc;
 }

@@ -47,10 +47,11 @@ ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 	rpc_req_input->age = 21;
 	rpc_req_input->days = 7;
 	rpc_req_input->delay = delay;
-	D_DEBUG(DB_TEST, "client(rank %d) sending ping rpc with tag "
-		"%d, name: %s, age: %d, days: %d, delay: %u.\n",
-		test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name,
-		rpc_req_input->age, rpc_req_input->days, rpc_req_input->delay);
+	D_DEBUG(
+	    DB_TEST,
+	    "client(rank %d) sending ping rpc with tag %d, name: %s, age: %d, days: %d, delay: %u",
+	    test_g.t_my_rank, server_ep.ep_tag, rpc_req_input->name, rpc_req_input->age,
+	    rpc_req_input->days, rpc_req_input->delay);
 
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
@@ -162,7 +163,7 @@ test_run(void)
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
 		fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TEST, "joined progress thread.\n");
+	D_DEBUG(DB_TEST, "joined progress thread");
 
 	rc = sem_destroy(&test_g.t_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
@@ -171,7 +172,7 @@ test_run(void)
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-	D_DEBUG(DB_TEST, "exiting.\n");
+	D_DEBUG(DB_TEST, "exiting");
 }
 
 int main(int argc, char **argv)

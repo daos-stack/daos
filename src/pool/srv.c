@@ -44,7 +44,7 @@ init(void)
 	ec_agg_disabled = false;
 	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
 	if (unlikely(ec_agg_disabled))
-		D_WARN("EC aggregation is disabled.\n");
+		D_WARN("EC aggregation is disabled");
 
 	ds_pool_rsvc_class_register();
 
@@ -90,7 +90,7 @@ cleanup(void)
 
 	rc = ds_pool_stop_all();
 	if (rc)
-		D_ERROR("Stop pools failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Stop pools failed");
 
 	return rc;
 }
@@ -150,8 +150,7 @@ pool_tls_fini(int tags, void *data)
 
 	/* pool child cache should be empty now */
 	d_list_for_each_entry(child, &tls->dt_pool_list, spc_list) {
-		D_ERROR(DF_UUID": ref: %d\n",
-			DP_UUID(child->spc_uuid), child->spc_ref);
+		D_ERROR(DF_UUID ": ref: %d", DP_UUID(child->spc_uuid), child->spc_ref);
 	}
 
 	if (!d_list_empty(&tls->dt_pool_list)) {
@@ -161,7 +160,7 @@ pool_tls_fini(int tags, void *data)
 		if (strict)
 			D_ASSERTF(false, "dt_pool_list not empty\n");
 		else
-			D_ERROR("dt_pool_list not empty\n");
+			D_ERROR("dt_pool_list not empty");
 	}
 
 	D_FREE(tls);

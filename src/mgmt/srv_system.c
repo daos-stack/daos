@@ -81,7 +81,7 @@ mgmt_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 
 	rc = ABT_rwlock_create(&svc->ms_lock);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("failed to create ms_lock: %d\n", rc);
+		D_ERROR("failed to create ms_lock: %d", rc);
 		rc = dss_abterr2der(rc);
 		goto err_svc;
 	}
@@ -203,8 +203,8 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 
 	ABT_rwlock_unlock(svc->ms_lock);
 
-	D_DEBUG(DB_MGMT, "requesting dist of map version %u (%u servers)\n",
-		in->gui_map_version, in->gui_n_servers);
+	D_DEBUG(DB_MGMT, "requesting dist of map version %u (%u servers)", in->gui_map_version,
+		in->gui_n_servers);
 	ds_rsvc_request_map_dist(&svc->ms_rsvc);
 
 out_svc:
@@ -223,8 +223,7 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 	crt_rpc_t		       *rpc;
 	int				rc;
 
-	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d\n", map_version,
-		nservers);
+	D_DEBUG(DB_MGMT, "enter: version=%u nservers=%d", map_version, nservers);
 
 	opc = DAOS_RPC_OPCODE(MGMT_TGT_MAP_UPDATE, DAOS_MGMT_MODULE,
 			      DAOS_MGMT_VERSION);
@@ -234,8 +233,7 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 				  0 /* flags */,
 				  crt_tree_topo(CRT_TREE_KNOMIAL, 32), &rpc);
 	if (rc != 0) {
-		D_ERROR("failed to create system map update RPC: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to create system map update RPC");
 		goto out;
 	}
 	in = crt_req_get(rpc);
@@ -254,8 +252,7 @@ map_update_bcast(crt_context_t ctx, struct mgmt_svc *svc, uint32_t map_version,
 out_rpc:
 	crt_req_decref(rpc);
 out:
-	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: "DF_RC"\n",
-		map_version, nservers, DP_RC(rc));
+	D_DEBUG(DB_MGMT, "leave: version=%u nservers=%d: " DF_RC, map_version, nservers, DP_RC(rc));
 	return rc;
 }
 
@@ -312,8 +309,7 @@ ds_mgmt_svc_start(void)
 	rc = ds_rsvc_start_nodb(DS_RSVC_CLASS_MGMT, &mgmt_svc_id,
 				mgmt_svc_db_uuid);
 	if (rc != 0 && rc != -DER_ALREADY)
-		D_ERROR("failed to start management service: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to start management service");
 
 	return rc;
 }
@@ -325,7 +321,7 @@ stopper(void *arg)
 
 	rc = ds_rsvc_stop_nodb(DS_RSVC_CLASS_MGMT, &mgmt_svc_id);
 	if (rc != 0)
-		D_DEBUG(DB_MGMT, "ignoring "DF_RC"\n", DP_RC(rc));
+		D_DEBUG(DB_MGMT, "ignoring: " DF_RC, DP_RC(rc));
 }
 
 int
@@ -336,7 +332,7 @@ ds_mgmt_svc_stop(void)
 
 	rc = dss_ult_create(stopper, NULL, DSS_XS_SYS, 0, 0, &thread);
 	if (rc != 0) {
-		D_ERROR("failed to create stopper ULT: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create stopper ULT");
 		return rc;
 	}
 

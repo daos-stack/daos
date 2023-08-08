@@ -35,7 +35,7 @@ safe_self_rank(void)
 
 	rc = crt_group_rank(NULL /* grp */, &rank);
 	if (rc != 0) {
-		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to get self rank");
 		rank = CRT_NO_RANK;
 	}
 
@@ -59,7 +59,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
-		D_ERROR("localtime() failed\n");
+		D_ERROR("localtime() failed");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
 	strftime(zone, 6, "%z", tm);
@@ -77,13 +77,13 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->proc_id = (uint64_t)getpid();
 
 	if (dmi == NULL) {
-		D_ERROR("failed to retrieve xstream id\n");
+		D_ERROR("failed to retrieve xstream id");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	evt->thread_id = (uint64_t)dmi->dmi_xs_id;
 
 	if (strnlen(dss_hostname, DSS_HOSTNAME_MAX_LEN) == 0) {
-		D_ERROR("missing hostname parameter\n");
+		D_ERROR("missing hostname parameter");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	D_STRNDUP(evt->hostname, dss_hostname, DSS_HOSTNAME_MAX_LEN);
@@ -91,7 +91,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		D_GOTO(out_ts, rc = -DER_NOMEM);
 
 	if ((msg == NULL) || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
-		D_ERROR("missing msg parameter\n");
+		D_ERROR("missing msg parameter");
 		D_GOTO(out_hn, rc = -DER_INVAL);
 	}
 	evt->msg = msg;
@@ -140,7 +140,7 @@ log_event(Shared__RASEvent *evt)
 
 	stream = open_memstream(&buf, &len);
 	if (stream == NULL) {
-		D_ERROR("open_memstream failed: "DF_RC"\n", DP_RC(-DER_NOMEM));
+		DL_ERROR(-DER_NOMEM, "open_memstream failed");
 		return;
 	}
 
@@ -183,7 +183,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_INFO("&&& RAS EVENT%s\n", buf);
+	D_INFO("&&& RAS EVENT%s", buf);
 	free(buf);
 }
 
@@ -197,7 +197,7 @@ send_event(Shared__RASEvent *evt, bool wait_for_resp)
 	int			 rc;
 
 	if (evt == NULL) {
-		D_ERROR("null RAS event\n");
+		D_ERROR("null RAS event");
 		return -DER_INVAL;
 	}
 	req.event = evt;
@@ -215,8 +215,7 @@ send_event(Shared__RASEvent *evt, bool wait_for_resp)
 		goto out_reqb;
 	if (wait_for_resp) {
 		if (dresp->status != DRPC__STATUS__SUCCESS) {
-			D_ERROR("received erroneous dRPC response: %d\n",
-				dresp->status);
+			D_ERROR("received erroneous dRPC response: %d", dresp->status);
 			rc = -DER_IO;
 		}
 		drpc_response_free(dresp);
@@ -239,16 +238,14 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 	int rc = init_event(id, msg, type, sev, hwid, rank, inc, jobid, pool, cont,
 			    objid, ctlop, evt);
 	if (rc != 0) {
-		D_ERROR("failed to init RAS event %s: "DF_RC"\n",
-			ras_event2str(id), DP_RC(rc));
+		DL_ERROR(rc, "failed to init RAS event %s", ras_event2str(id));
 		return rc;
 	}
 
 	log_event(evt);
 	rc = send_event(evt, wait_for_resp);
 	if (rc != 0)
-		D_ERROR("failed to send RAS event %s over dRPC: "DF_RC"\n",
-			ras_event2str(id), DP_RC(rc));
+		DL_ERROR(rc, "failed to send RAS event %s over dRPC", ras_event2str(id));
 
 	free_event(evt);
 
@@ -310,17 +307,17 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl, uint64_t version)
 	int					rc;
 
 	if ((pool == NULL) || uuid_is_null(*pool)) {
-		D_ERROR("invalid pool\n");
+		D_ERROR("invalid pool");
 		return -DER_INVAL;
 	}
 	if ((svcl == NULL) || svcl->rl_nr == 0) {
-		D_ERROR("invalid service replicas\n");
+		D_ERROR("invalid service replicas");
 		return -DER_INVAL;
 	}
 
 	rc = rank_list_to_uint32_array(svcl, &info.svc_reps, &info.n_svc_reps);
 	if (rc != 0) {
-		D_ERROR("failed to convert svc replicas to proto\n");
+		D_ERROR("failed to convert svc replicas to proto");
 		return rc;
 	}
 

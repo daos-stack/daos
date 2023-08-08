@@ -83,8 +83,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	pool = args->ca_pool;
 
-	D_DEBUG(DB_DF, "Allocating container uuid=" DF_UUID "\n",
-		DP_UUID(ukey->uuid));
+	D_DEBUG(DB_DF, "Allocating container uuid=" DF_UUID, DP_UUID(ukey->uuid));
 	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
 	if (UMOFF_IS_NULL(offset))
 		return -DER_NOSPACE;
@@ -96,7 +95,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
 				      DAOS_HDL_INVAL, pool, &hdl);
 	if (rc) {
-		D_ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed");
 		D_GOTO(failed, rc);
 	}
 	dbtree_close(hdl);
@@ -130,7 +129,7 @@ static int
 cont_df_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		   d_iov_t *key, d_iov_t *val, d_iov_t *val_out)
 {
-	D_DEBUG(DB_DF, "Record exists already. Nothing to do\n");
+	D_DEBUG(DB_DF, "Record exists already. Nothing to do");
 	return 0;
 }
 
@@ -233,7 +232,7 @@ cont_insert(struct vos_container *cont, struct d_uuid *key, struct d_uuid *pkey,
 	rc = d_uhash_link_insert(vos_cont_hhash_get(cont->vc_pool->vp_sysdb), key,
 				 pkey, &cont->vc_uhlink);
 	if (rc) {
-		D_ERROR("UHASH table container handle insert failed\n");
+		D_ERROR("UHASH table container handle insert failed");
 		D_GOTO(exit, rc);
 	}
 
@@ -285,18 +284,18 @@ vos_cont_create(daos_handle_t poh, uuid_t co_uuid)
 
 	vpool = vos_hdl2pool(poh);
 	if (vpool == NULL) {
-		D_ERROR("Empty pool handle?\n");
+		D_ERROR("Empty pool handle?");
 		return -DER_INVAL;
 	}
 
-	D_DEBUG(DB_TRACE, "looking up co_id in container index\n");
+	D_DEBUG(DB_TRACE, "looking up co_id in container index");
 	uuid_copy(ukey.uuid, co_uuid);
 	args.ca_pool = vpool;
 
 	rc = cont_df_lookup(vpool, &ukey, &args);
 	if (!rc) {
 		/* Check if attempt to reuse the same container uuid */
-		D_ERROR("Container already exists\n");
+		D_ERROR("Container already exists");
 		D_GOTO(exit, rc = -DER_EXIST);
 	}
 
@@ -329,11 +328,11 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	struct vos_container		*cont = NULL;
 	struct umem_attr		uma;
 
-	D_DEBUG(DB_TRACE, "Open container "DF_UUID"\n", DP_UUID(co_uuid));
+	D_DEBUG(DB_TRACE, "Open container " DF_UUID, DP_UUID(co_uuid));
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL) {
-		D_ERROR("Empty pool handle?\n");
+		D_ERROR("Empty pool handle?");
 		return -DER_INVAL;
 	}
 	uuid_copy(pkey.uuid, pool->vp_id);
@@ -346,8 +345,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	rc = cont_lookup(&ukey, &pkey, &cont, pool->vp_sysdb);
 	if (rc == 0) {
 		cont->vc_open_count++;
-		D_DEBUG(DB_TRACE, "Found handle for cont "DF_UUID
-			" in DRAM hash table, open count: %d\n",
+		D_DEBUG(DB_TRACE,
+			"Found handle for cont " DF_UUID " in DRAM hash table, open count: %d",
 			DP_UUID(co_uuid), cont->vc_open_count);
 		*coh = vos_cont2hdl(cont);
 		D_GOTO(exit, rc);
@@ -355,8 +354,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	rc = cont_df_lookup(pool, &ukey, &args);
 	if (rc) {
-		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
-			DP_UUID(co_uuid));
+		D_DEBUG(DB_TRACE, DF_UUID " container does not exist", DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
 
@@ -386,7 +384,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				    &pool->vp_uma, vos_cont2hdl(cont),
 				    cont->vc_pool, &cont->vc_btr_hdl);
 	if (rc) {
-		D_ERROR("No Object handle, Tree open failed\n");
+		D_ERROR("No Object handle, Tree open failed");
 		D_GOTO(exit, rc);
 	}
 
@@ -398,8 +396,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			      LRU_FLAG_REUSE_UNIQUE,
 			      NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX active array: rc = "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX active array");
 		D_GOTO(exit, rc);
 	}
 
@@ -409,8 +406,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_active_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX active btree: rc = "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX active btree");
 		D_GOTO(exit, rc);
 	}
 
@@ -420,8 +416,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX committed btree: rc = "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX committed btree");
 		D_GOTO(exit, rc);
 	}
 
@@ -432,9 +427,8 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 			rc = vea_hint_load(&cont->vc_cont_df->cd_hint_df[i],
 					   &cont->vc_hint_ctxt[i]);
 			if (rc) {
-				D_ERROR("Error loading allocator %d hint "
-					DF_UUID": %d\n", i, DP_UUID(co_uuid),
-					rc);
+				D_ERROR("Error loading allocator %d hint " DF_UUID ": %d", i,
+					DP_UUID(co_uuid), rc);
 				goto exit;
 			}
 		}
@@ -442,19 +436,18 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 
 	rc = vos_dtx_act_reindex(cont);
 	if (rc != 0) {
-		D_ERROR("Fail to reindex active DTX entries: %d\n", rc);
+		D_ERROR("Fail to reindex active DTX entries: %d", rc);
 		goto exit;
 	}
 
 	rc = cont_insert(cont, &ukey, &pkey, coh);
 	if (rc != 0) {
-		D_ERROR("Error inserting vos container handle to uuid hash\n");
+		D_ERROR("Error inserting vos container handle to uuid hash");
 		goto exit;
 	}
 
 	cont->vc_open_count = 1;
-	D_DEBUG(DB_TRACE, "Inert cont "DF_UUID" into hash table.\n",
-		DP_UUID(cont->vc_id));
+	D_DEBUG(DB_TRACE, "Inert cont " DF_UUID " into hash table", DP_UUID(cont->vc_id));
 
 exit:
 	if (rc != 0 && cont)
@@ -473,7 +466,7 @@ vos_cont_close(daos_handle_t coh)
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Cannot close a NULL handle\n");
+		D_ERROR("Cannot close a NULL handle");
 		return -DER_NO_HDL;
 	}
 
@@ -485,8 +478,8 @@ vos_cont_close(daos_handle_t coh)
 	if (cont->vc_open_count == 0)
 		vos_obj_cache_evict(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont);
 
-	D_DEBUG(DB_TRACE, "Close cont "DF_UUID", open count: %d\n",
-		DP_UUID(cont->vc_id), cont->vc_open_count);
+	D_DEBUG(DB_TRACE, "Close cont " DF_UUID ", open count: %d", DP_UUID(cont->vc_id),
+		cont->vc_open_count);
 
 	cont_decref(cont);
 
@@ -503,7 +496,7 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cont_info)
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Empty container handle for querying?\n");
+		D_ERROR("Empty container handle for querying?");
 		return -DER_INVAL;
 	}
 
@@ -524,7 +517,7 @@ vos_cont_ctl(daos_handle_t coh, enum vos_cont_opc opc)
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Empty container handle for ctl\n");
+		D_ERROR("Empty container handle for ctl");
 		return -DER_NO_HDL;
 	}
 
@@ -552,12 +545,11 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 	int			 rc;
 
 	uuid_copy(key.uuid, co_uuid);
-	D_DEBUG(DB_TRACE, "Destroying CO ID in container index "DF_UUID"\n",
-		DP_UUID(key.uuid));
+	D_DEBUG(DB_TRACE, "Destroying CO ID in container index " DF_UUID, DP_UUID(key.uuid));
 
 	pool = vos_hdl2pool(poh);
 	if (pool == NULL) {
-		D_ERROR("Empty pool handle for destroying container?\n");
+		D_ERROR("Empty pool handle for destroying container?");
 		return -DER_INVAL;
 	}
 	uuid_copy(pkey.uuid, pool->vp_id);
@@ -573,8 +565,8 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 					    &cont->vc_uhlink);
 			cont_decref(cont);
 		} else {
-			D_ERROR("Open reference exists for cont "DF_UUID
-				", cannot destroy, open count: %d\n",
+			D_ERROR("Open reference exists for cont " DF_UUID
+				", cannot destroy, open count: %d",
 				DP_UUID(co_uuid), cont->vc_open_count);
 			cont_decref(cont);
 			D_GOTO(exit, rc = -DER_BUSY);
@@ -584,21 +576,19 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = cont_df_lookup(pool, &key, &args);
 	if (rc) {
-		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
-			DP_UUID(co_uuid));
+		D_DEBUG(DB_TRACE, DF_UUID " container does not exist", DP_UUID(co_uuid));
 		D_GOTO(exit, rc);
 	}
 
 	rc = vos_flush_wal_header(pool);
 	if (rc) {
-		D_ERROR("Failed to flush WAL header. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to flush WAL header");
 		D_GOTO(exit, rc);
 	}
 
 	rc = umem_tx_begin(vos_pool2umm(pool), NULL);
 	if (rc) {
-		D_ERROR("Failed to start pmdk transaction: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to start pmdk transaction");
 		D_GOTO(exit, rc);
 	}
 
@@ -607,7 +597,7 @@ vos_cont_destroy(daos_handle_t poh, uuid_t co_uuid)
 
 	rc = umem_tx_end(vos_pool2umm(pool), rc);
 	if (rc) {
-		D_ERROR("Failed to end pmdk transaction: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to end pmdk transaction");
 		D_GOTO(exit, rc);
 	}
 	gc_wait();
@@ -639,12 +629,11 @@ vos_cont_tab_register()
 {
 	int	rc;
 
-	D_DEBUG(DB_DF, "Registering Container table class: %d\n",
-		VOS_BTR_CONT_TABLE);
+	D_DEBUG(DB_DF, "Registering Container table class: %d", VOS_BTR_CONT_TABLE);
 
 	rc = dbtree_class_register(VOS_BTR_CONT_TABLE, 0, &vct_ops);
 	if (rc)
-		D_ERROR("dbtree create failed\n");
+		D_ERROR("dbtree create failed");
 	return rc;
 }
 
@@ -676,7 +665,7 @@ cont_iter_fini(struct vos_iterator *iter)
 	if (daos_handle_is_valid(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
-			D_ERROR("co_iter_fini failed: "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "co_iter_fini failed");
 	}
 
 	if (co_iter->cot_pool != NULL)
@@ -695,8 +684,7 @@ cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	int			rc = 0;
 
 	if (type != VOS_ITER_COUUID) {
-		D_ERROR("Expected Type: %d, got %d\n",
-			VOS_ITER_COUUID, type);
+		D_ERROR("Expected Type: %d, got %d", VOS_ITER_COUUID, type);
 		return -DER_INVAL;
 	}
 
@@ -741,7 +729,7 @@ cont_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 
 	rc = dbtree_iter_fetch(co_iter->cot_hdl, &key, &value, anchor);
 	if (rc != 0) {
-		D_ERROR("Error while fetching co info: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Error while fetching co info");
 		return rc;
 	}
 	D_ASSERT(value.iov_len == sizeof(struct cont_df_args));

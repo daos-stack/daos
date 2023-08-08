@@ -104,7 +104,7 @@ deflate_init(void **daos_dc_ctx,
 	uint16_t isal_level = level - 1;
 
 	if (isal_level >= sizeof(level_size_buf) / sizeof(int)) {
-		D_ERROR("Invalid isa-l compression level: %d\n", level);
+		D_ERROR("Invalid isa-l compression level: %d", level);
 		return DC_STATUS_INVALID_LEVEL;
 	}
 

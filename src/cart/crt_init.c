@@ -74,26 +74,26 @@ dump_envariables(void)
 		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST",
 		"D_POLL_TIMEOUT"};
 
-	D_INFO("-- ENVARS: --\n");
+	D_INFO("-- ENVARS: --");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
 		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
-			D_INFO("%s = %s\n", envars[i], "********");
+			D_INFO("%s = %s", envars[i], "********");
 		else
-			D_INFO("%s = %s\n", envars[i], val);
+			D_INFO("%s = %s", envars[i], val);
 	}
 }
 
 static void
 dump_opt(crt_init_options_t *opt)
 {
-	D_INFO("options:\n");
-	D_INFO("crt_timeout = %d\n", opt->cio_crt_timeout);
-	D_INFO("max_ctx_num = %d\n", opt->cio_ctx_max_num);
-	D_INFO("swim_idx = %d\n", opt->cio_swim_crt_idx);
-	D_INFO("provider = %s\n", opt->cio_provider);
-	D_INFO("interface = %s\n", opt->cio_interface);
-	D_INFO("domain = %s\n", opt->cio_domain);
+	D_INFO("options:");
+	D_INFO("crt_timeout = %d", opt->cio_crt_timeout);
+	D_INFO("max_ctx_num = %d", opt->cio_ctx_max_num);
+	D_INFO("swim_idx = %d", opt->cio_swim_crt_idx);
+	D_INFO("provider = %s", opt->cio_provider);
+	D_INFO("interface = %s", opt->cio_interface);
+	D_INFO("domain = %s", opt->cio_domain);
 }
 
 static int
@@ -112,35 +112,33 @@ mem_pin_workaround(void)
 	/* Prevent malloc from releasing memory via sbrk syscall */
 	rc = mallopt(M_TRIM_THRESHOLD, -1);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc trim: %d\n", errno);
+		D_WARN("Failed to disable malloc trim: %d", errno);
 
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
+		D_WARN("Failed to disable malloc fastbins: %d (%s)", errno, strerror(errno));
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
-		D_WARN("getrlimit() failed; errno=%d (%s)\n",
-		       errno, strerror(errno));
+		D_WARN("getrlimit() failed; errno=%d (%s)", errno, strerror(errno));
 		goto exit;
 	}
 
 	if (rlim.rlim_cur == RLIM_INFINITY &&
 	    rlim.rlim_max == RLIM_INFINITY) {
-		D_INFO("Infinite rlimit detected; performing mlockall()\n");
+		D_INFO("Infinite rlimit detected; performing mlockall()");
 
 		/* Lock all pages */
 		rc = mlockall(MCL_CURRENT | MCL_FUTURE);
 		if (rc)
-			D_WARN("Failed to mlockall(); errno=%d (%s)\n",
-			       errno, strerror(errno));
+			D_WARN("Failed to mlockall(); errno=%d (%s)", errno, strerror(errno));
 
 	} else {
-		D_INFO("mlockall() skipped\n");
+		D_INFO("mlockall() skipped");
 	}
 
-	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
+	D_DEBUG(DB_ALL, "Memory pinning workaround enabled");
 exit:
 	return;
 }
@@ -181,7 +179,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	if (max_num_ctx < CRT_SRV_CONTEXT_NUM_MIN)
 		max_num_ctx = CRT_SRV_CONTEXT_NUM_MIN;
 
-	D_DEBUG(DB_ALL, "Max number of contexts set to %d\n", max_num_ctx);
+	D_DEBUG(DB_ALL, "Max number of contexts set to %d", max_num_ctx);
 
 	/* Assume for now this option is only available for a primary provider */
 	if (primary) {
@@ -226,7 +224,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 	prov_data->cpg_num_remote_tags = 1;
 	prov_data->cpg_last_remote_tag = 0;
 
-	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d) max_ctx: %d\n",
+	D_DEBUG(DB_ALL, "prov_idx: %d primary: %d sep_mode: %d sizes: (%d/%d) max_ctx: %d",
 		provider, primary, set_sep, max_expect_size, max_unexpect_size, max_num_ctx);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
@@ -245,12 +243,12 @@ static int data_init(int server, crt_init_options_t *opt)
 	char		ucx_ib_fork_init = 0;
 	int		rc = 0;
 
-	D_DEBUG(DB_ALL, "initializing crt_gdata...\n");
+	D_DEBUG(DB_ALL, "initializing crt_gdata");
 
 	dump_envariables();
 
-	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld\n",
-		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
+	D_DEBUG(DB_ALL, "Starting RPCID %#lx. Num cores: %ld", crt_gdata.cg_rpcid,
+		crt_gdata.cg_num_cores);
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
@@ -281,12 +279,11 @@ static int data_init(int server, crt_init_options_t *opt)
 	else
 		crt_gdata.cg_timeout = timeout;
 
-	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
-		crt_gdata.cg_timeout);
+	D_DEBUG(DB_ALL, "set the global timeout value as %d second", crt_gdata.cg_timeout);
 
 	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
-	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
+	D_DEBUG(DB_ALL, "SWIM context idx=%d", crt_gdata.cg_swim_crt_idx);
 
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
@@ -300,9 +297,9 @@ static int data_init(int server, crt_init_options_t *opt)
 	d_getenv_char("UCX_IB_FORK_INIT", &ucx_ib_fork_init);
 	if (ucx_ib_fork_init) {
 		if (server) {
-			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n\n", ucx_ib_fork_init);
+			D_INFO("UCX_IB_FORK_INIT was set to %c, setting to n", ucx_ib_fork_init);
 		} else {
-			D_INFO("UCX_IB_FORK_INIT was set to %c on client\n", ucx_ib_fork_init);
+			D_INFO("UCX_IB_FORK_INIT was set to %c on client", ucx_ib_fork_init);
 		}
 	}
 	if (server)
@@ -311,21 +308,20 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
-		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
+		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
 	if (credits == 0) {
-		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control "
-			"disabled.\n");
+		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as 0, flow control disabled");
 	} else if (credits > CRT_MAX_CREDITS_PER_EP_CTX) {
-		D_DEBUG(DB_ALL, "ENV CRT_CREDIT_EP_CTX's value %d exceed max "
-			"allowed value, use %d for flow control.\n",
+		D_DEBUG(DB_ALL,
+			"ENV CRT_CREDIT_EP_CTX's value %d exceed max allowed value, use %d for "
+			"flow control",
 			credits, CRT_MAX_CREDITS_PER_EP_CTX);
 		credits = CRT_MAX_CREDITS_PER_EP_CTX;
 	} else {
-		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as %d for flow "
-			"control.\n", credits);
+		D_DEBUG(DB_ALL, "CRT_CREDIT_EP_CTX set as %d for flow control", credits);
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
@@ -342,15 +338,13 @@ static int data_init(int server, crt_init_options_t *opt)
 				      "total number of URI requests for self",
 				      "", "net/uri/lookup_self");
 		if (ret)
-			D_WARN("Failed to create uri self sensor: "DF_RC"\n",
-			       DP_RC(ret));
+			DL_WARN(ret, "Failed to create uri self sensor");
 
 		ret = d_tm_add_metric(&crt_gdata.cg_uri_other, D_TM_COUNTER,
 				      "total number of URI requests for other "
 				      "ranks", "", "net/uri/lookup_other");
 		if (ret)
-			D_WARN("Failed to create uri other sensor: "DF_RC"\n",
-			       DP_RC(ret));
+			DL_WARN(ret, "Failed to create uri other sensor");
 	}
 
 	gdata_init_flag = 1;
@@ -489,14 +483,12 @@ check_grpid(crt_group_id_t grpid)
 		return rc;
 
 	if (crt_validate_grpid(grpid) != 0) {
-		D_ERROR("grpid contains invalid characters "
-			"or is too long\n");
+		D_ERROR("grpid contains invalid characters or is too long");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	if (strcmp(grpid, CRT_DEFAULT_GRPID) == 0) {
-		D_ERROR("invalid client grpid (same as "
-			"CRT_DEFAULT_GRPID).\n");
+		D_ERROR("invalid client grpid (same as CRT_DEFAULT_GRPID)");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 out:
@@ -511,7 +503,7 @@ apply_if_not_set(const char *env_name, const char *new_value)
 	old_val = getenv(env_name);
 
 	if (old_val == NULL) {
-		D_INFO("%s not set, setting to %s\n", env_name, new_value);
+		D_INFO("%s not set, setting to %s", env_name, new_value);
 		setenv(env_name, new_value, true);
 	}
 }
@@ -528,8 +520,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	/* rxm and verbs providers only works with regular EP */
 	if (prov != CRT_PROV_OFI_SOCKETS &&
 	    crt_provider_is_sep(primary, prov)) {
-		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-		       "for current provider, ignoring it.\n");
+		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid for current provider, ignoring it");
 		crt_provider_set_sep(prov, primary, false);
 	}
 
@@ -549,7 +540,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 
 	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
 	if (mrc_enable == 0) {
-		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
+		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)");
 		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
@@ -605,7 +596,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
-	D_INFO("libcart version %s initializing\n", CART_VERSION);
+	D_INFO("libcart version %s initializing", CART_VERSION);
 
 	if (opt)
 		dump_opt(opt);
@@ -613,7 +604,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	/* d_fault_inject_init() is reference counted */
 	rc = d_fault_inject_init();
 	if (rc != DER_SUCCESS && rc != -DER_NOSYS) {
-		D_ERROR("d_fault_inject_init() failed, rc: %d.\n", rc);
+		D_ERROR("d_fault_inject_init() failed, rc: %d", rc);
 		D_GOTO(out, rc);
 	}
 
@@ -625,7 +616,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	if (gdata_init_flag == 0) {
 		rc = data_init(server, opt);
 		if (rc != 0) {
-			D_ERROR("data_init failed "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "data_init failed");
 			D_GOTO(out, rc);
 		}
 	}
@@ -646,11 +637,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (path != NULL && strlen(path) > 0) {
 			rc = crt_group_config_path_set(path);
 			if (rc != 0)
-				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
-					"but crt_group_config_path_set failed "
-					"rc: %d, ignore the ENV.\n", path, rc);
+				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, but "
+					"crt_group_config_path_set failed rc: %d, ignore the ENV",
+					path, rc);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+				D_DEBUG(DB_ALL, "set group_config_path as %s", path);
 		}
 
 		if (opt && opt->cio_auth_key)
@@ -708,7 +699,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
-			D_ERROR("Requested provider %s not found\n", provider_env);
+			D_ERROR("Requested provider %s not found", provider_env);
 			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
 
@@ -726,7 +717,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(unlock, rc);
 
 		if (iface0 == NULL) {
-			D_ERROR("Empty interface specified\n");
+			D_ERROR("Empty interface specified");
 			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 
@@ -741,7 +732,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		rc = crt_na_config_init(true, primary_provider, iface0, domain0,
 					port0, auth_key0, port_auto_adjust);
 		if (rc != 0) {
-			D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_na_config_init() failed");
 			D_GOTO(unlock, rc);
 		}
 
@@ -777,27 +768,27 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			rc = crt_na_config_init(false, tmp_prov, iface1, domain1,
 						port1, auth_key1, port_auto_adjust);
 			if (rc != 0) {
-				D_ERROR("crt_na_config_init() failed, "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "crt_na_config_init() failed");
 				D_GOTO(cleanup, rc);
 			}
 		}
 
 		rc = crt_hg_init();
 		if (rc != 0) {
-			D_ERROR("crt_hg_init() failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_hg_init() failed");
 			D_GOTO(cleanup, rc);
 		}
 
 		rc = crt_grp_init(grpid);
 		if (rc != 0) {
-			D_ERROR("crt_grp_init() failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_grp_init() failed");
 			D_GOTO(cleanup, rc);
 		}
 
 		if (crt_plugin_gdata.cpg_inited == 0) {
 			rc = crt_plugin_init();
 			if (rc != 0) {
-				D_ERROR("crt_plugin_init() failed, "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "crt_plugin_init() failed");
 				D_GOTO(cleanup, rc);
 			}
 		}
@@ -806,13 +797,13 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		rc = crt_opc_map_create();
 		if (rc != 0) {
-			D_ERROR("crt_opc_map_create() failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_opc_map_create() failed");
 			D_GOTO(self_test, rc);
 		}
 
 		rc = crt_internal_rpc_register(server);
 		if (rc != 0) {
-			D_ERROR("crt_internal_rpc_register() failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "crt_internal_rpc_register() failed");
 			D_GOTO(self_test, rc);
 		}
 
@@ -821,7 +812,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		crt_gdata.cg_inited = 1;
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
-			D_ERROR("CRT initialized as client, cannot set as server again.\n");
+			D_ERROR("CRT initialized as client, cannot set as server again");
 			D_GOTO(unlock, rc = -DER_INVAL);
 		}
 	}
@@ -862,7 +853,7 @@ out:
 	D_FREE(auth_key0);
 
 	if (rc != 0) {
-		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 		d_fault_inject_fini();
 		d_log_fini();
 	}
@@ -886,7 +877,7 @@ crt_finalize(void)
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	if (!crt_initialized()) {
-		D_ERROR("cannot finalize before initializing.\n");
+		D_ERROR("cannot finalize before initializing");
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		D_GOTO(direct_out, rc = -DER_UNINIT);
 	}
@@ -901,8 +892,7 @@ crt_finalize(void)
 		if (prov_data->cpg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(crt_gdata.cg_primary_prov,
 				 CRT_LOCKED));
-			D_ERROR("cannot finalize, current ctx_num(%d).\n",
-				prov_data->cpg_ctx_num);
+			D_ERROR("cannot finalize, current ctx_num(%d)", prov_data->cpg_ctx_num);
 			crt_gdata.cg_refcount++;
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc = -DER_BUSY);
@@ -921,7 +911,7 @@ crt_finalize(void)
 
 		rc = crt_hg_fini();
 		if (rc != 0) {
-			D_ERROR("crt_hg_fini failed rc: %d.\n", rc);
+			D_ERROR("crt_hg_fini failed rc: %d", rc);
 			crt_gdata.cg_refcount++;
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 			D_GOTO(out, rc);
@@ -953,13 +943,13 @@ out:
 	/* d_fault_inject_fini() is reference counted */
 	local_rc = d_fault_inject_fini();
 	if (local_rc != 0 && local_rc != -DER_NOSYS)
-		D_ERROR("d_fault_inject_fini() failed, rc: %d\n", local_rc);
+		D_ERROR("d_fault_inject_fini() failed, rc: %d", local_rc);
 
 direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else
-		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "failed");
 
 	return rc;
 }
@@ -992,7 +982,7 @@ crt_get_port_opx(int *port)
 
 	pid = getpid();
 	*port = pid;
-	D_DEBUG(DB_ALL, "got a port: %d.\n", *port);
+	D_DEBUG(DB_ALL, "got a port: %d", *port);
 
 	return rc;
 }
@@ -1012,7 +1002,7 @@ crt_port_range_verify(int port)
 
 	f = fopen(proc, "r");
 	if (!f) {
-		D_ERROR("Failed to open %s for reading\n", proc);
+		D_ERROR("Failed to open %s for reading", proc);
 		return;
 	}
 
@@ -1020,7 +1010,7 @@ crt_port_range_verify(int port)
 
 	rc = fread(buff, 1, PORT_RANGE_STR_SIZE - 1, f);
 	if (rc <= 0) {
-		D_ERROR("Failed to read from file %s\n", proc);
+		D_ERROR("Failed to read from file %s", proc);
 		fclose(f);
 		return;
 	}
@@ -1048,10 +1038,11 @@ crt_port_range_verify(int port)
 		return;
 
 	if (port >= start_port && port <= end_port) {
-		D_WARN("Requested port %d is inside of the local port range "
-		       "as specified by file '%s'\n", port, proc);
-		D_WARN("In order to avoid port conflicts pick a different "
-		       "value outside of the %d-%d range\n",
+		D_WARN(
+		    "Requested port %d is inside of the local port range as specified by file '%s'",
+		    port, proc);
+		D_WARN("In order to avoid port conflicts pick a different value outside of the "
+		       "%d-%d range",
 		       start_port, end_port);
 	}
 }
@@ -1068,7 +1059,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
-		D_ERROR("cannot getifaddrs, errno: %d(%s).\n", errno, strerror(errno));
+		D_ERROR("cannot getifaddrs, errno: %d(%s)", errno, strerror(errno));
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -1085,7 +1076,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 			tmp_ptr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 			ip_str = inet_ntop(AF_INET, tmp_ptr, na_cfg->noc_ip_str, INET_ADDRSTRLEN);
 			if (ip_str == NULL) {
-				D_ERROR("inet_ntop errno: %d(%s).\n", errno, strerror(errno));
+				D_ERROR("inet_ntop errno: %d(%s)", errno, strerror(errno));
 				freeifaddrs(if_addrs);
 				D_GOTO(out, rc = -DER_PROTO);
 			}
@@ -1104,7 +1095,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 	}
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
-		D_ERROR("no IP addr found on interface %s\n", na_cfg->noc_interface);
+		D_ERROR("no IP addr found on interface %s", na_cfg->noc_interface);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -1144,7 +1135,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	crt_na_fill_ip_addr(na_cfg);
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
-			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.", port_str);
+			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s", port_str);
 		} else {
 			port = atoi(port_str);
 
@@ -1155,19 +1146,19 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 
 			if (provider == CRT_PROV_OFI_CXI && port_auto_adjust) {
 				if (port > 511) {
-					D_WARN("Port=%d outside of valid range 0-511, "
-					       "converting it to %d\n",
+					D_WARN("Port=%d outside of valid range 0-511, converting "
+					       "it to %d",
 					       port, port % 512);
 					port = port % 512;
 				}
 			}
 
-			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port.\n", port);
+			D_DEBUG(DB_ALL, "OFI_PORT %d, using it as service port", port);
 		}
 	} else if (provider == CRT_PROV_OFI_OPX) {
 		rc = crt_get_port_opx(&port);
 		if (rc != 0) {
-			D_ERROR("crt_get_port failed, rc: %d.\n", rc);
+			D_ERROR("crt_get_port failed, rc: %d", rc);
 			D_GOTO(out, rc);
 		}
 	}

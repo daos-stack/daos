@@ -56,8 +56,7 @@ umempobj_settings_init(bool md_on_ssd)
 
 		rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
 		if (rc != 0)
-			D_ERROR("Could not configure PMDK for global arena: %s\n",
-				strerror(errno));
+			D_ERROR("Could not configure PMDK for global arena: %s", strerror(errno));
 		return rc;
 	}
 
@@ -65,13 +64,13 @@ umempobj_settings_init(bool md_on_ssd)
 
 	switch (md_mode) {
 	case DAOS_MD_BMEM:
-		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface\n");
+		D_INFO("UMEM will use Blob Backed Memory as the metadata backend interface");
 		break;
 	case DAOS_MD_ADMEM:
-		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
+		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface");
 		break;
 	default:
-		D_ERROR("DAOS_MD_ON_SSD_MODE=%d envar invalid, use %d for BMEM or %d for ADMEM\n",
+		D_ERROR("DAOS_MD_ON_SSD_MODE=%d envar invalid, use %d for BMEM or %d for ADMEM",
 			md_mode, DAOS_MD_BMEM, DAOS_MD_ADMEM);
 		return -DER_INVAL;
 	};
@@ -208,7 +207,7 @@ get_slab(struct umem_instance *umm, uint64_t *flags, size_t *size)
 		return;
 
 	if (slab_map[slab_idx] == -1) {
-		D_DEBUG(DB_MEM, "No slab %zu for allocation of size %zu, idx=%d\n", aligned_size,
+		D_DEBUG(DB_MEM, "No slab %zu for allocation of size %zu, idx=%d", aligned_size,
 			*size, slab_idx);
 		return;
 	}
@@ -247,12 +246,12 @@ register_slabs(struct umem_pool *ph_p)
 
 		rc = set_slab_desc(ph_p, slab);
 		if (rc) {
-			D_ERROR("Failed to register umem slab %d. rc:%d\n", i, rc);
+			D_ERROR("Failed to register umem slab %d. rc:%d", i, rc);
 			rc = umem_tx_errno(rc);
 			return rc;
 		}
 		D_ASSERT(slab->class_id != 0);
-		D_DEBUG(DB_MEM, "slab registered with size %zu\n", slab->unit_size);
+		D_DEBUG(DB_MEM, "slab registered with size %zu", slab->unit_size);
 
 		used &= ~(1 << defined);
 	}
@@ -293,21 +292,20 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	else
 		umm_pool->up_store.store_type = DAOS_MD_PMEM; /* default */
 
-	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ...\n", path, poolsize,
+	D_DEBUG(DB_TRACE, "creating path %s, poolsize %zu, store_size %zu ", path, poolsize,
 		store != NULL ? store->stor_size : 0);
 	switch (umm_pool->up_store.store_type) {
 	case DAOS_MD_PMEM:
 		pop = pmemobj_create(path, layout_name, poolsize, mode);
 		if (!pop) {
-			D_ERROR("Failed to create pool %s, size="DF_U64": %s\n",
-				path, poolsize, pmemobj_errormsg());
+			D_ERROR("Failed to create pool %s, size=" DF_U64 ": %s", path, poolsize,
+				pmemobj_errormsg());
 			goto error;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
 			rc = pmemobj_ctl_set(pop, "stats.enabled", &enabled);
 			if (rc) {
-				D_ERROR("Enable SCM usage statistics failed. "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "Enable SCM usage statistics failed");
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
 				goto error;
@@ -319,8 +317,8 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	case DAOS_MD_BMEM:
 		dav_hdl = dav_obj_create(path, 0, poolsize, mode, &umm_pool->up_store);
 		if (!dav_hdl) {
-			D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
-				path, poolsize, errno);
+			D_ERROR("Failed to create pool %s, size=" DF_U64 ": errno = %d", path,
+				poolsize, errno);
 			goto error;
 		}
 		umm_pool->up_priv = dav_hdl;
@@ -328,7 +326,7 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_create(path, 0, store, &bh);
 		if (rc) {
-			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "ad_blob_create failed");
 			goto error;
 		}
 
@@ -378,20 +376,18 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 		umm_pool->up_store.store_standalone = true;
 	}
 
-	D_DEBUG(DB_TRACE, "opening %s\n", path);
+	D_DEBUG(DB_TRACE, "opening %s", path);
 	switch (umm_pool->up_store.store_type) {
 	case DAOS_MD_PMEM:
 		pop = pmemobj_open(path, layout_name);
 		if (!pop) {
-			D_ERROR("Error in opening the pool %s: %s\n",
-				path, pmemobj_errormsg());
+			D_ERROR("Error in opening the pool %s: %s", path, pmemobj_errormsg());
 			goto error;
 		}
 		if (flags & UMEMPOBJ_ENABLE_STATS) {
 			rc = pmemobj_ctl_set(pop, "stats.enabled", &enabled);
 			if (rc) {
-				D_ERROR("Enable SCM usage statistics failed. "DF_RC"\n",
-					DP_RC(rc));
+				DL_ERROR(rc, "Enable SCM usage statistics failed");
 				rc = umem_tx_errno(rc);
 				pmemobj_close(pop);
 				goto error;
@@ -403,8 +399,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	case DAOS_MD_BMEM:
 		dav_hdl = dav_obj_open(path, 0, &umm_pool->up_store);
 		if (!dav_hdl) {
-			D_ERROR("Error in opening the pool %s: errno =%d\n",
-				path, errno);
+			D_ERROR("Error in opening the pool %s: errno =%d", path, errno);
 			goto error;
 		}
 
@@ -413,7 +408,7 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_open(path, 0, store, &bh);
 		if (rc) {
-			D_ERROR("ad_blob_create failed, "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "ad_blob_create failed");
 			goto error;
 		}
 
@@ -558,18 +553,17 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 		pmemobj_ctl_get(pop, "stats.heap.run_allocated", &scm_used);
 		pmemobj_ctl_get(pop, "stats.heap.run_active", &scm_active);
 
-		D_ERROR("Fragmentation info, run_allocated: "
-		  DF_U64", run_active: "DF_U64"\n", scm_used, scm_active);
+		D_ERROR("Fragmentation info, run_allocated: " DF_U64 ", run_active: " DF_U64,
+			scm_used, scm_active);
 		break;
 	case DAOS_MD_BMEM:
 		dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
-		D_ERROR("Fragmentation info, run_allocated: "
-		  DF_U64", run_active: "DF_U64"\n",
-		  st.run_allocated, st.run_active);
+		D_ERROR("Fragmentation info, run_allocated: " DF_U64 ", run_active: " DF_U64,
+			st.run_allocated, st.run_active);
 		break;
 	case DAOS_MD_ADMEM:
 		/* TODO */
-		D_ERROR("Fragmentation info, not implemented in ADMEM yet.\n");
+		D_ERROR("Fragmentation info, not implemented in ADMEM yet");
 		break;
 	default:
 		D_ASSERTF(0, "bad daos_md_backend %d\n", ph_p->up_store.store_type);
@@ -964,7 +958,7 @@ umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		cnt_max = &txd->txd_end_max;
 		break;
 	default:
-		D_ERROR("Invalid stage %d\n", stage);
+		D_ERROR("Invalid stage %d", stage);
 		return -DER_INVAL;
 	}
 
@@ -973,8 +967,7 @@ umem_tx_add_cb(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		unsigned int new_max;
 
 		if (*cnt_max == TXD_CB_MAX) {
-			D_ERROR("Too many transaction callbacks "
-				"cnt:%u, stage:%d\n", *cnt, stage);
+			D_ERROR("Too many transaction callbacks cnt:%u, stage:%d", *cnt, stage);
 			return -DER_OVERFLOW;
 		}
 
@@ -1264,7 +1257,7 @@ umem_tx_errno(int err)
 		if (err < -DER_ERR_GURT_BASE)
 			return err; /* aborted by DAOS */
 
-		D_ERROR("pmdk returned negative errno %d\n", err);
+		D_ERROR("pmdk returned negative errno %d", err);
 		err = -err;
 	}
 
@@ -1426,7 +1419,7 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 		}
 	}
 	if (!found) {
-		D_DEBUG(DB_MEM, "Cannot find memory class %d\n", uma->uma_id);
+		D_DEBUG(DB_MEM, "Cannot find memory class %d", uma->uma_id);
 		return -DER_ENOENT;
 	}
 
@@ -1439,9 +1432,11 @@ umem_class_init(struct umem_attr *uma, struct umem_instance *umm)
 
 	set_offsets(umm);
 
-	D_DEBUG(DB_MEM, "Instantiate memory class %s id=%d nospc_rc=%d pool=%p pool_uuid_lo="DF_X64
-		" base="DF_X64"\n", umc->umc_name, umm->umm_id, umm->umm_nospc_rc, umm->umm_pool,
-		umm->umm_pool_uuid_lo, umm->umm_base);
+	D_DEBUG(DB_MEM,
+		"Instantiate memory class %s id=%d nospc_rc=%d pool=%p pool_uuid_lo=" DF_X64
+		" base=" DF_X64,
+		umc->umc_name, umm->umm_id, umm->umm_nospc_rc, umm->umm_pool, umm->umm_pool_uuid_lo,
+		umm->umm_base);
 
 	return 0;
 }
@@ -1541,7 +1536,7 @@ umem_rsrvd_item_size(struct umem_instance *umm)
 	case UMEM_CLASS_BMEM:
 		return sizeof(struct dav_action);
 	default:
-		D_ERROR("bad umm_id %d\n", umm->umm_id);
+		D_ERROR("bad umm_id %d", umm->umm_id);
 		return 0;
 	};
 	return 0;
@@ -1623,9 +1618,9 @@ umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act,
 			  "Invalid assumption about allocnot using flag bits");
 		D_DEBUG(DB_MEM,
 			"reserve %s umoff=" UMOFF_PF " size=%zu base=" DF_X64
-			" pool_uuid_lo=" DF_X64 "\n",
-			(umm)->umm_name, UMOFF_P(off), (size_t)(size),
-			(umm)->umm_base, (umm)->umm_pool_uuid_lo);
+			" pool_uuid_lo=" DF_X64,
+			(umm)->umm_name, UMOFF_P(off), (size_t)(size), (umm)->umm_base,
+			(umm)->umm_pool_uuid_lo);
 		return off;
 	}
 	return UMOFF_NULL;
@@ -1636,11 +1631,8 @@ umem_defer_free(struct umem_instance *umm, umem_off_t off,
 		struct umem_rsrvd_act *rsrvd_act)
 {
 	D_ASSERT(rsrvd_act->rs_actv_at < rsrvd_act->rs_actv_cnt);
-	D_DEBUG(DB_MEM,
-		"Defer free %s umoff=" UMOFF_PF "base=" DF_X64
-		" pool_uuid_lo=" DF_X64 "\n",
-		(umm)->umm_name, UMOFF_P(off), (umm)->umm_base,
-		(umm)->umm_pool_uuid_lo);
+	D_DEBUG(DB_MEM, "Defer free %s umoff=" UMOFF_PF "base=" DF_X64 " pool_uuid_lo=" DF_X64,
+		(umm)->umm_name, UMOFF_P(off), (umm)->umm_base, (umm)->umm_pool_uuid_lo);
 	if (umm->umm_ops->mo_defer_free) {
 		void		*act;
 		size_t		 act_size = umem_rsrvd_item_size(umm);
@@ -1720,7 +1712,7 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 	num_pages = (store->stor_size + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 
 	if (max_mapped != 0) {
-		D_ERROR("Setting max_mapped is unsupported at present\n");
+		D_ERROR("Setting max_mapped is unsupported at present");
 		return -DER_NOTSUPPORTED;
 	}
 
@@ -1732,7 +1724,7 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 		D_GOTO(error, rc = -DER_NOMEM);
 
 	D_DEBUG(DB_IO,
-		"Allocated page cache for stor->stor_size=" DF_U64 ", " DF_U64 " pages at %p\n",
+		"Allocated page cache for stor->stor_size=" DF_U64 ", " DF_U64 " pages at %p",
 		store->stor_size, num_pages, cache);
 
 	cache->ca_store      = store;

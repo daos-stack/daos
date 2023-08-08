@@ -105,13 +105,13 @@ int handler_ping(crt_rpc_t *rpc)
 	crt_context_idx(rpc->cr_ctx, &my_tag);
 
 	if (my_tag != input->tag || my_tag != hdr_dst_tag) {
-		D_ERROR("Incorrect tag Expected %lu got %d (hdr=%d)\n",
-			input->tag, my_tag, hdr_dst_tag);
+		D_ERROR("Incorrect tag Expected %lu got %d (hdr=%d)", input->tag, my_tag,
+			hdr_dst_tag);
 		assert(0);
 	}
 
 	if (hdr_src_rank != CRT_NO_RANK) {
-		D_ERROR("Expected %d got %d\n", CRT_NO_RANK, hdr_src_rank);
+		D_ERROR("Expected %d got %d", CRT_NO_RANK, hdr_src_rank);
 		assert(0);
 	}
 

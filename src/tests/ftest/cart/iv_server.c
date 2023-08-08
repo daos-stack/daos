@@ -279,7 +279,7 @@ add_new_kv_pair(crt_iv_key_t *iv_key, d_sg_list_t *iv_value,
 	memcpy(entry->key.iov_buf, iv_key->iov_buf, iv_key->iov_buf_len);
 	entry->key.iov_buf_len = iv_key->iov_buf_len;
 	entry->key.iov_len = iv_key->iov_len;
-	D_DEBUG(DB_TEST, "IV Variable:\n");
+	D_DEBUG(DB_TEST, "IV Variable:");
 
 	/* Allocate space for iv value */
 	entry->value.sg_nr = 1;
@@ -729,7 +729,7 @@ iv_destroy_cb(crt_iv_namespace_t ivns, void *arg)
 	D_ASSERT(ivns != NULL);
 	D_ASSERT(arg != NULL);
 
-	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p\n", ivns, arg);
+	D_DEBUG(DB_TRACE, "ivns %p was destroyed, arg %p", ivns, arg);
 }
 
 static void
@@ -935,7 +935,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	output = crt_reply_get(cb_info->rpc);
 	output->rc = update_rc;
 
-	D_DEBUG(DB_TRACE, "Respond/Send to change in IV\n");
+	D_DEBUG(DB_TRACE, "Respond/Send to change in IV");
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
@@ -1033,8 +1033,7 @@ iv_set_grp_version(crt_rpc_t *rpc)
 
 	g_grp_version = input->version;
 	g_timing = input->timing;
-	D_DEBUG(DB_TEST, "  set_grp_version: to 0x%0x: %d\n",
-		g_grp_version, g_grp_version);
+	D_DEBUG(DB_TEST, "  set_grp_version: to 0x%0x: %d", g_grp_version, g_grp_version);
 
 	/* implement code here */
 	if (g_timing == 0) {
@@ -1072,8 +1071,7 @@ iv_get_grp_version(crt_rpc_t *rpc)
 	rc = crt_group_version(grp, &version);
 
 	/* result of test output */
-	D_DEBUG(DB_TEST, " grp version: 0x%08x : %d::  rc %d:\n",
-		version, version, rc);
+	D_DEBUG(DB_TEST, " grp version: 0x%08x : %d::  rc %d:", version, version, rc);
 
 	/* Set output results */
 	output->version = version;
@@ -1275,7 +1273,7 @@ int main(int argc, char **argv)
 	crt_group_version(grp, &version);
 
 	if (grp == NULL) {
-		D_ERROR("Failed to lookup group %s\n", IV_GRP_NAME);
+		D_ERROR("Failed to lookup group %s", IV_GRP_NAME);
 		assert(0);
 	}
 
@@ -1287,16 +1285,16 @@ int main(int argc, char **argv)
 	/* Load the group configuration file */
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 	if (grp_cfg_file == NULL) {
-		D_ERROR("CRT_L_GRP_CFG was not set\n");
+		D_ERROR("CRT_L_GRP_CFG was not set");
 		assert(0);
 	} else {
-		D_DEBUG(DB_TEST, "Group Config File: %s\n", grp_cfg_file);
+		D_DEBUG(DB_TEST, "Group Config File: %s", grp_cfg_file);
 	}
 
 	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				     true);
 	if (rc != 0) {
-		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
+		D_ERROR("Failed to load group file %s", grp_cfg_file);
 		assert(0);
 	}
 
@@ -1308,8 +1306,7 @@ int main(int argc, char **argv)
 
 	rc = crt_group_size(NULL, &g_group_size);
 	assert(rc == 0);
-	D_DEBUG(DB_TEST, "My_rank %d: grp size %d\n",
-		g_my_rank, g_group_size);
+	D_DEBUG(DB_TEST, "My_rank %d: grp size %d", g_my_rank, g_group_size);
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	assert(rc == 0);

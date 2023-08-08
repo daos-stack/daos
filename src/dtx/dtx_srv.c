@@ -36,8 +36,7 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 			     "total number of committable DTX entries",
 			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
 	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create DTX committable metric");
 
 	return tls;
 }
@@ -84,16 +83,14 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			     "entries", "%s/entries/dtx_batched_degree/tgt_%u",
 			     path, tgt_id);
 	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX batched degree metric: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create DTX batched degree metric");
 
 	rc = d_tm_add_metric(&metrics->dpm_batched_total, D_TM_COUNTER,
 			     "total DTX entries via batched commit RPC",
 			     "entries", "%s/entries/dtx_batched_total/tgt_%u",
 			     path, tgt_id);
 	if (rc != DER_SUCCESS)
-		D_WARN("Failed to create DTX batched total metric: "DF_RC"\n",
-		       DP_RC(rc));
+		DL_WARN(rc, "Failed to create DTX batched total metric");
 
 	/** Register different per-opcode counters */
 	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
@@ -102,8 +99,8 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 				     "ops", "%s/ops/%s/tgt_%u", path,
 				     dtx_opc_to_str(opc), tgt_id);
 		if (rc != DER_SUCCESS)
-			D_WARN("Failed to create DTX RPC cnt metric for %s: "
-			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
+			DL_WARN(rc, "Failed to create DTX RPC cnt metric for %s",
+				dtx_opc_to_str(opc));
 	}
 
 	return metrics;
@@ -150,10 +147,8 @@ dtx_handler(crt_rpc_t *rpc)
 
 	rc = ds_cont_child_lookup(din->di_po_uuid, din->di_co_uuid, &cont);
 	if (rc != 0) {
-		D_ERROR("Failed to locate pool="DF_UUID" cont="DF_UUID
-			" for DTX rpc %u: rc = "DF_RC"\n",
-			DP_UUID(din->di_po_uuid), DP_UUID(din->di_co_uuid),
-			opc, DP_RC(rc));
+		DL_ERROR(rc, "Failed to locate pool=" DF_UUID " cont=" DF_UUID " for DTX rpc %u",
+			 DP_UUID(din->di_po_uuid), DP_UUID(din->di_co_uuid), opc);
 		goto out;
 	}
 
@@ -231,8 +226,8 @@ dtx_handler(crt_rpc_t *rpc)
 			/* Trigger DTX re-index for subsequent (retry) DTX_CHECK. */
 			rc1 = start_dtx_reindex_ult(cont);
 			if (rc1 != 0)
-				D_ERROR(DF_UUID": Failed to trigger DTX reindex: "DF_RC"\n",
-					DP_UUID(cont->sc_uuid), DP_RC(rc));
+				DL_ERROR(rc, DF_UUID ": Failed to trigger DTX reindex",
+					 DP_UUID(cont->sc_uuid));
 		}
 
 		break;
@@ -276,8 +271,8 @@ dtx_handler(crt_rpc_t *rpc)
 				 */
 				vos_dtx_stat(cont->sc_hdl, &stat, DSF_SKIP_BAD);
 				if (dtis->dti_hlc <= stat.dtx_newest_aggregated) {
-					D_WARN("Not sure about whether the old DTX "
-					       DF_DTI" is committed or not: %lu/%lu\n",
+					D_WARN("Not sure about whether the old DTX " DF_DTI
+					       " is committed or not: %lu/%lu",
 					       DP_DTI(dtis), dtis->dti_hlc,
 					       stat.dtx_newest_aggregated);
 					*ptr = -DER_TX_UNCERTAIN;
@@ -301,18 +296,16 @@ dtx_handler(crt_rpc_t *rpc)
 	}
 
 out:
-	D_DEBUG(DB_TRACE, "Handle DTX ("DF_DTI") rpc %u, count %d, epoch "
-		DF_X64" : rc = "DF_RC"\n",
-		DP_DTI(din->di_dtx_array.ca_arrays), opc,
-		(int)din->di_dtx_array.ca_count, din->di_epoch, DP_RC(rc));
+	D_DEBUG(DB_TRACE, "Handle DTX (" DF_DTI ") rpc %u, count %d, epoch " DF_X64 ": " DF_RC,
+		DP_DTI(din->di_dtx_array.ca_arrays), opc, (int)din->di_dtx_array.ca_count,
+		din->di_epoch, DP_RC(rc));
 
 	dout->do_status = rc;
 	/* For DTX_COMMIT, it is the count of real committed DTX entries. */
 	dout->do_misc = committed;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
-			DP_RC(rc));
+		DL_ERROR(rc, "send reply failed for DTX rpc %u", opc);
 
 	if (likely(dpm != NULL))
 		d_tm_inc_counter(dpm->dpm_total[opc], 1);
@@ -345,9 +338,8 @@ out:
 		 */
 		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
-			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
-			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
-			       DP_RC(rc));
+			DL_WARN(rc, "Failed to commit DTX " DF_DTI ", count %d",
+				DP_DTI(&dtes[0].dte_xid), j);
 
 		for (i = 0; i < j; i++)
 			D_FREE(pdte[i]->dte_mbs);
@@ -369,29 +361,31 @@ dtx_init(void)
 	d_getenv_int("DAOS_DTX_AGG_THD_CNT", &dtx_agg_thd_cnt_up);
 	if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN || dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
 		D_WARN("Invalid DTX aggregation count threshold %u, the valid range is [%u, %u], "
-		       "use the default value %u\n", dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
-		       DTX_AGG_THD_CNT_MAX, DTX_AGG_THD_CNT_DEF);
+		       "use the default value %u",
+		       dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN, DTX_AGG_THD_CNT_MAX,
+		       DTX_AGG_THD_CNT_DEF);
 		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	}
 
 	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 19 / 20;
-	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
+	D_INFO("Set DTX aggregation count threshold as %u (entries)", dtx_agg_thd_cnt_up);
 
 	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	d_getenv_int("DAOS_DTX_AGG_THD_AGE", &dtx_agg_thd_age_up);
 	if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN || dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
-		D_WARN("Invalid DTX aggregation age threshold %u, the valid range is [%u, %u], "
-		       "use the default value %u\n", dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
-		       DTX_AGG_THD_AGE_MAX, DTX_AGG_THD_AGE_DEF);
+		D_WARN("Invalid DTX aggregation age threshold %u, the valid range is [%u, %u], use "
+		       "the default value %u",
+		       dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN, DTX_AGG_THD_AGE_MAX,
+		       DTX_AGG_THD_AGE_DEF);
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
 	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 19 / 20;
-	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
+	D_INFO("Set DTX aggregation time threshold as %u (seconds)", dtx_agg_thd_age_up);
 
 	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
 	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
-	D_INFO("Set the max count of DTX batched commit ULTs as %d\n", dtx_batched_ult_max);
+	D_INFO("Set the max count of DTX batched commit ULTs as %d", dtx_batched_ult_max);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
@@ -416,13 +410,13 @@ dtx_setup(void)
 
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0) {
-		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX batched commit ULT");
 		return rc;
 	}
 
 	rc = dss_ult_create_all(dtx_aggregation_main, NULL, true);
 	if (rc != 0)
-		D_ERROR("Failed to create DTX aggregation ULT: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Failed to create DTX aggregation ULT");
 
 	return rc;
 }

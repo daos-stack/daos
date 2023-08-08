@@ -45,8 +45,7 @@ free_class_remove(struct vea_space_info *vsi, struct vea_entry *entry)
 			d_iov_set(&key, &int_key, sizeof(int_key));
 			rc = dbtree_delete(vfc->vfc_size_btr, BTR_PROBE_EQ, &key, NULL);
 			if (rc)
-				D_ERROR("Remove size class:%u failed, "DF_RC"\n",
-					blk_cnt, DP_RC(rc));
+				DL_ERROR(rc, "Remove size class:%u failed", blk_cnt);
 		}
 		dec_stats(vsi, STAT_FRAGS_SMALL, 1);
 	}
@@ -70,7 +69,7 @@ free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 	if (blk_cnt > vfc->vfc_large_thresh) {
 		rc = d_binheap_insert(&vfc->vfc_heap, &entry->ve_node);
 		if (rc != 0) {
-			D_ERROR("Failed to insert heap: %d\n", rc);
+			D_ERROR("Failed to insert heap: %d", rc);
 			return rc;
 		}
 
@@ -97,15 +96,14 @@ free_class_add(struct vea_space_info *vsi, struct vea_entry *entry)
 		rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val,
 				   &val_out);
 		if (rc != 0) {
-			D_ERROR("Insert size class:%u failed. "DF_RC"\n",
-				blk_cnt, DP_RC(rc));
+			DL_ERROR(rc, "Insert size class:%u failed", blk_cnt);
 			return rc;
 		}
 		sc = (struct vea_sized_class *)val_out.iov_buf;
 		D_ASSERT(sc != NULL);
 		D_INIT_LIST_HEAD(&sc->vsc_lru);
 	} else {
-		D_ERROR("Lookup size class:%u failed. "DF_RC"\n", blk_cnt, DP_RC(rc));
+		DL_ERROR(rc, "Lookup size class:%u failed", blk_cnt);
 		return rc;
 	}
 
@@ -206,12 +204,11 @@ merge_free_ext(struct vea_space_info *vsi, struct vea_free_extent *ext_in,
 	 */
 	rc = dbtree_fetch(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT, &key, &key_out, &val);
 	if (rc == 0) {
-		D_ERROR("unexpected extent ["DF_U64", %u]\n",
-			ext_in->vfe_blk_off, ext_in->vfe_blk_cnt);
+		D_ERROR("unexpected extent [" DF_U64 ", %u]", ext_in->vfe_blk_off,
+			ext_in->vfe_blk_cnt);
 		return -DER_INVAL;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("search extent with offset "DF_U64" failed. "DF_RC"\n",
-			ext_in->vfe_blk_off, DP_RC(rc));
+		DL_ERROR(rc, "search extent with offset " DF_U64 " failed", ext_in->vfe_blk_off);
 		return rc;
 	}
 repeat:
@@ -224,7 +221,7 @@ repeat:
 			fetch_prev = false;
 			goto repeat;
 		} else if (rc) {
-			D_ERROR("search prev extent failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "search prev extent failed");
 			return rc;
 		}
 	} else {
@@ -243,7 +240,7 @@ repeat:
 		if (rc == -DER_NONEXIST) {
 			goto done; /* Merge done */
 		} else if (rc) {
-			D_ERROR("search next extent failed. "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "search next extent failed");
 			return rc;
 		}
 	}
@@ -285,10 +282,9 @@ repeat:
 
 	if (rc > 0) {
 		if (flags & VEA_FL_NO_MERGE) {
-			D_ERROR("unexpected adjacent extents:"
-				" ["DF_U64", %u], ["DF_U64", %u]\n",
-				merged.vfe_blk_off, merged.vfe_blk_cnt,
-				ext->vfe_blk_off, ext->vfe_blk_cnt);
+			D_ERROR("unexpected adjacent extents: [" DF_U64 ", %u], [" DF_U64 ", %u]",
+				merged.vfe_blk_off, merged.vfe_blk_cnt, ext->vfe_blk_off,
+				ext->vfe_blk_cnt);
 			return -DER_INVAL;
 		}
 
@@ -309,7 +305,7 @@ repeat:
 				undock_entry(vsi, entry, type);
 				rc = dbtree_delete(btr_hdl, del_opc, &key_out, NULL);
 				if (rc) {
-					D_ERROR("Failed to delete: %d\n", rc);
+					D_ERROR("Failed to delete: %d", rc);
 					return rc;
 				}
 			} else {
@@ -331,7 +327,7 @@ done:
 		rc = umem_tx_add_ptr(vsi->vsi_umem, neighbor,
 				     sizeof(*neighbor));
 		if (rc) {
-			D_ERROR("Failed add ptr into tx: %d\n", rc);
+			D_ERROR("Failed add ptr into tx: %d", rc);
 			return rc;
 		}
 	} else {
@@ -382,7 +378,7 @@ compound_free(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 	rc = dbtree_upsert(vsi->vsi_free_btr, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key,
 			   &val, &val_out);
 	if (rc != 0) {
-		D_ERROR("Insert compound extent failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Insert compound extent failed");
 		return rc;
 	}
 
@@ -424,7 +420,7 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val, NULL);
 	if (rc)
-		D_ERROR("Insert persistent extent failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Insert persistent extent failed");
 	return rc;
 }
 
@@ -456,7 +452,7 @@ aggregated_free(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 
 	rc = dbtree_upsert(btr_hdl, BTR_PROBE_BYPASS, DAOS_INTENT_UPDATE, &key, &val, &val_out);
 	if (rc) {
-		D_ERROR("Insert aging extent failed. "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Insert aging extent failed");
 		return rc;
 	}
 
@@ -498,8 +494,8 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 		D_ASSERT(daos_handle_is_valid(vsi->vsi_agg_btr));
 		rc = dbtree_delete(vsi->vsi_agg_btr, BTR_PROBE_EQ, &key, NULL);
 		if (rc) {
-			D_ERROR("Remove ["DF_U64", %u] from aggregated tree error: "DF_RC"\n",
-				vfe.vfe_blk_off, vfe.vfe_blk_cnt, DP_RC(rc));
+			DL_ERROR(rc, "Remove [" DF_U64 ", %u] from aggregated tree error",
+				 vfe.vfe_blk_off, vfe.vfe_blk_cnt);
 			break;
 		}
 
@@ -526,8 +522,7 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 		rc = vsi->vsi_unmap_ctxt.vnc_unmap(unmap_sgl, vsi->vsi_md->vsd_blk_sz,
 						   vsi->vsi_unmap_ctxt.vnc_data);
 		if (rc)
-			D_ERROR("Unmap %u frags failed: "DF_RC"\n",
-				unmap_sgl->sg_nr_out, DP_RC(rc));
+			DL_ERROR(rc, "Unmap %u frags failed", unmap_sgl->sg_nr_out);
 	}
 
 	for (i = 0; i < unmap_sgl->sg_nr_out; i++) {
@@ -539,8 +534,8 @@ flush_internal(struct vea_space_info *vsi, bool force, uint32_t cur_time, d_sg_l
 
 		rc = compound_free(vsi, &vfe, 0);
 		if (rc)
-			D_ERROR("Compound free ["DF_U64", %u] error: "DF_RC"\n",
-				vfe.vfe_blk_off, vfe.vfe_blk_cnt, DP_RC(rc));
+			DL_ERROR(rc, "Compound free [" DF_U64 ", %u] error", vfe.vfe_blk_off,
+				 vfe.vfe_blk_cnt);
 	}
 
 	return rc;
@@ -640,7 +635,7 @@ schedule_aging_flush(struct vea_space_info *vsi)
 	rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_NONE,
 				  flush_end_cb, vsi);
 	if (rc) {
-		D_ERROR("Add transaction end callback error "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Add transaction end callback error");
 		return rc;
 	}
 	vsi->vsi_flush_scheduled = true;

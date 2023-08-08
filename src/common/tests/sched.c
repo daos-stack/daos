@@ -1063,13 +1063,13 @@ parent_func(tse_task_t *task)
 
 	rc = tse_task_register_deps(task2, 1, &task1);
 	if (rc != 0) {
-		D_ERROR("Failed to register task 2 dependency\n");
+		D_ERROR("Failed to register task 2 dependency");
 		D_GOTO(out, rc);
 	}
 
 	rc = tse_task_register_deps(task, 1, &task2);
 	if (rc != 0) {
-		D_ERROR("Failed to register task dependency\n");
+		D_ERROR("Failed to register task dependency");
 		D_GOTO(out, rc);
 	}
 

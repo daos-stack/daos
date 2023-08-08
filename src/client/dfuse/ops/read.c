@@ -92,8 +92,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	 * need updating to make full use of larger buffer sizes.
 	 */
 	if (len > ev->de_iov.iov_buf_len) {
-		D_WARN("Fuse read buffer not large enough %zx > %zx\n", len,
-		       ev->de_iov.iov_buf_len);
+		D_WARN("Fuse read buffer not large enough %zx > %zx", len, ev->de_iov.iov_buf_len);
 	}
 
 	ev->de_iov.iov_len  = len;

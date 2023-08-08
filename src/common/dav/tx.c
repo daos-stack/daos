@@ -367,7 +367,7 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 
 err_oom:
 	tx_action_remove(tx);
-	D_CRIT("out of memory\n");
+	D_CRIT("out of memory");
 	return obj_tx_fail_null(ENOMEM, args.flags);
 }
 
@@ -458,7 +458,7 @@ lw_tx_begin(dav_obj_t *pop)
 
 	rc = dav_wal_tx_reserve(pop, &wal_id);
 	if (rc) {
-		D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "so_wal_reserv failed");
 		return rc;
 	}
 	if (pop->do_utx == NULL) {
@@ -518,7 +518,7 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 		DAV_DBG("");
 		err = dav_wal_tx_reserve(pop, &wal_id);
 		if (err) {
-			D_ERROR("so_wal_reserv failed, "DF_RC"\n", DP_RC(err));
+			DL_ERROR(err, "so_wal_reserv failed");
 			goto err_abort;
 		}
 
@@ -554,7 +554,7 @@ dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...)
 	D_ALLOC_PTR_NZ(txd);
 	if (txd == NULL) {
 		err = errno;
-		D_CRIT("Malloc!\n");
+		D_CRIT("Malloc!");
 		goto err_abort;
 	}
 

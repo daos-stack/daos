@@ -91,7 +91,7 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 	int	rc;
 
 	if (info->bci_rc != 0) {
-		D_ERROR("Bulk transfer failed with rc=%d\n", info->bci_rc);
+		D_ERROR("Bulk transfer failed with rc=%d", info->bci_rc);
 		error_exit();
 	}
 
@@ -99,7 +99,7 @@ bulk_transfer_done_cb(const struct crt_bulk_cb_info *info)
 
 	rc = crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	if (rc != 0) {
-		D_ERROR("Failed to send response\n");
+		D_ERROR("Failed to send response");
 		error_exit();
 	}
 
@@ -139,12 +139,12 @@ handler_ping(crt_rpc_t *rpc)
 	crt_context_idx(rpc->cr_ctx, &my_tag);
 
 	if (my_tag != input->dst_tag || my_tag != hdr_dst_tag) {
-		D_ERROR("Incorrect tag Expected %lu got %d (hdr=%d)\n",
-			input->dst_tag, my_tag, hdr_dst_tag);
+		D_ERROR("Incorrect tag Expected %lu got %d (hdr=%d)", input->dst_tag, my_tag,
+			hdr_dst_tag);
 		assert(0);
 	}
 	if (hdr_src_rank != input->src_rank) {
-		D_ERROR("Expected %lu got %d\n", input->src_rank, hdr_src_rank);
+		D_ERROR("Expected %lu got %d", input->src_rank, hdr_src_rank);
 		rc = -DER_INVAL;
 	}
 
@@ -179,14 +179,14 @@ handler_ping(crt_rpc_t *rpc)
 		rc = crt_bulk_transfer(&bulk_desc, bulk_transfer_done_cb,
 				       dst, NULL);
 		if (rc != 0) {
-			D_ERROR("transfer failed; rc=%d\n", rc);
+			D_ERROR("transfer failed; rc=%d", rc);
 			error_exit();
 		}
 	} else {
 		output->rc = rc;
 		rc = crt_reply_send(rpc);
 		if (rc != 0) {
-			D_ERROR("reply failed; rc=%d\n", rc);
+			D_ERROR("reply failed; rc=%d", rc);
 			error_exit();
 		}
 	}
@@ -257,7 +257,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = sem_init(&sem, 0, 0);
 	if (rc != 0) {
-		D_ERROR("sem_init() failed; rc=%d\n", rc);
+		D_ERROR("sem_init() failed; rc=%d", rc);
 		error_exit();
 	}
 
@@ -269,49 +269,46 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	rc = crt_init_opt("server_grp", CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE,
 			  &init_opts);
 	if (rc != 0) {
-		D_ERROR("crt_init() failed; rc=%d\n", rc);
+		D_ERROR("crt_init() failed; rc=%d", rc);
 		error_exit();
 	}
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
-		D_ERROR("Failed to lookup group\n");
+		D_ERROR("Failed to lookup group");
 		error_exit();
 	}
 
 	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	if (rc != 0) {
-		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
-			my_rank, rc);
+		D_ERROR("crt_rank_self_set(%d) failed; rc=%d", my_rank, rc);
 		error_exit();
 	}
 
 	for (i = 0; i < NUM_SERVER_CTX; i++) {
 		rc = crt_context_create(&crt_ctx[i]);
 		if (rc != 0) {
-			D_ERROR("crt_context_create() ctx=%d failed; rc=%d\n",
-				i, rc);
+			D_ERROR("crt_context_create() ctx=%d failed; rc=%d", i, rc);
 			error_exit();
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
 				    crtu_progress_fn, &crt_ctx[i]);
 		if (rc != 0) {
-			D_ERROR("pthread_create() ctx=%d failed; rc=%d\n",
-				i, rc);
+			D_ERROR("pthread_create() ctx=%d failed; rc=%d", i, rc);
 			error_exit();
 		}
 	}
 
 	rc = crt_rank_uri_get(grp, my_rank, 0, &my_uri);
 	if (rc != 0) {
-		D_ERROR("crt_rank_uri_get() failed; rc=%d\n", rc);
+		D_ERROR("crt_rank_uri_get() failed; rc=%d", rc);
 		error_exit();
 	}
 
 	rc = crt_proto_register(&my_proto_fmt);
 	if (rc != 0) {
-		D_ERROR("crt_proto_register() failed; rc=%d\n", rc);
+		D_ERROR("crt_proto_register() failed; rc=%d", rc);
 		error_exit();
 	}
 
@@ -320,7 +317,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	/* Write self uri into a file */
 	rc = write(fd_write, my_uri, strlen(my_uri) + 1);
 	if (rc <= 0) {
-		D_ERROR("Failed to write uri to a file\n");
+		D_ERROR("Failed to write uri to a file");
 		error_exit();
 	}
 	D_FREE(my_uri);
@@ -336,7 +333,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
-		D_ERROR("Failed to read uri from a file\n");
+		D_ERROR("Failed to read uri from a file");
 		error_exit();
 	}
 	/* Terminate the string read by read since it won't do it on its own */
@@ -352,8 +349,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	rc = crt_group_primary_rank_add(crt_ctx[0], grp, other_rank,
 					other_server_uri);
 	if (rc != 0) {
-		D_ERROR("Failed to add rank=%d uri='%s'\n",
-			other_rank, other_server_uri);
+		D_ERROR("Failed to add rank=%d uri='%s'", other_rank, other_server_uri);
 		error_exit();
 	}
 
@@ -367,15 +363,13 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 		fd = open(mmap_file, O_RDWR);
 		if (fd < 0) {
-			D_ERROR("Failed to open file %s:%s\n",
-				mmap_file, strerror(errno));
+			D_ERROR("Failed to open file %s:%s", mmap_file, strerror(errno));
 			error_exit();
 		}
 
 		rc = stat(mmap_file, &st);
 		if (rc < 0) {
-			D_ERROR("Failed to stat file %s:%s\n",
-				mmap_file, strerror(errno));
+			D_ERROR("Failed to stat file %s:%s", mmap_file, strerror(errno));
 			error_exit();
 		}
 
@@ -383,8 +377,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		DBG_PRINT("mmap() of file %s of size %zu\n", mmap_file, size);
 		addr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 		if (addr == MAP_FAILED) {
-			D_ERROR("Failed to mmap file %s:%s\n",
-				mmap_file, strerror(errno));
+			D_ERROR("Failed to mmap file %s:%s", mmap_file, strerror(errno));
 			error_exit();
 		}
 
@@ -397,7 +390,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		rc = crt_bulk_create(crt_ctx[0], &sgl, CRT_BULK_RW,
 				     &bulk_hdl);
 		if (rc != 0) {
-			D_ERROR("Failed to create bulk; rc=%d\n", rc);
+			D_ERROR("Failed to create bulk; rc=%d", rc);
 			error_exit();
 		}
 	}
@@ -408,7 +401,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = crt_req_create(crt_ctx[0], &server_ep, RPC_PING, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_req_create() failed; rc=%d", rc);
 		error_exit();
 	}
 
@@ -420,7 +413,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 	if (rc != 0) {
-		D_ERROR("Failed to send rpc; rc=%d\n", rc);
+		D_ERROR("Failed to send rpc; rc=%d", rc);
 		error_exit();
 	}
 
@@ -442,7 +435,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = crt_req_create(crt_ctx[0], &server_ep, RPC_SHUTDOWN, &rpc);
 	if (rc != 0) {
-		D_ERROR("crt_req_create() failed; rc=%d\n", rc);
+		D_ERROR("crt_req_create() failed; rc=%d", rc);
 		error_exit();
 	}
 
@@ -452,7 +445,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = crt_req_send(rpc, rpc_handle_reply, &sem);
 	if (rc != 0) {
-		D_ERROR("Failed to send rpc; rc=%d\n", rc);
+		D_ERROR("Failed to send rpc; rc=%d", rc);
 		error_exit();
 	}
 
@@ -464,7 +457,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	rc = crt_finalize();
 	if (rc != 0) {
-		D_ERROR("crt_finalize() failed with rc=%d\n", rc);
+		D_ERROR("crt_finalize() failed with rc=%d", rc);
 		error_exit();
 	}
 
@@ -586,8 +579,7 @@ int main(int argc, char **argv)
 	fd1 = mkstemp(tmp_file1);
 
 	if (fd0 <= 0  || fd1 <= 0) {
-		D_ERROR("Failed to create tmp files %s %s\n",
-			tmp_file0, tmp_file1);
+		D_ERROR("Failed to create tmp files %s %s", tmp_file0, tmp_file1);
 		assert(0);
 	}
 

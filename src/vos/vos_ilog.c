@@ -161,8 +161,10 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 			info->ii_full_scan = false;
 			if (epr->epr_lo != 0) {
 				/** If this is non-zero, we know this is used for punch check */
-				D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "
-					DF_X64"-"DF_X64"\n", epr->epr_lo, epr->epr_hi);
+				D_DEBUG(DB_TRACE,
+					"Detected ilog entries outside epoch range " DF_X64
+					"-" DF_X64,
+					epr->epr_lo, epr->epr_hi);
 				return 0;
 			}
 			if (ilog_has_punch(&entry)) {
@@ -235,8 +237,9 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 				continue;
 
 			info->ii_full_scan = false;
-			D_DEBUG(DB_TRACE, "Detected ilog entries outside epoch range "DF_X64"-"
-				DF_X64"\n", epr->epr_lo, epr->epr_hi);
+			D_DEBUG(DB_TRACE,
+				"Detected ilog entries outside epoch range " DF_X64 "-" DF_X64,
+				epr->epr_lo, epr->epr_hi);
 			return 0;
 		}
 	}
@@ -250,10 +253,11 @@ vos_parse_ilog(struct vos_ilog_info *info, const daos_epoch_range_t *epr,
 			    punch))
 		info->ii_prior_any_punch = *punch;
 
-	D_DEBUG(DB_TRACE, "After fetch at "DF_X64": create="DF_X64
-		" prior_punch="DF_PUNCH" next_punch="DF_X64"%s\n", epr->epr_hi,
-		info->ii_create, DP_PUNCH(&info->ii_prior_punch),
-		info->ii_next_punch, info->ii_empty ? " is empty" : "");
+	D_DEBUG(DB_TRACE,
+		"After fetch at " DF_X64 ": create=" DF_X64 " prior_punch=" DF_PUNCH
+		" next_punch=" DF_X64 "%s",
+		epr->epr_hi, info->ii_create, DP_PUNCH(&info->ii_prior_punch), info->ii_next_punch,
+		info->ii_empty ? " is empty" :);
 
 	return 0;
 }
@@ -388,8 +392,8 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 			max_epr.epr_lo = parent->ii_prior_any_punch.pr_epc;
 	}
 
-	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
-		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
+	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range " DF_X64 "-" DF_X64,
+		max_epr.epr_lo, max_epr.epr_hi);
 
 	has_cond = cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT;
 
@@ -416,7 +420,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		goto done;
 	}
 	if (rc != -DER_NONEXIST) {
-		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Check failed");
 		return rc;
 	}
 update:
@@ -431,7 +435,7 @@ update:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
 	if (rc != 0) {
-		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not open incarnation log");
 		return rc;
 	}
 
@@ -443,8 +447,8 @@ update:
 	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
 done:
-	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at "DF_X64": "DF_RC"\n",
-			ilog, epr->epr_hi, DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not update ilog %p at " DF_X64 ": " DF_RC, ilog, epr->epr_hi,
+			DP_RC(rc));
 
 	/* No need to refetch the log.  The only field that is used by update
 	 * is prior_any_punch.   This field will not be changed by ilog_update
@@ -481,8 +485,8 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	else
 		has_cond = false;
 
-	D_DEBUG(DB_TRACE, "Checking existence of incarnation log in range "
-		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
+	D_DEBUG(DB_TRACE, "Checking existence of incarnation log in range " DF_X64 "-" DF_X64,
+		max_epr.epr_lo, max_epr.epr_hi);
 
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont), DAOS_INTENT_PUNCH,
@@ -509,8 +513,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
 	if (rc != 0) {
-		D_ERROR("Could not update ilog %p at "DF_X64": "DF_RC"\n",
-			ilog, epr->epr_hi, DP_RC(rc));
+		DL_ERROR(rc, "Could not update ilog %p at " DF_X64, ilog, epr->epr_hi);
 		return rc;
 	}
 
@@ -518,7 +521,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
 	if (rc != 0) {
-		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Check failed");
 		return rc;
 	}
 	if (!leaf)
@@ -528,7 +531,7 @@ punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
 	if (rc != 0) {
-		D_ERROR("Could not open incarnation log: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Could not open incarnation log");
 		return rc;
 	}
 
@@ -546,8 +549,7 @@ punch_log:
 
 	if (rc == -DER_ALREADY && (dth == NULL || !dth->dth_already)) /* operation had no effect */
 		rc = 0;
-	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: "DF_RC"\n",
-			DP_RC(rc));
+	VOS_TX_LOG_FAIL(rc, "Could not update incarnation log: " DF_RC, DP_RC(rc));
 
 	return rc;
 }
@@ -567,7 +569,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ran
 		punch_rec = *parent_punch;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
-	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
+	D_DEBUG(DB_TRACE, "log=" DF_X64, umem_ptr2off(umm, ilog));
 
 	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, uncommitted_only, punch_rec.pr_epc,
 			    punch_rec.pr_minor_epc, &info->ii_entries);
@@ -628,7 +630,7 @@ vos_ilog_init(void)
 
 	rc = ilog_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize incarnation log globals\n");
+		D_ERROR("Failed to initialize incarnation log globals");
 		return rc;
 	}
 

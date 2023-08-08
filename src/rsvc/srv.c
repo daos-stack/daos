@@ -89,22 +89,21 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 
 	rc = ABT_mutex_create(&svc->s_mutex);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create mutex: %d\n", svc->s_name, rc);
+		D_ERROR("%s: failed to create mutex: %d", svc->s_name, rc);
 		rc = dss_abterr2der(rc);
 		goto err_db_path;
 	}
 
 	rc = ABT_cond_create(&svc->s_state_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create state_cv: %d\n", svc->s_name, rc);
+		D_ERROR("%s: failed to create state_cv: %d", svc->s_name, rc);
 		rc = dss_abterr2der(rc);
 		goto err_mutex;
 	}
 
 	rc = ABT_cond_create(&svc->s_leader_ref_cv);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("%s: failed to create leader_ref_cv: %d\n", svc->s_name,
-			rc);
+		D_ERROR("%s: failed to create leader_ref_cv: %d", svc->s_name, rc);
 		rc = dss_abterr2der(rc);
 		goto err_state_cv;
 	}
@@ -112,8 +111,7 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	if (rsvc_class(class)->sc_map_dist != NULL) {
 		rc = ABT_cond_create(&svc->s_map_dist_cv);
 		if (rc != ABT_SUCCESS) {
-			D_ERROR("%s: failed to create map_dist_cv: %d\n",
-				svc->s_name, rc);
+			D_ERROR("%s: failed to create map_dist_cv: %d", svc->s_name, rc);
 			rc = dss_abterr2der(rc);
 			goto err_leader_ref_cv;
 		}
@@ -279,8 +277,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 				char *name = NULL;
 
 				rsvc_class(class)->sc_name(id, &name);
-				D_ERROR("%s: failed to stat %s: %d\n", name,
-					path, errno);
+				D_ERROR("%s: failed to stat %s: %d", name, path, errno);
 				if (name != NULL)
 					D_FREE(name);
 			}
@@ -388,7 +385,7 @@ ds_rsvc_put_leader(struct ds_rsvc *svc)
 static void
 change_state(struct ds_rsvc *svc, enum ds_rsvc_state state)
 {
-	D_DEBUG(DB_MD, "%s: term "DF_U64" state %s to %s\n", svc->s_name, svc->s_term,
+	D_DEBUG(DB_MD, "%s: term " DF_U64 " state %s to %s", svc->s_name, svc->s_term,
 		ds_rsvc_state_str(svc->s_state), ds_rsvc_state_str(state));
 	svc->s_state = state;
 	ABT_cond_broadcast(svc->s_state_cv);
@@ -409,8 +406,7 @@ init_map_distd(struct ds_rsvc *svc)
 	rc = dss_ult_create(map_distd, svc, DSS_XS_SELF, 0, 0,
 			    &svc->s_map_distd);
 	if (rc != 0) {
-		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name,
-			DP_RC(rc));
+		DL_ERROR(rc, "%s: failed to start map_distd", svc->s_name);
 		put_leader(svc);
 		ds_rsvc_put(svc);
 	}
@@ -444,15 +440,13 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 
 	ABT_mutex_lock(svc->s_mutex);
 	if (svc->s_stop) {
-		D_DEBUG(DB_MD, "%s: skip term "DF_U64" due to stopping\n",
-			svc->s_name, term);
+		D_DEBUG(DB_MD, "%s: skip term " DF_U64 " due to stopping", svc->s_name, term);
 		rc = 0;
 		goto out_mutex;
 	}
 	D_ASSERTF(svc->s_state == DS_RSVC_DOWN, "%d\n", svc->s_state);
 	svc->s_term = term;
-	D_DEBUG(DB_MD, "%s: stepping up to "DF_U64"\n", svc->s_name,
-		svc->s_term);
+	D_DEBUG(DB_MD, "%s: stepping up to " DF_U64, svc->s_name, svc->s_term);
 
 	if (rsvc_class(svc->s_class)->sc_map_dist != NULL) {
 		rc = init_map_distd(svc);
@@ -467,8 +461,8 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
-			svc->s_name, term, DP_RC(rc));
+		D_DEBUG(DB_MD, "%s: failed to step up to " DF_U64 ": " DF_RC, svc->s_name, term,
+			DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
 		/*
@@ -497,7 +491,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 {
 	int rc;
 
-	D_DEBUG(DB_MD, "%s: bootstrapping\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: bootstrapping", svc->s_name);
 	ABT_mutex_lock(svc->s_mutex);
 
 	/*
@@ -508,13 +502,13 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 	D_ASSERTF(svc->s_state == DS_RSVC_UP_EMPTY, "%d\n", svc->s_state);
 
-	D_DEBUG(DB_MD, "%s: calling sc_bootstrap\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: calling sc_bootstrap", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_bootstrap(svc, arg);
 	if (rc != 0)
 		goto out_mutex;
 
 	/* Try stepping up again. */
-	D_DEBUG(DB_MD, "%s: calling sc_step_up\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: calling sc_step_up", svc->s_name);
 	rc = rsvc_class(svc->s_class)->sc_step_up(svc);
 	if (rc != 0) {
 		D_ASSERT(rc != DER_UNINIT);
@@ -524,7 +518,7 @@ bootstrap_self(struct ds_rsvc *svc, void *arg)
 	change_state(svc, DS_RSVC_UP);
 out_mutex:
 	ABT_mutex_unlock(svc->s_mutex);
-	D_DEBUG(DB_MD, "%s: bootstrapped: "DF_RC"\n", svc->s_name, DP_RC(rc));
+	D_DEBUG(DB_MD, "%s: bootstrapped: " DF_RC, svc->s_name, DP_RC(rc));
 	return rc;
 }
 
@@ -533,7 +527,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
 	struct ds_rsvc *svc = arg;
 
-	D_DEBUG(DB_MD, "%s: stepping down from "DF_U64"\n", svc->s_name, term);
+	D_DEBUG(DB_MD, "%s: stepping down from " DF_U64, svc->s_name, term);
 	ABT_mutex_lock(svc->s_mutex);
 	D_ASSERTF(svc->s_term == term, DF_U64" == "DF_U64"\n", svc->s_term,
 		  term);
@@ -555,8 +549,8 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 		for (;;) {
 			if (svc->s_leader_ref == 0)
 				break;
-			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n",
-				svc->s_name, svc->s_leader_ref);
+			D_DEBUG(DB_MD, "%s: waiting for %d leader refs", svc->s_name,
+				svc->s_leader_ref);
 			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
 		}
 
@@ -568,7 +562,7 @@ rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 
 	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
-	D_DEBUG(DB_MD, "%s: stepped down from "DF_U64"\n", svc->s_name, term);
+	D_DEBUG(DB_MD, "%s: stepped down from " DF_U64, svc->s_name, term);
 }
 
 static int stop(struct ds_rsvc *svc, bool destroy);
@@ -591,8 +585,7 @@ rsvc_stop_cb(struct rdb *db, int err, void *arg)
 	ds_rsvc_get(svc);
 	rc = dss_ult_create(rsvc_stopper, svc, DSS_XS_SELF, 0, 0, NULL);
 	if (rc != 0) {
-		D_ERROR("%s: failed to create service stopper: "DF_RC"\n",
-			svc->s_name, DP_RC(rc));
+		DL_ERROR(rc, "%s: failed to create service stopper", svc->s_name);
 		ds_rsvc_put(svc);
 	}
 }
@@ -608,7 +601,7 @@ map_distd(void *arg)
 {
 	struct ds_rsvc *svc = arg;
 
-	D_DEBUG(DB_MD, "%s: start\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: start", svc->s_name);
 	for (;;) {
 		bool	stop;
 		int	rc;
@@ -639,7 +632,7 @@ map_distd(void *arg)
 	}
 	put_leader(svc);
 	ds_rsvc_put(svc);
-	D_DEBUG(DB_MD, "%s: stop\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: stop", svc->s_name);
 }
 
 /**
@@ -653,7 +646,7 @@ ds_rsvc_request_map_dist(struct ds_rsvc *svc)
 {
 	svc->s_map_dist = true;
 	ABT_cond_broadcast(svc->s_map_dist_cv);
-	D_DEBUG(DB_MD, "%s: requested map distribution\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: requested map distribution", svc->s_name);
 }
 
 static bool
@@ -759,8 +752,7 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name,
-			svc->s_stop);
+		D_DEBUG(DB_MD, "%s: found: stop=%d", svc->s_name, svc->s_stop);
 		if (svc->s_stop)
 			rc = -DER_CANCELED;
 		else
@@ -777,7 +769,7 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
 			       &svc->s_entry, true /* exclusive */);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
+		D_DEBUG(DB_MD, "%s: insert: " DF_RC, svc->s_name, DP_RC(rc));
 		stop(svc, false /* destroy */);
 		goto err_svc;
 	}
@@ -789,7 +781,7 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 	}
 	change_state(svc, DS_RSVC_UP);
 
-	D_DEBUG(DB_MD, "%s: started service\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: started service", svc->s_name);
 	ds_rsvc_put(svc);
 
 	goto out;
@@ -799,8 +791,7 @@ err_svc:
 	fini_free(svc);
 out:
 	if (rc != 0 && rc != -DER_ALREADY)
-		D_ERROR("Failed to start service: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to start service");
 	return rc;
 }
 
@@ -861,7 +852,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
-		D_DEBUG(DB_MD, "%s: found: stop=%d\n", svc->s_name, svc->s_stop);
+		D_DEBUG(DB_MD, "%s: found: stop=%d", svc->s_name, svc->s_stop);
 		if (caller_term != RDB_NIL_TERM) {
 			rc = rdb_ping(svc->s_db, caller_term);
 			if (rc != 0) {
@@ -886,17 +877,16 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 	rc = d_hash_rec_insert(&rsvc_hash, svc->s_id.iov_buf, svc->s_id.iov_len,
 			       &svc->s_entry, true /* exclusive */);
 	if (rc != 0) {
-		D_DEBUG(DB_MD, "%s: insert: "DF_RC"\n", svc->s_name, DP_RC(rc));
+		D_DEBUG(DB_MD, "%s: insert: " DF_RC, svc->s_name, DP_RC(rc));
 		stop(svc, create /* destroy */);
 		goto out;
 	}
 
-	D_DEBUG(DB_MD, "%s: started replicated service\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: started replicated service", svc->s_name);
 	ds_rsvc_put(svc);
 out:
 	if (rc != 0 && rc != -DER_ALREADY && !(create && rc == -DER_EXIST))
-		D_ERROR("Failed to start replicated service: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to start replicated service");
 	return rc;
 }
 
@@ -909,11 +899,11 @@ stop(struct ds_rsvc *svc, bool destroy)
 
 	if (svc->s_stop) {
 		ABT_mutex_unlock(svc->s_mutex);
-		D_DEBUG(DB_MD, "%s: stopping already\n", svc->s_name);
+		D_DEBUG(DB_MD, "%s: stopping already", svc->s_name);
 		return -DER_CANCELED;
 	}
 	svc->s_stop = true;
-	D_DEBUG(DB_MD, "%s: stopping\n", svc->s_name);
+	D_DEBUG(DB_MD, "%s: stopping", svc->s_name);
 
 	if (svc->s_state == DS_RSVC_UP || svc->s_state == DS_RSVC_UP_EMPTY)
 		/*
@@ -1039,8 +1029,7 @@ ds_rsvc_stop_all(enum ds_rsvc_class_id class)
 	}
 
 	if (rc != 0)
-		D_ERROR("failed to stop all replicated services: "DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "failed to stop all replicated services");
 	return rc;
 }
 
@@ -1214,8 +1203,7 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	int			 rc;
 
 	D_ASSERT(!bootstrap || ranks != NULL);
-	D_DEBUG(DB_MD, DF_UUID": %s DB\n",
-		DP_UUID(dbid), create ? "creating" : "starting");
+	D_DEBUG(DB_MD, DF_UUID ": %s DB", DP_UUID(dbid), create ? "creating" : "starting");
 
 	rc = bcast_create(RSVC_START, ranks != NULL /* filter_invert */,
 			  (d_rank_list_t *)ranks, &rpc);
@@ -1242,9 +1230,8 @@ ds_rsvc_dist_start(enum ds_rsvc_class_id class, d_iov_t *id, const uuid_t dbid,
 	out = crt_reply_get(rpc);
 	rc = out->sao_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start%s %d replicas: "DF_RC"\n",
-			DP_UUID(dbid), create ? "/create" : "", rc,
-			DP_RC(out->sao_rc_errval));
+		DL_ERROR(out->sao_rc_errval, DF_UUID ": failed to start%s %d replicas",
+			 DP_UUID(dbid), create ? "/create" :, rc);
 		ds_rsvc_dist_stop(class, id, ranks, NULL, caller_term, create);
 		rc = out->sao_rc_errval;
 	}
@@ -1351,8 +1338,7 @@ ds_rsvc_dist_stop(enum ds_rsvc_class_id class, d_iov_t *id, const d_rank_list_t 
 	out = crt_reply_get(rpc);
 	rc = out->soo_rc;
 	if (rc != 0) {
-		D_ERROR("failed to stop%s replicas: "DF_RC"\n",
-			destroy ? "/destroy" : "", DP_RC(rc));
+		DL_ERROR(rc, "failed to stop%s replicas", destroy ? "/destroy" :);
 		rc = -DER_IO;
 	}
 
@@ -1427,8 +1413,7 @@ ds_rsvc_get_md_cap(void)
 		return size_default;
 	n = atoi(v);    /* FIXME DAOS-9846 */
 	if (n < size_default >> 20) {
-		D_ERROR("metadata capacity too low; using %zu MB\n",
-			size_default >> 20);
+		D_ERROR("metadata capacity too low; using %zu MB", size_default >> 20);
 		return size_default;
 	}
 	return (size_t)n << 20;

@@ -106,7 +106,7 @@ process_access_types(const char *str, uint8_t *access_types)
 			*access_types |= DAOS_ACL_ACCESS_ALARM;
 			break;
 		default:
-			D_INFO("Invalid access type '%c'\n", str[i]);
+			D_INFO("Invalid access type '%c'", str[i]);
 			return ACE_INVALID;
 		}
 	}
@@ -136,7 +136,7 @@ process_flags(const char *str, uint16_t *flags)
 			*flags |= DAOS_ACL_FLAG_POOL_INHERIT;
 			break;
 		default:
-			D_INFO("Invalid flag '%c'\n", str[i]);
+			D_INFO("Invalid flag '%c'", str[i]);
 			return ACE_INVALID;
 		}
 	}
@@ -181,7 +181,7 @@ process_perms(const char *str, uint64_t *perms)
 			*perms |= DAOS_ACL_PERM_SET_OWNER;
 			break;
 		default:
-			D_INFO("Invalid permission '%c'\n", str[i]);
+			D_INFO("Invalid permission '%c'", str[i]);
 			return ACE_INVALID;
 		}
 	}
@@ -255,7 +255,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 
 			new_ace = get_ace_from_identity(field, flags);
 			if (new_ace == NULL) {
-				D_ERROR("Couldn't alloc ACE structure\n");
+				D_ERROR("Couldn't alloc ACE structure");
 				D_GOTO(error, rc = -DER_NOMEM);
 			}
 			state = ACE_PERMS;
@@ -265,7 +265,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 			break;
 		case ACE_DONE:
 		default:
-			D_INFO("Bad state: %u\n", state);
+			D_INFO("Bad state: %u", state);
 			state = ACE_INVALID;
 		}
 
@@ -276,7 +276,7 @@ create_ace_from_mutable_str(char *str, struct daos_ace **ace)
 	}
 
 	if (state != ACE_DONE) {
-		D_INFO("Invalid ACE string\n");
+		D_INFO("Invalid ACE string");
 		D_GOTO(error, rc = -DER_INVAL);
 	}
 
@@ -309,13 +309,13 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 	struct daos_ace	*new_ace = NULL;
 
 	if (str == NULL || ace == NULL) {
-		D_INFO("Invalid input ptr, str=%p, ace=%p\n", str, ace);
+		D_INFO("Invalid input ptr, str=%p, ace=%p", str, ace);
 		return -DER_INVAL;
 	}
 
 	len = strnlen(str, DAOS_ACL_MAX_ACE_STR_LEN + 1);
 	if (len > DAOS_ACL_MAX_ACE_STR_LEN) {
-		D_INFO("Input string is too long\n");
+		D_INFO("Input string is too long");
 		return -DER_INVAL;
 	}
 
@@ -331,7 +331,7 @@ daos_ace_from_str(const char *str, struct daos_ace **ace)
 		return rc;
 
 	if (!daos_ace_is_valid(new_ace)) {
-		D_INFO("Finished building ACE but it's not valid\n");
+		D_INFO("Finished building ACE but it's not valid");
 		daos_ace_free(new_ace);
 		return -DER_INVAL;
 	}
@@ -449,19 +449,18 @@ daos_ace_to_str(struct daos_ace *ace, char *buf, size_t buf_len)
 	int		rc = 0;
 
 	if (ace == NULL || buf == NULL || buf_len == 0) {
-		D_INFO("Invalid input, ace=%p, buf=%p, buf_len=%lu\n",
-		       ace, buf, buf_len);
+		D_INFO("Invalid input, ace=%p, buf=%p, buf_len=%lu", ace, buf, buf_len);
 		return -DER_INVAL;
 	}
 
 	if (!daos_ace_is_valid(ace)) {
-		D_INFO("ACE structure is not valid\n");
+		D_INFO("ACE structure is not valid");
 		return -DER_INVAL;
 	}
 
 	if (!perms_unified(ace)) {
-		D_INFO("Can't create string for ACE with different perms for "
-		       "different access types\n");
+		D_INFO(
+		    "Can't create string for ACE with different perms for different access types");
 		return -DER_INVAL;
 	}
 
@@ -692,12 +691,12 @@ daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len)
 
 
 	if (buf == NULL || buf_len == 0) {
-		D_ERROR("Empty or NULL buffer\n");
+		D_ERROR("Empty or NULL buffer");
 		return -DER_INVAL;
 	}
 
 	if (ace_str == NULL) {
-		D_ERROR("NULL ACE string\n");
+		D_ERROR("NULL ACE string");
 		return -DER_INVAL;
 	}
 
@@ -736,7 +735,7 @@ daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len)
 							 first);
 			break;
 		default:
-			D_INFO("Bad state: %u\n", state);
+			D_INFO("Bad state: %u", state);
 			state = ACE_INVALID;
 		}
 
@@ -745,12 +744,12 @@ daos_ace_str_get_verbose(const char *ace_str, char *buf, size_t buf_len)
 	}
 
 	if (state == ACE_INVALID) {
-		D_INFO("Invalid ACE string\n");
+		D_INFO("Invalid ACE string");
 		return -DER_INVAL;
 	}
 
 	if (state == ACE_TRUNC) {
-		D_INFO("String was truncated\n");
+		D_INFO("String was truncated");
 		return -DER_TRUNC;
 	}
 
@@ -766,12 +765,12 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 	int		rc;
 
 	if (ace_strs == NULL || ace_nr == 0) {
-		D_ERROR("No ACE strings provided\n");
+		D_ERROR("No ACE strings provided");
 		return -DER_INVAL;
 	}
 
 	if (acl == NULL) {
-		D_ERROR("NULL ACL pointer\n");
+		D_ERROR("NULL ACL pointer");
 		return -DER_INVAL;
 	}
 
@@ -782,21 +781,20 @@ daos_acl_from_strs(const char **ace_strs, size_t ace_nr, struct daos_acl **acl)
 	for (i = 0; i < ace_nr; i++) {
 		rc = daos_ace_from_str(ace_strs[i], &(tmp_aces[i]));
 		if (rc != 0) {
-			D_ERROR("Failed to convert string '%s' to ACE, "
-				"err=%d\n", ace_strs[i], rc);
+			D_ERROR("Failed to convert string '%s' to ACE, err=%d", ace_strs[i], rc);
 			D_GOTO(out, rc);
 		}
 	}
 
 	tmp_acl = daos_acl_create(tmp_aces, ace_nr);
 	if (tmp_acl == NULL) {
-		D_ERROR("Failed to allocate ACL\n");
+		D_ERROR("Failed to allocate ACL");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	rc = daos_acl_validate(tmp_acl);
 	if (rc != 0) {
-		D_ERROR("Resulting ACL was invalid\n");
+		D_ERROR("Resulting ACL was invalid");
 		daos_acl_free(tmp_acl);
 		D_GOTO(out, rc);
 	}
@@ -819,7 +817,7 @@ alloc_str_for_ace(struct daos_ace *current, char **result)
 
 	rc = daos_ace_to_str(current, buf, sizeof(buf));
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACE to string: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "Couldn't convert ACE to string");
 		return rc;
 	}
 
@@ -867,14 +865,13 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 	int		rc;
 
 	if (ace_strs == NULL || ace_nr == NULL) {
-		D_ERROR("Null output params: ace_strs=%p, ace_nr=%p\n",
-			ace_strs, ace_nr);
+		D_ERROR("Null output params: ace_strs=%p, ace_nr=%p", ace_strs, ace_nr);
 		return -DER_INVAL;
 	}
 
 	rc = daos_acl_validate(acl);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("ACL is not valid " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "ACL is not valid");
 		return rc;
 	}
 
@@ -912,8 +909,7 @@ verbose_str_to_stream(FILE *stream, const char *ace_str)
 				      sizeof(verbose_str));
 	/* String may have been truncated - that's OK */
 	if (rc != 0 && rc != -DER_TRUNC) {
-		D_ERROR("failed verbose translation for ACE string '%s': %d\n",
-			ace_str, rc);
+		D_ERROR("failed verbose translation for ACE string '%s': %d", ace_str, rc);
 		return rc;
 	}
 
@@ -928,7 +924,7 @@ daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
 	size_t	aces_nr, i;
 
 	if (stream == NULL) {
-		D_ERROR("Invalid stream\n");
+		D_ERROR("Invalid stream");
 		return -DER_INVAL;
 	}
 

@@ -170,10 +170,7 @@ rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		tgt_idx = rw_args->shard_args->auxi.shard % obj_get_grp_size(obj);
 		rc = obj_ec_fail_info_insert(rw_args->shard_args->reasb_req, tgt_idx);
 		if (rc) {
-			D_ERROR(DF_OID" fail info insert"
-				DF_RC"\n",
-				DP_OID(orw->orw_oid.id_pub),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_OID " fail info insert", DP_OID(orw->orw_oid.id_pub));
 		}
 		rc = -DER_CSUM;
 	}
@@ -421,7 +418,7 @@ csum_report_cb(const struct crt_cb_info *cb_info)
 	crt_rpc_t	*rpc = cb_info->cci_arg;
 	int		 rc = cb_info->cci_rc;
 
-	D_DEBUG(DB_IO, "rpc %p, csum report "DF_RC"\n", rpc, DP_RC(rc));
+	D_DEBUG(DB_IO, "rpc %p, csum report: " DF_RC, rpc, DP_RC(rc));
 	crt_req_decref(rpc);
 	crt_req_decref(cb_info->cci_rpc);
 }
@@ -439,8 +436,7 @@ dc_shard_csum_report(tse_task_t *task, crt_endpoint_t *tgt_ep, crt_rpc_t *rpc)
 	D_ASSERTF(opc == DAOS_OBJ_RPC_FETCH, "bad opc 0x%x\n", opc);
 	rc = obj_req_create(daos_task2ctx(task), tgt_ep, opc, &csum_rpc);
 	if (rc) {
-		D_ERROR("Failed to create csum report request, task %p.\n",
-			task);
+		D_ERROR("Failed to create csum report request, task %p", task);
 		return rc;
 	}
 
@@ -478,7 +474,8 @@ dc_shard_singv_size_conflict(struct daos_oclass_attr *oca, daos_size_t old_size,
 
 	obj_ec_singv_local_sz(old_size, oca, 1, &old_loc, false);
 	if (old_loc.esl_off < new_size) {
-		D_ERROR("old_size "DF_U64", tgt idx 1 off "DF_U64", new_size "DF_U64", conflict.\n",
+		D_ERROR("old_size " DF_U64 ", tgt idx 1 off " DF_U64 ", new_size " DF_U64
+			", conflict",
 			old_size, old_loc.esl_off, new_size);
 		return true;
 	}
@@ -519,7 +516,7 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 		struct shard_fetch_stat	*fetch_stat;
 		bool			conflict = false;
 
-		D_DEBUG(DB_IO, DF_UOID" size "DF_U64" eph "DF_U64"\n", DP_UOID(orw->orw_oid),
+		D_DEBUG(DB_IO, DF_UOID " size " DF_U64 " eph " DF_U64, DP_UOID(orw->orw_oid),
 			sizes[i], orw->orw_epoch);
 
 		if (!is_ec_obj) {
@@ -555,9 +552,9 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 			if (uiod->iod_size != 0 && uiod->iod_size < sizes[i]) {
 				rec2big = true;
 				rc = -DER_REC2BIG;
-				D_ERROR(DF_UOID" original iod_size "DF_U64", real size "DF_U64
-					", "DF_RC"\n", DP_UOID(orw->orw_oid),
-					iod->iod_size, sizes[i], DP_RC(rc));
+				DL_ERROR(rc,
+					 DF_UOID " original iod_size " DF_U64 ", real size " DF_U64,
+					 DP_UOID(orw->orw_oid), iod->iod_size, sizes[i]);
 				iod->iod_size = sizes[i];
 				uiod->iod_size = sizes[i];
 				goto unlock;
@@ -569,9 +566,8 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 				fetch_stat->sfs_size = sizes[i];
 			} else if (fetch_stat->sfs_size != sizes[i]) {
 				rc = -DER_IO;
-				D_ERROR(DF_UOID" size mismatch "DF_U64" != "DF_U64", "DF_RC"\n",
-					DP_UOID(orw->orw_oid), fetch_stat->sfs_size, sizes[i],
-					DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " size mismatch " DF_U64 " != " DF_U64,
+					 DP_UOID(orw->orw_oid), fetch_stat->sfs_size, sizes[i]);
 				goto unlock;
 			}
 
@@ -590,8 +586,9 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 			if (rc == 0 && fetch_stat->sfs_rc_other == -DER_REC2BIG &&
 			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
-				D_ERROR("other shard got -DER_REC2BIG, sfs_size "DF_U64
-					" on all shards\n", fetch_stat->sfs_size);
+				D_ERROR("other shard got -DER_REC2BIG, sfs_size " DF_U64
+					" on all shards",
+					fetch_stat->sfs_size);
 			}
 		} else if (sizes[i] != 0) {
 			if (iod->iod_size == 0)
@@ -603,17 +600,18 @@ dc_shard_update_size(struct rw_cb_args *rw_args, int fetch_rc)
 			} else {
 				if (fetch_stat->sfs_size_other != sizes[i]) {
 					rc = -DER_IO;
-					D_ERROR(DF_UOID" size mismatch "DF_U64" != "DF_U64", "
-						DF_RC"\n", DP_UOID(orw->orw_oid),
-						fetch_stat->sfs_size, sizes[i], DP_RC(rc));
+					DL_ERROR(rc, DF_UOID " size mismatch " DF_U64 " != " DF_U64,
+						 DP_UOID(orw->orw_oid), fetch_stat->sfs_size,
+						 sizes[i]);
 					goto unlock;
 				}
 			}
 			if (fetch_rc == -DER_REC2BIG && fetch_stat->sfs_size != 0 &&
 			    !obj_ec_singv_one_tgt(fetch_stat->sfs_size, NULL, oca)) {
 				rec2big = true;
-				D_ERROR("this non-parity shard got -DER_REC2BIG, sfs_size "DF_U64
-					" on all shards\n", fetch_stat->sfs_size);
+				D_ERROR("this non-parity shard got -DER_REC2BIG, sfs_size " DF_U64
+					" on all shards",
+					fetch_stat->sfs_size);
 			}
 
 			if (fetch_rc == 0 && fetch_stat->sfs_size != 0)
@@ -656,26 +654,26 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	int			 rc = 0;
 
 	opc = opc_get(rw_args->rpc->cr_opc);
-	D_DEBUG(DB_IO, "rpc %p opc:%d completed, task %p dt_result %d.\n",
-		rw_args->rpc, opc, task, ret);
+	D_DEBUG(DB_IO, "rpc %p opc:%d completed, task %p dt_result %d", rw_args->rpc, opc, task,
+		ret);
 	if (opc == DAOS_OBJ_RPC_FETCH &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_FETCH_TIMEOUT)) {
-		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch\n");
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O fetch");
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 	}
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
 	    DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT)) {
-		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O update\n");
+		D_ERROR("Inducing -DER_TIMEDOUT error on shard I/O update");
 		D_GOTO(out, rc = -DER_TIMEDOUT);
 	}
 	if (opc == DAOS_OBJ_RPC_UPDATE &&
 	    DAOS_FAIL_CHECK(DAOS_OBJ_UPDATE_NOSPACE)) {
-		D_ERROR("Inducing -DER_NOSPACE error on shard I/O update\n");
+		D_ERROR("Inducing -DER_NOSPACE error on shard I/O update");
 		D_GOTO(out, rc = -DER_NOSPACE);
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_RW_DROP_REPLY)) {
-		D_ERROR("Drop RPC for shard I/O update\n");
+		D_ERROR("Drop RPC for shard I/O update");
 		D_GOTO(out, rc = -DER_HG);
 	}
 
@@ -690,12 +688,13 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 * If any failure happens inside Cart, let's reset failure to
 		 * TIMEDOUT, so the upper layer can retry.
 		 */
-		D_ERROR(DF_UOID" (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s: "DF_RC"\n",
-			DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
-			rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
-			(unsigned long)orw->orw_api_flags, orw->orw_flags, task,
-			orw->orw_bulks.ca_arrays != NULL ||
-			orw->orw_bulks.ca_count != 0 ? "DMA" : "non-DMA", DP_RC(ret));
+		DL_ERROR(ret, DF_UOID " (%s) RPC %d to %d/%d, flags %lx/%x, task %p failed, %s",
+			 DP_UOID(orw->orw_oid), is_ec_obj ? "EC" : "non-EC", opc,
+			 rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag,
+			 (unsigned long)orw->orw_api_flags, orw->orw_flags, task,
+			 orw->orw_bulks.ca_arrays != NULL || orw->orw_bulks.ca_count != 0
+			     ? "DMA"
+			     : "non-DMA");
 
 		D_GOTO(out, ret);
 	}
@@ -714,23 +713,20 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				      &rw_args->shard_args->auxi.epoch, rc,
 				      orwo->orw_epoch);
 		if (rc_tmp != 0) {
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				orwo->orw_epoch, DP_RC(rc_tmp));
+			DL_ERROR(rc_tmp, "failed to end transaction operation (rc=%d epoch=" DF_U64,
+				 rc, orwo->orw_epoch);
 			goto out;
 		}
 	}
 
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
-			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may "
-				"need retry: "DF_RC"\n", rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank,
+			D_DEBUG(DB_IO, "rpc %p opc %d to rank %d tag %d may need retry: " DF_RC,
+				rw_args->rpc, opc, rw_args->rpc->cr_ep.ep_rank,
 				rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 			D_GOTO(out, rc);
 		} else if (rc == -DER_STALE) {
-			D_INFO("rpc %p got DER_STALE, pool map update needed\n",
-			       rw_args->rpc);
+			D_INFO("rpc %p got DER_STALE, pool map update needed", rw_args->rpc);
 			D_GOTO(out, rc);
 		}
 
@@ -740,14 +736,14 @@ dc_rw_cb(tse_task_t *task, void *arg)
 		 */
 		if (rc == -DER_REC2BIG || rc == -DER_NONEXIST || rc == -DER_NO_PERM ||
 		    rc == -DER_EXIST || rc == -DER_RF)
-			D_DEBUG(DB_IO, DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
+			D_DEBUG(DB_IO, DF_UOID " rpc %p opc %d to rank %d tag %d: " DF_RC,
 				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
 				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT DF_UOID" rpc %p opc %d to rank %d tag %d: "DF_RC"\n",
-				DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
-				DP_UOID(orw->orw_oid), rw_args->rpc, opc,
-				rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag, DP_RC(rc));
+			DL_ERROR(rc, DF_CONT DF_UOID " rpc %p opc %d to rank %d tag %d",
+				 DP_CONT(orw->orw_pool_uuid, orw->orw_co_uuid),
+				 DP_UOID(orw->orw_oid), rw_args->rpc, opc,
+				 rw_args->rpc->cr_ep.ep_rank, rw_args->rpc->cr_ep.ep_tag);
 
 		if (opc == DAOS_OBJ_RPC_FETCH) {
 			/* For EC obj fetch, set orr_epoch as highest server
@@ -768,9 +764,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					  obj_get_grp_size(rw_args->shard_args->auxi.obj_auxi->obj);
 				rc = obj_ec_fail_info_insert(reasb_req, tgt_idx);
 				if (rc)
-					D_ERROR(DF_OID" fail info insert: " DF_RC"\n",
-						DP_OID(orw->orw_oid.id_pub),
-						DP_RC(rc));
+					DL_ERROR(rc, DF_OID " fail info insert",
+						 DP_OID(orw->orw_oid.id_pub));
 				rc = -DER_CSUM;
 			} else if (rc == -DER_REC2BIG) {
 				rc = dc_shard_update_size(rw_args, rc);
@@ -790,11 +785,9 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			reasb_req->orr_epoch.oe_value = orwo->orw_epoch;
 
 		if (orwo->orw_iod_sizes.ca_count != orw->orw_nr) {
-			D_ERROR("out:%u != in:%u for "DF_UOID" with eph "
-				DF_U64".\n",
-				(unsigned)orwo->orw_iod_sizes.ca_count,
-				orw->orw_nr, DP_UOID(orw->orw_oid),
-				orw->orw_epoch);
+			D_ERROR("out:%u != in:%u for " DF_UOID " with eph " DF_U64,
+				(unsigned)orwo->orw_iod_sizes.ca_count, orw->orw_nr,
+				DP_UOID(orw->orw_oid), orw->orw_epoch);
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
@@ -803,8 +796,8 @@ dc_rw_cb(tse_task_t *task, void *arg)
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID " obj_ec_recov_add failed, " DF_RC "\n",
-					DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " obj_ec_recov_add failed",
+					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
 		} else if (is_ec_obj && reasb_req->orr_recov &&
@@ -813,16 +806,15 @@ dc_rw_cb(tse_task_t *task, void *arg)
 						 orwo->orw_rels.ca_arrays,
 						 orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR(DF_UOID " obj_ec_parity_check failed, " DF_RC "\n",
-					DP_UOID(orw->orw_oid), DP_RC(rc));
+				DL_ERROR(rc, DF_UOID " obj_ec_parity_check failed",
+					 DP_UOID(orw->orw_oid));
 				goto out;
 			}
 		}
 
 		rc = dc_shard_update_size(rw_args, 0);
 		if (rc) {
-			D_ERROR(DF_UOID " dc_shard_update_size failed, " DF_RC "\n",
-				DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_ERROR(rc, DF_UOID " dc_shard_update_size failed", DP_UOID(orw->orw_oid));
 			goto out;
 		}
 
@@ -848,8 +840,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			nrs_count = orwo->orw_nrs.ca_count;
 			replied_sizes = orwo->orw_data_sizes.ca_arrays;
 			if (nrs_count != orw->orw_nr) {
-				D_ERROR("Invalid nrs %u != %u\n", nrs_count,
-					orw->orw_nr);
+				D_ERROR("Invalid nrs %u != %u", nrs_count, orw->orw_nr);
 				D_GOTO(out, rc = -DER_PROTO);
 			}
 
@@ -981,8 +972,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 
 	if (DAOS_FAIL_CHECK(DAOS_SHARD_OBJ_UPDATE_TIMEOUT_SINGLE)) {
 		if (auxi->shard == daos_fail_value_get()) {
-			D_INFO("Set Shard %d update to return -DER_TIMEDOUT\n",
-			       auxi->shard);
+			D_INFO("Set Shard %d update to return -DER_TIMEDOUT", auxi->shard);
 			daos_fail_loc_set(DAOS_SHARD_OBJ_UPDATE_TIMEOUT |
 					  DAOS_FAIL_ONCE);
 		}
@@ -1009,9 +999,9 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
-	D_DEBUG(DB_TRACE, "rpc %p opc:%d "DF_UOID" "DF_KEY" rank:%d tag:%d eph "
-		DF_U64"\n", req, opc, DP_UOID(shard->do_id), DP_KEY(dkey),
-		tgt_ep.ep_rank, tgt_ep.ep_tag, auxi->epoch.oe_value);
+	D_DEBUG(DB_TRACE, "rpc %p opc:%d " DF_UOID " " DF_KEY " rank:%d tag:%d eph " DF_U64, req,
+		opc, DP_UOID(shard->do_id), DP_KEY(dkey), tgt_ep.ep_rank, tgt_ep.ep_tag,
+		auxi->epoch.oe_value);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -1078,11 +1068,12 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 					 0 : nr;
 	orw->orw_iod_array.oia_offs = args->offs;
 
-	D_DEBUG(DB_IO, "rpc %p opc %d "DF_UOID" "DF_KEY" rank %d tag %d eph "
-		DF_U64", DTI = "DF_DTI" start shard %u ver %u\n", req, opc,
-		DP_UOID(shard->do_id), DP_KEY(dkey), tgt_ep.ep_rank,
-		tgt_ep.ep_tag, auxi->epoch.oe_value, DP_DTI(&orw->orw_dti),
-		orw->orw_start_shard, orw->orw_map_ver);
+	D_DEBUG(DB_IO,
+		"rpc %p opc %d " DF_UOID " " DF_KEY " rank %d tag %d eph " DF_U64 ", DTI = " DF_DTI
+		" start shard %u ver %u",
+		req, opc, DP_UOID(shard->do_id), DP_KEY(dkey), tgt_ep.ep_rank, tgt_ep.ep_tag,
+		auxi->epoch.oe_value, DP_DTI(&orw->orw_dti), orw->orw_start_shard,
+		orw->orw_map_ver);
 
 	if (args->bulks != NULL) {
 		orw->orw_sgls.ca_count = 0;
@@ -1155,7 +1146,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
 			if (rc != 0)
-				D_ERROR("crt_req_set_timeout error: %d\n", rc);
+				D_ERROR("crt_req_set_timeout error: %d", rc);
 		    }
 
 		rc = daos_rpc_send(req, task);
@@ -1223,9 +1214,8 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d flags "DF_X64" epoch "DF_U64".\n",
-		opc, tgt_ep.ep_rank, tgt_ep.ep_tag, obj_args->flags,
-		args->pa_auxi.epoch.oe_value);
+	D_DEBUG(DB_IO, "opc=%d, rank=%d tag=%d flags " DF_X64 " epoch " DF_U64, opc, tgt_ep.ep_rank,
+		tgt_ep.ep_tag, obj_args->flags, args->pa_auxi.epoch.oe_value);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
@@ -1418,7 +1408,7 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 					     &enum_type_val, ci_to_compare);
 
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
+			D_ERROR("daos_csummer_verify_key error for %s: %d",
 				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
 			return rc;
 		}
@@ -1480,8 +1470,8 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
 		if (dst->iov_len > dst->iov_buf_len) {
-			D_DEBUG(DB_CSUM, "Checksum buffer truncated %d > %d\n",
-				(int)dst->iov_len, (int)dst->iov_buf_len);
+			D_DEBUG(DB_CSUM, "Checksum buffer truncated %d > %d", (int)dst->iov_len,
+				(int)dst->iov_buf_len);
 			return -DER_TRUNC;
 		}
 	}
@@ -1505,7 +1495,7 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		/* If any failure happens inside Cart, let's reset
 		 * failure to TIMEDOUT, so the upper layer can retry
 		 **/
-		D_ERROR("RPC %d failed: "DF_RC"\n", opc, DP_RC(ret));
+		DL_ERROR(ret, "RPC %d failed", opc);
 		D_GOTO(out, ret);
 	}
 
@@ -1520,28 +1510,26 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		rc_tmp = dc_tx_op_end(task, *enum_args->th, enum_args->epoch,
 				      rc, oeo->oeo_epoch);
 		if (rc_tmp != 0) {
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				oeo->oeo_epoch, DP_RC(rc_tmp));
+			DL_ERROR(rc_tmp, "failed to end transaction operation (rc=%d epoch=" DF_U64,
+				 rc, oeo->oeo_epoch);
 			goto out;
 		}
 	}
 
 	if (rc != 0) {
 		if (rc == -DER_KEY2BIG) {
-			D_DEBUG(DB_IO, "key size "DF_U64" %p too big.\n",
-				oeo->oeo_size, enum_args->eaa_kds);
+			D_DEBUG(DB_IO, "key size " DF_U64 " %p too big", oeo->oeo_size,
+				enum_args->eaa_kds);
 			if (enum_args->eaa_kds)
 				enum_args->eaa_kds[0].kd_key_len = oeo->oeo_size;
 		} else if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: " DF_RC, enum_args->rpc,
+				opc, DP_RC(rc));
 		} else if (rc == -DER_TX_RESTART) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: " DF_RC, enum_args->rpc,
+				opc, DP_RC(rc));
 		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n",
-				enum_args->rpc, opc, DP_RC(rc));
+			DL_ERROR(rc, "rpc %p RPC %d failed", enum_args->rpc, opc);
 		}
 		D_GOTO(out, rc);
 	}
@@ -1556,8 +1544,8 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		*enum_args->eaa_size = oeo->oeo_size;
 
 	if (*enum_args->eaa_nr < oeo->oeo_num) {
-		D_ERROR("key enumerate get %d > %d more kds, %d\n",
-			oeo->oeo_num, *enum_args->eaa_nr, -DER_PROTO);
+		D_ERROR("key enumerate get %d > %d more kds, %d", oeo->oeo_num, *enum_args->eaa_nr,
+			-DER_PROTO);
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -1656,8 +1644,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out_put, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
-		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "opc %d " DF_UOID " rank %d tag %d", opc, DP_UOID(obj_shard->do_id),
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
@@ -1821,8 +1809,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	 */
 	tmp_recx = *reply_recx;
 	tmp_end = DAOS_RECX_END(tmp_recx);
-	D_DEBUG(DB_IO, "shard %d/%u get recx "DF_U64" "DF_U64"\n",
-		shard, tgt_off, tmp_recx.rx_idx, tmp_recx.rx_nr);
+	D_DEBUG(DB_IO, "shard %d/%u get recx " DF_U64 " " DF_U64, shard, tgt_off, tmp_recx.rx_idx,
+		tmp_recx.rx_nr);
 	if (tmp_end > 0 && from_data_tgt) {
 		if (get_max) {
 			tmp_recx.rx_idx = max(tmp_recx.rx_idx, rounddown(tmp_end - 1, cell_rec_nr));
@@ -1868,7 +1856,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	opc = opc_get(cb_args->rpc->cr_opc);
 
 	if (ret != 0) {
-		D_ERROR("RPC %d failed, "DF_RC"\n", opc, DP_RC(ret));
+		DL_ERROR(ret, "RPC %d failed", opc);
 		D_GOTO(out, ret);
 	}
 
@@ -1882,9 +1870,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		rc_tmp = dc_tx_op_end(task, cb_args->th, &cb_args->epoch, rc,
 				      okqo->okqo_epoch);
 		if (rc_tmp != 0) {
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				okqo->okqo_epoch, DP_RC(rc_tmp));
+			DL_ERROR(rc_tmp, "failed to end transaction operation (rc=%d epoch=" DF_U64,
+				 rc, okqo->okqo_epoch);
 			goto out;
 		}
 	}
@@ -1896,11 +1883,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		}
 
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY)
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d\n",
-				cb_args->rpc, opc, rc);
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: %d", cb_args->rpc, opc,
+				rc);
 		else
-			D_ERROR("rpc %p RPC %d failed: %d\n",
-				cb_args->rpc, opc, rc);
+			D_ERROR("rpc %p RPC %d failed: %d", cb_args->rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
 	*cb_args->map_ver = obj_reply_map_version_get(rpc);
@@ -1920,7 +1906,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		uint64_t *cur = (uint64_t *)cb_args->dkey->iov_buf;
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
-			D_ERROR("Invalid Dkey obtained\n");
+			D_ERROR("Invalid Dkey obtained");
 			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 			D_GOTO(out, rc = -DER_IO);
 		}
@@ -1932,8 +1918,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {
-				D_DEBUG(DB_IO, "dkey update "DF_U64"->"
-					DF_U64"\n", *cur, *val);
+				D_DEBUG(DB_IO, "dkey update " DF_U64 "->" DF_U64, *cur, *val);
 				*cur = *val;
 				/** set to change akey and recx */
 				changed = true;
@@ -2018,7 +2003,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d.\n", tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "OBJ_QUERY_KEY_RPC, rank=%d tag=%d", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, DAOS_OBJ_RPC_QUERY_KEY, &req);
 	if (rc != 0)
@@ -2094,7 +2079,7 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 	rpc = cb_args->rpc;
 
 	if (ret != 0) {
-		D_ERROR("OBJ_SYNC RPC failed: rc = %d\n", ret);
+		D_ERROR("OBJ_SYNC RPC failed: rc = %d", ret);
 		D_GOTO(out, rc = ret);
 	}
 
@@ -2104,23 +2089,20 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc = 0);
 
 	if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
-		D_DEBUG(DB_TRACE,
-			"rpc %p OBJ_SYNC_RPC may need retry: rc = "DF_RC"\n",
-			rpc, DP_RC(rc));
+		D_DEBUG(DB_TRACE, "rpc %p OBJ_SYNC_RPC may need retry: " DF_RC, rpc, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	if (rc != 0) {
-		D_ERROR("rpc %p OBJ_SYNC_RPC failed: rc = "DF_RC"\n", rpc,
-			DP_RC(rc));
+		DL_ERROR(rc, "rpc %p OBJ_SYNC_RPC failed", rpc);
 		D_GOTO(out, rc);
 	}
 
 	*cb_args->epoch = oso->oso_epoch;
 	*cb_args->map_ver = oso->oso_map_version;
 
-	D_DEBUG(DB_IO, "OBJ_SYNC_RPC reply: eph "DF_U64", version %u.\n",
-		oso->oso_epoch, oso->oso_map_version);
+	D_DEBUG(DB_IO, "OBJ_SYNC_RPC reply: eph " DF_U64 ", version %u", oso->oso_epoch,
+		oso->oso_map_version);
 
 out:
 	crt_req_decref(rpc);
@@ -2156,8 +2138,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "OBJ_SYNC_RPC, rank=%d tag=%d.\n",
-		tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "OBJ_SYNC_RPC, rank=%d tag=%d", tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)
@@ -2217,7 +2198,7 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	oki = crt_req_get(k2a_args->rpc);
 	D_ASSERT(oki != NULL);
 	if (ret != 0) {
-		D_ERROR("RPC %d failed: "DF_RC"\n", DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(ret));
+		DL_ERROR(ret, "RPC %d failed", DAOS_OBJ_RPC_KEY2ANCHOR);
 		D_GOTO(out, ret);
 	}
 
@@ -2232,23 +2213,22 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 		rc_tmp = dc_tx_op_end(task, *k2a_args->th, k2a_args->epoch,
 				      rc, oko->oko_epoch);
 		if (rc_tmp != 0) {
-			D_ERROR("failed to end transaction operation (rc=%d "
-				"epoch="DF_U64": "DF_RC"\n", rc,
-				oko->oko_epoch, DP_RC(rc_tmp));
+			DL_ERROR(rc_tmp, "failed to end transaction operation (rc=%d epoch=" DF_U64,
+				 rc, oko->oko_epoch);
 			goto out;
 		}
 	}
 
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: "DF_RC"\n",
-				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
-		} else if (rc == -DER_TX_RESTART) {
-			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: "DF_RC"\n",
-				k2a_args->rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
-		} else {
-			D_ERROR("rpc %p RPC %d failed: "DF_RC"\n", k2a_args->rpc,
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need retry: " DF_RC, k2a_args->rpc,
 				DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+		} else if (rc == -DER_TX_RESTART) {
+			D_DEBUG(DB_TRACE, "rpc %p RPC %d may need restart: " DF_RC, k2a_args->rpc,
+				DAOS_OBJ_RPC_KEY2ANCHOR, DP_RC(rc));
+		} else {
+			DL_ERROR(rc, "rpc %p RPC %d failed", k2a_args->rpc,
+				 DAOS_OBJ_RPC_KEY2ANCHOR);
 		}
 		D_GOTO(out, rc);
 	}
@@ -2299,8 +2279,8 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if ((int)tgt_ep.ep_rank < 0)
 		D_GOTO(out_put, rc = (int)tgt_ep.ep_rank);
 
-	D_DEBUG(DB_IO, "opc %d "DF_UOID" rank %d tag %d\n",
-		opc, DP_UOID(obj_shard->do_id), tgt_ep.ep_rank, tgt_ep.ep_tag);
+	D_DEBUG(DB_IO, "opc %d " DF_UOID " rank %d tag %d", opc, DP_UOID(obj_shard->do_id),
+		tgt_ep.ep_rank, tgt_ep.ep_tag);
 
 	rc = obj_req_create(daos_task2ctx(task), &tgt_ep, opc, &req);
 	if (rc != 0)

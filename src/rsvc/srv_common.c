@@ -47,8 +47,7 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
 		goto out;
-	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu\n", svc->s_name, count,
-		bulk_size);
+	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu", svc->s_name, count, bulk_size);
 
 	D_ALLOC(data, bulk_size);
 	if (data == NULL) {
@@ -90,9 +89,8 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_update(tx, path, &key, &value);
 		if (rc != 0) {
-			D_ERROR("%s: failed to update attribute "DF_KEY
-				": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to update attribute " DF_KEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_bulk;
 		}
 	}
@@ -121,8 +119,7 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
 		goto out;
-	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu\n", svc->s_name, count,
-		bulk_size);
+	D_DEBUG(DB_MD, "%s: count=%lu, size=%lu", svc->s_name, count, bulk_size);
 
 	D_ALLOC(data, bulk_size);
 	if (data == NULL)
@@ -153,14 +150,12 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_ANY, "%s: failed to delete attribute "DF_KEY
-				": "DF_RC"\n", svc->s_name, DP_KEY(&key),
-				DP_RC(rc));
+			D_DEBUG(DB_ANY, "%s: failed to delete attribute " DF_KEY ": " DF_RC,
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to delete attribute "DF_KEY
-				": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to delete attribute " DF_KEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_bulk;
 		}
 	}
@@ -197,8 +192,8 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
 		goto out;
-	D_DEBUG(DB_MD, "%s: count=%lu, key_length=%lu, size=%lu\n",
-		svc->s_name, count, key_length, bulk_size);
+	D_DEBUG(DB_MD, "%s: count=%lu, key_length=%lu, size=%lu", svc->s_name, count, key_length,
+		bulk_size);
 
 	input_size = key_length + count * sizeof(*sizes);
 	D_ASSERT(input_size <= bulk_size);
@@ -252,12 +247,12 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			iovs[j - 1].iov_buf_len += sizes[i];
 			sizes[i] = 0;
 
-			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute " DF_KEY ": " DF_RC,
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to lookup attribute " DF_KEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_iovs;
 		} else if (sizes[i] > 0) {
 			daos_size_t size;
@@ -355,7 +350,7 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 		if (rc != 0)
 			goto out;
-		D_DEBUG(DB_MD, "%s: bulk_size=%lu\n", svc->s_name, bulk_size);
+		D_DEBUG(DB_MD, "%s: bulk_size=%lu", svc->s_name, bulk_size);
 
 		/* Start with 1 and grow as needed */
 		D_ALLOC_PTR(iter_args.iovs);

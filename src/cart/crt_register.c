@@ -52,15 +52,14 @@ crt_opc_map_create()
 	for (i = 0; i < 16; i++) {
 		rc = crt_opc_map_L2_create(&map->com_map[i]);
 		if (rc != DER_SUCCESS) {
-			D_ERROR("crt_opc_map_L2_create() failed, " DF_RC "\n",
-				DP_RC(rc));
+			DL_ERROR(rc, "crt_opc_map_L2_create() failed");
 			D_GOTO(out, rc);
 		}
 	}
 
 	rc = D_RWLOCK_INIT(&map->com_rwlock, NULL);
 	if (rc != 0) {
-		D_ERROR("Failed to create mutex for CaRT opc map.\n");
+		D_ERROR("Failed to create mutex for CaRT opc map");
 		D_GOTO(out, rc);
 	}
 
@@ -109,7 +108,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 	D_ASSERT(map != NULL);
 
 	if (map->com_map == NULL) {
-		D_DEBUG(DB_TRACE, "opc map empty, skipping.\n");
+		D_DEBUG(DB_TRACE, "opc map empty, skipping");
 		D_GOTO(skip, 0);
 	}
 
@@ -141,23 +140,23 @@ crt_proto_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	L2_idx = (opc & CRT_PROTO_VER_MASK) >> 16;
 
 	if (L1_idx >= map->com_num_slots_total) {
-		D_ERROR("base opc %d out of range [0, 255]\n", L1_idx);
+		D_ERROR("base opc %d out of range [0, 255]", L1_idx);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	if (map->com_map[L1_idx].L2_num_slots_total == 0) {
-		D_ERROR("base opc %d not registered\n", L1_idx);
+		D_ERROR("base opc %d not registered", L1_idx);
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
-		D_ERROR("version number %d out of range [0, %d]\n", L2_idx,
+		D_ERROR("version number %d out of range [0, %d]", L2_idx,
 			map->com_map[L1_idx].L2_num_slots_total - 1);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
 
 	if (map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total == 0) {
-		D_ERROR("version number %d has no entries\n", L2_idx);
+		D_ERROR("version number %d has no entries", L2_idx);
 		D_GOTO(out, rc = -DER_UNREG);
 	}
 
@@ -184,17 +183,16 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 		D_RWLOCK_RDLOCK(&map->com_rwlock);
 
 	if (L1_idx >= map->com_num_slots_total) {
-		D_WARN("base opc %d out of range [0, %d]\n", L1_idx,
-		       map->com_num_slots_total);
+		D_WARN("base opc %d out of range [0, %d]", L1_idx, map->com_num_slots_total);
 		D_GOTO(out, 0);
 	}
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
-		D_WARN("version number %d out of range [0, %d]\n", L2_idx,
+		D_WARN("version number %d out of range [0, %d]", L2_idx,
 		       map->com_map[L1_idx].L2_num_slots_total);
 		D_GOTO(out, 0);
 	}
 	if (L3_idx >= map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total) {
-		D_WARN("rpc id %d out of range [0, %d]\n", L3_idx,
+		D_WARN("rpc id %d out of range [0, %d]", L3_idx,
 		       map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total);
 		D_GOTO(out, 0);
 	}
@@ -217,8 +215,7 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	int	rc = 0;
 
 	if (opc_info->coi_inited == 1) {
-		D_ERROR("RPC with opcode %#x already registered\n",
-			opc_info->coi_opc);
+		D_ERROR("RPC with opcode %#x already registered", opc_info->coi_opc);
 		D_GOTO(out, rc = -DER_EXIST);
 	};
 
@@ -258,9 +255,7 @@ crt_opc_reg(struct crt_opc_info *opc_info, crt_opcode_t opc, uint32_t flags,
 	opc_info->coi_reset_timer = D_BIT_IS_SET(flags, CRT_RPC_FEAT_NO_TIMEOUT);
 	opc_info->coi_queue_front = D_BIT_IS_SET(flags, CRT_RPC_FEAT_QUEUE_FRONT);
 
-	D_DEBUG(DB_TRACE,
-		"opc %#x, no_reply %s, reset_timer %s, queue_front %s\n",
-		opc,
+	D_DEBUG(DB_TRACE, "opc %#x, no_reply %s, reset_timer %s, queue_front %s", opc,
 		opc_info->coi_no_reply ? "enabled" : "disabled",
 		opc_info->coi_reset_timer ? "enabled" : "disabled",
 		opc_info->coi_queue_front ? "enabled" : "disabled");
@@ -282,8 +277,8 @@ crt_opc_reg_internal(struct crt_opc_info *opc_info, crt_opcode_t opc,
 
 	if (crf->crf_size_in > CRT_MAX_INPUT_SIZE ||
 	    crf->crf_size_out > CRT_MAX_OUTPUT_SIZE) {
-		D_ERROR("input_size "DF_U64" or output_size "DF_U64" "
-			"too large.\n", crf->crf_size_in, crf->crf_size_out);
+		D_ERROR("input_size " DF_U64 " or output_size " DF_U64 " too large",
+			crf->crf_size_in, crf->crf_size_out);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -291,7 +286,7 @@ reg_opc:
 	rc = crt_opc_reg(opc_info, opc, prf->prf_flags, crf, prf->prf_hdlr,
 			 prf->prf_co_ops);
 	if (rc != 0)
-		D_ERROR("rpc (opc: %#x) register failed, rc: %d.\n", opc, rc);
+		D_ERROR("rpc (opc: %#x) register failed, rc: %d", opc, rc);
 
 out:
 	return rc;
@@ -341,9 +336,8 @@ crt_proto_reg_L3(struct crt_opc_map_L3 *L3_map,
 							i),
 					  prf);
 		if (rc != 0) {
-			D_ERROR("crt_opc_reg_internal(opc: %#x) failed, rc %d.\n",
-				CRT_PROTO_OPC(cpf->cpf_base, cpf->cpf_ver, i),
-				rc);
+			D_ERROR("crt_opc_reg_internal(opc: %#x) failed, rc %d",
+				CRT_PROTO_OPC(cpf->cpf_base, cpf->cpf_ver, i), rc);
 			return rc;
 		}
 	}
@@ -385,7 +379,7 @@ crt_proto_reg_L2(struct crt_opc_map_L2 *L2_map,
 		L2_map->L2_num_slots_used++;
 	rc = crt_proto_reg_L3(L3_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L3() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_proto_reg_L3() failed");
 
 	return rc;
 }
@@ -408,7 +402,7 @@ crt_proto_reg_L1(struct crt_opc_map *map, struct crt_proto_format *cpf)
 
 	rc = crt_proto_reg_L2(L2_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L2() failed, " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_proto_reg_L2() failed");
 	D_RWLOCK_UNLOCK(&map->com_rwlock);
 
 	return rc;
@@ -420,25 +414,24 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 	int rc;
 
 	if (cpf->cpf_ver > CRT_PROTO_MAX_VER) {
-		D_ERROR("Invalid version number %d, max version number is "
-			"%lu.\n", cpf->cpf_ver, CRT_PROTO_MAX_VER);
+		D_ERROR("Invalid version number %d, max version number is %lu", cpf->cpf_ver,
+			CRT_PROTO_MAX_VER);
 		return -DER_INVAL;
 	}
 
 	if (cpf->cpf_count > CRT_PROTO_MAX_COUNT) {
-		D_ERROR("Invalid member RPC count %d, max count is %lu.\n",
-			cpf->cpf_count, CRT_PROTO_MAX_COUNT);
+		D_ERROR("Invalid member RPC count %d, max count is %lu", cpf->cpf_count,
+			CRT_PROTO_MAX_COUNT);
 		return -DER_INVAL;
 	}
 
 	if (cpf->cpf_count == 0) {
-		D_ERROR("Invalid member RPC count %d\n",
-			cpf->cpf_count);
+		D_ERROR("Invalid member RPC count %d", cpf->cpf_count);
 		return -DER_INVAL;
 	}
 
 	if (cpf->cpf_prf == NULL) {
-		D_ERROR("prf can't be NULL\n");
+		D_ERROR("prf can't be NULL");
 		return -DER_INVAL;
 	}
 
@@ -469,20 +462,17 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 			/* TODO: Make this a D_WARN and resolve client issues
 			 * after the 1.2 release.
 			 */
-			D_DEBUG(DB_ALL, "Registering protocol without checking"
-				" %s.%#x %d\n",
+			D_DEBUG(DB_ALL, "Registering protocol without checking %s.%#x %d",
 				cpf->cpf_name, cpf->cpf_base, cpf->cpf_ver);
 	}
 
 	/* reg L1 */
 	rc = crt_proto_reg_L1(crt_gdata.cg_opc_map, cpf);
 	if (rc != 0)
-		D_ERROR("crt_proto_reg_L1() failed, "
-			"protocol: '%s', version %u, base_opc %#x. " DF_RC "\n",
-			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base, DP_RC(rc));
+		DL_ERROR(rc, "crt_proto_reg_L1() failed, protocol: '%s', version %u, base_opc %#x",
+			 cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
 	else
-		D_DEBUG(DB_TRACE, "registered protocol: '%s', version %u, "
-			"base_opc %#x.\n",
+		D_DEBUG(DB_TRACE, "registered protocol: '%s', version %u, base_opc %#x",
 			cpf->cpf_name, cpf->cpf_ver, cpf->cpf_base);
 
 	return rc;
@@ -492,13 +482,13 @@ int
 crt_proto_register(struct crt_proto_format *cpf)
 {
 	if (cpf == NULL) {
-		D_ERROR("cpf can't be NULL.\n");
+		D_ERROR("cpf can't be NULL");
 		return -DER_INVAL;
 	}
 
 	/* validate base_opc is in range */
 	if (!validate_base_opcode(cpf->cpf_base)) {
-		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
+		D_ERROR("Invalid base_opc: %#x", cpf->cpf_base);
 		return -DER_INVAL;
 	}
 
@@ -509,7 +499,7 @@ int
 crt_proto_register_internal(struct crt_proto_format *cpf)
 {
 	if (cpf == NULL) {
-		D_ERROR("cpf can't be NULL.\n");
+		D_ERROR("cpf can't be NULL");
 		return -DER_INVAL;
 	}
 
@@ -518,7 +508,7 @@ crt_proto_register_internal(struct crt_proto_format *cpf)
 	 * just checking equlity so only one mask would be allowed here
 	 */
 	if (cpf->cpf_base ^ CRT_PROTO_BASEOPC_MASK) {
-		D_ERROR("Invalid base_opc: %#x.\n", cpf->cpf_base);
+		D_ERROR("Invalid base_opc: %#x", cpf->cpf_base);
 		return -DER_INVAL;
 	}
 
@@ -545,8 +535,7 @@ proto_query_cb(const struct crt_cb_info *cb_info)
 	D_FREE(rpc_req_input->pq_ver.iov_buf);
 
 	if (cb_info->cci_rc != 0) {
-		D_ERROR("rpc (opc: %#x) failed: "DF_RC"\n", rpc_req->cr_opc,
-			DP_RC(cb_info->cci_rc));
+		DL_ERROR(cb_info->cci_rc, "rpc (opc: %#x) failed", rpc_req->cr_opc);
 		D_GOTO(out, user_cb_info.pq_rc = cb_info->cci_rc);
 	}
 
@@ -582,17 +571,17 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 	int				 rc = DER_SUCCESS;
 
 	if (ver == NULL) {
-		D_ERROR("ver is NULL.\n");
+		D_ERROR("ver is NULL");
 		return -DER_INVAL;
 	}
 
 	if (cb == NULL)
-		D_WARN("crt_proto_query() is not useful when cb is NULL.\n");
+		D_WARN("crt_proto_query() is not useful when cb is NULL");
 
 	if (ctx == NULL) {
 		crt_ctx = crt_context_lookup(0);
 		if (crt_ctx == NULL) {
-			D_ERROR("crt_context 0 doesn't exist.\n");
+			D_ERROR("crt_context 0 doesn't exist");
 			return -DER_INVAL;
 		}
 	} else {
@@ -601,7 +590,7 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 
 	rc = crt_req_create(crt_ctx, tgt_ep, CRT_OPC_PROTO_QUERY, &rpc_req);
 	if (rc != 0) {
-		D_ERROR("crt_req_create() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_create() failed");
 		D_GOTO(out, rc);
 	}
 
@@ -631,7 +620,7 @@ crt_proto_query_int(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t *ver
 
 	rc = crt_req_send(rpc_req, proto_query_cb, proto_query);
 	if (rc != 0)
-		D_ERROR("crt_req_send() failed: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "crt_req_send() failed");
 	D_GOTO(out, rc);
 
 err_rpc:
@@ -713,10 +702,10 @@ crt_hdlr_proto_query(crt_rpc_t *rpc_req)
 	if (rc != DER_SUCCESS)
 		rc = rc_tmp;
 
-	D_DEBUG(DB_TRACE, "high_ver %u\n", high_ver);
+	D_DEBUG(DB_TRACE, "high_ver %u", high_ver);
 	rpc_req_output->pq_ver = high_ver;
 	rpc_req_output->pq_rc = rc;
 	rc = crt_reply_send(rpc_req);
 	if (rc != 0)
-		D_ERROR("crt_reply_send() failed, rc: %d\n", rc);
+		D_ERROR("crt_reply_send() failed, rc: %d", rc);
 }

@@ -383,7 +383,7 @@ is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 			is_type_set = DAOS_OT_DKEY_LEXICAL;
 		break;
 	default:
-		D_ERROR("Unexpected parameter.\n");
+		D_ERROR("Unexpected parameter");
 		break;
 	}
 
@@ -412,7 +412,7 @@ daos_cont_rf2oit_ord(uint32_t cont_rf)
 		ord = OR_RP_5;
 		break;
 	default:
-		D_ERROR("bad cont_rf %d\n", cont_rf);
+		D_ERROR("bad cont_rf %d", cont_rf);
 		return -DER_INVAL;
 	};
 
@@ -777,18 +777,17 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	unsigned int			 i, j;
 
 	if (lists == NULL || nr == 0) {
-		D_ERROR("empty daos_recx_ep_list.\n");
+		D_ERROR("empty daos_recx_ep_list");
 		return;
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:",
 			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
-				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
-				recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]", recx_ep->re_type,
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
 		}
 	}
 }

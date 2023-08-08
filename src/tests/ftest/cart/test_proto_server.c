@@ -52,7 +52,7 @@ test_run(d_rank_t my_rank)
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
-	D_DEBUG(DB_TRACE, "joined progress thread.\n");
+	D_DEBUG(DB_TRACE, "joined progress thread");
 
 	rc = sem_destroy(&test.tg_token_to_proceed);
 	D_ASSERTF(rc == 0, "sem_destroy() failed.\n");
@@ -67,7 +67,7 @@ test_run(d_rank_t my_rank)
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
 	d_log_fini();
-	D_DEBUG(DB_TRACE, "exiting.\n");
+	D_DEBUG(DB_TRACE, "exiting");
 }
 
 int
