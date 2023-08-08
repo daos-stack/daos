@@ -12,6 +12,7 @@ if fixes are being applied.
 """
 
 import argparse
+import re
 import io
 import os
 
@@ -56,7 +57,6 @@ class FileLine():
         """Expand line to end"""
         while not self._code.endswith(';'):
             to_add = str(next(self._fo))
-            self._code += ' '
             self._code += to_add.strip()
             self._line += to_add
 
@@ -128,7 +128,7 @@ PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FAT
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER']
+                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN']
 
 
 PREFIXES_ALL = PREFIXES.copy()
@@ -174,7 +174,10 @@ class AllChecks():
             self.check_quote(line)
             self.check_return(line)
             self.check_df_rc_dot(line)
+            self.check_for_newline(line)
             self.check_df_rc(line)
+            self.remove_trailing_period(line)
+            self.migrate_to_dl_error(line)
 
             line.write(self._output)
             if line.modified:
@@ -199,7 +202,10 @@ class AllChecks():
             return
         if count == 1 and line.count('strerror') == 1:
             return
-        line.note('Message uses %s')
+        if '?' in line:
+            line.note('Message uses %s with trigraph')
+        else:
+            line.note('Message uses %s without trigraph')
 
     def check_quote(self, line):
         """Check for double quotes in message"""
@@ -260,10 +266,8 @@ class AllChecks():
         # Remove any spaces around macros as these may or may not be present.  This updated input
         # is used for the update check at the end so white-space differences here will not cause
         # code to be re-written.
-        code = code.replace('DF_RC ', 'DF_RC')
-        code = code.replace(' DF_RC', 'DF_RC')
-        code = code.replace('DP_RC ', 'DP_RC')
-        code = code.replace(' DP_RC ', 'DP_RC')
+        code = re.sub(r' ?DF_RC ?', 'DF_RC', code)
+        code = re.sub(r' ?DP_RC ?', 'DP_RC', code)
 
         # Check that DF_RC is at the end of the line, it should be.
 
@@ -307,8 +311,46 @@ class AllChecks():
 
         # Put it all back together with consistent style.
         new_code = f'{msg}: "DF_RC{parts[1]}'
+
+        if line.startswith('D_ERROR') or line.startswith('D_WARN'):
+            new_code = f'{msg}"DF_RC{parts[1]}'
+            if line.startswith('D_ERROR'):
+                new_code = f'DL_ERROR({var_name}, {new_code[8:]}'
+            else:
+                new_code = f'DL_WARN({var_name}, {new_code[7:]}'
+            new_code = new_code.replace('DF_RC', '')
+            new_code = new_code.replace(f',DP_RC({var_name})', '')
+
         if new_code != code:
             line.correct(new_code)
+
+    def check_for_newline(self, line):
+        """Remove optional new-lines"""
+        code = line.raw()
+
+        if any(map(code.startswith, PREFIXES_NNL)):
+            return
+
+        new_code = code.replace('"\\n",', ',')
+        new_code = new_code.replace('\\n",', '",')
+        new_code = new_code.replace('"\\n")', ')')
+        new_code = new_code.replace('\\n")', '")')
+        if new_code != code:
+            line.correct(new_code)
+
+    def remove_trailing_period(self, line):
+        """Remove . from the end of a line"""
+        code = line.raw()
+        new_code = re.sub(r'\.",', '",', code)
+        new_code = re.sub(r'\."\)', '")', new_code)
+
+        if new_code != code:
+            line.correct(new_code)
+
+    def migrate_to_dl_error(self, line):
+        """Update line to use DL_ERROR macro over DL_ERROR"""
+        if not line.startswith('D_ERROR'):
+            return
 
 
 def one_entry(fname):

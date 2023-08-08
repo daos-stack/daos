@@ -59,9 +59,8 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 /**< Env to specify stderr merge with logfile*/
 #define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
 
-/* Enable shadow warning where users use same variable name in nested
- * scope.   This enables use of a variable in the macro below and is
- * just good coding practice.
+/* Enable shadow warning where users use same variable name in nested scope.  This enables use of a
+ * variable in the macro below and is just good coding practice.
  */
 #pragma GCC diagnostic error "-Wshadow"
 
@@ -84,8 +83,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 		}                                                                                  \
 	} while (0)
 
-/**
- * The _D_LOG internal macro checks the specified mask and, if enabled, it logs the message,
+/* The _D_LOG internal macro checks the specified mask and, if enabled, it logs the message,
  * prependng the file, line, and function name.  This function can be used directly by users or by
  * user defined macros if the provided log level macros are not flexible enough.
  */
@@ -196,6 +194,32 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_EMIT(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ## __VA_ARGS__)
+
+/* Alternative versions of D_ERROR and D_WARN.
+ *
+ * These take a rc value and possibly a descriptor so we are able to better control the output.
+ */
+#define DHL_ERROR(_desc, _rc, _fmt, ...)                                                           \
+	do {                                                                                       \
+		_D_DEBUG(_D_TRACE_NOCHECK, DLOG_ERR, (_desc), _fmt ": " DF_RC "\n", ##__VA_ARGS__, \
+			 DP_RC(_rc));                                                              \
+	} while (0)
+
+#define DL_ERROR(_rc, _fmt, ...)                                                                   \
+	do {                                                                                       \
+		D_DEBUG(DLOG_ERR, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc));                \
+	} while (0)
+
+#define DHL_WARN(_desc, _rc, _fmt, ...)                                                            \
+	do {                                                                                       \
+		_D_DEBUG(_D_TRACE_NOCHECK, DLOG_WARN, (_desc), _fmt ": " DF_RC "\n",               \
+			 ##__VA_ARGS__, DP_RC(_rc));                                               \
+	} while (0)
+
+#define DL_WARN(_rc, _fmt, ...)                                                                    \
+	do {                                                                                       \
+		D_DEBUG(DLOG_WARN, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc));               \
+	} while (0)
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
