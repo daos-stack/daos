@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	uuid "github.com/google/uuid"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -23,6 +25,13 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+)
+
+// Set as variables so can be overwritten during unit testing.
+var (
+	baseDevReplaceBackoff      = 250 * time.Millisecond
+	maxDevReplaceBackoffFactor = 7 // 8s
+	maxDevReplaceRetries       = 5
 )
 
 func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
@@ -340,6 +349,33 @@ func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, 
 	}
 }
 
+// Retry dev-replace requests as state propagation may take some time after set-faulty call has
+// been made to manually trigger a faulty device state.
+func replaceDevRetryBusy(ctx context.Context, log logging.Logger, e Engine, req proto.Message) (res *ctlpb.SmdManageResp_Result, err error) {
+	for try := uint(0); try < uint(maxDevReplaceRetries); try++ {
+		res, err = sendManageReq(ctx, e, drpc.MethodReplaceStorage, req)
+		if err != nil {
+			return
+		}
+		if daos.Status(res.Status) != daos.Busy {
+			break
+		}
+
+		backoff := common.ExpBackoff(baseDevReplaceBackoff, uint64(try),
+			uint64(maxDevReplaceBackoffFactor))
+		log.Debugf("retrying dev-replace drpc request after %s", backoff)
+
+		select {
+		case <-ctx.Done():
+			err = ctx.Err()
+			return
+		case <-time.After(backoff):
+		}
+	}
+
+	return
+}
+
 // SmdManage implements the method defined for the Management Service.
 //
 // Manage SMD devices.
@@ -393,9 +429,9 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			}
 			dReq := req.GetReplace()
 			svc.log.Debugf(msg, "dev-replace", dReq)
-			devRes, err := sendManageReq(ctx, engine, drpc.MethodReplaceStorage, dReq)
+			devRes, err := replaceDevRetryBusy(ctx, svc.log, engine, dReq)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, msg)
 			}
 			addManageRespIDOnFail(svc.log, devRes, devs[0])
 			devResults = append(devResults, devRes)
@@ -407,12 +443,13 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			svc.log.Debugf(msg, "set-faulty", dReq)
 			devRes, err := sendManageReq(ctx, engine, drpc.MethodSetFaultyState, dReq)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrap(err, msg)
 			}
 			addManageRespIDOnFail(svc.log, devRes, devs[0])
 			devResults = append(devResults, devRes)
 		case *ctlpb.SmdManageReq_Led:
 			if len(devs) == 0 {
+				// TODO DAOS-12670: Enable all LEDs to be acted upon by default.
 				return nil, errors.New("led-manage request expects one or more IDs")
 			}
 			// Multiple addresses are supported in LED request.
@@ -427,7 +464,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 				svc.log.Debugf(msg, "led-manage", dReq)
 				devRes, err := sendManageReq(ctx, engine, drpc.MethodLedManage, dReq)
 				if err != nil {
-					return nil, err
+					return nil, errors.Wrap(err, msg)
 				}
 				addManageRespIDOnFail(svc.log, devRes, dev)
 				devResults = append(devResults, devRes)
