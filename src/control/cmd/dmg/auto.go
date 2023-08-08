@@ -109,7 +109,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	}
 
 	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(resp, err)
+		return nil, cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
