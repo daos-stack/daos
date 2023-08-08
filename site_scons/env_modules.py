@@ -61,6 +61,7 @@ class _env_module():  # pylint: disable=invalid-name
         except OSError as error:
             if error.errno == errno.ENOENT:
                 return None, None
+            raise
 
         stdout, stderr = proc.communicate()
 
@@ -191,6 +192,7 @@ def load_mpi(mpi):
             print("Error running update-alternatives")
             if error.errno == errno.ENOENT:
                 return False
+            raise
         for line in proc.stdout.readlines():
             if line.startswith(b"Value:"):
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:

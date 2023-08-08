@@ -784,7 +784,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	daos_props_2cont_props(out->coo_prop, &cont->dc_props);
 	rc = dc_cont_props_init(cont);
 	if (rc != 0) {
-		D_ERROR("container props failed to initialize");
+		D_ERROR("container props failed to initialize\n");
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
 		D_GOTO(out, rc);
 	}
@@ -896,7 +896,8 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				  DAOS_CO_QUERY_PROP_EC_PDA |
 				  DAOS_CO_QUERY_PROP_RP_PDA |
 				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
-				  DAOS_CO_QUERY_PROP_OBJ_VERSION;
+				  DAOS_CO_QUERY_PROP_OBJ_VERSION |
+				  DAOS_CO_QUERY_PROP_PERF_DOMAIN;
 
 	/* open bylabel RPC input */
 	if (label) {
@@ -1328,6 +1329,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_EC_CELL_SZ:
 			bits |= DAOS_CO_QUERY_PROP_EC_CELL_SZ;
 			break;
+		case DAOS_PROP_CO_PERF_DOMAIN:
+			bits |= DAOS_CO_QUERY_PROP_PERF_DOMAIN;
+			break;
 		case DAOS_PROP_CO_EC_PDA:
 			bits |= DAOS_CO_QUERY_PROP_EC_PDA;
 			break;
@@ -1510,6 +1514,12 @@ dc_cont_set_prop(tse_task_t *task)
 
 	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_RP_PDA)) {
 		D_ERROR("Can't set RP performance domain affinity "
+			"on existed container.\n");
+		D_GOTO(err, rc = -DER_NO_PERM);
+	}
+
+	if (daos_prop_entry_get(args->prop, DAOS_PROP_CO_PERF_DOMAIN)) {
+		D_ERROR("Can't set RP performance domain level "
 			"on existed container.\n");
 		D_GOTO(err, rc = -DER_NO_PERM);
 	}
@@ -2025,6 +2035,7 @@ struct dc_cont_glob {
 	uint32_t	dcg_ec_cell_sz;
 	uint32_t	dcg_ec_pda;
 	uint32_t	dcg_rp_pda;
+	uint32_t	dcg_perf_domain;
 	uint32_t	dcg_global_version;
 	uint32_t	dcg_obj_version;
 	/** minimal required pool map version, as a fence to make sure after
@@ -2110,6 +2121,7 @@ dc_cont_l2g(daos_handle_t coh, d_iov_t *glob)
 	cont_glob->dcg_ec_cell_sz	= cont->dc_props.dcp_ec_cell_sz;
 	cont_glob->dcg_ec_pda		= cont->dc_props.dcp_ec_pda;
 	cont_glob->dcg_rp_pda		= cont->dc_props.dcp_rp_pda;
+	cont_glob->dcg_perf_domain	= cont->dc_props.dcp_perf_domain;
 	cont_glob->dcg_min_ver		= cont->dc_min_ver;
 	cont_glob->dcg_global_version	= cont->dc_props.dcp_global_version;
 	cont_glob->dcg_obj_version	= cont->dc_props.dcp_obj_version;
@@ -2200,6 +2212,7 @@ dc_cont_g2l(daos_handle_t poh, struct dc_cont_glob *cont_glob,
 	cont->dc_props.dcp_ec_cell_sz	 = cont_glob->dcg_ec_cell_sz;
 	cont->dc_props.dcp_ec_pda	 = cont_glob->dcg_ec_pda;
 	cont->dc_props.dcp_rp_pda	 = cont_glob->dcg_rp_pda;
+	cont->dc_props.dcp_perf_domain	 = cont_glob->dcg_perf_domain;
 	cont->dc_min_ver		 = cont_glob->dcg_min_ver;
 	cont->dc_props.dcp_global_version = cont_glob->dcg_global_version;
 	cont->dc_props.dcp_obj_version = cont_glob->dcg_obj_version;
@@ -2542,21 +2555,20 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 	if (n <= 0 || names == NULL || ((sizes == NULL
 	    || values == NULL) && !readonly)) {
-		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
-			", sizes = %p", n, names, values, sizes);
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p\n", n,
+			names, values, sizes);
 		return -DER_INVAL;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (names[i] == NULL || *names[i] == '\0') {
-			D_ERROR("Invalid Arguments: names[%d] = %s",
-				i, names[i] == NULL ? "NULL" : "\'\\0\'");
+			D_ERROR("Invalid Arguments: names[%d] = %s\n", i,
+				names[i] == NULL ? "NULL" : "\'\\0\'");
 
 			return -DER_INVAL;
 		}
 		if (strnlen(names[i], DAOS_ATTR_NAME_MAX + 1) > DAOS_ATTR_NAME_MAX) {
-			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX",
-				i);
+			D_ERROR("Invalid Arguments: names[%d] size > DAOS_ATTR_NAME_MAX\n", i);
 			return -DER_INVAL;
 		}
 		if (sizes != NULL) {
@@ -2564,8 +2576,9 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 				sizes[i] = 0;
 			else if (values[i] == NULL || sizes[i] == 0) {
 				if (!readonly) {
-					D_ERROR("Invalid Arguments: values[%d] = %p, sizes[%d] = %lu",
-						i, values[i], i, sizes[i]);
+					D_ERROR(
+					    "Invalid Arguments: values[%d] = %p, sizes[%d] = %lu\n",
+					    i, values[i], i, sizes[i]);
 					return -DER_INVAL;
 				}
 				sizes[i] = 0;

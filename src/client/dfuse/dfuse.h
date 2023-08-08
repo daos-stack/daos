@@ -43,6 +43,9 @@ struct dfuse_info {
 	 */
 	pthread_spinlock_t   di_lock;
 
+	/* RW lock used for force filesystem query ioctl to block for pending forget calls. */
+	pthread_rwlock_t     di_forget_lock;
+
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
@@ -140,6 +143,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_started;
 	/* Set to true if readdir calls reach EOF made on this handle */
 	bool                      doh_kreaddir_finished;
+
+	bool                      doh_evict_on_close;
 };
 
 /* Readdir support.
@@ -707,8 +712,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(desc, req, arg)			\
-	DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
+#define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.
@@ -789,6 +793,24 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 };
+
+static inline struct dfuse_inode_entry *
+dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	d_list_t *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	if (!rlink)
+		return NULL;
+
+	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
+}
+
+static inline void
+dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+{
+	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
+}
 
 extern char *duns_xattr_name;
 

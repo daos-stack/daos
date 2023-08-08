@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -195,8 +195,8 @@ benchmark_placement(int argc, char **argv, uint32_t num_domains,
 	}
 
 	/* Create reference pool/placement map */
-	gen_pool_and_placement_map(num_domains, nodes_per_domain,
-				   vos_per_target, map_type,
+	gen_pool_and_placement_map(1, num_domains, nodes_per_domain,
+				   vos_per_target, map_type, PO_COMP_TP_RANK,
 				   &pool_map, &pl_map);
 	D_ASSERT(pool_map != NULL);
 	D_ASSERT(pl_map != NULL);
@@ -315,8 +315,8 @@ compute_data_movement(uint32_t domains, uint32_t nodes_per_domain,
 	 * Generate a new pool/placement map combination for
 	 * this new configuration
 	 */
-	gen_pool_and_placement_map(domains, nodes_per_domain, vos_per_target,
-				   map_type, &iter_pool_map, &iter_pl_map);
+	gen_pool_and_placement_map(1, domains, nodes_per_domain, vos_per_target,
+				   map_type, PO_COMP_TP_RANK, &iter_pool_map, &iter_pl_map);
 	D_ASSERT(iter_pool_map != NULL);
 	D_ASSERT(iter_pl_map != NULL);
 
@@ -506,9 +506,9 @@ benchmark_add_data_movement(int argc, char **argv, uint32_t num_domains,
 	/* Measure movement for all but ideal case */
 	for (type_idx = 0; type_idx < num_map_types - 1; type_idx++) {
 		/* Create initial reference pool/placement map */
-		gen_pool_and_placement_map(num_domains, nodes_per_domain,
+		gen_pool_and_placement_map(1, num_domains, nodes_per_domain,
 					   vos_per_target, map_types[type_idx],
-					   &initial_pool_map, &initial_pl_map);
+					   PO_COMP_TP_RANK, &initial_pool_map, &initial_pl_map);
 		D_ASSERT(initial_pool_map != NULL);
 		D_ASSERT(initial_pl_map != NULL);
 

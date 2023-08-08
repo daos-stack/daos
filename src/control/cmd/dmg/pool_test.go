@@ -722,6 +722,12 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("invalid value"),
 		},
 		{
+			"Set pool perf_domain property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb perf_domain:root",
+			"",
+			errors.New("can't set perf_domain on existing pool."),
+		},
+		{
 			"Set pool rd_fac property is not allowed",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb rd_fac:1",
 			"",

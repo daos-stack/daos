@@ -1614,6 +1614,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 
 	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
@@ -1958,6 +1959,8 @@ ds_pool_tgt_discard_ult(void *data)
 		 DP_UUID(arg->pool_uuid), DP_RC(rc));
 put:
 	pool->sp_need_discard = 0;
+	pool->sp_discard_status = rc;
+
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
@@ -1992,6 +1995,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 
 	pool->sp_need_discard = 1;
+	pool->sp_discard_status = 0;
 	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
 
 	ds_pool_put(pool);

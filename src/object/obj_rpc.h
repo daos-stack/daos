@@ -107,7 +107,8 @@ enum obj_rpc_opc {
 };
 #undef X
 
-extern struct crt_proto_format obj_proto_fmt;
+extern struct crt_proto_format obj_proto_fmt_0;
+extern struct crt_proto_format obj_proto_fmt_1;
 extern int dc_obj_proto_version;
 
 /* Helper function to convert opc to name */

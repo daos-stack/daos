@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,6 +58,29 @@ fini_ranks:
 	return rc;
 }
 
+static uint32_t
+pool_create_rpc_timeout(crt_rpc_t *tc_req, size_t scm_size)
+{
+	uint32_t	timeout;
+	uint32_t	default_timeout;
+	size_t		gib;
+	int		rc;
+	rc = crt_req_get_timeout(tc_req, &default_timeout);
+	D_ASSERTF(rc == 0, "crt_req_get_timeout: "DF_RC"\n", DP_RC(rc));
+
+	gib = scm_size / ((size_t)1024 * 1024 * 1024);
+	if (gib < 32)
+		timeout = 15;
+	else if (gib < 64)
+		timeout = 30;
+	else if (gib < 128)
+		timeout = 60;
+	else
+		timeout = 90;
+
+	return max(timeout, default_timeout);
+}
+
 static int
 ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *rank_list,
 			      size_t scm_size, size_t nvme_size)
@@ -69,6 +92,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 	int				topo;
 	int				rc;
 	int				rc_cleanup;
+	uint32_t			timeout;
 
 	/* Collective RPC to all of targets of the pool */
 	topo = crt_tree_topo(CRT_TREE_KNOMIAL, 4);
@@ -83,6 +107,10 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev, d_rank_list_t *ra
 		return rc;
 	}
 
+	timeout = pool_create_rpc_timeout(tc_req, scm_size);
+	crt_req_set_timeout(tc_req, timeout);
+	D_DEBUG(DB_MGMT, DF_UUID": pool create RPC timeout: %u\n",
+		DP_UUID(pool_uuid), timeout);
 	tc_in = crt_req_get(tc_req);
 	D_ASSERT(tc_in != NULL);
 	uuid_copy(tc_in->tc_pool_uuid, pool_uuid);
@@ -296,8 +324,8 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, 
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
 				     destroy, force_destroy, machine, count);
 	if (rc != 0) {
-		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR("Failed to evict pool handles" DF_UUID " rc: " DF_RC "\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out;
 	}
 
@@ -378,6 +406,8 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 		   daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
 		   uint32_t *upgrade_layout_ver)
 {
+	uint64_t deadline;
+
 	if (pool_info == NULL) {
 		D_ERROR("pool_info was NULL\n");
 		return -DER_INVAL;
@@ -385,8 +415,16 @@ ds_mgmt_pool_query(uuid_t pool_uuid, d_rank_list_t *svc_ranks, d_rank_list_t **r
 
 	D_DEBUG(DB_MGMT, "Querying pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
-	return ds_pool_svc_query(pool_uuid, svc_ranks, ranks, pool_info,
-				 pool_layout_ver, upgrade_layout_ver);
+	/*
+	 * Use a fixed timeout that matches what the control plane uses for the
+	 * moment.
+	 *
+	 * TODO: Pass the deadline from dmg (or daos_server).
+	 */
+	deadline = daos_getmtime_coarse() + 5 * 60 * 1000;
+
+	return dsc_pool_svc_query(pool_uuid, svc_ranks, deadline, ranks, pool_info, pool_layout_ver,
+				  upgrade_layout_ver);
 }
 
 /**

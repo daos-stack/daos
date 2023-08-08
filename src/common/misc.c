@@ -131,7 +131,7 @@ out:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -324,8 +324,11 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	if (p_buf_len != NULL)
 		*p_buf_len = 0;
 
-	if (idx->iov_idx >= sgl->sg_nr)
+	if (idx->iov_idx >= sgl->sg_nr) {
+		if (p_buf != NULL)
+			*p_buf = NULL;
 		return true; /** no data in sgl to get bytes from */
+	}
 
 	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
 		sgl->sg_iovs[idx->iov_idx].iov_len;
@@ -361,7 +364,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 		   size_t requested_bytes, daos_sgl_process_cb process_cb,
 		   void *cb_args)
 {
-	uint8_t		*buf = NULL;
+	uint8_t		*buf;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
@@ -371,15 +374,16 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
+		buf = NULL;
 		end = daos_sgl_get_bytes(sgl, check_buf, idx, requested_bytes,
 					 &buf, &len);
 		requested_bytes -= len;
-		if (process_cb != NULL)
+		if (process_cb != NULL && buf != NULL)
 			rc = process_cb(buf, len, cb_args);
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl");
+		D_INFO("Requested more bytes than what's available in sgl\n");
 
 	return rc;
 }

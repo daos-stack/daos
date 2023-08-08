@@ -32,33 +32,33 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 
 	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(daos_obj_id_t));
 	if (attr_dtype < 0) {
-		D_ERROR("failed to create attribute datatype");
+		D_ERROR("failed to create attribute datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "lo", HOFFSET(daos_obj_id_t, lo), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid low");
+		D_ERROR("failed to insert oid low\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Tinsert(attr_dtype, "hi", HOFFSET(daos_obj_id_t, hi), H5T_NATIVE_UINT64);
 	if (status < 0) {
-		D_ERROR("failed to insert oid high");
+		D_ERROR("failed to insert oid high\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create attribute dataspace");
+		D_ERROR("failed to create attribute dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
 	if (usr_attr < 0) {
-		D_ERROR("failed to create attribute");
+		D_ERROR("failed to create attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	status = H5Awrite(usr_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
-		D_ERROR("failed to write attribute");
+		D_ERROR("failed to write attribute\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 out:
@@ -290,6 +290,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_EC_PDA";
 	case DAOS_PROP_CO_RP_PDA:
 		return "DAOS_PROP_CO_RP_PDA";
+	case DAOS_PROP_CO_PERF_DOMAIN:
+		return "DAOS_PROP_CO_PERF_DOMAIN";
 	case DAOS_PROP_CO_GLOBAL_VERSION:
 		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
@@ -357,6 +359,7 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_EC_CELL_SZ ||
 			   type == DAOS_PROP_CO_EC_PDA ||
 			   type == DAOS_PROP_CO_RP_PDA ||
+			   type == DAOS_PROP_CO_PERF_DOMAIN ||
 			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
 			   type == DAOS_PROP_CO_ALLOCED_OID ||
 			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
@@ -1043,6 +1046,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_uint(file_id, &entry->dpe_val,
 				      "DAOS_PROP_CO_RP_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_PERF_DOMAIN") > 0) {
+		type = DAOS_PROP_CO_PERF_DOMAIN;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_PERF_DOMAIN");
 		if (rc != 0)
 			D_GOTO(out, rc);
 		prop_num++;
