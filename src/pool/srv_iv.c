@@ -804,7 +804,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rank != entry->ns->iv_master_rank)
 		D_GOTO(out_put, rc = -DER_IVCB_FORWARD);
 
-	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+	if (ent_pool_key->pik_eph >= pool_key->pik_eph && pool_key->pik_eph != 0) {
 		/* If incoming key/eph is older than the current entry/key, then it means
 		 * incoming update request is stale, especially for LAZY/asynchronous/retry
 		 * cases, see iv_op().
@@ -814,9 +814,9 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
-	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d\n",
-		DP_UUID(entry->ns->iv_pool_uuid), rank,
-		entry->ns->iv_master_rank);
+	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d ent " DF_U64 " key " DF_U64 "\n",
+		DP_UUID(entry->ns->iv_pool_uuid), rank, entry->ns->iv_master_rank,
+		ent_pool_key->pik_eph, pool_key->pik_eph);
 
 	/* Update pool map version or pool map */
 	if (entry->iv_class->iv_class_id == IV_POOL_MAP) {
@@ -856,7 +856,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	 */
 	if (!pool->sp_stopping) {
 		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-		if (rc == 0 && pool_key->pik_eph != 0)
+		if (rc == 0 && pool_key->pik_eph != 0 && ent_pool_key->pik_eph < pool_key->pik_eph)
 			ent_pool_key->pik_eph = pool_key->pik_eph;
 	}
 
@@ -946,7 +946,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
-	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+	if (ent_pool_key->pik_eph >= pool_key->pik_eph && pool_key->pik_eph != 0) {
 		/* If incoming key/eph is older than the current entry/key, then it means
 		 * incoming update request is stale, especially for LAZY/asynchronous/retry
 		 * cases, see iv_op().
@@ -956,6 +956,9 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
+	D_DEBUG(DB_TRACE, DF_UUID "master rank %d ent " DF_U64 " key " DF_U64 "\n",
+		DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank, ent_pool_key->pik_eph,
+		pool_key->pik_eph);
 	if (src == NULL) {
 		rc = pool_iv_ent_invalid(entry, key);
 		D_GOTO(out_put, rc);
@@ -1018,7 +1021,7 @@ update_iv_cache:
 	 */
 	if (!pool->sp_stopping) {
 		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-		if (rc == 0 && pool_key->pik_eph != 0)
+		if (rc == 0 && pool_key->pik_eph != 0 && ent_pool_key->pik_eph < pool_key->pik_eph)
 			ent_pool_key->pik_eph = pool_key->pik_eph;
 	}
 out_put:
