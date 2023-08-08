@@ -66,8 +66,11 @@
 
 /*
  * Aggregation of pool/container/object/keys disk format change.
+ * 1 for 2.2
+ * 2 for 2.4
+ * 3 for 2.6
  */
-#define DAOS_POOL_GLOBAL_VERSION		2
+#define DAOS_POOL_GLOBAL_VERSION		3
 
 int dc_pool_init(void);
 void dc_pool_fini(void);

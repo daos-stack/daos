@@ -164,9 +164,8 @@ typedef int (*ds_iv_ent_get_t)(struct ds_iv_entry *ent, void **priv);
  * \param ent [IN]	iv class entry to get.
  * \param priv [IN]	private ptr from crt IV callback.
  *
- * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
+typedef void (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
 
 /**
  * Destroy the data attached to the entry.
@@ -309,8 +308,6 @@ void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
-void ds_iv_ns_get(struct ds_iv_ns *ns);
-void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 
