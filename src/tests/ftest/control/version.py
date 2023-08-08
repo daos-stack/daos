@@ -16,6 +16,8 @@ class DAOSVersion(TestWithServers):
 
     Verify version number and the output string.
 
+    MK
+
     :avocado: recursive
     """
 
