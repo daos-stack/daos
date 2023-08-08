@@ -1697,7 +1697,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
 	svc_scheduled = true;
 
-	rc = ds_pool_iv_prop_update(svc->ps_pool, prop, false);
+	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
 		D_ERROR("ds_pool_iv_prop_update failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
@@ -4459,7 +4459,7 @@ out_lock:
 	 *	 caused by the out of order IV sync.
 	 */
 	if (!rc && prop != NULL) {
-		rc = ds_pool_iv_prop_update(svc->ps_pool, prop, false);
+		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 		if (rc)
 			D_ERROR(DF_UUID": failed to update prop IV for pool, "
 				"%d.\n", DP_UUID(in->psi_op.pi_uuid), rc);
@@ -4760,7 +4760,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		rc = pool_prop_read(tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 		if (rc)
 			D_GOTO(out_free, rc);
-		rc = ds_pool_iv_prop_update(svc->ps_pool, prop, true);
+		rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 		daos_prop_free(prop);
 	}
 
@@ -4851,7 +4851,7 @@ __ds_pool_mark_upgrade_completed(uuid_t pool_uuid, struct pool_svc *svc, int rc)
 	rc1 = pool_prop_read(&tx, svc, DAOS_PO_QUERY_PROP_ALL, &prop);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
-	rc1 = ds_pool_iv_prop_update(svc->ps_pool, prop, false);
+	rc1 = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	daos_prop_free(prop);
 	if (rc1)
 		D_GOTO(out_tx, rc1);
