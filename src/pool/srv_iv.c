@@ -582,14 +582,24 @@ static int
 pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 		 struct ds_iv_entry *entry)
 {
+	struct pool_iv_key *entry_key;
+	struct pool_iv_key *src_key;
 	int	rc;
 
 	rc = pool_iv_value_alloc_internal(iv_key, &entry->iv_value);
 	if (rc)
 		return rc;
 
-	memcpy(&entry->iv_key, iv_key, sizeof(*iv_key));
-
+	entry->iv_key.rank     = iv_key->rank;
+	entry->iv_key.class_id = iv_key->class_id;
+	entry_key              = key2priv(&entry->iv_key);
+	src_key                = key2priv(iv_key);
+	uuid_copy(entry_key->pik_uuid, src_key->pik_uuid);
+	entry_key->pik_term       = src_key->pik_term;
+	entry_key->pik_entry_size = src_key->pik_entry_size;
+	/* NB: pik_eph will be updated in pool_iv_ent_update/refresh(), until the
+	 * local entry are updated/refresh.
+	 */
 	return rc;
 }
 
@@ -848,6 +858,19 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
 		if (rc)
 			D_GOTO(out_put, rc);
+	} else if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
+		struct pool_iv_conn *conn;
+		char                *end;
+
+		D_ASSERT(src_iv->piv_conn_hdls.pic_size != (unsigned int)(-1));
+		conn = src_iv->piv_conn_hdls.pic_conns;
+		end  = (char *)conn + src_iv->piv_conn_hdls.pic_size;
+		while (pool_iv_conn_valid(conn, end)) {
+			rc = ds_pool_tgt_connect(pool, conn);
+			if (rc)
+				break;
+			conn = pool_iv_conn_next(conn);
+		}
 	}
 
 	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
