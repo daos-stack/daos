@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC DD_FAC(bio)
+#define D_LOGFAC	DD_FAC(bio)
 
 #include <spdk/blob.h>
 #include <spdk/thread.h>
@@ -16,35 +16,35 @@
 
 #include "smd.pb-c.h"
 
-#define LED_STATE_NAME(s)  (ctl__led_state__descriptor.values[s].name)
+#define LED_STATE_NAME(s) (ctl__led_state__descriptor.values[s].name)
 #define LED_ACTION_NAME(a) (ctl__led_action__descriptor.values[a].name)
 
 struct led_opts {
-	struct spdk_pci_addr pci_addr;
-	bool                 all_devices;
-	bool                 finished;
-	Ctl__LedAction       action;
-	Ctl__LedState        led_state;
-	int                  status;
+	struct spdk_pci_addr	pci_addr;
+	bool			all_devices;
+	bool			finished;
+	Ctl__LedAction		action;
+	Ctl__LedState		led_state;
+	int			status;
 };
 
 static int
 revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 {
-	struct bio_blobstore *bbs;
-	unsigned int          led_state = (unsigned int)CTL__LED_STATE__OFF;
-	int                   rc;
+	struct bio_blobstore	*bbs;
+	unsigned int		 led_state = (unsigned int)CTL__LED_STATE__OFF;
+	int			 rc;
 
 	D_ASSERT(d_bdev);
 	if (d_bdev->bb_removed) {
-		D_ERROR("Old dev " DF_UUID "(%s) is hot removed\n", DP_UUID(d_bdev->bb_uuid),
+		D_ERROR("Old dev "DF_UUID"(%s) is hot removed\n", DP_UUID(d_bdev->bb_uuid),
 			d_bdev->bb_name);
 		return -DER_INVAL;
 	}
 
 	rc = smd_dev_set_state(d_bdev->bb_uuid, SMD_DEV_NORMAL);
 	if (rc) {
-		D_ERROR("Set device state failed. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Set device state failed. "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -60,8 +60,8 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 			    &led_state, 0);
 	if (rc != 0)
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-			 "Set LED on device:" DF_UUID " failed, " DF_RC "\n",
-			 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
+			 DP_RC(rc));
 
 	return 0;
 }
@@ -69,7 +69,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 static bool
 is_tgt_on_dev(struct smd_dev_info *dev_info, int tgt_idx)
 {
-	int i;
+	int	i;
 
 	for (i = 0; i < dev_info->sdi_tgt_cnt; i++) {
 		if (tgt_idx == dev_info->sdi_tgts[i])
@@ -79,17 +79,17 @@ is_tgt_on_dev(struct smd_dev_info *dev_info, int tgt_idx)
 }
 
 struct blob_ops_arg {
-	ABT_eventual boa_eventual;
-	int          boa_rc;
-	spdk_blob_id boa_blob_id;
+	ABT_eventual	boa_eventual;
+	int		boa_rc;
+	spdk_blob_id	boa_blob_id;
 };
 
 static void
 blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
 {
-	struct blob_ops_arg *boa = cb_arg;
+	struct blob_ops_arg	*boa = cb_arg;
 
-	boa->boa_rc      = daos_errno2der(-rc);
+	boa->boa_rc = daos_errno2der(-rc);
 	boa->boa_blob_id = blob_id;
 	ABT_eventual_set(boa->boa_eventual, NULL, 0);
 	if (rc)
@@ -99,7 +99,7 @@ blob_create_cp(void *cb_arg, spdk_blob_id blob_id, int rc)
 static void
 blob_delete_cp(void *cb_arg, int rc)
 {
-	struct blob_ops_arg *boa = cb_arg;
+	struct blob_ops_arg	*boa = cb_arg;
 
 	boa->boa_rc = daos_errno2der(-rc);
 	ABT_eventual_set(boa->boa_eventual, NULL, 0);
@@ -108,20 +108,21 @@ blob_delete_cp(void *cb_arg, int rc)
 }
 
 static int
-create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz, spdk_blob_id *blob_id)
+create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
+		spdk_blob_id *blob_id)
 {
-	struct blob_ops_arg   boa = {0};
-	struct spdk_blob_opts blob_opts;
-	uint64_t              cluster_sz;
-	int                   rc;
+	struct blob_ops_arg	boa = { 0 };
+	struct spdk_blob_opts	blob_opts;
+	uint64_t		cluster_sz;
+	int			rc;
 
 	D_ASSERT(bs != NULL);
-	*blob_id   = 0;
+	*blob_id = 0;
 	cluster_sz = spdk_bs_get_cluster_size(bs);
 
 	if (blob_sz < cluster_sz) {
-		D_ERROR("Invalid blob size " DF_U64 ", cluster size " DF_U64 "\n", blob_sz,
-			cluster_sz);
+		D_ERROR("Invalid blob size "DF_U64", cluster size "DF_U64"\n",
+			blob_sz, cluster_sz);
 		return -DER_INVAL;
 	}
 
@@ -137,13 +138,13 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz, spdk_blob_id *blob
 	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	rc = boa.boa_rc;
 	if (rc)
-		D_ERROR("Create blob failed. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Create blob failed. "DF_RC"\n", DP_RC(rc));
 	else
 		*blob_id = boa.boa_blob_id;
 out:
@@ -154,8 +155,8 @@ out:
 static int
 delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
 {
-	struct blob_ops_arg boa = {0};
-	int                 rc;
+	struct blob_ops_arg	boa = { 0 };
+	int			rc;
 
 	D_ASSERT(bs != NULL);
 	rc = ABT_eventual_create(0, &boa.boa_eventual);
@@ -167,32 +168,34 @@ delete_one_blob(struct spdk_blob_store *bs, spdk_blob_id blob_id)
 	rc = ABT_eventual_wait(boa.boa_eventual, NULL);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Wait eventual failed. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Wait eventual failed. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	rc = boa.boa_rc;
 	if (rc)
-		D_ERROR("Delete blob(" DF_U64 ") failed. " DF_RC "\n", blob_id, DP_RC(rc));
+		D_ERROR("Delete blob("DF_U64") failed. "DF_RC"\n",
+			blob_id, DP_RC(rc));
 out:
 	ABT_eventual_free(&boa.boa_eventual);
 	return rc;
 }
 
 struct blob_item {
-	d_list_t     bi_link;
-	spdk_blob_id bi_blob_id;
+	d_list_t	bi_link;
+	spdk_blob_id	bi_blob_id;
 };
 
 static int
 create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
-		 struct bio_bdev *d_bdev, d_list_t *pool_list, d_list_t *blob_list)
+		 struct bio_bdev *d_bdev, d_list_t *pool_list,
+		 d_list_t *blob_list)
 {
-	struct spdk_blob_store *bs;
-	struct smd_pool_info   *pool_info;
-	uint64_t                blob_id;
-	struct blob_item       *created;
-	int                     i, rc = 0;
+	struct spdk_blob_store	*bs;
+	struct smd_pool_info	*pool_info;
+	uint64_t		 blob_id;
+	struct blob_item	*created;
+	int			 i, rc = 0;
 
 	D_ASSERT(d_bdev && d_bdev->bb_replacing);
 	D_ASSERT(d_list_empty(blob_list));
@@ -200,9 +203,10 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	if (d_list_empty(pool_list))
 		return 0;
 
-	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid, false, false, NULL, NULL);
+	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
+			    false, false, NULL, NULL);
 	if (bs == NULL) {
-		D_ERROR("Failed to load blobstore for new dev " DF_UUID "\n",
+		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
 			DP_UUID(d_bdev->bb_uuid));
 		return -DER_INVAL;
 	}
@@ -212,7 +216,7 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 	 * old blob IDs with new blob IDs in the pool info.
 	 */
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
-		bool found_tgt = false;
+		bool	found_tgt = false;
 
 		for (i = 0; i < pool_info->spi_tgt_cnt[SMD_DEV_TYPE_DATA]; i++) {
 			/* Skip the targets not assigned to old device */
@@ -220,8 +224,8 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 				continue;
 
 			found_tgt = true;
-			rc        = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
-						    &blob_id);
+			rc = create_one_blob(bs, pool_info->spi_blob_sz[SMD_DEV_TYPE_DATA],
+					     &blob_id);
 			if (rc)
 				goto out;
 
@@ -245,8 +249,9 @@ create_old_blobs(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
 		 *	 handle this once DAOS-5134 is fixed.
 		 */
 		if (!found_tgt) {
-			D_ERROR("No blobs from " DF_UUID " on dev " DF_UUID "\n",
-				DP_UUID(pool_info->spi_id), DP_UUID(d_bdev->bb_uuid));
+			D_ERROR("No blobs from "DF_UUID" on dev "DF_UUID"\n",
+				DP_UUID(pool_info->spi_id),
+				DP_UUID(d_bdev->bb_uuid));
 			rc = -DER_NOSYS;
 			goto out;
 		}
@@ -257,18 +262,20 @@ out:
 }
 
 static void
-free_blob_list(struct bio_xs_context *xs_ctxt, d_list_t *blob_list, struct bio_bdev *d_bdev)
+free_blob_list(struct bio_xs_context *xs_ctxt, d_list_t *blob_list,
+	       struct bio_bdev *d_bdev)
 {
-	struct spdk_blob_store *bs = NULL;
-	struct blob_item       *created, *tmp;
+	struct spdk_blob_store	*bs = NULL;
+	struct blob_item	*created, *tmp;
 
 	if (d_bdev == NULL)
 		goto free;
 
 	D_ASSERT(d_bdev->bb_replacing);
-	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid, false, false, NULL, NULL);
+	bs = load_blobstore(xs_ctxt, d_bdev->bb_name, &d_bdev->bb_uuid,
+			    false, false, NULL, NULL);
 	if (bs == NULL)
-		D_ERROR("Failed to load blobstore for new dev " DF_UUID "\n",
+		D_ERROR("Failed to load blobstore for new dev "DF_UUID"\n",
 			DP_UUID(d_bdev->bb_uuid));
 
 free:
@@ -287,7 +294,7 @@ free:
 static void
 free_pool_list(d_list_t *pool_list)
 {
-	struct smd_pool_info *pool_info, *tmp;
+	struct smd_pool_info	*pool_info, *tmp;
 
 	d_list_for_each_entry_safe(pool_info, tmp, pool_list, spi_link) {
 		d_list_del_init(&pool_info->spi_link);
@@ -296,12 +303,12 @@ free_pool_list(d_list_t *pool_list)
 }
 
 static int
-replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info, struct bio_bdev *old_dev,
-	    struct bio_bdev *new_dev)
+replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info,
+	    struct bio_bdev *old_dev, struct bio_bdev *new_dev)
 {
-	struct bio_blobstore *bbs = old_dev->bb_blobstore;
-	d_list_t              pool_list, blob_list;
-	int                   pool_cnt = 0, rc;
+	struct bio_blobstore	*bbs = old_dev->bb_blobstore;
+	d_list_t		 pool_list, blob_list;
+	int			 pool_cnt = 0, rc;
 
 	D_ASSERT(bbs != NULL);
 	D_ASSERT(bbs->bb_state == BIO_BS_STATE_OUT);
@@ -309,12 +316,12 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info, struc
 
 	/* Check if the new device is unplugged */
 	if (new_dev->bb_removed) {
-		D_ERROR("New dev " DF_UUID "(%s) is hot removed\n", DP_UUID(new_dev->bb_uuid),
-			new_dev->bb_name);
+		D_ERROR("New dev "DF_UUID"(%s) is hot removed\n",
+			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_INVAL;
 	} else if (new_dev->bb_replacing) {
-		D_ERROR("New dev " DF_UUID "(%s) is in replacing\n", DP_UUID(new_dev->bb_uuid),
-			new_dev->bb_name);
+		D_ERROR("New dev "DF_UUID"(%s) is in replacing\n",
+			DP_UUID(new_dev->bb_uuid), new_dev->bb_name);
 		return -DER_BUSY;
 	}
 	/* Avoid re-enter or being destroyed by hot remove callback */
@@ -326,30 +333,31 @@ replace_dev(struct bio_xs_context *xs_ctxt, struct smd_dev_info *old_info, struc
 	/* Create existing blobs on new device */
 	rc = smd_pool_list(&pool_list, &pool_cnt);
 	if (rc) {
-		D_ERROR("Failed to list pools in SMD. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to list pools in SMD. "DF_RC"\n", DP_RC(rc));
 		goto pool_list_out;
 	}
 
-	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list, &blob_list);
+	rc = create_old_blobs(xs_ctxt, old_info, new_dev, &pool_list,
+			      &blob_list);
 	if (rc) {
-		D_ERROR("Failed to create old blobs. " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to create old blobs. "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	/* Replace old device with new device in SMD */
 	rc = smd_dev_replace(old_dev->bb_uuid, new_dev->bb_uuid, &pool_list);
 	if (rc) {
-		D_ERROR("Failed to replace dev: " DF_UUID " -> " DF_UUID ", "
-			"" DF_RC "\n",
-			DP_UUID(old_dev->bb_uuid), DP_UUID(new_dev->bb_uuid), DP_RC(rc));
+		D_ERROR("Failed to replace dev: "DF_UUID" -> "DF_UUID", "
+			""DF_RC"\n", DP_UUID(old_dev->bb_uuid),
+			DP_UUID(new_dev->bb_uuid), DP_RC(rc));
 		goto out;
 	}
 
 	/* Replace in-memory bio_bdev */
 	replace_bio_bdev(old_dev, new_dev);
 	new_dev->bb_replacing = 0;
-	old_dev               = new_dev;
-	new_dev               = NULL;
+	old_dev = new_dev;
+	new_dev = NULL;
 
 	/*
 	 * Trigger auto reint only when faulty device is replaced by new hot
@@ -375,12 +383,13 @@ pool_list_out:
 }
 
 int
-bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_dev_id)
+bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id,
+		uuid_t new_dev_id)
 {
-	struct smd_dev_info  *old_info = NULL, *new_info = NULL;
-	struct bio_bdev      *old_dev, *new_dev;
-	struct bio_blobstore *bbs;
-	int                   rc;
+	struct smd_dev_info	*old_info = NULL, *new_info = NULL;
+	struct bio_bdev		*old_dev, *new_dev;
+	struct bio_blobstore	*bbs;
+	int			 rc;
 
 	/* Caller ensures the request handling ULT created on init xstream */
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -388,21 +397,22 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_de
 	/* Sanity check over old device */
 	rc = smd_dev_get_by_id(old_dev_id, &old_info);
 	if (rc) {
-		D_ERROR("Lookup old dev " DF_UUID " in SMD failed. " DF_RC "\n",
+		D_ERROR("Lookup old dev "DF_UUID" in SMD failed. "DF_RC"\n",
 			DP_UUID(old_dev_id), DP_RC(rc));
 		return rc;
 	}
 
 	if (old_info->sdi_state != SMD_DEV_FAULTY) {
-		D_ERROR("Old dev " DF_UUID " isn't in faulty state(%d)\n", DP_UUID(old_dev_id),
-			old_info->sdi_state);
+		D_ERROR("Old dev "DF_UUID" isn't in faulty state(%d)\n",
+			DP_UUID(old_dev_id), old_info->sdi_state);
 		rc = -DER_INVAL;
 		goto out;
 	}
 
 	old_dev = lookup_dev_by_id(old_dev_id);
 	if (old_dev == NULL) {
-		D_ERROR("Failed to find old dev " DF_UUID "\n", DP_UUID(old_dev_id));
+		D_ERROR("Failed to find old dev "DF_UUID"\n",
+			DP_UUID(old_dev_id));
 		rc = -DER_NONEXIST;
 		goto out;
 	}
@@ -412,7 +422,8 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_de
 
 	/* Read bb_state from init xstream */
 	if (bbs->bb_state != BIO_BS_STATE_OUT) {
-		D_ERROR("Old dev " DF_UUID " isn't in %s state (%s)\n", DP_UUID(old_dev->bb_uuid),
+		D_ERROR("Old dev "DF_UUID" isn't in %s state (%s)\n",
+			DP_UUID(old_dev->bb_uuid),
 			bio_state_enum_to_str(BIO_BS_STATE_OUT),
 			bio_state_enum_to_str(bbs->bb_state));
 		rc = -DER_BUSY;
@@ -428,20 +439,22 @@ bio_replace_dev(struct bio_xs_context *xs_ctxt, uuid_t old_dev_id, uuid_t new_de
 	/* Sanity check over new device */
 	rc = smd_dev_get_by_id(new_dev_id, &new_info);
 	if (rc == 0) {
-		D_ERROR("New dev " DF_UUID " is already used by DAOS\n", DP_UUID(new_dev_id));
+		D_ERROR("New dev "DF_UUID" is already used by DAOS\n",
+			DP_UUID(new_dev_id));
 
 		D_ASSERT(new_info != NULL);
 		rc = -DER_INVAL;
 		goto out;
 	} else if (rc != -DER_NONEXIST) {
-		D_ERROR("Lookup new dev " DF_UUID " in SMD failed. " DF_RC "\n",
+		D_ERROR("Lookup new dev "DF_UUID" in SMD failed. "DF_RC"\n",
 			DP_UUID(new_dev_id), DP_RC(rc));
 		goto out;
 	}
 
 	new_dev = lookup_dev_by_id(new_dev_id);
 	if (new_dev == NULL) {
-		D_ERROR("Failed to find new dev " DF_UUID "\n", DP_UUID(new_dev_id));
+		D_ERROR("Failed to find new dev "DF_UUID"\n",
+			DP_UUID(new_dev_id));
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -458,9 +471,9 @@ out:
 static int
 json_write_cb(void *cb_ctx, const void *data, size_t size)
 {
-	struct bio_dev_info *b_info = cb_ctx;
-	char                *prefix = "traddr\": \"";
-	char                *traddr, *end;
+	struct bio_dev_info	*b_info = cb_ctx;
+	char			*prefix = "traddr\": \"";
+	char			*traddr, *end;
 
 	D_ASSERT(b_info != NULL);
 	/* traddr is already generated */
@@ -490,9 +503,9 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
-	struct spdk_bdev           *bdev;
-	struct spdk_json_write_ctx *json;
-	int                         rc;
+	struct spdk_bdev		*bdev;
+	struct spdk_json_write_ctx	*json;
+	int				 rc;
 
 	D_ASSERT(dev_name != NULL);
 	D_ASSERT(b_info != NULL);
@@ -507,7 +520,8 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 	if (get_bdev_type(bdev) != BDEV_CLASS_NVME)
 		return 0;
 
-	json = spdk_json_write_begin(json_write_cb, b_info, SPDK_JSON_WRITE_FLAG_FORMATTED);
+	json = spdk_json_write_begin(json_write_cb, b_info,
+				     SPDK_JSON_WRITE_FLAG_FORMATTED);
 	if (json == NULL) {
 		D_ERROR("Failed to alloc SPDK json context\n");
 		return -DER_NOMEM;
@@ -532,8 +546,8 @@ fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 static struct bio_dev_info *
 alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 {
-	struct bio_dev_info *info;
-	int                  tgt_cnt = 0, i, rc;
+	struct bio_dev_info	*info;
+	int			 tgt_cnt = 0, i, rc;
 
 	D_ALLOC_PTR(info);
 	if (info == NULL)
@@ -574,7 +588,7 @@ alloc_dev_info(uuid_t dev_id, char *dev_name, struct smd_dev_info *s_info)
 static struct smd_dev_info *
 find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 {
-	struct smd_dev_info *s_info;
+	struct smd_dev_info	*s_info;
 
 	d_list_for_each_entry(s_info, s_dev_list, sdi_link) {
 		if (uuid_compare(s_info->sdi_id, dev_id) == 0)
@@ -587,11 +601,11 @@ find_smd_dev(uuid_t dev_id, d_list_t *s_dev_list)
 int
 bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 {
-	d_list_t             s_dev_list;
-	struct bio_dev_info *b_info, *b_tmp;
-	struct smd_dev_info *s_info, *s_tmp;
-	struct bio_bdev     *d_bdev;
-	int                  rc;
+	d_list_t		 s_dev_list;
+	struct bio_dev_info	*b_info, *b_tmp;
+	struct smd_dev_info	*s_info, *s_tmp;
+	struct bio_bdev		*d_bdev;
+	int			 rc;
 
 	/* Caller ensures the request handling ULT created on init xstream */
 	D_ASSERT(is_init_xstream(xs_ctxt));
@@ -601,7 +615,7 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 
 	rc = smd_dev_list(&s_dev_list, dev_cnt);
 	if (rc) {
-		D_ERROR("Failed to get SMD dev list " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Failed to get SMD dev list "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -642,7 +656,8 @@ bio_dev_list(struct bio_xs_context *xs_ctxt, d_list_t *dev_list, int *dev_cnt)
 	 * it for sanity check.
 	 */
 	d_list_for_each_entry(s_info, &s_dev_list, sdi_link) {
-		D_ERROR("Found unexpected device " DF_UUID " in SMD\n", DP_UUID(s_info->sdi_id));
+		D_ERROR("Found unexpected device "DF_UUID" in SMD\n",
+			DP_UUID(s_info->sdi_id));
 
 		b_info = alloc_dev_info(s_info->sdi_id, NULL, s_info);
 		if (b_info == NULL) {
@@ -673,11 +688,11 @@ out:
 static void
 led_device_action(void *ctx, struct spdk_pci_device *pci_device)
 {
-	struct led_opts        *opts = ctx;
-	enum spdk_vmd_led_state cur_led_state;
-	const char             *pci_dev_type = NULL;
-	char                    addr_buf[ADDR_STR_MAX_LEN + 1];
-	int                     rc;
+	struct led_opts		*opts = ctx;
+	enum spdk_vmd_led_state	 cur_led_state;
+	const char		*pci_dev_type = NULL;
+	char			 addr_buf[ADDR_STR_MAX_LEN + 1];
+	int			 rc;
 
 	if (opts->status != 0)
 		return;
@@ -777,11 +792,11 @@ static int
 set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr,
 			   uint64_t *expiry_time, bool *is_faulty)
 {
-	struct bio_dev_info *dev_info = NULL, *tmp;
-	struct bio_bdev     *d_bdev   = NULL;
-	d_list_t             dev_list;
-	int                  dev_list_cnt, rc;
-	char                 tr_addr[ADDR_STR_MAX_LEN + 1];
+	struct bio_dev_info	*dev_info = NULL, *tmp;
+	struct bio_bdev		*d_bdev = NULL;
+	d_list_t		 dev_list;
+	int			 dev_list_cnt, rc;
+	char			 tr_addr[ADDR_STR_MAX_LEN + 1];
 
 	D_ASSERT((expiry_time != NULL) || (is_faulty != NULL));
 
@@ -804,8 +819,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 
 	d_list_for_each_entry_safe(dev_info, tmp, &dev_list, bdi_link) {
 		if (dev_info->bdi_traddr == NULL) {
-			D_ERROR("No transport address for dev:" DF_UUID
-				", unable to verify state\n",
+			D_ERROR("No transport address for dev:"DF_UUID", unable to verify state\n",
 				DP_UUID(dev_info->bdi_dev_id));
 			rc = -DER_INVAL;
 			goto out;
@@ -818,7 +832,7 @@ set_timer_and_check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr 
 			if (expiry_time != NULL) {
 				d_bdev = lookup_dev_by_id(dev_info->bdi_dev_id);
 				if (d_bdev == NULL) {
-					D_ERROR("Failed to find dev " DF_UUID "\n",
+					D_ERROR("Failed to find dev "DF_UUID"\n",
 						DP_UUID(dev_info->bdi_dev_id));
 					rc = -DER_NONEXIST;
 					goto out;
@@ -839,24 +853,21 @@ out:
 }
 
 static int
-set_timer(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, uint64_t expiry_time)
-{
+set_timer(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, uint64_t expiry_time) {
 	return set_timer_and_check_faulty(xs_ctxt, pci_addr, &expiry_time, NULL);
 }
 
 static int
-check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, bool *is_faulty)
-{
+check_faulty(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, bool *is_faulty) {
 	return set_timer_and_check_faulty(xs_ctxt, pci_addr, NULL, is_faulty);
 }
 
 static int
 led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__LedAction action,
-	   Ctl__LedState *state, uint64_t duration)
-{
-	struct led_opts opts = {0};
-	bool            is_faulty;
-	int             rc;
+	   Ctl__LedState *state, uint64_t duration) {
+	struct led_opts		opts = { 0 };
+	bool			is_faulty;
+	int			rc;
 
 	D_ASSERT(is_init_xstream(xs_ctxt));
 
@@ -867,10 +878,10 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 
 	/* Init context to be used by led_device_action() */
 	opts.all_devices = false;
-	opts.finished    = false;
-	opts.led_state   = CTL__LED_STATE__NA;
-	opts.status      = 0;
-	opts.pci_addr    = pci_addr;
+	opts.finished = false;
+	opts.led_state = CTL__LED_STATE__NA;
+	opts.status = 0;
+	opts.pci_addr = pci_addr;
 
 	/* Validate LED action value. */
 	switch (action) {
@@ -878,14 +889,14 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 		opts.action = action;
 		break;
 	case CTL__LED_ACTION__SET:
-		opts.action    = action;
+		opts.action = action;
 		opts.led_state = *state;
 		break;
 	case CTL__LED_ACTION__RESET:
 		opts.action = CTL__LED_ACTION__SET;
 		/* Check if any relevant bdevs are faulty, if yes set faulty, if no set normal */
 		is_faulty = false;
-		rc        = check_faulty(xs_ctxt, pci_addr, &is_faulty);
+		rc = check_faulty(xs_ctxt, pci_addr, &is_faulty);
 		if (rc != 0) {
 			D_ERROR("Reset LED failed during check for faulty devices (%d)\n", rc);
 			return rc;
@@ -950,16 +961,16 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 static int
 dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 {
-	struct bio_bdev    *d_bdev;
-	struct bio_dev_info b_info = {0};
-	int                 rc     = 0;
+	struct bio_bdev		*d_bdev;
+	struct bio_dev_info	 b_info = { 0 };
+	int			 rc = 0;
 
 	if (pci_addr == NULL)
 		return -DER_INVAL;
 
 	d_bdev = lookup_dev_by_id(dev_uuid);
 	if (d_bdev == NULL) {
-		D_ERROR("Failed to find dev " DF_UUID "\n", DP_UUID(dev_uuid));
+		D_ERROR("Failed to find dev "DF_UUID"\n", DP_UUID(dev_uuid));
 		return -DER_NONEXIST;
 	}
 
@@ -984,8 +995,8 @@ int
 bio_led_manage(struct bio_xs_context *xs_ctxt, char *tr_addr, uuid_t dev_uuid, unsigned int action,
 	       unsigned int *state, uint64_t duration)
 {
-	struct spdk_pci_addr pci_addr;
-	int                  rc;
+	struct spdk_pci_addr	pci_addr;
+	int			rc;
 
 	/**
 	 * If tr_addr is already provided, convert to a PCI address. If tr_addr is NULL or empty,
