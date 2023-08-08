@@ -306,10 +306,8 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Pool performance domain",
 			},
 			values: map[string]uint64{
-				"root":   PoolPerfDomainRoot,
-				"node":   PoolPerfDomainNode,
-				"target": PoolPerfDomainTarget,
-				"rank":   PoolPerfDomainRank,
+				"root":  PoolPerfDomainRoot,
+				"group": PoolPerfDomainGrp,
 			},
 		},
 		"svc_rf": {
