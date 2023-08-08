@@ -10,3 +10,4 @@ server_config:
     0:
       nr_xs_helpers: 1
       storage: auto
+  system_ram_reserved: 1
