@@ -670,7 +670,7 @@ void
 crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 {
 	if (rpc_priv->crp_reply_pending == 1) {
-		D_INFO("no reply sent for rpc_priv %p (opc: %#x).\n",
+		D_WARN("no reply sent for rpc_priv %p (opc: %#x).\n",
 		       rpc_priv, rpc_priv->crp_pub.cr_opc);
 		/* We have executed the user RPC handler, but the user
 		 * handler forgot to call crt_reply_send(). We send a
