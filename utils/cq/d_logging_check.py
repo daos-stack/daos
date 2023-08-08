@@ -177,7 +177,6 @@ class AllChecks():
             self.check_for_newline(line)
             self.check_df_rc(line)
             self.remove_trailing_period(line)
-            self.migrate_to_dl_error(line)
 
             line.write(self._output)
             if line.modified:
@@ -211,6 +210,11 @@ class AllChecks():
         """Check for double quotes in message"""
         if '""' not in line:
             return
+
+        # Do not remove if used in tri-graphs.
+        if ': ""' in line or '? ""' in line:
+            return
+
         line.correct(line.raw().replace('""', ''))
 
     def check_return(self, line):
@@ -331,6 +335,10 @@ class AllChecks():
         if any(map(code.startswith, PREFIXES_NNL)):
             return
 
+        if '\\"\\n' in code:
+            line.note('Unable to check for newlines')
+            return
+
         new_code = code.replace('"\\n",', ',')
         new_code = new_code.replace('\\n",', '",')
         new_code = new_code.replace('"\\n")', ')')
@@ -346,11 +354,6 @@ class AllChecks():
 
         if new_code != code:
             line.correct(new_code)
-
-    def migrate_to_dl_error(self, line):
-        """Update line to use DL_ERROR macro over DL_ERROR"""
-        if not line.startswith('D_ERROR'):
-            return
 
 
 def one_entry(fname):
