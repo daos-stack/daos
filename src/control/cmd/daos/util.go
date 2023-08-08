@@ -247,7 +247,7 @@ type daosCaller interface {
 
 type daosCmd struct {
 	cmdutil.NoArgsCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 }
 

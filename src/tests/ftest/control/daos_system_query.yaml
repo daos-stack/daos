@@ -14,3 +14,4 @@ server_config:
       env_vars:
         - DD_MASK=mgmt
       storage: auto
+  system_ram_reserved: 1

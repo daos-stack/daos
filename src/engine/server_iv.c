@@ -596,8 +596,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, &key,
-							  iv_value);
+		rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -609,7 +608,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	D_ALLOC_PTR(priv_entry);
 	if (priv_entry == NULL) {
 		class->iv_class_ops->ivc_ent_put(entry, entry_priv_val);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	priv_entry->priv = entry_priv_val;
@@ -1112,7 +1111,7 @@ iv_op_async(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 		rc = daos_sgl_alloc_copy_data(&ult_arg->iv_value, value);
 		if (rc) {
 			D_FREE(ult_arg);
-			return -DER_NOMEM;
+			return rc;
 		}
 	}
 
