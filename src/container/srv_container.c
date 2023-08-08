@@ -758,12 +758,8 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	/* for new container set HEALTHY status with current pm ver */
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
-	if (pool_hdl->sph_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC)
-		entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, 0,
-					ds_pool_get_version(pool_hdl->sph_pool));
-	else
-		entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY,
-					DAOS_PROP_CO_RO, ds_pool_get_version(pool_hdl->sph_pool));
+	entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, 0,
+				ds_pool_get_version(pool_hdl->sph_pool));
 
 	/* Validate the result */
 	if (!daos_prop_valid(prop_def, false /* pool */, true /* input */)) {
