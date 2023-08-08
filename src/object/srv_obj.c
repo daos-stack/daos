@@ -2000,16 +2000,6 @@ out:
 	return rc;
 }
 
-static bool
-is_cont_rw(bool is_write, struct ds_cont_child *cont)
-{
-	if ((is_write && cont->sc_write_disabled) ||
-	    (!is_write && cont->sc_read_disabled))
-		return false;
-
-	return true;
-}
-
 static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
@@ -2027,9 +2017,17 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 		return -DER_NO_PERM;
 	}
 
-	if (!is_agg_migrate && coh->sch_cont && !is_cont_rw(is_write, coh->sch_cont)) {
+	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
 		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
+
+	if (is_write && coh->sch_cont &&
+	    coh->sch_cont->sc_pool->spc_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_ERROR("pool "DF_UUID" no_data_sync reint mode,"
+			" cont hdl "DF_UUID" NO_PERM to update.\n",
+			DP_UUID(coh->sch_cont->sc_pool->spc_uuid), DP_UUID(coh->sch_uuid));
+		return -DER_NO_PERM;
 	}
 
 	return 0;

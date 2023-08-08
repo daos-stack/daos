@@ -2485,16 +2485,10 @@ cont_child_prop_update(void *data)
 				child->sc_status_pm_ver, co_stat.dcs_pm_ver,
 				co_stat.dcs_status);
 		child->sc_status_pm_ver = co_stat.dcs_pm_ver;
-		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN) {
-			child->sc_read_disabled = 1;
-			child->sc_write_disabled = 1;
-		} else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY) {
-			child->sc_read_disabled = 0;
-			if (co_stat.dcs_flags & DAOS_PROP_CO_RO)
-				child->sc_write_disabled = 1;
-			else
-				child->sc_write_disabled = 0;
-		}
+		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+			child->sc_rw_disabled = 1;
+		else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+			child->sc_rw_disabled = 0;
 	}
 
 out:

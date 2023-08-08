@@ -773,7 +773,7 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 			assert_string_equal(buffer, rec);
 		}
 		sprintf(dkey, "dkey_101\n");
-		arg->expect_result = -DER_RF;
+		arg->expect_result = -DER_NO_PERM;
 		insert_single(dkey, akey, 0, (void *)rec, strlen(rec),
 			      DAOS_TX_NONE, &req);
 		arg->expect_result = 0;

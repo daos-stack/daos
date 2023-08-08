@@ -4434,7 +4434,6 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	struct rdb_tx			tx;
 	daos_prop_t			*prop = NULL;
 	int				rc;
-	uint32_t			orig_reint_mode = DAOS_REINT_MODE_DATA_SYNC;
 
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n",
 		DP_UUID(in->psi_op.pi_uuid), rpc);
@@ -4443,7 +4442,6 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 				    &out->pso_op.po_hint);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	orig_reint_mode = svc->ps_pool->sp_reint_mode;
 
 	if (!daos_prop_valid(in->psi_prop, true /* pool */, true /* input */)) {
 		D_ERROR(DF_UUID": invalid properties input\n",
@@ -4495,25 +4493,6 @@ out_svc:
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pso_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
-	if (rc == 0) {
-		uint64_t		 status;
-		struct daos_prop_entry	*entry = NULL;
-
-		entry = daos_prop_entry_get(in->psi_prop, DAOS_PROP_PO_REINT_MODE);
-		if (entry != NULL) {
-			if (entry->dpe_val == DAOS_REINT_MODE_NO_DATA_SYNC &&
-			    orig_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
-				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CO_RO,
-							ds_pool_get_version(svc->ps_pool));
-				rc = ds_cont_set_status(in->psi_op.pi_uuid, status);
-			} else if (entry->dpe_val == DAOS_REINT_MODE_DATA_SYNC &&
-				   orig_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
-				status = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, DAOS_PROP_CO_CLEAR,
-							ds_pool_get_version(svc->ps_pool));
-				rc = ds_cont_set_status(in->psi_op.pi_uuid, status);
-			}
-		}
-	}
 	out->pso_op.po_rc = rc;
 	D_DEBUG(DB_MD, DF_UUID ": replying rpc: %p %d\n", DP_UUID(in->psi_op.pi_uuid), rpc, rc);
 	crt_reply_send(rpc);
