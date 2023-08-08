@@ -66,10 +66,10 @@ rebuild_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 	return 0;
 }
 
-static int
+static void
 rebuild_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	return 0;
+	return;
 }
 
 static int

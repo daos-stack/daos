@@ -1191,7 +1191,6 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		hg_ret = HG_Reset(rpc_priv->crp_hg_hdl, rpc_priv->crp_hg_addr,
 				  0 /* reuse original rpcid */);
 		if (hg_ret != HG_SUCCESS) {
-			rpc_priv->crp_hg_hdl = NULL;
 			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: " DF_HG_RC "\n",
 				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
@@ -1264,8 +1263,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 mem_free:
-
-	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	crt_rpc_priv_free(rpc_priv);
 }
