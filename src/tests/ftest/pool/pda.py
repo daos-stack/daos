@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import ctypes
+
 from apricot import TestWithServers
 
 
@@ -53,7 +55,7 @@ class PoolPDAProperty(TestWithServers):
 
         # Verify pool ec_pda, pool_pda is default.
         self.assertEqual(1, self.pool.get_property("ec_pda"))
-        self.assertEqual(3, self.pool.get_property("rp_pda"))
+        self.assertEqual(ctypes.c_uint32(-1), ctypes.c_uint32(self.pool.get_property("rp_pda")))
 
         # destroy pool
         self.destroy_pools(pools=self.pool)
