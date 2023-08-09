@@ -1395,10 +1395,10 @@ rdb_raft_cb_debug(raft_server_t *raft, raft_node_t *node, void *arg,
 	if (node != NULL) {
 		struct rdb_raft_node *rdb_node = raft_node_get_udata(node);
 
-		D_DEBUG(DB_TRACE, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
+		D_DEBUG(DB_MD, DF_DB": %s: rank=%u\n", DP_DB(db), buf,
 			rdb_node->dn_rank);
 	} else {
-		D_DEBUG(DB_TRACE, DF_DB": %s\n", DP_DB(db), buf);
+		D_DEBUG(DB_MD, DF_DB": %s\n", DP_DB(db), buf);
 	}
 }
 

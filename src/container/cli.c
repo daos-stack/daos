@@ -300,6 +300,7 @@ dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
 	struct cont_create_in  *in;
+	struct cont_op_in      *op_in;
 	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
@@ -312,6 +313,9 @@ dc_cont_create(tse_task_t *task)
 	if (!daos_uuid_valid(args->uuid))
 		/** generate a UUID for the new container */
 		uuid_generate(args->uuid);
+
+	if (args->req_time == 0)
+		args->req_time = d_hlc_get();
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
@@ -349,6 +353,8 @@ dc_cont_create(tse_task_t *task)
 	}
 
 	in = crt_req_get(rpc);
+	op_in = crt_req_get(rpc);
+	op_in->ci_time = args->req_time;
 	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cci_op.ci_uuid, args->uuid);
 	in->cci_prop = rpc_prop;
@@ -418,6 +424,7 @@ dc_cont_destroy(tse_task_t *task)
 {
 	daos_cont_destroy_t	*args;
 	struct cont_destroy_in	*in;
+	struct cont_op_in	*op_in;
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
@@ -443,6 +450,9 @@ dc_cont_destroy(tse_task_t *task)
 		/** neither a label nor a UUID ... try again */
 		D_GOTO(err, rc = -DER_INVAL);
 	}
+
+	if (args->req_time == 0)
+		args->req_time = d_hlc_get();
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -471,9 +481,11 @@ dc_cont_destroy(tse_task_t *task)
 	}
 
 	in = crt_req_get(rpc);
+	op_in = crt_req_get(rpc);
 	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
 	uuid_copy(in->cdi_op.ci_uuid, uuid);
 	in->cdi_force = args->force;
+	op_in->ci_time = args->req_time;
 	if (label) {
 		struct cont_destroy_bylabel_in *lbl_in = crt_req_get(rpc);
 

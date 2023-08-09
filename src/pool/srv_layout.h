@@ -16,6 +16,7 @@
  *     Root KVS (GENERIC):
  *       Pool handle KVS (GENERIC)
  *       Pool user attribute KVS (GENERIC)
+ *       Metadata RPC KVS (GENERIC)
  *
  * The version of the whole layout is stored in ds_pool_prop_global_version.
  */
@@ -47,36 +48,36 @@
  *   usage shall be described above in this comment following existing
  *   examples. If the value is another KVS, its type shall be the KVS name.
  */
-extern d_iov_t ds_pool_prop_map_version;	/* uint32_t */
-extern d_iov_t ds_pool_prop_map_buffer;		/* pool_buf */
-extern d_iov_t ds_pool_prop_label;		/* string */
-extern d_iov_t ds_pool_prop_acl;		/* daos_acl */
-extern d_iov_t ds_pool_prop_space_rb;		/* uint64_t */
-extern d_iov_t ds_pool_prop_self_heal;		/* uint64_t */
-extern d_iov_t ds_pool_prop_reclaim;		/* uint64_t */
-extern d_iov_t ds_pool_prop_owner;		/* string */
-extern d_iov_t ds_pool_prop_owner_group;	/* string */
-extern d_iov_t ds_pool_prop_connectable;	/* uint32_t */
-extern d_iov_t ds_pool_prop_nhandles;		/* uint32_t */
-extern d_iov_t ds_pool_prop_handles;		/* pool handle KVS */
-extern d_iov_t ds_pool_prop_ec_cell_sz;		/* uint64_t */
-extern d_iov_t ds_pool_prop_redun_fac;		/* uint64_t */
-extern d_iov_t ds_pool_prop_ec_pda;		/* uint32_t */
-extern d_iov_t ds_pool_prop_rp_pda;		/* uint32_t */
-extern d_iov_t ds_pool_attr_user;		/* pool user attribute KVS */
-extern d_iov_t ds_pool_prop_policy;		/* string (tiering policy) */
-extern d_iov_t ds_pool_prop_global_version;	/* uint32_t */
-extern d_iov_t ds_pool_prop_upgrade_status;	/* uint32_t */
-extern d_iov_t ds_pool_prop_upgrade_global_version;/* uint32_t */
-extern d_iov_t ds_pool_prop_perf_domain;	/* uint32_t */
-extern d_iov_t ds_pool_prop_scrub_mode;		/* uint64_t */
-extern d_iov_t ds_pool_prop_scrub_freq;		/* uint64_t */
-extern d_iov_t ds_pool_prop_scrub_thresh;	/* uint64_t */
-extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
-extern d_iov_t ds_pool_prop_obj_version;	/* uint32_t */
-extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
-extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
-extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uin32_t */
+extern d_iov_t ds_pool_prop_map_version;		/* uint32_t */
+extern d_iov_t ds_pool_prop_map_buffer;			/* pool_buf */
+extern d_iov_t ds_pool_prop_label;			/* string */
+extern d_iov_t ds_pool_prop_acl;			/* daos_acl */
+extern d_iov_t ds_pool_prop_space_rb;			/* uint64_t */
+extern d_iov_t ds_pool_prop_self_heal;			/* uint64_t */
+extern d_iov_t ds_pool_prop_reclaim;			/* uint64_t */
+extern d_iov_t ds_pool_prop_owner;			/* string */
+extern d_iov_t ds_pool_prop_owner_group;		/* string */
+extern d_iov_t ds_pool_prop_connectable;		/* uint32_t */
+extern d_iov_t ds_pool_prop_nhandles;			/* uint32_t */
+extern d_iov_t ds_pool_prop_handles;			/* pool handle KVS */
+extern d_iov_t ds_pool_prop_ec_cell_sz;			/* uint64_t */
+extern d_iov_t ds_pool_prop_redun_fac;			/* uint64_t */
+extern d_iov_t ds_pool_prop_ec_pda;			/* uint32_t */
+extern d_iov_t ds_pool_prop_rp_pda;			/* uint32_t */
+extern d_iov_t ds_pool_attr_user;			/* pool user attribute KVS */
+extern d_iov_t ds_pool_prop_policy;			/* string (tiering policy) */
+extern d_iov_t ds_pool_prop_global_version;		/* uint32_t */
+extern d_iov_t ds_pool_prop_upgrade_status;		/* uint32_t */
+extern d_iov_t ds_pool_prop_upgrade_global_version;	/* uint32_t */
+extern d_iov_t ds_pool_prop_perf_domain;		/* uint32_t */
+extern d_iov_t ds_pool_prop_scrub_mode;			/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_freq;			/* uint64_t */
+extern d_iov_t ds_pool_prop_scrub_thresh;		/* uint64_t */
+extern d_iov_t ds_pool_prop_svc_redun_fac;		/* uint64_t */
+extern d_iov_t ds_pool_prop_obj_version;		/* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_mode;		/* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_freq;		/* uint32_t */
+extern d_iov_t ds_pool_prop_checkpoint_thresh;		/* uin32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
