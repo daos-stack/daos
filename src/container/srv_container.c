@@ -750,7 +750,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
 	entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, 0,
-				     ds_pool_get_version(pool_hdl->sph_pool));
+				ds_pool_get_version(pool_hdl->sph_pool));
 
 	/* Validate the result */
 	if (!daos_prop_valid(prop_def, false /* pool */, true /* input */)) {
