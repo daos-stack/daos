@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -125,6 +125,8 @@ const (
 	PoolPropertyCheckpointThresh = C.DAOS_PROP_PO_CHECKPOINT_THRESH
 	//PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
+	//PoolPropertyReintMode is pool reintegration mode
+	PoolPropertyReintMode = C.DAOS_PROP_PO_REINT_MODE
 )
 
 const (
@@ -250,15 +252,6 @@ func PoolPolicyIsValid(polStr string) bool {
 	return bool(C.daos_policy_try_parse(cStr, &polDesc))
 }
 
-// PerfDomainIsValid return a boolean indicating whether or not the
-// pool performance domain string is valid.
-func PerfDomainIsValid(perfdomain string) bool {
-	cPerfDomain := C.CString(perfdomain)
-	defer C.free(unsafe.Pointer(cPerfDomain))
-
-	return bool(C.daos_perf_domain_is_valid(cPerfDomain))
-}
-
 const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
@@ -277,4 +270,9 @@ const (
 	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
 	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
 	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
+)
+
+const (
+	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
+	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
 )

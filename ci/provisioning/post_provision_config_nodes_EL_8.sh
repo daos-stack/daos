@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2022 Intel Corporation.
+#  (C) Copyright 2021-2023 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -16,8 +16,14 @@ group_repo_post() {
 
 distro_custom() {
     # install avocado
-    dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                   clustershell
+    local avocado_rpms=(python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}})
+    if [ -z "$(dnf repoquery "${avocado_rpms[@]}")" ]; then
+        avocado_rpms=()
+        pip install "avocado-framework<83.0"
+        pip install "avocado-framework-plugin-result-html<83.0"
+        pip install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+    fi
+    dnf -y install "${avocado_rpms[@]}" clustershell
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
@@ -47,7 +53,7 @@ install_mofed() {
 
 
     stream=false
-    gversion="$(lsb_release -sr)"
+    gversion="$VERSION_ID"
     if [ "$gversion" == "8" ]; then
         gversion="8.6"
         stream=true
