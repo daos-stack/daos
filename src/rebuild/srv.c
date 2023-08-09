@@ -532,8 +532,6 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
 		if (rgt->rgt_opc == RB_OP_RECLAIM)
 			status->rs_state = DRS_COMPLETED;
-		else
-			status->rs_state = DRS_IN_PROGRESS;
 		status->rs_version = rgt->rgt_rebuild_ver;
 		rgt_put(rgt);
 	}
