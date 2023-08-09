@@ -59,7 +59,7 @@ class DaosBuild(DfuseTestBase):
             Checkout and build DAOS sources.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
