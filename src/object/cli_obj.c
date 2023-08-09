@@ -22,6 +22,8 @@
 #include "obj_internal.h"
 #include "cli_csum.h"
 
+/* Only for test. */
+
 /**
  * Open an object shard (shard object), cache the open handle.
  */
