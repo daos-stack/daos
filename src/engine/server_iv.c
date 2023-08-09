@@ -1049,7 +1049,7 @@ _iv_op(struct ds_iv_ns *ns, struct ds_iv_key *key, d_sg_list_t *value,
 retry:
 	rc = iv_op_internal(ns, key, value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
-	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
+	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER || rc == -DER_BUSY)) {
 		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
 		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
 			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {

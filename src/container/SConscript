@@ -24,7 +24,7 @@ def scons():
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     ds_cont = senv.d_library('cont',
                              ['srv.c', 'srv_container.c', 'srv_epoch.c',
-                              'srv_target.c', 'srv_layout.c', 'oid_iv.c',
+                              'srv_target.c', 'srv_layout.c',
                               'container_iv.c', 'srv_cli.c', 'srv_oi_table.c',
                               'srv_metrics.c', common],
                              install_off="../..")
