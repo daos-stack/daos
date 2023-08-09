@@ -6307,7 +6307,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
 			if (rc)
 				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
-					target_list.pti_ids[0].pti_id,
+				       target_list.pti_ids[0].pti_id,
 					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
 		}
 		D_GOTO(out, rc);
