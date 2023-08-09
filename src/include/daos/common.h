@@ -620,11 +620,8 @@ daos_der2errno(int err)
 static inline bool
 daos_crt_network_error(int err)
 {
-	if (crt_is_service())
 		return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
-		err == -DER_NOREPLY || err == -DER_OOG;
-	else
-		return err == -DER_HG_SEND_FAILED;
+		err == -DER_NOREPLY || err == -DER_OOG || err == -DER_HG_SEND_FAILED;
 }
 
 
