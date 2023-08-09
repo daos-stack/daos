@@ -55,6 +55,7 @@ install_mofed() {
         gversion="${gversion%.*}"
     fi
 
+    time dnf -y install ucx ucx-cma ucx-ib ucx-rdmacm
     # Add a repo to install MOFED RPMS
     repo_url=https://artifactory.dc.hpdd.intel.com/artifactory/mlnx_ofed/"$MLNX_VER_NUM-rhel$gversion"-x86_64/
     dnf -y config-manager --add-repo="$repo_url"
@@ -64,7 +65,7 @@ install_mofed() {
     rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
-    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
+    time dnf -y install mlnx-ofed-basic
 
     # now, upgrade firmware
     time dnf -y install mlnx-fw-updater
