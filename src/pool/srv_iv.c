@@ -580,14 +580,24 @@ static int
 pool_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 		 struct ds_iv_entry *entry)
 {
+	struct pool_iv_key *entry_key;
+	struct pool_iv_key *src_key;
 	int	rc;
 
 	rc = pool_iv_value_alloc_internal(iv_key, &entry->iv_value);
 	if (rc)
 		return rc;
 
-	memcpy(&entry->iv_key, iv_key, sizeof(*iv_key));
-
+	entry->iv_key.rank     = iv_key->rank;
+	entry->iv_key.class_id = iv_key->class_id;
+	entry_key              = key2priv(&entry->iv_key);
+	src_key                = key2priv(iv_key);
+	uuid_copy(entry_key->pik_uuid, src_key->pik_uuid);
+	entry_key->pik_term       = src_key->pik_term;
+	entry_key->pik_entry_size = src_key->pik_entry_size;
+	/* NB: pik_eph will be updated in pool_iv_ent_update/refresh(), until the
+	 * local entry are updated/refresh.
+	 */
 	return rc;
 }
 
@@ -802,7 +812,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	if (rank != entry->ns->iv_master_rank)
 		D_GOTO(out_put, rc = -DER_IVCB_FORWARD);
 
-	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+	if (ent_pool_key->pik_eph >= pool_key->pik_eph && pool_key->pik_eph != 0) {
 		/* If incoming key/eph is older than the current entry/key, then it means
 		 * incoming update request is stale, especially for LAZY/asynchronous/retry
 		 * cases, see iv_op().
@@ -812,9 +822,9 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
-	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d\n",
-		DP_UUID(entry->ns->iv_pool_uuid), rank,
-		entry->ns->iv_master_rank);
+	D_DEBUG(DB_TRACE, DF_UUID "rank %d master rank %d ent " DF_U64 " key " DF_U64 "\n",
+		DP_UUID(entry->ns->iv_pool_uuid), rank, entry->ns->iv_master_rank,
+		ent_pool_key->pik_eph, pool_key->pik_eph);
 
 	/* Update pool map version or pool map */
 	if (entry->iv_class->iv_class_id == IV_POOL_MAP) {
@@ -846,6 +856,19 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		rc = ds_pool_tgt_prop_update(pool, &src_iv->piv_prop);
 		if (rc)
 			D_GOTO(out_put, rc);
+	} else if (entry->iv_class->iv_class_id == IV_POOL_CONN) {
+		struct pool_iv_conn *conn;
+		char                *end;
+
+		D_ASSERT(src_iv->piv_conn_hdls.pic_size != (unsigned int)(-1));
+		conn = src_iv->piv_conn_hdls.pic_conns;
+		end  = (char *)conn + src_iv->piv_conn_hdls.pic_size;
+		while (pool_iv_conn_valid(conn, end)) {
+			rc = ds_pool_tgt_connect(pool, conn);
+			if (rc)
+				break;
+			conn = pool_iv_conn_next(conn);
+		}
 	}
 
 	/* Since pool_tgt_connect/prop_update/refresh_hdl might yield due to
@@ -854,7 +877,7 @@ pool_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	 */
 	if (!pool->sp_stopping) {
 		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-		if (rc == 0 && pool_key->pik_eph != 0)
+		if (rc == 0 && pool_key->pik_eph != 0 && ent_pool_key->pik_eph < pool_key->pik_eph)
 			ent_pool_key->pik_eph = pool_key->pik_eph;
 	}
 
@@ -944,7 +967,7 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
-	if (ent_pool_key->pik_eph > pool_key->pik_eph && pool_key->pik_eph != 0) {
+	if (ent_pool_key->pik_eph >= pool_key->pik_eph && pool_key->pik_eph != 0) {
 		/* If incoming key/eph is older than the current entry/key, then it means
 		 * incoming update request is stale, especially for LAZY/asynchronous/retry
 		 * cases, see iv_op().
@@ -954,6 +977,9 @@ pool_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		D_GOTO(out_put, rc);
 	}
 
+	D_DEBUG(DB_TRACE, DF_UUID "master rank %d ent " DF_U64 " key " DF_U64 "\n",
+		DP_UUID(entry->ns->iv_pool_uuid), entry->ns->iv_master_rank, ent_pool_key->pik_eph,
+		pool_key->pik_eph);
 	if (src == NULL) {
 		rc = pool_iv_ent_invalid(entry, key);
 		D_GOTO(out_put, rc);
@@ -1016,7 +1042,7 @@ update_iv_cache:
 	 */
 	if (!pool->sp_stopping) {
 		rc = pool_iv_ent_copy(key, &entry->iv_value, src_iv, true);
-		if (rc == 0 && pool_key->pik_eph != 0)
+		if (rc == 0 && pool_key->pik_eph != 0 && ent_pool_key->pik_eph < pool_key->pik_eph)
 			ent_pool_key->pik_eph = pool_key->pik_eph;
 	}
 out_put:
