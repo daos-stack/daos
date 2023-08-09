@@ -754,7 +754,12 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 	struct argv_parsed	 parse_args = {0};
 	struct ddb_cmd_info	 info = {0};
 	int			 rc;
-	char			*cmd_copy = strdup(cmd_str);
+	char                    *cmd_copy;
+
+	D_STRNDUP(cmd_copy, cmd_str, strlen(cmd_str) + 1);
+
+	if (cmd_copy == NULL)
+		return -DER_NOMEM;
 
 	/* Remove newline if needed */
 	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')

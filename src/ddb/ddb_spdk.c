@@ -110,7 +110,7 @@ dsc_init(struct ddb_spdk_context **ctx)
 static void
 dsc_fini(struct ddb_spdk_context *ctx)
 {
-	free(ctx);
+	D_FREE(ctx);
 }
 
 /* Setup what's needed to do a blob read */
