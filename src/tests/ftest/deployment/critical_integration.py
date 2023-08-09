@@ -68,9 +68,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                                       " 'echo hello'".format(str(self.hostlist_servers)))
             try:
                 out = json.loads((run_command(daos_server_cmd)).stdout)
-                if 'response' in out:
-                    if 'version' in out['response']:
-                        daos_server_version_list.append(out['response']['version'])
+                daos_server_version_list.append(out['response']['version'])
                 if check_remote_root_access:
                     run_command(remote_root_access)
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
@@ -86,9 +84,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
 
             try:
                 out = json.loads((run_command(dmg_version_cmd)).stdout)
-                if 'response' in out:
-                    if 'version' in out['response']:
-                        dmg_version_list.append(out['response']['version'])
+                dmg_version_list.append(out['response']['version'])
             except (DaosTestError, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
