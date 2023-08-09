@@ -74,7 +74,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
                 if check_remote_root_access:
                     run_command(remote_root_access)
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
-            except (DaosTestError, CommandFailure) as error:
+            except (DaosTestError, CommandFailure, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
         if failed_nodes:
@@ -82,14 +82,14 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
 
         for host in self.hostlist_clients:
             dmg_version_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
-                               " 'dmg version -i' -j".format(host))
+                               " dmg version -i -j".format(host))
 
             try:
                 out = json.loads((run_command(dmg_version_cmd)).stdout)
                 if 'response' in out:
                     if 'version' in out['response']:
                         dmg_version_list.append(out['response']['version'])
-            except DaosTestError as error:
+            except (DaosTestError, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
         if failed_nodes:
