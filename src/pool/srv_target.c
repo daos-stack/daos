@@ -1809,11 +1809,8 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
 			DP_RC(rc), DP_UOID(ent->ie_oid));
-		/* Busy - inform iterator and yield */
-		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);
 	} while (1);
-
 
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
@@ -1871,10 +1868,9 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
 			DP_RC(rc), DP_UUID(entry->ie_couuid));
-		/* Busy - inform iterator and yield */
-		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);
 	} while (1);
+
 	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
