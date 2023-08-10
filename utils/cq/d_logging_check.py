@@ -12,6 +12,7 @@ if fixes are being applied.
 """
 
 import argparse
+import sys
 import re
 import io
 import os
@@ -128,7 +129,8 @@ PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FAT
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN']
+                'DH_PERROR_SYS', 'DH_PERROR_DER',
+                'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN', 'DL_INFO', 'DHL_INFO']
 
 
 PREFIXES_ALL = PREFIXES.copy()
@@ -177,6 +179,7 @@ class AllChecks():
             self.check_for_newline(line)
             self.check_df_rc(line)
             self.remove_trailing_period(line)
+            self.check_quote(line)
 
             line.write(self._output)
             if line.modified:
@@ -244,6 +247,7 @@ class AllChecks():
         if 'DF_RC".\\n"' not in code:
             return
         code = code.replace('DF_RC".\\n"', 'DF_RC"\\n"')
+        line.warning('Extra . after DP_RC macro')
         line.fix(code)
 
     def check_df_rc(self, line):
@@ -316,12 +320,14 @@ class AllChecks():
         # Put it all back together with consistent style.
         new_code = f'{msg}: "DF_RC{parts[1]}'
 
-        if line.startswith('D_ERROR') or line.startswith('D_WARN'):
+        if any(map(line.startswith, ['D_ERROR', 'D_WARN', 'D_INFO'])):
             new_code = f'{msg}"DF_RC{parts[1]}'
             if line.startswith('D_ERROR'):
                 new_code = f'DL_ERROR({var_name}, {new_code[8:]}'
-            else:
+            elif line.startswith('D_WARN'):
                 new_code = f'DL_WARN({var_name}, {new_code[7:]}'
+            else:
+                new_code = f'DL_INFO({var_name}, {new_code[7:]}'
             new_code = new_code.replace('DF_RC', '')
             new_code = new_code.replace(f',DP_RC({var_name})', '')
 
@@ -349,20 +355,28 @@ class AllChecks():
     def remove_trailing_period(self, line):
         """Remove . from the end of a line"""
         code = line.raw()
-        new_code = re.sub(r'\.",', '",', code)
-        new_code = re.sub(r'\."\)', '")', new_code)
+
+        new_code = code
+        before_code = None
+        while new_code != before_code:
+            before_code = new_code
+            new_code = re.sub(r'\.",', '",', new_code)
+            new_code = re.sub(r'\."\)', '")', new_code)
 
         if new_code != code:
             line.correct(new_code)
 
 
 def one_entry(fname):
-    """Process one path entry"""
+    """Process one path entry
+
+    Returns true if there are un-fixed errors.
+    """
     if not any(map(fname.endswith, ['.c', '.h'])):
-        return
+        return False
 
     if any(map(fname.endswith, ['pb-c.c', 'pb-c..h'])):
-        return
+        return False
 
     if ARGS.verbose:
         print(f'Checking {fname}')
@@ -375,6 +389,11 @@ def one_entry(fname):
     if (ARGS.fix and checks.modified) or (ARGS.correct and checks.corrected):
         print(f'Saving updates to {fname}')
         checks.save(fname)
+        return False
+
+    if checks.modified and not ARGS.fix:
+        return True
+    return False
 
 
 def main():
@@ -389,6 +408,7 @@ def main():
     global ARGS
 
     ARGS = parser.parse_args()
+    unfixed_errors = False
 
     for fname in ARGS.files:
         if os.path.isfile(fname):
@@ -396,11 +416,15 @@ def main():
         else:
             for root, dirs, files in os.walk(fname):
                 for name in files:
-                    one_entry(os.path.join(root, name))
+                    if one_entry(os.path.join(root, name)):
+                        unfixed_errors = True
                 if '.git' in dirs:
                     dirs.remove('.git')
                 if root == 'src/control' and 'vendor' in dirs:
                     dirs.remove('vendor')
+    if unfixed_errors:
+        print('Required fixes not applied')
+        sys.exit(1)
 
 
 if __name__ == '__main__':

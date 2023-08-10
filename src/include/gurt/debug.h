@@ -198,28 +198,22 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 /* Alternative versions of D_ERROR and D_WARN.
  *
  * These take a rc value and possibly a descriptor so we are able to better control the output.
+ * Below INFO level we don't typically use DF_RC and just print daos errno as integers, plus
+ * end-users are less likely to be reading debug logs than error logs.
  */
-#define DHL_ERROR(_desc, _rc, _fmt, ...)                                                           \
-	do {                                                                                       \
-		_D_DEBUG(_D_TRACE_NOCHECK, DLOG_ERR, (_desc), _fmt ": " DF_RC "\n", ##__VA_ARGS__, \
-			 DP_RC(_rc));                                                              \
-	} while (0)
-
-#define DL_ERROR(_rc, _fmt, ...)                                                                   \
-	do {                                                                                       \
-		D_DEBUG(DLOG_ERR, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc));                \
-	} while (0)
-
+#define DHL_INFO(_desc, _rc, _fmt, ...)                                                            \
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_INFO, (_desc), _fmt ": " DF_RC "\n", ##__VA_ARGS__,        \
+		 DP_RC(_rc))
 #define DHL_WARN(_desc, _rc, _fmt, ...)                                                            \
-	do {                                                                                       \
-		_D_DEBUG(_D_TRACE_NOCHECK, DLOG_WARN, (_desc), _fmt ": " DF_RC "\n",               \
-			 ##__VA_ARGS__, DP_RC(_rc));                                               \
-	} while (0)
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_WARN, (_desc), _fmt ": " DF_RC "\n", ##__VA_ARGS__,        \
+		 DP_RC(_rc))
+#define DHL_ERROR(_desc, _rc, _fmt, ...)                                                           \
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_ERR, (_desc), _fmt ": " DF_RC "\n", ##__VA_ARGS__,         \
+		 DP_RC(_rc))
 
-#define DL_WARN(_rc, _fmt, ...)                                                                    \
-	do {                                                                                       \
-		D_DEBUG(DLOG_WARN, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc));               \
-	} while (0)
+#define DL_INFO(_rc, _fmt, ...)  D_DEBUG(DLOG_INFO, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
+#define DL_WARN(_rc, _fmt, ...)  D_DEBUG(DLOG_WARN, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
+#define DL_ERROR(_rc, _fmt, ...) D_DEBUG(DLOG_ERR, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
