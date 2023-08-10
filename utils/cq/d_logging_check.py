@@ -12,6 +12,7 @@ if fixes are being applied.
 """
 
 import argparse
+import inspect
 import sys
 import re
 import io
@@ -88,7 +89,9 @@ class FileLine():
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
         if ARGS.github:
-            print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
+            fn_name = inspect.stack()[1].function
+            fn_name = fn_name.replace('_', '-')
+            print(f'::warning file={self._fo.fname},line={self._lineno},::{fn_name}, {msg}')
 
     def note(self, msg):
         """Show a note"""
