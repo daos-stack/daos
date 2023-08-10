@@ -347,6 +347,14 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_REINT_MODE:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_REINT_MODE_DATA_SYNC &&
+			    val != DAOS_REINT_MODE_NO_DATA_SYNC) {
+				D_ERROR("invalid reintegration mode "DF_U64".\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_SELF_HEAL:
 		case DAOS_PROP_PO_EC_CELL_SZ:
 		case DAOS_PROP_PO_EC_PDA:
