@@ -124,7 +124,7 @@ test_d_errstr(void **state)
 	assert_string_equal(value, "DER_HG_SEND_FAILED");
 	value = d_errstr(-1046);
 	assert_string_equal(value, "DER_HG_SEND_FAILED");
-	value = d_errstr(-(DER_HG_FATAL + 1));
+	value = d_errstr(-(DER_HG_SEND_FAILED + 1));
 	assert_string_equal(value, "DER_UNKNOWN");
 
 	/* Check the end of the DAOS error numbers. */
