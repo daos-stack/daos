@@ -150,7 +150,7 @@ char *DP_UUID(const void *uuid);
 
 #ifdef DAOS_BUILD_RELEASE
 
-#define DF_KEY       "key[%d]"
+#define DF_KEY       "[%d]"
 #define DP_KEY(_key) (int)((_key)->iov_len)
 
 #define DF_DE        "de[%zi]"
@@ -161,7 +161,7 @@ char *DP_UUID(const void *uuid);
 char *
 daos_key2str(daos_key_t *key);
 
-#define DF_KEY      "[%d] key'%s'"
+#define DF_KEY      "[%d] '%s'"
 #define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
 
 char *
