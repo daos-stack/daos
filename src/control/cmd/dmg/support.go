@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
@@ -127,8 +128,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	progress.Steps = 100 / progress.Total
 
 	// Default TargetFolder location where logs will be copied.
+	// Included Date and time stamp to the log folder.
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
+		folderName := fmt.Sprintf("daos_support_server_logs_%s", time.Now().Format(time.RFC3339))
+		cmd.TargetFolder = filepath.Join(os.TempDir(), folderName)
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {

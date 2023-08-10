@@ -94,6 +94,9 @@ var SystemCmd = []string{
 	"ps axf",
 	"top -bcn1 -w512",
 	"lspci -D",
+	"sysctl -a",
+	"printenv",
+	"rpm -qa --qf '(%{INSTALLTIME:date}): %{NAME}-%{VERSION}\n'",
 }
 
 var ServerLog = []string{
@@ -239,7 +242,7 @@ func ArchiveLogs(log logging.Logger, opts ...CollectLogsParams) error {
 	// write to the the .tar.gz
 	tarFileName := fmt.Sprintf("%s.tar.gz", opts[0].TargetFolder)
 	log.Debugf("Archiving the log folder %s", tarFileName)
-	fileToWrite, err := os.OpenFile(tarFileName, os.O_CREATE|os.O_RDWR, os.FileMode(0755))
+	fileToWrite, err := os.OpenFile(tarFileName, os.O_CREATE|os.O_RDWR, os.FileMode(0600))
 	if err != nil {
 		return err
 	}
@@ -269,7 +272,7 @@ func createFolder(target string, log logging.Logger) error {
 	if _, err := os.Stat(target); err != nil {
 		log.Debugf("Log folder is not Exists, so creating %s", target)
 
-		if err := os.MkdirAll(target, 0777); err != nil {
+		if err := os.MkdirAll(target, 0700); err != nil {
 			return err
 		}
 	}
