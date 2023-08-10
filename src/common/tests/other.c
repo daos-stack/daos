@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -53,7 +53,7 @@ comb_sort_test(int num)
 	int		 i;
 	struct timeval	 tv;
 
-	arr = calloc(num, sizeof(int));
+	D_ALLOC_PTR(arr);
 	if (arr == NULL)
 		return -ENOMEM;
 

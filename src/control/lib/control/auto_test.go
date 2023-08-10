@@ -1573,7 +1573,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 3), mockBdevTier(1, 4, 5)),
 			},
 			hpSize:   defHpSizeKb,
-			memTotal: (54 * humanize.GiByte) / humanize.KiByte,
+			memTotal: (64 * humanize.GiByte) / humanize.KiByte,
 			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
 				[]*engine.Config{
 					MockEngineCfgTmpfs(0, 5, /* tmpfs size in gib */
