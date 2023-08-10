@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -171,25 +172,15 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
-	oldLog := cmd.Logger
-	dbgEnabled := oldLog.EnabledFor(logging.LogLevelTrace)
-	if !dbgEnabled {
-		// If --debug flag has not been set, restrict log messages to ERROR during the
-		// generation of server config file parameters as stdout is to be reserved for
-		// config file output only.
-		log := logging.NewCommandLineLogger()
-		log.SetLevel(logging.LogLevelError)
-		cmd.Logger = log
-		req.Log = cmd.Logger
-	}
+	// Use a modified commandline logger to send all log messages to stderr during the
+	// generation of server config file parameters so stdout can be reserved for config file
+	// output only.
+	logStderr := logging.NewCommandLineLogger()
+	logStderr.ClearLevel(logging.LogLevelInfo)
+	logStderr.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
+	req.Log = logStderr
 
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
-
-	if !dbgEnabled {
-		// Restore original logging behavior.
-		cmd.Logger = oldLog
-	}
-
 	if err != nil {
 		return nil, err
 	}
