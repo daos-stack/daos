@@ -350,8 +350,14 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 	return oldref == 1;
 }
 
+#define SHOW_STAT(_dfc, _stat)                                                                     \
+	do {                                                                                       \
+		if ((_dfc)->dfc_stats.values[(_stat)] != 0)                                        \
+			DFUSE_TRA_INFO(_dfc, #_stat ": %#lx", (_dfc)->dfc_stats.values[(_stat)]);  \
+	} while (0)
+
 static void
-_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
+dfuse_container_detach(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 {
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
@@ -370,13 +376,33 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 
+	SHOW_STAT(dfc, DS_CREATE);
+	SHOW_STAT(dfc, DS_MKNOD);
+	SHOW_STAT(dfc, DS_FGETATTR);
+	SHOW_STAT(dfc, DS_GETATTR);
+	SHOW_STAT(dfc, DS_FSETATTR);
+	SHOW_STAT(dfc, DS_SETATTR);
+	SHOW_STAT(dfc, DS_LOOKUP);
+	SHOW_STAT(dfc, DS_MKDIR);
+	SHOW_STAT(dfc, DS_UNLINK);
+	SHOW_STAT(dfc, DS_READDIR);
+	SHOW_STAT(dfc, DS_SYMLINK);
+	SHOW_STAT(dfc, DS_OPENDIR);
+	SHOW_STAT(dfc, DS_RELEASEDIR);
+	SHOW_STAT(dfc, DS_SETXATTR);
+	SHOW_STAT(dfc, DS_GETXATTR);
+	SHOW_STAT(dfc, DS_RMXATTR);
+	SHOW_STAT(dfc, DS_LISTXATTR);
+	SHOW_STAT(dfc, DS_RENAME);
+	SHOW_STAT(dfc, DS_STATFS);
+
 	D_FREE(dfc);
 }
 
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
+	dfuse_container_detach(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
 }
 
 d_hash_table_ops_t cont_hops = {
@@ -883,7 +909,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
-		_ch_free(dfuse_info, dfc);
+		dfuse_container_detach(dfuse_info, dfc);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 	}

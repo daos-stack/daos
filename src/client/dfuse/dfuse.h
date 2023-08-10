@@ -365,6 +365,37 @@ struct dfuse_pool {
 	struct d_hash_table dfp_cont_table;
 };
 
+/*
+ * TODO: Move these to the ioctl header file and use X macros to define these elements.
+ *
+ * Actually use atomics to measure them.
+ */
+enum dfuse_stat_idx {
+	DS_CREATE = 0,
+	DS_MKNOD,
+	DS_FGETATTR,
+	DS_GETATTR,
+	DS_FSETATTR,
+	DS_SETATTR,
+	DS_LOOKUP,
+	DS_MKDIR,
+	DS_UNLINK,
+	DS_READDIR,
+	DS_SYMLINK,
+	DS_OPENDIR,
+	DS_RELEASEDIR,
+	DS_SETXATTR,
+	DS_GETXATTR,
+	DS_RMXATTR,
+	DS_LISTXATTR,
+	DS_RENAME,
+	DS_STATFS,
+};
+
+struct dfuse_stats {
+	ATOMIC uint64_t values[DS_STATFS + 1];
+};
+
 /** Container information
  *
  * This represents a container that DFUSE is accessing.  All containers
@@ -377,36 +408,40 @@ struct dfuse_pool {
  */
 struct dfuse_cont {
 	/** Fuse handlers to use for this container */
-	struct dfuse_inode_ops	*dfs_ops;
+	struct dfuse_inode_ops *dfs_ops;
 
 	/** Pointer to parent pool, where a reference is held */
-	struct dfuse_pool	*dfs_dfp;
+	struct dfuse_pool      *dfs_dfp;
 
 	/** dfs mount handle */
-	dfs_t			*dfs_ns;
+	dfs_t                  *dfs_ns;
 
 	/** UUID of the container */
-	uuid_t			dfs_cont;
+	uuid_t                  dfs_cont;
 
 	/** Container handle */
-	daos_handle_t		dfs_coh;
+	daos_handle_t           dfs_coh;
 
 	/** Hash table entry entry in dfp_cont_table */
-	d_list_t		dfs_entry;
+	d_list_t                dfs_entry;
 	/** Hash table reference count */
-	ATOMIC uint32_t          dfs_ref;
+	ATOMIC uint32_t         dfs_ref;
 
 	/** Inode number of the root of this container */
-	ino_t			dfs_ino;
+	ino_t                   dfs_ino;
+
+	struct dfuse_stats      dfc_stats;
 
 	/** Caching information */
-	double			dfc_attr_timeout;
-	double			dfc_dentry_timeout;
-	double			dfc_dentry_dir_timeout;
-	double			dfc_ndentry_timeout;
-	double			dfc_data_timeout;
-	bool			dfc_direct_io_disable;
+	double                  dfc_attr_timeout;
+	double                  dfc_dentry_timeout;
+	double                  dfc_dentry_dir_timeout;
+	double                  dfc_ndentry_timeout;
+	double                  dfc_data_timeout;
+	bool                    dfc_direct_io_disable;
 };
+
+#define DFUSE_IE_STAT_ADD(_ie, _stat) (_ie)->ie_dfs->dfc_stats.values[(_stat)] += 1
 
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
