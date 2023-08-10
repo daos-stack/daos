@@ -12,14 +12,42 @@ test_tag="$TEST_TAG"
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
 
+cluster_reboot () {
+    # shellcheck disable=SC2029,SC2089
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" reboot || true
+
+    # shellcheck disable=SC2029,SC2089
+    poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
+    poll_cmd+=( cat /etc/os-release )
+    reboot_timeout=900 # 15 minutes
+    retry_wait=10 # seconds
+    timeout=$((SECONDS + reboot_timeout))
+    while [ "$SECONDS" -lt "$timeout" ]; do
+      if "${poll_cmd[@]}"; then
+        return 0
+      fi
+      sleep ${retry_wait}
+    done
+    return 1
+}
+
+test_cluster() {
+    # Test that all nodes in the cluster are healthy
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}"   \
+        "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}           \
+        FIRST_NODE=${first_node}                        \
+        TEST_RPMS=${TEST_RPMS}                          \
+        $(cat ci/functional/test_main_prep_node.sh)"
+}
+
 clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
     "NODELIST=${NODELIST} $(cat ci/functional/setup_nfs.sh)"
 
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-  "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}                \
-   FIRST_NODE=${first_node}                            \
-   TEST_RPMS=${TEST_RPMS}                              \
-   $(cat ci/functional/test_main_prep_node.sh)"
+if ! test_cluster; then
+    # Sometimes a cluster reboot will fix the issue so try it once.
+    cluster_reboot
+    test_cluster
+fi
 
 # this is being mis-flagged as SC2026 where shellcheck.net is OK with it
 # shellcheck disable=SC2026
