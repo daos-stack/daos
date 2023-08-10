@@ -1490,10 +1490,8 @@ dm_connect(struct cmd_args_s *ap,
 				dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "provide a destination pool or UNS path "
-					      "of the form:\n\t --dst </$pool> | </path/to/uns>");
-				D_GOTO(err, rc);
+				DH_PERROR_SYS(ap, rc, "failed to create destination UNS path");
+				D_GOTO(err, rc = daos_errno2der(rc));
 			}
 			snprintf(ca->dst_cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
