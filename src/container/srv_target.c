@@ -478,9 +478,10 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				DP_RC(rc));
+			D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR,
+				 DF_CONT": VOS aggregate failed. "DF_RC"\n",
+				 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				 DP_RC(rc));
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
