@@ -19,6 +19,7 @@
 
 #define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
+#define VOS_POOL_DF_2_6 26
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -287,6 +288,8 @@ enum {
 	VOS_POOL_FEAT_CHK = (1ULL << 1),
 	/** Dynamic evtree root supported for this pool */
 	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
+	/** Embedded value in tree root supported */
+	VOS_POOL_FEAT_EMB_VALUE = (1ULL << 3),
 };
 
 /** Mask for any conditionals passed to to the fetch */
