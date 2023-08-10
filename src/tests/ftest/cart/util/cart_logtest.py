@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2023 Intel Corporation
+# (C) Copyright 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -18,8 +18,6 @@ try:
     import tabulate
 except ImportError:
     HAVE_TABULATE = False
-
-# pylint: disable=too-few-public-methods
 
 
 class LogCheckError(Exception):
@@ -227,6 +225,7 @@ class LogTest():
         self.fi_triggered = False
         self.fi_location = None
         self.skip_suffixes = []
+        self._tracers = []
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
@@ -237,7 +236,11 @@ class LogTest():
 
     def __del__(self):
         if not self.quiet and not self._common_shown:
-            self.show_common_logs()
+            self._show_common_logs()
+
+    def add_tracer(self, callback, facs):
+        """Add a tracer for later use"""
+        self._tracers.append((callback, facs))
 
     def save_log_line(self, line):
         """Record a single line of logging"""
@@ -252,7 +255,7 @@ class LogTest():
         self.log_fac[line.fac] += 1
         self.log_levels[line.level] += 1
 
-    def show_common_logs(self):
+    def _show_common_logs(self):
         """Report to stdout the most common logging locations"""
         if self.log_count == 0:
             return
@@ -289,7 +292,7 @@ class LogTest():
             except LogCheckError as error:
                 if to_raise is None:
                     to_raise = error
-        self.show_common_logs()
+        self._show_common_logs()
         if to_raise:
             raise to_raise
 
@@ -323,6 +326,7 @@ class LogTest():
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
         # pylint: disable=too-many-branches,too-many-nested-blocks
         """Check a pid from a single log file for consistency"""
+        # pylint: disable=too-many-nested-blocks,too-many-locals,too-many-branches
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -347,15 +351,17 @@ class LogTest():
 
         trace_lines = 0
         non_trace_lines = 0
+        cb_list = []
 
-        if self.quiet:
-            rpc_r = None
-        else:
-            rpc_r = RpcReporting()
+        if not self.quiet:
+            cb_list.append((RpcReporting(), ('hg', 'rpc')))
+        for tracer in self._tracers:
+            cb_list.append((tracer[0], tracer[1]))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            if rpc_r:
-                rpc_r.add_line(line)
+            for (cbe, facs) in cb_list:
+                if facs is None or line.fac in facs:
+                    cbe.add_line(line)
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
@@ -544,8 +550,8 @@ class LogTest():
                             err_count += 1
 
         del active_desc['root']
-        if rpc_r:
-            rpc_r.report()
+        for (cbe, _) in cb_list:
+            cbe.report()
 
         # This isn't currently used anyway.
         # if not have_debug:
@@ -564,10 +570,6 @@ class LogTest():
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
 
-        # Special case the fuse arg values as these are allocated by IOF
-        # but freed by fuse itself.
-        # Skip over CaRT issues for now to get this landed, we can enable them
-        # once this is stable.
         lost_memory = False
         if show_memleaks:
             for (_, line) in list(regions.items()):
@@ -609,6 +611,7 @@ class RpcReporting():
     known_functions = frozenset({'crt_hg_req_send',
                                  'crt_hg_req_destroy',
                                  'crt_rpc_complete',
+                                 'crt_rpc_complete_and_unlock',
                                  'crt_rpc_priv_alloc',
                                  'crt_rpc_handler_common',
                                  'crt_req_send',
@@ -630,6 +633,8 @@ class RpcReporting():
             return
 
         if line.is_new_rpc():
+            if line.descriptor in self._current_opcodes:
+                return
             rpc_state = 'ALLOCATED'
             opcode = line.get_field(-4)
             if opcode == 'per':

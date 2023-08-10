@@ -409,6 +409,16 @@ func PoolProperties() PoolPropertyMap {
 				valueMarshaler: numericMarshaler,
 			},
 		},
+		"reintegration": {
+			Property: PoolProperty{
+				Number:      PoolPropertyReintMode,
+				Description: "Reintegration mode",
+			},
+			values: map[string]uint64{
+				"data_sync":    PoolReintModeDataSync,
+				"no_data_sync": PoolReintModeNoDataSync,
+			},
+		},
 	}
 }
 
