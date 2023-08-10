@@ -2106,7 +2106,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT) {
+	if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_RECLAIM ||
+	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
 		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
 		rpt->rt_pool->sp_reintegrating--;
 	}
