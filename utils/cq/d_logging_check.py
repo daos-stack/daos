@@ -215,7 +215,7 @@ class AllChecks():
             return
 
         # Do not remove if used in tri-graphs.
-        if ': ""' in line or '? ""' in line:
+        if ': ""' in line or '? ""' in line or '\\""' in line:
             return
 
         line.correct(line.raw().replace('""', ''))
