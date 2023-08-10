@@ -4319,6 +4319,7 @@ def check_no_file(dfuse):
 
 nlt_lp = None  # pylint: disable=invalid-name
 nlt_lt = None  # pylint: disable=invalid-name
+nlt_ct = None  # pylint: disable=invalid-name
 
 
 def setup_log_test(conf):
@@ -4338,11 +4339,32 @@ def setup_log_test(conf):
 
     global nlt_lp  # pylint: disable=invalid-name
     global nlt_lt  # pylint: disable=invalid-name
+    global nlt_ct  # pylint: disable=invalid-name
 
     nlt_lp = __import__('cart_logparse')
     nlt_lt = __import__('cart_logtest')
+    ct_mod = __import__('cart_logusage')
+
+    nlt_ct = ct_mod.UsageTracer()
+
+    if conf.args.log_usage_import:
+        if os.path.exists(conf.args.log_usage_import):
+            nlt_ct.load(conf.args.log_usage_import)
+        else:
+            print(f'Unable to load log-usage input file {conf.args.log_usage_import}')
 
     nlt_lt.wf = conf.wf
+
+
+def close_log_test(conf):
+    """Close down the log tracing"""
+    conf.flush_bz2()
+
+    if conf.args.log_usage_save:
+        nlt_ct.report_all(conf.args.log_usage_save)
+
+    if conf.args.log_usage_export:
+        nlt_ct.save(conf.args.log_usage_export)
 
 
 def log_timer(func):
@@ -4406,6 +4428,9 @@ def log_test(conf,
     conf.compress_file(filename)
 
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
+
+    # Add the code coverage tracer.
+    lto.add_tracer(nlt_ct, None)
 
     lto.hide_fi_calls = skip_fi
 
@@ -5916,7 +5941,8 @@ def run(wf, args):
     if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
-        args.dfuse_debug = 'WARN'
+        # Turn back on logging for this.
+        # args.dfuse_debug = 'WARN'
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
             if fi_test:
@@ -5980,7 +6006,7 @@ def run(wf, args):
         print("Valgrind errors detected during execution")
 
     wf_server.close()
-    conf.flush_bz2()
+    close_log_test(conf)
     print(f'Total time in log analysis: {conf.log_timer.total:.2f} seconds')
     print(f'Total time in log compression: {conf.compress_timer.total:.2f} seconds')
     return fatal_errors
@@ -6007,6 +6033,9 @@ def main():
     parser.add_argument('--system-ram-reserved', type=int, default=None, help='GiB reserved RAM')
     parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
     parser.add_argument('--perf-check', action='store_true')
+    parser.add_argument('--log-usage-import')
+    parser.add_argument('--log-usage-export')
+    parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
     parser.add_argument('mode', nargs='*')
