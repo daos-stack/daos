@@ -624,7 +624,6 @@ daos_crt_network_error(int err)
 	       err == -DER_NOREPLY || err == -DER_OOG || err == -DER_HG_SEND_FAILED;
 }
 
-
 /** See crt_quiet_error. */
 static inline bool
 daos_quiet_error(int err)
