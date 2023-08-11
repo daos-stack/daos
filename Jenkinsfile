@@ -16,6 +16,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value='pipeline-lib@your_branch') _
+@Library(value='pipeline-lib@pahender/DAOS-13934') _
 
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
@@ -1121,7 +1122,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL
+                        label cachedCommitPragma(pragma: 'Label-hw-medium', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL)
                     }
                     steps {
                         job_step_update(
@@ -1144,7 +1145,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
+                        label cachedCommitPragma(pragma: 'Label-hw-medium-verbs-provider', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL)
                     }
                     steps {
                         job_step_update(
@@ -1167,7 +1168,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
+                        label cachedCommitPragma(pragma: 'Label-hw-medium-ucx-provider', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL)
                     }
                     steps {
                         job_step_update(
@@ -1190,7 +1191,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
+                        label cachedCommitPragma(pragma: 'Label-hw-large', def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL)
                     }
                     steps {
                         job_step_update(

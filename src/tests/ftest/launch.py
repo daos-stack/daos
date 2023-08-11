@@ -8,13 +8,12 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
-from tempfile import TemporaryDirectory
 import getpass
 import json
 import logging
 import os
-import re
 import sys
+import traceback
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -24,29 +23,27 @@ from ClusterShell.NodeSet import NodeSet
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
-# pylint: disable=import-error,no-name-in-module
-from slurm_setup import SlurmSetup, SlurmSetupException
+from process_core_files import get_core_file_pattern
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
 from code_coverage_utils import CodeCoverage                                            # noqa: E402
-from data_utils import list_unique, dict_extract_values                                 # noqa: E402
-from environment_utils import TestEnvironment, TestEnvironmentException, set_test_environment, \
-    PROVIDER_KEYS, PROVIDER_ALIAS                                                       # noqa: E402
+from environment_utils import TestEnvironment, TestEnvironmentException, \
+    set_test_environment                                                                # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
-from launch_utils import LaunchException, AvocadoInfo, TestInfo, TestRunner, \
-    fault_injection_enabled                                                             # noqa: E402
-from logger_utils import get_console_handler, get_file_handler                          # noqa: E402
+from launch_utils import LaunchException, AvocadoInfo, get_test_groups, \
+    setup_fuse_config, summarize_run                                                    # noqa: E402
+from logger_utils import get_console_handler, get_file_handler, LOG_FILE_FORMAT         # noqa: E402
+from network_utils import SUPPORTED_PROVIDERS, PROVIDER_ALIAS                           # noqa: E402
 from package_utils import find_packages                                                 # noqa: E402
 from results_utils import Job, Results, LaunchTestName                                  # noqa: E402
-from run_utils import run_local, run_remote, RunException                               # noqa: E402
-from storage_utils import StorageInfo, StorageException                                 # noqa: E402
-from yaml_utils import get_yaml_data, YamlUpdater, YamlException                        # noqa: E402
+from run_utils import RunException                                                      # noqa: E402
+from storage_utils import StorageException                                              # noqa: E402
+from yaml_utils import YamlException                                                    # noqa: E402
 
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
-LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
 
 
@@ -138,166 +135,6 @@ class Launch():
             except TypeError as error:
                 logger.error("Error writing %s: %s", details_json, str(error))
 
-    def run(self, args):
-        # pylint: disable=too-many-return-statements
-        """Perform the actions specified by the command line arguments.
-
-        Args:
-            args (argparse.Namespace): command line arguments for this program
-
-        Returns:
-            int: exit status for the steps executed
-        """
-        # Setup launch to log and run the requested action
-        try:
-            self._configure(args.overwrite_config)
-        except LaunchException:
-            message = "Error configuring launch.py to start logging and track test results"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # Add a test result to account for any non-test execution steps
-        setup_result = self.result.add_test(
-            self.class_name, LaunchTestName("./launch.py", 0, 0), self.logfile)
-        setup_result.start()
-
-        # Set the number of times to repeat execution of each test
-        if self.mode == "ci" and args.repeat > MAX_CI_REPETITIONS:
-            message = "The requested number of test repetitions exceeds the CI limitation."
-            setup_result.warn_test(logger, "Setup", message)
-            logger.debug(
-                "The number of test repetitions has been reduced from %s to %s.",
-                args.repeat, MAX_CI_REPETITIONS)
-            args.repeat = MAX_CI_REPETITIONS
-        self.repeat = args.repeat
-
-        # Record the command line arguments
-        logger.debug("Arguments:")
-        for key in sorted(args.__dict__.keys()):
-            logger.debug("  %s = %s", key, getattr(args, key))
-
-        # Convert host specifications into NodeSets
-        try:
-            args.test_servers = NodeSet(args.test_servers)
-        except TypeError:
-            message = f"Invalid '--test_servers={args.test_servers}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        try:
-            args.test_clients = NodeSet(args.test_clients)
-        except TypeError:
-            message = f"Invalid '--test_clients={args.test_clients}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # A list of server hosts is required
-        if not args.test_servers and not args.list:
-            return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
-        logger.info("Testing with hosts:       %s", args.test_servers.union(args.test_clients))
-        self.details["test hosts"] = str(args.test_servers.union(args.test_clients))
-
-        # Setup the user environment
-        try:
-            test_env = TestEnvironment()
-            build_vars_file = os.path.join(
-                os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
-            if args.list:
-                set_test_environment(logger, build_vars_file)
-            else:
-                set_test_environment(
-                    logger, build_vars_file, test_env, args.test_servers, args.test_clients,
-                    args.provider, args.insecure_mode, self.details)
-        except TestEnvironmentException as error:
-            message = f"Error setting up test environment: {str(error)}"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # Process the tags argument to determine which tests to run - populates self.tests
-        try:
-            self.list_tests(args.tags, args.yaml_extension)
-        except RunException:
-            message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # Verify at least one test was requested
-        if not self.tests:
-            message = f"No tests found for tags: {' '.join(args.tags)}"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # Done if just listing tests matching the tags
-        if args.list and not args.modify:
-            return self.get_exit_status(0, "Listing tests complete")
-
-        # Create a temporary directory
-        if args.yaml_directory is None:
-            # pylint: disable=consider-using-with
-            temp_dir = TemporaryDirectory()
-            yaml_dir = temp_dir.name
-        else:
-            yaml_dir = args.yaml_directory
-            if not os.path.exists(yaml_dir):
-                os.mkdir(yaml_dir)
-        logger.info("Modified test yaml files being created in: %s", yaml_dir)
-
-        # Modify the test yaml files to run on this cluster
-        try:
-            self.setup_test_files(test_env, yaml_dir, args)
-        except (RunException, YamlException):
-            message = "Error modifying the test yaml files"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        except StorageException:
-            message = "Error detecting storage information for test yaml files"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        if args.modify:
-            return self.get_exit_status(0, "Modifying test yaml files complete")
-
-        try:
-            self.setup_fuse_config(args.test_servers | args.test_clients)
-        except LaunchException:
-            # Warn but don't fail
-            message = "Issue detected setting up the fuse configuration"
-            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
-
-        # Get the core file pattern information
-        try:
-            core_files = self._get_core_file_pattern(
-                args.test_servers, args.test_clients, args.process_cores)
-        except LaunchException:
-            message = "Error obtaining the core file pattern information"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-
-        # Add the installed packages to the details json
-        # pylint: disable=unsupported-binary-operation
-        all_hosts = args.test_servers | args.test_clients | self.local_host
-        self.details["installed packages"] = find_packages(
-            logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|)-'")
-
-        # Split the timer for the test result to account for any non-test execution steps as not to
-        # double report the test time accounted for in each individual test result
-        setup_result.end()
-
-        # Determine if bullseye code coverage collection is enabled
-        code_coverage = CodeCoverage(test_env)
-        # pylint: disable=unsupported-binary-operation
-        code_coverage.check(logger, args.test_servers | self.local_host)
-
-        # Define options for creating any slurm partitions required by the tests
-        try:
-            self.slurm_control_node = NodeSet(args.slurm_control_node)
-        except TypeError:
-            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
-        self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
-
-        # Execute the tests
-        status = self.run_tests(
-            test_env, args.sparse, args.failfast, not args.disable_stop_daos, args.archive,
-            args.rename, args.jenkinslog, core_files, args.logs_threshold, args.user_create,
-            code_coverage)
-
-        # Restart the timer for the test result to account for any non-test execution steps
-        setup_result.start()
-
-        # Return the appropriate return code and mark the test result to account for any non-test
-        # execution steps complete
-        return self.get_exit_status(status, "Executing tests complete")
-
     def _configure(self, overwrite_config=False):
         """Configure launch to start logging and track test results.
 
@@ -374,505 +211,196 @@ class Launch():
 
         return old_launch_log_dir
 
-    def list_tests(self, tags, yaml_extension=None):
-        """List the test files matching the tags.
-
-        Populates the self.tests list and defines the self.tag_filters list to use when running
-        tests.
+    def run(self, args):
+        # pylint: disable=too-many-return-statements
+        """Perform the actions specified by the command line arguments.
 
         Args:
-            tags (list): a list of tags or test file names
-            yaml_extension (str, optional): optional test yaml file extension to use when creating
-                the TestInfo object.
-
-        Raises:
-            RunException: if there is a problem listing tests
-        """
-        logger.debug("-" * 80)
-        self.tests = []
-        self.tag_filters = []
-
-        # Determine if fault injection is enabled
-        fault_tag = "-faults"
-        fault_filter = f"--filter-by-tags={fault_tag}"
-        faults_enabled = fault_injection_enabled(logger)
-
-        # Determine if each tag list entry is a tag or file specification
-        test_files = []
-        for tag in tags:
-            if os.path.isfile(tag):
-                # Assume an existing file is a test and add it to the list of tests
-                test_files.append(tag)
-                if not faults_enabled and fault_filter not in self.tag_filters:
-                    self.tag_filters.append(fault_filter)
-            else:
-                # Otherwise it is assumed that this is a tag
-                if not faults_enabled:
-                    tag = ",".join((tag, fault_tag))
-                self.tag_filters.append(f"--filter-by-tags={tag}")
-
-        # Get the avocado list command to find all the tests that match the specified files and tags
-        command = self.avocado.get_list_command()
-        command.extend(self.tag_filters)
-        command.extend(test_files)
-        if not test_files:
-            command.append("./")
-
-        # Find all the test files that contain tests matching the tags
-        logger.info("Detecting tests matching tags: %s", " ".join(command))
-        output = run_local(logger, " ".join(command), check=True)
-        unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
-        for index, test_file in enumerate(unique_test_files):
-            self.tests.append(TestInfo(test_file, index + 1, yaml_extension))
-            logger.info("  %s", self.tests[-1])
-
-    def setup_test_files(self, test_env, yaml_dir, args):
-        """Set up the test yaml files with any placeholder replacements.
-
-        Args:
-            test_env (TestEnvironment): the current test environment
-            yaml_dir (str): directory in which to write the modified yaml files
             args (argparse.Namespace): command line arguments for this program
 
-        Raises:
-            RunException: if there is a problem updating the test yaml files
-            YamlException: if there is an error getting host information from the test yaml files
-            StorageException: if there is an error getting storage information
-
-        """
-        # Detect available disk options for test yaml replacement
-        # Supported --nvme options:
-        #
-        #   auto[:filter]           = replace any test bdev_list placeholders with any NVMe disk or
-        #                             VMD controller address found to exist on all server hosts. If
-        #                             a 'filter' is specified use it to find devices with the
-        #                             'filter' in the device description. If generating automatic
-        #                             storage extra files, use a 'class: dcpm' first storage tier.
-        #
-        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
-        #                             VMD controller address found to exist on all server hosts. If
-        #                             a 'filter' is specified use it to find devices with the
-        #                             'filter' in the device description. If generating automatic
-        #                             storage extra files, use a 'class: ram' first storage tier.
-        #
-        #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
-        #                             found to exist on all server hosts. If a 'filter' is specified
-        #                             use it to find devices with the 'filter' in the device
-        #                             description. If generating automatic storage extra files, use
-        #                             a 'class: dcpm' first storage tier.
-        #
-        #   auto_vmd[:filter]       = replace any test bdev_list placeholders with any VMD
-        #                             controller address found to exist on all server hosts. If a
-        #                             'filter' is specified use it to find devices with the 'filter'
-        #                             in the device description. If generating automatic storage
-        #                             extra files, use a 'class: dcpm' first storage tier.
-        #
-        #   <address>[,<address>]   = replace any test bdev_list placeholders with the addresses
-        #                             specified as long as the address exists on each server host.
-        #                             If generating automatic storage extra files, use a
-        #                             'class: dcpm' first storage tier.
-        #
-        storage = None
-        storage_info = StorageInfo(logger, args.test_servers)
-        tier_0_type = "pmem"
-        control_metadata = None
-        max_nvme_tiers = 1
-        if args.nvme:
-            kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
-            if args.nvme.startswith("auto"):
-                # Separate any optional filter from the key
-                nvme_args = args.nvme.split(":")
-                kwargs["device_filter"] = nvme_args[1] if len(nvme_args) > 1 else None
-            logger.debug("-" * 80)
-            storage_info.scan(**kwargs)
-
-            # Determine which storage device types to use when replacing keywords in the test yaml
-            if args.nvme.startswith("auto_nvme"):
-                storage = ",".join([dev.address for dev in storage_info.disk_devices])
-            elif args.nvme.startswith("auto_vmd") or storage_info.controller_devices:
-                storage = ",".join([dev.address for dev in storage_info.controller_devices])
-            else:
-                storage = ",".join([dev.address for dev in storage_info.disk_devices])
-
-            # Change the auto-storage extra yaml format if md_on_ssd is requested
-            if args.nvme.startswith("auto_md_on_ssd"):
-                tier_0_type = "ram"
-                max_nvme_tiers = 5
-                control_metadata = os.path.join(test_env.log_dir, 'control_metadata')
-
-        self.details["storage"] = storage_info.device_dict()
-
-        updater = YamlUpdater(
-            logger, args.test_servers, args.test_clients, storage, args.timeout_multiplier,
-            args.override, args.verbose)
-
-        # Replace any placeholders in the extra yaml file, if provided
-        if args.extra_yaml:
-            logger.debug("Updating placeholders in extra yaml files: %s", args.extra_yaml)
-            common_extra_yaml = [
-                updater.update(extra, yaml_dir) or extra for extra in args.extra_yaml]
-            for test in self.tests:
-                test.extra_yaml.extend(common_extra_yaml)
-
-        # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(
-            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers,
-            control_metadata)
-
-        # Replace any placeholders in the test yaml file
-        for test in self.tests:
-            new_yaml_file = updater.update(test.yaml_file, yaml_dir)
-            if new_yaml_file:
-                if args.verbose > 0:
-                    # Optionally display a diff of the yaml file
-                    run_local(logger, f"diff -y {test.yaml_file} {new_yaml_file}", check=False)
-                test.yaml_file = new_yaml_file
-
-            # Display the modified yaml file variants with debug
-            command = ["avocado", "variants", "--mux-yaml", test.yaml_file]
-            if test.extra_yaml:
-                command.extend(test.extra_yaml)
-            command.extend(["--summary", "3"])
-            run_local(logger, " ".join(command))
-
-            # Collect the host information from the updated test yaml
-            test.set_yaml_info(logger, args.include_localhost)
-
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
-                               max_nvme_tiers, control_metadata):
-        """Add extra storage yaml definitions for tests requesting automatic storage configurations.
-
-        Args:
-            storage_info (StorageInfo): the collected storage information from the hosts
-            yaml_dir (str): path in which to create the extra storage yaml files
-            tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
-            scm_size (int): scm_size to use with ram storage tiers
-            scm_mount (str): the base path for the storage tier 0 scm_mount.
-            max_nvme_tiers (int): maximum number of NVMe tiers to generate
-            control_metadata (str, optional): directory to store control plane metadata when using
-                metadata on SSD.
-
-        Raises:
-            YamlException: if there is an error getting host information from the test yaml files
-            StorageException: if there is an error creating the extra storage yaml files
-
-        """
-        engine_storage_yaml = {}
-        for test in self.tests:
-            yaml_data = get_yaml_data(test.yaml_file)
-            logger.debug("Checking for auto-storage request in %s", test.yaml_file)
-
-            storage = dict_extract_values(yaml_data, ["server_config", "engines", "*", "storage"])
-            if "auto" in storage:
-                if len(list_unique(storage)) > 1:
-                    raise StorageException("storage: auto only supported for all or no engines")
-                engines = list_unique(dict_extract_values(yaml_data, ["engines_per_host"]))
-                if len(engines) > 1:
-                    raise StorageException(
-                        "storage: auto not supported for varying engines_per_host")
-                engines = engines[0]
-                yaml_file = os.path.join(yaml_dir, f"extra_yaml_storage_{engines}_engine.yaml")
-                if engines not in engine_storage_yaml:
-                    logger.debug("-" * 80)
-                    storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
-                        control_metadata)
-                    engine_storage_yaml[engines] = yaml_file
-                logger.debug(
-                    "  - Adding auto-storage extra yaml %s for %s",
-                    engine_storage_yaml[engines], str(test))
-                # Allow extra yaml files to be to override the generated storage yaml
-                test.extra_yaml.insert(0, engine_storage_yaml[engines])
-
-    @staticmethod
-    def setup_fuse_config(hosts):
-        """Set up the system fuse config file.
-
-        Args:
-            hosts (NodeSet): hosts to setup
-
-        Raises:
-            LaunchException: if setup fails
-
-        """
-        logger.info("Setting up fuse config")
-        fuse_configs = ("/etc/fuse.conf", "/etc/fuse3.conf")
-        command = ";".join([
-            "if [ -e {0} ]",
-            "then ls -l {0}",
-            "(grep -q '^user_allow_other$' {0} || echo user_allow_other | sudo tee -a {0})",
-            "cat {0}",
-            "fi"
-        ])
-        for config in fuse_configs:
-            if not run_remote(logger, hosts, command.format(config)).passed:
-                raise LaunchException(f"Failed to setup {config}")
-
-    def _get_core_file_pattern(self, servers, clients, process_cores):
-        """Get the core file pattern information from the hosts if collecting core files.
-
-        Args:
-            servers (NodeSet): hosts designated for the server role in testing
-            clients (NodeSet): hosts designated for the client role in testing
-            process_cores (bool): whether or not to collect core files after the tests complete
-
-        Raises:
-            LaunchException: if there was an error obtaining the core file pattern information
-
         Returns:
-            dict: a dictionary containing the path and pattern for the core files per NodeSet
-
+            int: exit status for the steps executed
         """
-        core_files = {}
-        if not process_cores:
-            logger.debug("Not collecting core files")
-            return core_files
-
-        # Determine the core file pattern being used by the hosts
-        all_hosts = servers | clients
-        all_hosts |= self.local_host
-        command = "cat /proc/sys/kernel/core_pattern"
-        result = run_remote(logger, all_hosts, command)
-
-        # Verify all the hosts have the same core file pattern
-        if not result.passed:
-            raise LaunchException("Error obtaining the core file pattern")
-
-        # Get the path and pattern information from the core pattern
-        for data in result.output:
-            hosts = str(data.hosts)
-            try:
-                info = os.path.split(result.output[0].stdout[-1])
-            except (TypeError, IndexError) as error:
-                raise LaunchException(
-                    "Error obtaining the core file pattern and directory") from error
-            if not info[0]:
-                raise LaunchException("Error obtaining the core file pattern directory")
-            core_files[hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
-            logger.info(
-                "Collecting any '%s' core files written to %s on %s",
-                core_files[hosts]["pattern"], core_files[hosts]["path"], hosts)
-
-        return core_files
-
-    def run_tests(self, test_env, sparse, fail_fast, stop_daos, archive, rename, jenkinslog,
-                  core_files, threshold, user_create, code_coverage):
-        # pylint: disable=too-many-arguments
-        """Run all the tests.
-
-        Args:
-            test_env (TestEnvironment): the test environment variables
-            sparse (bool): whether or not to display the shortened avocado test output
-            fail_fast (bool): whether or not to fail the avocado run command upon the first failure
-            stop_daos (bool): whether or not to stop daos servers/clients after the test
-            archive (bool): whether or not to collect remote files generated by the test
-            rename (bool): whether or not to rename the default avocado job-results directory names
-            jenkinslog (bool): whether or not to update the results.xml to use Jenkins-style names
-            core_files (dict): location and pattern defining where core files may be written
-            threshold (str): optional upper size limit for test log files
-            user_create (bool): whether to create extra test users defined by the test
-            code_coverage (CodeCoverage): bullseye code coverage
-
-        Returns:
-            int: status code to use when exiting launch.py
-
-        """
-        return_code = 0
-        runner = TestRunner(
-            self.avocado, self.result, len(self.tests), self.repeat, self.tag_filters)
-
-        # Display the location of the avocado logs
-        logger.info("Avocado job results directory: %s", self.job_results_dir)
-
-        # Configure slurm if any tests use partitions
-        return_code |= self.setup_slurm(test_env)
-
-        # Configure hosts to collect code coverage
-        if not code_coverage.setup(logger, self.result.tests[0]):
-            return_code |= 128
-
-        # Run each test for as many repetitions as requested
-        for repeat in range(1, self.repeat + 1):
-            logger.info("-" * 80)
-            logger.info("Starting test repetition %s/%s", repeat, self.repeat)
-
-            for index, test in enumerate(self.tests):
-                # Define a log for the execution of this test for this repetition
-                test_log_file = test.get_log_file(self.logdir, repeat, self.repeat)
-                logger.info("-" * 80)
-                logger.info("Log file for repetition %s of %s: %s", repeat, test, test_log_file)
-                test_file_handler = get_file_handler(test_log_file, LOG_FILE_FORMAT, logging.DEBUG)
-                logger.addHandler(test_file_handler)
-
-                # Prepare the hosts to run the tests
-                step_status = runner.prepare(
-                    logger, test_log_file, test, repeat, user_create, self.slurm_setup,
-                    self.slurm_control_node, self.slurm_partition_hosts)
-                if step_status:
-                    # Do not run this test - update its failure status to interrupted
-                    return_code |= step_status
-                    continue
-
-                # Run the test with avocado
-                return_code |= runner.execute(logger, test, repeat, index + 1, sparse, fail_fast)
-
-                # Archive the test results
-                return_code |= runner.process(
-                    logger, self.job_results_dir, test, repeat, stop_daos, archive, rename,
-                    jenkinslog, core_files, threshold)
-
-                # Display disk usage after the test is complete
-                self.display_disk_space(self.logdir)
-
-                # Stop logging to the test log file
-                logger.removeHandler(test_file_handler)
-
-        # Collect code coverage files after all test have completed
-        if not code_coverage.finalize(logger, self.job_results_dir, self.result.tests[0]):
-            return_code |= 16
-
-        # Summarize the run
-        return self._summarize_run(return_code)
-
-    def setup_slurm(self, test_env):
-        """Set up slurm on the hosts if any tests are using partitions.
-
-        Args:
-            test_env (TestEnvironment): the test environment variables
-
-        Returns:
-            int: status code: 0 = success, 128 = failure
-        """
-        status = 0
-        logger.debug("-" * 80)
-        logger.info("Setting up slurm partitions if required by tests")
-        if not any(test.yaml_info["client_partition"] for test in self.tests):
-            logger.debug("  No tests using client partitions detected - skipping slurm setup")
-            return status
-
-        if not self.slurm_setup:
-            logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
-            return status
-
-        status |= self.setup_application_directory(test_env)
-
-        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
-        logger.debug("-" * 80)
         try:
-            if self.slurm_install:
-                slurm_setup.install()
-            slurm_setup.update_config(self.user, 'daos_client')
-            slurm_setup.start_munge(self.user)
-            slurm_setup.start_slurm(self.user, True)
-        except SlurmSetupException:
-            message = "Error setting up slurm"
-            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
-            status |= 128
-        except Exception:       # pylint: disable=broad-except
-            message = "Unknown error setting up slurm"
-            self.result.tests[-1].fail_test(logger, "Run", message, sys.exc_info())
-            status |= 128
-
+            status = self._run(args)
+        except Exception as error:      # pylint: disable=broad-except
+            message = f"Unknown exception raised during launch.py execution: {error}"
+            status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
+            logger.debug("Stacktrace:\n%s", traceback.format_exc(error))
         return status
 
-    def setup_application_directory(self, test_env):
-        """Set up the application directory.
+    def _run(self, args):
+        # pylint: disable=too-many-return-statements
+        """Perform the actions specified by the command line arguments.
 
         Args:
-            test_env (TestEnvironment): the test environment variables
+            args (argparse.Namespace): command line arguments for this program
 
         Returns:
-            int: status code: 0 = success, 128 = failure
+            int: exit status for the steps executed
         """
-        logger.debug("-" * 80)
-        logger.debug("Setting up the '%s' application directory", test_env.app_dir)
-        if not os.path.exists(test_env.app_dir):
-            # Create the apps directory if it does not already exist
-            try:
-                logger.debug('  Creating the application directory')
-                os.makedirs(test_env.app_dir)
-            except OSError:
-                message = 'Error creating the application directory'
-                self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
-                return 128
-        else:
-            logger.debug('  Using the existing application directory')
+        status = 0
 
-        if test_env.app_src and os.path.exists(test_env.app_src):
-            logger.debug("  Copying applications from the '%s' directory", test_env.app_src)
-            run_local(logger, f"ls -al '{test_env.app_src}'")
-            for app in os.listdir(test_env.app_src):
-                try:
-                    run_local(
-                        logger,
-                        f"cp -r '{os.path.join(test_env.app_src, app)}' '{test_env.app_dir}'",
-                        check=True)
-                except RunException:
-                    message = 'Error copying files to the application directory'
-                    self.result.tests[-1].fail_test(logger, 'Run', message, sys.exc_info())
-                    return 128
-
-        logger.debug("  Applications in '%s':", test_env.app_dir)
-        run_local(logger, f"ls -al '{test_env.app_dir}'")
-        return 0
-
-    @staticmethod
-    def display_disk_space(path):
-        """Display disk space of provided path destination.
-
-        Args:
-            log (logger): logger for the messages produced by this method
-            path (str): path to directory to print disk space for.
-        """
-        logger.debug("-" * 80)
-        logger.debug("Current disk space usage of %s", path)
+        # Setup launch to log and run the requested action
         try:
-            run_local(logger, f"df -h {path}", check=False)
+            self._configure(args.overwrite_config)
+        except LaunchException:
+            message = "Error configuring launch.py to start logging and track test results"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # Add a test result to account for any non-test execution steps
+        setup_result = self.result.add_test(
+            self.class_name, LaunchTestName("./launch.py", 0, 0), self.logfile)
+        setup_result.start()
+
+        # Set the number of times to repeat execution of each test
+        if self.mode == "ci" and args.repeat > MAX_CI_REPETITIONS:
+            message = "The requested number of test repetitions exceeds the CI limitation."
+            setup_result.warn_test(logger, "Setup", message)
+            logger.debug(
+                "The number of test repetitions has been reduced from %s to %s.",
+                args.repeat, MAX_CI_REPETITIONS)
+            args.repeat = MAX_CI_REPETITIONS
+        self.repeat = args.repeat
+
+        # Record the command line arguments
+        logger.debug("Arguments:")
+        for key in sorted(args.__dict__.keys()):
+            logger.debug("  %s = %s", key, getattr(args, key))
+
+        # Convert host specifications into NodeSets
+        try:
+            test_servers = NodeSet(args.test_servers)
+        except TypeError:
+            message = f"Invalid '--test_servers={args.test_servers}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        try:
+            test_clients = NodeSet(args.test_clients)
+        except TypeError:
+            message = f"Invalid '--test_clients={args.test_clients}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        try:
+            control_host = NodeSet(args.slurm_control_node)
+        except TypeError:
+            message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # A list of server hosts is required
+        if not test_servers and not args.list:
+            return self.get_exit_status(1, "Missing required '--test_servers' argument", "Setup")
+        logger.info("Testing with hosts:       %s", test_servers.union(test_clients))
+        self.details["test hosts"] = str(test_servers.union(test_clients))
+
+        # Add the installed packages to the details json
+        # pylint: disable=unsupported-binary-operation
+        all_hosts = test_servers | test_clients | self.local_host
+        self.details["installed packages"] = find_packages(
+            logger, all_hosts, "'^(daos|libfabric|mercury|ior|openmpi|mpifileutils|)-'")
+
+        # Setup the test environment
+        test_env = TestEnvironment()
+        build_vars_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
+        try:
+            if args.list:
+                set_test_environment(logger, build_vars_file)
+            else:
+                set_test_environment(
+                    logger, build_vars_file, test_env, test_servers, test_clients, args.provider,
+                    args.insecure_mode, self.details)
+        except TestEnvironmentException as error:
+            message = f"Error setting up test environment: {str(error)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+
+        # Define the test configs specified by the arguments
+        try:
+            groups = get_test_groups(
+                logger, self.avocado, test_env, test_servers, test_clients, control_host, args.tags,
+                args.nvme, args.yaml_directory, args.yaml_extension)
         except RunException:
-            pass
+            message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
-    def _summarize_run(self, status):
-        """Summarize any failures that occurred during testing.
+        # Verify at least one test was requested
+        if not any(group.tests for group in groups):
+            message = f"No tests found for tags: {' '.join(args.tags)}"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
-        Args:
-            status (int): overall status of running all tests
+        # Done if just listing tests matching the tags
+        if args.list and not args.modify:
+            return self.get_exit_status(0, "Listing tests complete")
 
-        Returns:
-            int: status code to use when exiting launch.py
+        # Setup the fuse configuration
+        try:
+            setup_fuse_config(logger, test_servers | test_clients)
+        except LaunchException:
+            # Warn but don't fail
+            message = "Issue detected setting up the fuse configuration"
+            setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
-        """
-        logger.debug("=" * 80)
-        return_code = 0
-        if status == 0:
-            logger.info("All avocado tests passed!")
-            return return_code
+        # Get the core file pattern information
+        try:
+            all_hosts = test_servers | test_clients
+            all_hosts |= self.local_host
+            core_files = get_core_file_pattern(logger, all_hosts, args.process_cores)
+        except LaunchException:
+            message = "Error obtaining the core file pattern information"
+            return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
-        # Log any of errors that occurred during the run and determine an overall exit code
-        bit_error_map = {
-            1: "Failed avocado tests detected!",
-            2: "ERROR: Failed avocado jobs detected!",
-            4: "ERROR: Failed avocado commands detected!",
-            8: "Interrupted avocado jobs detected!",
-            16: "ERROR: Failed to archive files after one or more tests!",
-            32: "ERROR: Failed log size threshold check after one or more tests!",
-            64: "ERROR: Failed to create a junit xml test error file!",
-            128: "ERROR: Failed to prepare the hosts before running the one or more tests!",
-            256: "ERROR: Failed to process core files after one or more tests!",
-            512: "ERROR: Failed to stop daos_server.service after one or more tests!",
-            1024: "ERROR: Failed to rename logs and results after one or more tests!",
-            2048: "ERROR: Core stack trace files detected!",
-            4096: "ERROR: Unexpected processes or mounts found running!"
-        }
-        for bit_code, error_message in bit_error_map.items():
-            if status & bit_code == bit_code:
-                logger.info(error_message)
-                if self.mode == "ci" or (self.mode == "normal" and bit_code == 1) or bit_code == 8:
-                    # In CI mode the errors are reported in the results.xml, so always return 0
-                    # In normal mode avocado test failures do not yield a non-zero exit status
-                    # Interrupted avocado tests do not yield a non-zero exit status
-                    continue
-                return_code = 1
-        return return_code
+        # Determine if bullseye code coverage collection is enabled
+        code_coverage = CodeCoverage(test_env)
+        # pylint: disable=unsupported-binary-operation
+        code_coverage.check(logger, test_servers | self.local_host)
+
+        # Run each group of tests
+        self.details["test groups"] = []
+        for group in groups:
+            # Update the test yaml files for the tests in this test group
+            try:
+                group.update_test_yaml(
+                    logger, args.scm_size, args.scm_mount, args.extra_yaml,
+                    args.timeout_multiplier, args.override, args.verbose, args.include_localhost)
+            except (RunException, YamlException):
+                message = "Error modifying the test yaml files"
+                status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
+                continue
+            except StorageException:
+                message = "Error detecting storage information for test yaml files"
+                status |= self.get_exit_status(1, message, "Setup", sys.exc_info())
+                continue
+            if args.modify:
+                continue
+
+            # Configure slurm if any tests use partitions
+            test_status = group.setup_slurm(
+                logger, self.slurm_setup, self.slurm_install, self.user, self.result)
+
+            # Split the timer for the test result to account for any non-test execution steps as not
+            # to double report the test time accounted for in each individual test result
+            setup_result.end()
+
+            # Run the tests in this test group
+            test_status |= group.run_tests(
+                logger, self.result, self.repeat, self.slurm_setup, args.sparse, args.failfast,
+                not args.disable_stop_daos, args.archive, args.rename, args.jenkinslog, core_files,
+                args.logs_threshold, args.user_create, code_coverage, self.job_results_dir,
+                self.logdir)
+
+            # Convert the test status to a launch.py status
+            status |= summarize_run(logger, self.mode, test_status)
+
+            # Record the group details
+            self.details["test groups"].append(group.details)
+
+            # Restart the timer for the test result to account for any non-test execution steps
+            setup_result.start()
+
+        if args.modify:
+            return self.get_exit_status(0, "Modifying test yaml files complete")
+
+        # Return the appropriate return code and mark the test result to account for any non-test
+        # execution steps complete
+        return self.get_exit_status(status, "Executing tests complete")
 
 
 def main():
@@ -1017,11 +545,11 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
+        choices=[None] + list(SUPPORTED_PROVIDERS) + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()))}")
+             f"e.g. {', '.join(list(SUPPORTED_PROVIDERS) + list(PROVIDER_ALIAS.keys()))}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
@@ -1128,6 +656,7 @@ def main():
         args.archive = True
         args.include_localhost = True
         args.jenkinslog = True
+        args.overwrite_config = True    # to ensure CI expected path is used for test results
         args.process_cores = True
         args.rename = True
         args.sparse = True
@@ -1141,12 +670,15 @@ def main():
     launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
 
     # Perform the steps defined by the arguments specified
-    try:
-        status = launch.run(args)
-    except Exception as error:      # pylint: disable=broad-except
-        message = f"Unknown exception raised during launch.py execution: {str(error)}"
-        status = launch.get_exit_status(1, message, "Unknown", sys.exc_info())
-    sys.exit(status)
+    sys.exit(launch.run(args))
+
+    # try:
+    #     status = launch.run(args)
+    # except Exception as error:      # pylint: disable=broad-except
+    #     message = f"Unknown exception raised during launch.py execution: {error}"
+    #     logger.debug("Stacktrace:\n%s", traceback.format_stack(error))
+    #     status = launch.get_exit_status(1, message, "Unknown", sys.exc_info())
+    # sys.exit(status)
 
 
 if __name__ == "__main__":

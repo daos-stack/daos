@@ -3,40 +3,26 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import OrderedDict, defaultdict
 import json
 import os
 import site
 
 from ClusterShell.NodeSet import NodeSet
 
+from network_utils import get_fastest_interface, get_common_provider, SUPPORTED_PROVIDERS, \
+    PROVIDER_ALIAS, NetworkException
 from run_utils import run_remote
-
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp;ofi_rxm"),
-        ("opx", "ofi+opx"),
-    ]
-)
-
-# Temporary pipeline-lib workaround until DAOS-13934 is implemented
-PROVIDER_ALIAS = {
-    "ofi+tcp": "ofi+tcp;ofi_rxm"
-}
 
 
 class TestEnvironmentException(Exception):
     """Exception for launch.py execution."""
 
 
-def get_build_environment(log, build_vars_file):
+def get_build_environment(logger, build_vars_file):
     """Obtain DAOS build environment variables from the .build_vars.json file.
 
     Args:
-        log (logger): logger for the messages produced by this method
+        logger (Logger): logger for the messages produced by this method
         build_vars_file (str): the full path to the DAOS build_vars.json file
 
     Raises:
@@ -46,7 +32,7 @@ def get_build_environment(log, build_vars_file):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    log.debug("Obtaining DAOS build environment PREFIX path from %s", build_vars_file)
+    logger.debug("Obtaining DAOS build environment PREFIX path from %s", build_vars_file)
     try:
         with open(build_vars_file, encoding="utf-8") as vars_file:
             return json.load(vars_file)
@@ -55,17 +41,17 @@ def get_build_environment(log, build_vars_file):
         raise TestEnvironmentException("Error obtaining build environment:", str(error)) from error
 
 
-def update_path(log, build_vars_file):
+def update_path(logger, build_vars_file):
     """Update the PATH environment variable for functional testing.
 
     Args:
-        log (logger): logger for the messages produced by this method
+        logger (Logger): logger for the messages produced by this method
         build_vars_file (str): the full path to the DAOS build_vars.json file
 
     Raises:
         TestEnvironmentException: if there is an error obtaining the DAOS build environment
     """
-    base_dir = get_build_environment(log, build_vars_file)["PREFIX"]
+    base_dir = get_build_environment(logger, build_vars_file)["PREFIX"]
     bin_dir = os.path.join(base_dir, "bin")
     sbin_dir = os.path.join(base_dir, "sbin")
 
@@ -78,13 +64,13 @@ def update_path(log, build_vars_file):
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
 
 
-def set_python_environment(log):
+def set_python_environment(logger):
     """Set up the test python environment.
 
     Args:
-        log (logger): logger for the messages produced by this method
+        logger (Logger): logger for the messages produced by this method
     """
-    log.debug("-" * 80)
+    logger.debug("-" * 80)
     required_python_paths = [
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
@@ -113,108 +99,19 @@ def set_python_environment(log):
             if required_path not in defined_python_paths:
                 python_path += ":" + required_path
         os.environ["PYTHONPATH"] = python_path
-    log.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
+    logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
 
-def log_environment(log):
+def log_environment(logger):
     """Log the current environment variable assignments.
 
     Args:
-        log (logger): logger for the messages produced by this method
+        logger (Logger): logger for the messages produced by this method
     """
-    log.debug("ENVIRONMENT VARIABLES")
+    logger.debug("ENVIRONMENT VARIABLES")
     for key in sorted(os.environ):
         if not key.startswith("BASH_FUNC_"):
-            log.debug("  %s: %s", key, os.environ[key])
-
-
-def get_available_interfaces(log, hosts):
-    # pylint: disable=too-many-nested-blocks,too-many-branches,too-many-locals
-    """Get a dictionary of active available interfaces and their speeds.
-
-    Args:
-        log (logger): logger for the messages produced by this method
-        hosts (NodeSet): hosts on which to find a homogeneous interface
-
-    Raises:
-        TestEnvironmentException: if there is a problem finding active network interfaces
-
-    Returns:
-        dict: a dictionary of speeds with the first available active interface providing that
-            speed
-
-    """
-    available_interfaces = {}
-
-    # Find any active network interfaces on the server or client hosts
-    net_path = os.path.join(os.path.sep, "sys", "class", "net")
-    operstate = os.path.join(net_path, "*", "operstate")
-    command = [f"grep -l 'up' {operstate}", "grep -Ev '/(lo|bonding_masters)/'", "sort"]
-
-    result = run_remote(log, hosts, " | ".join(command))
-    if not result.passed:
-        raise TestEnvironmentException(
-            f"Error obtaining a default interface on {str(hosts)} from {net_path}")
-
-    # Populate a dictionary of active interfaces with a NodSet of hosts on which it was found
-    active_interfaces = {}
-    for data in result.output:
-        for line in data.stdout:
-            try:
-                interface = line.split("/")[-2]
-                if interface not in active_interfaces:
-                    active_interfaces[interface] = data.hosts
-                else:
-                    active_interfaces[interface].update(data.hosts)
-            except IndexError:
-                pass
-
-    # From the active interface dictionary find all the interfaces that are common to all hosts
-    log.debug("Active network interfaces detected:")
-    common_interfaces = []
-    for interface, node_set in active_interfaces.items():
-        log.debug("  - %-8s on %s (Common=%s)", interface, node_set, node_set == hosts)
-        if node_set == hosts:
-            common_interfaces.append(interface)
-
-    # Find the speed of each common active interface in order to be able to choose the fastest
-    interface_speeds = {}
-    for interface in common_interfaces:
-        # Check for a virtual interface
-        module_path = os.path.join(net_path, interface, "device", "driver", "module")
-        command = [f"readlink {module_path}", "grep 'virtio_net'"]
-        result = run_remote(log, hosts, " | ".join(command))
-        if result.passed and result.homogeneous:
-            interface_speeds[interface] = 1000
-            continue
-
-        # Verify each host has the same speed for non-virtual interfaces
-        command = " ".join(["cat", os.path.join(net_path, interface, "speed")])
-        result = run_remote(log, hosts, command)
-        if result.passed and result.homogeneous:
-            for line in result.output[0].stdout:
-                try:
-                    interface_speeds[interface] = int(line.strip())
-                except ValueError:
-                    # Any line not containing a speed (integer)
-                    pass
-        elif not result.homogeneous:
-            log.error("Non-homogeneous interface speed detected for %s on %s.", interface, hosts)
-        else:
-            log.error("Error detecting speed of %s on %s", interface, hosts)
-
-    if interface_speeds:
-        log.debug("Active network interface speeds on %s:", hosts)
-
-    for interface, speed in interface_speeds.items():
-        log.debug("  - %-8s (speed: %6s)", interface, speed)
-        # Only include the first active interface for each speed - first is
-        # determined by an alphabetic sort: ib0 will be checked before ib1
-        if speed is not None and speed not in available_interfaces:
-            available_interfaces[speed] = interface
-
-    log.debug("Available interfaces on %s: %s", hosts, available_interfaces)
-    return available_interfaces
+            logger.debug("  %s: %s", key, os.environ[key])
 
 
 class TestEnvironment():
@@ -237,11 +134,11 @@ class TestEnvironment():
         """Initialize a TestEnvironment object with existing or default test environment values."""
         self.set_defaults(None)
 
-    def set_defaults(self, log, servers=None, clients=None, provider=None, insecure_mode=None):
+    def set_defaults(self, logger, servers=None, clients=None, provider=None, insecure_mode=None):
         """Set the default test environment variable values with optional inputs.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             servers (NodeSet, optional): hosts designated for the server role in testing. Defaults
                 to None.
             clients (NodeSet, optional): hosts designated for the client role in testing. Defaults
@@ -249,6 +146,10 @@ class TestEnvironment():
             provider (str, optional): provider to use in testing. Defaults to None.
             insecure_mode (bool, optional): whether or not to run tests in insecure mode. Defaults
                 to None.
+
+        Raises:
+            TestEnvironmentException: if there are any issues setting environment variable default
+                values
         """
         all_hosts = NodeSet()
         all_hosts.update(servers)
@@ -262,11 +163,11 @@ class TestEnvironment():
         if self.user_dir is None:
             self.user_dir = self.default_user_dir()
         if self.interface is None:
-            self.interface = self.default_interface(log, all_hosts)
+            self.interface = self.default_interface(logger, all_hosts)
         if self.provider is None:
             self.provider = provider
         if self.provider is None:
-            self.provider = self.default_provider(log, servers)
+            self.provider = self.default_provider(logger, servers)
         if self.insecure_mode is None:
             self.insecure_mode = insecure_mode
         if self.insecure_mode is None:
@@ -430,11 +331,11 @@ class TestEnvironment():
         """
         self.__set_value('interface', value)
 
-    def default_interface(self, log, hosts):
+    def default_interface(self, logger, hosts):
         """Get the default interface.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             hosts (NodeSet): hosts on which to find a homogeneous interface
 
         Raises:
@@ -447,13 +348,10 @@ class TestEnvironment():
         interface = os.environ.get("OFI_INTERFACE")
         if interface is None and hosts:
             # Find all the /sys/class/net interfaces on the launch node (excluding lo)
-            log.debug("Detecting network devices - OFI_INTERFACE not set")
-            available_interfaces = get_available_interfaces(log, hosts)
+            logger.debug("Detecting network devices - OFI_INTERFACE not set")
             try:
-                # Select the fastest active interface available by sorting
-                # the speed
-                interface = available_interfaces[sorted(available_interfaces)[-1]]
-            except IndexError as error:
+                interface = get_fastest_interface(logger, hosts)
+            except NetworkException as error:
                 raise TestEnvironmentException("Error obtaining a default interface!") from error
         return interface
 
@@ -479,11 +377,11 @@ class TestEnvironment():
         else:
             self.__set_value('provider', value)
 
-    def default_provider(self, log, hosts):
+    def default_provider(self, logger, hosts):
         """Get the default provider.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             hosts (NodeSet): hosts on which to find a homogeneous provider
 
         Raises:
@@ -496,54 +394,37 @@ class TestEnvironment():
         if not hosts:
             return None
 
-        log.debug(
+        logger.debug(
             "Detecting provider for %s - %s not set",
             self.interface, self.__ENV_VAR_MAP['provider'])
+        provider = None
+        supported = list(SUPPORTED_PROVIDERS)
 
         # Check for a Omni-Path interface
-        log.debug("Checking for Omni-Path devices")
+        logger.debug("Checking for Omni-Path devices")
         command = "sudo -n opainfo"
-        result = run_remote(log, hosts, command)
+        result = run_remote(logger, hosts, command)
         if result.passed:
             # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
-            log.debug("  Excluding verbs provider for Omni-Path adapters")
-            PROVIDER_KEYS.pop("verbs")
+            logger.debug("  Excluding verbs provider for Omni-Path adapters")
+            supported.pop("verbs")
 
-        # Detect all supported providers
-        command = f"fi_info -d {self.interface} -l | grep -v 'version:'"
-        result = run_remote(log, hosts, command)
-        if result.passed:
-            # Find all supported providers
-            keys_found = defaultdict(NodeSet)
-            for data in result.output:
-                for line in data.stdout:
-                    provider_name = line.replace(":", "")
-                    if provider_name in PROVIDER_KEYS:
-                        keys_found[provider_name].update(data.hosts)
-
-            # Only use providers available on all the server hosts
-            if keys_found:
-                log.debug("Detected supported providers:")
-            provider_name_keys = list(keys_found)
-            for provider_name in provider_name_keys:
-                log.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                if keys_found[provider_name] != hosts:
-                    keys_found.pop(provider_name)
-
-            # Select the preferred found provider based upon PROVIDER_KEYS order
-            log.debug("Supported providers detected: %s", list(keys_found))
-            for key in PROVIDER_KEYS:
-                if key in keys_found:
-                    provider = PROVIDER_KEYS[key]
+        # Detect all supported providers for this interface that are common to all of the hosts
+        common_providers = get_common_provider(logger, hosts, self.interface, supported)
+        if common_providers:
+            # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
+            logger.debug("Supported providers detected: %s", common_providers)
+            for key in supported:
+                if key in common_providers:
+                    provider = key
                     break
 
         # Report an error if a provider cannot be found
         if not provider:
             raise TestEnvironmentException(
-                f"Error obtaining a supported provider for {self.interface} "
-                f"from: {list(PROVIDER_KEYS)}")
+                f"Error obtaining a supported provider for {self.interface} from: {supported}")
 
-        log.debug("  Found %s provider for %s", provider, self.interface)
+        logger.debug("  Found %s provider for %s", provider, self.interface)
         return provider
 
     @property
@@ -628,12 +509,12 @@ class TestEnvironment():
         return os.path.join(os.sep, "tmp", "test.cov")
 
 
-def set_test_environment(log, build_vars_file, test_env=None, servers=None, clients=None,
+def set_test_environment(logger, build_vars_file, test_env=None, servers=None, clients=None,
                          provider=None, insecure_mode=False, details=None):
     """Set up the test environment.
 
     Args:
-        log (logger): logger for the messages produced by this method
+        logger (Logger): logger for the messages produced by this method
         build_vars_file (str): the full path to the DAOS build_vars.json file
         test_env (TestEnvironment, optional): the current test environment. Defaults to None.
         servers (NodeSet, optional): hosts designated for the server role in testing. Defaults to
@@ -650,17 +531,17 @@ def set_test_environment(log, build_vars_file, test_env=None, servers=None, clie
         TestEnvironmentException: if there is a problem setting up the test environment
 
     """
-    log.debug("-" * 80)
-    log.debug("Setting up the test environment variables")
+    logger.debug("-" * 80)
+    logger.debug("Setting up the test environment variables")
 
     if test_env:
         # Update the PATH environment variable
-        update_path(log, build_vars_file)
+        update_path(logger, build_vars_file)
 
         # Get the default fabric interface and provider
-        test_env.set_defaults(log, servers, clients, provider, insecure_mode)
-        log.info("Testing with interface:   %s", test_env.interface)
-        log.info("Testing with provider:    %s", test_env.provider)
+        test_env.set_defaults(logger, servers, clients, provider, insecure_mode)
+        logger.info("Testing with interface:   %s", test_env.interface)
+        logger.info("Testing with provider:    %s", test_env.provider)
 
         if details:
             details["interface"] = test_env.interface
@@ -672,7 +553,7 @@ def set_test_environment(log, build_vars_file, test_env=None, servers=None, clie
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
     # Python paths required for functional testing
-    set_python_environment(log)
+    set_python_environment(logger)
 
     # Log the environment variable assignments
-    log_environment(log)
+    log_environment(logger)

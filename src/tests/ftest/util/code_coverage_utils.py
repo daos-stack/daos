@@ -21,27 +21,29 @@ class CodeCoverage():
         self.__hosts = None
         self.__test_env = test_env
 
-    def check(self, log, hosts):
+    def check(self, logger, hosts):
         """Determine if bullseye code coverage collection is enabled.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             hosts (NodeSet): hosts on which to check for bullseye code coverage source files
         """
-        log.debug("Checking for bullseye code coverage configuration")
-        result = run_remote(log, hosts, " ".join(["ls", "-al", self.__test_env.bullseye_src]))
+        logger.debug("-" * 80)
+        logger.debug("Checking for bullseye code coverage configuration")
+        result = run_remote(logger, hosts, " ".join(["ls", "-al", self.__test_env.bullseye_src]))
         if not result.passed:
-            log.info("Bullseye code coverage collection not configured on %s", result.failed_hosts)
+            logger.info(
+                "Bullseye code coverage collection not configured on %s", result.failed_hosts)
             self.__hosts = None
         else:
-            log.info("Bullseye code coverage collection configured on %s", hosts)
+            logger.info("Bullseye code coverage collection configured on %s", hosts)
             self.__hosts = hosts
 
-    def setup(self, log, result):
+    def setup(self, logger, result):
         """Set up the hosts for bullseye code coverage collection.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             result (TestResult): the test result used to update the status of the runner
 
         Returns:
@@ -51,38 +53,38 @@ class CodeCoverage():
         if not self.__hosts:
             return True
 
-        log.debug("-" * 80)
-        log.info("Setting up bullseye code coverage on %s:", self.__hosts)
+        logger.debug("-" * 80)
+        logger.info("Setting up bullseye code coverage on %s:", self.__hosts)
 
-        log.debug("Removing any existing %s file", self.__test_env.bullseye_file)
+        logger.debug("Removing any existing %s file", self.__test_env.bullseye_file)
         command = ["rm", "-fr", self.__test_env.bullseye_file]
-        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
             message = "Error removing bullseye code coverage file on at least one host"
-            result.fail_test(log, "Run", message, None)
+            result.fail_test(logger, "Run", message, None)
             return False
 
-        log.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
+        logger.debug("Copying %s bullseye code coverage source file", self.__test_env.bullseye_src)
         command = ["cp", self.__test_env.bullseye_src, self.__test_env.bullseye_file]
-        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
             message = "Error copying bullseye code coverage file on at least one host"
-            result.fail_test(log, "Run", message, None)
+            result.fail_test(logger, "Run", message, None)
             return False
 
-        log.debug(
+        logger.debug(
             "Updating %s bullseye code coverage file permissions", self.__test_env.bullseye_file)
         command = ["chmod", "777", self.__test_env.bullseye_file]
-        if not run_remote(log, self.__hosts, " ".join(command)).passed:
+        if not run_remote(logger, self.__hosts, " ".join(command)).passed:
             message = "Error updating bullseye code coverage file on at least one host"
-            result.fail_test(log, "Run", message, None)
+            result.fail_test(logger, "Run", message, None)
             return False
 
         return True
 
-    def finalize(self, log, job_results_dir, result):
+    def finalize(self, logger, job_results_dir, result):
         """Retrieve the bullseye code coverage collection information from the hosts.
 
         Args:
-            log (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             job_results_dir (str): avocado job-results directory
             result (TestResult): the test result used to update the status of the runner
 
@@ -93,10 +95,13 @@ class CodeCoverage():
         if not self.__hosts:
             return True
 
+        logger.debug("-" * 80)
+        logger.debug("Collecting bullseye code coverage information on %s:", self.__hosts)
+
         bullseye_path, bullseye_file = os.path.split(self.__test_env.bullseye_file)
         bullseye_dir = os.path.join(job_results_dir, "bullseye_coverage_logs")
         status = archive_files(
-            log, "bullseye coverage log files", self.__hosts, bullseye_path,
+            logger, "bullseye coverage log files", self.__hosts, bullseye_path,
             "".join([bullseye_file, "*"]), bullseye_dir, 1, None, 900, result)
 
         # Rename bullseye_coverage_logs.host/test.cov.* to bullseye_coverage_logs/test.host.cov.*
@@ -113,6 +118,6 @@ class CodeCoverage():
                             new_name.insert(1, host_ext[-1][1:])
                             new_file_name = ".".join(new_name)
                             new_file = os.path.join(bullseye_dir, new_file_name)
-                            log.debug("Renaming %s to %s", old_file, new_file)
+                            logger.debug("Renaming %s to %s", old_file, new_file)
                             os.rename(old_file, new_file)
         return status == 0

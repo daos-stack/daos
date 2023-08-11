@@ -204,11 +204,14 @@ def cleanup_processes(log, test, result):
     """
     any_found = False
     hosts = test.host_info.all_hosts
+    if not hosts:
+        return True
+
     log.debug("-" * 80)
-    log.debug("Cleaning up running processes after running %s", test)
+    log.debug("Cleaning up running processes on %s after running %s", hosts, test)
 
     proc_pattern = "|".join(CLEANUP_PROCESS_NAMES)
-    log.debug("Looking for running processes: %s", proc_pattern)
+    log.debug("Looking for running processes on %s: %s", hosts, proc_pattern)
     detected, running = stop_processes(log, hosts, f"'{proc_pattern}'", force=True)
     if running:
         message = f"Failed to kill processes on {running}"
@@ -217,7 +220,7 @@ def cleanup_processes(log, test, result):
         message = f"Running processes found on {detected}"
         result.warn_test(log, "Process", message)
 
-    log.debug("Looking for mount types: %s", " ".join(CLEANUP_UNMOUNT_TYPES))
+    log.debug("Looking for mount types on %s: %s", hosts, " ".join(CLEANUP_UNMOUNT_TYPES))
     # Use mount | grep instead of mount -t for better logging
     grep_pattern = "|".join(f'type {_type}' for _type in CLEANUP_UNMOUNT_TYPES)
     mount_grep_cmd = f"mount | grep -E '{grep_pattern}'"

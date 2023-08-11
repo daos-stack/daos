@@ -7,6 +7,7 @@ import logging
 import sys
 
 DATE_FORMAT = r"%Y/%m/%d %I:%M:%S"
+LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 
 
 def get_console_handler(log_format, log_level):
