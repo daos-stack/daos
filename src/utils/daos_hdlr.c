@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	18
+#define NUM_SERIALIZE_PROPS	19
 
 #include <stdio.h>
 #include <dirent.h>
@@ -1175,6 +1175,7 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	props->dpp_entries[18].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {
@@ -1489,10 +1490,8 @@ dm_connect(struct cmd_args_s *ap,
 				dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "provide a destination pool or UNS path "
-					      "of the form:\n\t --dst </$pool> | </path/to/uns>");
-				D_GOTO(err, rc);
+				DH_PERROR_SYS(ap, rc, "failed to create destination UNS path");
+				D_GOTO(err, rc = daos_errno2der(rc));
 			}
 			snprintf(ca->dst_cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
@@ -2439,7 +2438,8 @@ dfuse_count_query(struct cmd_args_s *ap)
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
 		return daos_errno2der(rc);
 	}
 
@@ -2448,8 +2448,12 @@ dfuse_count_query(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 
@@ -2540,8 +2544,12 @@ dfuse_evict(struct cmd_args_s *ap)
 	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
 	if (rc < 0) {
 		rc = errno;
-		DH_PERROR_SYS(ap, rc, "ioctl failed");
-		rc = daos_errno2der(errno);
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
 		goto close;
 	}
 

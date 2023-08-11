@@ -303,6 +303,9 @@ class FaultInjection():
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
+        if not self.fault_file:
+            return []
+
         # Remove the fault injection files on the hosts.
         error_list = []
         command = "rm -f {}".format(self.fault_file)

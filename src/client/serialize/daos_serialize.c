@@ -290,6 +290,8 @@ prop_to_str(uint32_t type)
 		return "DAOS_PROP_CO_EC_PDA";
 	case DAOS_PROP_CO_RP_PDA:
 		return "DAOS_PROP_CO_RP_PDA";
+	case DAOS_PROP_CO_PERF_DOMAIN:
+		return "DAOS_PROP_CO_PERF_DOMAIN";
 	case DAOS_PROP_CO_GLOBAL_VERSION:
 		return "DAOS_PROP_CO_GLOBAL_VERSION";
 	case DAOS_PROP_CO_ROOTS:
@@ -357,6 +359,7 @@ daos_cont_serialize_props(hid_t file_id, daos_prop_t *prop_query)
 			   type == DAOS_PROP_CO_EC_CELL_SZ ||
 			   type == DAOS_PROP_CO_EC_PDA ||
 			   type == DAOS_PROP_CO_RP_PDA ||
+			   type == DAOS_PROP_CO_PERF_DOMAIN ||
 			   type == DAOS_PROP_CO_GLOBAL_VERSION ||
 			   type == DAOS_PROP_CO_ALLOCED_OID ||
 			   type == DAOS_PROP_CO_SCRUBBER_DISABLED) {
@@ -1043,6 +1046,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_
 		entry = &prop->dpp_entries[prop_num];
 		rc = deserialize_uint(file_id, &entry->dpe_val,
 				      "DAOS_PROP_CO_RP_PDA");
+		if (rc != 0)
+			D_GOTO(out, rc);
+		prop_num++;
+	}
+	if (H5Aexists(file_id, "DAOS_PROP_CO_PERF_DOMAIN") > 0) {
+		type = DAOS_PROP_CO_PERF_DOMAIN;
+		prop->dpp_entries[prop_num].dpe_type = type;
+		entry = &prop->dpp_entries[prop_num];
+		rc = deserialize_uint(file_id, &entry->dpe_val,
+				      "DAOS_PROP_CO_PERF_DOMAIN");
 		if (rc != 0)
 			D_GOTO(out, rc);
 		prop_num++;

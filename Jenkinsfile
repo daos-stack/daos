@@ -156,6 +156,12 @@ void fixup_rpmlintrc() {
     writeFile(file: 'utils/rpms/daos.rpmlintrc', text: content)
 }
 
+String vm9_label(String distro) {
+    return cachedCommitPragma(pragma: distro + '-VM9-label',
+                              def_val: cachedCommitPragma(pragma: 'VM9-label',
+                                                          def_val: params.FUNCTIONAL_VM_LABEL))
+}
+
 pipeline {
     agent { label 'lightweight' }
 
@@ -231,6 +237,11 @@ pipeline {
         string(name: 'CI_EL8_TARGET',
                defaultValue: '',
                description: 'Image to used for EL 8 CI tests.  I.e. el8, el8.3, etc.')
+        /* pipeline{} is too big for this
+        string(name: 'CI_EL9_TARGET',
+               defaultValue: '',
+               description: 'Image to used for EL 9 CI tests.  I.e. el9, el9.1, etc.')
+        */
         string(name: 'CI_LEAP15_TARGET',
                defaultValue: '',
                description: 'Image to use for OpenSUSE Leap CI tests.  I.e. leap15, leap15.2, etc.')
@@ -240,6 +251,11 @@ pipeline {
         booleanParam(name: 'CI_RPM_el8_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for EL 8')
+        /* pipeline{} is too big for this
+        booleanParam(name: 'CI_RPM_el9_NOBUILD',
+                     defaultValue: false,
+                     description: 'Do not build RPM packages for EL 9')
+        */
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
@@ -267,6 +283,11 @@ pipeline {
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on EL 8 test stage')
+        /* pipeline{} is too big for this
+        booleanParam(name: 'CI_FUNCTIONAL_el9_TEST',
+                     defaultValue: true,
+                     description: 'Run the Functional on EL 9 test stage')
+        */
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
                      description: 'Run the Functional on Leap 15 test stage' +
@@ -546,7 +567,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on Leap 15.4') {
+                stage('Build RPM on EL 9') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
@@ -557,6 +578,43 @@ pipeline {
                             dir 'utils/rpms'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs()
+                            args '--cap-add=SYS_ADMIN'
+                        }
+                    }
+                    steps {
+                        job_step_update(buildRpm())
+                    }
+                    post {
+                        success {
+                            fixup_rpmlintrc()
+                            buildRpmPost condition: 'success', rpmlint: true
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                            job_status_update()
+                        }
+                    }
+                }
+                stage('Build RPM on Leap 15.4') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'packaging/Dockerfile.mockbuild'
+                            dir 'utils/rpms'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=37'
                             args  '--cap-add=SYS_ADMIN'
                         }
                     }
@@ -807,6 +865,10 @@ pipeline {
                                      unstash_opt: true,
                                      unstash_tests: false,
                                      inst_rpms: unitPackages()))
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltir.xml']],
+                        //                 skipPublishingChecks: true,
+                        //                 id: 'tlc', name: 'Fault Injection Interim Report')
+                        stash(name:'nltr', includes:'nltr.json', allowEmpty: true)
                     }
                     post {
                         always {
@@ -925,7 +987,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -941,13 +1003,13 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'EL8-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
+                        label vm9_label('EL8')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                     test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -957,19 +1019,41 @@ pipeline {
                         }
                     }
                 } // stage('Functional on EL 8')
+                stage('Functional on EL 9') {
+                    when {
+                        beforeAgent true
+                        expression { !skipStage() }
+                    }
+                    agent {
+                        label vm9_label('EL9')
+                    }
+                    steps {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                    test_function: 'runTestFunctionalV2'))
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                            job_status_update()
+                        }
+                    }
+                } // stage('Functional on EL 9')
                 stage('Functional on Leap 15.4') {
                     when {
                         beforeAgent true
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'Leap15-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
+                        label vm9_label('Leap15')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -985,13 +1069,13 @@ pipeline {
                         expression { !skipStage() }
                     }
                     agent {
-                        label cachedCommitPragma(pragma: 'Ubuntu-VM9-label', def_val: params.FUNCTIONAL_VM_LABEL)
+                        label vm9_label('Ubuntu')
                     }
                     steps {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1001,43 +1085,6 @@ pipeline {
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
-                stage('Scan EL 8 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { !skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'ci/docker/Dockerfile.maldet.el.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs() +
-                                                " -t ${sanitized_JOB_NAME}-el8 " +
-                                                ' --build-arg REPOS="' + prRepos() + '"' +
-                                                ' --build-arg BUILD_URL="' + env.BUILD_URL + '"'
-                        }
-                    }
-                    steps {
-                        job_step_update(
-                            runTest(script: 'export DAOS_PKG_VERSION=' +
-                                            daosPackagesVersion(next_version) + '\n' +
-                                            'utils/scripts/helpers/scan_daos_maldet.sh',
-                                    junit_files: 'maldetect_el8.xml',
-                                    failure_artifacts: env.STAGE_NAME,
-                                    ignore_failure: true,
-                                    description: env.STAGE_NAME,
-                                    context: 'test/' + env.STAGE_NAME))
-                    }
-                    post {
-                        always {
-                            junit 'maldetect_el8.xml'
-                            archiveArtifacts artifacts: 'maldetect_el8.xml'
-                            job_status_update()
-                            // Force a job failure if anything was found
-                            sh label: 'Check if anything was found.',
-                               script: '! grep "<error " maldetect_el8.xml'
-                        }
-                    }
-                } // stage('Scan EL 8 RPMs')
                 stage('Fault injection testing on EL 8') {
                     when {
                         beforeAgent true
@@ -1058,7 +1105,11 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
+                        unstash('nltr')
                         job_step_update(nlt_test())
+                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                                       skipPublishingChecks: true,
+                                       id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {
@@ -1101,7 +1152,7 @@ pipeline {
                 job_step_update(
                     storagePrepTest(
                         inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi')))
+                        inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
             }
             post {
                 cleanup {
@@ -1128,7 +1179,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1151,7 +1202,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1174,7 +1225,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {
@@ -1197,7 +1248,7 @@ pipeline {
                         job_step_update(
                             functionalTest(
                                 inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'client-tests-openmpi'),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
                                 test_function: 'runTestFunctionalV2'))
                     }
                     post {

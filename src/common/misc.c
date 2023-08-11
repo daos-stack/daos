@@ -131,7 +131,7 @@ out:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 int

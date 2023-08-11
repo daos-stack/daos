@@ -96,7 +96,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(16);
+	props = daos_prop_alloc(17);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -116,6 +116,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_STATUS;
+	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -437,8 +438,8 @@ out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished. "DF_RC"\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, DP_RC(rc));
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
@@ -1625,7 +1626,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct cont_tgt_open_arg arg = { 0 };
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
+	struct ds_pool		*pool;
 	int			rc;
+
+	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		rc = -DER_NO_HDL;
+		return rc;
+	}
+
+	if (uuid_compare(pool->sp_srv_cont_hdl, cont_hdl_uuid) == 0 && sec_capas == 0)
+		D_WARN("srv hdl "DF_UUID" capas is "DF_X64"\n",
+		       DP_UUID(cont_hdl_uuid), sec_capas);
+	ds_pool_put(pool);
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);

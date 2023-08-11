@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -47,6 +47,7 @@ RDB_STRING_KEY(ds_pool_prop_, obj_version);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_mode);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_freq);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_thresh);
+RDB_STRING_KEY(ds_pool_prop_, reint_mode);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -128,7 +129,8 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_OBJ_VERSION,
 	.dpe_val  = DS_POOL_OBJ_VERSION,
-    }, {
+    },
+    {
 	.dpe_type = DAOS_PROP_PO_PERF_DOMAIN,
 	.dpe_val  = DAOS_PROP_PO_PERF_DOMAIN_DEFAULT,
     },
@@ -143,6 +145,10 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_CHECKPOINT_THRESH,
 	.dpe_val  = DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT,
+    },
+    {
+	.dpe_type = DAOS_PROP_PO_REINT_MODE,
+	.dpe_val  = DAOS_PROP_PO_REINT_MODE_DEFAULT,
     },
 };
 
