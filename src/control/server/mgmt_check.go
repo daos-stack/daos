@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -215,6 +216,8 @@ func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDis
 	return &mgmtpb.DaosResp{}, nil
 }
 
+// SystemCheckStart starts a system check. The checker must be explicitly enabled to successfully
+// start a check.
 func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStartReq) (*mgmtpb.CheckStartResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -245,9 +248,17 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	if resp.Status > 0 {
-		svc.log.Debug("resetting checker findings DB")
-		if err := svc.sysdb.ResetCheckerData(); err != nil {
-			return nil, errors.Wrap(err, "failed to reset checker finding database")
+		if len(req.Uuids) == 0 {
+			svc.log.Debug("resetting checker findings DB")
+			if err := svc.sysdb.ResetCheckerData(); err != nil {
+				return nil, errors.Wrap(err, "failed to reset checker finding database")
+			}
+		} else {
+			pools := strings.Join(req.Uuids, ", ")
+			svc.log.Debugf("removing old checker findings for pools: %s", pools)
+			if err := svc.sysdb.RemoveCheckerFindingsForPools(req.Uuids...); err != nil {
+				return nil, errors.Wrapf(err, "failed to remove old findings for pools: %s", pools)
+			}
 		}
 		resp.Status = 0 // reset status to indicate success
 	}
