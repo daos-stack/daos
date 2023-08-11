@@ -133,6 +133,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_CHECKPOINT_FREQ,
 	/** WAL usage threshold to trigger checkpoint, default is 50% */
 	DAOS_PROP_PO_CHECKPOINT_THRESH,
+	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
+	DAOS_PROP_PO_REINT_MODE,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -206,6 +208,16 @@ enum {
 	DAOS_RECLAIM_BATCH,
 	DAOS_RECLAIM_TIME,
 };
+
+enum {
+	DAOS_REINT_MODE_DATA_SYNC = 0,
+	DAOS_REINT_MODE_NO_DATA_SYNC = 1,
+};
+
+/**
+ * default reintegration mode is data_sync
+ */
+#define DAOS_PROP_PO_REINT_MODE_DEFAULT	DAOS_REINT_MODE_DATA_SYNC
 
 /**
  * Pool checksum scrubbing schedule type
@@ -480,6 +492,7 @@ enum {
 
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
+
 /** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */

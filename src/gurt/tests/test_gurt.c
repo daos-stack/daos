@@ -95,6 +95,78 @@ test_time(void **state)
 	assert_int_equal(timeleft, 0);
 }
 
+void
+test_d_errstr(void **state)
+{
+	const char *value;
+
+	value = d_errstr(-DER_INVAL);
+	assert_string_equal(value, "DER_INVAL");
+	value = d_errstr(DER_INVAL);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(5000000);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(3);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(-3);
+	assert_string_equal(value, "DER_UNKNOWN");
+	value = d_errstr(0);
+	assert_string_equal(value, "DER_SUCCESS");
+	value = d_errstr(DER_SUCCESS);
+	assert_string_equal(value, "DER_SUCCESS");
+	value = d_errstr(-DER_IVCB_FORWARD);
+	assert_string_equal(value, "DER_IVCB_FORWARD");
+
+	/* Check the boundary at the end of the GURT error numbers, this will need updating if
+	 * additional error numbers are added.
+	 */
+	value = d_errstr(-DER_HG_FATAL);
+	assert_string_equal(value, "DER_HG_FATAL");
+	value = d_errstr(-1045);
+	assert_string_equal(value, "DER_HG_FATAL");
+	value = d_errstr(-(DER_HG_FATAL + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
+
+	/* Check the end of the DAOS error numbers. */
+	value = d_errstr(-DER_DIV_BY_ZERO);
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
+	value = d_errstr(-2047);
+	assert_string_equal(value, "DER_DIV_BY_ZERO");
+	value = d_errstr(-(DER_DIV_BY_ZERO + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
+}
+
+void
+test_d_errdesc(void **state)
+{
+	const char *value;
+
+	value = d_errdesc(-DER_INVAL);
+	assert_string_equal(value, "Invalid parameters");
+	value = d_errdesc(DER_INVAL);
+	assert_string_equal(value, "Unknown error code 1003");
+	value = d_errdesc(5000000);
+	assert_string_equal(value, "Unknown error code 5000000");
+	value = d_errdesc(3);
+	assert_string_equal(value, "Unknown error code 3");
+	value = d_errdesc(-3);
+	assert_string_equal(value, "Unknown error code -3");
+	value = d_errdesc(0);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(DER_SUCCESS);
+	assert_string_equal(value, "Success");
+	value = d_errdesc(-DER_NOTDIR);
+	assert_string_equal(value, "Not a directory");
+	value = d_errdesc(-2028);
+	assert_string_equal(value, "TX is not committed");
+	value = d_errdesc(-2100);
+	assert_string_equal(value, "Unknown error code -2100");
+	value = d_errdesc(-DER_UNKNOWN);
+	assert_string_equal(value, "Unknown error");
+	value = d_errdesc(-501001);
+	assert_string_equal(value, "Unknown error code -501001");
+}
+
 static int
 init_tests(void **state)
 {
@@ -2007,6 +2079,8 @@ main(int argc, char **argv)
 {
 	const struct CMUnitTest tests[] = {
 	    cmocka_unit_test(test_time),
+	    cmocka_unit_test(test_d_errstr),
+	    cmocka_unit_test(test_d_errdesc),
 	    cmocka_unit_test(test_gurt_list),
 	    cmocka_unit_test(test_gurt_hlist),
 	    cmocka_unit_test(test_binheap),

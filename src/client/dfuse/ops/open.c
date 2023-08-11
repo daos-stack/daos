@@ -10,19 +10,17 @@
 void
 dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry     *ie;
-	d_list_t                     *rlink;
-	struct dfuse_obj_hdl         *oh     = NULL;
-	struct fuse_file_info         fi_out = {0};
-	int                           rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *ie;
+	struct dfuse_obj_hdl     *oh;
+	struct fuse_file_info     fi_out = {0};
+	int                       rc;
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
-		DFUSE_REPLY_ERR_RAW(fs_handle, req, ENOENT);
+	ie = dfuse_inode_lookup(dfuse_info, ino);
+	if (!ie) {
+		DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOENT);
 		return;
 	}
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -30,12 +28,12 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(fs_handle, oh, ie);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	/* Upgrade fd permissions from O_WRONLY to O_RDWR if wb caching is
 	 * enabled so the kernel can do read-modify-write
 	 */
-	if (ie->ie_dfs->dfc_data_timeout != 0 && fs_handle->di_wb_cache &&
+	if (ie->ie_dfs->dfc_data_timeout != 0 && dfuse_info->di_wb_cache &&
 	    (fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_DEBUG(ie, "Upgrading fd to O_RDRW");
 		fi->flags &= ~O_ACCMODE;
@@ -86,13 +84,13 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, ie);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
 err:
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
-	dfuse_oh_free(fs_handle, oh);
+	dfuse_inode_decref(dfuse_info, ie);
+	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
 
