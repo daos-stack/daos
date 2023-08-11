@@ -1318,6 +1318,32 @@ tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg)
 	return ret;
 }
 
+int
+tse_task_list_traverse_adv(d_list_t *head, tse_task_cb_t cb, void *arg)
+{
+	struct tse_task_private	*dtp;
+	struct tse_task_private	*dtp_exec;
+	struct tse_task_private	*tmp;
+	int			 ret = 0;
+	int			 rc;
+	bool			 done;
+
+	for (dtp = d_list_entry(head->next, struct tse_task_private, dtp_task_list),
+	     tmp = d_list_entry(dtp->dtp_task_list.next, struct tse_task_private, dtp_task_list),
+	     done = (&dtp->dtp_task_list == head); !done;) {
+		dtp_exec = dtp;
+		dtp = tmp,
+		tmp = d_list_entry(tmp->dtp_task_list.next, struct tse_task_private,
+				   dtp_task_list);
+		done = (&dtp->dtp_task_list == head);
+		rc = cb(tse_priv2task(dtp_exec), arg);
+		if (rc != 0)
+			ret = rc;
+	}
+
+	return ret;
+}
+
 void
 tse_disable_propagate(tse_task_t *task)
 {
