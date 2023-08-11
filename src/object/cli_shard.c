@@ -1903,9 +1903,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				cb_args->rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	if (flags == 0)
 		goto set_max_epoch;
@@ -1928,7 +1928,6 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		/** for first cb, just set the dkey */
 		if (first) {
 			*cur = *val;
-			cb_args->dkey->iov_len = okqo->okqo_dkey.iov_len;
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {

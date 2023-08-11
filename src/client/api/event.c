@@ -341,6 +341,8 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	else
 		ev->ev_error = rc;
 
+	atomic_store(&evx->evx_status, DAOS_EVS_COMPLETED);
+
 	if (parent_evx != NULL) {
 		daos_event_t *parent_ev = daos_evx2ev(parent_evx);
 
@@ -372,9 +374,8 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 		/* Complete the barrier parent */
 		D_ASSERT(parent_evx->evx_status == DAOS_EVS_RUNNING);
-		parent_evx->evx_status = DAOS_EVS_COMPLETED;
 		rc = daos_event_complete_cb(parent_evx, rc);
-
+		atomic_store(&parent_evx->evx_status, DAOS_EVS_COMPLETED);
 		parent_ev->ev_error = parent_ev->ev_error ?: rc;
 		evx = parent_evx;
 	}
@@ -388,7 +389,6 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	}
 
 out:
-	evx->evx_status = DAOS_EVS_COMPLETED;
 	return 0;
 }
 
