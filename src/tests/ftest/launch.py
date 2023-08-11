@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
-
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict
 import getpass
@@ -28,12 +26,13 @@ from process_core_files import get_core_file_pattern
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
+from avocado_utils import AvocadoInfo, AvocadoException                                 # noqa: E402
 from code_coverage_utils import CodeCoverage                                            # noqa: E402
 from environment_utils import TestEnvironment, TestEnvironmentException, \
     set_test_environment                                                                # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
-from launch_utils import LaunchException, AvocadoInfo, get_test_groups, \
-    setup_fuse_config, summarize_run                                                    # noqa: E402
+from launch_utils import LaunchException, get_test_groups, setup_fuse_config, \
+    summarize_run                                                                       # noqa: E402
 from logger_utils import get_console_handler, get_file_handler, LOG_FILE_FORMAT         # noqa: E402
 from network_utils import SUPPORTED_PROVIDERS, PROVIDER_ALIAS                           # noqa: E402
 from package_utils import find_packages                                                 # noqa: E402
@@ -244,7 +243,7 @@ class Launch():
         # Setup launch to log and run the requested action
         try:
             self._configure(args.overwrite_config)
-        except LaunchException:
+        except (AvocadoException, LaunchException):
             message = "Error configuring launch.py to start logging and track test results"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
