@@ -1196,7 +1196,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label cachedCommitPragma(pragma: 'Label-hw-medium-verbs-provider', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL)
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL
                     }
                     steps {
                         job_step_update(
@@ -1219,7 +1219,7 @@ pipeline {
                     }
                     agent {
                         // 4 node cluster with 2 IB/node + 1 test control node
-                        label cachedCommitPragma(pragma: 'Label-hw-medium-ucx-provider', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL)
+                        label params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL
                     }
                     steps {
                         job_step_update(
@@ -1242,7 +1242,7 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label cachedCommitPragma(pragma: 'Label-hw-large', def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL)
+                        label params.FUNCTIONAL_HARDWARE_LARGE_LABEL
                     }
                     steps {
                         job_step_update(
