@@ -2643,8 +2643,7 @@ ds_obj_ec_aggregate(void *arg)
 	struct agg_param	param = { 0 };
 	int			rc;
 
-	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
-		DP_UUID(cont->sc_uuid));
+	D_INFO("start EC aggregation "DF_UUID"\n", DP_UUID(cont->sc_uuid));
 	param.ap_data = &agg_param;
 	param.ap_cont = cont;
 	rc = ec_agg_param_init(cont, &param);
@@ -2660,5 +2659,6 @@ ds_obj_ec_aggregate(void *arg)
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);
 
+	D_INFO("stop EC aggregation "DF_UUID"\n", DP_UUID(cont->sc_uuid));
 	ec_agg_param_fini(cont, &agg_param);
 }

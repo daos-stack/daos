@@ -3170,7 +3170,7 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 out:
 	if (rc == 0)
-		D_INFO(DF_UUID": success\n", DP_UUID(svc->ps_uuid));
+		D_INFO(DF_UUID": "DF_UUID" success\n", DP_UUID(svc->ps_uuid), DP_UUID(hdl_uuids[0]));
 	return rc;
 }
 

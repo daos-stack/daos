@@ -493,9 +493,9 @@ next:
 		sched_req_sleep(req, msecs);
 	}
 out:
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregation ULT stopped\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-		dmi->dmi_tgt_id);
+	D_INFO(DF_CONT"[%d]: Aggregation ULT stopped\n",
+	       DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+	       dmi->dmi_tgt_id);
 }
 
 static int
@@ -521,8 +521,7 @@ cont_agg_ult(void *arg)
 	struct ds_cont_child	*cont = arg;
 	struct agg_param	param = { 0 };
 
-	D_DEBUG(DB_EPC, "start VOS aggregation "DF_UUID"\n",
-		DP_UUID(cont->sc_uuid));
+	D_INFO("start VOS aggregation "DF_UUID"\n", DP_UUID(cont->sc_uuid));
 	param.ap_cont = cont;
 	param.ap_vos_agg = true;
 
@@ -534,7 +533,7 @@ cont_ec_agg_ult(void *arg)
 {
 	struct ds_cont_child	*cont = arg;
 
-	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
+	D_INFO("start EC aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
 
 	ds_obj_ec_aggregate(arg);
@@ -1957,6 +1956,7 @@ cont_snapshots_refresh_ult(void *data)
 	struct ds_pool		*pool;
 	int			 rc;
 
+	D_INFO(DF_UUID "refresh ult start\n", DP_UUID(args->pool_uuid));
 	rc = ds_pool_lookup(args->pool_uuid, &pool);
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
@@ -1971,6 +1971,7 @@ out:
 		D_DEBUG(DB_TRACE, DF_UUID": failed to refresh snapshots IV: "
 		       "Aggregation may not work correctly "DF_RC"\n",
 		       DP_UUID(args->cont_uuid), DP_RC(rc));
+	D_INFO(DF_UUID "refresh ult stop\n", DP_UUID(args->pool_uuid));
 	D_FREE(args);
 }
 

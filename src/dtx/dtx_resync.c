@@ -789,9 +789,9 @@ dtx_resync_ult(void *data)
 			arg->version);
 		D_GOTO(out_put, rc);
 	}
-	D_DEBUG(DB_MD, DF_UUID" update dtx resync version %u->%u\n",
-		DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
-		arg->version);
+	D_INFO(DF_UUID" update dtx resync version %u->%u\n",
+	       DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version,
+	       arg->version);
 
 	/* Delay 5 seconds for DTX resync. */
 	if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
@@ -808,6 +808,8 @@ dtx_resync_ult(void *data)
 	}
 	pool->sp_dtx_resync_version = arg->version;
 out_put:
+	D_INFO(DF_UUID" update dtx resync version %u done\n",
+	       DP_UUID(arg->pool_uuid), pool->sp_dtx_resync_version);
 	ds_pool_put(pool);
 	D_FREE(arg);
 }

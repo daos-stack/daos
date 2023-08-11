@@ -870,6 +870,8 @@ ds_pool_stop_all_containers(struct ds_pool *pool)
 	return rc;
 }
 
+static struct d_hash_table *pool_hdl_hash;
+static int pool_hdl_dump_cb(d_list_t *link, void *arg);
 /*
  * Stop a pool. Must be called on the system xstream. Release the ds_pool
  * object reference held by ds_pool_start. Only for mgmt and pool modules.
@@ -900,13 +902,12 @@ ds_pool_stop(uuid_t uuid)
 	ds_rebuild_abort(pool->sp_uuid, -1, -1, -1);
 	ds_migrate_stop(pool, -1, -1);
 	ds_pool_put(pool); /* held by ds_pool_start */
+	d_hash_table_traverse(pool_hdl_hash, pool_hdl_dump_cb, uuid);
 	ds_pool_put(pool);
 	D_INFO(DF_UUID": pool service is aborted\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
-
-static struct d_hash_table *pool_hdl_hash;
 
 static inline struct ds_pool_hdl *
 pool_hdl_obj(d_list_t *rlink)
@@ -979,6 +980,18 @@ static d_hash_table_ops_t pool_hdl_hash_ops = {
 	.hop_rec_decref	= pool_hdl_rec_decref,
 	.hop_rec_free	= pool_hdl_rec_free
 };
+
+static int
+pool_hdl_dump_cb(d_list_t *link, void *arg)
+{
+	uuid_t pool_uuid;
+	struct ds_pool_hdl *pool_hdl = pool_hdl_obj(link);
+
+	uuid_copy(pool_uuid, arg);
+	if (uuid_compare(pool_hdl->sph_pool->sp_uuid, pool_uuid) == 0)
+		D_INFO(DF_UUID "hdl "DF_UUID" left\n", DP_UUID(pool_uuid), DP_UUID(pool_hdl->sph_uuid));
+	return 0;
+}
 
 int
 ds_pool_hdl_hash_init(void)
@@ -1303,6 +1316,7 @@ out:
 	if (rc != 0)
 		D_FREE(hdl);
 
+	D_INFO(DF_UUID": "DF_UUID" connect "DF_RC"\n", DP_UUID(pool->sp_uuid), DP_UUID(pic->pic_hdl), DP_RC(rc));
 	D_DEBUG(DB_MD, DF_UUID": connect "DF_RC"\n",
 		DP_UUID(pool->sp_uuid), DP_RC(rc));
 	return rc;
@@ -1322,6 +1336,7 @@ ds_pool_tgt_disconnect(uuid_t uuid)
 
 	ds_pool_iv_conn_hdl_invalidate(hdl->sph_pool, uuid);
 
+	D_INFO(DF_UUID": "DF_UUID" disconnect.\n", DP_UUID(hdl->sph_pool->sp_uuid), DP_UUID(hdl->sph_uuid));
 	pool_hdl_delete(hdl);
 	ds_pool_hdl_put(hdl);
 }
@@ -1878,7 +1893,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	} while (1);
 
 	vos_cont_close(coh);
-	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
+	D_DEBUG(DB_MD, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
 
@@ -1908,8 +1923,8 @@ pool_child_discard(void *data)
 		return 0;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
-		myrank, addr.pta_target);
+	D_INFO(DF_UUID" discard %u/%u\n", DP_UUID(arg->pool_uuid),
+	       myrank, addr.pta_target);
 
 	child = ds_pool_child_lookup(arg->pool_uuid);
 	D_ASSERT(child != NULL);
@@ -1979,8 +1994,8 @@ ds_pool_tgt_discard_ult(void *data)
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
-	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
-		 DP_UUID(arg->pool_uuid), DP_RC(rc));
+
+	D_INFO(DF_UUID" tgt discard:" DF_RC" done\n", DP_UUID(arg->pool_uuid), DP_RC(rc));
 put:
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;
@@ -2025,8 +2040,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	ds_pool_put(pool);
 out:
 	out->ptdo_rc = rc;
-	D_DEBUG(DB_MD, DF_UUID": replying rpc "DF_RC"\n", DP_UUID(in->ptdi_uuid),
-		DP_RC(rc));
+	D_INFO(DF_UUID": replying rpc "DF_RC"\n", DP_UUID(in->ptdi_uuid), DP_RC(rc));
 	crt_reply_send(rpc);
 	if (rc != 0 && arg != NULL)
 		tgt_discard_arg_free(arg);

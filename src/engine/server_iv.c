@@ -547,7 +547,7 @@ ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 
 	iv_key_unpack(&key, iv_key);
 	if (key.rank == ((d_rank_t)-1)) {
-		D_INFO("Uninitialize master rank\n");
+		D_INFO("Uninitialize master rank class %u\n", key.class_id);
 		return -DER_NOTLEADER;
 	}
 
