@@ -33,13 +33,13 @@ obj_shard_decref(struct dc_obj_shard *shard)
 	bool			 release = false;
 
 	D_ASSERT(shard != NULL);
-	D_ASSERT(shard->do_ref > 0);
 	D_ASSERT(shard->do_obj != NULL);
 
 	obj = shard->do_obj;
 	layout = obj_shard2layout(shard);
 
 	D_SPIN_LOCK(&obj->cob_spin);
+	D_ASSERT(shard->do_ref > 0);
 	if (--(shard->do_ref) == 0) {
 		layout->do_open_count--;
 		if (layout->do_open_count == 0 && layout != obj->cob_shards)

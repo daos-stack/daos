@@ -248,12 +248,6 @@ tse_task_decref(tse_task_t *task)
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
 	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
-
-	/*
-	 * MSC - since we require user to allocate task, maybe we should have
-	 * user also free it. This now requires task to be on the heap all the
-	 * time.
-	 */
 	D_FREE(task);
 }
 
@@ -268,6 +262,7 @@ tse_task_decref_free_locked(tse_task_t *task)
 		return;
 
 	D_ASSERT(d_list_empty(&dtp->dtp_dep_list));
+	D_ASSERT(d_list_empty(&dtp->dtp_comp_cb_list));
 	D_FREE(task);
 }
 
@@ -392,7 +387,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
 
-	if (dtp->dtp_completed) {
+	if (atomic_load_relaxed(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
@@ -474,7 +469,7 @@ tse_task_prep_callback(tse_task_t *task)
 		d_list_del(&dtc->dtc_list);
 		/** no need to call if task was completed in one of the cbs */
 		gen = dtp_generation_get(dtp);
-		if (!dtp->dtp_completed) {
+		if (!atomic_load_relaxed(&dtp->dtp_completed)) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
 			if (task->dt_result == 0)
 				task->dt_result = rc;
@@ -484,7 +479,7 @@ tse_task_prep_callback(tse_task_t *task)
 
 		new_gen = dtp_generation_get(dtp);
 		/** Task was re-initialized; */
-		if (!dtp->dtp_running && new_gen != gen)
+		if (!atomic_load_relaxed(&dtp->dtp_running) && new_gen != gen)
 			ret = false;
 	}
 
@@ -502,22 +497,25 @@ tse_task_prep_callback(tse_task_t *task)
 static bool
 tse_task_complete_callback(tse_task_t *task)
 {
-	struct tse_task_private	*dtp = tse_task2priv(task);
-	uint32_t		 gen, new_gen;
-	struct tse_task_cb	*dtc;
-	struct tse_task_cb	*tmp;
+	struct tse_task_private		*dtp = tse_task2priv(task);
+	struct tse_sched_private        *dsp    = dtp->dtp_sched;
+	uint32_t		 	gen, new_gen;
+	struct tse_task_cb		*dtc;
+	struct tse_task_cb		*tmp;
 
 	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
 	 * re-init the task that may be completed immediately.
 	 */
-	tse_task_addref(task);
+	tse_task_addref_locked(dtp);
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
 		gen = dtp_generation_get(dtp);
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		ret = dtc->dtc_cb(task, dtc->dtc_arg);
+		D_MUTEX_LOCK(&dsp->dsp_lock);
 		if (task->dt_result == 0)
 			task->dt_result = ret;
 
@@ -527,12 +525,12 @@ tse_task_complete_callback(tse_task_t *task)
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
 			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
-			tse_task_decref(task);
+			tse_task_decref_free_locked(task);
 			return false;
 		}
 	}
 
-	tse_task_decref(task);
+	tse_task_decref_free_locked(task);
 	return true;
 }
 
@@ -597,7 +595,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				continue;
 			}
 			D_ASSERT(dtp->dtp_func != NULL);
-			if (!dtp->dtp_completed)
+			if (!atomic_load_relaxed(&dtp->dtp_completed))
 				dtp->dtp_func(task);
 		}
 		if (bumped)
@@ -619,14 +617,14 @@ tse_task_post_process(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D_ASSERT(dtp->dtp_completed == 1);
+	D_ASSERT(atomic_load_relaxed(&dtp->dtp_completed) == 1);
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	/* set scheduler result */
 	if (tse_priv2sched(dsp)->ds_result == 0)
 		tse_priv2sched(dsp)->ds_result = task->dt_result;
 
 	/* Check dependent list */
-	D_MUTEX_LOCK(&dsp->dsp_lock);
 	while (!d_list_empty(&dtp->dtp_dep_list)) {
 		struct tse_task_link		*tlink;
 		tse_task_t			*task_tmp;
@@ -671,9 +669,7 @@ tse_task_post_process(tse_task_t *task)
 			 * block.
 			 */
 			/** release lock for CB */
-			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
 			done = tse_task_complete_callback(task_tmp);
-			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
 
 			/*
 			 * task reinserted itself in scheduler by
@@ -699,9 +695,6 @@ tse_task_post_process(tse_task_t *task)
 	D_ASSERT(dsp->dsp_inflight > 0);
 	dsp->dsp_inflight--;
 	D_MUTEX_UNLOCK(&dsp->dsp_lock);
-
-	if (task->dt_result == 0)
-		task->dt_result = rc;
 
 	return rc;
 }
@@ -860,16 +853,15 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
 
-	if (dtp->dtp_completed)
+	if (atomic_load_relaxed(&dtp->dtp_completed))
 		return;
 
 	if (task->dt_result == 0)
 		task->dt_result = ret;
 
+	D_MUTEX_LOCK(&dsp->dsp_lock);
 	/** Execute task completion callbacks first. */
 	done = tse_task_complete_callback(task);
-
-	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
@@ -899,14 +891,14 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	D_ASSERT(task != dep);
 
-	if (dtp->dtp_completed) {
+	if (atomic_load_relaxed(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (dep_dtp->dtp_completed)
+	if (atomic_load_relaxed(&dep_dtp->dtp_completed))
 		return 0;
 
 	diff_sched = dtp->dtp_sched != dep_dtp->dtp_sched;
@@ -1049,25 +1041,26 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	}
 	/* decref when remove the task from dsp (tse_sched_process_complete) */
 	tse_sched_priv_addref_locked(dsp);
-	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** if caller wants to run the task instantly, call the task body function now. */
 	if (instant && ready) {
+		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		dtp->dtp_func(task);
-
+		D_MUTEX_LOCK(&dsp->dsp_lock);
 		/** If task was completed return the task result */
-		if (dtp->dtp_completed)
+		if (atomic_load_relaxed(&dtp->dtp_completed))
 			rc = task->dt_result;
 
-		tse_task_decref(task);
+		tse_task_decref_free_locked(task);
 	}
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return rc;
 }
 
 int
 tse_task_schedule(tse_task_t *task, bool instant)
 {
-	return tse_task_schedule_with_delay(task, instant, 0 /* delay */);
+	return tse_task_schedule_with_delay(task, instant, 0);
 }
 
 int

@@ -335,7 +335,6 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	if (eqx != NULL)
 		eq = daos_eqx2eq(eqx);
 
-	evx->evx_status = DAOS_EVS_COMPLETED;
 	rc = daos_event_complete_cb(evx, rc);
 	if (evx->is_errno)
 		ev->ev_error = daos_der2errno(rc);
@@ -389,6 +388,7 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 	}
 
 out:
+	evx->evx_status = DAOS_EVS_COMPLETED;
 	return 0;
 }
 
@@ -603,7 +603,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		return rc;
 	}
 
-	if (evx->evx_status == DAOS_EVS_READY)
+	if (atomic_load_relaxed(&evx->evx_status) == DAOS_EVS_READY)
 		*flag = true;
 	else
 		*flag = false;
@@ -920,7 +920,7 @@ daos_event_destroy(struct daos_event *ev, bool force)
 	struct daos_event_private	*evp = daos_ev2evx(ev);
 	int				 rc = 0;
 
-	if (!force && evp->evx_status == DAOS_EVS_RUNNING)
+	if (!force && atomic_load_relaxed(&evp->evx_status) == DAOS_EVS_RUNNING)
 		return -DER_BUSY;
 
 	if (d_list_empty(&evp->evx_child)) {
@@ -948,7 +948,7 @@ daos_event_destroy_children(struct daos_event *ev, bool force)
 	d_list_for_each_entry_safe(sub_evx, tmp, &evp->evx_child,
 				   evx_link) {
 		struct daos_event *sub_ev = daos_evx2ev(sub_evx);
-		daos_ev_status_t ev_status = sub_evx->evx_status;
+		daos_ev_status_t ev_status = atomic_load_relaxed(&sub_evx->evx_status);
 
 		d_list_del_init(&sub_evx->evx_link);
 		rc = daos_event_destroy(sub_ev, force);
@@ -984,7 +984,7 @@ daos_event_init(struct daos_event *ev, daos_handle_t eqh,
 
 	/* Init the event first */
 	memset(ev, 0, sizeof(*ev));
-	evx->evx_status	= DAOS_EVS_READY;
+	atomic_init(&evx->evx_status, DAOS_EVS_READY);
 	D_INIT_LIST_HEAD(&evx->evx_child);
 	D_INIT_LIST_HEAD(&evx->evx_link);
 	D_INIT_LIST_HEAD(&evx->evx_callback.evx_comp_list);
@@ -1233,8 +1233,9 @@ daos_event_priv_reset(void)
 int
 daos_event_priv_get(daos_event_t **ev)
 {
-	struct daos_event_private *evx = daos_ev2evx(&ev_thpriv);
-	int			   rc;
+	struct daos_event_private	*evx = daos_ev2evx(&ev_thpriv);
+	daos_ev_status_t		ev_status;
+	int				rc;
 
 	D_ASSERT(*ev == NULL);
 
@@ -1245,8 +1246,9 @@ daos_event_priv_get(daos_event_t **ev)
 		ev_thpriv_is_init = true;
 	}
 
-	if (evx->evx_status != DAOS_EVS_READY) {
-		D_CRIT("private event is inuse, status=%d\n", evx->evx_status);
+	ev_status = atomic_load_relaxed(&evx->evx_status);
+	if (ev_status != DAOS_EVS_READY) {
+		D_CRIT("private event is inuse, status=%d\n", ev_status);
 		return -DER_BUSY;
 	}
 	*ev = &ev_thpriv;
@@ -1272,13 +1274,13 @@ daos_event_priv_wait()
 	epa.eqx = NULL;
 
 	/* Wait on the event to complete */
-	while (evx->evx_status != DAOS_EVS_READY) {
+	while (atomic_load_relaxed(&evx->evx_status) != DAOS_EVS_READY) {
 		rc = crt_progress_cond(evx->evx_ctx, ev_prog_timeout, ev_progress_cb, &epa);
 
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
-			if (evx->evx_status == DAOS_EVS_READY)
+			if (atomic_load_relaxed(&evx->evx_status) == DAOS_EVS_READY)
 				break;
 			continue;
 		}
