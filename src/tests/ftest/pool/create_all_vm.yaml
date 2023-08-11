@@ -3,24 +3,24 @@ setup:
 hosts:
   test_servers: 5
 timeouts:
-  test_one_pool: 240
+  test_one_pool_vm: 240
   test_rank_filter: 240
-  test_two_pools: 160
-  test_recycle_pools: 1000
+  test_two_pools_vm: 160
+  test_recycle_pools_vm: 1000
 
 # DAOS-12750 NOTE External tools used by DAOS are creating sparse files (e.g. daos_system.db) which
 # could eventually be compacted when a pool is created.  To manage this, we add 9 MiB to the 17MiB
 # which will be kept for the tmpfs metadata and the space reserved for the control plane DB.
-test_one_pool:
+test_one_pool_vm:
   delta: 27262976             # 26Mib
 
 test_rank_filter:
   delta: 27262976             # 26MiB
 
-test_recycle_pools:
+test_recycle_pools_vm:
   pool_count: 50
 
-test_two_pools:
+test_two_pools_vm:
   deltas:
     pool_half: 27262976       # 26MiB
     # DAOS-13519 FIXME workaround for managing sparse VOS files of the first created pool.
