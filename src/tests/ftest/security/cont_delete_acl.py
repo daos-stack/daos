@@ -86,7 +86,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
                     "Found acl that was to be deleted in output: {}".format(
                         self.daos_cmd.result.stdout_text))
 
-    def test_no_user_permissions(self):
+    def test_cont_delete_acl_no_perm(self):
         """
         JIRA ID: DAOS-3714
 
@@ -96,7 +96,7 @@ class DeleteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=DeleteContainerACLTest,test_no_user_permissions
+        :avocado: tags=DeleteContainerACLTest,test_cont_delete_acl_no_perm
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(
