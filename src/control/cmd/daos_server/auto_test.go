@@ -8,7 +8,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -194,6 +196,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 		hsErr           error
 		expCfg          *config.Server
 		expErr          error
+		expOutPrefix    string
 	}{
 		"fetching host fabric fails": {
 			hfErr:  errors.New("bad fetch"),
@@ -448,6 +451,34 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
+		"tmpfs scm; no logging to stdout": {
+			tmpfsSCM:        true,
+			extMetadataPath: metadataMountPath,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+				MemInfo: &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
+				},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expOutPrefix: "port: 10001",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -469,6 +500,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				UseTmpfsSCM:     tc.tmpfsSCM,
 				ExtMetadataPath: tc.extMetadataPath,
 			}
+			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 
 			gf := func(_ context.Context, _ logging.Logger, _ string) (*control.HostFabric, error) {
@@ -477,6 +509,22 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 
 			gs := func(_ context.Context, _ logging.Logger, _ bool) (*control.HostStorage, error) {
 				return tc.hs, tc.hsErr
+			}
+
+			if tc.expOutPrefix != "" {
+				gotErr := cmd.confGenPrint(test.Context(t), gf, gs)
+				if gotErr != nil {
+					t.Fatal(gotErr)
+				}
+				if len(buf.String()) == 0 {
+					t.Fatal("no output from config generate print function")
+				}
+				outFirstLine := strings.Split(buf.String(), "\n")[0]
+				test.AssertTrue(t, strings.HasSuffix(outFirstLine, tc.expOutPrefix),
+					fmt.Sprintf("test: %s, expected %q to be included in the "+
+						"first line of output: %q", name, tc.expOutPrefix,
+						outFirstLine))
+				return
 			}
 
 			gotCfg, gotErr := cmd.confGen(test.Context(t), gf, gs)

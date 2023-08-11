@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -161,7 +162,6 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
 	req := control.ConfGenerateReq{
-		Log:             cmd.Logger,
 		NrEngines:       cmd.NrEngines,
 		SCMOnly:         cmd.SCMOnly,
 		NetClass:        ndc,
@@ -172,13 +172,37 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
+	// Use a modified commandline logger to send all log messages to stderr during the
+	// generation of server config file parameters so stdout can be reserved for config file
+	// output only.
+	logStderr := logging.NewCommandLineLogger()
+	logStderr.ClearLevel(logging.LogLevelInfo)
+	logStderr.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
+	req.Log = logStderr
+
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}
-	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
 
+	cmd.Debugf("control API ConfGenerate resp: %+v", resp)
 	return &resp.Server, nil
+}
+
+func (cmd *configGenCmd) confGenPrint(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) error {
+	cfg, err := cmd.confGen(ctx, getFabric, getStorage)
+	if err != nil {
+		return err
+	}
+
+	bytes, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Print generated config yaml file contents to stdout.
+	cmd.Info(string(bytes))
+	return nil
 }
 
 // Execute is run when configGenCmd activates.
@@ -191,18 +215,5 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	ctx := context.Background()
-	cfg, err := cmd.confGen(ctx, getLocalFabric, getLocalStorage)
-	if err != nil {
-		return err
-	}
-
-	bytes, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	// output recommended server config yaml file
-	cmd.Info(string(bytes))
-	return nil
+	return cmd.confGenPrint(context.Background(), getLocalFabric, getLocalStorage)
 }
