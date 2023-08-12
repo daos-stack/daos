@@ -117,7 +117,7 @@ class AvocadoInfo():
         """Set the avocado major and minor versions.
 
         Args:
-            logger (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
 
         Raises:
             AvocadoException: if there is an error running 'avocado -v'
@@ -147,7 +147,7 @@ class AvocadoInfo():
         """Get the value for the specified avocado setting.
 
         Args:
-            logger (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             section (str): avocado setting section name
             key (str): avocado setting key name
             default (object): default value to use if setting is undefined
@@ -194,7 +194,7 @@ class AvocadoInfo():
         """Get the avocado directory in which the test results are stored.
 
         Args:
-            logger (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
 
         Returns:
             str: the directory used by avocado to log test results
@@ -207,7 +207,7 @@ class AvocadoInfo():
         """Get the avocado test directory for the test.
 
         Args:
-            logger (logger): logger for the messages produced by this method
+            logger (Logger): logger for the messages produced by this method
             directory (str): name of the sub directory to add to the logs directory
             create (bool, optional): whether or not to create the directory if it doesn't exist.
                 Defaults to True.
