@@ -1891,7 +1891,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_LOCK(&cb_args->obj->cob_spin);
 			D_GOTO(set_max_epoch, rc = 0);
 		}
 
@@ -1904,7 +1904,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_LOCK(&cb_args->obj->cob_spin);
 	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	if (flags == 0)
@@ -1921,13 +1921,14 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
 			D_ERROR("Invalid Dkey obtained\n");
-			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
 		/** for first cb, just set the dkey */
 		if (first) {
 			*cur = *val;
+			cb_args->dkey->iov_len = okqo->okqo_dkey.iov_len;
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {
@@ -1982,7 +1983,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 set_max_epoch:
 	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
 		*cb_args->max_epoch = okqo->okqo_max_epoch;
-	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
 	crt_req_decref(rpc);
@@ -2050,9 +2051,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_oid			= oid;
 	d_iov_set(&okqi->okqi_dkey, NULL, 0);
 	d_iov_set(&okqi->okqi_akey, NULL, 0);
-	if (dkey != NULL)
+	if (dkey != NULL && !(flags & DAOS_GET_DKEY))
 		okqi->okqi_dkey		= *dkey;
-	if (akey != NULL)
+	if (akey != NULL && !(flags & DAOS_GET_AKEY))
 		okqi->okqi_akey		= *akey;
 	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
 		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
