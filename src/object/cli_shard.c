@@ -1789,7 +1789,6 @@ struct obj_query_key_cb_args {
 	struct dc_obj_shard	*shard;
 	struct dtx_epoch	epoch;
 	daos_handle_t		th;
-	bool			first;
 };
 
 static void
@@ -1892,7 +1891,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_SPIN_LOCK(&cb_args->obj->cob_spin);
+			D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
 			D_GOTO(set_max_epoch, rc = 0);
 		}
 
@@ -1905,14 +1904,15 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_SPIN_LOCK(&cb_args->obj->cob_spin);
+	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
 	*cb_args->map_ver = obj_reply_map_version_get(rpc);
-	
+
 	if (flags == 0)
 		goto set_max_epoch;
 
 	bool check = true;
 	bool changed = false;
+	bool first = (cb_args->dkey->iov_len == 0);
 	bool is_ec_obj = obj_is_ec(cb_args->obj);
 
 	if (flags & DAOS_GET_DKEY) {
@@ -1921,12 +1921,12 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
 			D_ERROR("Invalid Dkey obtained\n");
-			D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
+			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
 		/** for first cb, just set the dkey */
-		if (cb_args->first) {
+		if (first) {
 			*cur = *val;
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
@@ -1963,7 +1963,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		uint64_t *cur = (uint64_t *)cb_args->akey->iov_buf;
 
 		/** if first cb, or dkey changed, set akey */
-		if (cb_args->first || changed)
+		if (first || changed)
 			*cur = *val;
 	}
 
@@ -1978,12 +1978,12 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
 					  dkey, &okqo->okqo_recx, get_max, changed);
 	}
-	if (!cb_args->first)
-		cb_args->first = true;
+
 set_max_epoch:
 	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
 		*cb_args->max_epoch = okqo->okqo_max_epoch;
-	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
+	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+
 out:
 	crt_req_decref(rpc);
 	if (ret == 0 || obj_retry_error(rc))
@@ -2035,7 +2035,6 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	cb_args.epoch		= *epoch;
 	cb_args.th		= th;
 	cb_args.max_epoch	= max_epoch;
-	cb_args.first		= false;
 
 	rc = tse_task_register_comp_cb(task, obj_shard_query_key_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)
