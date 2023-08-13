@@ -31,10 +31,9 @@ container:
 ior:
   client_processes:
     ppn: 1
-  iorflags:
-    flags: -k -D 10 -v -w -W
-    api: DFS
-    transfer_size: 1M
-    block_size: 10G
-    dfs_oclass: SX
-    dfs_dir_oclass: SX
+  flags: -k -D 10 -v -w -W
+  api: DFS
+  transfer_size: 1M
+  block_size: 10G
+  dfs_oclass: SX
+  dfs_dir_oclass: SX

@@ -329,19 +329,23 @@ class PoolMembershipTest(IorTestBase):
         exp_msg = "dangling rank entry"
 
         # 1. Create a pool and a container.
-        # self.log_step("Create a pool and a container.")
+        self.log_step("Create a pool and a container.")
         self.pool = self.get_pool(connect=False)
         self.container = self.get_container(pool=self.pool)
 
         # 2. Write some data with IOR using SX.
-        self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+        self.log_step("Write some data with IOR.")
+        self.ior_cmd.set_daos_params(
+            self.server_group, self.pool, self.container.identifier)
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         # 3. Stop servers.
+        self.log_step("Stop servers.")
         dmg_command = self.get_dmg_command()
         dmg_command.system_stop()
 
         # 4. Remove pool directory from one of the mount points.
+        self.log_step("Remove pool directory from one of the mount points.")
         rank_1_host = NodeSet(self.server_managers[0].get_host(1))
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         rm_cmd = f"sudo rm -rf {scm_mount}/{self.pool.uuid.lower()}"
@@ -349,6 +353,7 @@ class PoolMembershipTest(IorTestBase):
             self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")
 
         # 5. Enable checker.
+        self.log_step("Enable checker.")
         dmg_command.check_enable(stop=False)
 
         # If we call check start immediately after check enable, checker may not detect
@@ -356,9 +361,12 @@ class PoolMembershipTest(IorTestBase):
         time.sleep(3)
 
         # 6. Start checker.
+        self.log_step("Start checker.")
         dmg_command.check_start()
 
         # 7. Query the checker until expected number of inconsistencies are repaired.
+        self.log_step(
+            "Query the checker until expected number of inconsistencies are repaired.")
         repair_reports = self.wait_for_check_complete()
 
         # Verify that the checker repaired target count + 1 faults. (+1 is for rank.
@@ -381,13 +389,17 @@ class PoolMembershipTest(IorTestBase):
             errors.append(f"{exp_msg} not in repair message!")
 
         # 8. Disable checker.
+        self.log_step("Disable checker.")
         dmg_command.check_disable()
 
         # 9. Wait for rebuild to finish.
+        self.log_step("Wait for rebuild to finish.")
         self.pool.wait_for_rebuild_to_start(interval=5)
         self.pool.wait_for_rebuild_to_end(interval=5)
 
         # 10. Query the pool and verify that expected number of targets are disabled.
+        self.log_step(
+            "Query the pool and verify that expected number of targets are disabled.")
         self.pool.set_query_data()
         disabled_targets = self.pool.query_data["response"]["disabled_targets"]
         if disabled_targets != targets:
