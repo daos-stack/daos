@@ -908,65 +908,6 @@ out:
 	return rc;
 }
 
-int
-daos_event_destroy_children(struct daos_event *ev, bool force);
-
-/**
- * Destroy events and all of its sub-events
- **/
-int
-daos_event_destroy(struct daos_event *ev, bool force)
-{
-	struct daos_event_private	*evp = daos_ev2evx(ev);
-	int				 rc = 0;
-
-	if (!force && evp->evx_status == DAOS_EVS_RUNNING)
-		return -DER_BUSY;
-
-	if (d_list_empty(&evp->evx_child)) {
-		D_ASSERT(d_list_empty(&evp->evx_link));
-		D_FREE(ev);
-		return rc;
-	}
-
-	rc = daos_event_destroy_children(ev, force);
-	if (rc == 0)
-		D_FREE(ev);
-
-	return rc;
-}
-
-int
-daos_event_destroy_children(struct daos_event *ev, bool force)
-{
-	struct daos_event_private	*evp = daos_ev2evx(ev);
-	struct daos_event_private	*sub_evx;
-	struct daos_event_private	*tmp;
-	int				 rc = 0;
-
-	/* Destroy all of sub events */
-	d_list_for_each_entry_safe(sub_evx, tmp, &evp->evx_child,
-				   evx_link) {
-		struct daos_event *sub_ev = daos_evx2ev(sub_evx);
-		daos_ev_status_t ev_status = sub_evx->evx_status;
-
-		d_list_del_init(&sub_evx->evx_link);
-		rc = daos_event_destroy(sub_ev, force);
-		if (rc != 0) {
-			d_list_add(&sub_evx->evx_link,
-				   &evp->evx_child);
-			break;
-		}
-		if (ev_status == DAOS_EVS_COMPLETED)
-			evp->evx_nchild_comp--;
-		else if (ev_status == DAOS_EVS_RUNNING)
-			evp->evx_nchild_running--;
-		evp->evx_nchild--;
-	}
-
-	return rc;
-}
-
 /**
  * Add the event to the event queue, and if there is parent, add
  * it to its child list as well.
@@ -1152,31 +1093,6 @@ out_unlocked:
 	if (eq != NULL)
 		daos_eq_putref(eqx);
 	return rc;
-}
-
-struct daos_event *
-daos_event_next(struct daos_event *parent,
-		struct daos_event *child)
-{
-	struct daos_event_private	*evx = daos_ev2evx(parent);
-	struct daos_event_private	*tmp;
-
-	if (child == NULL) {
-		if (d_list_empty(&evx->evx_child))
-			return NULL;
-
-		tmp = d_list_entry(evx->evx_child.next,
-				   struct daos_event_private, evx_link);
-		return daos_evx2ev(tmp);
-	}
-
-	tmp = daos_ev2evx(child);
-	if (tmp->evx_link.next == &evx->evx_child)
-		return NULL;
-
-	tmp = d_list_entry(tmp->evx_link.next, struct daos_event_private,
-			   evx_link);
-	return daos_evx2ev(tmp);
 }
 
 int

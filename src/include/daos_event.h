@@ -148,19 +148,6 @@ int
 daos_event_fini(daos_event_t *ev);
 
 /**
- * Get the next child event of \a ev, it will return the first child event
- * if \a child is NULL.
- *
- * \param[in] parent	Parent event
- * \param[in] child	Current child event.
- *
- * \return		The next child event after \a child, or NULL if it's
- *			the last one.
- */
-daos_event_t *
-daos_event_next(daos_event_t *parent, daos_event_t *child);
-
-/**
  * Test completion of an event. If \a ev is a child, the operation will fail.
  * If the event was initialized in an event queue, and the test completes the
  * event, the event will be pulled out of the event queue.

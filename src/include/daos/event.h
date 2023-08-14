@@ -110,13 +110,6 @@ daos_ev2sched(struct daos_event *ev);
 daos_handle_t
 daos_ev2eqh(struct daos_event *ev);
 
-int
-daos_event_destroy(struct daos_event *ev, bool force);
-
-int
-daos_event_destroy_children(struct daos_event *ev, bool force);
-
-
 /**
  * Wait for completion of the private event
  * This function is deprecated, use dc_task_new() and dc_task_schedule()
