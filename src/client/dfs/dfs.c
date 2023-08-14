@@ -4965,12 +4965,16 @@ ostatx_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		D_ERROR("Failed to stat file "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
+
+	if (args->obj->oid.hi != op_args->entry.oid.hi ||
+	    args->obj->oid.lo != op_args->entry.oid.lo)
+		D_GOTO(out, rc = ENOENT);
 
 	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf, NULL);
 	if (rc)
-		return rc;
+		D_GOTO(out, rc);
 
 	args->stbuf->st_size = op_args->array_stbuf.st_size;
 	args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
@@ -4986,6 +4990,7 @@ ostatx_cb(tse_task_t *task, void *data)
 		args->stbuf->st_atim.tv_nsec = args->stbuf->st_mtim.tv_nsec;
 	}
 
+out:
 	D_FREE(op_args);
 	rc = daos_obj_close(args->parent_oh, NULL);
 	return daos_der2errno(rc);
@@ -5091,7 +5096,7 @@ err1_out:
 }
 
 int
-dfs_file_stat(dfs_t *dfs, dfs_obj_t *file, struct stat *stbuf, daos_event_t *ev)
+dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
 {
 	daos_handle_t		oh;
 	tse_task_t		*task;
@@ -5100,12 +5105,12 @@ dfs_file_stat(dfs_t *dfs, dfs_obj_t *file, struct stat *stbuf, daos_event_t *ev)
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
-	if (file == NULL)
+	if (obj == NULL)
 		return EINVAL;
-	if (!S_ISREG(file->mode))
+	if (!S_ISREG(obj->mode))
 		return EINVAL;
 
-	rc = daos_obj_open(dfs->coh, file->parent_oid, DAOS_OO_RO, &oh, NULL);
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
 	if (rc)
 		return daos_der2errno(rc);
 
@@ -5115,7 +5120,7 @@ dfs_file_stat(dfs_t *dfs, dfs_obj_t *file, struct stat *stbuf, daos_event_t *ev)
 
 	args = dc_task_get_args(task);
 	args->dfs	= dfs;
-	args->obj	= file;
+	args->obj	= obj;
 	args->parent_oh	= oh;
 	args->stbuf	= stbuf;
 
