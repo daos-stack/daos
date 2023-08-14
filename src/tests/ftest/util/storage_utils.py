@@ -15,11 +15,12 @@ from ClusterShell.NodeSet import NodeSet
 from run_utils import run_remote
 
 
-def find_pci_address(value):
+def find_pci_address(value, *flags):
     """Find PCI addresses in the specified string.
 
     Args:
         value (str): string to search for PCI addresses
+        flags (list, optional): flags arguments for re.findall
 
     Returns:
         list: a list of all the PCI addresses found in the string
@@ -27,7 +28,7 @@ def find_pci_address(value):
     """
     digit = '0-9a-fA-F'
     pattern = rf'[{digit}]{{4,5}}:[{digit}]{{2}}:[{digit}]{{2}}\.[{digit}]'
-    return re.findall(pattern, str(value))
+    return re.findall(pattern, str(value), *flags)
 
 
 def get_tier_roles(tier, total_tiers):
@@ -327,19 +328,21 @@ class StorageInfo():
         """
         self._devices.clear()
         self._log.info('Scanning %s for PMEM/NVMe/VMD devices', self._hosts)
+        mounted = self.get_mounted_addresses()
         for key in self.TYPE_SEARCH:
-            device_info = self.get_device_information(key, device_filter)
+            device_info = self.get_device_information(key, device_filter, mounted)
             if key == "VMD" and device_info:
                 self._devices.extend(self.get_controller_information(device_info))
             else:
                 self._devices.extend(device_info)
 
-    def get_device_information(self, key, device_filter):
+    def get_device_information(self, key, device_filter, mounted):
         """Get a list of PMEM, NVMe, or VMD devices that exist on every host.
 
         Args:
             key (str): disk type: 'PMEM', 'NVMe', or 'VMD'
-            device_filter (str, optional): device search filter. Defaults to None.
+            device_filter (str): device search filter.
+            mounted (list): list of mounted devices addresses
 
         Returns:
             list: the StorageDevice objects found on every host
@@ -403,6 +406,11 @@ class StorageInfo():
                     # Ignore backing NVMe bound to the kernel driver, e.g., 10005:05:00.0
                     if device.is_backing:
                         self._log.debug("  excluding backing device: %s", device)
+                        continue
+
+                    # Ignore mounted devices
+                    if kwargs['address'] in mounted:
+                        self._log.debug("  excluding mounted device: %s", device)
                         continue
 
                     # Ignore any devices that do not match a filter if specified
@@ -526,6 +534,64 @@ class StorageInfo():
             self._log.debug('  %s: %s disk(s)', controller, disk_count)
 
         return controllers
+
+    def get_mounted_addresses(self):
+        """Get a list of addresses of devices which are mounted on one or more hosts.
+
+        Returns:
+            list: a list of addresses of devices which are mounted on one or more hosts
+        """
+        mounted_addresses = set()
+        self._log.debug('Detecting mounted addresses on %s', self._hosts)
+        for hosts, devices in self._get_mounted_devices():
+            mounted_addresses.add(self._get_addresses(NodeSet(hosts), devices))
+        return list(mounted_addresses)
+
+    def _get_mounted_devices(self):
+        """Get a dictionary of mounted devices names per group of hosts.
+
+        Returns:
+            dict: a dictionary of mounted devices name values with host string keys
+        """
+        mounted_devices = {}
+        result = run_remote(self._log, self._hosts, 'lvs -o +devices')
+        self._log.debug('  Detected mounted devices:')
+        for data in result.output:
+            if not data.passed:
+                self._log.debug('    %s: Error detecting mounted devices', data.hosts)
+                continue
+            devices = list(set(re.findall(r'/dev/([\w]+)', '\n'.join(data.stdout), re.MULTILINE)))
+            if devices:
+                mounted_devices[str(data.hosts)] = devices
+                self._log.debug('    %s: %s', data.hosts, devices)
+
+        return mounted_devices
+
+    def _get_addresses(self, hosts, devices):
+        """Get a list of addresses for each of the devices.
+
+        Args:
+            hosts (NodeSet): hosts from which to get the addresses
+            devices (list): devices for which to find their addresses
+
+        Returns:
+            list: a list of addresses
+        """
+        addresses = set()
+        self._log.debug('  Detecting addresses for %s on %s', devices, hosts)
+
+        # Find the mounted device names on each host
+        command = f'ls -l /dev/disk/by-path/ | grep -E ({"|".join(devices)})'
+        result = run_remote(self._log, self._hosts, command)
+        for data in result.output:
+            if not data.passed:
+                self._log.debug('    %s: Error detecting addresses', data.hosts)
+                continue
+            info = set(find_pci_address('\n'.join(data.stdout), re.MULTILINE))
+            self._log.debug('    %s: %s', data.hosts, info)
+            addresses.update(info)
+
+        return list(addresses)
 
     def write_storage_yaml(self, yaml_file, engines, tier_0_type, scm_size=0,
                            scm_mount='/mnt/daos', max_nvme_tiers=1, control_metadata=None):
