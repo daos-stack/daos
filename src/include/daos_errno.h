@@ -162,8 +162,8 @@ extern "C" {
 	/** Fatal (non-retry-able) transport layer mercury error */	\
 	ACTION(DER_HG_FATAL,		(DER_ERR_GURT_BASE + 45),	\
 	       Fatal transport layer mercury error)                     \
-        /** Failed to send rpc */                                       \
-        ACTION(DER_HG_SEND_FAILED,       (DER_ERR_GURT_BASE + 46),      \
+	/** Failed to send rpc */                                       \
+	ACTION(DER_HG_SEND_FAILED,       (DER_ERR_GURT_BASE + 46),      \
 	       Failed to send rpc)
 	/** TODO: add more error numbers */
 
