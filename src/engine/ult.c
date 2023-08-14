@@ -341,6 +341,10 @@ sched_ult2xs(int xs_type, int tgt_id)
 	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
+		/* XXX To avoid contention, try use current VOS xstream instead of helper xstream
+		 * or other VOS xstream */
+		return DSS_XS_SELF;
+
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
