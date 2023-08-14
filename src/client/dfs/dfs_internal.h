@@ -127,6 +127,9 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
 int
 dfs_relink_root(daos_handle_t coh);
 
+int
+dfs_file_stat(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
+
 #if defined(__cplusplus)
 }
 #endif

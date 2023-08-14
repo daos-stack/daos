@@ -354,6 +354,10 @@ dfs_test_lookup(void **state)
 		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
 
+	/** try dfs_file_stat on dir, should fail */
+	rc = dfs_file_stat(dfs_mt, dir, &stbuf, NULL);
+	assert_int_equal(rc, EINVAL);
+
 	/** try chmod to a symlink, should fail (since chmod resolves link) */
 	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
 	assert_int_equal(rc, EINVAL);
@@ -1034,33 +1038,64 @@ dfs_test_rename(void **state)
 	rc = dfs_write(dfs_mt, obj2, &sgl, 64, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_release(obj2);
+	rc = dfs_file_stat(dfs_mt, obj1, &stbuf, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_release(obj1);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
-	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 0);
 	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
-	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_file_stat(dfs_mt, obj2, &stbuf, NULL);
 	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 128);
 
 	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
 	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
+	daos_event_t ev, *evp;
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_file_stat(dfs_mt, obj1, &stbuf, &ev);
 	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
 	/** check ctime updated */
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_file_stat(dfs_mt, obj2, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	/** check ctime updated */
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 128);
+
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_release(obj2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj1);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
-
 	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
 	assert_int_equal(rc, 0);
 }
