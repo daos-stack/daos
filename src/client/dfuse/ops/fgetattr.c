@@ -7,11 +7,31 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+static void
+dfuse_cb_getattr_cb(struct dfuse_event *ev)
+{
+	D_ERROR("Landed here %d %zi", ev->de_ev.ev_error, ev->de_attr.st_size);
+
+	if (ev->de_ev.ev_error != 0) {
+		DFUSE_REPLY_ERR_RAW(ev->de_ie, ev->de_req, ev->de_ev.ev_error);
+		D_GOTO(release, 0);
+	}
+
+	ev->de_attr.st_ino = ev->de_ie->ie_stat.st_ino;
+
+	ev->de_ie->ie_stat = ev->de_attr;
+
+	DFUSE_REPLY_ATTR(ev->de_ie, ev->de_req, &ev->de_attr);
+release:
+	daos_event_fini(&ev->de_ev);
+	D_FREE(ev);
+}
+
 void
 dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
-	struct stat	attr = {};
-	int		rc;
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	int                rc;
 
 	if (ie->ie_unlinked) {
 		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
@@ -19,15 +39,41 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 		return;
 	}
 
-	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &attr);
-	if (rc != 0)
-		D_GOTO(err, rc);
+	if (S_ISREG(ie->ie_stat.st_mode)) {
+		struct dfuse_event *ev;
 
-	attr.st_ino = ie->ie_stat.st_ino;
+		uint64_t            eqt_idx;
+		struct dfuse_eq    *eqt;
 
-	ie->ie_stat = attr;
+		eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
 
-	DFUSE_REPLY_ATTR(ie, req, &attr);
+		eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+		D_ALLOC_PTR(ev);
+
+		ev->de_req         = req;
+		ev->de_complete_cb = dfuse_cb_getattr_cb;
+		ev->de_ie          = ie;
+
+		rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
+		if (rc != -DER_SUCCESS)
+			D_GOTO(err, rc = daos_der2errno(rc));
+
+		rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, &ev->de_ev);
+		if (rc != 0)
+			D_GOTO(err, rc);
+
+		sem_post(&eqt->de_sem);
+	} else {
+		struct stat attr = {};
+
+		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &attr);
+		if (rc != 0)
+			D_GOTO(err, rc);
+
+		attr.st_ino = ie->ie_stat.st_ino;
+		ie->ie_stat = attr;
+		DFUSE_REPLY_ATTR(ie, req, &attr);
+	}
 
 	return;
 err:

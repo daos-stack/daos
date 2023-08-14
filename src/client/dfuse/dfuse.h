@@ -330,10 +330,15 @@ struct dfuse_event {
 	d_sg_list_t                   de_sgl;
 	d_list_t                      de_list;
 	struct dfuse_eq              *de_eqt;
-	struct dfuse_obj_hdl         *de_oh;
+	union {
+		struct dfuse_obj_hdl     *de_oh;
+		struct dfuse_inode_entry *de_ie;
+	};
 	off_t                         de_req_position; /**< The file position requested by fuse */
 	size_t                        de_req_len;
 	void (*de_complete_cb)(struct dfuse_event *ev);
+
+	struct stat de_attr;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;

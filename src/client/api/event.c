@@ -296,6 +296,7 @@ daos_event_register_comp_cb(struct daos_event *ev,
 	return 0;
 }
 
+/* Takes a daos errno, passes it to everyong, returns the first non-zero daos errno */
 static int
 daos_event_complete_cb(struct daos_event_private *evx, int rc)
 {
@@ -354,6 +355,9 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 
 		if (parent_evx->evx_nchild_comp < parent_evx->evx_nchild) {
 			/* Not all children have completed yet */
+			if (parent_evx->is_errno)
+				rc = daos_der2errno(rc);
+
 			parent_ev->ev_error = parent_ev->ev_error ?: rc;
 			goto out;
 		}
@@ -376,7 +380,10 @@ daos_event_complete_locked(struct daos_eq_private *eqx,
 		parent_evx->evx_status = DAOS_EVS_COMPLETED;
 		rc = daos_event_complete_cb(parent_evx, rc);
 
-		parent_ev->ev_error = parent_ev->ev_error ?: rc;
+		if (parent_evx->is_errno)
+			rc = daos_der2errno(rc);
+
+		parent_ev->ev_error = rc;
 		evx = parent_evx;
 	}
 
@@ -476,7 +483,7 @@ daos_event_complete(struct daos_event *ev, int rc)
 
 	if (daos_handle_is_valid(evx->evx_eqh)) {
 		eqx = daos_eq_lookup(evx->evx_eqh);
-		D_ASSERT(eqx != NULL);
+		D_ASSERTF(eqx != NULL, "Key is %#lx", evx->evx_eqh.cookie);
 
 		D_MUTEX_LOCK(&eqx->eqx_lock);
 	} else {

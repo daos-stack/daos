@@ -1332,6 +1332,8 @@ class DFuse():
         if self.log_flush:
             my_env['D_LOG_FLUSH'] = 'DEBUG'
 
+        my_env['D_LOG_FLUSH'] = 'DEBUG'
+
         if v_hint is None:
             v_hint = get_inc_id()
 
@@ -2682,18 +2684,18 @@ class PosixTests():
             with open(test_file, 'r'):
                 pass
 
-    @needs_dfuse
+    @needs_dfuse_with_opt(caching=False)
     def test_chmod(self):
         """Test that chmod works on file"""
         fname = join(self.dfuse.dir, 'testfile')
-        with open(fname, 'w'):
-            pass
+        with open(fname, 'w') as fd:
+            fd.write('hello world')
 
-        modes = [stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
-                 stat.S_IRUSR]
+        modes = [stat.S_IRUSR, stat.S_IWUSR, stat.S_IXUSR, stat.S_IRUSR]
 
         for mode in modes:
             os.chmod(fname, mode)
+            attr = os.stat(fname)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode
 
