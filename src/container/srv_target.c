@@ -1695,7 +1695,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct cont_tgt_open_arg arg = { 0 };
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
+	struct ds_pool		*pool;
 	int			rc;
+
+	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		rc = -DER_NO_HDL;
+		return rc;
+	}
+
+	if (uuid_compare(pool->sp_srv_cont_hdl, cont_hdl_uuid) == 0 && sec_capas == 0)
+		D_WARN("srv hdl "DF_UUID" capas is "DF_X64"\n",
+		       DP_UUID(cont_hdl_uuid), sec_capas);
+	ds_pool_put(pool);
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);

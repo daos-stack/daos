@@ -2004,6 +2004,10 @@ static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
 	if (!is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
+		if (uuid_compare(coh->sch_cont->sc_pool->spc_pool->sp_srv_cont_hdl,
+				 coh->sch_uuid) == 0)
+			return 0;
+
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to read.\n",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
@@ -2020,6 +2024,14 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
 		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
+
+	if (is_write && coh->sch_cont &&
+	    coh->sch_cont->sc_pool->spc_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_ERROR("pool "DF_UUID" no_data_sync reint mode,"
+			" cont hdl "DF_UUID" NO_PERM to update.\n",
+			DP_UUID(coh->sch_cont->sc_pool->spc_uuid), DP_UUID(coh->sch_uuid));
+		return -DER_NO_PERM;
 	}
 
 	return 0;

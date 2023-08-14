@@ -2605,10 +2605,17 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	if (tls->mpt_opc == RB_OP_UPGRADE)
 		unpack_arg.new_layout_ver = tls->mpt_new_layout_ver;
 
-	dc_obj_shard2anchor(&dkey_anchor, arg->shard);
 	enum_flags = DIOF_TO_LEADER | DIOF_WITH_SPEC_EPOCH |
-		     DIOF_TO_SPEC_GROUP | DIOF_FOR_MIGRATION;
+		     DIOF_FOR_MIGRATION;
 
+	/* Upgrade needs to iterate all of the group, since dkey might be
+	 * in different group after upgrade, otherwise only iterate the
+	 * specific group.
+	 */
+	if (tls->mpt_opc != RB_OP_UPGRADE) {
+		dc_obj_shard2anchor(&dkey_anchor, arg->shard);
+		enum_flags |= DIOF_TO_SPEC_GROUP;
+	}
 
 	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
 		p_csum = NULL;
@@ -2720,7 +2727,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		}
 
 		/* Each object enumeration RPC will at least one OID */
-		if (num <= minimum_nr) {
+		if (num <= minimum_nr && (enum_flags & DIOF_TO_SPEC_GROUP)) {
 			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
 				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;

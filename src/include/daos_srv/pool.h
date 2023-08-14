@@ -104,6 +104,7 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_mode;
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -166,6 +167,7 @@ struct ds_pool_child {
 	uint64_t	spc_discard_done:1,
 			spc_no_storage:1; /* The pool shard has no storage. */
 
+	uint32_t	spc_reint_mode;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a

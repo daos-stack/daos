@@ -18,6 +18,11 @@ config_opts['module_setup_commands'] = [
   ('disable',  'go-toolset')
 ]
 EOF
+elif [[ $CHROOT_NAME == *epel-9-x86_64 ]]; then
+    # DO NOT LAND
+    # waiting for an answer on https://github.com/rpm-software-management/mock/discussions/1078
+    ln -sf /etc/mock/almalinux-9-x86_64.cfg "$mock_config_dir"
+    ln -sf /etc/mock/rocky-9-x86_64.cfg "$mock_config_dir"
 fi
 
 # Use dnf on CentOS 7
@@ -65,6 +70,7 @@ if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
     fi
 fi
 
+repos_added=()
 for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     branch="master"
     build_number="lastSuccessfulBuild"
@@ -76,20 +82,30 @@ for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
             branch="${branch%:*}"
         fi
     fi
-    repo_adds+=("--enablerepo $repo:$branch:$build_number")
-    echo -e "[$repo:$branch:$build_number]\n\
-name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/$DISTRO/\n\
+    if [[ " ${repos_added[*]} " = *\ ${repo}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo")
+    repo_adds+=("--enablerepo $repo:${branch//[@\/]/_}:$build_number")
+    echo -e "[$repo:${branch//[@\/]/_}:$build_number]\n\
+name=$repo:${branch//[@\/]/_}:$build_number\n\
+baseurl=${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/job/${branch//\//%2F}/$build_number/artifact/artifacts/$DISTRO/\n\
 enabled=1\n\
 gpgcheck=False\n" >> "$cfg_file"
 done
 for repo in $JOB_REPOS; do
     repo_name=${repo##*://}
     repo_name=${repo_name//\//_}
+    if [[ " ${repos_added[*]} " = *\ ${repo_name}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo_name")
     repo_adds+=("--enablerepo $repo_name")
-    echo -e "[${repo_name//@/_}]\n\
+    echo -e "[${repo_name//[@\/]/_}]\n\
 name=${repo_name}\n\
-baseurl=${repo}\n\
+baseurl=${repo//\//%2F}\n\
 enabled=1\n" >> "$cfg_file"
 done
 echo "\"\"\"" >> "$cfg_file"
