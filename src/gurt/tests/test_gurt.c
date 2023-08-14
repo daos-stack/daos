@@ -207,6 +207,16 @@ void test_d_errstr(void **state)
 #else
 	test_d_errstr_v2(state);
 #endif
+
+	/* Check the boundary at the end of the GURT error numbers, this will need updating if
+	 * additional error numbers are added.
+	 */
+	value = d_errstr(-DER_HG_SEND_FAILED);
+	assert_string_equal(value, "DER_HG_SEND_FAILED");
+	value = d_errstr(-1046);
+	assert_string_equal(value, "DER_HG_SEND_FAILED");
+	value = d_errstr(-(DER_HG_SEND_FAILED + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
 }
 
 void test_d_errdesc(void **state)
