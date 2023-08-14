@@ -856,31 +856,29 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
-	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
-		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
-		if (rc != 0) {
-			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
-				DP_UUID(entry->ie_couuid), DP_RC(rc));
-			vos_cont_close(coh);
-			return rc;
-		}
-		cont_child->sc_discarding = 1;
-		while (cont_child->sc_ec_agg_active) {
-			D_ASSERTF(rpt->rt_pool->sp_reintegrating >= 0, DF_UUID" reintegrating %d\n",
-				  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_reintegrating);
+	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+	if (rc != 0) {
+		D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	/* Wait for EC aggregation to finish. NB: migrate needs to wait for EC aggregation to finish */
+	while (cont_child->sc_ec_agg_active) {
+		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
+			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
 			/* Wait for EC aggregation to abort before discard the object */
-			D_DEBUG(DB_REBUILD, DF_UUID" wait for ec agg abort.\n",
-				DP_UUID(entry->ie_couuid));
-			dss_sleep(1000);
-			if (rpt->rt_abort || rpt->rt_finishing) {
-				D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
-					DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
-					RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_rebuild_ver,
-					rpt->rt_abort, rpt->rt_finishing);
-				*acts |= VOS_ITER_CB_ABORT;
-				D_GOTO(close, rc);
-			}
+		D_DEBUG(DB_REBUILD, DF_UUID" wait for ec agg abort.\n",
+			DP_UUID(entry->ie_couuid));
+		dss_sleep(1000);
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+				RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_rebuild_ver,
+				rpt->rt_abort, rpt->rt_finishing);
+			*acts |= VOS_ITER_CB_ABORT;
+			D_GOTO(close, rc);
 		}
 	}
 
@@ -912,10 +910,8 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 close:
 	vos_cont_close(coh);
 
-	if (cont_child != NULL) {
-		cont_child->sc_discarding = 0;
+	if (cont_child != NULL)
 		ds_cont_child_put(cont_child);
-	}
 
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
@@ -1175,9 +1171,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_RECLAIM ||
-	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM)
-		rpt->rt_pool->sp_reintegrating++; /* reset in rebuild_tgt_fini */
+	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
