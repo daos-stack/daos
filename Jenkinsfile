@@ -465,7 +465,7 @@ pipeline {
                             filename 'packaging/Dockerfile.mockbuild'
                             dir 'utils/rpms'
                             label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs()
+                            additionalBuildArgs dockerBuildArgs() + '--build-arg FVERSION=37'
                             args '--cap-add=SYS_ADMIN'
                         }
                     }
