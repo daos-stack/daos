@@ -208,6 +208,7 @@ tse_task2sched(tse_task_t *task)
 static void
 tse_task_addref_locked(struct tse_task_private *dtp)
 {
+	D_ASSERT(dtp->dtp_refcnt < UINT16_MAX);
 	dtp->dtp_refcnt++;
 }
 
@@ -910,6 +911,7 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 	D_DEBUG(DB_TRACE, "Add dependent %p ---> %p\n", dep, task);
 
 	D_MUTEX_LOCK(&dtp->dtp_sched->dsp_lock);
+	D_ASSERT(dtp->dtp_dep_cnt < UINT16_MAX);
 	tse_task_addref_locked(dtp);
 	tlink->tl_task = task;
 	dtp->dtp_dep_cnt++;
