@@ -189,10 +189,8 @@ create_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		if (rc == -DER_EXIST)
-			D_DEBUG(DB_IO, "Failed to create array obj "DF_RC"\n", DP_RC(rc));
-		else
-			D_ERROR("Failed to create array obj "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_EXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to create array obj "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_obj, rc);
 	}
 
@@ -617,10 +615,8 @@ open_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			D_DEBUG(DB_IO, "Failed to open array object "DF_RC"\n", DP_RC(rc));
-		else
-			D_ERROR("Failed to open array object "DF_RC"\n", DP_RC(rc));
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to open array object "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
