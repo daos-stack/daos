@@ -80,7 +80,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				23
+#define POOL_DF_VER_1                           23
 
 /** Individual version specific featuers are assigned to a release specific durable
  * format version number.  This allows us to add multiple features in a release cycle
@@ -91,13 +91,18 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_4
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
 
-/** 2.2 features */
+/** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
+ *  version.
+ */
 #define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
 
 /** 2.4 features */
 #define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
+
+/** 2.6 features */
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_EMB_VALUE)
 
 /**
  * Durable format for VOS pool
