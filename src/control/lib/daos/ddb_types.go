@@ -7,15 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// CommandContext structure used for all commands
-type CommandContext struct {
-	DdbContext        interface{}
-	JsonOutput        bool
-	JsonOutputHandled bool
-}
-
-// SuperBlock The pool super block used for the superblock_dump command
-type SuperBlock struct {
+// PoolSuperblock The pool super block used for the superblock_dump command
+type PoolSuperblock struct {
 	PoolUuid             uuid.UUID `json:"uuid"`
 	ContCount            int       `json:"cont_count"`
 	NvmeSize             uint64    `json:"nvme_size"`

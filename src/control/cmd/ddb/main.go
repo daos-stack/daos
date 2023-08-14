@@ -21,7 +21,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -70,7 +69,7 @@ func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
 		return
 	}
 	defer cleanup()
-	cmdCtx := daos.CommandContext{DdbContext: ctx, JsonOutput: false, JsonOutputHandled: false}
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: false, jsonOutputHandled: false}
 	app := createGrumbleApp(&cmdCtx)
 	for _, cmd := range app.Commands().All() {
 		if match == "" || strings.HasPrefix(cmd.Name, match) {
@@ -146,7 +145,7 @@ the first positional parameter will be opened before commands are executed.`
 
 	ctx, cleanup, err := InitDdb()
 
-	cmdCtx := daos.CommandContext{DdbContext: ctx, JsonOutput: opts.JSON, JsonOutputHandled: false}
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: opts.JSON, jsonOutputHandled: false}
 
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
@@ -186,7 +185,7 @@ the first positional parameter will be opened before commands are executed.`
 			}
 		}
 
-		if cmdCtx.JsonOutput && !cmdCtx.JsonOutputHandled {
+		if cmdCtx.jsonOutput && !cmdCtx.jsonOutputHandled {
 			log.Notice("Command does not support json output")
 		}
 
@@ -225,7 +224,7 @@ func main() {
 	}
 }
 
-func createGrumbleApp(ctx *daos.CommandContext) *grumble.App {
+func createGrumbleApp(ctx *CommandContext) *grumble.App {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		homedir = "/tmp"

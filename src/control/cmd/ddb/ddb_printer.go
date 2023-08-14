@@ -10,7 +10,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func printSuperBlock(log *logging.LeveledLogger, sb *daos.SuperBlock) {
+func printSuperBlock(log *logging.LeveledLogger, sb *daos.PoolSuperblock) {
 	log.Infof("Pool UUID: %s\n", sb.PoolUuid.String())
 	log.Infof("Format Version: %d\n", sb.DurableFormatVersion)
 	log.Infof("Containers: %d\n", sb.ContCount)
