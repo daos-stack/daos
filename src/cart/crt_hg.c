@@ -1056,7 +1056,11 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		D_GOTO(out, hg_ret = HG_SUCCESS);
 	}
 	D_ASSERT(proc != NULL);
-	opc = rpc_tmp.crp_req_hdr.cch_opc;
+
+	crt_rpc_header_set_version(&rpc_tmp,
+				   /* Previously unused reply field used for version */
+				   rpc_tmp.crp_header_v0.crp_reply_hdr.cch_opc);
+	opc = *rpc_tmp.crp_header.p_opc;
 
 	/**
 	 * Set the opcode in the temp RPC so that it can be correctly logged.
@@ -1087,7 +1091,18 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
+	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
+
 	crt_hg_header_copy(&rpc_tmp, rpc_priv);
+
+	/* 
+ * 		rpc_priv.crp_mutex
+ * 		rpc_priv.crp_reply_hdr
+ * 		rpc_priv.crp_reply_hdr.cch_opc
+ * 		*/
+	crt_rpc_header_set_version(rpc_priv,
+				   /* Unused field */
+				   rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
@@ -1095,8 +1110,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 
 	rpc_priv->crp_fail_hlc = rpc_tmp.crp_fail_hlc;
-	rpc_pub->cr_ep.ep_rank = rpc_priv->crp_req_hdr.cch_dst_rank;
-	rpc_pub->cr_ep.ep_tag = rpc_priv->crp_req_hdr.cch_dst_tag;
+	rpc_pub->cr_ep.ep_rank = *rpc_priv->crp_header.p_dst_rank;
+	rpc_pub->cr_ep.ep_tag = *rpc_priv->crp_header.p_dst_tag;
 
 	RPC_TRACE(DB_ALL, rpc_priv,
 		  "(opc: %#x rpc_pub: %p) allocated per RPC request received.\n",
@@ -1115,7 +1130,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 		if (rc == 0) {
 			rpc_priv->crp_input_got = 1;
 			rpc_pub->cr_ep.ep_grp = NULL;
-			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
 			D_ERROR("_unpack_body failed, rc: %d, opc: %#x.\n",
 				rc, rpc_pub->cr_opc);
@@ -1325,7 +1339,7 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 			hg_ret = HG_Get_output(hg_cbinfo->info.forward.handle, &rpc_pub->cr_output);
 			if (hg_ret == HG_SUCCESS) {
 				rpc_priv->crp_output_got = 1;
-				rc = rpc_priv->crp_reply_hdr.cch_rc;
+				rc = *rpc_priv->crp_header.p_rc;
 			} else {
 				rc = crt_hgret_2_der(hg_ret);
 				RPC_ERROR(rpc_priv, "HG_Get_output failed, hg_ret: " DF_HG_RC "\n",
@@ -1490,7 +1504,7 @@ crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code)
 	D_ASSERT(error_code != 0);
 
 	hg_out_struct = &rpc_priv->crp_pub.cr_output;
-	rpc_priv->crp_reply_hdr.cch_rc = error_code;
+	*rpc_priv->crp_header.p_rc = error_code;
 	hg_ret = HG_Respond(rpc_priv->crp_hg_hdl, NULL, NULL, hg_out_struct);
 	if (hg_ret != HG_SUCCESS) {
 		RPC_ERROR(rpc_priv,

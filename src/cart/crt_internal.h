@@ -32,7 +32,7 @@
 		D_TRACE_DEBUG(mask, (rpc),				\
 			"[opc=%#x rpcid=%#lx rank:tag=%d:%d] " fmt,	\
 			(rpc)->crp_pub.cr_opc,				\
-			(rpc)->crp_req_hdr.cch_rpcid,			\
+			*((rpc)->crp_header.p_rpcid),			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\
@@ -45,7 +45,7 @@
 			"[opc=%#x (%s) rpcid=%#lx rank:tag=%d:%d] " fmt,\
 			(rpc)->crp_pub.cr_opc,				\
 			crt_opc_to_str((rpc)->crp_pub.cr_opc),		\
-			(rpc)->crp_req_hdr.cch_rpcid,			\
+			*((rpc)->crp_header.p_rpcid),			\
 			(rpc)->crp_pub.cr_ep.ep_rank,			\
 			(rpc)->crp_pub.cr_ep.ep_tag,			\
 			## __VA_ARGS__);				\

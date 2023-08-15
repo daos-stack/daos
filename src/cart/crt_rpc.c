@@ -463,6 +463,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
+	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
 	*priv_allocated = rpc_priv;
 out:
 	return rc;
@@ -539,6 +540,8 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
+
+	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
 
 	if (tgt_ep != NULL) {
 		rc = check_ep(tgt_ep, &grp_priv);
@@ -1607,11 +1610,8 @@ crt_common_hdr_init(struct crt_rpc_priv *rpc_priv, crt_opcode_t opc)
 
 	rpcid = atomic_fetch_add(&crt_gdata.cg_rpcid, 1);
 
-	rpc_priv->crp_req_hdr.cch_opc = opc;
-	rpc_priv->crp_req_hdr.cch_rpcid = rpcid;
-
-	rpc_priv->crp_reply_hdr.cch_opc = opc;
-	rpc_priv->crp_reply_hdr.cch_rpcid = rpcid;
+	*rpc_priv->crp_header.p_opc = opc;
+	*rpc_priv->crp_header.p_rpcid = rpcid;
 }
 
 void
@@ -1732,15 +1732,15 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 			skip_check = true;
 	}
 
-	if ((self_rank != rpc_priv->crp_req_hdr.cch_dst_rank) ||
-	    (crt_ctx->cc_idx != rpc_priv->crp_req_hdr.cch_dst_tag)) {
+	if ((self_rank != *rpc_priv->crp_header.p_dst_rank) ||
+	    (crt_ctx->cc_idx != *rpc_priv->crp_header.p_dst_tag)) {
 		if (!skip_check) {
 			D_ERROR("Mismatch rpc: %p opc: %x rank:%d tag:%d "
 				"self:%d cc_idx:%d ep_rank:%d ep_tag:%d\n",
 				rpc_priv,
 				rpc_priv->crp_pub.cr_opc,
-				rpc_priv->crp_req_hdr.cch_dst_rank,
-				rpc_priv->crp_req_hdr.cch_dst_tag,
+				*rpc_priv->crp_header.p_dst_rank,
+				*rpc_priv->crp_header.p_dst_tag,
 				self_rank,
 				crt_ctx->cc_idx,
 				rpc_priv->crp_pub.cr_ep.ep_rank,
@@ -1755,7 +1755,7 @@ crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 		rpc_priv->crp_reply_pending = 1;
 
 	if (crt_rpc_cb_customized(crt_ctx, &rpc_priv->crp_pub) &&
-	    !crt_opc_is_swim(rpc_priv->crp_req_hdr.cch_opc)) {
+	    !crt_opc_is_swim(*rpc_priv->crp_header.p_opc)) {
 		/* Corresponding decref in crt_handle_rpc() */
 		RPC_ADDREF(rpc_priv);
 		rc = crt_ctx->cc_rpc_cb((crt_context_t)crt_ctx,
@@ -1847,7 +1847,7 @@ crt_req_src_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 
-	*rank = rpc_priv->crp_req_hdr.cch_src_rank;
+	*rank = *rpc_priv->crp_header.p_src_rank;
 
 out:
 	return rc;
@@ -1871,7 +1871,7 @@ crt_req_dst_rank_get(crt_rpc_t *rpc, d_rank_t *rank)
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 
-	*rank = rpc_priv->crp_req_hdr.cch_dst_rank;
+	*rank = *rpc_priv->crp_header.p_dst_rank;
 
 out:
 	return rc;
@@ -1894,7 +1894,7 @@ crt_req_dst_tag_get(crt_rpc_t *rpc, uint32_t *tag)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	*tag = rpc_priv->crp_req_hdr.cch_dst_tag;
+	*tag = *rpc_priv->crp_header.p_dst_tag;
 out:
 	return rc;
 }
@@ -1916,7 +1916,7 @@ crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout)
 	}
 
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	*timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+	*timeout = *rpc_priv->crp_header.p_src_timeout;
 out:
 	return rc;
 }
@@ -1947,4 +1947,80 @@ crt_trigger_hlc_error_cb(void)
 
 	if (handler)
 		handler(arg);
+}
+
+
+void
+crt_rpc_header_set_version(struct crt_rpc_priv *rpc_priv, uint32_t version)
+{
+	struct crt_rpc_header_internal *hdr;
+
+	hdr = &rpc_priv->crp_header;
+
+	D_EMIT("Setting version for %p to %d\n", rpc_priv, version);
+
+	switch (version) {
+	case 0: {
+		struct crt_common_hdr *hdr_req;
+		struct crt_common_hdr *hdr_reply;
+
+		hdr_req = &rpc_priv->crp_header_v0.crp_req_hdr;
+		hdr_reply = &rpc_priv->crp_header_v0.crp_reply_hdr;
+
+		/* For version use unused cch_opc in the reply header */
+		hdr->p_version = &(hdr_reply->cch_opc);
+
+		/* For rpc private size use unused cch_flags in the reply header */
+		hdr->p_rpc_priv_size = &(hdr_reply->cch_flags);
+
+		/* opcode from the request header */
+		hdr->p_opc = &(hdr_req->cch_opc);
+
+		/* flags from the request header */
+		hdr->p_flags = &(hdr_req->cch_flags);
+
+		/* Set src_hlc to the request hlc and dst_hlc to the reply hlc */
+		hdr->p_src_hlc = &(hdr_req->cch_hlc);
+		hdr->p_dst_hlc = &(hdr_reply->cch_hlc);
+
+		/* Set rpcid to the request rpcid */
+		hdr->p_rpcid = &(hdr_req->cch_rpcid);
+
+		/* src_rank, dst_rank, dst_tag and src_timeout all come from request header */
+		hdr->p_dst_rank = &(hdr_req->cch_dst_rank);
+		hdr->p_src_rank = &(hdr_req->cch_src_rank);
+		hdr->p_dst_tag = &(hdr_req->cch_dst_tag);
+		hdr->p_src_timeout = &(hdr_req->cch_src_timeout);
+
+		/* rc from the reply header */
+		hdr->p_rc = &(hdr_reply->cch_rc);
+		break;
+	}
+
+	case 1:
+	{
+		struct crt_rpc_header_v1 *hdr_v1;
+
+		hdr_v1 = &(rpc_priv->crp_header_v1);
+
+		hdr->p_version		= &hdr_v1->version;
+		hdr->p_rpc_priv_size	= &hdr_v1->rpc_priv_size;
+		hdr->p_opc		= &hdr_v1->opc;
+		hdr->p_flags		= &hdr_v1->flags;
+		hdr->p_src_hlc		= &hdr_v1->src_hlc;
+		hdr->p_dst_hlc		= &hdr_v1->dst_hlc;
+		hdr->p_rpcid		= &hdr_v1->rpcid;
+		hdr->p_dst_rank		= &hdr_v1->dst_rank;
+		hdr->p_src_rank		= &hdr_v1->src_rank;
+		hdr->p_dst_tag		= &hdr_v1->dst_tag;
+		hdr->p_src_timeout	= &hdr_v1->src_timeout;
+		hdr->p_rc		= &hdr_v1->rc;
+		break;
+		}
+
+	default:
+		D_ERROR("Unknown RPC header version %d\n", version);
+		D_ASSERT(0);
+		break;
+	}
 }

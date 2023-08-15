@@ -124,6 +124,56 @@ struct crt_corpc_info {
 	int			 co_rc;
 };
 
+#define RPC_VERSION_UNSET 0xFFFFFFFF
+#define RPC_HEADER_VERSION_LOCAL 0
+
+/* Local version needs to change each time there is an update to crt_rpc_priv 
+ * structure and not just a header */
+//static uint32_t g_local_rpc_priv_version = 0;
+
+
+/* NOTE: DO NOT rearrange fields in header_v0 without making corresponding changes to
+ * crt_rpc_header_set_version() calls.
+ * A field used for version support is a first unused field after the mutex 
+ * which is crt_reply_hdr.cch_opc
+ * Versipon field has to align in all rpc header versions
+ * */
+struct crt_rpc_header_v0 {
+	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
+	struct crt_common_hdr	crp_req_hdr; /* common header for request */
+} crt_rpc_header_v0;
+
+struct crt_rpc_header_v1 {
+	uint32_t	version;
+	uint32_t	rpc_priv_size;
+	uint32_t	opc;
+	uint32_t	flags;
+	uint64_t	src_hlc;
+	uint64_t	dst_hlc;
+	uint64_t	rpcid;
+	d_rank_t	dst_rank;
+	d_rank_t	src_rank;
+	uint32_t	dst_tag;
+	uint32_t	src_timeout;
+	uint32_t	rc;
+} crt_rpc_header_v1;
+
+
+struct crt_rpc_header_internal {
+	uint32_t*	p_version;
+	uint32_t*	p_rpc_priv_size;
+	uint32_t*	p_opc;
+	uint32_t*	p_flags;
+	uint64_t*	p_src_hlc;
+	uint64_t*	p_dst_hlc;
+	uint64_t*	p_rpcid;
+	d_rank_t*	p_dst_rank;
+	d_rank_t*	p_src_rank;
+	uint32_t*	p_dst_tag;
+	uint32_t*	p_src_timeout;
+	uint32_t*	p_rc;
+};
+
 struct crt_rpc_priv {
 	crt_rpc_t		crp_pub; /* public part */
 	/* link to crt_ep_inflight::epi_req_q/::epi_req_waitq */
@@ -199,10 +249,20 @@ struct crt_rpc_priv {
 	 *   crt_gdata.cg_rwlock
 	 */
 	pthread_mutex_t		crp_mutex;
-	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
-	struct crt_common_hdr	crp_req_hdr; /* common header for request */
-	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
+
+	union {
+		struct crt_rpc_header_v0	crp_header_v0;
+		struct crt_rpc_header_v1	crp_header_v1;
+	};
+
+	struct crt_rpc_header_internal	crp_header;
+	struct crt_corpc_hdr		crp_coreq_hdr; /* collective request header */
 };
+
+void
+crt_rpc_header_set_version(struct crt_rpc_priv *rpc_priv, uint32_t version);
+
+
 
 static inline void
 crt_rpc_lock(struct crt_rpc_priv *rpc_priv)

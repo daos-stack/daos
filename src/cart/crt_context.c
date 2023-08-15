@@ -441,7 +441,7 @@ crt_rpc_complete_and_unlock(struct crt_rpc_priv *rpc_priv, int rc)
 		cbinfo.cci_arg = rpc_priv->crp_arg;
 		cbinfo.cci_rc = rc;
 		if (cbinfo.cci_rc == 0)
-			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
+			cbinfo.cci_rc = *rpc_priv->crp_header.p_rc;
 
 		if (cbinfo.cci_rc != 0)
 			RPC_CERROR(crt_quiet_error(cbinfo.cci_rc), DB_NET, rpc_priv,

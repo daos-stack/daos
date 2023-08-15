@@ -396,7 +396,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 
 	D_ASSERT(crt_is_service());
 
-	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
+	from_id = *rpc_priv->crp_header.p_src_rank;
 
 	/* Initialize empty array in case of error in reply */
 	rpc_out->upds.ca_arrays = NULL;
@@ -420,8 +420,8 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	 * crt_hg_unpack_header may have failed to synchronize the HLC with
 	 * this request.
 	 */
-	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
+	if (hlc > *rpc_priv->crp_header.p_src_hlc)
+		rcv_delay = d_hlc2msec(hlc - *rpc_priv->crp_header.p_src_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "incoming %s with %zu updates with %u ms delay. %lu: %lu <= %lu\n",
@@ -587,8 +587,8 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 		break;
 	}
 
-	if (hlc > rpc_priv->crp_reply_hdr.cch_hlc)
-		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
+	if (hlc > *rpc_priv->crp_header.p_dst_hlc)
+		rcv_delay = d_hlc2msec(hlc - *rpc_priv->crp_header.p_dst_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "

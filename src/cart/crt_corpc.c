@@ -123,7 +123,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	}
 
 	/* Inherit a timeout from a source */
-	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+	src_timeout = *rpc_priv->crp_header.p_src_timeout;
 
 	if (src_timeout != 0)
 		rpc_priv->crp_timeout_sec = src_timeout;
@@ -390,6 +390,8 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
+	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
+
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
 	if (grp_root == CRT_NO_RANK) {
@@ -522,7 +524,7 @@ corpc_del_child_rpc_locked(struct crt_rpc_priv *parent_rpc_priv,
 static inline void
 crt_corpc_fail_parent_rpc(struct crt_rpc_priv *parent_rpc_priv, int failed_rc)
 {
-	parent_rpc_priv->crp_reply_hdr.cch_rc = failed_rc;
+	*parent_rpc_priv->crp_header.p_rc = failed_rc;
 	parent_rpc_priv->crp_corpc_info->co_rc = failed_rc;
 	if (failed_rc != -DER_GRPVER)
 		RPC_ERROR(parent_rpc_priv,
@@ -652,9 +654,9 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
-	if (child_rpc_priv->crp_reply_hdr.cch_rc != 0)
+	if (*child_rpc_priv->crp_header.p_rc != 0)
 		crt_corpc_fail_parent_rpc(parent_rpc_priv,
-					  child_rpc_priv->crp_reply_hdr.cch_rc);
+					  *child_rpc_priv->crp_header.p_rc);
 
 	co_ops = opc_info->coi_co_ops;
 	if (co_ops == NULL) {
