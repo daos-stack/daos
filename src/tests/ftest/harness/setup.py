@@ -14,9 +14,11 @@ class HarnessSetupTest(TestWithServers):
 
     def run_test(self):
         """Run the test."""
-        if self.server_managers[0].storage_prepare_timeout.value != 60:
+        prepare_timeout = self.params.get('storage_prepare_timeout')
+        format_timeout = self.params.get('storage_format_timeout')
+        if self.server_managers[0].storage_prepare_timeout.value != prepare_timeout:
             self.fail("Storage prepare was not set correctly from the test yaml")
-        if self.server_managers[0].storage_format_timeout.value != 60:
+        if self.server_managers[0].storage_format_timeout.value != format_timeout:
             self.fail("Storage format was not set correctly from the test yaml")
         self.log.info("Test passed!")
 

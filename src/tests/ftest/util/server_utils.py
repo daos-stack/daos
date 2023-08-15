@@ -17,6 +17,7 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
+from data_utils import dict_extract_values, flatten
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
@@ -132,8 +133,8 @@ class DaosServerManager(SubprocessManager):
         self.detect_start_via_dmg = False
 
         # Parameters to set storage prepare and format timeout
-        self.storage_prepare_timeout = BasicParameter(None, 40)
-        self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_prepare_timeout = BasicParameter(None)
+        self.storage_format_timeout = BasicParameter(None)
 
         # Optional external yaml data to use to create the server config file, bypassing the values
         # defined in the self.manager.job.yaml object.
@@ -223,6 +224,19 @@ class DaosServerManager(SubprocessManager):
             hosts = self._hosts
         self.dmg.hostlist = hosts
 
+    def _update_storage_timeouts(self):
+        """Update the storage prepare/format timeouts if undefined."""
+        bdev_lists = None
+        for name in ("storage_prepare_timeout", "storage_format_timeout"):
+            timeout = getattr(self, name)
+            if timeout.value is None:
+                # Set the default storage prepare/format timeout equal to 20 seconds per NVMe
+                if bdev_lists is None:
+                    data = self.manager.job.get_yaml_data()
+                    bdev_lists = dict_extract_values(data, ['storage', '*', 'bdev_list'])
+                value = len(flatten(bdev_lists)) * 20
+                timeout.update(value, name)
+
     def prepare(self, storage=True):
         """Prepare to start daos_server.
 
@@ -234,9 +248,10 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Preparing to start daos_server on %s with %s",
             self._hosts, self.manager.command)
 
-        # Create the daos_server yaml file
+        # Create the daos_server yaml file and update the default timeouts based on number of bdevs
         self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file(self._external_yaml_data)
+        self._update_storage_timeouts()
 
         # Copy certificates
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
