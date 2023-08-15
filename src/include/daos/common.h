@@ -149,15 +149,27 @@ char *DP_UUID(const void *uuid);
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 #ifdef DAOS_BUILD_RELEASE
-#define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)((key)->iov_len)
-#else
-char *daos_key2str(daos_key_t *key);
-#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%s'"
-#define DP_KEY(key)		(int)(key)->iov_len,	\
-				daos_key2str(key)
+#define DF_KEY       "[%d]"
+#define DP_KEY(_key) (int)((_key)->iov_len)
+
+#define DF_DE        "de[%zi]"
+#define DP_DE(_de)   strnlen(_de, NAME_MAX)
+
+#else
+
+char *
+daos_key2str(daos_key_t *key);
+
+#define DF_KEY      "[%d] '%s'"
+#define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
+
+char *
+daos_de2str(const char *de);
+
+#define DF_DE       "de'%s'"
+#define DP_DE(_de)  daos_de2str(_de)
+
 #endif
 
 #define DF_RECX			"["DF_X64"-"DF_X64"]"
@@ -621,7 +633,7 @@ static inline bool
 daos_crt_network_error(int err)
 {
 	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY || err == -DER_OOG;
+	       err == -DER_NOREPLY || err == -DER_OOG || err == -DER_HG_SEND_FAILED;
 }
 
 /** See crt_quiet_error. */
