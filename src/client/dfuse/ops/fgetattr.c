@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,8 +10,6 @@
 static void
 dfuse_cb_getattr_cb(struct dfuse_event *ev)
 {
-	D_ERROR("Landed here %d %zi", ev->de_ev.ev_error, ev->de_attr.st_size);
-
 	if (ev->de_ev.ev_error != 0) {
 		DFUSE_REPLY_ERR_RAW(ev->de_ie, ev->de_req, ev->de_ev.ev_error);
 		D_GOTO(release, 0);
