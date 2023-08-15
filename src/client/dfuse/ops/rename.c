@@ -90,7 +90,7 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(out, rc);
 
-	DFUSE_TRA_DEBUG(newparent, "Renamed '%s' to '%s' in %p", name, newname, newparent);
+	DFUSE_TRA_DEBUG(newparent, "Renamed " DF_DE " to " DF_DE, DP_DE(name), DP_DE(newname));
 
 	/* update moid */
 	dfuse_oid_moved(dfuse_info, &moid, parent, name, newparent, newname);
