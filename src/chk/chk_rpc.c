@@ -277,6 +277,11 @@ again:
 	       sizeof(*shards) * out_source->cqo_shards.ca_count);
 	out_result->cqo_shards.ca_count = nr;
 
+	out_result->cqo_ins_status = chk_ins_merge_status(out_result->cqo_ins_status,
+							  out_source->cqo_ins_status,
+							  &out_result->cqo_gen,
+							  &out_source->cqo_gen);
+
 	/*
 	 * cqps_target_nr and cqps_targets are shared between out_source and out_result.
 	 * Let's reset them in out_source to avoid being released when cleanup out_source.
@@ -485,7 +490,7 @@ int
 chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_rank_t *ranks,
 		 uint32_t policy_nr, struct chk_policy *policies, int pool_nr,
 		 uuid_t pools[], uint32_t api_flags, int phase, d_rank_t leader, uint32_t flags,
-		 chk_co_rpc_cb_t start_cb, void *args)
+		 uuid_t iv_uuid, chk_co_rpc_cb_t start_cb, void *args)
 {
 	crt_rpc_t		*req = NULL;
 	struct chk_start_in	*csi = NULL;
@@ -505,6 +510,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	csi->csi_phase = phase;
 	csi->csi_leader_rank = leader;
 	csi->csi_api_flags = api_flags;
+	uuid_copy(csi->csi_iv_uuid, iv_uuid);
 	csi->csi_ranks.ca_count = rank_nr;
 	csi->csi_ranks.ca_arrays = ranks;
 	csi->csi_policies.ca_count = policy_nr;
@@ -520,7 +526,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 	if (cso->cso_status < 0)
 		D_GOTO(out, rc = cso->cso_status);
 
-	rc = start_cb(args, 0 /* unused rank */, 0 /* unused result */,
+	rc = start_cb(args, 0, 0 /* unused rank */, 0 /* unused result */,
 		      cso->cso_clues.ca_arrays, cso->cso_clues.ca_count);
 	if (rc != 0)
 		goto out;
@@ -530,7 +536,7 @@ chk_start_remote(d_rank_list_t *rank_list, uint64_t gen, uint32_t rank_nr, d_ran
 
 	for (i = 0, cmp_rank = cso->cso_cmp_ranks.ca_arrays; i < cso->cso_cmp_ranks.ca_count;
 	     i++, cmp_rank++) {
-		rc = start_cb(args, *cmp_rank, 1, NULL /* unused data */, 0 /* unused nr */);
+		rc = start_cb(args, 0, *cmp_rank, 1, NULL /* unused data */, 0 /* unused nr */);
 		if (rc != 0)
 			goto out;
 	}
@@ -543,9 +549,9 @@ out:
 		 */
 		chk_start_post_reply(req, NULL);
 
-		if (rc < 0 && rc != -DER_ALREADY) {
+		if (rc < 0) {
 			rc1 = chk_stop_remote(rank_list, gen, pool_nr, pools, NULL, NULL);
-			if (rc1 < 0)
+			if (rc1 < 0 && rc1 != -DER_NOTAPPLICABLE)
 				D_ERROR("Failed to cleanup DAOS check with gen "DF_X64": "DF_RC"\n",
 					gen, DP_RC(rc1));
 		}
@@ -554,8 +560,8 @@ out:
 	}
 
 	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u start DAOS check with gen "DF_X64", flags %x, phase %d: "DF_RC"\n",
-		 leader, gen, flags, phase, DP_RC(rc));
+		 "Rank %u start checker, gen "DF_X64", flags %x, phase %d, iv "DF_UUIDF":"DF_RC"\n",
+		 leader, gen, flags, phase, DP_UUID(iv_uuid), DP_RC(rc));
 
 	return rc;
 }
@@ -595,7 +601,7 @@ chk_stop_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t pool
 		D_GOTO(out, rc = 0);
 
 	for (i = 0, rank = cso->cso_ranks.ca_arrays; i < cso->cso_ranks.ca_count; i++, rank++) {
-		rc = stop_cb(args, *rank, 1, &cso->cso_flags, 0 /* unused nr */);
+		rc = stop_cb(args, 0, *rank, 1, &cso->cso_flags, 0 /* unused nr */);
 		if (rc != 0)
 			goto out;
 	}
@@ -643,8 +649,8 @@ chk_query_remote(d_rank_list_t *rank_list, uint64_t gen, int pool_nr, uuid_t poo
 	if (cqo->cqo_status < 0)
 		D_GOTO(out, rc = cqo->cqo_status);
 
-	rc = query_cb(args, 0 /* unused rank */, cqo->cqo_status,
-		      cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
+	rc = query_cb(args, cqo->cqo_gen, cqo->cqo_ins_status /* reuse rank as ins_stauts */,
+		      cqo->cqo_status, cqo->cqo_shards.ca_arrays, cqo->cqo_shards.ca_count);
 
 out:
 	if (req != NULL) {
@@ -769,7 +775,7 @@ chk_cont_list_remote(struct ds_pool *pool, uint64_t gen, chk_co_rpc_cb_t list_cb
 	if (cclo->cclo_status < 0)
 		D_GOTO(out, rc = cclo->cclo_status);
 
-	rc = list_cb(args, 0 /* unused rank */, cclo->cclo_status,
+	rc = list_cb(args, 0, 0 /* unused rank */, cclo->cclo_status,
 		     cclo->cclo_conts.ca_arrays, cclo->cclo_conts.ca_count);
 
 out:
@@ -790,7 +796,8 @@ out:
 }
 
 int
-chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase)
+chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint32_t phase,
+		      uint32_t flags)
 {
 	crt_rpc_t			*req;
 	struct chk_pool_start_in	*cpsi;
@@ -805,6 +812,7 @@ chk_pool_start_remote(d_rank_list_t *rank_list, uint64_t gen, uuid_t uuid, uint3
 	cpsi->cpsi_gen = gen;
 	uuid_copy(cpsi->cpsi_pool, uuid);
 	cpsi->cpsi_phase = phase;
+	cpsi->cpsi_flags = flags;
 
 	rc = dss_rpc_send(req);
 	if (rc != 0)
@@ -948,7 +956,8 @@ out:
 }
 
 int
-chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t *pool_nr, uuid_t **pools)
+chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uuid_t iv_uuid, uint32_t *flags,
+		  uint32_t *pool_nr, uuid_t **pools)
 {
 	crt_rpc_t		*req;
 	struct chk_rejoin_in	*cri;
@@ -963,6 +972,7 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t *pool_n
 	cri = crt_req_get(req);
 	cri->cri_gen = gen;
 	cri->cri_rank = rank;
+	uuid_copy(cri->cri_iv_uuid, iv_uuid);
 
 	rc = dss_rpc_send(req);
 	if (rc != 0)
@@ -971,6 +981,7 @@ chk_rejoin_remote(d_rank_t leader, uint64_t gen, d_rank_t rank, uint32_t *pool_n
 	cro = crt_reply_get(req);
 	rc = cro->cro_status;
 	if (rc == 0 && cro->cro_pools.ca_count > 0) {
+		*flags = cro->cro_flags;
 		D_ALLOC(tmp, cro->cro_pools.ca_count);
 		if (tmp == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
@@ -985,8 +996,8 @@ out:
 		crt_req_decref(req);
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "Rank %u rejoin DAOS check with leader %u, gen "DF_X64": "DF_RC"\n",
-		 rank, leader, gen, DP_RC(rc));
+		 "Rank %u rejoin DAOS check with leader %u, gen "DF_X64", iv "DF_UUIDF": "DF_RC"\n",
+		 rank, leader, gen, DP_UUID(iv_uuid), DP_RC(rc));
 
 	return rc;
 }

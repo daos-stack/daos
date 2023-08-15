@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIPG"
+#define TESTS "mpceFtTViADKCoRvSXbOzZUdrNbBIPG"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -72,6 +72,7 @@ print_usage(int rank)
 	print_message("daos_test -N|--nvme_recovery\n");
 	print_message("daos_test -P|--daos_pipeline\n");
 	print_message("daos_test -G|--upgrade\n");
+	print_message("daos_test -F |--cat_recov\n");
 	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -302,6 +303,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_upgrade_test(rank, size, sub_tests, sub_tests_size);
 			break;
+		case 'F':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS catastrophic recovery tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_cr_test(rank, size, sub_tests, sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -363,6 +370,7 @@ main(int argc, char **argv)
 		{"mdr",		no_argument,		NULL,	'R'},
 		{"oid_alloc",	no_argument,		NULL,	'O'},
 		{"degraded",	no_argument,		NULL,	'd'},
+		{"cat_recov",	no_argument,		NULL,	'F'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"rebuild_simple",	no_argument,	NULL,	'v'},
 		{"rebuild_ec",	no_argument,		NULL,	'S'},
@@ -399,7 +407,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
+			    "ampcCdFtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
