@@ -4961,7 +4961,8 @@ ostatx_cb(tse_task_t *task, void *data)
 {
 	struct dfs_statx_args	*args = daos_task_get_args(task);
 	struct statx_op_args	*op_args = *((struct statx_op_args **)data);
-	int			rc = task->dt_result;
+	int                      rc      = daos_der2errno(task->dt_result);
+	int                      rc2;
 
 	if (rc != 0) {
 		D_ERROR("Failed to stat file "DF_RC"\n", DP_RC(rc));
@@ -4992,8 +4993,10 @@ ostatx_cb(tse_task_t *task, void *data)
 
 out:
 	D_FREE(op_args);
-	rc = daos_obj_close(args->parent_oh, NULL);
-	return daos_der2errno(rc);
+	rc2 = daos_obj_close(args->parent_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
 }
 
 int
