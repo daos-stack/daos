@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import sys
-import traceback
+# import traceback
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
@@ -225,7 +225,7 @@ class Launch():
         except Exception as error:      # pylint: disable=broad-except
             message = f"Unknown exception raised during launch.py execution: {error}"
             status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
-            logger.debug("Stacktrace:\n%s", traceback.format_exc(error))
+            # logger.debug("Stacktrace:\n%s", traceback.format_exc(error))
         return status
 
     def _run(self, args):
