@@ -736,14 +736,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 			req:    &ctlpb.SmdManageReq{},
 			expErr: errors.New("Unrecognized operation"),
 		},
-		"led-manage; missing ids": {
-			req: &ctlpb.SmdManageReq{
-				Op: &ctlpb.SmdManageReq_Led{
-					Led: &ctlpb.LedManageReq{},
-				},
-			},
-			expErr: errors.New("empty id string"),
-		},
 		"dev-replace; missing uuid": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Replace{
@@ -1022,6 +1014,44 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				},
 			},
 		},
+		"led-manage; dual-engine; no ids in request": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					// No ids specified in request should return all.
+					Led: &ctlpb.LedManageReq{},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentifyDev,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{},
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentifyDev},
+						},
+					},
+				},
+			},
+		},
 		"led-manage; mixed id types in request": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -1087,6 +1117,47 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 									LedState: ledStateNormal,
 								},
 							},
+						},
+					},
+				},
+			},
+		},
+		// Multiple NVMe namespaces per SSD.
+		"led-manage; multiple dev ids for the same traddr": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					Led: &ctlpb.LedManageReq{
+						// Matches IDs returned in initial list query.
+						Ids: test.MockUUID(1) + "," + test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								pbNormDev,
+								func() *ctlpb.SmdDevice {
+									d := *pbNormDev
+									d.Uuid = test.MockUUID(2)
+									return &d
+								}(),
+							},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentifyDev,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentifyDev},
 						},
 					},
 				},

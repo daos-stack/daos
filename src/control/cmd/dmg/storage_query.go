@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -278,7 +278,7 @@ type ledIdentifyCmd struct {
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
 func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation:       control.LedBlinkOp,
@@ -303,7 +303,7 @@ type ledCheckCmd struct {
 // Runs SPDK VMD API commands to query the LED state on VMD devices
 func (cmd *ledCheckCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation: control.LedCheckOp,
