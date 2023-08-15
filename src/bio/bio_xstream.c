@@ -1851,8 +1851,10 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 			rc = bio_led_manage(ctxt, NULL, d_bdev->bb_uuid,
 					    (unsigned int)CTL__LED_ACTION__RESET, &led_state, 0);
 			if (rc != 0)
-				D_ERROR("Reset LED identify state after timeout failed on device:"
-					DF_UUID", "DF_RC"\n", DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				/* DER_NOSYS indicates that VMD-LED control is not enabled */
+				D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
+					 "Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
+					 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 		}
 	}
 }
