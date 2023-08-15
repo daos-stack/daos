@@ -127,6 +127,7 @@ dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr);
 int
 dfs_relink_root(daos_handle_t coh);
 
+/** Internal routine for async ostat. Today this only works for files. */
 int
 dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev);
 
