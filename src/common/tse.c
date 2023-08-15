@@ -457,7 +457,7 @@ dtp_generation_inc(struct tse_task_private *dtp)
  * Execute the prep callback(s) of the task.
  */
 static bool
-tse_task_prep_callback(tse_task_t *task)
+tse_task_prep_callback(tse_task_t *task, int *result)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
 	struct tse_task_cb	*dtc;
@@ -472,12 +472,10 @@ tse_task_prep_callback(tse_task_t *task)
 		gen = dtp_generation_get(dtp);
 		if (!atomic_load(&dtp->dtp_completed)) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
-			if (task->dt_result == 0)
-				task->dt_result = rc;
+			if (*result == 0)
+				*result = rc;
 		}
-
 		D_FREE(dtc);
-
 		new_gen = dtp_generation_get(dtp);
 		/** Task was re-initialized; */
 		if (!atomic_load(&dtp->dtp_running) && new_gen != gen)
@@ -496,42 +494,36 @@ tse_task_prep_callback(tse_task_t *task)
  * already have been removed from the list at this point.
  */
 static bool
-tse_task_complete_callback(tse_task_t *task)
+tse_task_complete_callback(tse_task_t *task, int *result)
 {
 	struct tse_task_private		*dtp = tse_task2priv(task);
-	struct tse_sched_private        *dsp    = dtp->dtp_sched;
 	uint32_t		 	gen, new_gen;
 	struct tse_task_cb		*dtc;
 	struct tse_task_cb		*tmp;
+	int				rc;
 
 	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
 	 * re-init the task that may be completed immediately.
 	 */
-	tse_task_addref_locked(dtp);
+	tse_task_addref(task);
 
 	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
-		int ret;
-
 		d_list_del(&dtc->dtc_list);
 		gen = dtp_generation_get(dtp);
-		D_MUTEX_UNLOCK(&dsp->dsp_lock);
-		ret = dtc->dtc_cb(task, dtc->dtc_arg);
-		D_MUTEX_LOCK(&dsp->dsp_lock);
-		if (task->dt_result == 0)
-			task->dt_result = ret;
-
+		rc = dtc->dtc_cb(task, dtc->dtc_arg);
+		if (*result == 0)
+			*result = rc;
 		D_FREE(dtc);
-
 		/** Task was re-initialized, or new dep-task added */
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
 			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
-			tse_task_decref_free_locked(task);
+			tse_task_decref(task);
 			return false;
 		}
 	}
 
-	tse_task_decref_free_locked(task);
+	tse_task_decref(task);
 	return true;
 }
 
@@ -591,7 +583,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 
 		if (!dsp->dsp_cancelling) {
 			/** if task is reinitialized in prep cb, skip over it */
-			if (!tse_task_prep_callback(task)) {
+			if (!tse_task_prep_callback(task, &task->dt_result)) {
 				tse_task_decref(task);
 				continue;
 			}
@@ -658,8 +650,8 @@ tse_task_post_process(tse_task_t *task)
 			dtp_tmp->dtp_dep_cnt);
 		if (!dsp_tmp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
 		    dtp_tmp->dtp_running) {
-			bool done;
-
+			bool	done;
+			int	ret = 0;
 			/*
 			 * If the task is already running, let's mark it
 			 * complete. This happens when we create subtasks in the
@@ -670,8 +662,12 @@ tse_task_post_process(tse_task_t *task)
 			 * block.
 			 */
 			/** release lock for CB */
-			done = tse_task_complete_callback(task_tmp);
+			D_MUTEX_UNLOCK(&dsp_tmp->dsp_lock);
+			done = tse_task_complete_callback(task_tmp, &ret);
+			D_MUTEX_LOCK(&dsp_tmp->dsp_lock);
 
+			if (task_tmp->dt_result == 0)
+				task_tmp->dt_result = ret;
 			/*
 			 * task reinserted itself in scheduler by
 			 * calling tse_task_reinit().
@@ -853,17 +849,17 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_task_private		*dtp	= tse_task2priv(task);
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
+	int				rc = ret;
 
 	if (atomic_load(&dtp->dtp_completed))
 		return;
 
-	if (task->dt_result == 0)
-		task->dt_result = ret;
+	/** Execute task completion callbacks first. */
+	done = tse_task_complete_callback(task, &rc);
 
 	D_MUTEX_LOCK(&dsp->dsp_lock);
-	/** Execute task completion callbacks first. */
-	done = tse_task_complete_callback(task);
-
+	if (task->dt_result == 0)
+		task->dt_result = rc;
 	if (!dsp->dsp_cancelling) {
 		/** if task reinserted itself in scheduler, don't complete */
 		if (done)
@@ -1043,19 +1039,16 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	}
 	/* decref when remove the task from dsp (tse_sched_process_complete) */
 	tse_sched_priv_addref_locked(dsp);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 
 	/** if caller wants to run the task instantly, call the task body function now. */
 	if (instant && ready) {
-		D_MUTEX_UNLOCK(&dsp->dsp_lock);
 		dtp->dtp_func(task);
-		D_MUTEX_LOCK(&dsp->dsp_lock);
 		/** If task was completed return the task result */
 		if (atomic_load(&dtp->dtp_completed))
 			rc = task->dt_result;
-
-		tse_task_decref_free_locked(task);
+		tse_task_decref(task);
 	}
-	D_MUTEX_UNLOCK(&dsp->dsp_lock);
 	return rc;
 }
 
