@@ -7,8 +7,10 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -352,6 +354,28 @@ show_help(char *name)
 	    name, DAOS_VERSION);
 }
 
+static int
+check_fd_mountpoint(const char *mountpoint)
+{
+	int fd = -1;
+	int len = 0;
+
+	int res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	if (res != 1) {
+		return -1;
+	}
+	if (len != strnlen(mountpoint, NAME_MAX)) {
+		return -1;
+	}
+
+	int fd_flags = fcntl(fd, F_GETFD);
+	if (fd_flags == -1) {
+		return -1;
+	}
+
+	return fd;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -633,8 +657,17 @@ main(int argc, char **argv)
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
-		printf("Mount point does not exist\n");
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		/* In order to allow FUSE daemons to run without privileges, libfuse
+		 * allows the caller to open /dev/fuse and pass the file descriptor by
+		 * specifying /dev/fd/N as the mountpoint. In some cases, realpath may
+		 * fail for these paths.
+		 */
+		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
+		if (fd == -1) {
+			printf("Mount point does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		DFUSE_LOG_INFO("Mounting FUSE file descriptor %d", fd);
 	} else if (rc == ENOTCONN) {
 		printf("Stale mount point, run fusermount3 and retry\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
