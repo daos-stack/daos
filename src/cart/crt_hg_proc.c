@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -456,7 +456,8 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 
 	// TODO: ALEXMOD -- should we only be copying req portion here?
 	// if so then we need to do field by field copy of fields of interest
-	out->crp_header_v1 = in->crp_header_v1;
+	//	out->crp_header_v1 = in->crp_header_v1;
+	out->crp_header_v0.crp_req_hdr = in->crp_header_v0.crp_req_hdr;
 	*out->crp_header.p_dst_hlc = *in->crp_header.p_dst_hlc;
 
 	if (!(out->crp_flags & CRT_RPC_FLAG_COLL))
