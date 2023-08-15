@@ -388,7 +388,7 @@ register_cb(tse_task_t *task, bool is_comp, tse_task_cb_t cb,
 	struct tse_task_private *dtp = tse_task2priv(task);
 	struct tse_task_cb *dtc;
 
-	if (atomic_load_relaxed(&dtp->dtp_completed)) {
+	if (atomic_load(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a callback for a completed task\n");
 		return -DER_NO_PERM;
 	}
@@ -470,7 +470,7 @@ tse_task_prep_callback(tse_task_t *task)
 		d_list_del(&dtc->dtc_list);
 		/** no need to call if task was completed in one of the cbs */
 		gen = dtp_generation_get(dtp);
-		if (!atomic_load_relaxed(&dtp->dtp_completed)) {
+		if (!atomic_load(&dtp->dtp_completed)) {
 			rc = dtc->dtc_cb(task, dtc->dtc_arg);
 			if (task->dt_result == 0)
 				task->dt_result = rc;
@@ -480,7 +480,7 @@ tse_task_prep_callback(tse_task_t *task)
 
 		new_gen = dtp_generation_get(dtp);
 		/** Task was re-initialized; */
-		if (!atomic_load_relaxed(&dtp->dtp_running) && new_gen != gen)
+		if (!atomic_load(&dtp->dtp_running) && new_gen != gen)
 			ret = false;
 	}
 
@@ -596,7 +596,7 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				continue;
 			}
 			D_ASSERT(dtp->dtp_func != NULL);
-			if (!atomic_load_relaxed(&dtp->dtp_completed))
+			if (!atomic_load(&dtp->dtp_completed))
 				dtp->dtp_func(task);
 		}
 		if (bumped)
@@ -618,7 +618,7 @@ tse_task_post_process(tse_task_t *task)
 	struct tse_sched_private *dsp = dtp->dtp_sched;
 	int rc = 0;
 
-	D_ASSERT(atomic_load_relaxed(&dtp->dtp_completed) == 1);
+	D_ASSERT(atomic_load(&dtp->dtp_completed) == 1);
 	D_MUTEX_LOCK(&dsp->dsp_lock);
 
 	/* set scheduler result */
@@ -854,7 +854,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
 
-	if (atomic_load_relaxed(&dtp->dtp_completed))
+	if (atomic_load(&dtp->dtp_completed))
 		return;
 
 	if (task->dt_result == 0)
@@ -892,14 +892,14 @@ tse_task_add_dependent(tse_task_t *task, tse_task_t *dep)
 
 	D_ASSERT(task != dep);
 
-	if (atomic_load_relaxed(&dtp->dtp_completed)) {
+	if (atomic_load(&dtp->dtp_completed)) {
 		D_ERROR("Can't add a dependency for a completed task (%p)\n",
 			task);
 		return -DER_NO_PERM;
 	}
 
 	/** if task to depend on has completed already, do nothing */
-	if (atomic_load_relaxed(&dep_dtp->dtp_completed))
+	if (atomic_load(&dep_dtp->dtp_completed))
 		return 0;
 
 	diff_sched = dtp->dtp_sched != dep_dtp->dtp_sched;
@@ -1050,7 +1050,7 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 		dtp->dtp_func(task);
 		D_MUTEX_LOCK(&dsp->dsp_lock);
 		/** If task was completed return the task result */
-		if (atomic_load_relaxed(&dtp->dtp_completed))
+		if (atomic_load(&dtp->dtp_completed))
 			rc = task->dt_result;
 
 		tse_task_decref_free_locked(task);

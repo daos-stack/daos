@@ -399,7 +399,7 @@ daos_event_launch(struct daos_event *ev)
 	struct daos_eq_private		*eqx = NULL;
 	int				  rc = 0;
 
-	if (evx->evx_status != DAOS_EVS_READY) {
+	if (atomic_load(&evx->evx_status) != DAOS_EVS_READY) {
 		D_ERROR("Event status should be INIT: %d\n", evx->evx_status);
 		return -DER_NO_PERM;
 	}
@@ -603,7 +603,7 @@ daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag)
 		return rc;
 	}
 
-	if (atomic_load_relaxed(&evx->evx_status) == DAOS_EVS_READY)
+	if (atomic_load(&evx->evx_status) == DAOS_EVS_READY)
 		*flag = true;
 	else
 		*flag = false;
@@ -920,7 +920,7 @@ daos_event_destroy(struct daos_event *ev, bool force)
 	struct daos_event_private	*evp = daos_ev2evx(ev);
 	int				 rc = 0;
 
-	if (!force && atomic_load_relaxed(&evp->evx_status) == DAOS_EVS_RUNNING)
+	if (!force && atomic_load(&evp->evx_status) == DAOS_EVS_RUNNING)
 		return -DER_BUSY;
 
 	if (d_list_empty(&evp->evx_child)) {
@@ -948,7 +948,7 @@ daos_event_destroy_children(struct daos_event *ev, bool force)
 	d_list_for_each_entry_safe(sub_evx, tmp, &evp->evx_child,
 				   evx_link) {
 		struct daos_event *sub_ev = daos_evx2ev(sub_evx);
-		daos_ev_status_t ev_status = atomic_load_relaxed(&sub_evx->evx_status);
+		daos_ev_status_t ev_status = atomic_load(&sub_evx->evx_status);
 
 		d_list_del_init(&sub_evx->evx_link);
 		rc = daos_event_destroy(sub_ev, force);
@@ -1246,7 +1246,7 @@ daos_event_priv_get(daos_event_t **ev)
 		ev_thpriv_is_init = true;
 	}
 
-	ev_status = atomic_load_relaxed(&evx->evx_status);
+	ev_status = atomic_load(&evx->evx_status);
 	if (ev_status != DAOS_EVS_READY) {
 		D_CRIT("private event is inuse, status=%d\n", ev_status);
 		return -DER_BUSY;
@@ -1274,13 +1274,13 @@ daos_event_priv_wait()
 	epa.eqx = NULL;
 
 	/* Wait on the event to complete */
-	while (atomic_load_relaxed(&evx->evx_status) != DAOS_EVS_READY) {
+	while (atomic_load(&evx->evx_status) != DAOS_EVS_READY) {
 		rc = crt_progress_cond(evx->evx_ctx, ev_prog_timeout, ev_progress_cb, &epa);
 
 		/** progress succeeded, loop can exit if event completed */
 		if (rc == 0) {
 			rc = ev_thpriv.ev_error;
-			if (atomic_load_relaxed(&evx->evx_status) == DAOS_EVS_READY)
+			if (atomic_load(&evx->evx_status) == DAOS_EVS_READY)
 				break;
 			continue;
 		}
