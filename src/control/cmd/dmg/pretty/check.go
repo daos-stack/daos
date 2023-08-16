@@ -108,32 +108,97 @@ func PrintCheckQueryResp(out io.Writer, resp *control.SystemCheckQueryResp, verb
 		return
 	}
 
-	iw := txtfmt.NewIndentWriter(out)
 	fmt.Fprintln(out, "Inconsistency Reports:")
+	if verbose {
+		printInconsistencyReportsVerbose(out, resp)
+	} else {
+		printInconsistencyReportsTable(out, resp)
+	}
+}
+
+func printInconsistencyReportsTable(out io.Writer, resp *control.SystemCheckQueryResp) {
+	const (
+		idLabel     = "ID"
+		classLabel  = "Class"
+		poolLabel   = "Pool"
+		contLabel   = "Cont"
+		resLabel    = "Resolution"
+		repairLabel = "Suggested Repair"
+	)
+	table := []txtfmt.TableRow{}
+	hasCont := false
+	hasRepairChoices := false
+	for _, report := range resp.Reports {
+		tr := txtfmt.TableRow{}
+
+		tr[idLabel] = fmt.Sprintf("0x%x", report.Seq)
+		tr[classLabel] = control.SystemCheckFindingClass(report.Class).String()
+		tr[poolLabel] = checkerPoolID(report, false)
+
+		if report.ContUuid != "" {
+			hasCont = true
+			tr[contLabel] = checkerContID(report, false)
+		}
+
+		if report.IsInteractive() {
+			tr[resLabel] = "Action required"
+			choices := report.RepairChoices()
+			if len(choices) > 0 {
+				// First repair choice is the recommended option
+				tr[repairLabel] = fmt.Sprintf("0: %s", choices[0].Info)
+				hasRepairChoices = true
+			}
+		} else if res := report.Resolution(); res != "" {
+			tr[resLabel] = res
+		}
+
+		table = append(table, tr)
+	}
+
+	cols := []string{idLabel, classLabel, poolLabel}
+	if hasCont {
+		cols = append(cols, contLabel)
+	}
+	cols = append(cols, resLabel)
+	if hasRepairChoices {
+		cols = append(cols, repairLabel)
+	}
+	tw := txtfmt.NewTableFormatter(cols...)
+	fmt.Fprintf(out, "%s\n", tw.Format(table))
+}
+
+func checkerPoolID(report *control.SystemCheckReport, verbose bool) string {
+	poolID := report.PoolUuid
+	if report.PoolLabel != "" {
+		poolID = report.PoolLabel
+		if verbose {
+			poolID += fmt.Sprintf(" (%s)", report.PoolUuid)
+		}
+	}
+	return poolID
+}
+
+func checkerContID(report *control.SystemCheckReport, verbose bool) string {
+	contID := report.ContUuid
+	if report.ContLabel != "" {
+		contID = report.ContLabel
+		if verbose {
+			contID += fmt.Sprintf(" (%s)", report.ContUuid)
+		}
+	}
+	return contID
+}
+
+func printInconsistencyReportsVerbose(out io.Writer, resp *control.SystemCheckQueryResp) {
+	iw := txtfmt.NewIndentWriter(out)
 	for _, report := range resp.Reports {
 		cls := control.SystemCheckFindingClass(report.Class)
 		fmt.Fprintf(iw, "ID:         0x%x\n", report.Seq)
 		fmt.Fprintf(iw, "Class:      %s\n", cls)
 		fmt.Fprintf(iw, "Message:    %s\n", report.Msg)
-		poolID := report.PoolUuid
-		var poolIDV string
-		if report.PoolLabel != "" {
-			poolID = report.PoolLabel
-			if verbose {
-				poolIDV = fmt.Sprintf(" (%s)", report.PoolUuid)
-			}
-		}
-		fmt.Fprintf(iw, "Pool:       %s%s\n", poolID, poolIDV)
+		fmt.Fprintf(iw, "Pool:       %s\n", checkerPoolID(report, true))
 		if report.ContUuid != "" {
-			contID := report.ContUuid
-			var contIDV string
-			if report.ContLabel != "" {
-				contID = report.ContLabel
-				if verbose {
-					contIDV = fmt.Sprintf(" (%s)", report.ContUuid)
-				}
-			}
-			fmt.Fprintf(iw, "Container:  %s%s\n", contID, contIDV)
+			fmt.Fprintf(iw, "Container:  %s\n", checkerContID(report, true))
 		}
 		if report.IsInteractive() {
 			fmt.Fprintf(iw, "Potential resolution actions:\n")
