@@ -32,8 +32,12 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"per-server metadata device health query (missing uuid)",
 			"storage query device-health",
-			printRequest(t, &control.SmdQueryReq{}),
-			errors.New("required flag"),
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             ranklist.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+			}),
+			nil,
 		},
 		{
 			"per-server metadata query pools",
