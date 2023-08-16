@@ -59,6 +59,7 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	rc = bio_led_manage(xs_ctxt, NULL, d_bdev->bb_uuid, (unsigned int)CTL__LED_ACTION__SET,
 			    &led_state, 0);
 	if (rc != 0)
+		/* DER_NOSYS indicates that VMD-LED control is not enabled */
 		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
 			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
 			 DP_RC(rc));
@@ -928,11 +929,21 @@ led_manage(struct bio_xs_context *xs_ctxt, struct spdk_pci_addr pci_addr, Ctl__L
 	switch (action) {
 	case CTL__LED_ACTION__SET:
 		if (*state == CTL__LED_STATE__QUICK_BLINK) {
-			/* If identify state has been set, record LED start time on bdevs */
+			/**
+			 * If identify state has been set, record LED start time on bdevs
+			 * to start timer.
+			 */
 			rc = set_timer(xs_ctxt, pci_addr,
 				       (duration != 0) ? d_timeus_secdiff(0) + duration : 0);
 			if (rc != 0) {
 				D_ERROR("Recording LED start time failed (%d)\n", rc);
+				return rc;
+			}
+		} else {
+			/* Clear LED start time to cancel any previously set timers */
+			rc = set_timer(xs_ctxt, pci_addr, 0);
+			if (rc != 0) {
+				D_ERROR("Clearing LED start time failed (%d)\n", rc);
 				return rc;
 			}
 		}
