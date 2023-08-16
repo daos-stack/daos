@@ -99,8 +99,8 @@ dfuse_reply_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie,
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else if ((inode->ie_parent != ie->ie_parent) ||
 			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX) != 0)) {
-			DFUSE_TRA_DEBUG(inode, "File has moved from '%s to '%s'",
-					inode->ie_name, ie->ie_name);
+			DFUSE_TRA_DEBUG(inode, "File has moved from " DF_DE " to " DF_DE,
+					DP_DE(inode->ie_name), DP_DE(ie->ie_name));
 
 			dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
 
@@ -244,8 +244,7 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	char                     *outp     = &out[0];
 	daos_size_t               attr_len = DUNS_MAX_XATTR_LEN;
 
-	DFUSE_TRA_DEBUG(parent,
-			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%#lx " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
