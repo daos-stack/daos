@@ -8,6 +8,7 @@ server_config:
   engines:
     0:
       storage: auto
+  system_ram_reserved: 2
 server_manager:
   storage_prepare_timeout: 60
   storage_format_timeout: 60
