@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -709,6 +710,7 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 		DevState: devStateNormal,
 		LedState: ledStateIdentify,
 	}
+	devManageBusyResp := &ctlpb.DevManageResp{Status: int32(daos.Busy), Device: pbNormDev}
 
 	for name, tc := range map[string]struct {
 		setupAP        bool
@@ -1273,10 +1275,128 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				},
 			},
 		},
+		"dev-replace; retry on busy": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: &ctlpb.DevManageResp{Device: pbReplacedDev}},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbReplacedDev},
+						},
+					},
+				},
+			},
+		},
+		"dev-replace; retry on busy; other error": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{Message: devManageBusyResp},
+					{
+						Message: &ctlpb.DevManageResp{
+							Status: int32(daos.TimedOut),
+							Device: pbNormDev,
+						},
+					},
+					{Message: devManageBusyResp},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{
+								Device: pbNormDev,
+								Status: int32(daos.TimedOut),
+							},
+						},
+					},
+				},
+			},
+		},
+		"dev-replace; retry on busy; keeps busy": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Replace{
+					Replace: &ctlpb.DevReplaceReq{
+						OldDevUuid: test.MockUUID(1),
+						NewDevUuid: test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+					{Message: devManageBusyResp},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{
+								Device: pbNormDev,
+								Status: int32(daos.Busy),
+							},
+						},
+					},
+				},
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
+
+			origInterval := baseDevReplaceBackoff
+			origRetries := maxDevReplaceRetries
+			origFactor := maxDevReplaceBackoffFactor
+			baseDevReplaceBackoff = 50 * time.Millisecond
+			maxDevReplaceRetries = 5
+			maxDevReplaceBackoffFactor = 1
+			defer func() {
+				maxDevReplaceBackoffFactor = origFactor
+				maxDevReplaceRetries = origRetries
+				baseDevReplaceBackoff = origInterval
+			}()
 
 			engineCount := len(tc.drpcResps)
 			if engineCount == 0 {
