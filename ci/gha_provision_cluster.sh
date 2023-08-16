@@ -5,7 +5,7 @@ set -euxo pipefail
 env | sort
 reqid=${REQID:-$(reqidgen)}
 echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
-url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_waittest_vm9&'"REQID=$reqid"
+url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"REQID=$reqid"
 if ! queue_url=$(curl -D - -f -v -X POST --user "$JENKINS_TOKEN" "$url" |
                  sed -ne 's/\r//' -e '/Location:/s/.*: //p'); then
     echo "Failed to request a cluster."
