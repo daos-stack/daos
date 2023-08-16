@@ -13,6 +13,7 @@ import re
 from ClusterShell.NodeSet import NodeSet
 
 from run_utils import run_remote
+from yaml_utils import get_yaml_data, YamlException
 
 
 def find_pci_address(value, *flags):
@@ -548,24 +549,56 @@ class StorageInfo():
         return list(mounted_addresses)
 
     def _get_mounted_devices(self):
-        """Get a dictionary of mounted devices names per group of hosts.
+        """Get a dictionary of list of mounted device names per host.
 
         Returns:
-            dict: a dictionary of mounted devices name values with host string keys
+            dict: a dictionary of list of mounted device names per host
         """
-        mounted_devices = {}
-        result = run_remote(self._log, self._hosts, 'lvs -o +devices')
-        self._log.debug('  Detected mounted devices:')
+        def get_mounted_parent(block_device):
+            """Get the mounted parent kernel device name for the lsblk json block device entry.
+
+            Args:
+                block_device (dict): lsblk json block device entry
+
+            Returns:
+                str: mounted parent kernel device name or None
+            """
+            if block_device and 'children' in block_device:
+                for child in block_device['children']:
+                    if get_mounted_parent(child):
+                        return block_device['name']
+            if block_device and 'mountpoint' in block_device and block_device['mountpoint']:
+                return block_device['name']
+            return None
+
+        self._log.debug('  Detecting mounted device names on %s', self._hosts)
+
+        mounted_names = {}
+        result = run_remote(self._log, self._hosts, 'lsblk --output NAME,MOUNTPOINT --json')
+        self._log.debug('  Detected mounted names:')
         for data in result.output:
             if not data.passed:
                 self._log.debug('    %s: Error detecting mounted devices', data.hosts)
                 continue
-            devices = list(set(re.findall(r'/dev/([\w]+)', '\n'.join(data.stdout), re.MULTILINE)))
-            if devices:
-                mounted_devices[str(data.hosts)] = devices
-                self._log.debug('    %s: %s', data.hosts, devices)
-
-        return mounted_devices
+            try:
+                lsblk_data = get_yaml_data('\n'.join(data.stdout))
+            except YamlException as error:
+                self._log.debug(
+                    '    %s: Error processing mounted device information: %s', data.hosts, error)
+                continue
+            key = 'blockdevices'
+            if key not in lsblk_data:
+                self._log.debug('    %s: lsblk json output missing \'%s\' key', data.hosts, key)
+                continue
+            for entry in lsblk_data[key]:
+                name = get_mounted_parent(entry)
+                self._log.debug('    %s: %s', data.hosts, name)
+                if name is not None:
+                    hosts_str = str(data.hosts)
+                    if hosts_str not in mounted_names:
+                        mounted_names[hosts_str] = []
+                    mounted_names[hosts_str].append(name)
+        return mounted_names
 
     def _get_addresses(self, hosts, devices):
         """Get a list of addresses for each of the devices.
@@ -581,8 +614,9 @@ class StorageInfo():
         self._log.debug('  Detecting addresses for %s on %s', devices, hosts)
 
         # Find the mounted device names on each host
-        command = f'ls -l /dev/disk/by-path/ | grep -E ({"|".join(devices)})'
+        command = f'ls -l /dev/disk/by-path/ | grep -w -E \'({"|".join(devices)})\''
         result = run_remote(self._log, self._hosts, command)
+        self._log.debug('  Detecting addresses for %s:', devices)
         for data in result.output:
             if not data.passed:
                 self._log.debug('    %s: Error detecting addresses', data.hosts)
