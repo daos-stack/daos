@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -71,7 +71,7 @@ type storageQueryCmd struct {
 
 type devHealthQueryCmd struct {
 	smdQueryCmd
-	UUID string `short:"u" long:"uuid" required:"1" description:"Device UUID"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID. All devices queried if arg not set"`
 }
 
 func (cmd *devHealthQueryCmd) Execute(_ []string) error {
