@@ -232,8 +232,12 @@ class DaosServerManager(SubprocessManager):
             if timeout.value is None:
                 # Set the default storage prepare/format timeout equal to 20 seconds per NVMe
                 if bdev_lists is None:
-                    data = self.manager.job.get_yaml_data()
-                    bdev_lists = dict_extract_values(data, ['storage', '*', 'bdev_list'])
+                    try:
+                        data = self.manager.job.yaml.get_yaml_data()
+                        bdev_lists = dict_extract_values(data, ['storage', '*', 'bdev_list'])
+                    except (AttributeError, TypeError, RecursionError):
+                        # Default if the bdev_list cannot be obtained from the server configuration
+                        bdev_lists = [None, None]
                 value = len(list_flatten(bdev_lists)) * 20
                 timeout.update(value, name)
 
