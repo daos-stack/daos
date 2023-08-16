@@ -463,8 +463,8 @@ def launch_extend(self, pool, name, results, args):
 
         # init the status dictionary
         params = {"name": name,
-                "status": status,
-                "vars": {"host": self.selected_host, "ranks": ranks}}
+                  "status": status,
+                  "vars": {"host": self.selected_host, "ranks": ranks}}
         self.log.info(
             "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
         ranks = ",".join(str(rank) for rank in ranklist)
