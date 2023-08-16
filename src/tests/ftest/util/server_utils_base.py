@@ -149,7 +149,6 @@ class DaosServerCommand(YamlCommand):
 
     def update_pattern_timeout(self):
         """Update the pattern timeout if undefined."""
-        bdev_lists = None
         if self.pattern_timeout.value is None:
             try:
                 data = self.yaml.get_yaml_data()
