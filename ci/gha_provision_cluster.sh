@@ -35,7 +35,7 @@ fi
 echo "NODE_COUNT=$(echo "$NODESTRING" | tr ',' ' ' | wc -w)" >> "$GITHUB_ENV"
 cat "$GITHUB_ENV"
 ssh -oPasswordAuthentication=false -v root@"${NODESTRING%%vm*}" \
-    "POOL=$CP_PROVISIONING_POOL
+    "POOL=${CP_PROVISIONING_POOL:-}
      NODESTRING=$NODESTRING
      NODELIST=$NODESTRING
      DISTRO=$DISTRO_WITH_VERSION
