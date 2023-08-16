@@ -17,7 +17,7 @@ from avocado import fail_on
 from ClusterShell.NodeSet import NodeSet
 from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
-from data_utils import dict_extract_values, flatten
+from data_utils import dict_extract_values, list_flatten
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
 from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
@@ -234,7 +234,7 @@ class DaosServerManager(SubprocessManager):
                 if bdev_lists is None:
                     data = self.manager.job.get_yaml_data()
                     bdev_lists = dict_extract_values(data, ['storage', '*', 'bdev_list'])
-                value = len(flatten(bdev_lists)) * 20
+                value = len(list_flatten(bdev_lists)) * 20
                 timeout.update(value, name)
 
     def prepare(self, storage=True):
