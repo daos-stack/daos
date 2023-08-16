@@ -240,6 +240,7 @@ keys_are_parsed_correctly(void **state)
 	assert_invalid(ddb_parse_key(NULL, &key));
 	/* invalid syntax */
 	assert_invalid(ddb_parse_key("{}", &key));
+	assert_invalid(ddb_parse_key("/", &key));
 	assert_invalid(ddb_parse_key("{", &key));
 	assert_invalid(ddb_parse_key("}", &key));
 	assert_invalid(ddb_parse_key("string_key{{64}", &key));
@@ -325,6 +326,38 @@ keys_are_parsed_correctly(void **state)
 	daos_iov_free(&key);
 }
 
+static void
+parse_hex_value(void **state)
+{
+	uint64_t actual = 0;
+
+	assert_rc_equal(-DER_INVAL, ddb_parse_hex("", &actual));
+	assert_int_equal(0, actual);
+	assert_rc_equal(-DER_INVAL, ddb_parse_hex("1234", &actual));
+	assert_int_equal(0, actual);
+	assert_rc_equal(-DER_INVAL, ddb_parse_hex("0x", &actual));
+	assert_int_equal(0, actual);
+
+	// parse 3 chars
+	assert_int_equal(3, ddb_parse_hex("0x0", &actual));
+	assert_int_equal(0, actual);
+	assert_int_equal(3, ddb_parse_hex("0x9", &actual));
+	assert_int_equal(9, actual);
+	assert_int_equal(3, ddb_parse_hex("0X9", &actual));
+	assert_int_equal(9, actual);
+
+	// parse 3 chars, even with more input
+	assert_int_equal(3, ddb_parse_hex("0x1zzz", &actual));
+	assert_int_equal(1, actual);
+
+	// too long of a hex string to put into an uint64
+	assert_rc_equal(-DER_INVAL, ddb_parse_hex("0x1234567890abcdef0123456789", &actual));
+
+	// max uint64
+	assert_int_equal(18, ddb_parse_hex("0xffffffffffffffff", &actual));
+	assert_int_equal(UINT64_MAX, actual);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -335,11 +368,8 @@ int
 ddb_parse_tests_run()
 {
 	static const struct CMUnitTest tests[] = {
-		TEST(vos_file_parts_tests),
-		TEST(string_to_argv_tests),
-		TEST(parse_args_tests),
-		TEST(parse_dtx_id_tests),
-		TEST(keys_are_parsed_correctly),
+	    TEST(vos_file_parts_tests), TEST(string_to_argv_tests),      TEST(parse_args_tests),
+	    TEST(parse_dtx_id_tests),   TEST(keys_are_parsed_correctly), TEST(parse_hex_value),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

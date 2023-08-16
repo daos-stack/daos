@@ -272,8 +272,8 @@ setup_global_arrays()
 	d_iov_set(&g_invalid_key, g_invalid_key_str, strlen(g_invalid_key_str));
 
 	for (i = 0; i < ARRAY_SIZE(g_recxs); i++) {
-		g_recxs[0].rx_idx = i;
-		g_recxs[0].rx_nr = 10;
+		g_recxs[i].rx_idx = i;
+		g_recxs[i].rx_nr  = 10;
 	}
 
 	return 0;
@@ -349,9 +349,8 @@ create_object_data(daos_handle_t *coh, uint32_t obj_to_create, uint32_t dkeys_to
 				if (a % 2 == 0) {
 					for (r = 0; r < recx_to_create; r++)
 						dvt_vos_insert_recx((*coh), g_oids[o],
-								    g_dkeys_str[d],
-								    g_akeys_str[a],
-								    &g_recxs[r], 1);
+								    g_dkeys_str[d], g_akeys_str[a],
+								    &g_recxs[r], 5 + r);
 				} else {
 					dvt_vos_insert_single((*coh), g_oids[o],
 							      g_dkeys_str[d],
@@ -388,6 +387,7 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 	tctx->dvt_obj_count = obj_to_create;
 	tctx->dvt_dkey_count = dkeys_to_create;
 	tctx->dvt_akey_count = akeys_to_create;
+	tctx->dvt_recx_count = recx_to_create;
 
 	/* Setup by creating containers */
 	for (c = 0; c < cont_to_create; c++) {
@@ -640,17 +640,17 @@ int main(int argc, char *argv[])
 		rc += func(); } while (0)
 
 		/* filtering suites and tests */
-		char test_suites[] = "";
+	char test_suites[] = "";
 #if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
-		cmocka_set_test_filter("**");
+	cmocka_set_test_filter("**");
 #endif
-		RUN_TEST_SUIT('a', ddb_parse_tests_run);
-		RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
-		RUN_TEST_SUIT('c', ddb_vos_tests_run);
-		RUN_TEST_SUIT('d', ddb_commands_tests_run);
-		RUN_TEST_SUIT('e', ddb_main_tests_run);
-		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
-		RUN_TEST_SUIT('g', ddb_path_tests_run);
+	RUN_TEST_SUIT('a', ddb_parse_tests_run);
+	RUN_TEST_SUIT('b', ddb_cmd_options_tests_run);
+	RUN_TEST_SUIT('c', ddb_vos_tests_run);
+	RUN_TEST_SUIT('d', ddb_commands_tests_run);
+	RUN_TEST_SUIT('e', ddb_main_tests_run);
+	RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
+	RUN_TEST_SUIT('g', ddb_path_tests_run);
 
 done:
 	ddb_fini();

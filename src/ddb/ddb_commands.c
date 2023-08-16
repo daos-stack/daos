@@ -51,12 +51,20 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
+	int rc;
+
 	if (ddb_pool_is_open(ctx)) {
 		ddb_error(ctx, "Must close pool before can open another\n");
 		return -DER_EXIST;
 	}
 	ctx->dc_write_mode = opt->write_mode;
-	return dv_pool_open(opt->path, &ctx->dc_poh);
+	rc                 = dv_pool_open(opt->path, &ctx->dc_poh);
+
+	if (ctx->dc_write_mode)
+		ddb_printf(ctx, "CAUTION: Connected to '%s' in WRITE MODE.\n", opt->path);
+	else
+		ddb_printf(ctx, "Connected to '%s'\n", opt->path);
+	return rc;
 }
 
 int
@@ -111,10 +119,9 @@ ls_cont_handler(struct ddb_cont *cont, void *args)
 	struct ls_ctx *ctx = args;
 
 	ctx->has_cont = true;
+	ddb_print_path(ctx->ctx, cont->ddbc_path, 0);
 	if (ctx->print_details)
 		ddb_print_cont(ctx->ctx, cont);
-	else
-		ddb_print_path(ctx->ctx, cont->ddbc_path, 0);
 
 	return 0;
 }
@@ -125,10 +132,9 @@ ls_obj_handler(struct ddb_obj *obj, void *args)
 	struct ls_ctx		*ctx = args;
 
 	ctx->has_obj = true;
+	ddb_print_path(ctx->ctx, obj->ddbo_path, ctx->has_cont);
 	if (ctx->print_details)
-		ddb_print_obj(ctx->ctx, obj, ctx->has_cont);
-	else
-		ddb_print_path(ctx->ctx, obj->ddbo_path, ctx->has_cont);
+		ddb_print_obj(ctx->ctx, obj, ctx->has_cont + 1);
 
 	return 0;
 }
@@ -140,10 +146,9 @@ ls_dkey_handler(struct ddb_key *key, void *args)
 	int		 indent = ctx->has_cont + ctx->has_obj;
 
 	ctx->has_dkey = true;
+	ddb_print_path(ctx->ctx, key->ddbk_path, indent);
 	if (ctx->print_details)
-		ddb_print_key(ctx->ctx, key, indent);
-	else
-		ddb_print_path(ctx->ctx, key->ddbk_path, indent);
+		ddb_print_key(ctx->ctx, key, indent + 1);
 
 	return 0;
 }
@@ -155,10 +160,9 @@ ls_akey_handler(struct ddb_key *key, void *args)
 	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey;
 
 	ctx->has_akey = true;
+	ddb_print_path(ctx->ctx, key->ddbk_path, indent);
 	if (ctx->print_details)
-		ddb_print_key(ctx->ctx, key, indent);
-	else
-		ddb_print_path(ctx->ctx, key->ddbk_path, indent);
+		ddb_print_key(ctx->ctx, key, indent + 1);
 
 	return 0;
 }
@@ -170,9 +174,8 @@ ls_sv_handler(struct ddb_sv *val, void *args)
 	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey;
 
 	if (ctx->print_details)
-		ddb_print_sv(ctx->ctx, val, indent);
-	else
-		ddb_print_path(ctx->ctx, val->ddbs_path, indent);
+		ddb_print_sv(ctx->ctx, val, indent + 1);
+
 	return 0;
 }
 
@@ -182,10 +185,9 @@ ls_array_handler(struct ddb_array *val, void *args)
 	struct ls_ctx	*ctx = args;
 	int		 indent = ctx->has_cont + ctx->has_obj + ctx->has_dkey + ctx->has_akey;
 
+	ddb_print_path(ctx->ctx, val->ddba_path, indent);
 	if (ctx->print_details)
-		ddb_print_array(ctx->ctx, val, indent);
-	else
-		ddb_print_path(ctx->ctx, val->ddba_path, indent);
+		ddb_print_array(ctx->ctx, val, indent + 1);
 	return 0;
 }
 
@@ -233,7 +235,7 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	}
 	lsctx.print_details = opt->details;
 	lsctx.ctx = ctx;
-	rc = dv_iterate(ctx->dc_poh, &vtp, opt->recursive, &handlers, &lsctx, &itp);
+	rc = dv_iterate(ctx->dc_poh, &vtp, opt->recursive, &handlers, &lsctx, &itp, opt->all_recx);
 
 	itp_free(&itp);
 
@@ -536,6 +538,7 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 	struct dv_tree_path		vtp = {0};
 	d_iov_t				iov = {0};
 	size_t				file_size;
+	bool                            is_new = false;
 	int				rc;
 
 	if (!ctx->dc_write_mode) {
@@ -549,14 +552,18 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 		/* It's okay that the path doesn't exist as long as the container does */
 		if (itp_has_cont_complete(&itp)) {
 			rc = 0;
+			is_new = true;
 		} else {
 			D_ERROR("Must at least have a valid container\n");
 			return -DDBER_INVALID_CONT;
 		}
 	}
 
-	itp_print_full(ctx, &itp);
-	ddb_print(ctx, "\n");
+	if (!is_new) {
+		ddb_print(ctx, "Updating value at ");
+		itp_print_full(ctx, &itp);
+		ddb_print(ctx, "\n");
+	}
 
 	if (!ctx->dc_io_ft.ddb_get_file_exists(opt->src)) {
 		ddb_errorf(ctx, "Unable to access '%s'\n", opt->src);
@@ -582,19 +589,37 @@ ddb_run_value_load(struct ddb_ctx *ctx, struct value_load_options *opt)
 	}
 
 	itp_to_vos_path(&itp, &vtp);
-	rc = dv_update(ctx->dc_poh, &vtp, &iov);
+	rc = dv_update(ctx->dc_poh, &vtp, &iov, 1);
 	if (!SUCCESS(rc)) {
 		ddb_errorf(ctx, "Unable to update path: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(done, rc);
 	}
+	if (is_new && vtp.vtp_is_recx && itp_recx(&itp)->drx_epoch == 0)
+		/* side effect of dv_update is the recx epoch will be set */
+		itp_recx(&itp)->drx_epoch = vtp.vtp_recx.drx_epoch;
+
+	if (is_new) {
+		/* now try to re-verify the path to make sure the new one exists it exists */
+		rc = dv_path_verify(ctx->dc_poh, &itp);
+		if (!SUCCESS(rc)) {
+			ddb_error(ctx, "The new path was created successfully, however, unable "
+				       "to find it.\n");
+			rc = itp_handle_path_parse_error(ctx, rc);
+		}
+	}
 
 done:
+	if (SUCCESS(rc)) {
+		if (is_new) {
+			ddb_print(ctx, "Successfully created new path for ");
+			itp_print_full(ctx, &itp);
+			ddb_print(ctx, "\n");
+		}
+		ddb_printf(ctx, "Successfully loaded file '%s'\n", opt->src);
+	}
+
 	daos_iov_free(&iov);
 	itp_free(&itp);
-
-	if (SUCCESS(rc))
-		ddb_printf(ctx, "Successfully loaded file '%s'\n", opt->src);
-
 	return rc;
 }
 
@@ -774,6 +799,11 @@ ddb_run_vea_dump(struct ddb_ctx *ctx)
 {
 	struct dump_vea_cb_args args = {.dva_ctx = ctx, .dva_count = 0};
 	int			rc;
+
+	if (daos_handle_is_inval(ctx->dc_poh)) {
+		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
+		return -DER_NONEXIST;
+	}
 
 	rc = dv_enumerate_vea(ctx->dc_poh, dump_vea_cb, &args);
 

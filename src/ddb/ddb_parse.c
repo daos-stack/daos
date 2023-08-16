@@ -436,7 +436,7 @@ key_parse_str(const char *input, daos_key_t *key)
 	}
 	if (size == 0)
 		size = key_len;
-	if (size < key_len)
+	if (size == 0 || size < key_len)
 		return -DER_INVAL;
 
 	rc = daos_iov_alloc(key, size, true);
@@ -466,4 +466,39 @@ ddb_parse_key(const char *input, daos_key_t *key)
 	return input[0] == '{' ?
 	       key_parse_typed(input, key) :
 	       key_parse_str(input, key);
+}
+
+int
+ddb_parse_hex(const char *input, uint64_t *value)
+{
+	const char *input_idx = input;
+	char       *verify;
+	uint32_t    input_processed;
+	char        x;
+
+	if (!is_hex(input))
+		return -DER_INVAL;
+
+	x = input[1];
+
+	input_idx += 2;
+	while (isxdigit(input_idx[0]))
+		input_idx++;
+
+	input_processed = input_idx - input;
+
+	*value = strtoul(input, NULL, 16);
+
+	D_ALLOC(verify, input_processed + 1); // +1 for '\0'
+	if (verify == NULL)
+		return -DER_NOMEM;
+	sprintf(verify, "0%c%lx", x, *value);
+	if (strncmp(input, verify, input_processed) != 0) {
+		D_FREE(verify);
+		return -DER_INVAL;
+	}
+
+	D_FREE(verify);
+
+	return (int)input_processed;
 }

@@ -126,7 +126,7 @@ parse_oid(const char *oid_str, struct dv_indexed_tree_path *itp)
 int
 parse_recx(const char *recx_str, struct dv_indexed_tree_path *itp)
 {
-	daos_recx_t	 recx = {0};
+	struct ddb_recx  recx = {0};
 	const char	*dash;
 	const char	*close;
 	uint64_t	 lo;
@@ -147,7 +147,7 @@ parse_recx(const char *recx_str, struct dv_indexed_tree_path *itp)
 		return rc;
 	}
 
-	if (recx_str[0] != '{' || recx_str[strlen(recx_str) - 1] != '}')
+	if (recx_str[0] != '{')
 		return -DDBER_INVALID_RECX;
 
 	dash = recx_str + 1;
@@ -166,12 +166,17 @@ parse_recx(const char *recx_str, struct dv_indexed_tree_path *itp)
 		close++;
 	if (close[0] != '}')
 		return -DDBER_INVALID_RECX;
+	if (close[1] == '.') {
+		/* Has epoch */
+		if (ddb_parse_hex(&close[2], &recx.drx_epoch) <= 0)
+			return -DDBER_INVALID_RECX;
+	}
 
 	lo = atoll(recx_str + 1);
 	hi = atoll(dash + 1);
 
-	recx.rx_idx = lo;
-	recx.rx_nr = hi - lo + 1;
+	recx.drx_idx = lo;
+	recx.drx_nr  = hi - lo + 1;
 
 	itp_set_recx_part_value(itp, &recx);
 
@@ -337,9 +342,9 @@ itp_part_set_key(union itp_part_type *part, void *part_value)
 bool
 itp_part_set_recx(union itp_part_type *part, void *part_value)
 {
-	daos_recx_t *recx = part_value;
+	struct ddb_recx *recx = part_value;
 
-	if (recx->rx_nr == 0)
+	if (recx->drx_nr == 0)
 		return false;
 
 	part->itp_recx = *recx;
@@ -452,13 +457,13 @@ itp_set_akey_part_value(struct dv_indexed_tree_path *itp, daos_key_t *key)
 }
 
 bool
-itp_set_recx(struct dv_indexed_tree_path *itp, daos_recx_t *recx, uint32_t idx)
+itp_set_recx(struct dv_indexed_tree_path *itp, struct ddb_recx *recx, uint32_t idx)
 {
 	return itp_set(itp, PATH_PART_RECX, recx, idx);
 }
 
 bool
-itp_set_recx_part_value(struct dv_indexed_tree_path *itp, daos_recx_t *recx)
+itp_set_recx_part_value(struct dv_indexed_tree_path *itp, struct ddb_recx *recx)
 {
 	return itp_part_value_set(itp, PATH_PART_RECX, recx);
 }
@@ -660,7 +665,7 @@ itp_akey(struct dv_indexed_tree_path *itp)
 	return &itp_value(itp, PATH_PART_AKEY)->itp_key;
 }
 
-daos_recx_t *
+struct ddb_recx *
 itp_recx(struct dv_indexed_tree_path *itp)
 {
 	return &itp_value(itp, PATH_PART_RECX)->itp_recx;
@@ -747,7 +752,7 @@ dv_has_akey(struct dv_tree_path *vtp)
 bool
 dv_has_recx(struct dv_tree_path *vtp)
 {
-	return vtp->vtp_recx.rx_nr > 0;
+	return vtp->vtp_recx.drx_nr > 0;
 }
 
 bool

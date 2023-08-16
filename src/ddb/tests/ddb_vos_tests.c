@@ -6,7 +6,6 @@
 #include <gurt/debug.h>
 #include <daos/tests_lib.h>
 #include <ddb_vos.h>
-#include <ddb_common.h>
 #include <daos_srv/vos.h>
 #include <ddb_parse.h>
 #include "ddb_cmocka.h"
@@ -138,7 +137,7 @@ __assert_ddb_iterate(daos_handle_t poh, uuid_t *cont_uuid, daos_unit_oid_t *oid,
 		path.vtp_akey = *akey;
 	path.vtp_is_recx = is_recx;
 
-	assert_success(dv_iterate(poh, &path, recursive, &fake_handlers, NULL, NULL));
+	assert_success(dv_iterate(poh, &path, recursive, &fake_handlers, NULL, NULL, false));
 
 	expect_int_equal(expected_cont, fake_cont_handler_call_count, rc);
 	expect_int_equal(expected_obj, fake_obj_handler_call_count, rc);
@@ -201,6 +200,7 @@ list_items_test(void **state)
 	uint32_t		 obj_count = tctx->dvt_obj_count;
 	uint32_t		 dkey_count = tctx->dvt_dkey_count;
 	uint32_t		 akey_count = tctx->dvt_akey_count;
+	uint32_t                 recx_count = tctx->dvt_recx_count;
 
 	/*
 	 * The vos tree is created with equal number of children at each level. Meaning if
@@ -212,41 +212,36 @@ list_items_test(void **state)
 
 	/* list containers */
 	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, false, cont_count, 0, 0, 0, 0, 0);
-	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, true,
-			   cont_count,
-			   cont_count * obj_count,
-			   cont_count * obj_count * dkey_count,
+	assert_ddb_iterate(poh, NULL, NULL, NULL, NULL, false, true, cont_count,
+			   cont_count * obj_count, cont_count * obj_count * dkey_count,
 			   cont_count * obj_count * dkey_count * akey_count,
 			   cont_count * obj_count * dkey_count * akey_count / 2,
-			   cont_count * obj_count * dkey_count * akey_count / 2);
+			   cont_count * obj_count * dkey_count * akey_count / 2 * recx_count);
 
 	/* list objects of a container */
 	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, false,
 			   0, obj_count, 0, 0, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, true,
-			   0, obj_count,
-			   obj_count * dkey_count,
-			   obj_count * dkey_count * akey_count,
+	assert_ddb_iterate(poh, &g_uuids[0], NULL, NULL, NULL, false, true, 0, obj_count,
+			   obj_count * dkey_count, obj_count * dkey_count * akey_count,
 			   obj_count * dkey_count * akey_count / 2,
-			   obj_count * dkey_count * akey_count / 2);
+			   obj_count * dkey_count * akey_count / 2 * recx_count);
 
 	/* list dkeys of an object */
 	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, false,
 			   0, 0, dkey_count, 0, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, true,
-			   0, 0, dkey_count, dkey_count * akey_count,
-			   dkey_count * akey_count / 2,
-			   dkey_count * akey_count / 2);
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], NULL, NULL, false, true, 0, 0, dkey_count,
+			   dkey_count * akey_count, dkey_count * akey_count / 2,
+			   dkey_count * akey_count / 2 * recx_count);
 
 	/* list akeys of a dkey */
 	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false, false,
 			   0, 0, 0, akey_count, 0, 0);
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false, true,
-			   0, 0, 0, akey_count, akey_count / 2, akey_count / 2);
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], NULL, false, true, 0, 0, 0,
+			   akey_count, akey_count / 2, akey_count / 2 * recx_count);
 
 	/* list values in akeys */
-	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[0], true, false,
-			   0, 0, 0, 0, 0, 1);
+	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[0], true, false, 0,
+			   0, 0, 0, 0, recx_count);
 	assert_ddb_iterate(poh, &g_uuids[0], &g_oids[0], &g_dkeys[0], &g_akeys[1], false, true,
 			   0, 0, 0, 0, 1, 0);
 }
@@ -355,7 +350,7 @@ get_recx_from_idx_tests(void **state)
 	daos_handle_t		 coh = DAOS_HDL_INVAL;
 	daos_key_t		 dkey = {0};
 	daos_key_t		 akey = {0};
-	daos_recx_t		 recx = {0};
+	struct ddb_recx          recx = {0};
 
 	assert_rc_equal(-DER_INVAL, dv_get_recx(coh, uoid, &dkey, &akey, 0, &recx));
 
@@ -430,7 +425,7 @@ fake_dump_value_cb(void *cb_args, d_iov_t *value)
 
 static int
 test_dump_value(daos_handle_t poh, uuid_t cont_uuid, daos_unit_oid_t oid, daos_key_t *dkey,
-		daos_key_t *akey, daos_recx_t *recx, dv_dump_value_cb dump_cb, void *cb_arg)
+		daos_key_t *akey, struct ddb_recx *recx, dv_dump_value_cb dump_cb, void *cb_arg)
 {
 	struct dv_tree_path	 path = {0};
 
@@ -449,7 +444,7 @@ static void
 get_value_tests(void **state)
 {
 	struct dt_vos_pool_ctx	*tctx = *state;
-	daos_recx_t		 recx = {.rx_idx = 0, .rx_nr = 10};
+	struct ddb_recx          recx = {.drx_idx = 0, .drx_nr = 10};
 
 	/* first akey is a recx */
 	assert_success(test_dump_value(tctx->dvt_poh, g_uuids[0], g_oids[0], &g_dkeys[0],
@@ -499,7 +494,7 @@ get_obj_ilog_tests(void **state)
 
 	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
 
-	assert_int_equal(1, fake_dump_ilog_entry_called);
+	assert_int_equal(2, fake_dump_ilog_entry_called);
 
 	vos_cont_close(coh);
 }
@@ -520,7 +515,7 @@ abort_obj_ilog_tests(void **state)
 
 	/* First make sure there is an ilog to rm */
 	assert_success(dv_get_obj_ilog_entries(coh, g_oids[0], fake_dump_ilog_entry, NULL));
-	assert_int_equal(1, fake_dump_ilog_entry_called);
+	assert_int_equal(2, fake_dump_ilog_entry_called);
 	fake_dump_ilog_entry_called = 0;
 
 	/* Abort the ilogs */
@@ -549,7 +544,7 @@ get_dkey_ilog_tests(void **state)
 	assert_success(dv_get_key_ilog_entries(coh, g_oids[1], &g_dkeys[0], NULL,
 					       fake_dump_ilog_entry,
 					       NULL));
-	assert_int_equal(1, fake_dump_ilog_entry_called);
+	assert_int_equal(2, fake_dump_ilog_entry_called);
 
 	fake_dump_ilog_entry_called = 0;
 	assert_success(dv_get_key_ilog_entries(coh, g_oids[1], &g_dkeys[0], &g_akeys[0],
@@ -575,6 +570,7 @@ abort_dkey_ilog_tests(void **state)
 
 
 	/* akey */
+	fake_dump_ilog_entry_called = 0;
 	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], &g_akeys[0],
 					       fake_dump_ilog_entry, NULL));
 	assert_int_equal(1, fake_dump_ilog_entry_called);
@@ -590,7 +586,7 @@ abort_dkey_ilog_tests(void **state)
 	/* dkey */
 	assert_success(dv_get_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], NULL,
 					       fake_dump_ilog_entry, NULL));
-	assert_int_equal(1, fake_dump_ilog_entry_called);
+	assert_int_equal(2, fake_dump_ilog_entry_called);
 
 	assert_success(dv_process_key_ilog_entries(coh, g_oids[0], &g_dkeys[0], NULL,
 						   DDB_ILOG_OP_ABORT));
@@ -658,14 +654,14 @@ verify_correct_params_for_update_value_tests(void **state)
 	struct dv_tree_path	vtp = {};
 	d_iov_t			value_iov = {0};
 
-	assert_rc_equal(-DER_INVAL, dv_update(DAOS_HDL_INVAL, &vtp, &value_iov));
-	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov));
+	assert_rc_equal(-DER_INVAL, dv_update(DAOS_HDL_INVAL, &vtp, &value_iov, 1));
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
 
 	uuid_copy(vtp.vtp_cont, g_uuids[3]);
 	vtp.vtp_oid = g_oids[0];
 	vtp.vtp_dkey = g_dkeys[0];
 	vtp.vtp_akey = g_akeys[0];
-	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov));
+	assert_rc_equal(-DER_INVAL, dv_update(poh, &vtp, &value_iov, 1));
 }
 
 static void
@@ -680,10 +676,14 @@ assert_update_existing_path(daos_handle_t poh, struct dv_tree_path *vtp)
 
 	d_iov_set(&value_iov, value_buf, strlen(value_buf));
 
-	/* if it's an array path, update so will be same length as new value */
-	if (vtp->vtp_recx.rx_nr > 0)
-		vtp->vtp_recx.rx_nr = value_iov.iov_len;
-	assert_success(dv_update(poh, vtp, &value_iov));
+	if (vtp->vtp_recx.drx_nr > 0) {
+		/* if it's an array path, make sure the value is large enough for the recx and
+		 * update the value to be same size
+		 */
+		assert_true(vtp->vtp_recx.drx_nr <= value_iov.iov_len);
+		value_iov.iov_len = vtp->vtp_recx.drx_nr;
+	}
+	assert_success(dv_update(poh, vtp, &value_iov, 1));
 
 	/* Verify that after loading the value_buf, the same value_buf is dumped */
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
@@ -697,7 +697,6 @@ update_value_to_modify_tests(void **state)
 	daos_handle_t		poh = tctx->dvt_poh;
 	struct dv_tree_path	vtp = {};
 	daos_handle_t		coh;
-
 
 	uuid_copy(vtp.vtp_cont, g_uuids[3]);
 	vtp.vtp_oid = g_oids[0];
@@ -726,7 +725,7 @@ assert_update_new_path(daos_handle_t poh, struct dv_tree_path *vtp)
 
 	d_iov_set(&value_iov, value_buf, strlen(value_buf));
 
-	assert_success(dv_update(poh, vtp, &value_iov));
+	assert_success(dv_update(poh, vtp, &value_iov, 1));
 
 	/* Verify that after loading the value_buf, the same value_buf is dumped */
 	assert_success(dv_dump_value(poh, vtp, fake_dump_value_cb, NULL));
@@ -839,6 +838,7 @@ path_verify(void **state)
 	struct dt_vos_pool_ctx		*tctx = *state;
 	struct dv_indexed_tree_path	 itp = {0};
 	char				 path[256];
+	struct ddb_recx                  d_recx;
 
 	/* empty path is fine */
 	assert_success(itp_parse("", &itp));
@@ -954,10 +954,12 @@ path_verify(void **state)
 	assert_true(itp_has_recx_complete(&itp));
 	itp_free(&itp);
 	/* set to key */
-	sprintf(path, "/%s/"DF_UOID"/%s/%s/"DF_DDB_RECX, g_uuids_str[3], DP_UOID(g_oids[0]),
-		(char *)g_dkeys[0].iov_buf,
-		(char *)g_akeys[0].iov_buf,
-		 DP_DDB_RECX(g_recxs[0]));
+	d_recx.drx_nr    = g_recxs[0].rx_nr;
+	d_recx.drx_idx   = g_recxs[0].rx_idx;
+	d_recx.drx_epoch = 5;
+
+	sprintf(path, "/%s/" DF_UOID "/%s/%s/" DF_DDB_RECX, g_uuids_str[3], DP_UOID(g_oids[0]),
+		(char *)g_dkeys[0].iov_buf, (char *)g_akeys[0].iov_buf, DP_DDB_RECX(d_recx));
 	assert_success(itp_parse(path, &itp));
 	assert_success(dv_path_verify(tctx->dvt_poh, &itp));
 	assert_true(itp_has_recx_complete(&itp));

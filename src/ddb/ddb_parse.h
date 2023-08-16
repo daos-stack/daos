@@ -45,6 +45,10 @@ int ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv,
 /* See ddb_iov_to_printable_buf for how the keys will be printed */
 int ddb_parse_key(const char *input, daos_key_t *key);
 
+/* Parse a hex value. Must start with '0x' and be able to fit into an uint64_t */
+int
+    ddb_parse_hex(const char *input, uint64_t *value);
+
 /* Parse a string into the parts of a dtx_id. See DF_DTIF for how the format of the dtx_id is
  * expected to be.
  */

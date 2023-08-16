@@ -113,6 +113,7 @@ fully_set_and_print_path_parts(void **state)
 {
 	struct dv_indexed_tree_path	itp = {0};
 	uuid_t				null_uuid = {0};
+	struct ddb_recx                 d_recx    = {0};
 
 	dvt_fake_print_reset();
 
@@ -157,11 +158,14 @@ fully_set_and_print_path_parts(void **state)
 	dvt_fake_print_reset();
 
 	/* set recx and print */
-	assert_true(itp_set_recx(&itp, &g_recxs[0], 5));
+	d_recx.drx_nr    = g_recxs[0].rx_nr;
+	d_recx.drx_idx   = g_recxs[0].rx_idx;
+	d_recx.drx_epoch = 0x64;
+	assert_true(itp_set_recx(&itp, &d_recx, 5));
 	itp_print_full(&g_ctx, &itp);
 	assert_printed_exact("RECX: (/[1]/[2]/[3]/[4]/[5]) /12345678-1234-1234-1234-123456789001/"
 			     "281479271743488.4294967296.0.0/"
-			     "dkey-1/akey-1/{9-18}");
+			     "dkey-1/akey-1/{0-9}.0x64");
 	dvt_fake_print_reset();
 
 	itp_free(&itp);
@@ -173,6 +177,7 @@ path_parts_partial_behavior(void **state)
 {
 	struct dv_indexed_tree_path itp = {0};
 
+	dvt_fake_print_reset();
 	itp_set_cont_idx(&itp, 1);
 	/* missing container uuid */
 	itp_print_full(&g_ctx, &itp);
@@ -193,8 +198,9 @@ path_parts_partial_behavior(void **state)
 static void
 parse_path_from_printed_path(void **state)
 {
-	struct dv_indexed_tree_path itp = {0};
+	struct dv_indexed_tree_path itp     = {0};
 	struct dv_indexed_tree_path itp_out = {0};
+	struct ddb_recx             d_recx  = {0};
 
 	/* Empty path is success */
 	dvt_fake_print_reset();
@@ -269,7 +275,10 @@ parse_path_from_printed_path(void **state)
 	itp_free(&itp_out);
 
 	/* recx */
-	itp_set_recx(&itp, &g_recxs[0], 2);
+	d_recx.drx_nr    = g_recxs[0].rx_nr;
+	d_recx.drx_idx   = g_recxs[0].rx_idx;
+	d_recx.drx_epoch = 100;
+	itp_set_recx(&itp, &d_recx, 2);
 	itp_print_indexes(&g_ctx, &itp);
 	assert_success(itp_parse(dvt_fake_print_buffer, &itp_out));
 	assert_int_equal(itp.itp_parts[PATH_PART_RECX].itp_part_idx,
@@ -328,6 +337,10 @@ string_to_path_to_string(void **state)
 
 	assert_path_parsed_equals("/12345678-1234-1234-1234-123456789012/1.2.3.4/\\/",
 				  "/12345678-1234-1234-1234-123456789012/1.2.3.4/\\/");
+	assert_path_parsed_equals("/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1///"
+				  "DFS_INODE/{0-87}.0x123dac613de00000",
+				  "/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1///"
+				  "DFS_INODE/{0-87}.0x123dac613de00000");
 }
 
 /* Verify that the correct path specific return code is returned */

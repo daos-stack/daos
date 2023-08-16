@@ -48,4 +48,11 @@ struct argv_parsed {
 	uint32_t	  ap_argc;
 };
 
+/* similar to daos_recx_t, but includes the epoch */
+struct ddb_recx {
+	uint64_t     drx_idx;
+	uint64_t     drx_nr;
+	daos_epoch_t drx_epoch;
+};
+
 #endif /* __DAOS_DDB_COMMON_H */

@@ -233,25 +233,60 @@ rm_cmd_tests(void **state)
 	assert_invalid(ddb_run_rm(&g_ctx, &opt));
 
 	dvt_fake_print_reset();
+
+	/* Delete RECX */
+	opt.path = "[0]/[0]/[0]/[0]/[0]";
+	assert_success(ddb_run_rm(&g_ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer,
+			    "RECX: (/[0]/[0]/[0]/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
+			    "281479271743488.4294967296.0.0/dkey-1/akey-1/{0-9}.0x5 deleted\n");
+	dvt_fake_print_reset();
+
+	/* Delete AKey */
+	opt.path = "[0]/[0]/[0]/[0]";
+	assert_success(ddb_run_rm(&g_ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer,
+			    "AKEY: (/[0]/[0]/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
+			    "281479271743488.4294967296.0.0/dkey-1/akey-1 deleted\n");
+	dvt_fake_print_reset();
+
+	/* Delete DKey */
+	opt.path = "[0]/[0]/[0]";
+	assert_success(ddb_run_rm(&g_ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer,
+			    "DKEY: (/[0]/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
+			    "281479271743488.4294967296.0.0/dkey-1 deleted\n");
+	dvt_fake_print_reset();
+
+	/* Delete Object */
+	opt.path = "[0]/[0]";
+	assert_success(ddb_run_rm(&g_ctx, &opt));
+	assert_string_equal(dvt_fake_print_buffer,
+			    "OBJ: (/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
+			    "281479271743488.4294967296.0.0 deleted\n");
+	dvt_fake_print_reset();
+
+	/* Delete Container */
 	opt.path = "[0]";
 	assert_success(ddb_run_rm(&g_ctx, &opt));
 	assert_string_equal(dvt_fake_print_buffer,
 			    "CONT: (/[0]) /12345678-1234-1234-1234-123456789001 deleted\n");
+	dvt_fake_print_reset();
 }
 
 static void
 load_cmd_tests(void **state)
 {
 	struct value_load_options	opt = {0};
-	char				buf[256];
-	daos_unit_oid_t			new_oid = g_oids[0];
+	char                            buf[256];
+	daos_unit_oid_t                 new_oid = g_oids[0];
 
 	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 
 	opt.dst = "/[0]/[0]/[0]/[1]";
 	opt.src = "/tmp/value_src";
 	dvt_fake_get_file_exists_result = true;
-	snprintf(dvt_fake_read_file_buf, ARRAY_SIZE(dvt_fake_read_file_buf), "Some text");
+	snprintf(dvt_fake_read_file_buf, ARRAY_SIZE(dvt_fake_read_file_buf), "Some text!!");
 	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 	dvt_fake_get_file_size_result = strlen(dvt_fake_read_file_buf);
 	dvt_fake_read_file_result = strlen(dvt_fake_read_file_buf);
@@ -260,16 +295,31 @@ load_cmd_tests(void **state)
 	/* add a new 'a' key */
 	opt.dst = "/[0]/[0]/[0]/a-new-key";
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
+	/* add a new 'a' key */
+	opt.dst = "/[0]/[0]/[0]/a-new-key";
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new 'd' key */
-	opt.dst = "/[0]/[0]/a-new-key/a-new-key";
+	opt.dst = "/[0]/[0]/d-new-key/a-new-key";
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
 
 	/* add a new object */
 	new_oid.id_pub.lo = 999;
-	sprintf(buf, "%s/"DF_UOID"/dkey_new/akey_new", g_uuids_str[3], DP_UOID(new_oid));
+	sprintf(buf, "%s/" DF_UOID "/dkey_new/akey_new", g_uuids_str[3], DP_UOID(new_oid));
 	opt.dst = buf;
 	assert_success(ddb_run_value_load(&g_ctx, &opt));
+
+	/* Update an existing recx */
+	opt.dst = "/[0]/[0]/[0]/[0]/{0-9}.0x5";
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
+
+	/* Update recx without specific epoch */
+	opt.dst = "/[0]/[0]/[0]/[0]/{0-9}";
+	assert_success(ddb_run_value_load(&g_ctx, &opt));
+
+	/* recx is bigger than file */
+	opt.dst = "/[0]/[0]/[0]/[0]/{0-99}"; /* must be larger than dvt_fake_read_file_result */
+	assert_rc_equal(-DER_REC2BIG, ddb_run_value_load(&g_ctx, &opt));
 
 	/*
 	 * Error cases ...

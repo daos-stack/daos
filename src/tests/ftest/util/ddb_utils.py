@@ -35,10 +35,11 @@ class DdbCommandBase(CommandWithParameters):
         self.write_mode = FormattedParameter("-w", default=False)
 
         # Command to run on the VOS file that contains container, object info, etc.
-        self.single_command = BasicParameter(None, position=2)
+        self.single_command = BasicParameter(None, position=3)
 
         # VOS file path.
-        self.vos_path = BasicParameter(None, position=1)
+        self.ddb_param = BasicParameter("-p", default=True, position=1)
+        self.vos_path = BasicParameter(None, position=2)
 
         # Members needed for run_pcmd().
         self.verbose = verbose

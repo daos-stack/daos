@@ -54,10 +54,11 @@
 			assert_memory_not_equal(a.iov_buf, b.iov_buf, a.iov_len); \
 	} while (0)
 
-#define assert_recx_equal(a, b) \
-	do { \
-		assert_int_equal((a).rx_nr, (b).rx_nr); \
-		assert_int_equal((a).rx_idx, (b).rx_idx); \
+#define assert_recx_equal(a, b)                                                                    \
+	do {                                                                                       \
+		assert_int_equal((a).drx_nr, (b).drx_nr);                                          \
+		assert_int_equal((a).drx_idx, (b).drx_idx);                                        \
+		assert_int_equal((a).drx_epoch, (b).drx_epoch);                                    \
 	} while (0)
 
 #define assert_string_contains(str, substr) \
