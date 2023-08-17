@@ -150,14 +150,16 @@ class DaosServerCommand(YamlCommand):
     def update_pattern_timeout(self):
         """Update the pattern timeout if undefined."""
         if self.pattern_timeout.value is None:
+            self.log.debug('Updating pattern timeout based upon server config')
             try:
                 data = self.yaml.get_yaml_data()
-                bdev_lists = dict_extract_values(data, ['storage', '*', 'bdev_list'])
+                bdev_lists = list_flatten(dict_extract_values(data, ['storage', '*', 'bdev_list']))
+                self.log.debug('  Detected bdev_list entries: %s', bdev_lists)
             except (AttributeError, TypeError, RecursionError):
                 # Default if the bdev_list cannot be obtained from the server configuration
-                bdev_lists = [None, None]
+                bdev_lists = []
             self.pattern_timeout.update(
-                len(list_flatten(bdev_lists)) * 20, 'DaosServerCommand.pattern_timeout')
+                max(len(bdev_lists), 2) * 20, 'DaosServerCommand.pattern_timeout')
 
     @property
     def using_nvme(self):
