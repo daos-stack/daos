@@ -455,8 +455,8 @@ class SoakTestBase(TestWithServers):
                 self.sharedsoaktest_dir, self.outputsoak_dir)
             command2 = f"/usr/bin/rm -rf {self.sharedsoaktest_dir}"
             try:
-                run_local(self.log, command, timeout=300)
-                run_local(self.log, command2, timeout=300)
+                run_local(self.log, command, timeout=600)
+                run_local(self.log, command2, timeout=600)
             except RunException as error:
                 self.log.info("Local copy failed with %s", error)
             self.soak_results = {}
@@ -535,7 +535,7 @@ class SoakTestBase(TestWithServers):
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
-        harassers = self.params.get("harasserlist", test_param + "*")
+        harassers = self.params.get(self.test_id, os.path.join(test_param, "harasserlist", "*"))
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
