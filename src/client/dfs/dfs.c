@@ -4961,11 +4961,14 @@ ostatx_cb(tse_task_t *task, void *data)
 {
 	struct dfs_statx_args	*args = daos_task_get_args(task);
 	struct statx_op_args	*op_args = *((struct statx_op_args **)data);
-	int			rc2, rc = daos_der2errno(task->dt_result);
+	int			rc2, rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to stat file "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc);
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to stat file: " DF_RC "\n", DP_RC(rc));
+		/** convert the task result to errno since it takes prescedence over the cb error */
+		task->dt_result = daos_der2errno(rc);
+		D_GOTO(out, rc = task->dt_result);
 	}
 
 	if (args->obj->oid.hi != op_args->entry.oid.hi ||
@@ -5058,12 +5061,13 @@ statx_task(tse_task_t *task)
 	op_args->sgl.sg_iovs	= op_args->sg_iovs;
 
 	fetch_arg = daos_task_get_args(fetch_task);
-	fetch_arg->oh	= args->parent_oh;
-	fetch_arg->th	= DAOS_TX_NONE;
-	fetch_arg->dkey	= &op_args->dkey;
-	fetch_arg->nr	= 1;
-	fetch_arg->iods	= &op_args->iod;
-	fetch_arg->sgls	= &op_args->sgl;
+	fetch_arg->oh		= args->parent_oh;
+	fetch_arg->th		= DAOS_TX_NONE;
+	fetch_arg->flags	= DAOS_COND_DKEY_FETCH;
+	fetch_arg->dkey		= &op_args->dkey;
+	fetch_arg->nr		= 1;
+	fetch_arg->iods		= &op_args->iod;
+	fetch_arg->sgls		= &op_args->sgl;
 
 	if (S_ISREG(args->obj->mode)) {
 		daos_array_stat_t *stat_arg;
@@ -5089,7 +5093,7 @@ statx_task(tse_task_t *task)
 			D_GOTO(err2_out, rc);
 		}
 
-		/** set array_stat parameters */
+		/** set obj_query parameters */
 		stat_arg = daos_task_get_args(stat_task);
 		stat_arg->oh		= args->obj->oh;
 		stat_arg->th		= DAOS_TX_NONE;
