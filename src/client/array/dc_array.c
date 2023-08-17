@@ -608,8 +608,8 @@ static int
 open_handle_cb(tse_task_t *task, void *data)
 {
 	daos_array_open_t	*args = *((daos_array_open_t **)data);
-	struct dc_array		*array = NULL;
-	struct md_params	*params = NULL;
+	struct dc_array		*array;
+	struct md_params	*params;
 	uint64_t		*md_vals;
 	int			rc = task->dt_result;
 
