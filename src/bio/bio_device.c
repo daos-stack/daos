@@ -993,15 +993,15 @@ dev_uuid2pci_addr(struct spdk_pci_addr *pci_addr, uuid_t dev_uuid)
 
 	rc = fill_in_traddr(&b_info, d_bdev->bb_name);
 	if (rc) {
-		D_ERROR("Unable to get traddr for device:%s\n", d_bdev->bb_name);
-		return -DER_INVAL;
+		D_DEBUG(DB_MGMT, "Unable to get traddr for device %s\n", d_bdev->bb_name);
+		return -DER_NOSYS;
 	}
 
 	rc = spdk_pci_addr_parse(pci_addr, b_info.bdi_traddr);
 	if (rc != 0) {
-		D_ERROR("Unable to parse PCI address for device %s (%s)\n", b_info.bdi_traddr,
-			spdk_strerror(-rc));
-		rc = -DER_INVAL;
+		D_DEBUG(DB_MGMT, "Unable to parse PCI address for device %s (%s)\n",
+			b_info.bdi_traddr, spdk_strerror(-rc));
+		rc = -DER_NOSYS;
 	}
 
 	D_FREE(b_info.bdi_traddr);
