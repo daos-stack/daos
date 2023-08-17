@@ -104,6 +104,8 @@ struct dc_tx {
 	/** The read requests count */
 	uint32_t		 tx_read_cnt;
 
+	uint16_t		 tx_retry_cnt;
+	uint16_t		 tx_inprogress_cnt;
 	/** Pool map version when trigger first IO. */
 	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
@@ -972,6 +974,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	crt_rpc_t		 *req = tcca->tcca_req;
 	struct obj_cpd_out	 *oco = crt_reply_get(req);
 	tse_task_t		 *pool_task = NULL;
+	uint32_t		  delay;
 	int			  rc = task->dt_result;
 	int			  rc1;
 	bool			  locked = true;
@@ -1075,7 +1078,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN ||
+	    rc == -DER_EXCLUDED || rc == -DER_HG) {
 		tx->tx_status = TX_FAILED;
 		rc = -DER_TX_RESTART;
 	} else {
@@ -1087,7 +1091,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		rc1 = dc_task_resched(task);
+		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt);
+		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
 			tx->tx_status = TX_ABORTED;
@@ -2542,6 +2547,8 @@ dc_tx_restart_begin(struct dc_tx *tx, uint32_t *backoff)
 		 * tx_lock is temporarily released during the backoff.
 		 */
 		tx->tx_status = TX_RESTARTING;
+		tx->tx_retry_cnt = 0;
+		tx->tx_inprogress_cnt = 0;
 
 		*backoff = d_backoff_seq_next(&tx->tx_backoff_seq);
 	}
