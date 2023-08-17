@@ -1100,8 +1100,6 @@ dfs_test_rename(void **state)
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
-	assert_int_equal(rc, 0);
 
 	/** try to stat obj1 corresponding to f1 which was removed, should fail. */
 	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, NULL);
@@ -1115,6 +1113,9 @@ dfs_test_rename(void **state)
 	assert_int_equal(evp->ev_error, ENOENT);
 	rc = daos_event_fini(&ev);
 	assert_rc_equal(rc, 0);
+
+	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
+	assert_int_equal(rc, 0);
 
 	/** try to stat obj2 corresponding to f2 which was renamed, should fail. */
 	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
