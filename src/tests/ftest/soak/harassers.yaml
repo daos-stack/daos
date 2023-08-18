@@ -76,7 +76,8 @@ soak_harassers:
   # harasser test timeout in hours
   single_test_pool: false
   test_timeout:
-    test_soak_harassers: 12
+    test_soak_online_harassers: 12
+    test_soak_offline_harassers: 12
   # maximum timeout for a single job in test in minutes
   joblist:
     - ior_harasser
@@ -100,6 +101,7 @@ soak_harassers:
   # continue test if container destroy fails
   ignore_soak_errors: true
   enable_intercept_lib: false
+  enable_remote_logging: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
