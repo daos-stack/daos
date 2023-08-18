@@ -9,11 +9,11 @@ import itertools
 from operator import is_not
 import os
 import re
+import yaml
 
 from ClusterShell.NodeSet import NodeSet
 
 from run_utils import run_remote
-from yaml_utils import get_yaml_data, YamlException
 
 
 def find_pci_address(value, *flags):
@@ -581,8 +581,8 @@ class StorageInfo():
                 self._log.debug('    %s: Error detecting mounted devices', data.hosts)
                 continue
             try:
-                lsblk_data = get_yaml_data('\n'.join(data.stdout))
-            except YamlException as error:
+                lsblk_data = yaml.safe_load('\n'.join(data.stdout))
+            except yaml.YAMLError as error:
                 self._log.debug(
                     '    %s: Error processing mounted device information: %s', data.hosts, error)
                 continue
