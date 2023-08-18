@@ -90,11 +90,13 @@ soak_harassers:
       - server-stop_server-start-offline
       - server-stop_server-reintegrate-offline
       - extend-pool-offline
+      # - vmd-identify-check-offline
     test_soak_online_harassers:
       - exclude_reintegrate
       - server-stop_server
       - server-stop_server-reintegrate
       - extend-pool
+      # - vmd-identify-check
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true
