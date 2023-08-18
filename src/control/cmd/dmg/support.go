@@ -20,6 +20,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
+var bld strings.Builder
+
 // supportCmd is the struct representing the top-level support subcommand.
 type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from servers"`
@@ -53,11 +55,9 @@ func (cmd *collectLogCmd) rsyncLog() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "rsync", &bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -82,11 +82,9 @@ func (cmd *collectLogCmd) archLogsOnServer() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "archive", &bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -169,11 +167,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				return err
 			}
 			if len(resp.GetHostErrors()) > 0 {
-				var bld strings.Builder
-				if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+				if err := pretty.UpdateErrorSummary(resp, logCmd, &bld); err != nil {
 					return err
 				}
-				cmd.Info(bld.String())
+
 				if cmd.Stop {
 					return resp.Errors()
 				}
@@ -196,7 +193,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
-				fmt.Println(err)
+				// fmt.Println(err)
 				if cmd.Stop {
 					return err
 				}
@@ -236,6 +233,14 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
+	}
+
+	// Print the support command summary.
+	if len(bld.String()) == 0 {
+		fmt.Println("Summary : All Commands Successfully Executed")
+	} else {
+		fmt.Println("Summary :")
+		cmd.Info(bld.String())
 	}
 
 	return nil

@@ -155,3 +155,41 @@ func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConf
 
 	return nil
 }
+
+// PrintErrorsSummary generates a human-readable representation of the supplied
+// HostErrorsMap summary struct and writes it to the supplied io.Writer.
+func UpdateErrorSummary(resp hostErrorsGetter, cmd string, out io.Writer, opts ...PrintConfigOption) error {
+	if resp == nil {
+		return errors.Errorf("nil %T", resp)
+	}
+
+	if len(resp.GetHostErrors()) > 0 {
+		setTitle := "Hosts"
+		cmdTitle := "Command"
+		errTitle := "Error"
+
+		tablePrint := txtfmt.NewTableFormatter(setTitle, cmdTitle, errTitle)
+		tablePrint.InitWriter(out)
+		table := []txtfmt.TableRow{}
+
+		for _, errStr := range resp.GetHostErrors().Keys() {
+			errHosts := getPrintHosts(resp.GetHostErrors()[errStr].HostSet.RangedString(), opts...)
+			row := txtfmt.TableRow{setTitle: errHosts}
+
+			// Unpack the root cause error. If it's a fault,
+			// just print the description.
+			hostErr := errors.Cause(resp.GetHostErrors()[errStr].HostError)
+			row[cmdTitle] = cmd
+			row[errTitle] = hostErr.Error()
+			if f, ok := hostErr.(*fault.Fault); ok {
+				row[errTitle] = f.Description
+			}
+
+			table = append(table, row)
+		}
+
+		tablePrint.Format(table)
+	}
+
+	return nil
+}
