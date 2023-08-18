@@ -682,6 +682,66 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	}
 }
 
+func TestServer_engineDevMap(t *testing.T) {
+	e1 := EngineInstance{}
+	e2 := EngineInstance{}
+	dev1 := devID{uuid: test.MockUUID(1)}
+	dev2 := devID{trAddr: test.MockPCIAddr(1)}
+
+	for name, tc := range map[string]struct {
+		devs1        []devID
+		devs2        []devID
+		expMap       engineDevMap
+		expFirstDev1 *devID
+		expFirstDev2 *devID
+	}{
+		"simple": {
+			devs1: []devID{dev1},
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e1: devIDMap{dev1.String(): dev1},
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev1: &dev1,
+			expFirstDev2: &dev2,
+		},
+		"multiple devs": {
+			devs2: []devID{dev1, dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev1.String(): dev1, dev2.String(): dev2},
+			},
+			expFirstDev2: &dev1,
+		},
+		"missing dev": {
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev2: &dev2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			edm := make(engineDevMap)
+
+			for _, id := range tc.devs1 {
+				edm.add(&e1, id)
+			}
+			for _, id := range tc.devs2 {
+				edm.add(&e2, id)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.AllowUnexported(devID{}),
+			}
+			if diff := cmp.Diff(tc.expMap, edm, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected map (-want, +got)\n%s\n", diff)
+			}
+			test.AssertEqual(t, tc.expFirstDev1, edm[&e1].getFirst(), "unexpected first dev1")
+			test.AssertEqual(t, tc.expFirstDev2, edm[&e2].getFirst(), "unexpected first dev2")
+		})
+	}
+}
+
 func TestServer_CtlSvc_SmdManage(t *testing.T) {
 	pbNormDev := &ctlpb.SmdDevice{
 		TrAddr:   test.MockPCIAddr(1),

@@ -235,6 +235,7 @@ func extractReqIDs(log logging.Logger, ids string, addrs idMap, uuids idMap) err
 	return nil
 }
 
+// Union type containing either traddr or uuid.
 type devID struct {
 	trAddr string
 	uuid   string
@@ -250,10 +251,18 @@ func (id *devID) String() string {
 type devIDMap map[string]devID
 
 func (dim devIDMap) getFirst() *devID {
-	for _, id := range dim {
-		return &id
+	if len(dim) == 0 {
+		return nil
 	}
-	return nil
+
+	var keys []string
+	for key := range dim {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	d := dim[keys[0]]
+	return &d
 }
 
 type engineDevMap map[Engine]devIDMap
