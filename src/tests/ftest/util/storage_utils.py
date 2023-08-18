@@ -544,7 +544,7 @@ class StorageInfo():
         """
         mounted_addresses = set()
         self._log.debug('Detecting mounted addresses on %s', self._hosts)
-        for hosts, devices in self._get_mounted_devices():
+        for hosts, devices in self._get_mounted_devices().items():
             mounted_addresses.add(self._get_addresses(NodeSet(hosts), devices))
         return list(mounted_addresses)
 
