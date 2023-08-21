@@ -76,6 +76,7 @@ class SoakTestBase(TestWithServers):
         self.enable_il = False
         self.enable_remote_logging = False
         self.soak_log_dir = None
+        self.soak_dir = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -462,7 +463,7 @@ class SoakTestBase(TestWithServers):
                 if result.passed:
                     result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
                 if not result.passed:
-                    self.log.info("Remote copy failed with %s", result.log_output)
+                    self.log.error("Remote copy failed on %s", result.failed_hosts)
             # copy the local files; local host not included in hostlist_client
             try:
                 run_local(self.log, cmd, timeout=600)
@@ -506,7 +507,7 @@ class SoakTestBase(TestWithServers):
             result = run_remote(self.log, self.hostlist_clients, f"mkdir -p {soaktest_dir}")
             if not result.passed:
                 raise SoakTestError(
-                    f"<<FAILED: log directory not created on clients>>: {result.log_output}")
+                    f"<<FAILED: log directory not created on clients>>: {result.failed_hosts}")
             self.soak_log_dir = soaktest_dir
         else:
             self.soak_log_dir = sharedsoaktest_dir
