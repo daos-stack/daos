@@ -29,6 +29,9 @@ void
 dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
 	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_event *ev;
+	uint64_t            eqt_idx;
+	struct dfuse_eq    *eqt;
 	int                rc;
 
 	if (ie->ie_unlinked) {
@@ -37,41 +40,25 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 		return;
 	}
 
-	if (S_ISREG(ie->ie_stat.st_mode)) {
-		struct dfuse_event *ev;
+	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	eqt     = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
+	D_ALLOC_PTR(ev);
+	if (ev == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
-		uint64_t            eqt_idx;
-		struct dfuse_eq    *eqt;
+	ev->de_req         = req;
+	ev->de_complete_cb = dfuse_cb_getattr_cb;
+	ev->de_ie          = ie;
 
-		eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);
+	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
+	if (rc != -DER_SUCCESS)
+		D_GOTO(err, rc = daos_der2errno(rc));
 
-		eqt = &dfuse_info->di_eqt[eqt_idx % dfuse_info->di_eq_count];
-		D_ALLOC_PTR(ev);
+	rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, &ev->de_ev);
+	if (rc != 0)
+		D_GOTO(err, rc);
 
-		ev->de_req         = req;
-		ev->de_complete_cb = dfuse_cb_getattr_cb;
-		ev->de_ie          = ie;
-
-		rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
-		if (rc != -DER_SUCCESS)
-			D_GOTO(err, rc = daos_der2errno(rc));
-
-		rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, &ev->de_ev);
-		if (rc != 0)
-			D_GOTO(err, rc);
-
-		sem_post(&eqt->de_sem);
-	} else {
-		struct stat attr = {};
-
-		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &attr);
-		if (rc != 0)
-			D_GOTO(err, rc);
-
-		attr.st_ino = ie->ie_stat.st_ino;
-		ie->ie_stat = attr;
-		DFUSE_REPLY_ATTR(ie, req, &attr);
-	}
+	sem_post(&eqt->de_sem);
 
 	return;
 err:

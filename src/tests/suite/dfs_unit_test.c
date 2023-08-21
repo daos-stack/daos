@@ -343,6 +343,11 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_sym1, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_dir1, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_dir1));
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -357,6 +362,10 @@ dfs_test_lookup(void **state)
 	/** try dfs_ostatx on dir, should fail */
 	rc = dfs_ostatx(dfs_mt, dir, &stbuf, NULL);
 	assert_int_equal(rc, EINVAL);
+
+	rc = dfs_ostatx(dfs_mt, dir, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISDIR(stbuf.st_mode));
 
 	/** try chmod to a symlink, should fail (since chmod resolves link) */
 	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
@@ -399,6 +408,10 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, dir, filename_sym2, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_file2, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_file2));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -1515,7 +1528,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
@@ -1530,7 +1543,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		assert_int_equal(rc, 0);
 	}
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
@@ -1614,7 +1627,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_int_equal(rc, 0);
 	/* verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);
