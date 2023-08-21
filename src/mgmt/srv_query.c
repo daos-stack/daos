@@ -672,7 +672,7 @@ ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp)
 	if (resp->device->tr_addr == NULL)
 		return -DER_NOMEM;
 
-	if (strlen(req->ids) == 0) {
+	if (((req->ids) == NULL) || (strlen(req->ids) == 0)) {
 		D_ERROR("Transport address not provided in request\n");
 		return -DER_INVAL;
 	}
