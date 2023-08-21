@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -1199,6 +1199,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 
 	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
 			       *sync, invalidate_done, cb_info);
+	assert(rc == 0);
 	DBG_EXIT();
 	return 0;
 }
