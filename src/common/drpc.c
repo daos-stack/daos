@@ -531,7 +531,7 @@ drpc_accept(struct drpc *listener_ctx, struct drpc **drpc)
 
 	if (!drpc_is_valid_listener(listener_ctx)) {
 		D_ERROR("dRPC context is not a listener\n");
-		return NULL;
+		return -DER_INVAL;
 	}
 
 	D_ALLOC_PTR(session_ctx);
