@@ -756,8 +756,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	if (rc <= 0) {
-		D_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, DF_UOID" rebuild shards:" DF_RC"\n",
-			 DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, rc, DF_UOID " rebuild shards",
+			  DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 

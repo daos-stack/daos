@@ -255,8 +255,7 @@ vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_h
 
 	rc = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		D_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR,
-			 "Failed to prepare DMA buffer. "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR, rc, "Failed to prepare DMA buffer");
 		goto free;
 	}
 
