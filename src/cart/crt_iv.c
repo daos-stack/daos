@@ -2192,8 +2192,6 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 /* Helper function to issue update sync
  * Important note: iv_key and iv_value are destroyed right after this call,
  * as such they need to be copied over
- *
- * TODO: This is leaking memory on failure.
  */
 static int
 crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
@@ -2203,7 +2201,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     crt_iv_comp_cb_t update_comp_cb, void *cb_arg,
 		     void *user_priv, int update_rc)
 {
-	crt_rpc_t		*corpc_req;
+	crt_rpc_t               *corpc_req = NULL;
 	struct crt_iv_sync_in	*input;
 	int			rc = 0;
 	bool			delay_completion = false;
@@ -2314,10 +2312,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 		/* Copy iv_key over as it will get destroyed after this call */
 		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
-		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
-			/* Avoid checkpatch warning */
+		if (iv_sync_cb->isc_iv_key.iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
 		       iv_key->iov_buf_len);
@@ -2357,6 +2353,8 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
+		if (corpc_req)
+			RPC_PUB_DECREF(corpc_req);
 	}
 	return rc;
 }
