@@ -6,7 +6,7 @@ env | sort
 reqid=${REQID:-$(reqidgen)}
 echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
 url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"REQID=$reqid"
-if ! queue_url=$(curl -D - -f -v -X POST --user "$JENKINS_TOKEN" "$url" |
+if ! queue_url=$(curl -D - -f -v -X POST "$url" |
                  sed -ne 's/\r//' -e '/Location:/s/.*: //p'); then
     echo "Failed to request a cluster."
     exit 1
@@ -15,7 +15,7 @@ set +x
 while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \
-            <(curl -sf --user "$JENKINS_TOKEN" "${queue_url}api/json/" |
+            <(curl -sf "${queue_url}api/json/" |
               jq -r .cancelled,.why)
         if [ "$cancelled" == "true" ]; then
             echo "Cluster request cancelled from Jenkins"

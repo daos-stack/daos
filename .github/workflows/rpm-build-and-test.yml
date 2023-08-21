@@ -526,14 +526,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       # - name: Show most recent commit
       #   run: echo '${{ needs.Import-commit-message.outputs.dequoted_message }}'
-      - uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
+      # this key is now on the GH runner
+      # - uses: webfactory/ssh-agent@v0.7.0
+      #   with:
+      #     ssh-private-key: ${{ secrets.GHA_RUNNER_POC }}
       - name: Request and Provision a Cluster
         run: |
             STAGE_NAME='${{ env.STAGE_NAME }}'
             REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
-            JENKINS_TOKEN='${{ secrets.JENKINS_TOKEN }}' \
             REQID="$REQID-${STAGE_NAME// /_}" ci/gha_provision_cluster.sh
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master
