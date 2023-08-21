@@ -390,7 +390,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,run_utils
-        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_no_stdout
         """
         hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
         command = 'if [ $(hostname -s) == \'{}\' ]; then echo stderr 1>&2; fi'.format(hosts[1])
@@ -423,7 +423,7 @@ class HarnessUnitTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness,run_utils
-        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_separated
+        :avocado: tags=HarnessUnitTest,test_harness_unit_run_remote_failure
         """
         hosts = self.get_hosts_from_yaml('test_clients', 'partition', 'reservation', '/run/hosts/*')
         command = 'if [ $(hostname -s) == \'{}\' ]; then echo fail; exit 1; fi; echo pass'.format(

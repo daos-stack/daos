@@ -401,7 +401,7 @@ Usage:
 ...
 
 [device-health command options]
-      -u, --uuid=     Device UUID
+      -u, --uuid=     Device UUID. All devices queried if arg not set
 ```
 ```bash
 $ dmg storage scan --nvme-health --help

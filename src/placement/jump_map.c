@@ -63,7 +63,12 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	int			 i, rc;
 
 	jmop->jmop_root = root;
-	if (md->omd_pda == 0)
+	/* Enable the PDA placement only when -
+	 * 1) daos_obj_md::omd_pdom_lvl is PO_COMP_TP_GRP,
+	 * 2) daos_obj_md::omd_pda is non-zero, and
+	 * 3) with PO_COMP_TP_GRP layer in pool map.
+	 */
+	if (md->omd_pda == 0 || md->omd_pdom_lvl != PO_COMP_TP_GRP)
 		pd_nr = 0;
 	jmop->jmop_pd_nr = pd_nr;
 	if (jmop->jmop_pd_nr == 0) {
@@ -79,10 +84,15 @@ jm_obj_pd_init(struct pl_jump_map *jmap, struct daos_obj_md *md, struct pool_dom
 	doms_per_pd = dom_nr / pd_nr;
 	D_ASSERTF(doms_per_pd >= 1, "bad dom_nr %d, pd_nr %d\n", dom_nr, pd_nr);
 
-	if (jmop->jmop_grp_size == 1) /* non-replica */
+	if (jmop->jmop_grp_size == 1) { /* non-replica */
 		pd_grp_size = min(md->omd_pda, pds->do_target_nr);
-	else
-		pd_grp_size = min(md->omd_pda, doms_per_pd);
+	} else {
+		if (md->omd_pda == DAOS_PROP_PDA_MAX)
+			pd_grp_size = jmop->jmop_grp_size;
+		else
+			pd_grp_size = md->omd_pda;
+		pd_grp_size = min(pd_grp_size, doms_per_pd);
+	}
 	pd_grp_nr = shard_nr / pd_grp_size + (shard_nr % pd_grp_size != 0);
 	jmop->jmop_pd_grp_size = pd_grp_size;
 	jmop->jmop_pd_nr = min(pd_grp_nr, pd_nr);
@@ -441,9 +451,18 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 				   dgu->dgu_used, dgu->dgu_real, tgts_used,
 				   shard_id, allow_status, allow_version, fdom_lvl,
 				   jmop->jmop_grp_size, &spares_left, &spare_avail);
-			D_ASSERT(spare_tgt != NULL);
-			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
-				DP_TARGET(spare_tgt));
+			if (layout_ver > 0) {
+				/*
+				 * After 2.4 (layout_ver > 0), it will always assign each shard
+				 * to one target, so it might put multiple shards in the same
+				 * target, if there are not enough targets.
+				 * Though before 2.4 (layout_ver == 0), it will set the shard as -1,
+				 * if there are no spare targets.
+				 */
+				D_ASSERT(spare_tgt != NULL);
+				D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
+					DP_TARGET(spare_tgt));
+			}
 		}
 
 		rc = determine_valid_spares(spare_tgt, md, spare_avail, remap_list,

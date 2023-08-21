@@ -57,7 +57,7 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
-#define EC_AGG_ITERATION_MAX	2048
+#define EC_AGG_ITERATION_MAX	1024
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -2326,6 +2326,7 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
+	md.omd_pdom_lvl = props.dcp_perf_domain;
 	md.omd_pda = props.dcp_ec_pda;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
@@ -2585,6 +2586,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
+	rc = vos_aggregate_enter(cont->sc_hdl, epr);
+	if (rc)
+		goto update_hae;
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
@@ -2617,6 +2622,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		D_ASSERT(cont->sc_ec_agg_req != NULL);
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
+
+	vos_aggregate_exit(cont->sc_hdl);
 
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {

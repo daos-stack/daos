@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,7 +76,8 @@ extern d_iov_t ds_pool_prop_svc_redun_fac;	/* uint64_t */
 extern d_iov_t ds_pool_prop_obj_version;	/* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
-extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uin32_t */
+extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uint32_t */
+extern d_iov_t ds_pool_prop_reint_mode;		/* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

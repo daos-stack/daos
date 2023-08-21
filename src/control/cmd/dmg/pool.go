@@ -706,6 +706,9 @@ type PoolSetPropCmd struct {
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "perf_domain" {
+			return errors.New("can't set perf_domain on existing pool.")
+		}
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
 		}

@@ -1162,6 +1162,10 @@ func TestControl_PoolGetProp(t *testing.T) {
 			Number: propWithVal("checkpoint_thresh", "").Number,
 			Value:  &mgmtpb.PoolProperty_Numval{20},
 		},
+		{
+			Number: propWithVal("reintegration", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolReintModeNoDataSync},
+		},
 	}...)
 
 	for name, tc := range map[string]struct {
@@ -1253,6 +1257,7 @@ func TestControl_PoolGetProp(t *testing.T) {
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("reintegration", "no_data_sync"),
 				propWithVal("rp_pda", "2"),
 				propWithVal("scrub", "timed"),
 				propWithVal("scrub-freq", "1024"),

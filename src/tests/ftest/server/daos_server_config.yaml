@@ -163,7 +163,7 @@ server_config_val: !mux
     config_val:
       - "nr_xs_helpers"
       - -10000
-      - "PASS"
+      - "FAIL"
   targets_str:
     config_val:
       - "targets"
