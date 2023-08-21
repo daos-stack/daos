@@ -633,7 +633,7 @@ static inline bool
 daos_crt_network_error(int err)
 {
 	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY || err == -DER_OOG || err == -DER_HG_SEND_FAILED;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 /** See crt_quiet_error. */
