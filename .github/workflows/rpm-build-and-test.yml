@@ -451,7 +451,7 @@ jobs:
       NODESTRING:
       CP_PR_REPOS:
       CP_TEST_TAG:
-      CLUSTER_REQUEST_UUID:
+      CLUSTER_REQUEST_reqid:
       STAGE_NAME:
     steps:
       - name: Debug matrix exclusion
@@ -575,9 +575,9 @@ jobs:
       - name: Job cleanup
         if: ${{ !cancelled() && (success() || failure()) }}
         run: . ci/gha_functions.sh;
-             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}"; then
+             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}"; then
                 id;
-                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_UUID }}";
+                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}";
              fi;
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files

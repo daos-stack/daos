@@ -25,7 +25,7 @@ if ! POOL="${POOL:-}" restore_vm_snapshot.sh daos_ci-"$DISTRO" "$NODESTRING"; th
     distro="$DISTRO"
     while [[ $distro = *.* ]]; do
         distro=${distro%.*}
-        if ! POOL="" restore_vm_snapshot.sh daos_ci-${distro} "$NODESTRING"; then
+        if ! POOL="" restore_vm_snapshot.sh daos_ci-"${distro}" "$NODESTRING"; then
             rc=${PIPESTATUS[0]}
             continue
         fi
