@@ -943,7 +943,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
 		daos_size_t	 nr;
 
-		D_ASSERT(hi >= lo);
+		D_ASSERTF(hi >= lo, "hi < lo, filter.fr_ex: " DF_EXT ", ent: " DF_ENT "\n",
+			  DP_EXT(&filter.fr_ex), DP_ENT(ent));
 		nr = hi - lo + 1;
 
 		if (BIO_ADDR_IS_CORRUPTED(&ent->en_addr)) {
