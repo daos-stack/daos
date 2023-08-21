@@ -463,6 +463,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
+	/* By default set the rpc header version to the local verison */
 	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
 	*priv_allocated = rpc_priv;
 out:
