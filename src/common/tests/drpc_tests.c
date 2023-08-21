@@ -491,7 +491,7 @@ test_drpc_accept_fails_if_accept_fails(void **state)
 	accept_return = -1;
 
 	rc = drpc_accept(ctx, NULL);
-	assert_rc_equal(rc, -DER_INVAL);
+	assert_rc_equal(rc, -DER_NONEXIST);
 
 	free_drpc(ctx);
 }

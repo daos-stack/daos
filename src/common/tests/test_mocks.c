@@ -196,6 +196,8 @@ __wrap_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
 	accept_addr_ptr = addr;
 	accept_addrlen_ptr = addrlen;
 	accept_call_count++;
+	if (accept_return < 0)
+		errno = EIO;
 	return accept_return;
 }
 
