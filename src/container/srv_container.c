@@ -1426,8 +1426,11 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 
 	rc = ds_sec_creds_are_same_user(&cred, arg->fha_cred);
 
-	if (pool_hdl == NULL)
+	if (pool_hdl)
+		ds_pool_hdl_put(pool_hdl);
+	else
 		D_FREE(cred.iov_buf);
+
 	return rc;
 }
 
