@@ -60,9 +60,8 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 			    &led_state, 0);
 	if (rc != 0)
 		/* DER_NOSYS indicates that VMD-LED control is not enabled */
-		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n", DP_UUID(d_bdev->bb_uuid),
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
+			  "Set LED on device:" DF_UUID " failed", DP_UUID(d_bdev->bb_uuid));
 
 	return 0;
 }

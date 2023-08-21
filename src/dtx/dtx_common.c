@@ -1598,9 +1598,9 @@ dtx_reindex_ult(void *arg)
 		ABT_thread_yield();
 	}
 
-	D_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO,
-		 DF_CONT": stopping DTX reindex ULT on stream %d, ver %u: rc = %d\n",
-		 DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont), rc);
+	DL_CDEBUG(rc < 0, DLOG_ERR, DLOG_INFO, rc,
+		  DF_CONT ": stopping DTX reindex ULT on stream %d, ver %u",
+		  DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	cont->sc_dtx_reindex = 0;
 	ds_cont_child_put(cont);

@@ -3588,9 +3588,9 @@ again:
 	/* dc_tx_restart_begin() will trigger dc_tx_cleanup() internally, let's re-attach. */
 	rc = dc_tx_attach(th, obj, opc, tx->tx_orig_task, *backoff, false);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-		 "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u: rc = %d\n",
-		 tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff, rc);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u",
+		  tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff);
 
 	if (unlikely(rc == -DER_TX_RESTART))
 		goto again;

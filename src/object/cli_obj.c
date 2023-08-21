@@ -1057,9 +1057,9 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 DF_OID " obj_shard_open %u opc %u, rc " DF_RC "\n",
-			 DP_OID(obj->cob_md.omd_id), obj_auxi->opc, shard, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR, rc,
+			  DF_OID " obj_shard_open %u opc %u", DP_OID(obj->cob_md.omd_id),
+			  obj_auxi->opc, shard);
 		D_GOTO(out, rc);
 	}
 
@@ -1266,9 +1266,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				 * the operation, so let's skip such shard here.  Note: these
 				 * non-exist shards will never happen for the leader.
 				 */
-				D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-					 DF_OID", shard open:" DF_RC"\n",
-					 DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+				DL_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR, rc,
+					  DF_OID ", shard open", DP_OID(obj->cob_md.omd_id));
 				if (rc != -DER_NONEXIST)
 					D_GOTO(out, rc);
 				rc = 0;
@@ -1319,8 +1318,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_cnt);
 
 out:
-	D_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE,
-		 DLOG_ERR, DF_OID", forward:" DF_RC"\n", DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+	DL_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE, DLOG_ERR, rc,
+		  DF_OID ", forward", DP_OID(obj->cob_md.omd_id));
 	return rc;
 }
 

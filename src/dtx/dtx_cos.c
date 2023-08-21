@@ -401,10 +401,9 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 	rc = dbtree_upsert(cont->sc_dtx_cos_hdl, BTR_PROBE_EQ,
 			   DAOS_INTENT_UPDATE, &kiov, &riov, NULL);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Insert DTX "DF_DTI" to CoS "
-		 "cache, "DF_UOID", key %lu, flags %x: rc = "DF_RC"\n",
-		 DP_DTI(&dte->dte_xid), DP_UOID(*oid), (unsigned long)dkey_hash,
-		 flags, DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Insert DTX " DF_DTI " to CoS cache, " DF_UOID ", key %lu, flags %x",
+		  DP_DTI(&dte->dte_xid), DP_UOID(*oid), (unsigned long)dkey_hash, flags);
 
 	return rc;
 }
