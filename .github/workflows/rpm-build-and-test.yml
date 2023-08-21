@@ -533,6 +533,7 @@ jobs:
         run: |
             STAGE_NAME='${{ env.STAGE_NAME }}'
             REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
+            JENKINS_TOKEN='${{ secrets.JENKINS_TOKEN }}' \
             REQID="$REQID-${STAGE_NAME// /_}" ci/gha_provision_cluster.sh
       - name: Wait for nodes to be ready
         #  uses: appleboy/ssh-action@master
