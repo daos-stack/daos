@@ -5,7 +5,11 @@ set -euxo pipefail
 env | sort
 reqid=${REQID:-$(reqidgen)}
 echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
-url='https://build.hpdd.intel.com/job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&'"REQID=$reqid"
+trap 'rm -f $cookiejar' EXIT
+cookiejar="$(mktemp)"
+crumb="$(curl --cookie-jar "$COOKIEJAR" "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
+url="${JENKINS_URL}job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&REQID=$reqid"
+curl -D - -f -v -X POST --cookie "$cookiejar" -H "$crumb" "$url"
 if ! queue_url=$(curl -D - -f -v -X POST "$url" |
                  sed -ne 's/\r//' -e '/Location:/s/.*: //p'); then
     echo "Failed to request a cluster."
@@ -15,7 +19,7 @@ set +x
 while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \
-            <(curl -sf "${queue_url}api/json/" |
+            <(curl -sf --cookie "$cookiejar" -H "$crumb" "${queue_url}api/json/" |
               jq -r .cancelled,.why)
         if [ "$cancelled" == "true" ]; then
             echo "Cluster request cancelled from Jenkins"
@@ -25,6 +29,7 @@ while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     fi
     sleep 1
 done
+set -x
 NODESTRING=$(cat /scratch/Get\ a\ cluster/"$reqid")
 if [ "$NODESTRING" = "cancelled" ]; then
     echo "Cluster request cancelled from Jenkins"
