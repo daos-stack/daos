@@ -488,10 +488,10 @@ test_drpc_accept_fails_if_accept_fails(void **state)
 	struct drpc *ctx = new_drpc_with_fd(15);
 	int          rc;
 
-	accept_return = -1;
+	accept_return = -EIO;
 
 	rc = drpc_accept(ctx, NULL);
-	assert_rc_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_IO);
 
 	free_drpc(ctx);
 }
