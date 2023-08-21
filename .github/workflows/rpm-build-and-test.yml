@@ -545,14 +545,14 @@ jobs:
         #    #   Host *
         #    #   ConnectTimeout=420
         #    script: timeout=$((SECONDS+420));
-        run: clush -B -S -l root -w ${{ env.NODESTRING }} "set -x;
+        run: clush -B -S -l root -w ${{ env.NODESTRING }} 'set -x;
                   waited=0;
-                  while [ \$waited -lt 420 ]; do
+                  while [ $waited -lt 420 ]; do
                       if [ -d /var/chef/reports ]; then
                           exit 0;
                       fi;
                       sleep 10;
-                      (( \$waited +=10 )) || true;
+                      (( waited +=10 )) || true;
                   done;
                   exit 1"
       - name: Post-provision cluster
