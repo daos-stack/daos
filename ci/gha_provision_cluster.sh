@@ -9,10 +9,12 @@ trap 'rm -f $cookiejar' EXIT
 cookiejar="$(mktemp)"
 crumb="$(curl --cookie-jar "$cookiejar" "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
 url="${JENKINS_URL}job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&REQID=$reqid"
-curl -D - -f -v -X POST --cookie "$cookiejar" -H "$crumb" "$url"
-if ! queue_url=$(curl -D - -f -v -X POST "$url" |
+trap 'rm -f $cookiejar $headers_file' EXIT
+headers_file="$(mktemp)"
+if ! queue_url=$(curl -D "$headers_file" -f -X POST --cookie "$cookiejar" -H "$crumb" "$url" |
                  sed -ne 's/\r//' -e '/Location:/s/.*: //p'); then
     echo "Failed to request a cluster."
+    cat "$headers_file"
     exit 1
 fi
 set +x
