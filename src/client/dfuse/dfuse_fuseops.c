@@ -60,7 +60,7 @@ dfuse_show_flags(void *handle, unsigned int in)
 static void
 dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
-	struct dfuse_projection_info *fs_handle = arg;
+	struct dfuse_info *fs_handle = arg;
 
 	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
 

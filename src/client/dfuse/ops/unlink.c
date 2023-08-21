@@ -50,8 +50,8 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	 */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'",
-				ie->ie_parent, ie->ie_name);
+		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx " DF_DE, ie->ie_parent,
+				DP_DE(ie->ie_name));
 
 		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
@@ -66,13 +66,11 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 void
 dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
-	struct dfuse_projection_info	*fs_handle;
-	int				rc;
-	daos_obj_id_t			oid = {};
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	int                rc;
+	daos_obj_id_t      oid = {};
 
-	fs_handle = fuse_req_userdata(req);
-
-	dfuse_cache_evict_dir(fs_handle, parent);
+	dfuse_cache_evict_dir(dfuse_info, parent);
 
 	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false, &oid);
 	if (rc != 0) {
@@ -82,6 +80,5 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	D_ASSERT(oid.lo || oid.hi);
 
-	/* TODO: Need to do the first part of this and set ie->ie_unlinked before returning */
-	dfuse_oid_unlinked(fs_handle, req, &oid, parent, name);
+	dfuse_oid_unlinked(dfuse_info, req, &oid, parent, name);
 }

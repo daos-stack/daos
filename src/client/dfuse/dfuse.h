@@ -66,9 +66,6 @@ struct dfuse_info {
 	ATOMIC uint64_t      di_container_count;
 };
 
-/* legacy, allow the old name for easier migration */
-#define dfuse_projection_info dfuse_info
-
 struct dfuse_eq {
 	struct dfuse_info  *de_handle;
 
@@ -281,7 +278,7 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
+dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.

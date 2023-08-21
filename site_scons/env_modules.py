@@ -56,6 +56,7 @@ class _env_module():  # pylint: disable=invalid-name
 
         # pylint: disable=consider-using-with
         try:
+            print(f"Going to run {cmd}")
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
             if error.errno == errno.ENOENT:
@@ -108,6 +109,7 @@ class _env_module():  # pylint: disable=invalid-name
                 self._module_func('unload', to_unload)
 
         for to_load in load:
+            print(f"Trying to load {to_load}")
             if self._module_func('is-avail', to_load)[0] and \
                self._module_func('load', to_load)[0]:
                 print(f'Loaded {to_load}')

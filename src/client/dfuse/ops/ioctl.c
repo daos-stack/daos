@@ -27,9 +27,9 @@ handle_user_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	struct dfuse_il_reply         il_reply  = {0};
-	int                           rc;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_il_reply il_reply   = {0};
+	int                   rc;
 
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
@@ -44,7 +44,7 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		il_reply.fir_flags |= DFUSE_IOCTL_FLAGS_MCACHE;
 
 	if (oh->doh_writeable) {
-		rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session,
+		rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session,
 						      oh->doh_ie->ie_stat.st_ino, 0, 0);
 
 		if (rc == 0) {

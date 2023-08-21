@@ -7,7 +7,7 @@ from vol_test_base import VolTestBase
 from job_manager_utils import get_job_manager
 
 
-class DaosVol(VolTestBase):
+class DaosVolBigIO(VolTestBase):
     # pylint: disable=too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
 
@@ -27,7 +27,7 @@ class DaosVol(VolTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=hdf5,daos_vol,vol
-        :avocado: tags=DaosVol,test_daos_vol_bigio
+        :avocado: tags=DaosVolBigIO,test_daos_vol_bigio
         """
         manager = get_job_manager(self, mpi_type="mpich")
         self.run_test(manager, "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")
