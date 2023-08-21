@@ -463,7 +463,7 @@ class SoakTestBase(TestWithServers):
                 if result.passed:
                     result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
                 if not result.passed:
-                    self.log.error("Remote copy failed on %s", result.failed_hosts)
+                    self.log.error("Remote copy failed on %s", str(result.failed_hosts))
             # copy the local files; local host not included in hostlist_client
             try:
                 run_local(self.log, cmd, timeout=600)
@@ -507,7 +507,7 @@ class SoakTestBase(TestWithServers):
             result = run_remote(self.log, self.hostlist_clients, f"mkdir -p {soaktest_dir}")
             if not result.passed:
                 raise SoakTestError(
-                    f"<<FAILED: log directory not created on clients>>: {result.failed_hosts}")
+                    f"<<FAILED: log directory not created on clients>>: {str(result.failed_hosts)}")
             self.soak_log_dir = soaktest_dir
         else:
             self.soak_log_dir = sharedsoaktest_dir
@@ -602,7 +602,7 @@ class SoakTestBase(TestWithServers):
                 self.log, self.hostlist_clients, f"rm -rf {self.soak_dir}/*", timeout=300)
             if not result.passed:
                 raise SoakTestError(
-                    f"<<FAILED: Log directory not removed from clients>> {result.log_output}")
+                    f"<<FAILED:Log directory not removed from clients>> {str(result.failed_hosts)}")
         else:
             try:
                 run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=300)
