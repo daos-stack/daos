@@ -345,8 +345,8 @@ get_metadata_times(struct rdb_tx *tx, struct cont *cont, bool update_otime, bool
 
 		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": failed to update metadata times, "DF_RC"\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ": failed to update metadata times",
+				 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 			goto out;
 		}
 	}
@@ -525,8 +525,8 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		d_iov_set(&value, &result, sizeof(result));
 		rc = rdb_tx_update(tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": rdb_tx_update nhandles failed, "DF_RC"\n",
-				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ": rdb_tx_update nhandles failed",
+				 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 			goto out;
 		}
 
@@ -1111,9 +1111,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_set(&value, &ghce, sizeof(ghce));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_ghce, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": create ghce property failed: "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": create ghce property failed",
+			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 		D_GOTO(out_kvs, rc);
 	}
 
@@ -1121,9 +1120,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": create alloced_oid prop failed: "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": create alloced_oid prop failed",
+			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 		D_GOTO(out_kvs, rc);
 	}
 
@@ -1136,9 +1134,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		d_iov_set(&value, &mdtimes, sizeof(mdtimes));
 		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_co_md_times, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": create co_md_times failed: "DF_RC"\n",
-				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ": create co_md_times failed",
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 			D_GOTO(out_kvs, rc);
 		}
 		D_DEBUG(DB_MD, DF_CONT": set metadata times: open="DF_X64", modify="DF_X64"\n",
@@ -1153,9 +1150,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		d_iov_set(&value, &nhandles, sizeof(nhandles));
 		rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_nhandles, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": create nhandles failed: "DF_RC"\n",
-				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid),
-				DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ": create nhandles failed",
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 			goto out_kvs;
 		}
 	}
@@ -1178,9 +1174,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		d_iov_set(&value, in->cci_op.ci_uuid, sizeof(uuid_t));
 		rc = rdb_tx_update(tx, &svc->cs_uuids, &key, &value);
 		if (rc != 0) {
-			D_ERROR(DF_CONT": update cs_uuids failed: "DF_RC"\n",
-				DP_CONT(pool_hdl->sph_pool->sp_uuid,
-					in->cci_op.ci_uuid), DP_RC(rc));
+			DL_ERROR(rc, DF_CONT ": update cs_uuids failed",
+				 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 			D_GOTO(out_kvs, rc);
 		}
 		D_DEBUG(DB_MD, DF_CONT": creating container, label: %s\n",
@@ -1191,8 +1186,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_set(&value, &nsnapshots, sizeof(nsnapshots));
 	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_nsnapshots, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update nsnapshots, "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT ": failed to update nsnapshots",
+			 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid));
 		D_GOTO(out_kvs, rc);
 	}
 	attr.dsa_class = RDB_KVS_INTEGER;
@@ -2322,8 +2317,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				 cont->c_uuid, prop, true);
 	daos_prop_free(prop);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": cont_iv_prop_update failed %d.\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		DL_ERROR(rc, DF_CONT ": cont_iv_prop_update failed",
+			 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		D_GOTO(out, rc);
 	}
 
@@ -2332,8 +2327,8 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				       in->coi_op.ci_hdl, cont->c_uuid,
 				       in->coi_flags, sec_capas, stat_pm_ver);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": cont_iv_capability_update failed %d.\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		DL_ERROR(rc, DF_CONT ": cont_iv_capability_update failed",
+			 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		D_GOTO(out, rc);
 	}
 	cont_hdl_opened = true;
@@ -3575,8 +3570,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	d_iov_set(&val, cont->c_uuid, sizeof(uuid_t));
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_uuids, &key, &val);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": update cs_uuids failed: "DF_RC"\n",
-			DP_UUID(cont->c_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": update cs_uuids failed", DP_UUID(cont->c_uuid));
 		return rc;
 	}
 	D_DEBUG(DB_MD, DF_UUID": inserted new label in cs_uuids KVS: %s\n",
@@ -4524,8 +4518,8 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		rc = rdb_tx_update(ap->tx, &cont->c_prop,
 				   &ds_cont_prop_cont_obj_version, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container obj version pool/cont: "DF_CONTF"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid));
+			DL_ERROR(rc, "failed to upgrade container obj version pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4581,8 +4575,8 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	rc = rdb_tx_update(ap->tx, &cont->c_prop,
 			   &ds_cont_prop_cont_global_version, &value);
 	if (rc) {
-		D_ERROR("failed to upgrade container global version pool/cont: "DF_CONTF"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid));
+		DL_ERROR(rc, "failed to upgrade container global version pool/cont: " DF_CONTF,
+			 DP_CONT(ap->pool_uuid, cont_uuid));
 		goto out;
 	}
 
@@ -4607,11 +4601,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	entry->dpe_flags &= ~DAOS_PROP_ENTRY_NOT_SET;
 	obj_ver = DS_POOL_OBJ_VERSION;
 	d_iov_set(&value, &obj_ver, sizeof(obj_ver));
-	rc = rdb_tx_update(ap->tx, &cont->c_prop,
-			   &ds_cont_prop_cont_obj_version, &value);
+	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_cont_obj_version, &value);
 	if (rc) {
-		D_ERROR("failed to upgrade container obj version pool/cont: "DF_CONTF"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid));
+		DL_ERROR(rc, "failed to upgrade container obj version pool/cont: " DF_CONTF,
+			 DP_CONT(ap->pool_uuid, cont_uuid));
 		goto out;
 	}
 
@@ -4624,11 +4617,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	if (rc == -DER_NONEXIST) {
 		pda = DAOS_PROP_PO_EC_PDA_DEFAULT;
-		rc = rdb_tx_update(ap->tx, &cont->c_prop,
-				   &ds_cont_prop_ec_pda, &value);
+		rc  = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_ec_pda, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container ec_pda pool/cont: "DF_CONTF"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid));
+			DL_ERROR(rc, "failed to upgrade container ec_pda pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4645,11 +4637,10 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		goto out;
 	if (rc == -DER_NONEXIST) {
 		pda = DAOS_PROP_PO_RP_PDA_DEFAULT;
-		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda,
-				   &value);
+		rc  = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_rp_pda, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container rp_pda pool/cont: "DF_CONTF"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid));
+			DL_ERROR(rc, "failed to upgrade container rp_pda pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4668,8 +4659,8 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		perf_domain = DAOS_PROP_CO_PERF_DOMAIN_DEFAULT;
 		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_perf_domain, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container perf_domain pool/cont: "DF_CONTF"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid));
+			DL_ERROR(rc, "failed to upgrade container perf_domain pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4687,8 +4678,9 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		pda = 0;
 		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_scrubber_disabled, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container scrubbing disabled prop: "DF_CONTF"\n",
-				DP_CONT(ap->pool_uuid, cont_uuid));
+			DL_ERROR(rc,
+				 "failed to upgrade container scrubbing disabled prop: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4702,8 +4694,8 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	if (rc == -DER_NONEXIST) {
 		rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_nhandles, &value);
 		if (rc) {
-			D_ERROR("failed to upgrade container nhandles pool/cont: "DF_CONTF
-				", "DF_RC"\n", DP_CONT(ap->pool_uuid, cont_uuid), DP_RC(rc));
+			DL_ERROR(rc, "failed to upgrade container nhandles pool/cont: " DF_CONTF,
+				 DP_CONT(ap->pool_uuid, cont_uuid));
 			goto out;
 		}
 		upgraded = true;
@@ -4730,8 +4722,8 @@ upgrade_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	mdtimes.mtime = d_hlc_get();
 	rc = rdb_tx_update(ap->tx, &cont->c_prop, &ds_cont_prop_co_md_times, &value);
 	if (rc) {
-		D_ERROR("failed to upgrade container co_md_times/cont: "DF_CONTF"\n",
-			DP_CONT(ap->pool_uuid, cont_uuid));
+		DL_ERROR(rc, "failed to upgrade container co_md_times/cont: " DF_CONTF,
+			 DP_CONT(ap->pool_uuid, cont_uuid));
 		goto out;
 	}
 	upgraded = true;
@@ -5070,18 +5062,15 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
-				D_ERROR(DF_CONT": rejecting unauthorized "
-					"operation: "DF_UUID"\n",
-					DP_CONT(cont->c_svc->cs_pool_uuid,
-						cont->c_uuid),
-					DP_UUID(in->ci_hdl));
 				rc = -DER_NO_HDL;
+				DL_ERROR(rc, DF_CONT ": rejecting unauthorized operation: " DF_UUID,
+					 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+					 DP_UUID(in->ci_hdl));
 			} else {
-				D_ERROR(DF_CONT": failed to look up container "
-					"handle "DF_UUID": %d\n",
-					DP_CONT(cont->c_svc->cs_pool_uuid,
-						cont->c_uuid),
-					DP_UUID(in->ci_hdl), rc);
+				DL_ERROR(rc,
+					 DF_CONT ": failed to look up container handle " DF_UUID,
+					 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid),
+					 DP_UUID(in->ci_hdl));
 			}
 			goto out;
 		}
@@ -5406,8 +5395,8 @@ ds_cont_oid_fetch_add(uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_
 	/* Update the max OID */
 	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
+		DL_ERROR(rc, DF_CONT ": failed to update alloced_oid",
+			 DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid));
 		D_GOTO(out_cont, rc);
 	}
 

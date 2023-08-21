@@ -66,23 +66,43 @@ enum rpcflags {
 	R_SYNC = 1
 };
 
-int drpc_call_create(struct drpc *ctx, int32_t module, int32_t method,
-		     Drpc__Call **callp);
-void drpc_call_free(Drpc__Call *call);
+int
+drpc_call_create(struct drpc *ctx, int32_t module, int32_t method, Drpc__Call **callp);
 
-Drpc__Response *drpc_response_create(Drpc__Call *call);
-void drpc_response_free(Drpc__Response *resp);
+void
+drpc_call_free(Drpc__Call *call);
 
-int drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg,
-		Drpc__Response **resp);
-int drpc_connect(char *sockaddr, struct drpc **);
-struct drpc *drpc_listen(char *sockaddr, drpc_handler_t handler);
-bool drpc_is_valid_listener(struct drpc *ctx);
-struct drpc *drpc_accept(struct drpc *listener_ctx);
-int drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
-int drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
-int drpc_close(struct drpc *ctx);
+Drpc__Response *
+drpc_response_create(Drpc__Call *call);
 
-int drpc_add_ref(struct drpc *ctx);
+void
+drpc_response_free(Drpc__Response *resp);
+
+int
+drpc_call(struct drpc *ctx, int flags, Drpc__Call *msg, Drpc__Response **resp);
+
+int
+drpc_connect(char *sockaddr, struct drpc **);
+
+struct drpc *
+drpc_listen(char *sockaddr, drpc_handler_t handler);
+
+bool
+drpc_is_valid_listener(struct drpc *ctx);
+
+int
+drpc_accept(struct drpc *listener_ctx, struct drpc **drpc);
+
+int
+drpc_recv_call(struct drpc *ctx, Drpc__Call **call);
+
+int
+drpc_send_response(struct drpc *ctx, Drpc__Response *resp);
+
+int
+drpc_close(struct drpc *ctx);
+
+int
+drpc_add_ref(struct drpc *ctx);
 
 #endif /* __DAOS_DRPC_H__ */
