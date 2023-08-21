@@ -7,7 +7,7 @@ reqid=${REQID:-$(reqidgen)}
 echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
 trap 'rm -f $cookiejar' EXIT
 cookiejar="$(mktemp)"
-crumb="$(curl --cookie-jar "$COOKIEJAR" "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
+crumb="$(curl --cookie-jar "$cookiejar" "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
 url="${JENKINS_URL}job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=stage_vm9&REQID=$reqid"
 curl -D - -f -v -X POST --cookie "$cookiejar" -H "$crumb" "$url"
 if ! queue_url=$(curl -D - -f -v -X POST "$url" |
