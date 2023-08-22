@@ -703,7 +703,7 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     mount_dir = dfuse.mount_dir.value
     dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
     dfuselog = os.path.join(
-        self.sharedsoaktest_dir,
+        self.soak_log_dir,
         self.test_name + "_" + name + "_`hostname -s`_"
         "" + "${SLURM_JOB_ID}_" + "daos_dfuse.log")
     dfuse_env = f"export D_LOG_FILE_APPEND_PID=1;export D_LOG_MASK=ERR;export D_LOG_FILE={dfuselog}"
@@ -832,7 +832,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob, oclass_list=None,
                 job_spec.replace("/", "_"), api, b_size, t_size,
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
-                self.sharedsoaktest_dir, self.test_name + "_" + log_name
+                self.soak_log_dir, self.test_name + "_" + log_name
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = ior_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
@@ -904,13 +904,13 @@ def create_macsio_cmdline(self, job_spec, pool, ppn, nodesperjob):
             log_name = "{}_{}_{}_{}_{}_{}".format(
                 job_spec, api, file_oclass, nodesperjob * ppn, nodesperjob, ppn)
             daos_log = os.path.join(
-                self.sharedsoaktest_dir, self.test_name
+                self.soak_log_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             macsio_log = os.path.join(
-                self.sharedsoaktest_dir, self.test_name
+                self.soak_log_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-log.log")
             macsio_timing_log = os.path.join(
-                self.sharedsoaktest_dir, self.test_name
+                self.soak_log_dir, self.test_name
                 + "_" + log_name + "_`hostname -s`_${SLURM_JOB_ID}_macsio-timing.log")
             macsio.log_file_name.update(macsio_log)
             macsio.timings_file_name.update(macsio_timing_log)
@@ -1004,7 +1004,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                 file_dir_oclass[0], nodesperjob * ppn, nodesperjob,
                 ppn)
             daos_log = os.path.join(
-                self.sharedsoaktest_dir, self.test_name + "_" + log_name
+                self.soak_log_dir, self.test_name + "_" + log_name
                 + "_`hostname -s`_${SLURM_JOB_ID}_daos.log")
             env = mdtest_cmd.get_default_env("mpirun", log_file=daos_log)
             env["D_LOG_FILE_APPEND_PID"] = "1"
@@ -1061,7 +1061,7 @@ def create_racer_cmdline(self, job_spec):
     daos_racer.pool_uuid.update(self.pool[-1].uuid)
     daos_racer.cont_uuid.update(self.container[-1].uuid)
     racer_log = os.path.join(
-        self.sharedsoaktest_dir,
+        self.soak_log_dir,
         self.test_name + "_" + job_spec + "_`hostname -s`_"
         "${SLURM_JOB_ID}_" + "racer_log")
     daos_racer.env["D_LOG_FILE"] = get_log_file(racer_log)
@@ -1272,7 +1272,7 @@ def create_dm_cmdline(self, job_spec, pool, ppn, nodesperjob):
         src_file = format_path(pool, cont_1)
         dcp_cmd.set_params(src=src_file, dst=dst_file)
         env_vars = {
-            "D_LOG_FILE": os.path.join(self.sharedsoaktest_dir, self.test_name + "_"
+            "D_LOG_FILE": os.path.join(self.soak_log_dir, self.test_name + "_"
                                        + log_name + "_`hostname -s`_${SLURM_JOB_ID}_daos.log"),
             "D_LOG_FILE_APPEND_PID": "1"
         }
@@ -1324,7 +1324,7 @@ def build_job_script(self, commands, job, nodesperjob):
         if isinstance(cmd, str):
             cmd = [cmd]
         output = os.path.join(
-            self.sharedsoaktest_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
+            self.soak_log_dir, self.test_name + "_" + log_name + "_%N_" + "%j_")
         error = os.path.join(str(output) + "ERROR_")
         sbatch = {
             "time": str(job_timeout) + ":00",
@@ -1337,7 +1337,7 @@ def build_job_script(self, commands, job, nodesperjob):
         sbatch.update(self.srun_params)
         unique = get_random_string(5, self.used)
         script = slurm_utils.write_slurm_script(
-            self.sharedsoaktest_dir, job, output, nodesperjob,
+            self.soak_log_dir, job, output, nodesperjob,
             prepend_cmds + cmd + append_cmds + exit_cmd, unique, sbatch)
         script_list.append(script)
         self.used.append(unique)
