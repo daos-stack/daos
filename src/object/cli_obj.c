@@ -3727,9 +3727,25 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 				shard_auxi->shard);
 		}
 	} else if (obj_retry_error(ret)) {
+		int rc;
+
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
 		if (obj_auxi->result == 0)
 			obj_auxi->result = ret;
+		/* If the failure needs to be retried from different redundancy shards,
+		 * then let's remember the failure targets to make sure these targets
+		 * will be skipped during retry, see obj_ec_valid_shard_get() and
+		 * need_retry_redundancy().
+		 */
+		if ((ret == -DER_TX_UNCERTAIN || ret == -DER_CSUM || ret == -DER_NVME_IO) &&
+		    obj_auxi->is_ec_obj) {
+			rc = obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			if (rc != 0) {
+				D_ERROR("failed to add tgt %u to failed list: %d\n",
+					shard_auxi->target, rc);
+				ret = rc;
+			}
+		}
 	} else if (ret == -DER_TGT_RETRY) {
 		/* some special handing for DER_TGT_RETRY, as we use that errno for
 		 * some retry cases.
@@ -3763,11 +3779,17 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 			   ret != -DER_TX_RESTART && ret != -DER_RF &&
 			   !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
+			int rc;
 
 			/* Check if there are other replicas available to
 			 * fulfill the request
 			 */
-			obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			rc = obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			if (rc != 0) {
+				D_ERROR("failed to add tgt %u to failed list: %d\n",
+					shard_auxi->target, rc);
+				ret = rc;
+			}
 			new_tgt = obj_shard_find_replica(obj_auxi->obj,
 						 shard_auxi->target,
 						 obj_auxi->failed_tgt_list);
@@ -5106,7 +5128,36 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 static inline bool
 need_retry_redundancy(struct obj_auxi_args *obj_auxi)
 {
+	/* NB: If new failure being added here, then please update failure check in
+	 * obj_shard_comp_cb() as well.
+	 */
 	return (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err);
+}
+
+/* Check if the shard was failed in the previous fetch, so these shards can be skipped */
+static inline bool
+shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
+{
+	struct obj_auxi_tgt_list *failed_list;
+	uint32_t                  tgt_id;
+
+	if (obj_auxi->force_degraded) {
+		D_DEBUG(DB_IO, DF_OID " fail idx %u\n", DP_OID(obj_auxi->obj->cob_md.omd_id),
+			shard_idx);
+		obj_auxi->force_degraded = 0;
+		return true;
+	}
+
+	if (obj_auxi->failed_tgt_list == NULL)
+		return false;
+
+	failed_list = obj_auxi->failed_tgt_list;
+	tgt_id      = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
+
+	if (tgt_in_failed_tgts_list(tgt_id, failed_list))
+		return true;
+
+	return false;
 }
 
 static int
@@ -5115,20 +5166,15 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 {
 	struct dc_object	*obj = obj_auxi->obj;
 	uint32_t		grp_start = grp_idx * obj_get_grp_size(obj);
-	uint32_t		shard_idx = grp_start + *tgt_idx;
-	bool			force_ec_degrade = false;
-	bool			ec_degrade = false;
+	uint32_t                 shard_idx = grp_start + *tgt_idx;
 	int			rc = 0;
 
-	if (need_retry_redundancy(obj_auxi) || obj_auxi->force_degraded)
-		force_ec_degrade = true;
-
-	while (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) || force_ec_degrade) {
-		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d/%d on "DF_OID"\n", shard_idx, *tgt_idx,
+	while (shard_was_fail(obj_auxi, shard_idx) ||
+	       obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH)) {
+		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d on " DF_OID "\n", shard_idx, *tgt_idx,
 			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
 			obj->cob_shards->do_shards[shard_idx].do_target_id,
-			obj->cob_shards->do_shards[shard_idx].do_shard, force_ec_degrade,
-			DP_OID(obj->cob_md.omd_id));
+			obj->cob_shards->do_shards[shard_idx].do_shard, DP_OID(obj->cob_md.omd_id));
 		rc = obj_ec_fail_info_insert(&obj_auxi->reasb_req, (uint16_t)*tgt_idx);
 		if (rc)
 			break;
@@ -5138,24 +5184,15 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 		if (rc)
 			break;
 		shard_idx = grp_start + *tgt_idx;
-		force_ec_degrade = false;
-		obj_auxi->force_degraded = false;
-		ec_degrade = true;
 	}
 
 	if (rc) {
-		if (force_ec_degrade) {
-			obj_auxi->no_retry = 1;
-			rc = retry_errcode(obj_auxi, rc);
-		}
+		/* Can not find any valid shards anymore, so no need retry, and also to check
+		 * if it needs to restore the original failure. */
+		obj_auxi->no_retry = 1;
+		rc                 = retry_errcode(obj_auxi, rc);
 		D_ERROR(DF_OID" can not get parity shard: "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-	}
-
-	if (ec_degrade) {
-		obj_auxi->tx_uncertain = 0;
-		obj_auxi->csum_retry = 0;
-		obj_auxi->nvme_io_err = 0;
 	}
 
 	return rc;

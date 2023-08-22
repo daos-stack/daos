@@ -1023,7 +1023,12 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 		if (!rpt->rt_abort && !rpt->rt_finishing) {
 			ABT_mutex_lock(rpt->rt_lock);
-			ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+				D_INFO(DF_UUID "wait for global dtx %u rebuild ver %u\n",
+				       DP_UUID(rpt->rt_pool_uuid),
+				       rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
+				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			}
 			ABT_mutex_unlock(rpt->rt_lock);
 		}
 		if (rpt->rt_abort || rpt->rt_finishing) {
@@ -1031,7 +1036,6 @@ rebuild_scan_leader(void *data)
 			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
-
 	}
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
