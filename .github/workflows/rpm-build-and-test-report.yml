@@ -2,20 +2,37 @@ name: 'RPM Build and Test Report'
 on:
   workflow_run:
     workflows:
-      - 'RPM Build and Test'
+      - 'RPM Build and Test Report'
     types:
       - completed
 
 jobs:
-  report:
-    name: 'Report'
+  report-el8:
+    env:
+      STAGE_NAME: 'Functional on EL 8'
+    name: 'RPM Build and Test Report Functional on EL 8'
     runs-on: [self-hosted, light]
     steps:
       - name: Test Report
         uses: phoenix-actions/test-reporting@v10
         id: test-report
         with:
-          artifact: test-results
+          artifact: ${{ env.STAGE_NAME }} test-results
+          name: ${{ env.STAGE_NAME }} Test Results (new)
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+          reporter: java-junit        # Format of test results
+          fail-on-error: false
+  report-leap15:
+    env:
+      STAGE_NAME: 'Functional on Leap 15'
+    name: 'RPM Build and Test Report Functional on Leap 15'
+    runs-on: [self-hosted, light]
+    steps:
+      - name: Test Report
+        uses: phoenix-actions/test-reporting@v10
+        id: test-report
+        with:
+          artifact: ${{ env.STAGE_NAME }} test-results
           name: ${{ env.STAGE_NAME }} Test Results (new)
           path: ${{ env.STAGE_NAME }}/**/results.xml
           reporter: java-junit        # Format of test results
