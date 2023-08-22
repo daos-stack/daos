@@ -36,5 +36,6 @@ cancel_provision() {
     if ! curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H "$crumb" "$url"; then
         echo "Failed to cancel cluster provision request."
         cat "$headers_file"
+        return 1
     fi
 }
