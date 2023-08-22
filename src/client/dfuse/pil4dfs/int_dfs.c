@@ -1753,7 +1753,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	if (!is_target_path)
 		goto org_func;
 	if (oflags & O_APPEND)
-		D_GOTO(out_error, rc = ENOSUPP);
+		D_GOTO(out_error, rc = ENOTSUP);
 
 	if (oflags & __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -1854,7 +1854,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->st_ino      = FAKE_ST_INO(full_path);
 	file_list[idx_fd]->idx_mmap    = -1;
 	file_list[idx_fd]->open_flag   = oflags;
-	file_list[idx_fd]->offset      = offset;
+	file_list[idx_fd]->offset      = 0;
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
