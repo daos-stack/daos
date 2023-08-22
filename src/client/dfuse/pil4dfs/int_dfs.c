@@ -1726,7 +1726,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
 	char            *parent_dir = NULL;
-	char            *full_path = NULL;
+	char            *full_path  = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
