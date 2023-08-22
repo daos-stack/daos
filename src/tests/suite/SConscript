@@ -50,7 +50,7 @@ def CheckCmockaSkip(context):
             sys.stdout.write(" (Bug not reproduced) ")
     context.Result(rc)
     # return 0 means error
-    return not rc
+    return rc == 0
 
 
 # pylint: disable=no-member
@@ -64,8 +64,7 @@ def configure_cmocka(env):
         # it would be cool to be able to check exit code is effectively 134
         #    (for abort() upon skip() bug) but in all error cases we should
         #    decide to use workaround
-        env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
-        print("libcmocka with broken skip(), using workaround (DAOS-1093).")
+        print('libcmocka with broken skip()')
         Exit(1)
     conf.Finish()
 
