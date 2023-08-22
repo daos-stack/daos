@@ -214,48 +214,86 @@ func (im idMap) Keys() (keys []string) {
 }
 
 // Split IDs in comma separated string and assign each token to relevant return list.
-func extractReqIDs(log logging.Logger, ids string) (idMap, idMap, error) {
-	if ids == "" {
-		return nil, nil, errors.New("empty id string")
-	}
-
+func extractReqIDs(log logging.Logger, ids string, addrs idMap, uuids idMap) error {
 	tokens := strings.Split(ids, ",")
 
-	addrs := make(idMap)
-	uuids := make(idMap)
-
 	for _, token := range tokens {
-		if addr, err := hardware.NewPCIAddress(token); err == nil && addr.IsVMDBackingAddress() {
+		if addr, e := hardware.NewPCIAddress(token); e == nil && addr.IsVMDBackingAddress() {
 			addrs[addr.String()] = true
 			continue
 		}
 
-		if uuid, err := uuid.Parse(token); err == nil {
+		if uuid, e := uuid.Parse(token); e == nil {
 			uuids[uuid.String()] = true
 			continue
 		}
 
-		return nil, nil, errors.Errorf("req id entry %q is neither a valid vmd backing "+
-			"device pci address or uuid", token)
+		return errors.Errorf("req id entry %q is neither a valid vmd backing device pci "+
+			"address or uuid", token)
 	}
 
-	return addrs, uuids, nil
+	return nil
 }
 
+// Union type containing either traddr or uuid.
 type devID struct {
 	trAddr string
 	uuid   string
 }
 
-type engineDevMap map[Engine][]devID
+func (id *devID) String() string {
+	if id.trAddr != "" {
+		return id.trAddr
+	}
+	return id.uuid
+}
+
+type devIDMap map[string]devID
+
+func (dim devIDMap) getFirst() *devID {
+	if len(dim) == 0 {
+		return nil
+	}
+
+	var keys []string
+	for key := range dim {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	d := dim[keys[0]]
+	return &d
+}
+
+type engineDevMap map[Engine]devIDMap
+
+func (edm engineDevMap) add(e Engine, id devID) {
+	if _, exists := edm[e]; !exists {
+		edm[e] = make(devIDMap)
+	}
+	if _, exists := edm[e][id.String()]; !exists {
+		edm[e][id.String()] = id
+	}
+}
 
 // Map requested device IDs provided in comma-separated string to the engine that controls the given
 // device. Device can be identified either by UUID or transport (PCI) address.
 func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTrAddr bool) (engineDevMap, error) {
-	// Extract transport addresses and device UUIDs from IDs string.
-	trAddrs, devUUIDs, err := extractReqIDs(svc.log, ids)
-	if err != nil {
-		return nil, err
+	trAddrs := make(idMap)
+	devUUIDs := make(idMap)
+	matchAll := false
+
+	if ids == "" {
+		// Selecting all is not supported unless using transport addresses.
+		if !useTrAddr {
+			return nil, errors.New("empty id string")
+		}
+		matchAll = true
+	} else {
+		// Extract transport addresses and device UUIDs from IDs string.
+		if err := extractReqIDs(svc.log, ids, trAddrs, devUUIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	req := &ctlpb.SmdQueryReq{Rank: uint32(ranklist.NilRank)}
@@ -272,7 +310,8 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			return nil, err
 		}
 		if len(engines) == 0 {
-			return nil, errors.Errorf("failed to retrieve instance for rank %d", rr.Rank)
+			return nil, errors.Errorf("failed to retrieve instance for rank %d",
+				rr.Rank)
 		}
 		engine := engines[0]
 		for _, dev := range rr.Devices {
@@ -283,24 +322,29 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 			if dds == nil {
 				return nil, errors.New("device with nil details in smd query resp")
 			}
+			if dds.TrAddr == "" {
+				svc.log.Errorf("No transport address associated with device %s",
+					dds.Uuid)
+			}
 
-			uuidMatch := dds.Uuid != "" && devUUIDs[dds.Uuid]
+			matchUUID := dds.Uuid != "" && devUUIDs[dds.Uuid]
+
 			// Where possible specify the TrAddr over UUID as there may be multiple
 			// UUIDs mapping to the same TrAddr.
 			if useTrAddr && dds.TrAddr != "" {
-				if trAddrs[dds.TrAddr] || uuidMatch {
+				if matchAll || matchUUID || trAddrs[dds.TrAddr] {
 					// If UUID matches, add by TrAddr rather than UUID which
 					// should avoid duplicate UUID entries for the same TrAddr.
-					edm[engine] = append(edm[engine], devID{trAddr: dds.TrAddr})
+					edm.add(engine, devID{trAddr: dds.TrAddr})
 					delete(trAddrs, dds.TrAddr)
 					delete(devUUIDs, dds.Uuid)
 					continue
 				}
 			}
 
-			if uuidMatch {
+			if matchUUID {
 				// Only add UUID entry if TrAddr is not available for a device.
-				edm[engine] = append(edm[engine], devID{uuid: dds.Uuid})
+				edm.add(engine, devID{uuid: dds.Uuid})
 				delete(devUUIDs, dds.Uuid)
 			}
 		}
@@ -337,14 +381,16 @@ func sendManageReq(c context.Context, e Engine, m drpc.Method, b proto.Message) 
 	}, nil
 }
 
-func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, dev devID) {
-	if res.Status != 0 {
-		log.Errorf("drpc returned status %q on dev %+v", daos.Status(res.Status), dev)
-		if res.Device == nil {
-			// Populate id so failure can be mapped to a device.
-			res.Device = &ctlpb.SmdDevice{
-				TrAddr: dev.trAddr, Uuid: dev.uuid,
-			}
+func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, dev *devID) {
+	if res == nil || dev == nil || res.Status == 0 {
+		return
+	}
+
+	log.Errorf("drpc returned status %q on dev %+v", daos.Status(res.Status), dev)
+	if res.Device == nil {
+		// Populate id so failure can be mapped to a device.
+		res.Device = &ctlpb.SmdDevice{
+			TrAddr: dev.trAddr, Uuid: dev.uuid,
 		}
 	}
 }
@@ -433,7 +479,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			if err != nil {
 				return nil, errors.Wrap(err, msg)
 			}
-			addManageRespIDOnFail(svc.log, devRes, devs[0])
+			addManageRespIDOnFail(svc.log, devRes, devs.getFirst())
 			devResults = append(devResults, devRes)
 		case *ctlpb.SmdManageReq_Faulty:
 			if len(devs) != 1 {
@@ -445,11 +491,11 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 			if err != nil {
 				return nil, errors.Wrap(err, msg)
 			}
-			addManageRespIDOnFail(svc.log, devRes, devs[0])
+			addManageRespIDOnFail(svc.log, devRes, devs.getFirst())
 			devResults = append(devResults, devRes)
 		case *ctlpb.SmdManageReq_Led:
 			if len(devs) == 0 {
-				// TODO DAOS-12670: Enable all LEDs to be acted upon by default.
+				// Operate on all devices by default.
 				return nil, errors.New("led-manage request expects one or more IDs")
 			}
 			// Multiple addresses are supported in LED request.
@@ -466,7 +512,7 @@ func (svc *ControlService) SmdManage(ctx context.Context, req *ctlpb.SmdManageRe
 				if err != nil {
 					return nil, errors.Wrap(err, msg)
 				}
-				addManageRespIDOnFail(svc.log, devRes, dev)
+				addManageRespIDOnFail(svc.log, devRes, &dev)
 				devResults = append(devResults, devRes)
 			}
 		default:
