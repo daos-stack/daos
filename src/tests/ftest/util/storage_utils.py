@@ -544,15 +544,15 @@ class StorageInfo():
         """
         mounted_addresses = set()
         self._log.debug('Detecting mounted addresses on %s', self._hosts)
-        for hosts, devices in self._get_mounted_devices().items():
-            mounted_addresses.add(self._get_addresses(NodeSet(hosts), devices))
+        for device, hosts in self._get_mounted_devices().items():
+            mounted_addresses.update(self._get_addresses(hosts, device))
         return list(mounted_addresses)
 
     def _get_mounted_devices(self):
         """Get a dictionary of list of mounted device names per host.
 
         Returns:
-            dict: a dictionary of list of mounted device names per host
+            dict: a dictionary of mounted device name keys on host NodeSet values
         """
         def get_mounted_parent(block_device):
             """Get the mounted parent kernel device name for the lsblk json block device entry.
@@ -573,50 +573,53 @@ class StorageInfo():
 
         self._log.debug('  Detecting mounted device names on %s', self._hosts)
 
-        mounted_names = {}
+        mounted_devices = {}
         result = run_remote(self._log, self._hosts, 'lsblk --output NAME,MOUNTPOINT --json')
-        self._log.debug('  Detected mounted names:')
         for data in result.output:
             if not data.passed:
-                self._log.debug('    %s: Error detecting mounted devices', data.hosts)
+                self._log.debug('  - Error detecting mounted devices on %s', data.hosts)
                 continue
             try:
                 lsblk_data = yaml.safe_load('\n'.join(data.stdout))
             except yaml.YAMLError as error:
                 self._log.debug(
-                    '    %s: Error processing mounted device information: %s', data.hosts, error)
+                    '  - Error processing mounted device information on %s: %s', data.hosts, error)
                 continue
             key = 'blockdevices'
             if key not in lsblk_data:
-                self._log.debug('    %s: lsblk json output missing \'%s\' key', data.hosts, key)
+                self._log.debug('  -%s: lsblk json output missing \'%s\' key', data.hosts, key)
                 continue
             for entry in lsblk_data[key]:
                 name = get_mounted_parent(entry)
-                self._log.debug('    %s: %s', data.hosts, name)
                 if name is not None:
-                    hosts_str = str(data.hosts)
-                    if hosts_str not in mounted_names:
-                        mounted_names[hosts_str] = []
-                    mounted_names[hosts_str].append(name)
-        return mounted_names
+                    self._log.debug('    %s: %s', data.hosts, name)
+                    if name not in mounted_devices:
+                        mounted_devices[name] = NodeSet()
+                    mounted_devices[name].add(data.hosts)
 
-    def _get_addresses(self, hosts, devices):
+        self._log.debug('  Detected mounted names:')
+        for device, hosts in mounted_devices.items():
+            self._log.debug('    %s on %s', device, hosts)
+
+        return mounted_devices
+
+    def _get_addresses(self, hosts, device):
         """Get a list of addresses for each of the devices.
 
         Args:
             hosts (NodeSet): hosts from which to get the addresses
-            devices (list): devices for which to find their addresses
+            device (str): devices for which to find their addresses
 
         Returns:
             list: a list of addresses
         """
         addresses = set()
-        self._log.debug('  Detecting addresses for %s on %s', devices, hosts)
+        self._log.debug('  Detecting addresses for %s on %s', device, hosts)
 
         # Find the mounted device names on each host
-        command = f'ls -l /dev/disk/by-path/ | grep -w -E \'({"|".join(devices)})\''
+        command = f'ls -l /dev/disk/by-path/ | grep -w \'{device}\''
         result = run_remote(self._log, self._hosts, command)
-        self._log.debug('  Detecting addresses for %s:', devices)
+        self._log.debug('  Detecting addresses for %s:', device)
         for data in result.output:
             if not data.passed:
                 self._log.debug('    %s: Error detecting addresses', data.hosts)
