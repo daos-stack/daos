@@ -1727,6 +1727,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path = NULL;
+	struct stat      stbuf;
+	off_t            offset = 0;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1784,14 +1786,32 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	}
 	/* file/dir should be handled by DFS */
 	if (oflags & O_CREAT) {
-		rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0, NULL,
-			      &dfs_obj);
+		if ((oflags & O_APPEND) && ((oflags & O_TRUNC) == 0)) {
+			rc = dfs_open_stat(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags,
+					   0, 0, NULL, &dfs_obj, &stbuf);
+			if (rc == 0)
+				offset = stbuf.st_size;
+		} else {
+			rc = dfs_open(dfs_mt->dfs, parent, item_name, mode | S_IFREG, oflags, 0, 0,
+				      NULL, &dfs_obj);
+		}
 		mode_query = S_IFREG;
 	} else if (!parent && (strncmp(item_name, "/", 2) == 0)) {
 		rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &dfs_obj, &mode_query, NULL);
 	} else {
-		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
-				    NULL);
+		if ((oflags & O_APPEND) && ((oflags & O_TRUNC) == 0)) {
+			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
+					    &stbuf);
+			if (rc == 0 && S_ISREG(mode_query))
+				offset = stbuf.st_size;
+		} else {
+			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
+					    NULL);
+		}
+		if ((rc == 0) && S_ISREG(mode_query) && (oflags & O_TRUNC)) {
+			/* set file size zero. Looks like dfs_lookup_rel() does not support O_TRUNC. */
+			rc = dfs_punch(dfs_mt->dfs, dfs_obj, 0, DFS_MAX_FSIZE);
+		}
 	}
 
 	if (rc)
@@ -1847,8 +1867,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->st_ino      = FAKE_ST_INO(full_path);
 	file_list[idx_fd]->idx_mmap    = -1;
 	file_list[idx_fd]->open_flag   = oflags;
-	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
-	file_list[idx_fd]->offset = 0;
+	file_list[idx_fd]->offset      = offset;
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
