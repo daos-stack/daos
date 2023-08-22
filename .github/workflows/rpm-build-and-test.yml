@@ -16,6 +16,12 @@ defaults:
   run:
     shell: bash --noprofile --norc -ueo pipefail {0}
 
+# https://github.com/dorny/test-reporter/issues/149
+permissions:
+  id-token: write
+  contents: read
+  checks: write
+
 jobs:
   dump_contexts_to_log:
     runs-on: [self-hosted, light]
@@ -582,7 +588,7 @@ jobs:
           trap 'rm -f $cookiejar' EXIT
           cookiejar="$(mktemp)"
           url="${{ env.JENKINS_URL }}crumbIssuer/api/xml?xpath="
-          url+="concat(//crumbRequestField,\":\",//crumb)")"
+          url+="concat(//crumbRequestField,\":\",//crumb)"
           crumb="$(curl --cookie-jar "$cookiejar" "$url")"
           url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's'|item/\(.*\)/|cancelItem?id=\1|'
           trap 'set -x; rm -f $cookiejar $headers_file' EXIT
