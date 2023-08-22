@@ -1962,7 +1962,7 @@ crt_rpc_hdr_version_set(struct crt_rpc_priv *rpc_priv, uint32_t version)
 
 	hdr = &rpc_priv->crp_header;
 
-	D_EMIT("Setting version for %p to %d\n", rpc_priv, version);
+	D_DEBUG(DB_ALL, "Setting version for %p to %d\n", rpc_priv, version);
 
 	switch (version) {
 	case 0: {
