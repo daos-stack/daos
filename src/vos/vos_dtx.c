@@ -2785,27 +2785,30 @@ out:
 }
 
 int
-vos_dtx_cmt_reindex(daos_handle_t coh)
+vos_dtx_cmt_reindex(daos_handle_t coh, bool *complete)
 {
-	struct umem_instance		*umm;
-	struct vos_container		*cont;
-	struct vos_dtx_cmt_ent		*dce;
-	struct vos_dtx_blob_df		*dbd;
-	d_iov_t				 kiov;
-	d_iov_t				 riov;
-	int				 rc = 0;
-	int				 i;
+	struct umem_instance   *umm;
+	struct vos_container   *cont;
+	struct vos_dtx_cmt_ent *dce;
+	struct vos_dtx_blob_df *dbd;
+	d_iov_t                 kiov;
+	d_iov_t                 riov;
+	int                     rc = -DER_SUCCESS;
+	int                     i;
+	bool                    done = false;
 
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
-	if (cont->vc_cmt_dtx_indexed)
-		return 1;
+	if (cont->vc_cmt_dtx_indexed) {
+		*complete = true;
+		return -DER_SUCCESS;
+	}
 
 	umm = vos_cont2umm(cont);
 	dbd = umem_off2ptr(umm, cont->vc_cmt_dtx_reindex_pos);
 	if (dbd == NULL)
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, done = true);
 
 	D_ASSERTF(dbd->dbd_magic == DTX_CMT_BLOB_MAGIC,
 		  "Corrupted committed DTX blob (2) %x\n", dbd->dbd_magic);
@@ -2839,20 +2842,21 @@ vos_dtx_cmt_reindex(daos_handle_t coh)
 		 */
 		if (dce->dce_exist) {
 			D_FREE(dce);
-			D_GOTO(out, rc = 1);
+			D_GOTO(out, done = true);
 		}
 	}
 
 	if (dbd->dbd_count < dbd->dbd_cap || umoff_is_null(dbd->dbd_next))
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, done = true);
 
 	cont->vc_cmt_dtx_reindex_pos = dbd->dbd_next;
 
 out:
-	if (rc > 0) {
+	if (done) {
 		cont->vc_cmt_dtx_reindex_pos = UMOFF_NULL;
 		cont->vc_cmt_dtx_indexed = 1;
 	}
+	*complete = done;
 
 	return rc;
 }

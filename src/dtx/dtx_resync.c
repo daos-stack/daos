@@ -646,8 +646,10 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		vos_dtx_cache_reset(cont->sc_hdl, true);
 
 		while (1) {
-			rc = vos_dtx_cmt_reindex(cont->sc_hdl);
-			if (rc > 0)
+			bool done;
+
+			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &done);
+			if (rc == -DER_SUCCESS && done)
 				break;
 
 			/* Simplify failure handling just for test. */

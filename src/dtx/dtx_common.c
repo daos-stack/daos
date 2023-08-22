@@ -1583,16 +1583,17 @@ out:
 void
 dtx_reindex_ult(void *arg)
 {
-	struct ds_cont_child		*cont	= arg;
-	struct dss_module_info		*dmi	= dss_get_module_info();
-	int				 rc	= 0;
+	struct ds_cont_child   *cont = arg;
+	struct dss_module_info *dmi  = dss_get_module_info();
+	int                     rc   = 0;
+	bool                    done;
 
 	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
 	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
-		if (rc != 0)
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &done);
+		if (rc != 0 || done)
 			break;
 
 		ABT_thread_yield();
