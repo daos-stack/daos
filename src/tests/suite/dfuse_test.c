@@ -154,7 +154,7 @@ do_openat(void **state)
 	rc = unlinkat(root, "openat_file", 0);
 	assert_return_code(rc, errno);
 
-	/* openning flag testing with openat */
+	/* opening flag testing with openat */
 	fd = openat(root, "oflag_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
 	assert_return_code(fd, errno);
 	count = write(fd, "Hello", 5);
@@ -178,7 +178,7 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 	assert_int_equal(strncmp(read_buf, "Hello World", 12), 0);
 
-	/* trucate the file size to zero */
+	/* truncate the file size to zero */
 	fd = openat(root, "oflag_file", O_RDWR | O_TRUNC);
 	assert_return_code(fd, errno);
 	rc = close(fd);

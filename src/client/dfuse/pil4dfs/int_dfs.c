@@ -1725,8 +1725,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path = NULL;
+	char            *parent_dir = NULL;
+	char            *full_path = NULL;
 	struct stat      stbuf;
 	off_t            offset = 0;
 
@@ -1800,16 +1800,17 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		rc = dfs_lookup(dfs_mt->dfs, "/", oflags, &dfs_obj, &mode_query, NULL);
 	} else {
 		if ((oflags & O_APPEND) && ((oflags & O_TRUNC) == 0)) {
-			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
-					    &stbuf);
+			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj,
+					    &mode_query, &stbuf);
 			if (rc == 0 && S_ISREG(mode_query))
 				offset = stbuf.st_size;
 		} else {
-			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
-					    NULL);
+			rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj,
+					    &mode_query, NULL);
 		}
 		if ((rc == 0) && S_ISREG(mode_query) && (oflags & O_TRUNC)) {
-			/* set file size zero. Looks like dfs_lookup_rel() does not support O_TRUNC. */
+			/* set file size zero. Looks like dfs_lookup_rel() does not support O_TRUNC.
+			 */
 			rc = dfs_punch(dfs_mt->dfs, dfs_obj, 0, DFS_MAX_FSIZE);
 		}
 	}
