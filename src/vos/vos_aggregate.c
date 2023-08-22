@@ -2616,6 +2616,18 @@ struct agg_data {
 };
 
 int
+vos_aggregate_enter(daos_handle_t coh, daos_epoch_range_t *epr)
+{
+	return aggregate_enter(vos_hdl2cont(coh), AGG_MODE_AGGREGATE, epr);
+}
+
+void
+vos_aggregate_exit(daos_handle_t coh)
+{
+	aggregate_exit(vos_hdl2cont(coh), AGG_MODE_AGGREGATE);
+}
+
+int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      int (*yield_func)(void *arg), void *yield_arg, uint32_t flags)
 {
