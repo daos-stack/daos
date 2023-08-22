@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -38,6 +38,10 @@ def _supports_custom_format(clang_exe):
     if match and int(match.group(1)) >= MIN_FORMAT_VERSION:
         return True
 
+    match = re.search(r"google3\-trunk", output)
+    if match:
+        return True
+
     print(f'Custom .clang-format wants version {MIN_FORMAT_VERSION}+. Using Mozilla style.')
     return False
 
@@ -52,6 +56,10 @@ def _supports_correct_style(clang_exe):
         output = rawbytes.decode('utf-8')
     except subprocess.CalledProcessError:
         return False
+
+    match = re.search(r"google3\-trunk", output)
+    if match:
+        return True
 
     match = re.search(r'version ([\d+\.]+)', output)
     if match:
