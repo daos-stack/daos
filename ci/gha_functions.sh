@@ -7,9 +7,18 @@ error_exit() {
 }
 
 get_repo_path() {
-    repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
+    # shellcheck disable=SC2153
+    local repo_path="$REPO_PATH$GITHUB_RUN_NUMBER/artifact/artifacts/"
     mkdir -p "$repo_path"
 
     echo "$repo_path"
 
+}
+
+cleanup_provision_request () {
+    local reqid="$1"
+    if ! rm -f /scratch/Get\ a\ cluster/"$reqid"; then
+       id;
+       ls -l /scratch/Get\ a\ cluster/"$reqid";
+    fi;
 }

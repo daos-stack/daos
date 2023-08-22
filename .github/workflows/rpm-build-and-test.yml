@@ -415,7 +415,7 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas,
             Import-commit-pragmas2]
-    if: ${{ !cancelled() }}
+    if: !cancelled()
     steps:
       - name: Show if conditions
         run: |
@@ -436,10 +436,10 @@ jobs:
         distro: ${{ fromJSON(needs.Calc-functional-matrix.outputs.matrix) }}
     # https://github.com/actions/runner/issues/491#issuecomment-926924523
     if: |
-      ${{ !cancelled() && (success() || failure() ||
-          (needs.Build-RPM.result == 'success' ||
-           needs.Build-RPM.result == 'skipped') &&
-          needs.Import-commit-pragmas2.outputs.skip-func-test != 'true') }}
+      !cancelled() && (success() || failure() ||
+      (needs.Build-RPM.result == 'success' ||
+       needs.Build-RPM.result == 'skipped') &&
+      needs.Import-commit-pragmas2.outputs.skip-func-test != 'true')
     env:
       TEST_TAG: pr,-hw
       CONFIG_POWER_ONLY: false
@@ -583,44 +583,44 @@ jobs:
           done
           NODE_COUNT="$NODE_COUNT" TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
       - name: Cancel cluster request (if cancelled after requesting)
-        if: ${{ cancelled() }}
+        if: cancelled()
         run: |
+          . ci/gha_functions.sh
           trap 'rm -f $cookiejar' EXIT
           cookiejar="$(mktemp)"
           url="${{ env.JENKINS_URL }}crumbIssuer/api/xml?xpath="
           url+="concat(//crumbRequestField,\":\",//crumb)"
           crumb="$(curl --cookie-jar "$cookiejar" "$url")"
-          url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's'|item/\(.*\)/|cancelItem?id=\1|'
+          url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's|item/\(.*\)/|cancelItem?id=\1|'
           trap 'set -x; rm -f $cookiejar $headers_file' EXIT
           headers_file="$(mktemp)"
           if ! curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H "$crumb" "$url"; then
               echo "Failed to cancel cluster provision request."
               cat "$headers_file"
+              # probably already provisioned and needs unprovisioning
+              cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
               exit 1
           fi
       - name: Job cleanup
-        if: ${{ !cancelled() && (success() || failure()) }}
+        if: (!cancelled() && (success() || failure()))
         run: set -eux;
              . ci/gha_functions.sh;
-             if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}"; then
-                id;
-                ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}";
-             fi;
+             cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files
-        if: ${{ !cancelled() && (success() || failure()) }}
+        if: (!cancelled() && (success() || failure()))
         run: . ci/gha_functions.sh;
              hostname;
              pwd;
              find Functional\ on\ * -type f
       # - name: Debug Publish NLT test results
-      #   if: ${{ !cancelled() && (success() || failure()) }}
+      #   if: (!cancelled() && (success() || failure()))
       #   run: pwd;
       #        ls -l ../../{,_temp/{,_github_workflow/}};
       #        echo mkdir -p ../../_temp/_github_home;
       #        ls -l ../../{,_temp/{,_github_workflow/}}
       - name: Publish test results
-        if: ${{ !cancelled() && (success() || failure()) }}
+        if: (!cancelled() && (success() || failure()))
         uses: EnricoMi/publish-unit-test-result-action@v2
         with:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
@@ -629,7 +629,7 @@ jobs:
       - name: Test Report
         uses: phoenix-actions/test-reporting@v10
         id: test-report
-        if: ${{ !cancelled() && (success() || failure()) }}
+        if: (!cancelled() && (success() || failure()))
         with:
           name: ${{ env.STAGE_NAME }} Test Results (new)
           path: ${{ env.STAGE_NAME }}/**/results.xml
@@ -637,7 +637,7 @@ jobs:
           fail-on-error: false
 
       - name: Publish artifacts
-        if: ${{ !cancelled() && (success() || failure()) }}
+        if: (!cancelled() && (success() || failure()))
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.STAGE_NAME }} artifacts
