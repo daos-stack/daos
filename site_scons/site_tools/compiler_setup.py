@@ -39,8 +39,9 @@ def _base_setup(env):
     compiler = env['CC']
 
     build_type = env['BUILD_TYPE']
-    print(f'Setting up compile environment for {compiler}')
-    print(f"Build type is '{build_type}'")
+    if not GetOption('silent'):
+        print(f'Setting up compile environment for {compiler}')
+        print(f"Build type is '{build_type}'")
 
     prev_compiler = env.get('BSETUP', False)
     if prev_compiler:

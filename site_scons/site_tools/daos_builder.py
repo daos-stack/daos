@@ -224,6 +224,10 @@ def _configure_mpi(self):
     if GetOption('help'):
         return None
 
+    def _print(msg):
+        if not GetOption('silent'):
+            print(msg)
+
     env = self.Clone()
 
     env['CXX'] = None
@@ -233,13 +237,13 @@ def _configure_mpi(self):
         return env
 
     for mpi in ['openmpi', 'mpich']:
-        if not load_mpi(mpi):
+        if not load_mpi(mpi, GetOption('silent')):
             continue
         if _find_mpicc(env):
-            print(f'{mpi} is installed')
+            _print(f'{mpi} is installed')
             return env
-        print(f'No {mpi} installed and/or loaded')
-    print("No MPI installed")
+        _print(f'No {mpi} installed and/or loaded')
+    _print("No MPI installed")
     return None
 
 

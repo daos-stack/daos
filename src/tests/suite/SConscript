@@ -54,19 +54,20 @@ def CheckCmockaSkip(context):
 
 
 # pylint: disable=no-member
-def configure_cmocka(nenv):
+def configure_cmocka(env):
     """configure cmocka environment"""
     if GetOption('help') or GetOption('clean'):
-        return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
-    conf.env.AppendUnique(LIBS=['cmocka'])
+        return
+    tenv = env.Clone(LIBS=['cmocka'])
+    conf = Configure(tenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
     if not conf.CheckCmockaSkip():
         # it would be cool to be able to check exit code is effectively 134
         #    (for abort() upon skip() bug) but in all error cases we should
         #    decide to use workaround
-        conf.env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
+        env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
         print("libcmocka with broken skip(), using workaround (DAOS-1093).")
-    return conf.Finish()
+        Exit(1)
+    conf.Finish()
 
 
 def scons():
@@ -97,7 +98,8 @@ def scons():
                                c_files + daos_test_tgt,
                                LIBS=['daos_common'] + libraries)
 
-    newenv = configure_cmocka(denv.Clone())
+    newenv = denv.Clone()
+    configure_cmocka(newenv)
 
     c_files = Split("""daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
                     daos_container.c daos_dedup.c daos_degraded.c
