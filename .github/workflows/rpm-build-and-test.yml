@@ -585,18 +585,10 @@ jobs:
       - name: Cancel cluster request (if cancelled after requesting)
         if: cancelled()
         run: |
+          set -eux
           . ci/gha_functions.sh
-          trap 'rm -f $cookiejar' EXIT
-          cookiejar="$(mktemp)"
-          url="${{ env.JENKINS_URL }}crumbIssuer/api/xml?xpath="
-          url+="concat(//crumbRequestField,\":\",//crumb)"
-          crumb="$(curl --cookie-jar "$cookiejar" "$url")"
-          url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's|item/\(.*\)/|cancelItem?id=\1|'
-          trap 'set -x; rm -f $cookiejar $headers_file' EXIT
-          headers_file="$(mktemp)"
-          if ! curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H "$crumb" "$url"; then
-              echo "Failed to cancel cluster provision request."
-              cat "$headers_file"
+          if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
+               cancel_provision; then
               # probably already provisioned and needs unprovisioning
               cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
               exit 1
