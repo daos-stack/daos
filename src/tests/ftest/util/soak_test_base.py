@@ -79,7 +79,6 @@ class SoakTestBase(TestWithServers):
         self.soak_log_dir = None
         self.soak_dir = None
 
-
     def setUp(self):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
