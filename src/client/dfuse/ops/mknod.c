@@ -15,7 +15,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 	struct dfuse_inode_entry     *ie;
 	int                           rc;
 
-	DFUSE_TRA_DEBUG(parent, "Parent:%lu '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%lu " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -23,7 +23,7 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent, const char *nam
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	DFUSE_TRA_DEBUG(ie, "file '%s' mode 0%o", name, mode);
+	DFUSE_TRA_DEBUG(ie, "file " DF_DE " mode 0%o", DP_DE(name), mode);
 
 	rc = _dfuse_mode_update(req, parent, &mode);
 	if (rc != 0)

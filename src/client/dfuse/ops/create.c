@@ -109,7 +109,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 	struct dfuse_cont        *dfs        = parent->ie_dfs;
 	int                       rc;
 
-	DFUSE_TRA_DEBUG(parent, "Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
+	DFUSE_TRA_DEBUG(parent, "Parent:%#lx " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
 
 	atomic_store_relaxed(&parent->ie_linear_read, false);
 
@@ -169,7 +169,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 			D_GOTO(err, rc);
 	}
 
-	DFUSE_TRA_DEBUG(ie, "file '%s' flags 0%o mode 0%o", name, fi->flags, mode);
+	DFUSE_TRA_DEBUG(ie, "file " DF_DE " flags 0%o mode 0%o", DP_DE(name), fi->flags, mode);
 
 	rc = dfs_open_stat(dfs->dfs_ns, parent->ie_obj, name, mode, fi->flags, 0, 0, NULL,
 			   &oh->doh_obj, &ie->ie_stat);

@@ -227,7 +227,7 @@ vos_obj_discard_hold(struct daos_lru_cache *occ, struct vos_container *cont, dao
 	int			 rc;
 
 	rc = vos_obj_hold(occ, cont, oid, &epr, 0, VOS_OBJ_DISCARD,
-			  DAOS_INTENT_DEFAULT, &obj, NULL);
+			  DAOS_INTENT_DISCARD, &obj, NULL);
 	if (rc != 0)
 		return rc;
 

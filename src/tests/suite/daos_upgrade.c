@@ -13,6 +13,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
@@ -158,6 +159,126 @@ upgrade_ec_parity_rotate_single_dkey(void **state)
 	test_teardown((void **)&new_arg);
 }
 
+void
+dfs_ec_upgrade(void **state)
+{
+	test_arg_t	*new_arg = NULL;
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	test_arg_t	*arg = *state;
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	dfs_obj_t	*obj;
+	daos_size_t	buf_size = 1048576;
+	uuid_t		co_uuid;
+	char		filename[32];
+	char		*buf;
+	char		*vbuf;
+	int		i;
+	int		rc;
+	dfs_attr_t	attr = {};
+
+	if (arg->myrank == 0) {
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					   DAOS_FAIL_POOL_CREATE_VERSION | DAOS_FAIL_ALWAYS,
+					   0, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+					   0, 0, 0);
+		assert_rc_equal(rc, 0);
+	}
+
+	/* create/connect another pool */
+	rc = test_setup((void **)&new_arg, SETUP_POOL_CONNECT, arg->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	attr.da_props = daos_prop_alloc(1);
+	assert_non_null(attr.da_props);
+	attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	attr.da_props->dpp_entries[0].dpe_val = 64 * 1024;
+	rc = dfs_cont_create(new_arg->pool.poh, &co_uuid, &attr, &co_hdl, &dfs_mt);
+	daos_prop_free(attr.da_props);
+
+	uuid_unparse(co_uuid, new_arg->co_str);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	D_ALLOC(buf, buf_size);
+	assert_true(buf != NULL);
+	D_ALLOC(vbuf, buf_size);
+	assert_true(vbuf != NULL);
+
+	sprintf(filename, "ec_file");
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, OC_EC_2P1GX, 1048576, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	d_iov_set(&iov, buf, buf_size);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 1;
+	sgl.sg_iovs = &iov;
+
+	dts_buf_render(buf, buf_size);
+	memcpy(vbuf, buf, buf_size);
+
+	for (i = 0; i < 50; i++) {
+		rc = dfs_write(dfs_mt, obj, &sgl, i * buf_size, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					   DAOS_FORCE_OBJ_UPGRADE | DAOS_FAIL_ALWAYS,
+					   0, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = daos_pool_upgrade(new_arg->pool.pool_uuid);
+	assert_rc_equal(rc, 0);
+
+	print_message("sleep 80 seconds for upgrade to finish!\n");
+	sleep(80);
+
+	rebuild_pool_connect_internal(new_arg);
+	/** mount in Relaxed mode should succeed */
+	rc = dfs_mount(new_arg->pool.poh, new_arg->coh, O_RDWR | DFS_RELAXED, &dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDONLY, OC_EC_2P1GX, 1048576, NULL, &obj);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 50; i++) {
+		daos_size_t fetch_size = 0;
+
+		memset(buf, 0, buf_size);
+		rc = dfs_read(dfs_mt, obj, &sgl, buf_size * i, &fetch_size, NULL);
+		assert_int_equal(rc, 0);
+		assert_int_equal(fetch_size, buf_size);
+		assert_memory_equal(buf, vbuf, buf_size);
+	}
+
+	rc = dfs_release(obj);
+	assert_int_equal(rc, 0);
+
+	D_FREE(buf);
+	D_FREE(vbuf);
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	test_teardown((void **)&new_arg);
+}
+
 int
 upgrade_sub_setup(void **state)
 {
@@ -185,6 +306,8 @@ static const struct CMUnitTest upgrade_tests[] = {
 	upgrade_ec_parity_rotate, upgrade_sub_setup, test_teardown},
 	{"UPGRADE1: upgrade single dkey",
 	upgrade_ec_parity_rotate_single_dkey, upgrade_sub_setup, test_teardown},
+	{"UPGRADE2: upgrade with dfs",
+	dfs_ec_upgrade, upgrade_sub_setup, test_teardown},
 };
 
 int

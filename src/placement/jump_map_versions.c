@@ -873,9 +873,20 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 {
 	switch(layout_ver) {
 	case 0:
+		/**
+		 * Version 0 layout will never put multiple shards in the same target, so
+		 * if there are no spare targets left, it will stop assigning the target
+		 * to shard, which will leave some shards as -1.
+		 */
+		if (spare_left && *spare_left == 0) {
+			if (spare_avail)
+				*spare_avail = false;
+			break;
+		}
+
 		get_target_v0(root, target, key, dom_used, dom_full, dom_cur_grp_used,
 			      tgts_used, shard_num, allow_status, fdom_lvl);
-		if (spare_avail) {
+		if (spare_avail && spare_left) {
 			if ( --(*spare_left) > 0)
 				*spare_avail = true;
 			else
@@ -883,6 +894,11 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 		}
 		break;
 	case 1:
+		/**
+		 * New layout(>= 1) will always try to assign target to the shard due to the high
+		 * overhead of the EC degraded fetch, so it might put multiple shards in the
+		 * same target, i.e. it will never check the spare target here.
+		 */
 		get_target_v1(root, curr_pd, target, dom, key, dom_used, dom_full, dom_cur_grp_used,
 			      dom_cur_grp_real, tgts_used, shard_num, allow_status, allow_version,
 			      fdom_lvl, grp_size);

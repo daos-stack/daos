@@ -401,7 +401,7 @@ Usage:
 ...
 
 [device-health command options]
-      -u, --uuid=     Device UUID
+      -u, --uuid=     Device UUID. All devices queried if arg not set
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -619,7 +619,7 @@ Usage:
 
 [identify command arguments]
   ids:                Comma-separated list of identifiers which could be either VMD backing device
-                      (NVMe SSD) PCI addresses or device
+                      (NVMe SSD) PCI addresses or device. All SSDs selected if arg not provided.
 ```
 
 To identify a single SSD, any of the Device-UUIDs can be used which can be found from
@@ -669,11 +669,16 @@ in the command.
 
 Upon issuing a device identify command with specified device IDs and optional custom timeout value,
 an admin now can quickly identify a device in question.
+
 After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
 state, representing a quick, 4Hz blinking amber light.
+
 The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
 no value is specified on the command line, after which the LED state will return to the previous
 state (faulty "ON" or default "OFF").
+
+The led identify command will set (or --reset) the state of all devices on the specified host(s) if
+no positional arguments are supplied.
 
 - Check LED state of SSDs:
 
@@ -689,6 +694,9 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
     TrAddr:850505:11:00.0 LED:QUICK_BLINK
 ```
+
+The led check command will return the state of all devices on the specified host(s) if no positional
+arguments are supplied.
 
 - Locate an Evicted SSD:
 
@@ -947,3 +955,8 @@ required that all engines in the same system run the same DAOS version.
 
 !!! warning
     Rolling upgrade is not supporting at this time.
+
+DAOS v2.2 client connections to pools which were created by DAOS v2.4
+will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
+server. To upgrade all pools to latest format after software upgrade, run
+`dmg pool upgrade <pool>`

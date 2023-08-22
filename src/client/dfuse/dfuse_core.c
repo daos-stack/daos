@@ -1129,8 +1129,8 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	uint32_t ref;
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
-	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name '%s', parent %#lx",
-			ie->ie_stat.st_ino, ref, ie->ie_name, ie->ie_parent);
+	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
+			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
 	D_ASSERT(ref == 0);
 	D_ASSERT(atomic_load_relaxed(&ie->ie_readdir_number) == 0);
@@ -1380,15 +1380,11 @@ ino_flush(d_list_t *rlink, void *arg)
 	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent, ie->ie_name,
 					      strlen(ie->ie_name));
 	if (rc != 0 && rc != -EBADF)
-		DFUSE_TRA_WARNING(ie,
-				  "%#lx %#lx '%s': %d %s",
-				  ie->ie_parent, ie->ie_stat.st_ino,
-				  ie->ie_name, rc, strerror(-rc));
+		DFUSE_TRA_WARNING(ie, "%#lx %#lx " DF_DE ": %d %s", ie->ie_parent,
+				  ie->ie_stat.st_ino, DP_DE(ie->ie_name), rc, strerror(-rc));
 	else
-		DFUSE_TRA_INFO(ie,
-			       "%#lx %#lx '%s': %d %s",
-			       ie->ie_parent, ie->ie_stat.st_ino,
-			       ie->ie_name, rc, strerror(-rc));
+		DFUSE_TRA_INFO(ie, "%#lx %#lx " DF_DE ": %d %s", ie->ie_parent, ie->ie_stat.st_ino,
+			       DP_DE(ie->ie_name), rc, strerror(-rc));
 
 	/* If the FUSE connection is dead then do not traverse further, it
 	 * doesn't matter what gets returned here, as long as it's negative
