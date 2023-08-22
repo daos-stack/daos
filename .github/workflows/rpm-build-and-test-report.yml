@@ -1,8 +1,7 @@
 name: 'RPM Build and Test Report'
 on:
   workflow_run:
-    workflows:
-      - 'RPM Build and Test'
+    workflows: ['RPM Build and Test']
     types:
       - completed
 
