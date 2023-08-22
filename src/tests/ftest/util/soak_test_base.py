@@ -598,9 +598,8 @@ class SoakTestBase(TestWithServers):
             if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
                 # create a pool excluding the ranks from the selected host
                 self.selected_host = self.random.choice(self.hostlist_servers)
-                selected_ranks = self.server_managers[0].get_host_ranks(self.selected_host)
-                server_ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers)
-                ranks = [i for i in server_ranks if i not in selected_ranks]
+                ranks = self.server_managers[0].get_host_ranks(
+                    self.hostlist_servers - NodeSet(self.selected_host))
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
                 add_pools(self, ["pool_jobs"])
