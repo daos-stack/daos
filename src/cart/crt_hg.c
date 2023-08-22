@@ -1090,9 +1090,6 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
-	/* set initial version based on the local version before header copy attempt */
-	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
-
 	crt_hg_header_copy(&rpc_tmp, rpc_priv);
 
 	/* unused reply_hdr.cch_opc in v0 header occupies space for the version field */

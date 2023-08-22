@@ -451,6 +451,7 @@ crt_hg_header_copy(struct crt_rpc_priv *in, struct crt_rpc_priv *out)
 	out->crp_pub.cr_ctx = in->crp_pub.cr_ctx;
 	out->crp_flags = in->crp_flags;
 
+	/* Note: v0 and other versions of the header are a union */
 	out->crp_header_v0.crp_req_hdr = in->crp_header_v0.crp_req_hdr;
 	*out->crp_header.p_dst_hlc = *in->crp_header.p_dst_hlc;
 
