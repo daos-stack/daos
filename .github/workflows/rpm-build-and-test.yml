@@ -409,7 +409,7 @@ jobs:
     runs-on: [self-hosted, wolf]
     needs: [Build-RPM, Import-commit-message, Calc-functional-matrix, Import-commit-pragmas,
             Import-commit-pragmas2]
-    if: (!cancelled())
+    if: ${{ !cancelled() }}
     steps:
       - name: Show if conditions
         run: |
@@ -583,7 +583,7 @@ jobs:
           cookiejar="$(mktemp)"
           url="${{ env.JENKINS_URL }}crumbIssuer/api/xml?xpath="
           url+="concat(//crumbRequestField,\":\",//crumb)")"
-          crumb="$(curl --cookie-jar "$cookiejar" "$url"
+          crumb="$(curl --cookie-jar "$cookiejar" "$url")"
           url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's'|item/\(.*\)/|cancelItem?id=\1|'
           trap 'set -x; rm -f $cookiejar $headers_file' EXIT
           headers_file="$(mktemp)"
