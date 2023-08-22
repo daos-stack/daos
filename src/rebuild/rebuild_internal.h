@@ -123,9 +123,6 @@ struct rebuild_global_pool_tracker {
 	/** rebuild status for each server */
 	struct rebuild_server_status *rgt_servers;
 
-	/** rebuild opcode */
-	daos_rebuild_opc_t	rgt_opc;
-
 	/** the current version being rebuilt */
 	uint32_t	rgt_rebuild_ver;
 
