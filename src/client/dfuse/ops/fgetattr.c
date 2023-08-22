@@ -28,11 +28,11 @@ release:
 void
 dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
-	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_info  *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_event *ev;
 	uint64_t            eqt_idx;
 	struct dfuse_eq    *eqt;
-	int                rc;
+	int                 rc;
 
 	if (ie->ie_unlinked) {
 		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
