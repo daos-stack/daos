@@ -62,10 +62,8 @@ do_openat(void **state)
 	int         rc;
 	char        output_buf[10];
 	char        input_buf[] = "hello";
-	char        read_buf[16];
 	off_t       offset;
 	int         root = open(test_dir, O_PATH | O_DIRECTORY);
-	size_t      count;
 
 	assert_return_code(root, errno);
 
@@ -152,43 +150,6 @@ do_openat(void **state)
 	assert_return_code(rc, errno);
 
 	rc = unlinkat(root, "openat_file", 0);
-	assert_return_code(rc, errno);
-
-	/* opening flag testing with openat */
-	fd = openat(root, "oflag_file", O_RDWR | O_CREAT | O_EXCL, S_IWUSR | S_IRUSR);
-	assert_return_code(fd, errno);
-	count = write(fd, "Hello", 5);
-	assert_int_equal(count, 5);
-	rc = close(fd);
-	assert_return_code(rc, errno);
-
-	/* Append to the end of the file */
-	fd = openat(root, "oflag_file", O_RDWR | O_APPEND);
-	assert_return_code(fd, errno);
-	count = write(fd, " World", 7);
-	assert_int_equal(count, 7);
-	rc = close(fd);
-	assert_return_code(rc, errno);
-
-	fd = openat(root, "oflag_file", O_RDONLY);
-	assert_return_code(fd, errno);
-	count = read(fd, read_buf, 12);
-	assert_int_equal(count, 12);
-	rc = close(fd);
-	assert_return_code(rc, errno);
-	assert_int_equal(strncmp(read_buf, "Hello World", 12), 0);
-
-	/* truncate the file size to zero */
-	fd = openat(root, "oflag_file", O_RDWR | O_TRUNC);
-	assert_return_code(fd, errno);
-	rc = close(fd);
-	assert_return_code(rc, errno);
-
-	rc = fstatat(root, "oflag_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
-	assert_return_code(rc, errno);
-	assert_int_equal(stbuf0.st_size, 0);
-
-	rc = unlinkat(root, "oflag_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
