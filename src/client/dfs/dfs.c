@@ -4935,6 +4935,243 @@ out:
 	return rc;
 }
 
+struct dfs_statx_args {
+	dfs_t			*dfs;
+	dfs_obj_t		*obj;
+	struct stat		*stbuf;
+	daos_handle_t		parent_oh;
+};
+
+struct statx_op_args {
+	daos_key_t		dkey;
+	daos_iod_t		iod;
+	daos_recx_t		recx;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iovs[INODE_AKEYS];
+	struct dfs_entry	entry;
+	daos_array_stbuf_t	array_stbuf;
+};
+
+int
+ostatx_cb(tse_task_t *task, void *data)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args = *((struct statx_op_args **)data);
+	int			rc2, rc = task->dt_result;
+
+	if (rc != 0) {
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to stat file: " DF_RC "\n", DP_RC(rc));
+		/** convert the task result to errno since it takes prescedence over the cb error */
+		task->dt_result = daos_der2errno(rc);
+		D_GOTO(out, rc = task->dt_result);
+	}
+
+	if (args->obj->oid.hi != op_args->entry.oid.hi ||
+	    args->obj->oid.lo != op_args->entry.oid.lo)
+		D_GOTO(out, rc = ENOENT);
+
+	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (S_ISREG(args->obj->mode)) {
+		args->stbuf->st_size = op_args->array_stbuf.st_size;
+		args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
+	} else if (S_ISDIR(args->obj->mode)) {
+		args->stbuf->st_size = sizeof(op_args->entry);
+	} else if (S_ISLNK(args->obj->mode)) {
+		args->stbuf->st_size = op_args->entry.value_len;
+	}
+
+	args->stbuf->st_nlink = 1;
+	args->stbuf->st_mode = op_args->entry.mode;
+	args->stbuf->st_uid = op_args->entry.uid;
+	args->stbuf->st_gid = op_args->entry.gid;
+	if (tspec_gt(args->stbuf->st_ctim, args->stbuf->st_mtim)) {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_ctim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_ctim.tv_nsec;
+	} else {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_mtim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_mtim.tv_nsec;
+	}
+
+out:
+	D_FREE(op_args);
+	rc2 = daos_obj_close(args->parent_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
+}
+
+int
+statx_task(tse_task_t *task)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args;
+	tse_task_t		*fetch_task;
+	daos_obj_fetch_t	*fetch_arg;
+	tse_task_t		*stat_task;
+	tse_sched_t		*sched = tse_task2sched(task);
+	bool			need_stat = false;
+	int			i;
+	int			rc;
+
+	D_ALLOC_PTR(op_args);
+	if (op_args == NULL) {
+		daos_obj_close(args->parent_oh, NULL);
+		return ENOMEM;
+	}
+
+	/** Create task to fetch entry. */
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, sched, 0, NULL, &fetch_task);
+	if (rc != 0) {
+		D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	/** set obj_fetch parameters */
+	d_iov_set(&op_args->dkey, (void *)args->obj->name, strlen(args->obj->name));
+	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	op_args->iod.iod_nr    = 1;
+	op_args->recx.rx_idx   = 0;
+	op_args->recx.rx_nr    = END_IDX;
+	op_args->iod.iod_recxs = &op_args->recx;
+	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
+	op_args->iod.iod_size  = 1;
+	i = 0;
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mode, sizeof(mode_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oid, sizeof(daos_obj_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.chunk_size, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.uid, sizeof(uid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
+	op_args->sgl.sg_nr		= i;
+	op_args->sgl.sg_nr_out	= 0;
+	op_args->sgl.sg_iovs	= op_args->sg_iovs;
+
+	fetch_arg = daos_task_get_args(fetch_task);
+	fetch_arg->oh		= args->parent_oh;
+	fetch_arg->th		= DAOS_TX_NONE;
+	fetch_arg->flags	= DAOS_COND_DKEY_FETCH;
+	fetch_arg->dkey		= &op_args->dkey;
+	fetch_arg->nr		= 1;
+	fetch_arg->iods		= &op_args->iod;
+	fetch_arg->sgls		= &op_args->sgl;
+
+	if (S_ISREG(args->obj->mode)) {
+		daos_array_stat_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_ARRAY_STAT, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set array_stat parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh	= args->obj->oh;
+		stat_arg->th	= DAOS_TX_NONE;
+		stat_arg->stbuf	= &op_args->array_stbuf;
+		need_stat = true;
+	} else if (S_ISDIR(args->obj->mode)) {
+		daos_obj_query_key_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set obj_query parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh		= args->obj->oh;
+		stat_arg->th		= DAOS_TX_NONE;
+		stat_arg->max_epoch	= &op_args->array_stbuf.st_max_epoch;
+		stat_arg->flags		= 0;
+		stat_arg->dkey		= NULL;
+		stat_arg->akey		= NULL;
+		stat_arg->recx		= NULL;
+		need_stat = true;
+	}
+
+	rc = tse_task_register_deps(task, 1, &fetch_task);
+	if (rc) {
+		D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err3_out, rc);
+	}
+	if (need_stat) {
+		rc = tse_task_register_deps(task, 1, &stat_task);
+		if (rc) {
+			D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+			tse_task_complete(stat_task, rc);
+			D_GOTO(err1_out, rc);
+		}
+	}
+	rc = tse_task_register_comp_cb(task, ostatx_cb, &op_args, sizeof(op_args));
+	if (rc != 0) {
+		D_ERROR("tse_task_register_comp_cb() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	tse_task_schedule(fetch_task, true);
+	if (need_stat)
+		tse_task_schedule(stat_task, true);
+	return daos_der2errno(rc);
+err3_out:
+	if (need_stat)
+		tse_task_complete(stat_task, rc);
+err2_out:
+	tse_task_complete(fetch_task, rc);
+err1_out:
+	D_FREE(op_args);
+	daos_obj_close(args->parent_oh, NULL);
+	return daos_der2errno(rc);
+}
+
+int
+dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
+{
+	daos_handle_t		oh;
+	tse_task_t		*task;
+	struct dfs_statx_args	*args;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	rc = dc_task_create(statx_task, NULL, ev, &task);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+
+	args = dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->parent_oh	= oh;
+	args->stbuf	= stbuf;
+
+	rc = dc_task_schedule(task, true);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+	return 0;
+}
+
 int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 {
