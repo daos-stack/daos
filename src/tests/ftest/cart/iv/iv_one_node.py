@@ -160,7 +160,7 @@ class CartIvOneNodeTest(CartTest):
                 with open(log_path, 'r') as log_file:
                     data = log_file.read()
                     try:
-                        test_result = json.load(data)
+                        test_result = json.loads(data)
                     except json.JSONDecodeError:
                         print(data)
                         raise
