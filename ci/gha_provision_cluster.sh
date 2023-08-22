@@ -17,6 +17,7 @@ if ! queue_url=$(curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H 
     cat "$headers_file"
     exit 1
 fi
+echo QUEUE_URL="$queue_url" >> "$GITHUB_ENV"
 while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
     if [ $((SECONDS % 60)) -eq 0 ]; then
         { read -r cancelled; read -r why; } < \

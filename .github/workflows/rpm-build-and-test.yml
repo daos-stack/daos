@@ -453,6 +453,7 @@ jobs:
       CP_TEST_TAG:
       CLUSTER_REQUEST_reqid:
       STAGE_NAME:
+      QUEUE_URL:
     steps:
       - name: Debug matrix exclusion
         run: echo ${{ github.event_name == 'pull_request' &&
@@ -575,9 +576,26 @@ jobs:
               test_tags+=($tag,-hw)
           done
           NODE_COUNT="$NODE_COUNT" TEST_TAG="${test_tags[@]}" ci/functional/test_main.sh
+      - name: Cancel cluster request (if cancelled after requesting)
+        if: ${{ cancelled() }}
+        run: |
+          trap 'rm -f $cookiejar' EXIT
+          cookiejar="$(mktemp)"
+          url="${{ env.JENKINS_URL }}crumbIssuer/api/xml?xpath="
+          url+="concat(//crumbRequestField,\":\",//crumb)")"
+          crumb="$(curl --cookie-jar "$cookiejar" "$url"
+          url="$(echo "${{ env.QUEUE_URL }}" | sed -e 's'|item/\(.*\)/|cancelItem?id=\1|'
+          trap 'set -x; rm -f $cookiejar $headers_file' EXIT
+          headers_file="$(mktemp)"
+          if ! curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H "$crumb" "$url"; then
+              echo "Failed to cancel cluster provision request."
+              cat "$headers_file"
+              exit 1
+          fi
       - name: Job cleanup
         if: ${{ !cancelled() && (success() || failure()) }}
-        run: . ci/gha_functions.sh;
+        run: set -eux;
+             . ci/gha_functions.sh;
              if ! rm -f /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}"; then
                 id;
                 ls -l /scratch/Get\ a\ cluster/"${{ env.CLUSTER_REQUEST_reqid }}";
