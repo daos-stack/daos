@@ -459,12 +459,14 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		D_GOTO(out, rc);
 	}
 
+	/* By default set the rpc header version to the local verison */
+	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
+
 	RPC_TRACE(DB_TRACE, rpc_priv, "(opc: %#x rpc_pub: %p) allocated.\n",
 		  rpc_priv->crp_opc_info->coi_opc,
 		  &rpc_priv->crp_pub);
 
-	/* By default set the rpc header version to the local verison */
-	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
+
 	*priv_allocated = rpc_priv;
 out:
 	return rc;
@@ -1955,6 +1957,8 @@ void
 crt_rpc_hdr_version_set(struct crt_rpc_priv *rpc_priv, uint32_t version)
 {
 	struct crt_rpc_header_internal *hdr;
+
+	D_ASSERT(rpc_priv != NULL);
 
 	hdr = &rpc_priv->crp_header;
 
