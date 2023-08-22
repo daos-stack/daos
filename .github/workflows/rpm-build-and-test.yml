@@ -590,8 +590,9 @@ jobs:
           if ! JENKINS_URL="${{ env.JENKINS_URL }}" QUEUE_URL="${{ env.QUEUE_URL }}" \
                cancel_provision; then
               # probably already provisioned and needs unprovisioning
-              cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
-              exit 1
+              if ! cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"; then
+                  exit 1
+              fi
           fi
       - name: Job cleanup
         if: (!cancelled() && (success() || failure()))
@@ -619,19 +620,15 @@ jobs:
           check_name: ${{ env.STAGE_NAME }} Test Results (old)
           github_token: ${{ secrets.GITHUB_TOKEN }}
           junit_files: ${{ env.STAGE_NAME }}/**/results.xml
-      - name: Test Report
-        uses: phoenix-actions/test-reporting@v10
-        id: test-report
-        if: (!cancelled() && (success() || failure()))
-        with:
-          name: ${{ env.STAGE_NAME }} Test Results (new)
-          path: ${{ env.STAGE_NAME }}/**/results.xml
-          reporter: java-junit        # Format of test results
-          fail-on-error: false
-
       - name: Publish artifacts
         if: (!cancelled() && (success() || failure()))
         uses: actions/upload-artifact@v3
         with:
           name: ${{ env.STAGE_NAME }} artifacts
           path: ${{ env.STAGE_NAME }}/**
+      - name: Upload test results
+        if: success() || failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: ${{ env.STAGE_NAME }}/**/results.xml

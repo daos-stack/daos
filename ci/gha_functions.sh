@@ -17,10 +17,15 @@ get_repo_path() {
 
 cleanup_provision_request () {
     local reqid="$1"
-    if ! rm -f /scratch/Get\ a\ cluster/"$reqid"; then
-       id;
-       ls -l /scratch/Get\ a\ cluster/"$reqid";
-    fi;
+    local file="/scratch/Get a cluster/$reqid"
+    if [ -e "$file" ]; then
+        if ! rm -f "$file"; then
+            echo "Failed to remove $file"
+            id
+            ls -l "$file"
+            exit 1
+        fi
+    fi
 }
 
 cancel_provision() {
