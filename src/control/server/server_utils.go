@@ -540,6 +540,29 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	memRamdisk := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
 
+	// In the event that tmpfs was already mounted, we need to verify that it
+	// is the correct size and that the memory usage still makes sense.
+	if isMounted, err := ei.storage.ScmIsMounted(); err == nil && isMounted {
+		usage, err := ei.storage.GetScmUsage()
+		if err != nil {
+			return errors.Wrap(err, "unable to check tmpfs usage")
+		}
+		if usage.TotalBytes != memRamdisk {
+			// Check that the existing ramdisk is at least 90% of the
+			// calculated optimal ramdisk size and not larger.
+			if usage.TotalBytes < memRamdisk*90/100 {
+				return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
+			} else if usage.TotalBytes > memRamdisk {
+				return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
+			}
+		}
+		// Looks OK, so update the required amount to match available so that
+		// we don't fail the check below.
+		memRamdisk = memAvail
+	} else if err != nil {
+		return errors.Wrap(err, "unable to check for mounted tmpfs")
+	}
+
 	if err := checkMemForRamdisk(srv.log, memRamdisk, memAvail); err != nil {
 		return err
 	}
