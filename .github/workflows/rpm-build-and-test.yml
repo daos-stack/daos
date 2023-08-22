@@ -597,7 +597,7 @@ jobs:
         if: (!cancelled() && (success() || failure()))
         run: set -eux;
              . ci/gha_functions.sh;
-             cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}"
+             cleanup_provision_request "${{ env.CLUSTER_REQUEST_reqid }}";
              ci/functional/job_cleanup.sh
       - name: Debug - find junit files
         if: (!cancelled() && (success() || failure()))
