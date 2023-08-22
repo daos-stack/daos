@@ -1713,21 +1713,21 @@ dc_obj_layout_refresh(daos_handle_t oh)
 	return rc;
 }
 
-static inline uint32_t
-dc_obj_retry_delay(struct obj_auxi_args *obj_auxi, int err)
+uint32_t
+dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt)
 {
 	uint32_t	delay = 0;
 
-	/* Randomly delay 5 - 36 us if it is not the first retry for
-	 * -DER_INPROGRESS && -DER_UPDATE_AGAIN case.
-	 **/
+	/*
+	 * Randomly delay 5 - 68 us if it is not the first retry for
+	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
+	 */
+	++(*retry_cnt);
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
-		obj_auxi->inprogress_cnt++;
-		if (obj_auxi->inprogress_cnt > 1) {
-			delay = (d_rand() & ((1 << 5) - 1)) + 5;
+		if (++(*inprogress_cnt) > 1) {
+			delay = (d_rand() & ((1 << 6) - 1)) + 5;
 			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
-				obj_auxi->obj_task, (int)obj_auxi->inprogress_cnt,
-				(int)obj_auxi->retry_cnt, delay);
+				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
 	}
 
@@ -1741,6 +1741,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
+	uint32_t	  delay;
 	int		  result = task->dt_result;
 	int		  rc;
 
@@ -1760,8 +1761,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
-		obj_auxi->retry_cnt++;
-		rc = tse_task_reinit_with_delay(task, dc_obj_retry_delay(obj_auxi, result));
+		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
+					   &obj_auxi->inprogress_cnt);
+		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
 
@@ -6063,6 +6065,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		}
 		memcpy(shard_arg->la_dkey_anchor,
 		       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_dkey_anchor->da_flags = obj_args->dkey_anchor->da_flags;
 	}
 
 	if (obj_args->akey_anchor) {
@@ -6077,6 +6080,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		else
 			memcpy(shard_arg->la_akey_anchor,
 			       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_akey_anchor->da_flags = obj_args->akey_anchor->da_flags;
 	}
 out:
 	return rc;
