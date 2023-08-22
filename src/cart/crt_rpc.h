@@ -124,16 +124,12 @@ struct crt_corpc_info {
 	int			 co_rc;
 };
 
-#define RPC_VERSION_UNSET 0xFFFFFFFF
-#define RPC_HEADER_VERSION_LOCAL 0
 
-/* Local version needs to change each time there is an update to crt_rpc_priv 
- * structure and not just a header */
-//static uint32_t g_local_rpc_priv_version = 0;
-
+/* Local version needs to change each time there is a new rpc header */
+#define CRT_RPC_HEADER_VERSION_LOCAL 0
 
 /* NOTE: DO NOT rearrange fields in header_v0 without making corresponding changes to
- * crt_rpc_header_set_version() calls.
+ * crt_rpc_hdr_version_set() calls.
  * A field used for version support is a first unused field after the mutex 
  * which is crt_reply_hdr.cch_opc
  * Versipon field has to align in all rpc header versions
@@ -260,7 +256,7 @@ struct crt_rpc_priv {
 };
 
 void
-crt_rpc_header_set_version(struct crt_rpc_priv *rpc_priv, uint32_t version);
+crt_rpc_hdr_version_set(struct crt_rpc_priv *rpc_priv, uint32_t version);
 
 
 

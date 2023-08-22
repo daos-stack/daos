@@ -464,7 +464,7 @@ crt_rpc_priv_alloc(crt_opcode_t opc, struct crt_rpc_priv **priv_allocated,
 		  &rpc_priv->crp_pub);
 
 	/* By default set the rpc header version to the local verison */
-	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
+	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
 	*priv_allocated = rpc_priv;
 out:
 	return rc;
@@ -542,7 +542,7 @@ crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 
 	D_ASSERT(rpc_priv != NULL);
 
-	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
+	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
 
 	if (tgt_ep != NULL) {
 		rc = check_ep(tgt_ep, &grp_priv);
@@ -1952,7 +1952,7 @@ crt_trigger_hlc_error_cb(void)
 
 
 void
-crt_rpc_header_set_version(struct crt_rpc_priv *rpc_priv, uint32_t version)
+crt_rpc_hdr_version_set(struct crt_rpc_priv *rpc_priv, uint32_t version)
 {
 	struct crt_rpc_header_internal *hdr;
 

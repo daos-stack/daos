@@ -390,8 +390,6 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
-	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
-
 	/* grp_root is logical rank number in this group */
 	grp_root = grp_priv->gp_self;
 	if (grp_root == CRT_NO_RANK) {

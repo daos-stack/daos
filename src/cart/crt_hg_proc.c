@@ -305,7 +305,7 @@ out:
 }
 
 static inline int
-crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
+crt_proc_common_hdr_v0(crt_proc_t proc, struct crt_common_hdr *hdr)
 {
 	crt_proc_op_t	proc_op;
 	int		rc;
@@ -313,16 +313,11 @@ crt_proc_common_hdr(crt_proc_t proc, struct crt_common_hdr *hdr)
 	if (unlikely(hdr == NULL))
 		D_GOTO(out, rc = -DER_INVAL);
 
-	/*
-	 * D_DEBUG("in crt_proc_common_hdr, opc: %#x.\n", hdr->cch_opc);
-	 */
-
 	rc = crt_proc_get_op(proc, &proc_op);
 	if (unlikely(rc))
 		D_GOTO(out, rc);
 
 	rc = crt_proc_memcpy(proc, proc_op, hdr, sizeof(*hdr));
-
 out:
 	return rc;
 }
@@ -400,15 +395,17 @@ crt_hg_unpack_header(hg_handle_t handle, struct crt_rpc_priv *rpc_priv,
 		D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
 	}
 
-	/* Decode header */ // ALEXMOD -- decode version , apply vresion first
-	// TODO: This is v0 only
-	rc = crt_proc_common_hdr(hg_proc, &rpc_priv->crp_header_v0.crp_req_hdr);
+	/* Decode header */
+	/* TODO:
+	 * This is v0 only header decoding. decode the version first and based on that
+	 * decide which decode function to use */
+	rc = crt_proc_common_hdr_v0(hg_proc, &rpc_priv->crp_header_v0.crp_req_hdr);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: " DF_RC "\n", DP_RC(rc));
+		RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
-	crt_rpc_header_set_version(rpc_priv, rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
+	crt_rpc_hdr_version_set(rpc_priv, rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
 
 	/* Sync the HLC. Clients never decode requests. */
 	D_ASSERT(crt_is_service());
@@ -570,10 +567,10 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 			}
 		}
 
-		// ALEXMOD: This is v0 only
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_header_v0.crp_req_hdr);
+		/* TODO: Decode version first before deciding which unpack function to use */
+		rc = crt_proc_common_hdr_v0(proc, &rpc_priv->crp_header_v0.crp_req_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: "
 				  DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
@@ -645,10 +642,10 @@ crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data)
 			*rpc_priv->crp_header.p_dst_hlc = d_hlc_get();
 		}
 
-		// ALEXMOD: This is version0 only
-		rc = crt_proc_common_hdr(proc, &rpc_priv->crp_header_v0.crp_reply_hdr);
+		/* TODO: Unpack version first and use appropriate header unpack function */
+		rc = crt_proc_common_hdr_v0(proc, &rpc_priv->crp_header_v0.crp_reply_hdr);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv, "crt_proc_common_hdr failed: "
+			RPC_ERROR(rpc_priv, "crt_proc_common_hdr_v0 failed: "
 				  DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}

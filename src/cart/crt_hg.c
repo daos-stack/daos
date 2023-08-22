@@ -1057,9 +1057,8 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	}
 	D_ASSERT(proc != NULL);
 
-	crt_rpc_header_set_version(&rpc_tmp,
-				   /* Previously unused reply field used for version */
-				   rpc_tmp.crp_header_v0.crp_reply_hdr.cch_opc);
+	/* unused reply_hdr.cch_opc in v0 header occupies space for the version field */
+	crt_rpc_hdr_version_set(&rpc_tmp, rpc_tmp.crp_header_v0.crp_reply_hdr.cch_opc);
 	opc = *rpc_tmp.crp_header.p_opc;
 
 	/**
@@ -1091,18 +1090,13 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 	opc_info = rpc_priv->crp_opc_info;
 	rpc_pub = &rpc_priv->crp_pub;
 
-	crt_rpc_header_set_version(rpc_priv, RPC_HEADER_VERSION_LOCAL);
+	/* set initial version based on the local version before header copy attempt */
+	crt_rpc_hdr_version_set(rpc_priv, CRT_RPC_HEADER_VERSION_LOCAL);
 
 	crt_hg_header_copy(&rpc_tmp, rpc_priv);
 
-	/* 
- * 		rpc_priv.crp_mutex
- * 		rpc_priv.crp_reply_hdr
- * 		rpc_priv.crp_reply_hdr.cch_opc
- * 		*/
-	crt_rpc_header_set_version(rpc_priv,
-				   /* Unused field */
-				   rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
+	/* unused reply_hdr.cch_opc in v0 header occupies space for the version field */
+	crt_rpc_hdr_version_set(rpc_priv, rpc_priv->crp_header_v0.crp_reply_hdr.cch_opc);
 
 	if (rpc_priv->crp_flags & CRT_RPC_FLAG_COLL) {
 		is_coll_req = true;
