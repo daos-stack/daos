@@ -604,11 +604,11 @@ class StorageInfo():
         return mounted_devices
 
     def _get_addresses(self, hosts, device):
-        """Get a list of addresses for each of the devices.
+        """Get a list of addresses for the device on each host.
 
         Args:
-            hosts (NodeSet): hosts from which to get the addresses
-            device (str): devices for which to find their addresses
+            hosts (NodeSet): hosts on which to get the device address
+            device (str): device whose address to find
 
         Returns:
             list: a list of addresses
@@ -619,7 +619,7 @@ class StorageInfo():
         # Find the mounted device names on each host
         command = f'ls -l /dev/disk/by-path/ | grep -w \'{device}\''
         result = run_remote(self._log, self._hosts, command)
-        self._log.debug('  Detecting addresses for %s:', device)
+        self._log.debug('  Detected addresses for %s:', device)
         for data in result.output:
             if not data.passed:
                 self._log.debug('    %s: Error detecting addresses', data.hosts)
