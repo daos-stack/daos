@@ -1128,6 +1128,16 @@ ec_parity_nr_get(daos_obj_id_t oid)
 	return oca->u.ec.e_p;
 }
 
+int
+ec_tgt_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k + oca->u.ec.e_p;
+}
+
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			int parity_nr, d_rank_t *ranks, int *ranks_num)

@@ -138,7 +138,7 @@ class NLTConf():
         """
         # pylint: disable=consider-using-with
         self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
-        self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
+        self._compress_procs.append(subprocess.Popen(['nice', '-19', 'bzip2', '--best', filename]))
 
     def flush_bz2(self):
         """Wait for all bzip2 subprocess to finish"""
@@ -5941,8 +5941,7 @@ def run(wf, args):
     if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
-        # Turn back on logging for this.
-        # args.dfuse_debug = 'WARN'
+        args.dfuse_debug = 'WARN'
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
             if fi_test:

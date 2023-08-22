@@ -8,13 +8,13 @@ from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 
 
-class DaosRacerTest(TestWithServers):
+class DaosRacerMultiTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
     """
 
-    def test_daos_racer(self):
+    def test_daos_racer_multi(self):
         """JIRA-3855: daos_racer/consistency checker test.
 
         Test Description:
@@ -30,8 +30,8 @@ class DaosRacerTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=io,daosracer
-        :avocado: tags=daos_racer,DaosRacerTest,test_daos_racer
+        :avocado: tags=io,daos_racer
+        :avocado: tags=DaosRacerMultiTest,test_daos_racer_multi
         """
         dmg = self.get_dmg_command()
         self.assertGreater(

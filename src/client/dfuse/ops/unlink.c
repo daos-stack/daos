@@ -50,8 +50,8 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	 */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'",
-				ie->ie_parent, ie->ie_name);
+		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx " DF_DE, ie->ie_parent,
+				DP_DE(ie->ie_name));
 
 		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
