@@ -137,7 +137,7 @@ struct crt_corpc_info {
 struct crt_rpc_header_v0 {
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
-} crt_rpc_header_v0;
+};
 
 struct crt_rpc_header_v1 {
 	uint32_t	version;
@@ -152,7 +152,7 @@ struct crt_rpc_header_v1 {
 	uint32_t	dst_tag;
 	uint32_t	src_timeout;
 	uint32_t	rc;
-} crt_rpc_header_v1;
+};
 
 
 struct crt_rpc_header_internal {

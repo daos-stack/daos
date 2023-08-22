@@ -30,6 +30,9 @@
 struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
+struct crt_rpc_header_v0;
+struct crt_rpc_header_v1;
+struct crt_rpc_header_internal;
 
 /**
  * Enumeration specifying providers supported by the library
