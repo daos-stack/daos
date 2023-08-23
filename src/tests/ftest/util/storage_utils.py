@@ -571,9 +571,8 @@ class StorageInfo():
                 return block_device['name']
             return None
 
-        self._log.debug('  Detecting mounted device names on %s', self._hosts)
-
         mounted_devices = {}
+        self._log.debug('  Detecting mounted device names on %s', self._hosts)
         result = run_remote(self._log, self._hosts, 'lsblk --output NAME,MOUNTPOINT --json')
         for data in result.output:
             if not data.passed:
@@ -592,7 +591,6 @@ class StorageInfo():
             for entry in lsblk_data[key]:
                 name = get_mounted_parent(entry)
                 if name is not None:
-                    self._log.debug('    %s: %s', data.hosts, name)
                     if name not in mounted_devices:
                         mounted_devices[name] = NodeSet()
                     mounted_devices[name].add(data.hosts)
@@ -617,7 +615,8 @@ class StorageInfo():
         self._log.debug('  Detecting addresses for %s on %s', device, hosts)
 
         # Find the mounted device names on each host
-        command = f'ls -l /dev/disk/by-path/ | grep -w \'{device}\''
+        command = (f'find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\' | '
+                   f'grep -w \'{device}\' | sort')
         result = run_remote(self._log, self._hosts, command)
         self._log.debug('  Detected addresses for %s:', device)
         for data in result.output:
