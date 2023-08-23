@@ -1,8 +1,8 @@
 /**
-* (C) Copyright 2022 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #include <ctype.h>
 #include <getopt.h>
 #include <gurt/debug.h>
@@ -10,6 +10,8 @@
 #include "ddb.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
+
+#define MAX_COMMAND_LEN              1024
 
 #define same(a, b) (strcmp((a), (b)) == 0)
 #define COMMAND_NAME_HELP "help"
@@ -754,7 +756,12 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 	struct argv_parsed	 parse_args = {0};
 	struct ddb_cmd_info	 info = {0};
 	int			 rc;
-	char			*cmd_copy = strdup(cmd_str);
+	char                    *cmd_copy;
+
+	D_STRNDUP(cmd_copy, cmd_str, MAX_COMMAND_LEN);
+
+	if (cmd_copy == NULL)
+		return -DER_NOMEM;
 
 	/* Remove newline if needed */
 	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')
