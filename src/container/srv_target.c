@@ -55,10 +55,10 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* If the container is discarding the object mostly due to rebuild failure
-	 * reclaim, let's abort the aggregation to let discard proceed.
-	 */
-	if (cont->sc_discarding)
+	/* EC aggregation needs to be parsed during rebuilding to avoid the race
+	 * between EC rebuild and EC aggregation.
+	 **/
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
@@ -191,14 +191,14 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_reintegrating) {
+	if (pool->sp_rebuilding) {
 		if (vos_agg)
 			cont->sc_vos_agg_active = 0;
 		else
 			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
+		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_reintegrating);
+			vos_agg ? "VOS" : "EC", pool->sp_rebuilding);
 		return false;
 	}
 
@@ -478,9 +478,10 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				DP_RC(rc));
+			D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR,
+				 DF_CONT": VOS aggregate failed. "DF_RC"\n",
+				 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				 DP_RC(rc));
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;

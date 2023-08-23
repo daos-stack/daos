@@ -9,13 +9,13 @@ import os
 from fio_test_base import FioBase
 
 
-class FioILSmallPil4dfs(FioBase):
+class FioPil4dfsSmall(FioBase):
     """Test class Description: Runs Fio with in small config.
 
     :avocado: recursive
     """
 
-    def test_fio_il_small_pil4dfs(self):
+    def test_fio_pil4dfs_small(self):
         """Jira ID: DAOS-12142.
 
         Test Description:
@@ -36,7 +36,7 @@ class FioILSmallPil4dfs(FioBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=dfuse,fio,checksum,tx,pil4dfs
-        :avocado: tags=FioILSmall,test_fio_small_pil4dfs
+        :avocado: tags=FioPil4dfsSmall,test_fio_pil4dfs_small
         """
         self.fio_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
         self.execute_fio()
