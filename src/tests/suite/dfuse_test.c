@@ -180,7 +180,7 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = unlinkat(root, "openat_file", 0);
+	rc = unlinkat(root, "oflag_file", 0);
 	assert_return_code(rc, errno);
 
 	rc = close(root);
