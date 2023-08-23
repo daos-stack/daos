@@ -4222,6 +4222,8 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
 		return EPERM;
 	if (_obj == NULL)

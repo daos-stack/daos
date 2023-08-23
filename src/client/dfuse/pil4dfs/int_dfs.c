@@ -1752,8 +1752,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 
 	if (!is_target_path)
 		goto org_func;
-	if (oflags & O_APPEND)
-		D_GOTO(out_error, rc = ENOTSUP);
 
 	if (oflags & __O_TMPFILE) {
 		if (!parent && (strncmp(item_name, "/", 2) == 0))
@@ -1794,15 +1792,14 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	} else {
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
 				    NULL);
+		if ((rc == 0) && (oflags & O_TRUNC)) {
+			if (S_ISDIR(mode_query))
+				D_GOTO(out_error, rc = EISDIR);
+			rc = dfs_punch(dfs_mt->dfs, dfs_obj, 0, DFS_MAX_FSIZE);
+		}
 	}
 	if (rc)
 		D_GOTO(out_error, rc);
-
-	if ((oflags & O_TRUNC) && S_ISREG(mode_query)) {
-		rc = dfs_punch(dfs_mt->dfs, dfs_obj, 0, DFS_MAX_FSIZE);
-		if (rc)
-			D_GOTO(out_error, rc);
-	}
 
 	if (S_ISDIR(mode_query)) {
 		rc = find_next_available_dirfd(NULL, &idx_dirfd);
