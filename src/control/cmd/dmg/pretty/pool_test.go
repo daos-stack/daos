@@ -30,14 +30,15 @@ func TestPretty_PrintPoolQueryResp(t *testing.T) {
 		"empty response": {
 			pqr: &control.PoolQueryResp{},
 			expPrintStr: `
-Pool , ntarget=0, disabled=0, leader=0, version=0
+Pool , ntarget=0, disabled=0, leader=0, version=0, state=Unknown
 Pool space info:
 - Target(VOS) count:0
 `,
 		},
 		"normal response": {
 			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -64,7 +65,7 @@ Pool space info:
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Target(VOS) count:1
@@ -79,7 +80,8 @@ Rebuild busy, 42 objs, 21 recs
 		},
 		"normal response; enabled ranks": {
 			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -107,7 +109,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Enabled targets: 0-2
@@ -123,7 +125,8 @@ Rebuild busy, 42 objs, 21 recs
 		},
 		"normal response; disabled ranks": {
 			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -151,7 +154,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Disabled targets: 0-1,3
@@ -167,7 +170,8 @@ Rebuild busy, 42 objs, 21 recs
 		},
 		"unknown/invalid rebuild state response": {
 			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -195,7 +199,7 @@ Rebuild busy, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Disabled targets: 0-1,3
@@ -211,7 +215,8 @@ Rebuild unknown, 42 objs, 21 recs
 		},
 		"rebuild failed": {
 			pqr: &control.PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: control.PoolInfo{
 					TotalTargets:     2,
 					DisabledTargets:  1,
@@ -239,7 +244,7 @@ Rebuild unknown, 42 objs, 21 recs
 				},
 			},
 			expPrintStr: fmt.Sprintf(`
-Pool %s, ntarget=2, disabled=1, leader=42, version=100
+Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
 - Target(VOS) count:1
@@ -255,6 +260,7 @@ Rebuild failed, rc=0, status=2
 	} {
 		t.Run(name, func(t *testing.T) {
 			var bld strings.Builder
+			tc.pqr.UpdateState()
 			if err := PrintPoolQueryResponse(tc.pqr, &bld); err != nil {
 				t.Fatal(err)
 			}
@@ -971,6 +977,7 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 	for name, tc := range map[string]struct {
 		resp        *control.ListPoolsResp
 		verbose     bool
+		noQuery     bool
 		expErr      error
 		expPrintStr string
 	}{
@@ -1192,10 +1199,34 @@ no pools in system
 						State:            system.PoolServiceStateReady.String(),
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "idle",
 					},
 				},
 			},
 			verbose: true,
+			expPrintStr: `
+Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+-     00000001-0001-0001-0001-000000000001 Ready N/A     100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2           idle          
+
+`,
+		},
+		"verbose; zero svc replicas with no query": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.Pool{
+					{
+						UUID:             test.MockUUID(1),
+						Usage:            exampleUsage,
+						TargetsTotal:     16,
+						TargetsDisabled:  0,
+						State:            system.PoolServiceStateReady.String(),
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
+					},
+				},
+			},
+			verbose: true,
+			noQuery: true,
 			expPrintStr: `
 Label UUID                                 State SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? 
 ----- ----                                 ----- ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- 
@@ -1216,6 +1247,7 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 						State:            system.PoolServiceStateReady.String(),
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "idle",
 					},
 					{
 						Label:            "two",
@@ -1227,15 +1259,41 @@ Label UUID                                 State SvcReps SCM Size SCM Used SCM I
 						State:            system.PoolServiceStateDestroying.String(),
 						PoolLayoutVer:    2,
 						UpgradeLayoutVer: 2,
+						RebuildState:     "done",
 					},
 				},
 			},
 			verbose: true,
 			expPrintStr: `
-Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? 
------ ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- 
-one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2           
-two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     None           
+Label UUID                                 State      SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----      ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 Ready      [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             0/16     1->2           idle          
+two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/64     None           done          
+
+`,
+		},
+		"verbose; one pools; rebuild state busy": {
+			resp: &control.ListPoolsResp{
+				Pools: []*control.Pool{
+					{
+						Label:            "one",
+						UUID:             test.MockUUID(1),
+						ServiceReplicas:  []ranklist.Rank{0, 1, 2},
+						Usage:            exampleUsage,
+						TargetsTotal:     16,
+						TargetsDisabled:  8,
+						State:            system.PoolServiceStateDegraded.String(),
+						PoolLayoutVer:    1,
+						UpgradeLayoutVer: 2,
+						RebuildState:     "busy",
+					},
+				},
+			},
+			verbose: true,
+			expPrintStr: `
+Label UUID                                 State    SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled UpgradeNeeded? Rebuild State 
+----- ----                                 -----    ------- -------- -------- ------------- --------- --------- -------------- -------- -------------- ------------- 
+one   00000001-0001-0001-0001-000000000001 Degraded [0-2]   100 GB   80 GB    12%           6.0 TB    5.0 TB    1%             8/16     1->2           busy          
 
 `,
 		},
@@ -1245,7 +1303,7 @@ two   00000002-0002-0002-0002-000000000002 Destroying [3-5]   100 GB   80 GB    
 
 			// pass the same io writer to standard and error stream
 			// parameters to mimic combined output seen on terminal
-			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose)
+			err := PrintListPoolsResponse(&bld, &bld, tc.resp, tc.verbose, tc.noQuery)
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {
 				return
