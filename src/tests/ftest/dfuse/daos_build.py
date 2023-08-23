@@ -196,8 +196,8 @@ class DaosBuild(DfuseTestBase):
         if intercept:
             intercept_jobs = 1
 
-        build_jobs = 1
-        intercept_jobs = 1
+        # build_jobs = 1
+        # intercept_jobs = 1
 
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
