@@ -4057,6 +4057,14 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 			D_ERROR("daos_array_open_with_attr() Failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
+		if (flags & O_TRUNC) {
+			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
+			if (rc) {
+				D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
+				daos_array_close(obj->oh, NULL);
+				D_GOTO(err_obj, rc = daos_der2errno(rc));
+			}
+		}
 
 		/** we need the file size if stat struct is needed */
 		if (stbuf) {

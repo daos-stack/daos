@@ -1792,11 +1792,6 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	} else {
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
 				    NULL);
-		if ((rc == 0) && (oflags & O_TRUNC)) {
-			if (S_ISDIR(mode_query))
-				D_GOTO(out_error, rc = EISDIR);
-			rc = dfs_punch(dfs_mt->dfs, dfs_obj, 0, DFS_MAX_FSIZE);
-		}
 	}
 	if (rc)
 		D_GOTO(out_error, rc);
