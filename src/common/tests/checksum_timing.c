@@ -138,7 +138,7 @@ run_timings(struct hash_ft *fts[], const int types_count, const size_t *sizes,
 
 			rc = daos_csummer_init(&csummer, ft, 0, 0);
 			if (rc != 0) {
-				D_FREE(buf);
+				free(buf);
 				return rc;
 			}
 
@@ -172,7 +172,7 @@ run_timings(struct hash_ft *fts[], const int types_count, const size_t *sizes,
 			D_FREE(csum_buf);
 			daos_csummer_destroy(&csummer);
 		}
-		D_FREE(buf);
+		free(buf);
 	}
 
 	return 0;

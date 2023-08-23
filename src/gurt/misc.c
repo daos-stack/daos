@@ -82,25 +82,6 @@ d_asprintf(char **strp, const char *fmt, ...)
 }
 
 char *
-d_asprintf2(int *_rc, const char *fmt, ...)
-{
-	char   *str = NULL;
-	va_list ap;
-	int     rc;
-
-	va_start(ap, fmt);
-	rc = vasprintf(&str, fmt, ap);
-	va_end(ap);
-
-	*_rc = rc;
-
-	if (rc == -1)
-		return NULL;
-
-	return str;
-}
-
-char *
 d_realpath(const char *path, char *resolved_path)
 {
 	return realpath(path, resolved_path);
