@@ -18,7 +18,7 @@ class HarnessSetupTest(TestWithServers):
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=vm
+        :avocado: tags=hw,medium,large
         :avocado: tags=harness
         :avocado: tags=HarnessSetupTest,test_setup
         """
