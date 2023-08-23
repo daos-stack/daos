@@ -36,7 +36,7 @@
  */
 #define MIGRATE_MAX_SIZE	(1 << 28)
 /* Max migrate ULT number on the server */
-#define MIGRATE_MAX_ULT		8192
+#define MIGRATE_MAX_ULT		512
 
 struct migrate_one {
 	daos_key_t		 mo_dkey;
@@ -2897,7 +2897,7 @@ migrate_obj_ult(void *data)
 			rc = tls->mpt_pool->spc_pool->sp_discard_status;
 			D_DEBUG(DB_REBUILD, DF_UUID" discard failure"DF_RC".\n",
 				DP_UUID(arg->pool_uuid), DP_RC(rc));
-			D_GOTO(free_notls, rc);
+			D_GOTO(out, rc);
 		}
 	}
 
@@ -2949,7 +2949,7 @@ free:
 	if (DAOS_FAIL_CHECK(DAOS_REBUILD_OBJ_FAIL) &&
 	    tls->mpt_obj_count >= daos_fail_value_get())
 		rc = -DER_IO;
-
+out:
 	if (tls->mpt_status == 0 && rc < 0)
 		tls->mpt_status = rc;
 
@@ -3027,7 +3027,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_e
 		 * pseudorandomly to get better performance by leveraging all
 		 * the xstreams.
 		 */
-		ult_tgt_idx = oid.id_pub.lo % dss_tgt_nr;
+		ult_tgt_idx = d_rand() % dss_tgt_nr;
 	}
 
 	/* Let's iterate the object on different xstream */

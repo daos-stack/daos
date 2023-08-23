@@ -1540,14 +1540,18 @@ rebuild_task_ult(void *arg)
 		}
 	}
 
-	if (actions & REBUILD_TARGET)
+	if (actions & REBUILD_TARGET) {
 		/* Start leader tracking ULT to wait until rebuild finished */
 		rebuild_leader_status_check(pool, task->dst_rebuild_op, rgt);
-	else if (actions & UPDATE_TARGET)
+	} else if (actions & UPDATE_TARGET) {
 		/* Do not need rebuild target, only update the target status */
+		D_PRINT("%s [completed] (pool "DF_UUID" ver=%u/%u)\n",
+			RB_OP_STR(task->dst_rebuild_op), DP_UUID(task->dst_pool_uuid),
+			task->dst_map_ver, task->dst_reclaim_ver);
 		D_GOTO(update_tgts, rc);
-	else
+	} else {
 		D_GOTO(output, rc);
+	}
 done:
 	D_ASSERT(rgt != NULL);
 	if (!is_rebuild_global_done(rgt)) {
