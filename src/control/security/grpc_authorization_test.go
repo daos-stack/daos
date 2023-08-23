@@ -63,7 +63,6 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
 		"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
 		"/ctl.CtlSvc/StopRanks":                {ComponentServer},
-		"/ctl.CtlSvc/PingRanks":                {ComponentServer},
 		"/ctl.CtlSvc/ResetFormatRanks":         {ComponentServer},
 		"/ctl.CtlSvc/StartRanks":               {ComponentServer},
 		"/mgmt.MgmtSvc/Join":                   {ComponentServer},

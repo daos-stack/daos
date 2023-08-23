@@ -306,10 +306,8 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Pool performance domain",
 			},
 			values: map[string]uint64{
-				"root":   PoolPerfDomainRoot,
-				"node":   PoolPerfDomainNode,
-				"target": PoolPerfDomainTarget,
-				"rank":   PoolPerfDomainRank,
+				"root":  PoolPerfDomainRoot,
+				"group": PoolPerfDomainGrp,
 			},
 		},
 		"svc_rf": {
@@ -409,6 +407,16 @@ func PoolProperties() PoolPropertyMap {
 					return fmt.Sprintf("%d", n)
 				},
 				valueMarshaler: numericMarshaler,
+			},
+		},
+		"reintegration": {
+			Property: PoolProperty{
+				Number:      PoolPropertyReintMode,
+				Description: "Reintegration mode",
+			},
+			values: map[string]uint64{
+				"data_sync":    PoolReintModeDataSync,
+				"no_data_sync": PoolReintModeNoDataSync,
 			},
 		},
 	}

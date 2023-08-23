@@ -1393,7 +1393,7 @@ obj_ec_fail_info_insert(struct obj_reasb_req *reasb_req, uint16_t fail_tgt)
 	if (fail_info->efi_ntgts > obj_ec_parity_tgt_nr(reasb_req->orr_oca)) {
 		D_ERROR(DF_OID" %d failure, not recoverable.\n", DP_OID(reasb_req->orr_oid),
 			fail_info->efi_ntgts);
-		for (i = 0; i < nerrs; i++)
+		for (i = 0; i <= nerrs; i++)
 			D_ERROR("fail tgt: %u\n", err_list[i]);
 
 		return -DER_DATA_LOSS;

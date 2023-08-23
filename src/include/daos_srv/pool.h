@@ -48,6 +48,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
@@ -77,7 +79,7 @@ struct ds_pool {
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
 
 	int			sp_discard_status;
 	/** path to ephemeral metrics */
@@ -98,6 +100,7 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_mode;
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -158,6 +161,7 @@ struct ds_pool_child {
 	ABT_eventual	spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1;
+	uint32_t	spc_reint_mode;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a

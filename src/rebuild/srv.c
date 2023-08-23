@@ -1536,14 +1536,18 @@ rebuild_task_ult(void *arg)
 		}
 	}
 
-	if (actions & REBUILD_TARGET)
+	if (actions & REBUILD_TARGET) {
 		/* Start leader tracking ULT to wait until rebuild finished */
 		rebuild_leader_status_check(pool, task->dst_rebuild_op, rgt);
-	else if (actions & UPDATE_TARGET)
+	} else if (actions & UPDATE_TARGET) {
 		/* Do not need rebuild target, only update the target status */
+		D_PRINT("%s [completed] (pool "DF_UUID" ver=%u/%u)\n",
+			RB_OP_STR(task->dst_rebuild_op), DP_UUID(task->dst_pool_uuid),
+			task->dst_map_ver, task->dst_reclaim_ver);
 		D_GOTO(update_tgts, rc);
-	else
+	} else {
 		D_GOTO(output, rc);
+	}
 done:
 	D_ASSERT(rgt != NULL);
 	if (!is_rebuild_global_done(rgt)) {
@@ -2025,6 +2029,12 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 
 	rebuild_gst.rg_abort = 0;
 
+	if (pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_DEBUG(DB_REBUILD, DF_UUID" No data sync for reintegration\n",
+			DP_UUID(pool->sp_uuid));
+		return DER_SUCCESS;
+	}
+
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
 	D_ASSERT(entry != NULL);
 	if (entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD) {
@@ -2107,11 +2117,8 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
 	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT || rpt->rt_rebuild_op == RB_OP_RECLAIM ||
-	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
-		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
-		rpt->rt_pool->sp_reintegrating--;
-	}
+	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
+	rpt->rt_pool->sp_rebuilding--;
 
 	ABT_mutex_lock(rpt->rt_lock);
 	ABT_cond_signal(rpt->rt_global_dtx_wait_cond);

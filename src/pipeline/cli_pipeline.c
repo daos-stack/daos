@@ -612,6 +612,10 @@ dc_pipeline_run(tse_task_t *api_task)
 		D_GOTO(out, rc = -DER_NO_HDL);
 	}
 	obj_md.omd_ver = dc_pool_get_version(pool);
+	obj_md.omd_pdom_lvl = dc_obj_hdl2pdom(api_args->oh);
+	obj_md.omd_fdom_lvl = dc_obj_hdl2redun_lvl(api_args->oh);
+	obj_md.omd_pda = dc_obj_hdl2pda(api_args->oh);
+
 
 	/** get layout */
 
