@@ -1065,7 +1065,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
-		DS_ERROR(rc, "getifaddrs() failed");
+		DS_ERROR(errno, "getifaddrs() failed");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
