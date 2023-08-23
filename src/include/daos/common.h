@@ -638,7 +638,7 @@ static inline bool
 daos_crt_network_error(int err)
 {
 	return err == -DER_HG || err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY || err == -DER_OOG || err == -DER_HG_SEND_FAILED;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 /** See crt_quiet_error. */
@@ -862,6 +862,7 @@ enum {
 #define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
 #define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
 #define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
+#define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
 
 #define DAOS_CHK_CONT_ORPHAN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa0)
 #define DAOS_CHK_CONT_BAD_LABEL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa1)
