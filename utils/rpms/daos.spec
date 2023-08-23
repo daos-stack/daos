@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       3%{?relval}%{?dist}
+Release:       8%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -31,10 +31,11 @@ BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel >= %{mercury_version}
 BuildRequires: gcc-c++
 %if (0%{?rhel} >= 8)
-BuildRequires: openmpi-devel
+%global openmpi openmpi
 %else
-BuildRequires: openmpi3-devel
+%global openmpi openmpi3
 %endif
+BuildRequires: %{openmpi}-devel
 BuildRequires: hwloc-devel
 %if ("%{?compiler_args}" == "COMPILER=covc")
 BuildRequires: bullseye
@@ -72,7 +73,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.9.2-1.403.g3d20556%{?dist}
+BuildRequires: daos-raft-devel = 0.10.1-2.409.gc354cd7%{?dist}
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -85,7 +86,11 @@ BuildRequires: numactl-devel
 BuildRequires: CUnit-devel
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
+%if (0%{?rhel} >= 9)
+BuildRequires: python-devel
+%else
 BuildRequires: python36-devel
+%endif
 BuildRequires: python3-distro
 BuildRequires: Lmod
 %else
@@ -197,6 +202,8 @@ This is the package is a metapackage to install all of the test packages
 Summary: The entire internal DAOS test suite
 Requires: %{name}-tests = %{version}-%{release}
 Requires: %{name}-client-tests-openmpi%{?_isa} = %{version}-%{release}
+Requires: %{name}-client-tests-mpich = %{version}-%{release}
+Requires: %{name}-serialize%{?_isa} = %{version}-%{release}
 BuildArch: noarch
 
 %description tests-internal
@@ -216,6 +223,8 @@ Requires: git
 Requires: dbench
 Requires: lbzip2
 Requires: attr
+Requires: ior
+Requires: go >= 1.18
 %if (0%{?suse_version} >= 1315)
 Requires: lua-lmod
 Requires: libcapstone-devel
@@ -230,9 +239,31 @@ This is the package needed to run the DAOS test suite (client tests)
 %package client-tests-openmpi
 Summary: The DAOS client test suite - tools which need openmpi
 Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: hdf5-%{openmpi}-tests
+Requires: hdf5-vol-daos-%{openmpi}-tests
+Requires: MACSio-%{openmpi}
+Requires: simul-%{openmpi}
 
 %description client-tests-openmpi
 This is the package needed to run the DAOS client test suite openmpi tools
+
+%package client-tests-mpich
+Summary: The DAOS client test suite - tools which need mpich
+BuildArch: noarch
+Requires: %{name}-client-tests%{?_isa} = %{version}-%{release}
+Requires: mpifileutils-mpich
+Requires: testmpio
+Requires: mpich
+Requires: ior
+Requires: hdf5-mpich-tests
+Requires: hdf5-vol-daos-mpich-tests
+Requires: MACSio-mpich
+Requires: simul-mpich
+Requires: romio-tests
+Requires: python3-mpi4py-tests
+
+%description client-tests-mpich
+This is the package needed to run the DAOS client test suite mpich tools
 
 %package server-tests
 Summary: The DAOS server test suite (server tests)
@@ -420,6 +451,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/libvos.so
 %{_libdir}/daos_srv/libbio.so
 %{_libdir}/daos_srv/libplacement.so
+%{_libdir}/daos_srv/libpipeline.so
 %{_libdir}/libdaos_common_pmem.so
 %config(noreplace) %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
@@ -507,6 +539,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %doc README.md
 %{_libdir}/libdpar_mpi.so
 
+%files client-tests-mpich
+%doc README.md
+
 %files server-tests
 %doc README.md
 %{_bindir}/evt_ctl
@@ -552,6 +587,22 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Aug 08 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-8
+- Build on EL9
+- Add a client-tests-mpich subpackage for mpich test dependencies.
+
+* Fri Jul 07 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-7
+- Fix golang daos-client-tests dependency to be go instead
+
+* Thu Jun 29 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.5.100-6
+- Install golang >= 1.18 as a daos-client-tests dependency
+
+* Thu Jun 22 2023 Li Wei <wei.g.li@intel.com> 2.5.100-5
+- Update raft to 0.10.1-1.408.g9524cdb
+
+* Wed Jun 14 2023 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 2.5.100-4
+- Add pipeline lib
+
 * Wed Jun 14 2023 Wang Shilong <shilong.wang@intel.com> 2.5.100-3
 - Remove lmdb-devel for MD on SSD
 

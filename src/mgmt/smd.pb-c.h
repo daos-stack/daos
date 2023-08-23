@@ -95,7 +95,13 @@ struct  _Ctl__BioHealthReq
 {
   ProtobufCMessage base;
   char *dev_uuid;
+  /*
+   * Size of the metadata (i.e. vos file index) blob
+   */
   uint64_t meta_size;
+  /*
+   * Size of the RDB blob
+   */
   uint64_t rdb_size;
 };
 #define CTL__BIO_HEALTH_REQ__INIT \
@@ -244,7 +250,7 @@ struct  _Ctl__SmdDevice
    */
   uint64_t total_bytes;
   /*
-   * blobstore clusters available bytes
+   * Available RAW storage for data
    */
   uint64_t avail_bytes;
   /*
@@ -268,7 +274,7 @@ struct  _Ctl__SmdDevice
    */
   uint64_t meta_wal_size;
   /*
-   * Size of the RDB (i.e. vos file index) blob
+   * Size of the RDB blob
    */
   uint64_t rdb_size;
   /*
@@ -276,7 +282,7 @@ struct  _Ctl__SmdDevice
    */
   uint64_t rdb_wal_size;
   /*
-   * blobstrore clusters usable bytes
+   * Effective storage available for data
    */
   uint64_t usable_bytes;
 };

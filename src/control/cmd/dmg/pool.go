@@ -19,6 +19,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -187,7 +188,7 @@ type PoolCreateCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	GroupName  ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
@@ -309,8 +310,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -355,7 +356,7 @@ type PoolListCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
 	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
@@ -379,8 +380,8 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	var out, outErr strings.Builder
@@ -406,7 +407,7 @@ type poolCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
@@ -598,8 +599,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -638,8 +639,8 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -686,6 +687,9 @@ type PoolSetPropCmd struct {
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "perf_domain" {
+			return errors.New("can't set perf_domain on existing pool.")
+		}
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
 		}
@@ -703,8 +707,8 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	}
 
 	err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -731,8 +735,8 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.PoolGetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -760,8 +764,8 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 	req := &control.PoolGetACLReq{ID: cmd.PoolID().String()}
 
 	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -830,8 +834,8 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -878,8 +882,8 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -908,8 +912,8 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

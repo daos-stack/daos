@@ -742,6 +742,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
+    def pool_upgrade(self, pool):
+        """Call dmg pool upgrade.
+
+        Args:
+            pool (str): pool to upgrade
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(("pool", "upgrade"), pool=pool)
+
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
 
@@ -1320,14 +1335,13 @@ class DmgCommand(DmgCommandBase):
         """Call dmg version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
 
 
 def check_system_query_status(data):

@@ -43,6 +43,9 @@ struct dfuse_info {
 	 */
 	pthread_spinlock_t   di_lock;
 
+	/* RW lock used for force filesystem query ioctl to block for pending forget calls. */
+	pthread_rwlock_t     di_forget_lock;
+
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
@@ -56,10 +59,12 @@ struct dfuse_info {
 	/* Array of dfuse_eq */
 	struct dfuse_eq     *di_eqt;
 	ATOMIC uint64_t      di_eqt_idx;
-};
 
-/* legacy, allow the old name for easier migration */
-#define dfuse_projection_info dfuse_info
+	ATOMIC uint64_t      di_inode_count;
+	ATOMIC uint64_t      di_fh_count;
+	ATOMIC uint64_t      di_pool_count;
+	ATOMIC uint64_t      di_container_count;
+};
 
 struct dfuse_eq {
 	struct dfuse_info  *de_handle;
@@ -135,6 +140,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_started;
 	/* Set to true if readdir calls reach EOF made on this handle */
 	bool                      doh_kreaddir_finished;
+
+	bool                      doh_evict_on_close;
 };
 
 /* Readdir support.
@@ -271,13 +278,14 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
+dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
  */
 void
-dfuse_open_handle_init(struct dfuse_obj_hdl *oh, struct dfuse_inode_entry *ie);
+dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
+		       struct dfuse_inode_entry *ie);
 
 struct dfuse_inode_ops {
 	void (*create)(fuse_req_t req, struct dfuse_inode_entry *parent,
@@ -701,8 +709,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(desc, req, arg)			\
-	DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
+#define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.
@@ -784,6 +791,24 @@ struct dfuse_inode_entry {
 	bool                      ie_unlinked;
 };
 
+static inline struct dfuse_inode_entry *
+dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	d_list_t *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	if (!rlink)
+		return NULL;
+
+	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
+}
+
+static inline void
+dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+{
+	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
+}
+
 extern char *duns_xattr_name;
 
 /* Generate the inode to use for this dfs object.  This is generating a single
@@ -849,10 +874,22 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		 daos_size_t len);
 
 void
-dfuse_ie_init(struct dfuse_inode_entry *ie);
+dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
+
+#define dfuse_ie_free(_di, _ie)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&(_di)->di_inode_count, 1);                               \
+		D_FREE(_ie);                                                                       \
+	} while (0)
+
+#define dfuse_oh_free(_di, _oh)                                                                    \
+	do {                                                                                       \
+		atomic_fetch_sub_relaxed(&(_di)->di_fh_count, 1);                                  \
+		D_FREE(_oh);                                                                       \
+	} while (0)
 
 void
-dfuse_ie_close(struct dfuse_inode_entry *ie);
+dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie);
 
 /* ops/...c */
 

@@ -38,9 +38,13 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= true,
 		.nad_port_bind  = false,
 	}, {
+		.nad_type	= CRT_PROV_OFI_TCP,
+		.nad_str	= "ofi+tcp",
+		.nad_contig_eps	= true,
+		.nad_port_bind  = true,
+	}, {
 		.nad_type	= CRT_PROV_OFI_TCP_RXM,
 		.nad_str	= "ofi+tcp;ofi_rxm",
-		.nad_alt_str	= "ofi+tcp",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
 	}, {
@@ -655,7 +659,7 @@ crt_get_opx_info_string(char *provider, char *domain, char *ip,
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	strcpy(domain_name, domain);
+	strncpy(domain_name, domain, sizeof(domain_name) - 1);
 	strtok_r(domain_name, &domain[delimiter], &hfi_str);
 	hfi = (unsigned int)strtoul(hfi_str, NULL, 10);
 
@@ -1187,7 +1191,6 @@ crt_hg_req_create(struct crt_hg_context *hg_ctx, struct crt_rpc_priv *rpc_priv)
 		hg_ret = HG_Reset(rpc_priv->crp_hg_hdl, rpc_priv->crp_hg_addr,
 				  0 /* reuse original rpcid */);
 		if (hg_ret != HG_SUCCESS) {
-			rpc_priv->crp_hg_hdl = NULL;
 			RPC_ERROR(rpc_priv, "HG_Reset failed, hg_ret: " DF_HG_RC "\n",
 				  DP_HG_RC(hg_ret));
 			D_GOTO(out, rc = crt_hgret_2_der(hg_ret));
@@ -1260,8 +1263,6 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 	}
 
 mem_free:
-
-	RPC_TRACE(DB_TRACE, rpc_priv, "destroying\n");
 
 	crt_rpc_priv_free(rpc_priv);
 }

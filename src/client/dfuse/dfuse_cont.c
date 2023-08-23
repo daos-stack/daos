@@ -14,10 +14,9 @@ void
 dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
-	struct dfuse_inode_entry *ie         = NULL;
-	struct dfuse_pool        *dfp        = parent->ie_dfs->dfs_dfp;
-	struct dfuse_cont        *dfc        = NULL;
-	d_list_t                 *rlink;
+	struct dfuse_inode_entry *ie;
+	struct dfuse_pool        *dfp = parent->ie_dfs->dfs_dfp;
+	struct dfuse_cont        *dfc = NULL;
 	uuid_t                    cont;
 	int                       rc;
 
@@ -34,7 +33,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, cont) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_DEBUG(parent, "Invalid container uuid '%s'", name);
+		DFUSE_TRA_DEBUG(parent, "Invalid container uuid");
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}
@@ -45,17 +44,13 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (rc)
 		D_GOTO(err, rc);
 
-	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &dfc->dfs_ino, sizeof(dfc->dfs_ino));
-	if (rlink) {
+	ie = dfuse_inode_lookup(dfuse_info, dfc->dfs_ino);
+	if (ie) {
 		struct fuse_entry_param entry = {0};
-
-		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 		DFUSE_TRA_DEBUG(ie, "Reusing existing container entry without reconnect");
 
-		/* Update the stat information, but copy in the
-		 * inode value afterwards.
-		 */
+		/* Update the stat information, but copy in the inode value afterwards. */
 		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &entry.attr);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)", strerror(rc));
@@ -78,7 +73,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(ie);
+	dfuse_ie_init(dfuse_info, ie);
 
 	rc = dfs_lookup(dfc->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
@@ -98,7 +93,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	dfuse_reply_entry(dfuse_info, ie, NULL, true, req);
 	return;
 close:
-	D_FREE(ie);
+	dfuse_ie_free(dfuse_info, ie);
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:

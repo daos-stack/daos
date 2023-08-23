@@ -1028,7 +1028,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
 		if (rc) {
-			daos_obj_close(oh, NULL);
+			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
 		}
 
@@ -1246,15 +1246,20 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
+			int rc2;
+
 			/** just try fetching entry to open the file */
-			daos_array_close(file->oh, NULL);
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2) {
+				D_ERROR("daos_array_close() failed "DF_RC"\n", DP_RC(rc2));
+				return daos_der2errno(rc2);
+			}
 		} else if (rc) {
 			int rc2;
 
 			rc2 = daos_array_close(file->oh, NULL);
-			if (rc2 == -DER_NOMEM)
-				daos_array_close(file->oh, NULL);
-
+			if (rc2)
+				D_ERROR("daos_array_close() failed "DF_RC"\n", DP_RC(rc2));
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			return rc;
 		} else {
@@ -3150,7 +3155,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update object class ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update object class: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -3200,7 +3205,7 @@ set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update chunk size ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update chunk size: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -4934,6 +4939,243 @@ out:
 	return rc;
 }
 
+struct dfs_statx_args {
+	dfs_t			*dfs;
+	dfs_obj_t		*obj;
+	struct stat		*stbuf;
+	daos_handle_t		parent_oh;
+};
+
+struct statx_op_args {
+	daos_key_t		dkey;
+	daos_iod_t		iod;
+	daos_recx_t		recx;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iovs[INODE_AKEYS];
+	struct dfs_entry	entry;
+	daos_array_stbuf_t	array_stbuf;
+};
+
+int
+ostatx_cb(tse_task_t *task, void *data)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args = *((struct statx_op_args **)data);
+	int			rc2, rc = task->dt_result;
+
+	if (rc != 0) {
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to stat file: " DF_RC "\n", DP_RC(rc));
+		/** convert the task result to errno since it takes prescedence over the cb error */
+		task->dt_result = daos_der2errno(rc);
+		D_GOTO(out, rc = task->dt_result);
+	}
+
+	if (args->obj->oid.hi != op_args->entry.oid.hi ||
+	    args->obj->oid.lo != op_args->entry.oid.lo)
+		D_GOTO(out, rc = ENOENT);
+
+	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (S_ISREG(args->obj->mode)) {
+		args->stbuf->st_size = op_args->array_stbuf.st_size;
+		args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
+	} else if (S_ISDIR(args->obj->mode)) {
+		args->stbuf->st_size = sizeof(op_args->entry);
+	} else if (S_ISLNK(args->obj->mode)) {
+		args->stbuf->st_size = op_args->entry.value_len;
+	}
+
+	args->stbuf->st_nlink = 1;
+	args->stbuf->st_mode = op_args->entry.mode;
+	args->stbuf->st_uid = op_args->entry.uid;
+	args->stbuf->st_gid = op_args->entry.gid;
+	if (tspec_gt(args->stbuf->st_ctim, args->stbuf->st_mtim)) {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_ctim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_ctim.tv_nsec;
+	} else {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_mtim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_mtim.tv_nsec;
+	}
+
+out:
+	D_FREE(op_args);
+	rc2 = daos_obj_close(args->parent_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
+}
+
+int
+statx_task(tse_task_t *task)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args;
+	tse_task_t		*fetch_task;
+	daos_obj_fetch_t	*fetch_arg;
+	tse_task_t		*stat_task;
+	tse_sched_t		*sched = tse_task2sched(task);
+	bool			need_stat = false;
+	int			i;
+	int			rc;
+
+	D_ALLOC_PTR(op_args);
+	if (op_args == NULL) {
+		daos_obj_close(args->parent_oh, NULL);
+		return ENOMEM;
+	}
+
+	/** Create task to fetch entry. */
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, sched, 0, NULL, &fetch_task);
+	if (rc != 0) {
+		D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	/** set obj_fetch parameters */
+	d_iov_set(&op_args->dkey, (void *)args->obj->name, strlen(args->obj->name));
+	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	op_args->iod.iod_nr    = 1;
+	op_args->recx.rx_idx   = 0;
+	op_args->recx.rx_nr    = END_IDX;
+	op_args->iod.iod_recxs = &op_args->recx;
+	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
+	op_args->iod.iod_size  = 1;
+	i = 0;
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mode, sizeof(mode_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oid, sizeof(daos_obj_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.chunk_size, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.uid, sizeof(uid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
+	op_args->sgl.sg_nr		= i;
+	op_args->sgl.sg_nr_out	= 0;
+	op_args->sgl.sg_iovs	= op_args->sg_iovs;
+
+	fetch_arg = daos_task_get_args(fetch_task);
+	fetch_arg->oh		= args->parent_oh;
+	fetch_arg->th		= DAOS_TX_NONE;
+	fetch_arg->flags	= DAOS_COND_DKEY_FETCH;
+	fetch_arg->dkey		= &op_args->dkey;
+	fetch_arg->nr		= 1;
+	fetch_arg->iods		= &op_args->iod;
+	fetch_arg->sgls		= &op_args->sgl;
+
+	if (S_ISREG(args->obj->mode)) {
+		daos_array_stat_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_ARRAY_STAT, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set array_stat parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh	= args->obj->oh;
+		stat_arg->th	= DAOS_TX_NONE;
+		stat_arg->stbuf	= &op_args->array_stbuf;
+		need_stat = true;
+	} else if (S_ISDIR(args->obj->mode)) {
+		daos_obj_query_key_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set obj_query parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh		= args->obj->oh;
+		stat_arg->th		= DAOS_TX_NONE;
+		stat_arg->max_epoch	= &op_args->array_stbuf.st_max_epoch;
+		stat_arg->flags		= 0;
+		stat_arg->dkey		= NULL;
+		stat_arg->akey		= NULL;
+		stat_arg->recx		= NULL;
+		need_stat = true;
+	}
+
+	rc = tse_task_register_deps(task, 1, &fetch_task);
+	if (rc) {
+		D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err3_out, rc);
+	}
+	if (need_stat) {
+		rc = tse_task_register_deps(task, 1, &stat_task);
+		if (rc) {
+			D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+			tse_task_complete(stat_task, rc);
+			D_GOTO(err1_out, rc);
+		}
+	}
+	rc = tse_task_register_comp_cb(task, ostatx_cb, &op_args, sizeof(op_args));
+	if (rc != 0) {
+		D_ERROR("tse_task_register_comp_cb() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	tse_task_schedule(fetch_task, true);
+	if (need_stat)
+		tse_task_schedule(stat_task, true);
+	return daos_der2errno(rc);
+err3_out:
+	if (need_stat)
+		tse_task_complete(stat_task, rc);
+err2_out:
+	tse_task_complete(fetch_task, rc);
+err1_out:
+	D_FREE(op_args);
+	daos_obj_close(args->parent_oh, NULL);
+	return daos_der2errno(rc);
+}
+
+int
+dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
+{
+	daos_handle_t		oh;
+	tse_task_t		*task;
+	struct dfs_statx_args	*args;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	rc = dc_task_create(statx_task, NULL, ev, &task);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+
+	args = dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->parent_oh	= oh;
+	args->stbuf	= stbuf;
+
+	rc = dc_task_schedule(task, true);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+	return 0;
+}
+
 int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 {
@@ -6283,7 +6525,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
 			 "Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
@@ -6454,6 +6696,7 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 #define DFS_ITER_NR		128
 #define DFS_ITER_DKEY_BUF	(DFS_ITER_NR * sizeof(uint64_t))
 #define DFS_ITER_ENTRY_BUF	(DFS_ITER_NR * DFS_MAX_NAME)
+#define DFS_ELAPSED_TIME	30
 
 struct dfs_oit_args {
 	daos_handle_t	oit;
@@ -6461,6 +6704,9 @@ struct dfs_oit_args {
 	uint64_t	snap_epoch;
 	uint64_t	skipped;
 	uint64_t	failed;
+	time_t		start_time;
+	time_t		print_time;
+	uint64_t	num_scanned;
 };
 
 static int
@@ -6556,7 +6802,18 @@ oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
 	daos_obj_id_t		oid;
 	d_iov_t			marker;
 	bool			mark_data = true;
+	struct timespec		current_time;
 	int			rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		return errno;
+	oit_args->num_scanned ++;
+	if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+		D_PRINT("DFS checker: Scanned "DF_U64" files/directories (runtime: "DF_U64" sec)\n",
+			oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+		oit_args->print_time = current_time.tv_sec;
+	}
 
 	/** open the entry name and get the oid */
 	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
@@ -6703,11 +6960,23 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	d_iov_t			marker;
 	bool			mark_data = true;
 	daos_epoch_range_t	epr;
-	struct timespec		now;
+	struct timespec		now, current_time;
 	uid_t			uid = geteuid();
 	gid_t			gid = getegid();
 	unsigned int		co_flags = DAOS_COO_EX;
+	char			now_name[24];
+	struct tm		*now_tm;
+	daos_size_t		len;
 	int			rc, rc2;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		return errno;
+	now_tm = localtime(&now.tv_sec);
+	len = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
+	if (len == 0)
+		return EINVAL;
+	D_PRINT("DFS checker: Start (%s)\n", now_name);
 
 	if (flags & DFS_CHECK_RELINK && flags & DFS_CHECK_REMOVE) {
 		D_ERROR("can't request remove and link to l+f at the same time\n");
@@ -6729,6 +6998,7 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		D_GOTO(out_cont, rc);
 	}
 
+	D_PRINT("DFS checker: Create OIT table\n");
 	/** create snapshot for OIT */
 	rc = daos_cont_create_snap_opt(coh, &snap_epoch, NULL, DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
 				       NULL);
@@ -6742,6 +7012,8 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		D_GOTO(out_dfs, rc = ENOMEM);
 	oit_args->flags = flags;
 	oit_args->snap_epoch = snap_epoch;
+	oit_args->start_time = now.tv_sec;
+	oit_args->print_time = now.tv_sec;
 
 	/** Open OIT table */
 	rc = daos_oit_open(coh, snap_epoch, &oit_args->oit, NULL);
@@ -6758,10 +7030,11 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		D_GOTO(out_oit, rc = daos_der2errno(rc));
 	}
 	rc = daos_oit_mark(oit_args->oit, dfs->root.oid, &marker, NULL);
-	if (rc) {
+	if (rc && rc != -DER_NONEXIST) {
 		D_ERROR("Failed to mark ROOT OID in OIT: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_oit, rc = daos_der2errno(rc));
 	}
+	rc = 0;
 
 	if (flags & DFS_CHECK_VERIFY) {
 		rc = daos_obj_verify(coh, dfs->super_oid, snap_epoch);
@@ -6791,6 +7064,8 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		}
 	}
 
+	D_PRINT("DFS checker: Iterating namespace and marking objects\n");
+	oit_args->num_scanned = 2;
 	/** iterate through the namespace and mark OITs starting from the root object */
 	while (!daos_anchor_is_eof(&anchor)) {
 		rc = dfs_iterate(dfs, &dfs->root, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
@@ -6803,14 +7078,14 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		nr_entries = DFS_ITER_NR;
 	}
 
-	/** Create lost+found directory and properly link unmarked oids there. */
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		D_GOTO(out_oit, rc = errno);
+	D_PRINT("DFS checker: marked "DF_U64" files/directories (runtime: "DF_U64" sec))\n",
+		oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+
+	/** Create lost+found directory to link unmarked oids there. */
 	if (flags & DFS_CHECK_RELINK) {
-		char		now_name[24];
-
-		rc = clock_gettime(CLOCK_REALTIME, &now);
-		if (rc)
-			D_GOTO(out_oit, rc = errno);
-
 		rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL,
 			      &lf);
 		if (rc) {
@@ -6819,21 +7094,15 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		}
 
 		if (name == NULL) {
-			struct tm	*now_tm;
-			size_t		len;
 			/*
 			 * Create a directory with current timestamp in l+f where leaked oids will
 			 * be linked in this run.
 			 */
-			now_tm = localtime(&now.tv_sec);
-			len = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
-			if (len == 0) {
-				D_ERROR("Invalid time format\n");
-				D_GOTO(out_lf1, rc = EINVAL);
-			}
-			D_PRINT("Leaked OIDs will be inserted in /lost+found/%s\n", now_name);
+			D_PRINT("DFS checker: Leaked OIDs will be inserted in /lost+found/%s\n",
+				now_name);
 		} else {
-			D_PRINT("Leaked OIDs will be inserted in /lost+found/%s\n", name);
+			D_PRINT("DFS checker: Leaked OIDs will be inserted in /lost+found/%s\n",
+				name);
 		}
 
 		rc = dfs_open(dfs, lf, name ? name : now_name, S_IFDIR | 0755,
@@ -6865,6 +7134,8 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	 * Pass 1: check directories only and descend to mark all oids in the namespace of each dir.
 	 * Pass 2: relink remaining oids in the L+F root that are unmarked still after first pass.
 	 */
+	D_PRINT("DFS checker: Checking unmarked OIDs (Pass 1)\n");
+	oit_args->num_scanned = 0;
 	memset(&anchor, 0, sizeof(anchor));
 	/** Start Pass 1 */
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -6873,6 +7144,16 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 		if (rc) {
 			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
+		}
+
+		clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc)
+			D_GOTO(out_lf2, rc = errno);
+		oit_args->num_scanned += nr_entries;
+		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+			D_PRINT("DFS checker: Checked "DF_U64" objects (runtime: "DF_U64" sec)\n",
+				oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+			oit_args->print_time = current_time.tv_sec;
 		}
 
 		for (i = 0; i < nr_entries; i++) {
@@ -6935,6 +7216,8 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	if (!(flags & DFS_CHECK_RELINK))
 		goto done;
 
+	D_PRINT("DFS checker: Checking unmarked OIDs (Pass 2)\n");
+	oit_args->num_scanned = 0;
 	memset(&anchor, 0, sizeof(anchor));
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_entries = DFS_ITER_NR;
@@ -6944,11 +7227,20 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 			D_GOTO(out_lf2, rc = daos_der2errno(rc));
 		}
 
+		clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc)
+			D_GOTO(out_lf2, rc = errno);
+		oit_args->num_scanned += nr_entries;
+		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+			D_PRINT("DFS checker: Checked "DF_U64" objects (runtime: "DF_U64" sec)\n",
+				oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+			oit_args->print_time = current_time.tv_sec;
+		}
+
 		for (i = 0; i < nr_entries; i++) {
 			struct dfs_entry	entry = {0};
 			enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
 			char			oid_name[DFS_MAX_NAME + 1];
-			daos_size_t		len;
 
 			if (flags & DFS_CHECK_PRINT)
 				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
@@ -7017,8 +7309,12 @@ dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *
 	}
 
 done:
-	if (flags & DFS_CHECK_PRINT)
-		D_PRINT("Number of Leaked OIDs in Namespace = "DF_U64"\n", unmarked_entries);
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		D_GOTO(out_lf2, rc = errno);
+	D_PRINT("DFS checker: Done! (runtime: "DF_U64" sec)\n",
+		current_time.tv_sec - oit_args->start_time);
+	D_PRINT("DFS checker: Number of leaked OIDs in namespace = "DF_U64"\n", unmarked_entries);
 	if (flags & DFS_CHECK_VERIFY) {
 		if (oit_args->failed) {
 			D_ERROR(""DF_U64" OIDs failed data consistency check!\n", oit_args->failed);
@@ -7058,6 +7354,7 @@ out_cont:
 	rc2 = daos_cont_close(coh, NULL);
 	if (rc == 0)
 		rc = daos_der2errno(rc2);
+
 	return rc;
 }
 

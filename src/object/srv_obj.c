@@ -480,7 +480,7 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 		}
 		remote_off += length;
 
-		/* Give cart progress a chance to complete some inflight bulk transfers */
+		/* Give cart progress a chance to complete some in-flight bulk transfers */
 		if (bulk_iovs >= MAX_BULK_IOVS) {
 			bulk_iovs = 0;
 			ABT_thread_yield();
@@ -847,8 +847,7 @@ out:
  * used for the csum structures.
  */
 static int
-obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
-		    struct obj_rw_out *orwo)
+obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw, struct obj_rw_out *orwo)
 {
 	int rc;
 
@@ -859,15 +858,13 @@ obj_fetch_csum_init(struct ds_cont_child *cont, struct obj_rw_in *orw,
 	 *
 	 * The memory will be freed in obj_rw_reply
 	 */
-	rc = daos_csummer_alloc_iods_csums(cont->sc_csummer,
-					   orw->orw_iod_array.oia_iods,
-					   orw->orw_iod_array.oia_iod_nr,
-					   false, NULL,
+	rc = daos_csummer_alloc_iods_csums(cont->sc_csummer, orw->orw_iod_array.oia_iods,
+					   orw->orw_iod_array.oia_iod_nr, false, NULL,
 					   &orwo->orw_iod_csums.ca_arrays);
 
 	if (rc >= 0) {
 		orwo->orw_iod_csums.ca_count = (uint64_t)rc;
-		rc = 0;
+		rc                           = 0;
 	}
 
 	return rc;
@@ -1585,18 +1582,31 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 
 	if (obj_rpc_is_fetch(rpc) && !spec_fetch &&
 	    daos_csummer_initialized(ioc->ioc_coc->sc_csummer)) {
+		if (orw->orw_iod_array.oia_iods != iods) {
+			/* Need to copy iod sizes for checksums */
+			int i, j;
+
+			for (i = 0, j = 0; i < orw->orw_iod_array.oia_iod_nr; i++) {
+				if (skips != NULL && isset(skips, i)) {
+					orw->orw_iod_array.oia_iods[i].iod_size = 0;
+					continue;
+				}
+				orw->orw_iod_array.oia_iods[i].iod_size = iods[j].iod_size;
+				j++;
+			}
+		}
+
 		rc = obj_fetch_csum_init(ioc->ioc_coc, orw, orwo);
 		if (rc) {
-			D_ERROR(DF_UOID" fetch csum init failed: %d.\n",
-				DP_UOID(orw->orw_oid), rc);
+			D_ERROR(DF_UOID " fetch csum init failed: %d.\n", DP_UOID(orw->orw_oid),
+				rc);
 			goto post;
 		}
 
 		if (ioc->ioc_coc->sc_props.dcp_csum_enabled) {
 			rc = csum_add2iods(ioh, orw->orw_iod_array.oia_iods,
-					   orw->orw_iod_array.oia_iod_nr,
-					   skips, ioc->ioc_coc->sc_csummer,
-					   orwo->orw_iod_csums.ca_arrays,
+					   orw->orw_iod_array.oia_iod_nr, skips,
+					   ioc->ioc_coc->sc_csummer, orwo->orw_iod_csums.ca_arrays,
 					   orw->orw_oid, &orw->orw_dkey);
 			if (rc) {
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
@@ -1606,6 +1616,12 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		}
 	}
 	bio_pre_latency = daos_get_ntime() - time;
+
+	if (obj_rpc_is_fetch(rpc) && DAOS_FAIL_CHECK(DAOS_OBJ_FAIL_NVME_IO)) {
+		D_ERROR(DF_UOID" fetch failed: %d\n", DP_UOID(orw->orw_oid), -DER_NVME_IO);
+		rc = -DER_NVME_IO;
+		goto post;
+	}
 
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
@@ -1993,14 +2009,14 @@ out:
 static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
-	if (!is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
+	if (!is_agg_migrate && !is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to read.\n",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
 		return -DER_NO_PERM;
 	}
 
-	if (is_write && !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
+	if (!is_agg_migrate && is_write && !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to update.\n",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
@@ -2010,6 +2026,14 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
 		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
+
+	if (is_write && coh->sch_cont &&
+	    coh->sch_cont->sc_pool->spc_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_ERROR("pool "DF_UUID" no_data_sync reint mode,"
+			" cont hdl "DF_UUID" NO_PERM to update.\n",
+			DP_UUID(coh->sch_cont->sc_pool->spc_uuid), DP_UUID(coh->sch_uuid));
+		return -DER_NO_PERM;
 	}
 
 	return 0;
@@ -2270,11 +2294,19 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 {
+	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
+		if (child->sc_ec_agg_active) {
+			D_ERROR(DF_UUID" ec aggregate still active\n",
+				DP_UUID(child->sc_pool->spc_uuid));
+			return -DER_UPDATE_AGAIN;
+		}
+	}
+
 	if (!obj_is_modification_opc(opc))
 		return 0;
 
 	/* If the incoming I/O is during integration, then it needs to wait the
-	 * vos discard to finish, which otherwise might discard these new inflight
+	 * vos discard to finish, which otherwise might discard these new in-flight
 	 * I/O update.
 	 */
 	if ((flags & ORF_REINTEGRATING_IO) &&
@@ -3127,6 +3159,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		}
 		recursive = true;
 
+		if (oei->oei_flags & ORF_DESCENDING_ORDER)
+			param.ip_flags |= VOS_IT_RECX_REVERSE;
+
 		if (daos_oclass_is_ec(&ioc->ioc_oca))
 			enum_arg->ec_cell_sz = ioc->ioc_oca.u.ec.e_len;
 		enum_arg->chk_key2big = 1;
@@ -3838,11 +3873,11 @@ cleanup:
 	obj_ioc_end(&ioc, rc);
 }
 
-static void
-ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
+void
+ds_obj_query_key_handler(crt_rpc_t *rpc)
 {
-	struct obj_query_key_1_in	*okqi;
-	struct obj_query_key_1_out	*okqo;
+	struct obj_query_key_in		*okqi;
+	struct obj_query_key_out	*okqo;
 	daos_key_t			*dkey;
 	daos_key_t			*akey;
 	struct dtx_handle		*dth = NULL;
@@ -3900,7 +3935,7 @@ ds_obj_query_key_handler(crt_rpc_t *rpc, bool return_epoch)
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
 			       okqi->okqi_epoch, dkey, akey, &okqo->okqo_recx,
-			       return_epoch ? &okqo->okqo_max_epoch : NULL,
+			       &okqo->okqo_max_epoch,
 			       cell_size, stripe_size, dth);
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc.ioc_coc);
@@ -3919,18 +3954,6 @@ failed:
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("send reply failed: "DF_RC"\n", DP_RC(rc));
-}
-
-void
-ds_obj_query_key_handler_0(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, false);
-}
-
-void
-ds_obj_query_key_handler_1(crt_rpc_t *rpc)
-{
-	ds_obj_query_key_handler(rpc, true);
 }
 
 void

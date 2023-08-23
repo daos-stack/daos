@@ -163,7 +163,7 @@ func TestScrubProxyVariables(t *testing.T) {
 	}
 }
 
-func TestCommon_MergeEnvVars(t *testing.T) {
+func TestCommon_MergeKeyValues(t *testing.T) {
 	for name, tc := range map[string]struct {
 		baseVars  []string
 		mergeVars []string
@@ -206,7 +206,7 @@ func TestCommon_MergeEnvVars(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotVars := MergeEnvVars(tc.baseVars, tc.mergeVars)
+			gotVars := MergeKeyValues(tc.baseVars, tc.mergeVars)
 			if diff := cmp.Diff(tc.wantVars, gotVars, defCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}

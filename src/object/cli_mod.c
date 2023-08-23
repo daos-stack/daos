@@ -67,6 +67,11 @@ dc_obj_init(void)
 			daos_rpc_unregister(&obj_proto_fmt_1);
 		D_GOTO(out_class, rc);
 	}
+
+	tx_verify_rdg = false;
+	d_getenv_bool("DAOS_TX_VERIFY_RDG", &tx_verify_rdg);
+	D_INFO("%s TX redundancy group verification\n", tx_verify_rdg ? "Enable" : "Disable");
+
 out_class:
 	if (rc)
 		obj_class_fini();

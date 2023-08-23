@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,9 +57,9 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	gen_pool_and_placement_map(DOM_NR, NODE_PER_DOM,
+	gen_pool_and_placement_map(1, DOM_NR, NODE_PER_DOM,
 				   VOS_PER_TARGET, PL_TYPE_RING,
-				   &po_map, &pl_map);
+				   PO_COMP_TP_RANK, &po_map, &pl_map);
 	D_ASSERT(po_map != NULL);
 	D_ASSERT(pl_map != NULL);
 	pool_map_print(po_map);
@@ -74,7 +74,7 @@ main(int argc, char **argv)
 	rc = daos_obj_set_oid_by_class(&oid, 0, OC_RP_4G2, 0);
 	assert_success(rc == 0);
 	D_PRINT("\ntest initial placement when no failed shard ...\n");
-	assert_success(plt_obj_place(oid, &lo_1, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_1, pl_map, true));
 	plt_obj_layout_check(lo_1, COMPONENT_NR, 0);
 
 	/* test plt_obj_place when some/all shards failed */
@@ -82,7 +82,7 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_fail_tgt(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			     pl_debug_msg);
-	assert_success(plt_obj_place(oid, &lo_2, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_2, pl_map, true));
 	plt_obj_layout_check(lo_2, COMPONENT_NR, 0);
 	D_ASSERT(!plt_obj_layout_match(lo_1, lo_2));
 	D_PRINT("spare target candidate:");
@@ -96,7 +96,7 @@ main(int argc, char **argv)
 	for (i = 0; i < SPARE_MAX_NUM && i < lo_1->ol_nr; i++)
 		plt_reint_tgt_up(lo_1->ol_shards[i].po_target, &po_ver, po_map,
 			    pl_debug_msg);
-	assert_success(plt_obj_place(oid, &lo_3, pl_map, true));
+	assert_success(plt_obj_place(oid, 0, &lo_3, pl_map, true));
 	plt_obj_layout_check(lo_3, COMPONENT_NR, 0);
 	D_ASSERT(plt_obj_layout_match(lo_1, lo_3));
 

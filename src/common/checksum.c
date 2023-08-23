@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,7 +44,7 @@ daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 	int			 rc = 0;
 
 	if (!ft) {
-		D_ERROR("No function table");
+		D_ERROR("No function table\n");
 		return -DER_INVAL;
 	}
 
@@ -256,17 +256,21 @@ daos_csummer_compare_csum_info(struct daos_csummer *obj,
 			       struct dcs_csum_info *b)
 {
 	uint32_t	a_len = a->cs_len * a->cs_nr;
-	uint32_t	b_len = b->cs_len * b->cs_nr;
+	uint32_t	b_len;
 	bool		match = true;
 	int		i;
 
+	if (b == NULL)
+		return false;
+
 	if (a->cs_type != b->cs_type) {
-		D_ERROR("%d != %d", a->cs_type, b->cs_type);
+		D_ERROR("Checksum types don't match. %d != %d\n", a->cs_type, b->cs_type);
 		return false;
 	}
 
+	b_len = b->cs_len * b->cs_nr;
 	if (a_len != b_len) {
-		D_ERROR("%d != %d", a_len, b_len);
+		D_ERROR("Checksum lengths don't match. %d != %d\n", a_len, b_len);
 		return false;
 	}
 
@@ -986,7 +990,6 @@ daos_csummer_verify_iod(struct daos_csummer *obj, daos_iod_t *iod,
 					"received "DF_CI"\n",
 					DP_CI(new_iod_csums->ic_data[i]),
 					DP_CI(iod_csum->ic_data[i]));
-
 			D_GOTO(done, rc = -DER_CSUM);
 		}
 	}
@@ -1072,9 +1075,8 @@ daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer,
 
 			ci_cast(&ci, csum_iov);
 			if (ci == NULL) {
-				D_ERROR("Error casting iod (%d/%d) "
-					"csum %d/%d.\n",
-					i, iod_cnt, c, (*iods_csums)[i].ic_nr);
+				D_ERROR("Error casting iod (%d/%d) csum %d/%d.\n", i, iod_cnt, c,
+					(*iods_csums)[i].ic_nr);
 				daos_csummer_free_ic(csummer, iods_csums);
 				return -DER_CSUM;
 			}
@@ -1155,6 +1157,11 @@ void
 ci_insert(struct dcs_csum_info *dcb, int idx, uint8_t *csum_buf, size_t len)
 {
 	uint8_t *to_update;
+
+	if (dcb == NULL) {
+		D_WARN("Trying to insert a csum (%p) into a NULL dcb\n", csum_buf);
+		return;
+	}
 
 	D_ASSERTF(idx < dcb->cs_nr, "idx(%d) < dcb->cs_nr(%d)",
 		  idx, dcb->cs_nr);

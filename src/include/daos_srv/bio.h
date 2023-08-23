@@ -849,11 +849,13 @@ void *bio_buf_addr(struct bio_desc *biod);
  * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
+ * \param desc		[OUT]	Returned BIO copy descriptor
  *
- * \return			BIO copy descriptor on success, NULL on error
+ * \return			Zero on success, negative value on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-				    struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst);
+int bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+		  struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+		  struct bio_copy_desc **desc);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;

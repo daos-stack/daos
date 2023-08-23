@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -287,7 +287,7 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map
 }
 
 func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
@@ -338,14 +338,6 @@ func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
 	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
-// setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
-	ei.Lock()
-	defer ei.Unlock()
-
-	ei.runner.GetConfig().TargetCount = numTargets
-}
-
 // GetTargetCount returns the target count set for this instance.
 func (ei *EngineInstance) GetTargetCount() int {
 	ei.RLock()
@@ -355,7 +347,7 @@ func (ei *EngineInstance) GetTargetCount() int {
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}

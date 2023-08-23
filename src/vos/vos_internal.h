@@ -268,7 +268,7 @@ struct vos_pool {
 	struct vea_space_info	*vp_vea_info;
 	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
-	/** Held space by inflight updates. In bytes */
+	/** Held space by in-flight updates. In bytes */
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
@@ -734,6 +734,9 @@ int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 			int count, daos_epoch_t epoch, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+
+int
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
 
 void
 vos_dtx_post_handle(struct vos_container *cont,

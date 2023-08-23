@@ -56,10 +56,12 @@ class _env_module():  # pylint: disable=invalid-name
 
         # pylint: disable=consider-using-with
         try:
+            print(f"Going to run {cmd}")
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
             if error.errno == errno.ENOENT:
                 return None, None
+            raise
 
         stdout, stderr = proc.communicate()
 
@@ -107,6 +109,7 @@ class _env_module():  # pylint: disable=invalid-name
                 self._module_func('unload', to_unload)
 
         for to_load in load:
+            print(f"Trying to load {to_load}")
             if self._module_func('is-avail', to_load)[0] and \
                self._module_func('load', to_load)[0]:
                 print(f'Loaded {to_load}')
@@ -189,6 +192,7 @@ def load_mpi(mpi):
             print("Error running update-alternatives")
             if error.errno == errno.ENOENT:
                 return False
+            raise
         for line in proc.stdout.readlines():
             if line.startswith(b"Value:"):
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:

@@ -51,19 +51,23 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					switch {
-					case n&PoolSelfHealingAutoExclude > 0:
+					switch n {
+					case PoolSelfHealingAutoExclude:
 						return "exclude"
-					case n&PoolSelfHealingAutoRebuild > 0:
+					case PoolSelfHealingAutoRebuild:
 						return "rebuild"
+					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
+						return "exclude,rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
-				"exclude": PoolSelfHealingAutoExclude,
-				"rebuild": PoolSelfHealingAutoRebuild,
+				"exclude":         PoolSelfHealingAutoExclude,
+				"rebuild":         PoolSelfHealingAutoRebuild,
+				"exclude,rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 			},
 		},
 		"space_rb": {
@@ -302,10 +306,8 @@ func PoolProperties() PoolPropertyMap {
 				Description: "Pool performance domain",
 			},
 			values: map[string]uint64{
-				"root":   PoolPerfDomainRoot,
-				"node":   PoolPerfDomainNode,
-				"target": PoolPerfDomainTarget,
-				"rank":   PoolPerfDomainRank,
+				"root":  PoolPerfDomainRoot,
+				"group": PoolPerfDomainGrp,
 			},
 		},
 		"svc_rf": {
@@ -405,6 +407,16 @@ func PoolProperties() PoolPropertyMap {
 					return fmt.Sprintf("%d", n)
 				},
 				valueMarshaler: numericMarshaler,
+			},
+		},
+		"reintegration": {
+			Property: PoolProperty{
+				Number:      PoolPropertyReintMode,
+				Description: "Reintegration mode",
+			},
+			values: map[string]uint64{
+				"data_sync":    PoolReintModeDataSync,
+				"no_data_sync": PoolReintModeNoDataSync,
 			},
 		},
 	}

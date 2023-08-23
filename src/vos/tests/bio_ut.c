@@ -34,6 +34,8 @@ ut_init(struct bio_ut_args *args)
 {
 	int rc;
 
+	daos_debug_init(DAOS_LOG_DEFAULT);
+
 	rc = vos_self_init(db_path, false, BIO_STANDALONE_TGT_ID);
 	if (rc)
 		daos_debug_fini();

@@ -33,7 +33,7 @@ alloc_ace_with_access(enum daos_acl_principal_type type, uint64_t permissions)
 
 	ace = daos_ace_create(type, NULL);
 	if (ace == NULL) {
-		D_ERROR("Failed to allocate default ACE type %d", type);
+		D_ERROR("Failed to allocate default ACE type %d\n", type);
 		return NULL;
 	}
 
@@ -79,7 +79,7 @@ ds_sec_alloc_default_daos_cont_acl(void)
 
 	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
 	if (acl == NULL)
-		D_ERROR("Failed to allocate default ACL for cont properties");
+		D_ERROR("Failed to allocate default ACL for cont properties\n");
 
 	return acl;
 }
@@ -102,7 +102,7 @@ ds_sec_alloc_default_daos_pool_acl(void)
 
 	acl = alloc_default_daos_acl_with_perms(owner_perms, grp_perms);
 	if (acl == NULL)
-		D_ERROR("Failed to allocate default ACL for pool properties");
+		D_ERROR("Failed to allocate default ACL for pool properties\n");
 
 	return acl;
 }
@@ -160,7 +160,6 @@ get_token_from_validation_response(Drpc__Response *response,
 
 	*token = auth_token_dup(resp->token);
 	if (*token == NULL) {
-		D_ERROR("Couldn't copy the Auth Token\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -223,7 +222,7 @@ validate_credentials_via_drpc(Drpc__Response **response, d_iov_t *creds)
 
 	rc = drpc_connect(ds_sec_server_socket_path, &server_socket);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Couldn't connect to daos_server socket\n");
+		D_ERROR("Couldn't connect to daos_server socket: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -407,7 +406,7 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 		return rc;
 
 	if (authsys->machinename == protobuf_c_empty_string) {
-		D_ERROR("Malformed AuthSys token missing machinename");
+		D_ERROR("Malformed AuthSys token missing machinename\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -416,7 +415,7 @@ get_sec_origin_for_token(Auth__Token *token, char **machine)
 	machine_size = strnlen(authsys->machinename, MAXHOSTNAMELEN+1);
 
 	if (machine_size > MAXHOSTNAMELEN) {
-		D_ERROR("hostname provided by the agent is too large");
+		D_ERROR("hostname provided by the agent is too large\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -486,9 +485,10 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 		return -DER_INVAL;
 	}
 
-	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("Invalid ACL\n");
-		return -DER_INVAL;
+	rc = daos_acl_validate(acl);
+	if (rc != -DER_SUCCESS) {
+		D_ERROR("Invalid ACL: " DF_RC "\n", DP_RC(rc));
+		return rc;
 	}
 
 	rc = ds_sec_validate_credentials(cred, &token);

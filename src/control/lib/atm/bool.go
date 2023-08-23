@@ -21,6 +21,13 @@ func NewBool(in bool) Bool {
 	return b
 }
 
+// NewBoolRef returns a reference to a Bool set to the
+// provided starting value.
+func NewBoolRef(in bool) *Bool {
+	b := NewBool(in)
+	return &b
+}
+
 // SetTrue sets the Bool to true.
 func (b *Bool) SetTrue() {
 	atomic.StoreUint32((*uint32)(b), 1)

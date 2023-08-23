@@ -149,15 +149,27 @@ char *DP_UUID(const void *uuid);
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 #ifdef DAOS_BUILD_RELEASE
-#define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)((key)->iov_len)
-#else
-char *daos_key2str(daos_key_t *key);
-#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%s'"
-#define DP_KEY(key)		(int)(key)->iov_len,	\
-				daos_key2str(key)
+#define DF_KEY       "[%d]"
+#define DP_KEY(_key) (int)((_key)->iov_len)
+
+#define DF_DE        "de[%zi]"
+#define DP_DE(_de)   strnlen(_de, NAME_MAX)
+
+#else
+
+char *
+daos_key2str(daos_key_t *key);
+
+#define DF_KEY      "[%d] '%s'"
+#define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
+
+char *
+daos_de2str(const char *de);
+
+#define DF_DE       "de'%s'"
+#define DP_DE(_de)  daos_de2str(_de)
+
 #endif
 
 #define DF_RECX			"["DF_X64"-"DF_X64"]"
@@ -845,6 +857,7 @@ enum {
 #define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
 #define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
 #define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
+#define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
