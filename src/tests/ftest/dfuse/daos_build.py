@@ -63,7 +63,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
+        self.run_build_test("writethrough", False, dfuse_namespace="/run/dfuse_vm/*")
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
