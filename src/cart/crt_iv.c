@@ -2329,9 +2329,12 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	}
 
 	rc = crt_req_send(corpc_req, handle_response_cb, iv_sync_cb);
-	if (rc != 0)
-		D_ERROR("crt_req_send(): "DF_RC"\n", DP_RC(rc));
+	if (rc != 0) {
+		DL_ERROR(rc, "crt_req_send() failed, not calling decref");
 
+		/* Do not call decref on this rpc below if req_send failed */
+		corpc_req = NULL;
+	}
 exit:
 	if (delay_completion == false || rc != 0) {
 		if (rc != 0)
