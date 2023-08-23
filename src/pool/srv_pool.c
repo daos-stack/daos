@@ -31,7 +31,6 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rebuild.h>
 #include <daos_srv/security.h>
-#include <daos_srv/vos.h>
 #include <cart/api.h>
 #include <cart/iv.h>
 #include "rpc.h"
@@ -976,20 +975,11 @@ ds_pool_svc_stop(uuid_t pool_uuid)
 	d_iov_set(&id, pool_uuid, sizeof(uuid_t));
 
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &id, RDB_NIL_TERM, false /* destroy */);
-	if (rc != 0) {
-		if (rc == -DER_ALREADY) {
-			D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
-			rc = 0;
-		}
-		D_GOTO(out, rc);
+	if (rc == -DER_ALREADY) {
+		D_DEBUG(DB_MD, DF_UUID": ds_rsvc_stop: "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
+		rc = 0;
 	}
 
-	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
-		rc = vos_pool_kill(pool_uuid, VOS_POF_SMALL | VOS_POF_EXCL | VOS_POF_RDB);
-	}
-
-out:
 	return rc;
 }
 

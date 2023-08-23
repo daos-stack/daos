@@ -275,6 +275,11 @@ cleanup_leftover_cb(uuid_t uuid, void *arg)
 
 	/* destroy blobIDs */
 	D_DEBUG(DB_MGMT, "Clear SPDK blobs for pool "DF_UUID"\n", DP_UUID(uuid));
+	rc = vos_pool_kill(uuid, VOS_POF_RDB);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": kill pool service VOS pool: "DF_RC"\n", DP_UUID(uuid), DP_RC(rc));
+		return rc;
+	}
 	uuid_copy(id.uuid, uuid);
 	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc != 0) {
@@ -1298,6 +1303,12 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 	rc = access(path, F_OK);
 	if (rc >= 0) {
 		/** target is still there, destroy it */
+		rc = vos_pool_kill(td_in->td_pool_uuid, VOS_POF_RDB);
+		if (rc != 0 && rc != -DER_BUSY) {
+			D_ERROR(DF_UUID": kill pool service VOS pool: "DF_RC"\n",
+				DP_UUID(td_in->td_pool_uuid), DP_RC(rc));
+			goto out_path;
+		}
 		rc = tgt_destroy(td_req->cr_input, path);
 	} else if (errno == ENOENT) {
 		char	*zombie;
@@ -1319,6 +1330,7 @@ ds_mgmt_hdlr_tgt_destroy(crt_rpc_t *td_req)
 		rc = daos_errno2der(errno);
 	}
 
+out_path:
 	D_FREE(path);
 out:
 	td_out->td_rc = rc;
