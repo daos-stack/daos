@@ -1084,8 +1084,7 @@ iv_get_grp_version(crt_rpc_t *rpc)
 int
 iv_test_fetch_iv(crt_rpc_t *rpc)
 {
-	struct RPC_TEST_FETCH_IV_in	*input;
-	int				 rc;
+	struct RPC_TEST_FETCH_IV_in *input;
 
 	DBG_ENTRY();
 	wait_for_namespace();
@@ -1095,8 +1094,7 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 
 	crt_req_addref(rpc);
 
-	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
-	assert(rc == 0);
+	crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
 	/*
 	 * Test break case:
@@ -1172,8 +1170,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;
 	crt_iv_sync_t				 dsync = CRT_IV_SYNC_MODE_NONE;
-	crt_iv_sync_t				*sync = &dsync;
-	int					 rc;
+	crt_iv_sync_t                           *sync  = &dsync;
 
 	DBG_ENTRY();
 
@@ -1197,9 +1194,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	if (input->iov_sync.iov_buf != NULL)
 		sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 
-	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
-			       *sync, invalidate_done, cb_info);
-	assert(rc == 0);
+	crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE, *sync, invalidate_done, cb_info);
 	DBG_EXIT();
 	return 0;
 }

@@ -1,8 +1,8 @@
-"""
+'''
   (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-"""
+'''
 import time
 import tempfile
 import json
@@ -158,12 +158,7 @@ class CartIvOneNodeTest(CartTest):
 
                 # Read the result into test_result and remove the temp file
                 with open(log_path, 'r') as log_file:
-                    data = log_file.read()
-                    try:
-                        test_result = json.loads(data)
-                    except json.JSONDecodeError:
-                        print(data)
-                        raise
+                    test_result = json.load(log_file)
 
                 os.close(log_fd)
                 os.remove(log_path)
@@ -485,7 +480,7 @@ class CartIvOneNodeTest(CartTest):
             self._iv_test_actions(clicmd, actions)
         except ValueError as exception:
             failed = True
-            traceback.print_tb(exception)
+            traceback.print_stack()
             self.print("TEST FAILED: %s" % str(exception))
 
         # Shutdown Servers
