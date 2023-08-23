@@ -115,7 +115,10 @@ auth_token_dup(Auth__Token *orig)
 	uint8_t			*packed;
 	size_t			len;
 
-	/* The most straightforward way to copy a protobuf struct is to pack and unpack it. */
+	/*
+	 * The most straightforward way to copy a protobuf struct is to pack
+	 * and unpack it.
+	 */
 	len = auth__token__get_packed_size(orig);
 	D_ALLOC(packed, len);
 	if (packed == NULL)

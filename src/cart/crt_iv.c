@@ -2353,7 +2353,7 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
-		if (corpc_req)
+		if (corpc_req != NULL)
 			RPC_PUB_DECREF(corpc_req);
 	}
 	return rc;
