@@ -1345,8 +1345,14 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 		if (rmv_ent->re_rect.rc_ex.ex_lo > phy_ent->pe_rect.rc_ex.ex_hi)
 			continue;
 
-		D_ASSERT(rmv_ent->re_phy_count > 0);
-		rmv_ent->re_phy_count--;
+		/*
+		 * Aggregation could fail out before processing the invisible record
+		 * which being covered by a removal record (see join_merge_window()),
+		 * in such case, removal record & physical record are both enqueued
+		 * but the removal record isn't referenced yet.
+		 */
+		if (rmv_ent->re_phy_count > 0)
+			rmv_ent->re_phy_count--;
 	}
 }
 
