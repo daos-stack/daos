@@ -691,6 +691,11 @@ dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 	if (rc != 0)
 		return rc;
 
+	if (mode & (S_ISVTX | S_ISGID | S_ISUID)) {
+		D_DEBUG(DB_TRACE, "setuid, setgid, and sticky bit are not supported, and will be ignored.\n");
+		mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	}
+
 	rc = dfs_chmod(dfs_sys->dfs, sys_path.parent, sys_path.name, mode);
 
 	sys_path_free(dfs_sys, &sys_path);
