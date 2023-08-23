@@ -15,7 +15,11 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
+#ifndef ROMIO_DAOS
 #include <malloc.h>
+#else
+#define malloc_usable_size(__ptr) 0ull
+#endif
 
 #include <uuid/uuid.h>
 #include <unistd.h>
