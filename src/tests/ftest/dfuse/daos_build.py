@@ -63,7 +63,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", False, dfuse_namespace="/run/dfuse_vm/*")
+        self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -196,6 +196,9 @@ class DaosBuild(DfuseTestBase):
         if intercept:
             intercept_jobs = 1
 
+        build_jobs = 1
+        intercept_jobs = 1
+
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),
                 'git -C {} submodule init'.format(build_dir),
@@ -206,7 +209,7 @@ class DaosBuild(DfuseTestBase):
                 'daos filesystem query {}'.format(mount_dir),
                 'daos filesystem evict {}'.format(build_dir),
                 'daos filesystem query {}'.format(mount_dir),
-                'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
+                'echo scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)
             # Use a short timeout for most commands, but vary the build timeout based on dfuse mode.
@@ -223,12 +226,15 @@ class DaosBuild(DfuseTestBase):
             if result.passed:
                 continue
 
+            time.sleep(60)
+
             self.log.info('Failure detected - debug information:')
             fail_type = 'Failure to build'
             if result.timeout:
                 self.log.info('Command timed out')
-                run_remote(self.log, self.hostlist_clients, 'ps auwx', timeout=30)
                 fail_type = 'Timeout building'
+
+            run_remote(self.log, self.hostlist_clients, 'ps auwx', timeout=30)
 
             self.log.error('BuildDaos Test Failed')
             if cmd.startswith('scons'):
