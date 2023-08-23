@@ -530,8 +530,6 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
-		if (rgt->rgt_opc == RB_OP_RECLAIM)
-			status->rs_state = DRS_COMPLETED;
 		status->rs_version = rgt->rgt_rebuild_ver;
 		rgt_put(rgt);
 	}
@@ -545,16 +543,14 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		struct rebuild_task *task;
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
-			    task->dst_rebuild_op != RB_OP_RECLAIM) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
 		}
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
-			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
-			    task->dst_rebuild_op != RB_OP_RECLAIM) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
@@ -748,8 +744,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 }
 
 static int
-rebuild_global_pool_tracker_create(struct ds_pool *pool, daos_rebuild_opc_t opc, uint32_t ver,
-				   uint32_t rebuild_gen, uint64_t leader_term, daos_epoch_t reclaim_eph,
+rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t rebuild_gen,
+				   uint64_t leader_term, daos_epoch_t reclaim_eph,
 				   struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
@@ -784,7 +780,6 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, daos_rebuild_opc_t opc,
 	rgt->rgt_servers_number = node_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
-	rgt->rgt_opc = opc;
 	rgt->rgt_rebuild_ver = ver;
 	rgt->rgt_status.rs_version = ver;
 	rgt->rgt_leader_term = leader_term;
@@ -907,7 +902,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	/* Create global rgt on leader to track the rebuild status */
 	if (*actions & REBUILD_TARGET) {
 		/* Update pool iv ns for the pool */
-		rc = rebuild_global_pool_tracker_create(pool, rebuild_op, rebuild_ver, rebuild_gen,
+		rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rebuild_gen,
 							leader_term, reclaim_eph, rgt);
 		if (rc)
 			D_ERROR("rebuild_global_pool_tracker create failed: rc %d\n", rc);
@@ -1541,14 +1536,18 @@ rebuild_task_ult(void *arg)
 		}
 	}
 
-	if (actions & REBUILD_TARGET)
+	if (actions & REBUILD_TARGET) {
 		/* Start leader tracking ULT to wait until rebuild finished */
 		rebuild_leader_status_check(pool, task->dst_rebuild_op, rgt);
-	else if (actions & UPDATE_TARGET)
+	} else if (actions & UPDATE_TARGET) {
 		/* Do not need rebuild target, only update the target status */
+		D_PRINT("%s [completed] (pool "DF_UUID" ver=%u/%u)\n",
+			RB_OP_STR(task->dst_rebuild_op), DP_UUID(task->dst_pool_uuid),
+			task->dst_map_ver, task->dst_reclaim_ver);
 		D_GOTO(update_tgts, rc);
-	else
+	} else {
 		D_GOTO(output, rc);
+	}
 done:
 	D_ASSERT(rgt != NULL);
 	if (!is_rebuild_global_done(rgt)) {
