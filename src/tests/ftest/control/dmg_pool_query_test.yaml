@@ -26,6 +26,7 @@ ior:
 
 exp_vals:
   pool_status: 0
+  pool_state: "Ready"
   total_targets: 4
   active_targets: 4
   total_engines: 1

@@ -22,7 +22,7 @@ from general_utils import journalctl_time
 from host_utils import get_local_host
 import slurm_utils
 from dmg_utils import DmgCommand
-from run_utils import run_local, RunException
+from run_utils import run_local, run_remote, RunException
 from soak_utils import ddhhmmss_format, add_pools, \
     launch_snapshot, launch_exclude_reintegrate, launch_extend, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
@@ -74,6 +74,10 @@ class SoakTestBase(TestWithServers):
         self.slurm_exclude_servers = True
         self.control = get_local_host()
         self.enable_il = False
+        self.selected_host = None
+        self.enable_remote_logging = False
+        self.soak_log_dir = None
+        self.soak_dir = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -85,7 +89,9 @@ class SoakTestBase(TestWithServers):
         # Setup logging directories for soak logfiles
         # self.output dir is an avocado directory .../data/
         self.outputsoak_dir = self.outputdir + "/soak"
-        # Create the remote log directories on all client nodes
+        self.soak_dir = self.base_test_dir + "/soak"
+        self.soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
+        # Create the a shared directory for logs
         self.sharedsoak_dir = self.tmp + "/soak"
         self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
@@ -451,12 +457,18 @@ class SoakTestBase(TestWithServers):
                     self.log.info(
                         "<< Job %s failed with status %s>>", job, result)
             # gather all the logfiles for this pass and cleanup test nodes
-            command = "/usr/bin/rsync -avtr --min-size=1B {} {}/".format(
-                self.sharedsoaktest_dir, self.outputsoak_dir)
-            command2 = f"/usr/bin/rm -rf {self.sharedsoaktest_dir}"
+            cmd = f"/usr/bin/rsync -avtr --min-size=1B {self.soak_log_dir} {self.outputsoak_dir}/"
+            cmd2 = f"/usr/bin/rm -rf {self.soak_log_dir}"
+            if self.enable_remote_logging:
+                result = run_remote(self.log, self.hostlist_clients, cmd, timeout=600)
+                if result.passed:
+                    result = run_remote(self.log, self.hostlist_clients, cmd2, timeout=600)
+                if not result.passed:
+                    self.log.error("Remote copy failed on %s", str(result.failed_hosts))
+            # copy the local files; local host not included in hostlist_client
             try:
-                run_local(self.log, command, timeout=300)
-                run_local(self.log, command2, timeout=300)
+                run_local(self.log, cmd, timeout=600)
+                run_local(self.log, cmd2, timeout=600)
             except RunException as error:
                 self.log.info("Local copy failed with %s", error)
             self.soak_results = {}
@@ -483,12 +495,23 @@ class SoakTestBase(TestWithServers):
         """
         job_script_list = []
         # Update the remote log directories from new loop/pass
-        self.sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
+        sharedsoaktest_dir = self.sharedsoak_dir + "/pass" + str(self.loop)
         outputsoaktest_dir = self.outputsoak_dir + "/pass" + str(self.loop)
+        soaktest_dir = self.soak_dir + "/pass" + str(self.loop)
         # Create local avocado log directory for this pass
         os.makedirs(outputsoaktest_dir)
         # Create shared log directory for this pass
-        os.makedirs(self.sharedsoaktest_dir, exist_ok=True)
+        os.makedirs(sharedsoaktest_dir, exist_ok=True)
+        # Create local test log directory for this pass
+        os.makedirs(soaktest_dir)
+        if self.enable_remote_logging:
+            result = run_remote(self.log, self.hostlist_clients, f"mkdir -p {soaktest_dir}")
+            if not result.passed:
+                raise SoakTestError(
+                    f"<<FAILED: log directory not created on clients>>: {str(result.failed_hosts)}")
+            self.soak_log_dir = soaktest_dir
+        else:
+            self.soak_log_dir = sharedsoaktest_dir
         # create the batch scripts
         job_script_list = self.job_setup(jobs, pools)
         # randomize job list
@@ -535,12 +558,14 @@ class SoakTestBase(TestWithServers):
         test_to = self.params.get(self.test_id, os.path.join(test_param, "test_timeout", "*"))
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get("single_test_pool", test_param + "*", True)
-        harassers = self.params.get("harasserlist", test_param + "*")
+        harassers = self.params.get(self.test_id, os.path.join(test_param, "harasserlist", "*"))
         job_list = self.params.get("joblist", test_param + "*")
         resv_bytes = self.params.get("resv_bytes", test_param + "*", 500000000)
         ignore_soak_errors = self.params.get("ignore_soak_errors", test_param + "*", False)
         self.enable_il = self.params.get("enable_intercept_lib", test_param + "*", False)
         self.sudo_cmd = "sudo" if enable_sudo else ""
+        self.enable_remote_logging = self.params.get(
+            "enable_remote_logging", os.path.join(test_param, "*"), False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
@@ -569,10 +594,22 @@ class SoakTestBase(TestWithServers):
 
         # cleanup soak log directories before test
         try:
-            run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=30)
+            run_local(self.log, f"rm -rf {self.soak_dir}/*", timeout=300)
         except RunException as error:
             raise SoakTestError(
-                f"<<FAILED: Soak directory {self.sharedsoak_dir} was not removed>>") from error
+                f"<<FAILED: Log directory {self.soak_dir} was not removed>>") from error
+        if self.enable_remote_logging:
+            result = run_remote(
+                self.log, self.hostlist_clients, f"rm -rf {self.soak_dir}/*", timeout=300)
+            if not result.passed:
+                raise SoakTestError(
+                    f"<<FAILED:Log directory not removed from clients>> {str(result.failed_hosts)}")
+        else:
+            try:
+                run_local(self.log, f"rm -rf {self.sharedsoak_dir}/*", timeout=300)
+            except RunException as error:
+                raise SoakTestError(
+                    f"<<FAILED: Log directory {self.sharedsoak_dir} was not removed>>") from error
         # Baseline metrics data
         run_metrics_check(self, prefix="initial")
         # Initialize time
@@ -595,7 +632,10 @@ class SoakTestBase(TestWithServers):
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
             if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
-                ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
+                # create a pool excluding the ranks from the selected host
+                self.selected_host = self.random.choice(self.hostlist_servers)
+                ranks = self.server_managers[0].get_host_ranks(
+                    self.hostlist_servers - NodeSet(self.selected_host))
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
                 add_pools(self, ["pool_jobs"])

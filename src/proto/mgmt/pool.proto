@@ -145,6 +145,7 @@ message ListPoolsResp {
 		string label = 2; // pool label
 		repeated uint32 svc_reps = 3; // pool service replica ranks
 		string state = 4; // pool state
+		string rebuild_state = 5; // pool rebuild state
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
@@ -205,6 +206,14 @@ message PoolRebuildStatus {
 	uint64 records = 4;
 }
 
+enum PoolServiceState {
+	Creating = 0;   // pool service is being created
+	Ready = 1;      // pool service is ready to be used
+	Destroying = 2; // pool service is being destroyed
+	Degraded = 3 ;  // pool service is being Degraded
+	Unknown = 4 ;   // pool service is Unknown state
+}
+
 // PoolQueryResp represents a pool query response.
 message PoolQueryResp {
 	reserved 9;
@@ -224,6 +233,7 @@ message PoolQueryResp {
 	uint32 total_engines = 14; // total engines in pool
 	uint32 pool_layout_ver = 15; // current pool global version
 	uint32 upgrade_layout_ver = 16; // latest pool global version to upgrade
+	PoolServiceState state = 17; // pool state
 }
 
 message PoolProperty {
