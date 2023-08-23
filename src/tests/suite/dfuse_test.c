@@ -62,6 +62,7 @@ do_openat(void **state)
 	int         rc;
 	char        output_buf[10];
 	char        input_buf[] = "hello";
+	char        read_buf[16];
 	off_t       offset;
 	int         root = open(test_dir, O_PATH | O_DIRECTORY);
 	ssize_t     count;
@@ -150,6 +151,9 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	rc = unlinkat(root, "openat_file", 0);
+	assert_return_code(rc, errno);
+
 	/* opening flag testing with openat */
 	fd = openat(root, "oflag_file", O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR);
 	assert_int_equal(fd, -1);
@@ -169,9 +173,12 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	rc = fstatat(root, "oflag_file", &stbuf0, AT_SYMLINK_NOFOLLOW);
+	fd = openat(root, "oflag_file", O_RDONLY);
+	assert_return_code(fd, errno);
+	count = read(fd, read_buf, 5);
+	assert_int_equal(count, 0);
+	rc = close(fd);
 	assert_return_code(rc, errno);
-	assert_int_equal(stbuf0.st_size, 0);
 
 	rc = unlinkat(root, "openat_file", 0);
 	assert_return_code(rc, errno);

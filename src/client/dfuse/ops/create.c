@@ -120,6 +120,12 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 		D_GOTO(err, rc = ENOTSUP);
 	}
 
+	/* O_APPEND is not supported. Return ENOTSUP */
+	if (fi->flags & O_APPEND) {
+		DFUSE_TRA_INFO(parent, "O_APPEND is not supported");
+		D_GOTO(err, rc = ENOTSUP);
+	}
+
 	/* Check for flags that do not make sense in this context. */
 	if (fi->flags & DFUSE_UNSUPPORTED_CREATE_FLAGS) {
 		DFUSE_TRA_INFO(parent, "unsupported flag requested 0%o", fi->flags);
