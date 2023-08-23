@@ -845,6 +845,21 @@ ds_mgmt_tgt_create_post_reply(crt_rpc_t *rpc, void *priv)
 }
 
 int
+ds_mgmt_tgt_destroy_aggregator(crt_rpc_t *source, crt_rpc_t *result,
+			      void *priv)
+{
+	struct mgmt_tgt_destroy_out	*td_out;
+	struct mgmt_tgt_destroy_out	*ret_out;
+
+	td_out = crt_reply_get(source);
+	ret_out = crt_reply_get(result);
+	if (td_out->td_rc != 0)
+		ret_out->td_rc = td_out->td_rc;
+
+	return 0;
+}
+
+int
 ds_mgmt_tgt_create_aggregator(crt_rpc_t *source, crt_rpc_t *result,
 			      void *priv)
 {
@@ -1202,6 +1217,9 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 	/* destroy blobIDs first */
 	uuid_copy(tda.tda_id.uuid, pool_uuid);
 	rc = dss_thread_collective(tgt_kill_pool, &tda.tda_id, 0);
+	if (rc == -DER_BUSY && unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_DESTROY_BUSY_CHECK)))
+		D_GOTO(out, rc);
+
 	if (rc && rc != -DER_BUSY)
 		goto out;
 

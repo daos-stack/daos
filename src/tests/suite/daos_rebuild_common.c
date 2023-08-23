@@ -271,6 +271,12 @@ extend_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank)
 }
 
 void
+extend_pool_ranks(test_arg_t *arg, d_rank_t *ranks, int nr)
+{
+	rebuild_targets(&arg, 1, ranks, NULL, nr, false, RB_OP_TYPE_ADD);
+}
+
+void
 drain_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr, bool kill)
 {

@@ -51,7 +51,8 @@
 		&ds_mgmt_hdlr_tgt_create_co_ops),			\
 	X(MGMT_TGT_DESTROY,						\
 		0, &CQF_mgmt_tgt_destroy,				\
-		ds_mgmt_hdlr_tgt_destroy, NULL),			\
+		ds_mgmt_hdlr_tgt_destroy,				\
+		&ds_mgmt_hdlr_tgt_destroy_co_ops),			\
 	X(MGMT_TGT_PARAMS_SET,						\
 		0, &CQF_mgmt_tgt_params_set,				\
 		ds_mgmt_tgt_params_set_hdlr, NULL),			\
