@@ -150,7 +150,7 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	/* openning flag testing with openat */
+	/* opening flag testing with openat */
 	fd = openat(root, "oflag_file", O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR);
 	assert_int_equal(fd, -1);
 	assert_int_equal(errno, ENOTSUP);
@@ -163,7 +163,7 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
-	/* trucate the file size to zero */
+	/* truncate the file size to zero */
 	fd = openat(root, "oflag_file", O_RDWR | O_TRUNC);
 	assert_return_code(fd, errno);
 	rc = close(fd);
