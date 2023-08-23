@@ -167,6 +167,11 @@ do_openat(void **state)
 	rc = close(fd);
 	assert_return_code(rc, errno);
 
+	/* opening with O_APPEND but without O_CREAT */
+	fd = openat(root, "oflag_file", O_RDWR | O_APPEND);
+	assert_int_equal(fd, -1);
+	assert_int_equal(errno, ENOTSUP);
+
 	/* truncate the file size to zero */
 	fd = openat(root, "oflag_file", O_RDWR | O_TRUNC);
 	assert_return_code(fd, errno);

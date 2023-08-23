@@ -4013,6 +4013,8 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		parent = &dfs->root;
 	else if (!S_ISDIR(parent->mode))
 		return ENOTDIR;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 
 	rc = check_name(name, &len);
 	if (rc)
