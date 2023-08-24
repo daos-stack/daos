@@ -4,7 +4,7 @@ Githooks are a [well documented](https://git-scm.com/docs/githooks) feature
 of git that enable various local exectubles to be run during various stages of
 the git workflow.
 
-The DAOS repo contains several githooks built-in githooks that are intended
+The DAOS repo contains several built-in githooks that are intended
 to help developers conform to DAOS community coding standards and practices
 and to avoid some common mistakes in the development cycle.
 
