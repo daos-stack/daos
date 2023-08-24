@@ -408,7 +408,7 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
-                if str(Exception) == "Test interrupted by SIGTERM":
+                if str(error) == "Test interrupted by SIGTERM":
                     # Abort testing if timed out by avocado.
                     raise error
                 errors.append(
