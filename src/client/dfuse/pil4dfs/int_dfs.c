@@ -1725,8 +1725,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	mode_t           mode_query = 0, mode_parent = 0;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char            *parent_dir = NULL;
-	char            *full_path  = NULL;
+	char             *parent_dir = NULL;
+	char             *full_path = NULL;
 
 	if (pathname == NULL) {
 		errno = EFAULT;
@@ -1793,6 +1793,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, oflags, &dfs_obj, &mode_query,
 				    NULL);
 	}
+
 	if (rc)
 		D_GOTO(out_error, rc);
 
@@ -1846,7 +1847,8 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 	file_list[idx_fd]->st_ino      = FAKE_ST_INO(full_path);
 	file_list[idx_fd]->idx_mmap    = -1;
 	file_list[idx_fd]->open_flag   = oflags;
-	file_list[idx_fd]->offset      = 0;
+	/* NEED to set at the end of file if O_APPEND!!!!!!!! */
+	file_list[idx_fd]->offset = 0;
 	strncpy(file_list[idx_fd]->item_name, item_name, DFS_MAX_NAME);
 
 	FREE(parent_dir);
