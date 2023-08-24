@@ -32,7 +32,9 @@ However, some hooks will simply check for required software and are
 effectively a noop if such is not installed.
 
 On many systems, the required packages can be installed through standard means
-but customization may be required.  The following packages are used by
+but customization may be required.  Some are specified in
+[requirements.txt](../../requirements.txt) so can be installed using pip or
+by using a virtual environment. The following packages are used by
 built-in githooks.
 
 1. clang-format version 14.0.5 or higher.  If the check is unable to parse
@@ -45,6 +47,11 @@ the version output, it will fail.  Try running
 
 It is important to check the output on commit for any errors that may indicate
 any one of the required tools is missing.
+
+Additionally, [find_base.sh](find_base.sh) attempts to determine the base
+branch using `gh`, the Github CLI. If this isn't installed, it will use
+`master` as the base which can result in a larger diff and more files being
+checked than expected.
 
 ## Checks performed by built-in scripts
 
