@@ -56,7 +56,7 @@ agg_rate_ctl(void *arg)
 		return -1;
 
 	/*
-	 * XXX tempoaray workaround: EC aggregation needs to be paused during rebuilding
+	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
 	 * to avoid the race between EC rebuild and EC aggregation.
 	 **/
 	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
