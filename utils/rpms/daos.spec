@@ -588,6 +588,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing
+- Adding fuse3-devel as a requirment for daos-client-tests subpackage
 
 * Tue Aug 08 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-8
 - Build on EL9
