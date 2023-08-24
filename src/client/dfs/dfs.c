@@ -3626,6 +3626,14 @@ lookup_rel_path_loop:
 				D_ERROR("daos_array_open() Failed (%d)\n", rc);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
+			if (flags & O_TRUNC) {
+				rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
+				if (rc) {
+					D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
+					daos_array_close(obj->oh, NULL);
+					D_GOTO(err_obj, rc = daos_der2errno(rc));
+				}
+			}
 
 			if (stbuf) {
 				daos_size_t size;
@@ -3794,6 +3802,8 @@ dfs_lookup(dfs_t *dfs, const char *path, int flags, dfs_obj_t **_obj,
 {
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 	if (_obj == NULL)
 		return EINVAL;
 	if (path == NULL || strnlen(path, DFS_MAX_PATH) > DFS_MAX_PATH - 1)
