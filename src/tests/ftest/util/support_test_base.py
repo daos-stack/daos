@@ -54,7 +54,7 @@ class SupportTestBase(ControlTestBase):
         """Verify custom log files is collected and part of archive.
 
         """
-        read_filedata = "sudo find {}  -name {} | xargs sudo cat".format(
+        read_filedata = "find {}  -name {} | xargs cat".format(
             self.extract_dir, os.path.basename(self.custom_log_file))
 
         result = run_remote(self.log, self.log_hosts, read_filedata)
@@ -77,13 +77,13 @@ class SupportTestBase(ControlTestBase):
 
         """
         # Create the new extract directory
-        cmd = "sudo mkdir -p {}".format(self.extract_dir)
+        cmd = "mkdir -p {}".format(self.extract_dir)
         result = run_remote(self.log, self.log_hosts, cmd)
         if not result.passed:
             self.fail("cmd {} failed, result:{}".format(cmd, result))
 
         # Extract The tar.gz file to newly created directory
-        cmd = "sudo tar -xf {} -C {}".format(tar_gz_filename, self.extract_dir)
+        cmd = "tar -xf {} -C {}".format(tar_gz_filename, self.extract_dir)
         result = run_remote(self.log, self.log_hosts, cmd)
         if not result.passed:
             self.fail("Failed to extract the {} file, result:{}".format(tar_gz_filename, result))
@@ -105,7 +105,7 @@ class SupportTestBase(ControlTestBase):
 
         # Verify server log files are collected.
         for log_file in log_files:
-            list_file = "sudo ls -lsaRt {} | grep {}".format(self.extract_dir, log_file)
+            list_file = "ls -lsaRt {} | grep {}".format(self.extract_dir, log_file)
             result = run_remote(self.log, self.log_hosts, list_file)
             if not result.passed:
                 self.fail("Failed to list the {} file from extracted folder{}".format(
