@@ -241,8 +241,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
-						atomic.StoreUint32(&instanceStarts,
-							atomic.AddUint32(&instanceStarts, 1))
+						_ = atomic.AddUint32(&instanceStarts, 1)
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
