@@ -191,7 +191,7 @@ class DaosBuild(DfuseTestBase):
 
         # Run the deps build in parallel for speed/coverage however the daos build itself does
         # not yet work under the interception library so run this part in serial.
-        build_jobs = 6 * 5
+        build_jobs = 6 * 2
         intercept_jobs = build_jobs
         if intercept:
             intercept_jobs = 1
