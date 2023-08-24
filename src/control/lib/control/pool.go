@@ -432,8 +432,9 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32  `json:"status"`
-		UUID   string `json:"uuid"`
+		Status int32                   `json:"status"`
+		State  system.PoolServiceState `json:"state"`
+		UUID   string                  `json:"uuid"`
 		PoolInfo
 	}
 
@@ -611,7 +612,37 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	}
 
 	pqr := new(PoolQueryResp)
-	return pqr, convertMSResponse(ur, pqr)
+	err = convertMSResponse(ur, pqr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pqr.UpdateState()
+	if err != nil {
+		return nil, err
+	}
+
+	return pqr, err
+}
+
+// Update the pool state
+func (pqr *PoolQueryResp) UpdateState() error {
+	// Update the state as Ready if DAOS return code is 0.
+	if pqr.Status == 0 {
+		pqr.State = system.PoolServiceStateReady
+	}
+
+	// Pool state is unknown, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = system.PoolServiceStateUnknown
+	}
+
+	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
+	if pqr.State == system.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+		pqr.State = system.PoolServiceStateDegraded
+	}
+
+	return nil
 }
 
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
@@ -1053,6 +1084,9 @@ type (
 
 		// Usage contains pool usage statistics for each storage tier.
 		Usage []*PoolTierUsage `json:"usage"`
+
+		// PoolRebuildStatus contains detailed information about the pool rebuild process.
+		RebuildState string `json:"rebuild_state"`
 	}
 )
 
@@ -1201,11 +1235,13 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
+		p.State = resp.State.String()
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
+		p.RebuildState = resp.Rebuild.State.String()
 	}
 
 	sort.Slice(resp.Pools, func(i int, j int) bool {
