@@ -76,7 +76,7 @@ struct agg_rmv_ent {
 	uint32_t                re_aggregate : 1, /* Aggregate of one or more records */
 	    re_child                         : 1; /* Contained in aggregate record */
 	/** Refcount of physical records that reference this removal */
-	int			re_phy_count;
+	unsigned int		re_phy_count;
 };
 
 /* EV tree logical entry */
@@ -1346,10 +1346,10 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 			continue;
 
 		/*
-		 * Aggregation could fail out before processing the invisible record
-		 * which being covered by a removal record (see join_merge_window()),
-		 * in such case, removal record & physical record are both enqueued
-		 * but the removal record isn't referenced yet.
+		 * Aggregation could abort before processing the invisible record
+		 * which being covered by a removal record, in such case, the removal
+		 * record & physical record are both enqueued but the removal record
+		 * isn't referenced yet.
 		 */
 		if (rmv_ent->re_phy_count > 0)
 			rmv_ent->re_phy_count--;
