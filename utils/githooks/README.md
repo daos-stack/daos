@@ -33,9 +33,9 @@ effectively a noop if such is not installed.
 
 On many systems, the required packages can be installed through standard means
 but customization may be required.  Some are specified in
-[requirements.txt](../../requirements.txt) so can be installed using pip or
-by using a virtual environment. The following packages are used by
-built-in githooks.
+[requirements.txt](../../requirements.txt) so can be installed using
+`pip -r requirements.txt` or by using a virtual environment. The following
+packages are used by built-in githooks.
 
 1. clang-format version 14.0.5 or higher.  If the check is unable to parse
 the version output, it will fail.  Try running
