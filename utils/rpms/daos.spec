@@ -225,6 +225,11 @@ Requires: libcapstone-devel
 Requires: Lmod
 Requires: capstone-devel
 %endif
+%if (0%{?rhel} >= 8)
+BuildRequires: fuse3-devel >= 3
+%else
+BuildRequires: fuse3-devel >= 3.4.2
+%endif
 
 %description client-tests
 This is the package needed to run the DAOS test suite (client tests)
