@@ -503,16 +503,25 @@ static bool
 tse_task_complete_callback(tse_task_t *task)
 {
 	struct tse_task_private	*dtp = tse_task2priv(task);
+	struct tse_sched_private *dsp = dtp->dtp_sched;
 	uint32_t		 gen, new_gen;
 	struct tse_task_cb	*dtc;
 	struct tse_task_cb	*tmp;
+	d_list_t		comp_cb_list;
 
 	/* Take one extra ref-count here and decref before exit, as in dtc_cb() it possibly
 	 * re-init the task that may be completed immediately.
 	 */
 	tse_task_addref(task);
 
-	d_list_for_each_entry_safe(dtc, tmp, &dtp->dtp_comp_cb_list, dtc_list) {
+	/* pick CBs from complete_list */
+	D_INIT_LIST_HEAD(&comp_cb_list);
+	/* just grab lock to get list */
+	D_MUTEX_LOCK(&dsp->dsp_lock);
+	d_list_splice_init(&dtp->dtp_comp_cb_list, &comp_cb_list);
+	D_MUTEX_UNLOCK(&dsp->dsp_lock);
+
+	d_list_for_each_entry_safe(dtc, tmp, &comp_cb_list, dtc_list) {
 		int ret;
 
 		d_list_del(&dtc->dtc_list);
@@ -527,6 +536,10 @@ tse_task_complete_callback(tse_task_t *task)
 		new_gen = dtp_generation_get(dtp);
 		if (new_gen != gen) {
 			D_DEBUG(DB_TRACE, "task %p re-inited or new dep-task added\n", task);
+			D_MUTEX_LOCK(&dsp->dsp_lock);
+			/* splice any remaining completion CBs back in front of task's list */
+			d_list_splice(&comp_cb_list, &dtp->dtp_comp_cb_list);
+			D_MUTEX_UNLOCK(&dsp->dsp_lock);
 			tse_task_decref(task);
 			return false;
 		}
