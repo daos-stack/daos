@@ -226,9 +226,9 @@ Requires: Lmod
 Requires: capstone-devel
 %endif
 %if (0%{?rhel} >= 8)
-BuildRequires: fuse3-devel >= 3
+Requires: fuse3-devel >= 3
 %else
-BuildRequires: fuse3-devel >= 3.4.2
+Requires: fuse3-devel >= 3.4.2
 %endif
 
 %description client-tests
