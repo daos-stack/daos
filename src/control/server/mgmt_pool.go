@@ -240,14 +240,26 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 
 // PoolCreate implements the method defined for the Management Service.
 //
-// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
-// are per-engine so need to be larger than (minimum_target_allocation *
-// target_count).
-func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
+// NB: Only one pool create request may be processed at a time.
+func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (*mgmtpb.PoolCreateResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
+	msg, err := svc.submitSerialRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return msg.(*mgmtpb.PoolCreateResp), nil
+}
+
+// poolCreate handles the actual pool creation request. This is separated from
+// PoolCreate() so that it can be called from the batch request handler.
+//
+// Validate minimum SCM/NVMe pool size per VOS target, pool size request params
+// are per-engine so need to be larger than (minimum_target_allocation *
+// target_count).
+func (svc *mgmtSvc) poolCreate(parent context.Context, req *mgmtpb.PoolCreateReq) (resp *mgmtpb.PoolCreateResp, err error) {
 	if err := svc.poolCreateAddSystemProps(req); err != nil {
 		return nil, err
 	}
@@ -443,7 +455,7 @@ func (svc *mgmtSvc) PoolCreate(parent context.Context, req *mgmtpb.PoolCreateReq
 		}
 
 		switch errors.Cause(err) {
-		case errInstanceNotReady:
+		case errEngineNotReady:
 			// If the pool create failed because there was no available instance
 			// to service the request, signal to the client that it should try again.
 			resp.Status = int32(daos.TryAgain)
@@ -748,13 +760,12 @@ func (svc *mgmtSvc) PoolDestroy(parent context.Context, req *mgmtpb.PoolDestroyR
 	return resp, nil
 }
 
-// PoolEvict implements the method defined for the Management Service.
-func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+func (svc *mgmtSvc) evictPoolConnections(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 
-	dresp, err := svc.makeLockedPoolServiceCall(ctx, drpc.MethodPoolEvict, req)
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, req)
 	if err != nil {
 		return nil, err
 	}
@@ -764,7 +775,31 @@ func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*m
 		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
 	}
 
+	if resp.Count > 0 {
+		svc.log.Infof("pool %s: evicted %d handle(s)", req.Id, resp.Count)
+	}
 	return resp, nil
+}
+
+// PoolEvict handles requests to evict pool handles. When a request contains
+// multiple pool handles, it will be added to a batch request and processed
+// with other handle eviction requests in order to reduce the number of dRPCs.
+func (svc *mgmtSvc) PoolEvict(ctx context.Context, req *mgmtpb.PoolEvictReq) (*mgmtpb.PoolEvictResp, error) {
+	if err := svc.checkLeaderRequest(req); err != nil {
+		return nil, err
+	}
+
+	if len(req.Handles) == 0 {
+		// If we're not evicting a set of handles, then we shouldn't bother with trying
+		// to batch up the requests from multiple agents.
+		return svc.evictPoolConnections(ctx, req)
+	}
+
+	msg, err := svc.submitBatchRequest(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return msg.(*mgmtpb.PoolEvictResp), nil
 }
 
 // PoolExclude implements the method defined for the Management Service.

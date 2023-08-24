@@ -3,13 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
+import time
 
+from exception_utils import CommandFailure
 from control_test_base import ControlTestBase
 
 
 class DmgPoolQueryRanks(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test dmg query ranks enabled/disabled command.
 
     Test Class Description:
@@ -112,7 +112,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         disabled_ranks = []
 
         all_ranks = enabled_ranks.copy()
-        random.shuffle(all_ranks)
+        self.random.shuffle(all_ranks)
         self.log.info("Starting excluding ranks: all_ranks=%s", all_ranks)
         for rank in all_ranks:
             self.log.debug("Excluding rank %d", rank)
@@ -138,12 +138,22 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.pool.wait_for_rebuild_to_start()
             self.pool.wait_for_rebuild_to_end()
 
-        random.shuffle(all_ranks)
+        self.random.shuffle(all_ranks)
         self.log.info("Starting reintegrating ranks: all_ranks=%s", all_ranks)
         for rank in all_ranks:
             self.log.debug("Reintegrating rank %d", rank)
-            self.pool.reintegrate(rank)
 
+            cmd_succeed = False
+            for _ in range(3):
+                try:
+                    result = self.pool.reintegrate(rank)
+                    cmd_succeed = True
+                    break
+                except CommandFailure:
+                    self.log.debug("dmg command failed retry")
+                time.sleep(3)
+
+            self.assertTrue(cmd_succeed, "pool reintegrate failed: {}".format(result))
             enabled_ranks = sorted(enabled_ranks + [rank])
             disabled_ranks.remove(rank)
 

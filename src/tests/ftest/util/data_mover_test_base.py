@@ -737,11 +737,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Get an intermediate path for HDF5 file(s)
         tmp_path = self.new_posix_test_path(create=False, parent=self.serial_tmp_dir)
 
-        # Set the source params for dserialize
+        # Set the source params for serialize
         if src is not None:
             self.dserialize_cmd.set_params(src=src, output_path=tmp_path)
 
-        # Set the destination params for ddeserialize
+        # Set the destination params for deserialize
         if dst_pool is not None:
             self.ddeserialize_cmd.set_params(src=tmp_path, pool=uuid_from_obj(dst_pool))
 
@@ -833,7 +833,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Reset params
         self.mdtest_cmd.api.update(None)
         self.mdtest_cmd.test_dir.update(None)
-        self.mdtest_cmd.dfs_pool_uuid.update(None)
+        self.mdtest_cmd.dfs_pool.update(None)
         self.mdtest_cmd.dfs_cont.update(None)
         self.mdtest_cmd.dfs_group.update(None)
 

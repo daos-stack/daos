@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -47,7 +47,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			legacyCmd: &legacyPrepCmd{Force: true},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
@@ -83,14 +83,14 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
 			expPrepSCMCall: &storage.ScmPrepareRequest{NrNamespacesPerSocket: 2},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  spaceSepMultiAddrList,
 				PCIBlockList:  defaultSingleAddrList,
 				DisableVFIO:   true,
@@ -111,7 +111,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			smbc: &scm.MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket:     storage.ScmSocketState{State: storage.ScmNoFreeCap},
+					Socket:     &storage.ScmSocketState{State: storage.ScmNoFreeCap},
 					Namespaces: storage.ScmNamespaces{storage.MockScmNamespace()},
 				},
 			},
@@ -132,7 +132,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  defaultSingleAddrList,
 				PCIBlockList:  spaceSepMultiAddrList,
 				DisableVFIO:   true,
@@ -149,7 +149,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			},
 			expPrepNVMeCall: &storage.BdevPrepareRequest{
 				TargetUser:    "root",
-				HugePageCount: 9182,
+				HugepageCount: 9182,
 				PCIAllowList:  spaceSepMultiAddrList,
 				PCIBlockList:  defaultSingleAddrList,
 				DisableVFIO:   true,
@@ -164,7 +164,7 @@ func TestDaosServer_StoragePrepare_Legacy(t *testing.T) {
 			mbp := bdev.NewProvider(log, mbb)
 			msb := scm.NewMockBackend(tc.smbc)
 			msp := scm.NewProvider(log, msb, nil, nil)
-			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp)
+			scs := server.NewMockStorageControlService(log, nil, nil, msp, mbp, nil)
 
 			if tc.legacyCmd == nil {
 				tc.legacyCmd = &legacyPrepCmd{}

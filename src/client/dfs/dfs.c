@@ -65,8 +65,6 @@
 #define DFS_SB_VERSION		2
 /** DFS Layout Version Value */
 #define DFS_LAYOUT_VERSION	3
-/** Array object stripe size for regular files */
-#define DFS_DEFAULT_CHUNK_SIZE	1048576
 /** Magic value for serializing / deserializing a DFS handle */
 #define DFS_GLOB_MAGIC		0xda05df50
 /** Magic value for serializing / deserializing a DFS object handle */
@@ -204,10 +202,6 @@ struct dfs_entry {
 	daos_size_t		value_len;
 	/** Object ID if not a symbolic link */
 	daos_obj_id_t		oid;
-	/* Time of last access (sec) */
-	uint64_t		atime;
-	/* Time of last access (nsec) */
-	uint64_t		atime_nano;
 	/* Time of last modification (sec) */
 	uint64_t		mtime;
 	/* Time of last modification (nsec) */
@@ -634,24 +628,16 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	/** atime is stored only in 2.0 containers */
-	if (ver <= 2)
-		d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
-
-	if (ver <= 2) {
-		recx.rx_nr = END_L2_IDX;
-	} else {
-		d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
-		d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
-		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
-		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
-		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
-		d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-	}
+	d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
+	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
 	sgl->sg_nr	= i;
 	sgl->sg_nr_out	= 0;
@@ -674,33 +660,19 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 		char		*value;
 		daos_size_t	val_len;
 
-		if (ver > 2) {
-			/** symlink is empty */
-			if (entry->value_len == 0)
-				D_GOTO(out, rc = EIO);
-			val_len = entry->value_len;
-			D_ALLOC(value, val_len + 1);
-		} else {
-			val_len = DFS_MAX_PATH;
-			D_ALLOC(value, DFS_MAX_PATH);
-		}
+		/** symlink is empty */
+		if (entry->value_len == 0)
+			D_GOTO(out, rc = EIO);
+		val_len = entry->value_len;
+		D_ALLOC(value, val_len + 1);
 		if (value == NULL)
 			D_GOTO(out, rc = ENOMEM);
 
-		/*
-		 * If we are reading from a layout ver 2 or older container, symlink value starts at
-		 * the current END_L2_IDX; otherwise symlink is in a separate akey.
-		 */
-		if (ver <= 2) {
-			recx.rx_idx = END_L2_IDX;
-			recx.rx_nr = val_len;
-		} else {
-			d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
-			iod->iod_nr	= 1;
-			iod->iod_recxs	= NULL;
-			iod->iod_type	= DAOS_IOD_SINGLE;
-			iod->iod_size	= DAOS_REC_ANY;
-		}
+		d_iov_set(&iod->iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+		iod->iod_nr	= 1;
+		iod->iod_recxs	= NULL;
+		iod->iod_type	= DAOS_IOD_SINGLE;
+		iod->iod_size	= DAOS_REC_ANY;
 
 		d_iov_set(&sg_iovs[0], value, val_len);
 		sgl->sg_nr	= 1;
@@ -718,20 +690,12 @@ fetch_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const char
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
-		if (ver > 2) {
-			/** make sure that the akey value size matches what is in the inode */
-			if (iod->iod_size != val_len) {
-				D_ERROR("Symlink value length inconsistent with inode data\n");
-				D_GOTO(out, rc = EIO);
-			}
-			value[val_len] = 0;
-		} else {
-			/*
-			 * update the length in the entry struct since it's not known at this point
-			 * in the older layout version.
-			 */
-			entry->value_len = sg_iovs[0].iov_len;
+		/** make sure that the akey value size matches what is in the inode */
+		if (iod->iod_size != val_len) {
+			D_ERROR("Symlink value length inconsistent with inode data\n");
+			D_GOTO(out, rc = EIO);
 		}
+		value[val_len] = 0;
 
 		if (entry->value_len != 0) {
 			entry->value = value;
@@ -819,50 +783,33 @@ insert_entry(dfs_layout_ver_t ver, daos_handle_t oh, daos_handle_t th, const cha
 	i = 0;
 	d_iov_set(&sg_iovs[i++], &entry->mode, sizeof(mode_t));
 	d_iov_set(&sg_iovs[i++], &entry->oid, sizeof(daos_obj_id_t));
-	/** atime is stored only in 2.0 containers */
-	if (ver <= 2)
-		d_iov_set(&sg_iovs[i++], &entry->atime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->mtime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->ctime, sizeof(uint64_t));
 	d_iov_set(&sg_iovs[i++], &entry->chunk_size, sizeof(daos_size_t));
 	d_iov_set(&sg_iovs[i++], &entry->oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
+	d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
+	d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
+	/** Add file size / symlink length. for now, file size cached in the entry is 0. */
+	d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
+	d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
 
-	nr_iods = 1;
-	/*
-	 * if we are writing to a layout ver 2 or older container, don't add the uid, gid, internal
-	 * mtime, nsec granularity for times, and put symlink value in the same akey.
-	 */
-	if (ver <= 2) {
-		recx.rx_nr = END_L2_IDX;
+	/** add the symlink as a separate akey */
+	if (S_ISLNK(entry->mode)) {
+		nr_iods = 2;
+		d_iov_set(&iods[1].iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
+		iods[1].iod_nr		= 1;
+		iods[1].iod_recxs	= NULL;
+		iods[1].iod_type	= DAOS_IOD_SINGLE;
+		iods[1].iod_size	= entry->value_len;
 
-		/** Add symlink value to the array */
-		if (S_ISLNK(entry->mode)) {
-			d_iov_set(&sg_iovs[i++], entry->value, entry->value_len);
-			recx.rx_nr += entry->value_len;
-		}
+		d_iov_set(&sym_iov, entry->value, entry->value_len);
+		sgls[1].sg_nr = 1;
+		sgls[1].sg_nr_out = 0;
+		sgls[1].sg_iovs = &sym_iov;
 	} else {
-		d_iov_set(&sg_iovs[i++], &entry->mtime_nano, sizeof(uint64_t));
-		d_iov_set(&sg_iovs[i++], &entry->ctime_nano, sizeof(uint64_t));
-		d_iov_set(&sg_iovs[i++], &entry->uid, sizeof(uid_t));
-		d_iov_set(&sg_iovs[i++], &entry->gid, sizeof(gid_t));
-		/** Add file size / symlink length. for now, file size cached in the entry is 0. */
-		d_iov_set(&sg_iovs[i++], &entry->value_len, sizeof(daos_size_t));
-		d_iov_set(&sg_iovs[i++], &entry->obj_hlc, sizeof(uint64_t));
-
-		/** add the symlink as a separate akey */
-		if (S_ISLNK(entry->mode)) {
-			nr_iods = 2;
-			d_iov_set(&iods[1].iod_name, SLINK_AKEY_NAME, sizeof(SLINK_AKEY_NAME) - 1);
-			iods[1].iod_nr		= 1;
-			iods[1].iod_recxs	= NULL;
-			iods[1].iod_type	= DAOS_IOD_SINGLE;
-			iods[1].iod_size	= entry->value_len;
-
-			d_iov_set(&sym_iov, entry->value, entry->value_len);
-			sgls[1].sg_nr = 1;
-			sgls[1].sg_nr_out = 0;
-			sgls[1].sg_iovs = &sym_iov;
-		}
+		nr_iods = 1;
 	}
 
 	sgls[0].sg_nr		= i;
@@ -993,17 +940,9 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 	memset(stbuf, 0, sizeof(struct stat));
 
-	/*
-	 * Check if parent has the entry. In older layout version, we need to fetch the symlink to
-	 * determine the size, but in current version, the size is stored in the inode akey, so no
-	 * need to fetch the symlink.
-	 */
-	if (dfs->layout_v > 2)
-		rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0,
-				 NULL, NULL, NULL);
-	else
-		rc = fetch_entry(dfs->layout_v, oh, th, name, len, true, &exists, &entry, 0,
-				 NULL, NULL, NULL);
+	/** Check if parent has the entry. */
+	rc = fetch_entry(dfs->layout_v, oh, th, name, len, false, &exists, &entry, 0,
+			 NULL, NULL, NULL);
 	if (rc)
 		return rc;
 
@@ -1030,7 +969,7 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 
 		rc = daos_obj_query_max_epoch(dir_oh, th, &ep, NULL);
 		if (rc) {
-			daos_obj_close(oh, NULL);
+			daos_obj_close(dir_oh, NULL);
 			return daos_der2errno(rc);
 		}
 
@@ -1114,17 +1053,12 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 	stbuf->st_mode = entry.mode;
 	stbuf->st_uid = entry.uid;
 	stbuf->st_gid = entry.gid;
-	if (dfs->layout_v > 2) {
-		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-			stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
-			stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
-		} else {
-			stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
-			stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
-		}
+	if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+		stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
+		stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
 	} else {
-		stbuf->st_atim.tv_sec = entry.atime;
-		stbuf->st_atim.tv_nsec = 0;
+		stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
+		stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 	}
 	return 0;
 }
@@ -1152,12 +1086,8 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 {
 	mode_t	base_mask;
 
-	/** Root can access everything */
-	if (uid == 0)
-		return 0;
-
 	if (mode == 0)
-		return EPERM;
+		return EACCES;
 
 	/** set base_mask to others at first step */
 	base_mask = S_IRWXO;
@@ -1174,17 +1104,17 @@ check_access(uid_t c_uid, gid_t c_gid, uid_t uid, gid_t gid, mode_t mode, int ma
 	/** Execute check */
 	if (X_OK == (mask & X_OK))
 		if (0 == (mode & (S_IXUSR | S_IXGRP | S_IXOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Write check */
 	if (W_OK == (mask & W_OK))
 		if (0 == (mode & (S_IWUSR | S_IWGRP | S_IWOTH)))
-			return EPERM;
+			return EACCES;
 
 	/** Read check */
 	if (R_OK == (mask & R_OK))
 		if (0 == (mode & (S_IRUSR | S_IRGRP | S_IROTH)))
-			return EPERM;
+			return EACCES;
 
 	/** TODO - check ACL, attributes (immutable, append) etc. */
 	return 0;
@@ -1245,17 +1175,27 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		rc = clock_gettime(CLOCK_REALTIME, &now);
 		if (rc)
 			return errno;
-		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
-		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
+		entry->mtime = entry->ctime = now.tv_sec;
+		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size = chunk_size;
 
 		rc = insert_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, file->name, len,
 				  DAOS_COND_DKEY_INSERT, entry);
 		if (rc == EEXIST && !oexcl) {
+			int rc2;
+
 			/** just try fetching entry to open the file */
-			daos_array_close(file->oh, NULL);
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2) {
+				D_ERROR("daos_array_close() failed "DF_RC"\n", DP_RC(rc2));
+				return daos_der2errno(rc2);
+			}
 		} else if (rc) {
-			daos_array_close(file->oh, NULL);
+			int rc2;
+
+			rc2 = daos_array_close(file->oh, NULL);
+			if (rc2)
+				D_ERROR("daos_array_close() failed "DF_RC"\n", DP_RC(rc2));
 			D_DEBUG(DB_TRACE, "Insert file entry %s failed (%d)\n", file->name, rc);
 			return rc;
 		} else {
@@ -1378,8 +1318,8 @@ open_dir(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 			daos_obj_close(dir->oh, NULL);
 			return rc;
 		}
-		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
-		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
+		entry->mtime = entry->ctime = now.tv_sec;
+		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		entry->chunk_size = parent->d.chunk_size;
 		entry->oclass = parent->d.oclass;
 
@@ -1474,8 +1414,8 @@ open_symlink(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 		rc = clock_gettime(CLOCK_REALTIME, &now);
 		if (rc)
 			return errno;
-		entry->atime = entry->mtime = entry->ctime = now.tv_sec;
-		entry->atime_nano = entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
+		entry->mtime = entry->ctime = now.tv_sec;
+		entry->mtime_nano = entry->ctime_nano = now.tv_nsec;
 		D_STRNDUP(sym->value, value, value_len + 1);
 		if (sym->value == NULL)
 			return ENOMEM;
@@ -1526,8 +1466,8 @@ set_sb_params(bool for_update, daos_iod_t *iods, daos_key_t *dkey)
 }
 
 static int
-open_sb(daos_handle_t coh, bool create, int omode, daos_obj_id_t super_oid, dfs_attr_t *attr,
-	daos_handle_t *oh, dfs_layout_ver_t *ver)
+open_sb(daos_handle_t coh, bool create, bool punch, int omode, daos_obj_id_t super_oid,
+	dfs_attr_t *attr, daos_handle_t *oh, dfs_layout_ver_t *ver)
 {
 	d_sg_list_t		sgls[SB_AKEYS];
 	d_iov_t			sg_iovs[SB_AKEYS];
@@ -1569,6 +1509,14 @@ open_sb(daos_handle_t coh, bool create, int omode, daos_obj_id_t super_oid, dfs_
 	}
 
 	set_sb_params(create, iods, &dkey);
+
+	if (punch) {
+		rc = daos_obj_punch_dkeys(*oh, DAOS_TX_NONE, 0, 1, &dkey, NULL);
+		if (rc) {
+			D_ERROR("SB punch failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+	}
 
 	/** create the SB and exit */
 	if (create) {
@@ -1620,25 +1568,30 @@ open_sb(daos_handle_t coh, bool create, int omode, daos_obj_id_t super_oid, dfs_
 
 	/** check if SB info exists */
 	if (iods[MAGIC_IDX].iod_size == 0) {
-		D_DEBUG(DB_ALL, "SB does not exist.\n");
-		D_GOTO(err, rc = ENOENT);
+		rc = ENOENT;
+		D_ERROR("SB does not exist: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (magic != DFS_SB_MAGIC) {
-		D_ERROR("SB MAGIC verification failed.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("SB MAGIC verification failed: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	/** check version compatibility */
 	if (iods[SB_VER_IDX].iod_size != sizeof(sb_ver) || sb_ver > DFS_SB_VERSION) {
-		D_ERROR("Incompatible SB version.\n");
-		D_GOTO(err, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Incompatible SB version: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	if (iods[LAYOUT_VER_IDX].iod_size != sizeof(layout_ver) ||
-	    layout_ver > DFS_LAYOUT_VERSION) {
-		D_ERROR("Incompatible DFS Layout version: %d\n", layout_ver);
-		D_GOTO(err, rc = EINVAL);
+	    layout_ver != DFS_LAYOUT_VERSION) {
+		rc = EINVAL;
+		D_ERROR("Incompatible DFS Layout version %d: %d (%s)\n", layout_ver, rc,
+			strerror(rc));
+		D_GOTO(err, rc);
 	}
 
 	D_DEBUG(DB_ALL, "DFS Container Layout version: %d\n", layout_ver);
@@ -1859,7 +1812,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	}
 
 	/** Create SB */
-	rc = open_sb(coh, true, DAOS_OO_RW, roots.cr_oids[0], &dattr, &super_oh, NULL);
+	rc = open_sb(coh, true, false, DAOS_OO_RW, roots.cr_oids[0], &dattr, &super_oh, NULL);
 	if (rc)
 		D_GOTO(err_close, rc);
 
@@ -1869,8 +1822,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr,
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		D_GOTO(err_super, rc = errno);
-	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+	entry.mtime = entry.ctime = now.tv_sec;
+	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 	entry.uid = geteuid();
 	entry.gid = getegid();
 
@@ -1962,9 +1915,9 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 		attr = &local;
 
 	if (attr->da_props) {
-		merged_props = daos_prop_merge(attr->da_props, label_prop);
-		if (merged_props == NULL)
-			D_GOTO(out_prop, rc = ENOMEM);
+		rc = daos_prop_merge2(attr->da_props, label_prop, &merged_props);
+		if (rc != 0)
+			D_GOTO(out_prop, rc = daos_der2errno(rc));
 		orig = attr->da_props;
 		attr->da_props = merged_props;
 	} else {
@@ -2064,7 +2017,7 @@ mount:
 					break;
 			}
 			if (rc) {
-				D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+				D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 				D_GOTO(err, rc);
 			}
 		} else {
@@ -2079,7 +2032,7 @@ mount:
 		cont_h_bump = true;
 		rc = dfs_mount(poh, cont_hdl->handle, amode, &dfs);
 		if (rc) {
-			D_ERROR("Failed to mount DFS %d (%s)\n", rc, strerror(rc));
+			D_ERROR("Failed to mount DFS: %d (%s)\n", rc, strerror(rc));
 			D_GOTO(err, rc);
 		}
 	}
@@ -2200,54 +2153,6 @@ err:
 	return rc;
 }
 
-static int
-get_uid_gid_from_ownership(daos_handle_t coh, dfs_t *dfs)
-{
-	daos_prop_t		*owner_props;
-	struct daos_prop_entry	*entry;
-	int			rc = 0;
-
-	owner_props = daos_prop_alloc(2);
-	if (owner_props == NULL)
-		return ENOMEM;
-
-	owner_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	owner_props->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-
-	rc = daos_cont_query(coh, NULL, owner_props, NULL);
-	if (rc) {
-		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
-	}
-
-	/* Convert the owner information to uid/gid */
-	entry = daos_prop_entry_get(owner_props, DAOS_PROP_CO_OWNER);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_uid(entry->dpe_str, &dfs->uid);
-	if (rc == -DER_NONEXIST)
-		/** Set uid to nobody */
-		rc = daos_acl_principal_to_uid("nobody@", &dfs->uid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to uid "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
-	}
-
-	entry = daos_prop_entry_get(owner_props, DAOS_PROP_CO_OWNER_GROUP);
-	D_ASSERT(entry != NULL);
-	rc = daos_acl_principal_to_gid(entry->dpe_str, &dfs->gid);
-	if (rc == -DER_NONEXIST)
-		/** Set gid to nobody */
-		rc = daos_acl_principal_to_gid("nobody@", &dfs->gid);
-	if (rc) {
-		D_ERROR("Unable to convert owner to gid "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out, rc = daos_der2errno(rc));
-	}
-
-out:
-	daos_prop_free(owner_props);
-	return rc;
-}
-
 int
 dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 {
@@ -2317,16 +2222,10 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root.parent_oid = dfs->super_oid;
 
 	/** Verify SB */
-	rc = open_sb(coh, false, omode, dfs->super_oid, &dfs->attr, &dfs->super_oh, &dfs->layout_v);
+	rc = open_sb(coh, false, false, omode, dfs->super_oid, &dfs->attr, &dfs->super_oh,
+		     &dfs->layout_v);
 	if (rc)
 		D_GOTO(err_dfs, rc);
-
-	/** older layout versions don't have uid/gid for each entry, so use the ACL. */
-	if (dfs->layout_v <= 2) {
-		rc = get_uid_gid_from_ownership(coh, dfs);
-		if (rc)
-			D_GOTO(err_dfs, rc);
-	}
 
 	/** set oid hints for files and dirs */
 	if (dfs->attr.da_hints[0] != 0) {
@@ -2376,7 +2275,7 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");
-	rc = open_dir(dfs, NULL, amode | S_IFDIR, flags, &root_dir, 1, &dfs->root);
+	rc = open_dir(dfs, NULL, amode, flags, &root_dir, 1, &dfs->root);
 	if (rc) {
 		D_ERROR("Failed to open root object: %d (%s)\n", rc, strerror(rc));
 		D_GOTO(err_super, rc);
@@ -2391,17 +2290,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	dfs->root_stbuf.st_mtim.tv_nsec = root_dir.mtime_nano;
 	dfs->root_stbuf.st_ctim.tv_sec = root_dir.ctime;
 	dfs->root_stbuf.st_ctim.tv_nsec = root_dir.ctime_nano;
-	if (dfs->layout_v > 2) {
-		if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
-			dfs->root_stbuf.st_atim.tv_sec = root_dir.ctime;
-			dfs->root_stbuf.st_atim.tv_nsec = root_dir.ctime_nano;
-		} else {
-			dfs->root_stbuf.st_atim.tv_sec = root_dir.mtime;
-			dfs->root_stbuf.st_atim.tv_nsec = root_dir.mtime_nano;
-		}
+	if (tspec_gt(dfs->root_stbuf.st_ctim, dfs->root_stbuf.st_mtim)) {
+		dfs->root_stbuf.st_atim.tv_sec = root_dir.ctime;
+		dfs->root_stbuf.st_atim.tv_nsec = root_dir.ctime_nano;
 	} else {
-		dfs->root_stbuf.st_atim.tv_sec = root_dir.atime;
-		dfs->root_stbuf.st_atim.tv_nsec = root_dir.atime_nano;
+		dfs->root_stbuf.st_atim.tv_sec = root_dir.mtime;
+		dfs->root_stbuf.st_atim.tv_nsec = root_dir.mtime_nano;
 	}
 
 	/** if RW, allocate an OID for the namespace */
@@ -3137,7 +3031,7 @@ dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update object class ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update object class: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 
@@ -3151,7 +3045,7 @@ out:
 }
 
 int
-dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
+set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
 {
 	daos_handle_t		oh;
 	d_sg_list_t		sgl;
@@ -3160,13 +3054,6 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 	daos_recx_t		recx;
 	daos_key_t		dkey;
 	int			rc;
-
-	if (obj == NULL)
-		return EINVAL;
-	if (!S_ISDIR(obj->mode))
-		return ENOTSUP;
-	if (csize == 0)
-		csize = dfs->attr.da_chunk_size;
 
 	/** Open parent object and fetch entry of obj from it */
 	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RW, &oh, NULL);
@@ -3194,17 +3081,60 @@ dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1,
 			     &iod, &sgl, NULL);
 	if (rc) {
-		D_ERROR("Failed to update chunk size ("DF_RC")\n", DP_RC(rc));
+		D_ERROR("Failed to update chunk size: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
-
-	/** if this is root object, we need to update the cached handle csize */
-	if (daos_oid_cmp(obj->oid, dfs->root.oid) == 0)
-		dfs->root.d.chunk_size = csize;
 
 out:
 	daos_obj_close(oh, NULL);
 	return rc;
+}
+
+int
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_size_t csize)
+{
+	int	rc;
+
+	if (obj == NULL)
+		return EINVAL;
+	if (!S_ISDIR(obj->mode))
+		return ENOTSUP;
+	if (csize == 0)
+		csize = dfs->attr.da_chunk_size;
+
+	rc = set_chunk_size(dfs, obj, csize);
+	if (rc)
+		return rc;
+
+	/** if this is the root dir, we need to update the cached handle csize */
+	if (daos_oid_cmp(obj->oid, dfs->root.oid) == 0)
+		dfs->root.d.chunk_size = csize;
+
+	return 0;
+}
+
+int
+dfs_file_update_chunk_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t csize)
+{
+	int	rc;
+
+	if (obj == NULL)
+		return EINVAL;
+	if (!S_ISREG(obj->mode))
+		return EINVAL;
+	if (csize == 0)
+		csize = dfs->attr.da_chunk_size;
+
+	rc = set_chunk_size(dfs, obj, csize);
+	if (rc)
+		return daos_der2errno(rc);
+
+	/* need to update the array handle chunk size */
+	rc = daos_array_update_chunk_size(obj->oh, csize);
+	if (rc)
+		return daos_der2errno(rc);
+
+	return 0;
 }
 
 int
@@ -3243,8 +3173,8 @@ dfs_mkdir(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		return errno;
-	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+	entry.mtime = entry.ctime = now.tv_sec;
+	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 	entry.chunk_size = parent->d.chunk_size;
 	entry.oclass = parent->d.oclass;
 	entry.uid = geteuid();
@@ -3708,17 +3638,12 @@ lookup_rel_path_loop:
 			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 			stbuf->st_ctim.tv_sec = entry.ctime;
 			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
-			if (dfs->layout_v > 2) {
-				if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-					stbuf->st_atim.tv_sec = entry.ctime;
-					stbuf->st_atim.tv_nsec = entry.ctime_nano;
-				} else {
-					stbuf->st_atim.tv_sec = entry.mtime;
-					stbuf->st_atim.tv_nsec = entry.mtime_nano;
-				}
+			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+				stbuf->st_atim.tv_sec = entry.ctime;
+				stbuf->st_atim.tv_nsec = entry.ctime_nano;
 			} else {
-				stbuf->st_atim.tv_sec = entry.atime;
-				stbuf->st_atim.tv_nsec = 0;
+				stbuf->st_atim.tv_sec = entry.mtime;
+				stbuf->st_atim.tv_nsec = entry.mtime_nano;
 			}
 		}
 	}
@@ -3820,7 +3745,7 @@ readdir_int(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor, uint32_t *nr,
 						kds[i].kd_key_len, NULL, true, &stbufs[key_nr],
 						NULL);
 				if (rc) {
-					D_ERROR("Failed to stat entry %s: %d (%s)\n",
+					D_ERROR("Failed to stat entry '%s': %d (%s)\n",
 						dirs[key_nr].d_name, rc, strerror(rc));
 					D_GOTO(out, rc);
 				}
@@ -3980,8 +3905,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		memset(stbuf, 0, sizeof(struct stat));
 
 	D_ALLOC_PTR(obj);
-	if (obj == NULL)
+	if (obj == NULL) {
+		D_FREE(entry.value);
 		return ENOMEM;
+	}
 
 	strncpy(obj->name, name, len + 1);
 	oid_cp(&obj->parent_oid, parent->oid);
@@ -4064,7 +3991,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	case S_IFDIR:
 		rc = daos_obj_open(dfs->coh, entry.oid, daos_mode, &obj->oh, NULL);
 		if (rc) {
-			D_ERROR("daos_obj_open() Failed (%d)\n", rc);
+			D_ERROR("daos_obj_open() Failed: " DF_RC "\n", DP_RC(rc));
 			D_GOTO(err_obj, rc = daos_der2errno(rc));
 		}
 
@@ -4089,8 +4016,10 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		}
 		break;
 	default:
-		D_ERROR("Invalid entry type (not a dir, file, symlink).\n");
-		D_GOTO(err_obj, rc = EINVAL);
+		rc = EINVAL;
+		D_ERROR("Invalid entry type (not a dir, file, symlink): %d (%s)\n", rc,
+			strerror(rc));
+		D_GOTO(err_obj, rc);
 	}
 
 	if (mode)
@@ -4101,17 +4030,12 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		stbuf->st_mode = obj->mode;
 		stbuf->st_uid = entry.uid;
 		stbuf->st_gid = entry.gid;
-		if (dfs->layout_v > 2) {
-			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-				stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
-				stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
-			} else {
-				stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
-				stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
-			}
+		if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+			stbuf->st_atim.tv_sec = stbuf->st_ctim.tv_sec;
+			stbuf->st_atim.tv_nsec = stbuf->st_ctim.tv_nsec;
 		} else {
-			stbuf->st_atim.tv_sec = entry.atime;
-			stbuf->st_atim.tv_nsec = 0;
+			stbuf->st_atim.tv_sec = stbuf->st_mtim.tv_sec;
+			stbuf->st_atim.tv_nsec = stbuf->st_mtim.tv_nsec;
 		}
 	}
 
@@ -4243,17 +4167,12 @@ out:
 			stbuf->st_mtim.tv_nsec = entry.mtime_nano;
 			stbuf->st_ctim.tv_sec = entry.ctime;
 			stbuf->st_ctim.tv_nsec = entry.ctime_nano;
-			if (dfs->layout_v > 2) {
-				if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
-					stbuf->st_atim.tv_sec = entry.ctime;
-					stbuf->st_atim.tv_nsec = entry.ctime_nano;
-				} else {
-					stbuf->st_atim.tv_sec = entry.mtime;
-					stbuf->st_atim.tv_nsec = entry.mtime_nano;
-				}
+			if (tspec_gt(stbuf->st_ctim, stbuf->st_mtim)) {
+				stbuf->st_atim.tv_sec = entry.ctime;
+				stbuf->st_atim.tv_nsec = entry.ctime_nano;
 			} else {
-				stbuf->st_atim.tv_sec = entry.atime;
-				stbuf->st_atim.tv_nsec = 0;
+				stbuf->st_atim.tv_sec = entry.mtime;
+				stbuf->st_atim.tv_nsec = entry.mtime_nano;
 			}
 		}
 		*_obj = obj;
@@ -4545,7 +4464,7 @@ read_cb(tse_task_t *task, void *data)
 	D_ASSERT(params != NULL);
 
 	if (rc != 0) {
-		D_ERROR("Failed to read from array object (%d)\n", rc);
+		D_ERROR("Failed to read from array object: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -4596,17 +4515,19 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	args->iod	= &params->arr_iod;
 
 	daos_task_set_priv(task, params);
-	rc = tse_task_register_cbs(task, NULL, 0, 0, read_cb, NULL, 0);
+	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
 		D_GOTO(err_params, rc = daos_der2errno(rc));
 
-	return dc_task_schedule(task, true);
+	rc = dc_task_schedule(task, true);
+	return daos_der2errno(rc);
 
 err_params:
 	D_FREE(params);
 err_task:
 	tse_task_complete(task, rc);
-	return rc;
+	/** the event is completed with the proper rc */
+	return 0;
 }
 
 int
@@ -4879,6 +4800,243 @@ out:
 	return rc;
 }
 
+struct dfs_statx_args {
+	dfs_t			*dfs;
+	dfs_obj_t		*obj;
+	struct stat		*stbuf;
+	daos_handle_t		parent_oh;
+};
+
+struct statx_op_args {
+	daos_key_t		dkey;
+	daos_iod_t		iod;
+	daos_recx_t		recx;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iovs[INODE_AKEYS];
+	struct dfs_entry	entry;
+	daos_array_stbuf_t	array_stbuf;
+};
+
+int
+ostatx_cb(tse_task_t *task, void *data)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args = *((struct statx_op_args **)data);
+	int			rc2, rc = task->dt_result;
+
+	if (rc != 0) {
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
+			 "Failed to stat file: " DF_RC "\n", DP_RC(rc));
+		/** convert the task result to errno since it takes prescedence over the cb error */
+		task->dt_result = daos_der2errno(rc);
+		D_GOTO(out, rc = task->dt_result);
+	}
+
+	if (args->obj->oid.hi != op_args->entry.oid.hi ||
+	    args->obj->oid.lo != op_args->entry.oid.lo)
+		D_GOTO(out, rc = ENOENT);
+
+	rc = update_stbuf_times(op_args->entry, op_args->array_stbuf.st_max_epoch, args->stbuf, NULL);
+	if (rc)
+		D_GOTO(out, rc);
+
+	if (S_ISREG(args->obj->mode)) {
+		args->stbuf->st_size = op_args->array_stbuf.st_size;
+		args->stbuf->st_blocks = (args->stbuf->st_size + (1 << 9) - 1) >> 9;
+	} else if (S_ISDIR(args->obj->mode)) {
+		args->stbuf->st_size = sizeof(op_args->entry);
+	} else if (S_ISLNK(args->obj->mode)) {
+		args->stbuf->st_size = op_args->entry.value_len;
+	}
+
+	args->stbuf->st_nlink = 1;
+	args->stbuf->st_mode = op_args->entry.mode;
+	args->stbuf->st_uid = op_args->entry.uid;
+	args->stbuf->st_gid = op_args->entry.gid;
+	if (tspec_gt(args->stbuf->st_ctim, args->stbuf->st_mtim)) {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_ctim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_ctim.tv_nsec;
+	} else {
+		args->stbuf->st_atim.tv_sec = args->stbuf->st_mtim.tv_sec;
+		args->stbuf->st_atim.tv_nsec = args->stbuf->st_mtim.tv_nsec;
+	}
+
+out:
+	D_FREE(op_args);
+	rc2 = daos_obj_close(args->parent_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
+}
+
+int
+statx_task(tse_task_t *task)
+{
+	struct dfs_statx_args	*args = daos_task_get_args(task);
+	struct statx_op_args	*op_args;
+	tse_task_t		*fetch_task;
+	daos_obj_fetch_t	*fetch_arg;
+	tse_task_t		*stat_task;
+	tse_sched_t		*sched = tse_task2sched(task);
+	bool			need_stat = false;
+	int			i;
+	int			rc;
+
+	D_ALLOC_PTR(op_args);
+	if (op_args == NULL) {
+		daos_obj_close(args->parent_oh, NULL);
+		return ENOMEM;
+	}
+
+	/** Create task to fetch entry. */
+	rc = daos_task_create(DAOS_OPC_OBJ_FETCH, sched, 0, NULL, &fetch_task);
+	if (rc != 0) {
+		D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	/** set obj_fetch parameters */
+	d_iov_set(&op_args->dkey, (void *)args->obj->name, strlen(args->obj->name));
+	d_iov_set(&op_args->iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	op_args->iod.iod_nr    = 1;
+	op_args->recx.rx_idx   = 0;
+	op_args->recx.rx_nr    = END_IDX;
+	op_args->iod.iod_recxs = &op_args->recx;
+	op_args->iod.iod_type  = DAOS_IOD_ARRAY;
+	op_args->iod.iod_size  = 1;
+	i = 0;
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mode, sizeof(mode_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oid, sizeof(daos_obj_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.chunk_size, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.oclass, sizeof(daos_oclass_id_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.mtime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.ctime_nano, sizeof(uint64_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.uid, sizeof(uid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.gid, sizeof(gid_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.value_len, sizeof(daos_size_t));
+	d_iov_set(&op_args->sg_iovs[i++], &op_args->entry.obj_hlc, sizeof(uint64_t));
+	op_args->sgl.sg_nr		= i;
+	op_args->sgl.sg_nr_out	= 0;
+	op_args->sgl.sg_iovs	= op_args->sg_iovs;
+
+	fetch_arg = daos_task_get_args(fetch_task);
+	fetch_arg->oh		= args->parent_oh;
+	fetch_arg->th		= DAOS_TX_NONE;
+	fetch_arg->flags	= DAOS_COND_DKEY_FETCH;
+	fetch_arg->dkey		= &op_args->dkey;
+	fetch_arg->nr		= 1;
+	fetch_arg->iods		= &op_args->iod;
+	fetch_arg->sgls		= &op_args->sgl;
+
+	if (S_ISREG(args->obj->mode)) {
+		daos_array_stat_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_ARRAY_STAT, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set array_stat parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh	= args->obj->oh;
+		stat_arg->th	= DAOS_TX_NONE;
+		stat_arg->stbuf	= &op_args->array_stbuf;
+		need_stat = true;
+	} else if (S_ISDIR(args->obj->mode)) {
+		daos_obj_query_key_t *stat_arg;
+
+		rc = daos_task_create(DAOS_OPC_OBJ_QUERY_KEY, sched, 0, NULL, &stat_task);
+		if (rc != 0) {
+			D_ERROR("daos_task_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err2_out, rc);
+		}
+
+		/** set obj_query parameters */
+		stat_arg = daos_task_get_args(stat_task);
+		stat_arg->oh		= args->obj->oh;
+		stat_arg->th		= DAOS_TX_NONE;
+		stat_arg->max_epoch	= &op_args->array_stbuf.st_max_epoch;
+		stat_arg->flags		= 0;
+		stat_arg->dkey		= NULL;
+		stat_arg->akey		= NULL;
+		stat_arg->recx		= NULL;
+		need_stat = true;
+	}
+
+	rc = tse_task_register_deps(task, 1, &fetch_task);
+	if (rc) {
+		D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err3_out, rc);
+	}
+	if (need_stat) {
+		rc = tse_task_register_deps(task, 1, &stat_task);
+		if (rc) {
+			D_ERROR("tse_task_register_deps() failed: "DF_RC"\n", DP_RC(rc));
+			tse_task_complete(stat_task, rc);
+			D_GOTO(err1_out, rc);
+		}
+	}
+	rc = tse_task_register_comp_cb(task, ostatx_cb, &op_args, sizeof(op_args));
+	if (rc != 0) {
+		D_ERROR("tse_task_register_comp_cb() failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err1_out, rc);
+	}
+
+	tse_task_schedule(fetch_task, true);
+	if (need_stat)
+		tse_task_schedule(stat_task, true);
+	return daos_der2errno(rc);
+err3_out:
+	if (need_stat)
+		tse_task_complete(stat_task, rc);
+err2_out:
+	tse_task_complete(fetch_task, rc);
+err1_out:
+	D_FREE(op_args);
+	daos_obj_close(args->parent_oh, NULL);
+	return daos_der2errno(rc);
+}
+
+int
+dfs_ostatx(dfs_t *dfs, dfs_obj_t *obj, struct stat *stbuf, daos_event_t *ev)
+{
+	daos_handle_t		oh;
+	tse_task_t		*task;
+	struct dfs_statx_args	*args;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (obj == NULL)
+		return EINVAL;
+
+	rc = daos_obj_open(dfs->coh, obj->parent_oid, DAOS_OO_RO, &oh, NULL);
+	if (rc)
+		return daos_der2errno(rc);
+
+	rc = dc_task_create(statx_task, NULL, ev, &task);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+
+	args = dc_task_get_args(task);
+	args->dfs	= dfs;
+	args->obj	= obj;
+	args->parent_oh	= oh;
+	args->stbuf	= stbuf;
+
+	rc = dc_task_schedule(task, true);
+	if (rc) {
+		daos_obj_close(oh, NULL);
+		return rc;
+	}
+	return 0;
+}
+
 int
 dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 {
@@ -4927,12 +5085,7 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 			return 0;
 
 		/** Use real uid and gid for access() */
-		if (dfs->layout_v <= 2)
-			return check_access(dfs->uid, dfs->gid, getuid(), getgid(), entry.mode,
-					    mask);
-		else
-			return check_access(entry.uid, entry.gid, getuid(), getgid(), entry.mode,
-					    mask);
+		return check_access(entry.uid, entry.gid, getuid(), getgid(), entry.mode, mask);
 	}
 
 	D_ASSERT(entry.value);
@@ -4943,15 +5096,9 @@ dfs_access(dfs_t *dfs, dfs_obj_t *parent, const char *name, int mask)
 		D_GOTO(out, rc);
 	}
 
-	if (mask != F_OK) {
-		if (dfs->layout_v <= 2)
-			rc = check_access(dfs->uid, dfs->gid, getuid(), getgid(), sym->mode, mask);
-		else
-			rc = check_access(entry.uid, entry.gid, getuid(), getgid(), sym->mode,
-					  mask);
-	}
+	if (mask != F_OK)
+		rc = check_access(entry.uid, entry.gid, getuid(), getgid(), sym->mode, mask);
 	dfs_release(sym);
-
 out:
 	D_FREE(entry.value);
 	return rc;
@@ -5110,10 +5257,6 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
-	if (dfs->layout_v <= 2) {
-		D_ERROR("DFS Container has a layout version that does not support dfs_chown()\n");
-		return ENOTSUP;
-	}
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if (parent == NULL)
@@ -5122,8 +5265,7 @@ dfs_chown(dfs_t *dfs, dfs_obj_t *parent, const char *name, uid_t uid, gid_t gid,
 		return ENOTDIR;
 	if (name == NULL) {
 		if (strcmp(parent->name, "/") != 0) {
-			D_ERROR("Invalid path %s and entry name is NULL)\n",
-				parent->name);
+			D_ERROR("Invalid path %s and entry name is NULL)\n", parent->name);
 			return EINVAL;
 		}
 		name = parent->name;
@@ -5798,8 +5940,8 @@ restart:
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		D_GOTO(out, rc = errno);
-	entry.atime = entry.mtime = entry.ctime = now.tv_sec;
-	entry.atime_nano = entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+	entry.mtime = entry.ctime = now.tv_sec;
+	entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
 
 	/** insert old entry in new parent object */
 	rc = insert_entry(dfs->layout_v, new_parent->oh, th, new_name, new_len,
@@ -5941,8 +6083,8 @@ restart:
 	rc = clock_gettime(CLOCK_REALTIME, &now);
 	if (rc)
 		D_GOTO(out, rc = errno);
-	entry1.atime = entry1.mtime = entry1.ctime = now.tv_sec;
-	entry1.atime_nano = entry1.mtime_nano = entry1.ctime_nano = now.tv_nsec;
+	entry1.mtime = entry1.ctime = now.tv_sec;
+	entry1.mtime_nano = entry1.ctime_nano = now.tv_nsec;
 
 	/** insert entry1 in parent2 object */
 	rc = insert_entry(dfs->layout_v, parent2->oh, th, name1, len1,
@@ -5952,8 +6094,8 @@ restart:
 		D_GOTO(out, rc);
 	}
 
-	entry2.atime = entry2.mtime = entry2.ctime = now.tv_sec;
-	entry2.atime_nano = entry2.mtime_nano = entry2.ctime_nano = now.tv_nsec;
+	entry2.mtime = entry2.ctime = now.tv_sec;
+	entry2.mtime_nano = entry2.ctime_nano = now.tv_nsec;
 
 	/** insert entry2 in parent1 object */
 	rc = insert_entry(dfs->layout_v, parent1->oh, th, name2, len2,
@@ -6229,7 +6371,7 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name)
 	cond = DAOS_COND_DKEY_UPDATE | DAOS_COND_PUNCH;
 	rc = daos_obj_punch_akeys(oh, th, cond, &dkey, 1, &akey, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
 			 "Failed to punch extended attribute '%s'\n", name);
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
@@ -6395,4 +6537,912 @@ dfs_dir_anchor_set(dfs_obj_t *obj, const char name[], daos_anchor_t *anchor)
 	d_iov_set(&dkey, (void *)name, len);
 	rc = daos_obj_key2anchor(obj->oh, DAOS_TX_NONE, &dkey, NULL, anchor, NULL);
 	return daos_der2errno(rc);
+}
+
+#define DFS_ITER_NR		128
+#define DFS_ITER_DKEY_BUF	(DFS_ITER_NR * sizeof(uint64_t))
+#define DFS_ITER_ENTRY_BUF	(DFS_ITER_NR * DFS_MAX_NAME)
+#define DFS_ELAPSED_TIME	30
+
+struct dfs_oit_args {
+	daos_handle_t	oit;
+	uint64_t	flags;
+	uint64_t	snap_epoch;
+	uint64_t	skipped;
+	uint64_t	failed;
+	time_t		start_time;
+	time_t		print_time;
+	uint64_t	num_scanned;
+};
+
+static int
+fetch_mark_oids(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char *enum_buf,
+		struct dfs_oit_args *args)
+{
+	daos_handle_t	oh;
+	d_sg_list_t	sgl, entry_sgl;
+	d_iov_t		iov, sg_iov;
+	daos_recx_t	recx;
+	uint32_t	nr;
+	daos_iod_t	iod;
+	d_iov_t		marker;
+	bool		mark_data = true;
+	daos_anchor_t	anchor = {0};
+	int		rc, rc2;
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	/** set sgl for enumeration */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, DFS_ITER_ENTRY_BUF);
+	sgl.sg_iovs = &iov;
+
+	/** set sgl for fetch */
+	entry_sgl.sg_nr = 1;
+	entry_sgl.sg_nr_out = 0;
+	entry_sgl.sg_iovs = &sg_iov;
+
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	recx.rx_idx	= OID_IDX;
+	recx.rx_nr	= sizeof(daos_obj_id_t);
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	i;
+		char		*ptr;
+
+		nr = DFS_ITER_NR;
+		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_dkey() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+
+		/** for every entry, fetch its oid and mark it in the oit table */
+		for (ptr = enum_buf, i = 0; i < nr; i++) {
+			daos_obj_id_t	entry_oid;
+			daos_key_t	dkey;
+
+			d_iov_set(&dkey, ptr, kds[i].kd_key_len);
+			d_iov_set(&sg_iov, &entry_oid, sizeof(daos_obj_id_t));
+
+			rc = daos_obj_fetch(oh, DAOS_TX_NONE, DAOS_COND_DKEY_FETCH, &dkey, 1, &iod,
+					    &entry_sgl, NULL, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_fetch() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+
+			/** mark oid in the oit table */
+			rc = daos_oit_mark(args->oit, entry_oid, &marker, NULL);
+			if (rc && rc != -DER_NONEXIST) {
+				D_ERROR("daos_oit_mark() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+			rc = 0;
+			ptr += kds[i].kd_key_len;
+		}
+	}
+
+out_obj:
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
+}
+
+static int
+oit_mark_cb(dfs_t *dfs, dfs_obj_t *parent, const char name[], void *args)
+{
+	struct dfs_oit_args	*oit_args = (struct dfs_oit_args *)args;
+	dfs_obj_t		*obj;
+	daos_obj_id_t		oid;
+	d_iov_t			marker;
+	bool			mark_data = true;
+	struct timespec		current_time;
+	int			rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		return errno;
+	oit_args->num_scanned ++;
+	if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+		D_PRINT("DFS checker: Scanned "DF_U64" files/directories (runtime: "DF_U64" sec)\n",
+			oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+		oit_args->print_time = current_time.tv_sec;
+	}
+
+	/** open the entry name and get the oid */
+	rc = dfs_lookup_rel(dfs, parent, name, O_RDONLY, &obj, NULL, NULL);
+	if (rc) {
+		D_ERROR("dfs_lookup_rel() of %s failed: %d\n", name, rc);
+		return rc;
+	}
+
+	rc = dfs_obj2id(obj, &oid);
+	if (rc)
+		D_GOTO(out_obj, rc);
+
+	if (oit_args->flags & DFS_CHECK_VERIFY) {
+		rc = daos_obj_verify(dfs->coh, oid, oit_args->snap_epoch);
+		if (rc == -DER_NOSYS) {
+			oit_args->skipped++;
+		} else if (rc == -DER_MISMATCH) {
+			oit_args->failed++;
+			if (oit_args->flags & DFS_CHECK_PRINT)
+				D_PRINT(""DF_OID" failed data consistency check!\n", DP_OID(oid));
+		} else if (rc) {
+			D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+	}
+
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	rc = daos_oit_mark(oit_args->oit, oid, &marker, NULL);
+	/*
+	 * If the entry exists but the file or directory are empty, the corresponding oid itself has
+	 * not been written to, so it doesn't exist in the OIT. The mark operation would return
+	 * NONEXIST in this case, so check and avoid returning an error in this case.
+	 */
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR("Failed to mark OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_obj, rc = daos_der2errno(rc));
+	}
+
+	/** descend into directories */
+	if (S_ISDIR(obj->mode))	{
+		daos_anchor_t		anchor = {0};
+		uint32_t		nr_entries = DFS_ITER_NR;
+
+		while (!daos_anchor_is_eof(&anchor)) {
+			rc = dfs_iterate(dfs, obj, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+					 oit_mark_cb, args);
+			if (rc) {
+				D_ERROR("dfs_iterate() failed: %d\n", rc);
+				D_GOTO(out_obj, rc);
+			}
+			nr_entries = DFS_ITER_NR;
+		}
+	}
+
+out_obj:
+	rc = dfs_release(obj);
+	return rc;
+}
+
+static int
+adjust_chunk_size(daos_handle_t coh, daos_obj_id_t oid, daos_key_desc_t *kds, char *enum_buf,
+		  uint64_t *_max_offset)
+{
+	daos_handle_t	oh;
+	daos_anchor_t	anchor = {0};
+	d_sg_list_t	sgl;
+	d_iov_t		iov;
+	uint64_t	max_offset = *_max_offset;
+	int		rc, rc2;
+
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	/** iterate over all (integer) dkeys and then query the max record / offset */
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, enum_buf, DFS_ITER_DKEY_BUF);
+	sgl.sg_iovs = &iov;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		uint32_t	nr = DFS_ITER_NR;
+		char		*ptr = &enum_buf[0];
+		uint32_t	i;
+
+		rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr, kds, &sgl, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_obj_list_dkey() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_obj, rc = daos_der2errno(rc));
+		}
+
+		if (nr == 0)
+			continue;
+
+		for (i = 0; i < nr; i++) {
+			daos_key_t	dkey, akey;
+			uint64_t	dkey_val, offset;
+			char		akey_val = '0';
+			daos_recx_t	recx;
+
+			memcpy(&dkey_val, ptr, kds[i].kd_key_len);
+			ptr += kds[i].kd_key_len;
+			d_iov_set(&dkey, &dkey_val, sizeof(uint64_t));
+			d_iov_set(&akey, &akey_val, 1);
+			rc = daos_obj_query_key(oh, DAOS_TX_NONE, DAOS_GET_RECX | DAOS_GET_MAX,
+						&dkey, &akey, &recx, NULL);
+			if (rc) {
+				D_ERROR("daos_obj_query_key() failed "DF_RC"\n", DP_RC(rc));
+				D_GOTO(out_obj, rc = daos_der2errno(rc));
+			}
+
+			/** maintain the highest offset seen in each dkey */
+			offset = recx.rx_idx + recx.rx_nr;
+			if (max_offset < offset)
+				max_offset = offset;
+		}
+	}
+
+	*_max_offset = max_offset;
+out_obj:
+	rc2 = daos_obj_close(oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	return rc;
+}
+
+int
+dfs_cont_check(daos_handle_t poh, const char *cont, uint64_t flags, const char *name)
+{
+	dfs_t			*dfs;
+	daos_handle_t		coh;
+	struct dfs_oit_args	*oit_args = NULL;
+	daos_epoch_t		snap_epoch;
+	dfs_obj_t		*lf, *now_dir;
+	daos_anchor_t		anchor = {0};
+	uint32_t		nr_entries = DFS_ITER_NR, i;
+	daos_obj_id_t		oids[DFS_ITER_NR] = {0};
+	daos_key_desc_t		*kds = NULL;
+	char			*dkey_enum_buf = NULL;
+	char			*entry_enum_buf = NULL;
+	uint64_t		unmarked_entries = 0;
+	d_iov_t			marker;
+	bool			mark_data = true;
+	daos_epoch_range_t	epr;
+	struct timespec		now, current_time;
+	uid_t			uid = geteuid();
+	gid_t			gid = getegid();
+	unsigned int		co_flags = DAOS_COO_EX;
+	char			now_name[24];
+	struct tm		*now_tm;
+	daos_size_t		len;
+	int			rc, rc2;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		return errno;
+	now_tm = localtime(&now.tv_sec);
+	len = strftime(now_name, sizeof(now_name), "%Y-%m-%d-%H:%M:%S", now_tm);
+	if (len == 0)
+		return EINVAL;
+	D_PRINT("DFS checker: Start (%s)\n", now_name);
+
+	if (flags & DFS_CHECK_RELINK && flags & DFS_CHECK_REMOVE) {
+		D_ERROR("can't request remove and link to l+f at the same time\n");
+		return EINVAL;
+	}
+
+	if (flags & DFS_CHECK_EVICT_ALL)
+		co_flags |= DAOS_COO_EVICT_ALL;
+
+	rc = daos_cont_open(poh, cont, co_flags, &coh, NULL, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_open() failed: " DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+	if (rc) {
+		D_ERROR("dfs_mount() failed (%d)\n", rc);
+		D_GOTO(out_cont, rc);
+	}
+
+	D_PRINT("DFS checker: Create OIT table\n");
+	/** create snapshot for OIT */
+	rc = daos_cont_create_snap_opt(coh, &snap_epoch, NULL, DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT,
+				       NULL);
+	if (rc) {
+		D_ERROR("daos_cont_create_snap_opt failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_dfs, rc = daos_der2errno(rc));
+	}
+
+	D_ALLOC_PTR(oit_args);
+	if (oit_args == NULL)
+		D_GOTO(out_dfs, rc = ENOMEM);
+	oit_args->flags = flags;
+	oit_args->snap_epoch = snap_epoch;
+	oit_args->start_time = now.tv_sec;
+	oit_args->print_time = now.tv_sec;
+
+	/** Open OIT table */
+	rc = daos_oit_open(coh, snap_epoch, &oit_args->oit, NULL);
+	if (rc) {
+		D_ERROR("daos_oit_open failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_snap, rc = daos_der2errno(rc));
+	}
+
+	/** get and mark the SB and root OIDs */
+	d_iov_set(&marker, &mark_data, sizeof(mark_data));
+	rc = daos_oit_mark(oit_args->oit, dfs->super_oid, &marker, NULL);
+	if (rc) {
+		D_ERROR("Failed to mark SB OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
+	rc = daos_oit_mark(oit_args->oit, dfs->root.oid, &marker, NULL);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR("Failed to mark ROOT OID in OIT: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_oit, rc = daos_der2errno(rc));
+	}
+	rc = 0;
+
+	if (flags & DFS_CHECK_VERIFY) {
+		rc = daos_obj_verify(coh, dfs->super_oid, snap_epoch);
+		if (rc == -DER_NOSYS) {
+			oit_args->skipped++;
+		} else if (rc == -DER_MISMATCH) {
+			oit_args->failed++;
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("SB Object "DF_OID" failed data consistency check!\n",
+					DP_OID(dfs->super_oid));
+		} else if (rc) {
+			D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_oit, rc = daos_der2errno(rc));
+		}
+
+		rc = daos_obj_verify(coh, dfs->root.oid, snap_epoch);
+		if (rc == -DER_NOSYS) {
+			oit_args->skipped++;
+		} else if (rc == -DER_MISMATCH) {
+			oit_args->failed++;
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("ROOT Object "DF_OID" failed data consistency check!\n",
+					DP_OID(dfs->root.oid));
+		} else if (rc) {
+			D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_oit, rc = daos_der2errno(rc));
+		}
+	}
+
+	D_PRINT("DFS checker: Iterating namespace and marking objects\n");
+	oit_args->num_scanned = 2;
+	/** iterate through the namespace and mark OITs starting from the root object */
+	while (!daos_anchor_is_eof(&anchor)) {
+		rc = dfs_iterate(dfs, &dfs->root, &anchor, &nr_entries, DFS_MAX_NAME * nr_entries,
+				 oit_mark_cb, oit_args);
+		if (rc) {
+			D_ERROR("dfs_iterate() failed: %d\n", rc);
+			D_GOTO(out_oit, rc);
+		}
+
+		nr_entries = DFS_ITER_NR;
+	}
+
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		D_GOTO(out_oit, rc = errno);
+	D_PRINT("DFS checker: marked "DF_U64" files/directories (runtime: "DF_U64" sec))\n",
+		oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+
+	/** Create lost+found directory to link unmarked oids there. */
+	if (flags & DFS_CHECK_RELINK) {
+		rc = dfs_open(dfs, NULL, "lost+found", S_IFDIR | 0755, O_CREAT | O_RDWR, 0, 0, NULL,
+			      &lf);
+		if (rc) {
+			D_ERROR("Failed to create/open lost+found directory: %d\n", rc);
+			D_GOTO(out_oit, rc);
+		}
+
+		if (name == NULL) {
+			/*
+			 * Create a directory with current timestamp in l+f where leaked oids will
+			 * be linked in this run.
+			 */
+			D_PRINT("DFS checker: Leaked OIDs will be inserted in /lost+found/%s\n",
+				now_name);
+		} else {
+			D_PRINT("DFS checker: Leaked OIDs will be inserted in /lost+found/%s\n",
+				name);
+		}
+
+		rc = dfs_open(dfs, lf, name ? name : now_name, S_IFDIR | 0755,
+			      O_CREAT | O_RDWR | O_EXCL, 0, 0, NULL, &now_dir);
+		if (rc) {
+			D_ERROR("Failed to create dir in lost+found: %d\n", rc);
+			D_GOTO(out_lf1, rc);
+		}
+
+		/** allocate kds and enumeration buffers */
+		D_ALLOC_ARRAY(kds, DFS_ITER_NR);
+		if (kds == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
+
+		/** Allocate a buffer to store the array int dkeys */
+		D_ALLOC_ARRAY(dkey_enum_buf, DFS_ITER_DKEY_BUF);
+		if (dkey_enum_buf == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
+
+		/** Allocate a buffer to store the entries */
+		D_ALLOC_ARRAY(entry_enum_buf, DFS_ITER_ENTRY_BUF);
+		if (entry_enum_buf == NULL)
+			D_GOTO(out_lf2, rc = ENOMEM);
+	}
+
+	/*
+	 * list all unmarked oids and print / remove / punch. In the case of the L+F relink flag, we
+	 * need 2 passes instead of 1:
+	 * Pass 1: check directories only and descend to mark all oids in the namespace of each dir.
+	 * Pass 2: relink remaining oids in the L+F root that are unmarked still after first pass.
+	 */
+	D_PRINT("DFS checker: Checking unmarked OIDs (Pass 1)\n");
+	oit_args->num_scanned = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	/** Start Pass 1 */
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = DFS_ITER_NR;
+		rc = daos_oit_list_unmarked(oit_args->oit, oids, &nr_entries, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_lf2, rc = daos_der2errno(rc));
+		}
+
+		clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc)
+			D_GOTO(out_lf2, rc = errno);
+		oit_args->num_scanned += nr_entries;
+		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+			D_PRINT("DFS checker: Checked "DF_U64" objects (runtime: "DF_U64" sec)\n",
+				oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+			oit_args->print_time = current_time.tv_sec;
+		}
+
+		for (i = 0; i < nr_entries; i++) {
+			if (flags & DFS_CHECK_RELINK) {
+				enum daos_otype_t otype = daos_obj_id2type(oids[i]);
+
+				/** Pass 1 - if a file is seen, skip in this pass */
+				if (daos_is_array_type(otype))
+					continue;
+
+				/** for a directory, mark the oids reachable from it */
+				rc = fetch_mark_oids(coh, oids[i], kds, entry_enum_buf, oit_args);
+				if (rc)
+					D_GOTO(out_lf2, rc);
+				continue;
+			}
+
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
+					DP_OID(oids[i]));
+
+			if (flags & DFS_CHECK_VERIFY) {
+				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
+				if (rc == -DER_NOSYS) {
+					oit_args->skipped++;
+				} else if (rc == -DER_MISMATCH) {
+					oit_args->failed++;
+					if (flags & DFS_CHECK_PRINT)
+						D_PRINT(""DF_OID" failed data consistency check!\n",
+							DP_OID(oids[i]));
+				} else if (rc) {
+					D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+				}
+			}
+
+			if (flags & DFS_CHECK_REMOVE) {
+				daos_handle_t oh;
+
+				rc = daos_obj_open(dfs->coh, oids[i], DAOS_OO_RW, &oh, NULL);
+				if (rc)
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+
+				rc = daos_obj_punch(oh, DAOS_TX_NONE, 0, NULL);
+				if (rc) {
+					daos_obj_close(oh, NULL);
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+				}
+
+				rc = daos_obj_close(oh, NULL);
+				if (rc)
+					D_GOTO(out_oit, rc = daos_der2errno(rc));
+			}
+
+			unmarked_entries++;
+		}
+	}
+
+	/** Start Pass 2 only if L+F flag is used */
+	if (!(flags & DFS_CHECK_RELINK))
+		goto done;
+
+	D_PRINT("DFS checker: Checking unmarked OIDs (Pass 2)\n");
+	oit_args->num_scanned = 0;
+	memset(&anchor, 0, sizeof(anchor));
+	while (!daos_anchor_is_eof(&anchor)) {
+		nr_entries = DFS_ITER_NR;
+		rc = daos_oit_list_unmarked(oit_args->oit, oids, &nr_entries, &anchor, NULL);
+		if (rc) {
+			D_ERROR("daos_oit_list_unmarked() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out_lf2, rc = daos_der2errno(rc));
+		}
+
+		clock_gettime(CLOCK_REALTIME, &current_time);
+		if (rc)
+			D_GOTO(out_lf2, rc = errno);
+		oit_args->num_scanned += nr_entries;
+		if (current_time.tv_sec - oit_args->print_time >= DFS_ELAPSED_TIME) {
+			D_PRINT("DFS checker: Checked "DF_U64" objects (runtime: "DF_U64" sec)\n",
+				oit_args->num_scanned, current_time.tv_sec - oit_args->start_time);
+			oit_args->print_time = current_time.tv_sec;
+		}
+
+		for (i = 0; i < nr_entries; i++) {
+			struct dfs_entry	entry = {0};
+			enum daos_otype_t	otype = daos_obj_id2type(oids[i]);
+			char			oid_name[DFS_MAX_NAME + 1];
+
+			if (flags & DFS_CHECK_PRINT)
+				D_PRINT("oid["DF_U64"]: "DF_OID"\n", unmarked_entries,
+					DP_OID(oids[i]));
+
+			if (flags & DFS_CHECK_VERIFY) {
+				rc = daos_obj_verify(dfs->coh, oids[i], snap_epoch);
+				if (rc == -DER_NOSYS) {
+					oit_args->skipped++;
+				} else if (rc == -DER_MISMATCH) {
+					oit_args->failed++;
+					if (flags & DFS_CHECK_PRINT)
+						D_PRINT(""DF_OID" failed data consistency check!\n",
+							DP_OID(oids[i]));
+				} else if (rc) {
+					D_ERROR("daos_obj_verify() failed "DF_RC"\n", DP_RC(rc));
+					D_GOTO(out_lf2, rc = daos_der2errno(rc));
+				}
+			}
+
+			if (daos_is_array_type(otype))
+				entry.mode = S_IFREG | 0600;
+			else
+				entry.mode = S_IFDIR | 0700;
+			entry.uid = uid;
+			entry.gid = gid;
+			oid_cp(&entry.oid, oids[i]);
+			entry.mtime = entry.ctime = now.tv_sec;
+			entry.mtime_nano = entry.ctime_nano = now.tv_nsec;
+			entry.chunk_size = dfs->attr.da_chunk_size;
+
+			/*
+			 * If this is a regular file / array object, the user might have used a
+			 * different chunk size than the default one. Since we lost the directory
+			 * entry where the chunks size for that file would have been stored, we can
+			 * make a best attempt to set the chunk size. To do that, we get the largest
+			 * offset of every dkey in the array to see if it's larger than the default
+			 * chunk size. If it is, adjust the chunk size to that, otherwise leave the
+			 * chunk size as default. This of course does not account for the fact that
+			 * if the chunk size is smaller than the default or is larger than the
+			 * largest offset seen then we have added or removed existing holes from the
+			 * file respectively. This can be fixed later by the user by adjusting the
+			 * chunk size to the correct one they know using the daos tool.
+			 */
+			if (daos_is_array_type(otype)) {
+				rc = adjust_chunk_size(dfs->coh, oids[i], kds, dkey_enum_buf,
+						       &entry.chunk_size);
+				if (rc)
+					D_GOTO(out_lf2, rc);
+				if (flags & DFS_CHECK_PRINT &&
+				    entry.chunk_size != dfs->attr.da_chunk_size)
+					D_PRINT("Adjusting File ("DF_OID") chunk size to %zu\n",
+						DP_OID(oids[i]),  entry.chunk_size);
+			}
+
+			len = sprintf(oid_name, "%"PRIu64".%"PRIu64"", oids[i].hi, oids[i].lo);
+			D_ASSERT(len <= DFS_MAX_NAME);
+			rc = insert_entry(dfs->layout_v, now_dir->oh, DAOS_TX_NONE,
+					  oid_name, len, DAOS_COND_DKEY_INSERT, &entry);
+			if (rc) {
+				D_ERROR("Failed to insert leaked entry in l+f (%d)\n", rc);
+				D_GOTO(out_lf2, rc);
+			}
+			unmarked_entries++;
+		}
+	}
+
+done:
+	rc = clock_gettime(CLOCK_REALTIME, &current_time);
+	if (rc)
+		D_GOTO(out_lf2, rc = errno);
+	D_PRINT("DFS checker: Done! (runtime: "DF_U64" sec)\n",
+		current_time.tv_sec - oit_args->start_time);
+	D_PRINT("DFS checker: Number of leaked OIDs in namespace = "DF_U64"\n", unmarked_entries);
+	if (flags & DFS_CHECK_VERIFY) {
+		if (oit_args->failed) {
+			D_ERROR(""DF_U64" OIDs failed data consistency check!\n", oit_args->failed);
+			D_GOTO(out_lf2, rc = EIO);
+		}
+	}
+out_lf2:
+	D_FREE(kds);
+	D_FREE(dkey_enum_buf);
+	D_FREE(entry_enum_buf);
+	if (flags & DFS_CHECK_RELINK) {
+		rc2 = dfs_release(now_dir);
+		if (rc == 0)
+			rc = rc2;
+	}
+out_lf1:
+	if (flags & DFS_CHECK_RELINK) {
+		rc2 = dfs_release(lf);
+		if (rc == 0)
+			rc = rc2;
+	}
+out_oit:
+	rc2 = daos_oit_close(oit_args->oit, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+	D_FREE(oit_args);
+out_snap:
+	epr.epr_hi = epr.epr_lo = snap_epoch;
+	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+out_dfs:
+	rc2 = dfs_umount(dfs);
+	if (rc == 0)
+		rc = rc2;
+out_cont:
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+
+	return rc;
+}
+
+int
+dfs_recreate_sb(daos_handle_t coh, dfs_attr_t *attr)
+{
+	uint32_t			props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
+	const int			num_props = ARRAY_SIZE(props);
+	daos_prop_t			*prop;
+	struct daos_prop_entry		*entry;
+	struct daos_prop_co_roots	*roots;
+	daos_handle_t			super_oh;
+	struct dfs_entry		rentry = {0};
+	struct timespec			now;
+	int				i;
+	int				rc, rc2;
+
+	if (attr == NULL)
+		return EINVAL;
+
+	prop = daos_prop_alloc(num_props);
+	if (prop == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < num_props; i++)
+		prop->dpp_entries[i].dpe_type = props[i];
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		D_ERROR("container is not of type POSIX\n");
+		D_GOTO(out_prop, rc = EINVAL);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	D_ASSERT(entry != NULL);
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) ||
+	    daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID\n");
+		D_GOTO(out_prop, rc = EIO);
+	}
+
+	/** Recreate SB */
+	rc = open_sb(coh, true, true, DAOS_OO_RW, roots->cr_oids[0], attr, &super_oh, NULL);
+	if (rc)
+		D_GOTO(out_prop, rc);
+
+	/** relink the root object */
+	rentry.oid = roots->cr_oids[1];
+	rentry.mode = S_IFDIR | 0755;
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_super, rc = errno);
+	rentry.mtime = rentry.ctime = now.tv_sec;
+	rentry.mtime_nano = rentry.ctime_nano = now.tv_nsec;
+	rentry.uid = geteuid();
+	rentry.gid = getegid();
+
+	rc = insert_entry(DFS_LAYOUT_VERSION, super_oh, DAOS_TX_NONE, "/", 1, DAOS_COND_DKEY_INSERT,
+			  &rentry);
+	if (rc) {
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_super, rc);
+	}
+
+out_super:
+	rc2 = daos_obj_close(super_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+out_prop:
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
+dfs_relink_root(daos_handle_t coh)
+{
+	uint32_t			props[] = {DAOS_PROP_CO_LAYOUT_TYPE, DAOS_PROP_CO_ROOTS};
+	const int			num_props = ARRAY_SIZE(props);
+	daos_prop_t			*prop;
+	struct daos_prop_entry		*entry;
+	struct daos_prop_co_roots	*roots;
+	daos_handle_t			super_oh;
+	dfs_layout_ver_t		layout_v;
+	dfs_attr_t			attr;
+	bool				exists;
+	struct dfs_entry		rentry = {0};
+	struct timespec			now;
+	int				i;
+	int				rc, rc2;
+
+	prop = daos_prop_alloc(num_props);
+	if (prop == NULL)
+		return ENOMEM;
+
+	for (i = 0; i < num_props; i++)
+		prop->dpp_entries[i].dpe_type = props[i];
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_POSIX) {
+		D_ERROR("container is not of type POSIX\n");
+		D_GOTO(out_prop, rc = EINVAL);
+	}
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	D_ASSERT(entry != NULL);
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (daos_obj_id_is_nil(roots->cr_oids[0]) ||
+	    daos_obj_id_is_nil(roots->cr_oids[1])) {
+		D_ERROR("Invalid superblock or root object ID\n");
+		D_GOTO(out_prop, rc = EIO);
+	}
+
+	/** Verify SB */
+	rc = open_sb(coh, false, false, DAOS_OO_RW, roots->cr_oids[0], &attr, &super_oh, &layout_v);
+	if (rc)
+		D_GOTO(out_prop, rc);
+
+	/** Check if super object has the root entry */
+	rc = fetch_entry(layout_v, super_oh, DAOS_TX_NONE, "/", 1, false, &exists, &rentry,
+			 0, NULL, NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to fetch object: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_super, rc);
+	}
+	if (exists) {
+		D_PRINT("Root object already linked in SB\n");
+		D_GOTO(out_super, rc = 0);
+	}
+
+	/** relink the root object */
+	rentry.oid = roots->cr_oids[1];
+	rentry.mode = S_IFDIR | 0755;
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc)
+		D_GOTO(out_super, rc = errno);
+	rentry.mtime = rentry.ctime = now.tv_sec;
+	rentry.mtime_nano = rentry.ctime_nano = now.tv_nsec;
+	rentry.uid = geteuid();
+	rentry.gid = getegid();
+
+	rc = insert_entry(layout_v, super_oh, DAOS_TX_NONE, "/", 1, DAOS_COND_DKEY_INSERT, &rentry);
+	if (rc) {
+		D_ERROR("Failed to insert root entry: %d (%s)\n", rc, strerror(rc));
+		D_GOTO(out_super, rc);
+	}
+
+out_super:
+	rc2 = daos_obj_close(super_oh, NULL);
+	if (rc == 0)
+		rc = daos_der2errno(rc2);
+out_prop:
+	daos_prop_free(prop);
+	return rc;
+}
+
+int
+dfs_obj_fix_type(dfs_t *dfs, dfs_obj_t *parent, const char *name)
+{
+	struct dfs_entry	entry = {0};
+	bool			exists;
+	daos_key_t		dkey;
+	size_t			len;
+	enum daos_otype_t	otype;
+	mode_t			mode;
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iov;
+	daos_recx_t		recx;
+	daos_iod_t		iod;
+	int			rc;
+
+	if (dfs == NULL || !dfs->mounted)
+		return EINVAL;
+	if (parent == NULL)
+		parent = &dfs->root;
+	else if (!S_ISDIR(parent->mode))
+		return ENOTDIR;
+
+	rc = check_name(name, &len);
+	if (rc)
+		return rc;
+
+	rc = fetch_entry(dfs->layout_v, parent->oh, DAOS_TX_NONE, name, len, true, &exists, &entry,
+			 0, NULL, NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to fetch entry %s (%d)\n", name, rc);
+		D_GOTO(out, rc);
+	}
+	if (exists == false)
+		D_GOTO(out, rc = ENOENT);
+
+	/** get the object type from the oid */
+	otype = daos_obj_id2type(entry.oid);
+
+	/** reset the type bits to 0 and set 700 permission bits */
+	mode = S_IWUSR | S_IRUSR | S_IXUSR;
+	/** set the type bits according to oid type and entry value */
+	if (daos_is_array_type(otype)) {
+		mode |= S_IFREG;
+		D_PRINT("Setting entry type to S_IFREG\n");
+	} else if (entry.value_len) {
+		mode |= S_IFLNK;
+		D_PRINT("Setting entry type to S_IFLNK\n");
+	} else {
+		mode |= S_IFDIR;
+		D_PRINT("Setting entry type to S_IFDIR\n");
+	}
+
+	/** Update mode bits on storage */
+	d_iov_set(&dkey, (void *)name, len);
+	d_iov_set(&iod.iod_name, INODE_AKEY_NAME, sizeof(INODE_AKEY_NAME) - 1);
+	recx.rx_idx	= MODE_IDX;
+	recx.rx_nr	= sizeof(mode_t);
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	iod.iod_size	= 1;
+	d_iov_set(&sg_iov, &mode, sizeof(mode_t));
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	rc = daos_obj_update(parent->oh, DAOS_TX_NONE, DAOS_COND_DKEY_UPDATE, &dkey, 1, &iod, &sgl,
+			     NULL);
+	if (rc) {
+		D_ERROR("Failed to update object type "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+
+out:
+	if (entry.value)
+		D_FREE(entry.value);
+	return rc;
 }

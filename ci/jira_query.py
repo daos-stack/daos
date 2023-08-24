@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import time
 import urllib
 import random
 import string
@@ -26,8 +27,8 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury', 'swim',
-                    'test', 'tools')
+VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury',
+                    'packaging', 'pil4dfs', 'swim', 'test', 'tools')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -73,8 +74,18 @@ def fetch_pr_data():
         github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
         gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
 
-        with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
-            pr_data = json.loads(raw_pr_data.read())
+        # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
+        # while and re-try once.
+        try:
+            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                pr_data = json.loads(raw_pr_data.read())
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                time.sleep(60 * 10)
+                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                    pr_data = json.loads(raw_pr_data.read())
+            else:
+                raise
     else:
         print('Pass PR number on command line')
         sys.exit(1)
@@ -85,7 +96,6 @@ def fetch_pr_data():
 
 def main():
     """Run the script"""
-
     # pylint: disable=too-many-branches
     pr_data = fetch_pr_data()
 

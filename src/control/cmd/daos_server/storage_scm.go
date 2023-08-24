@@ -66,6 +66,9 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	if resp == nil {
 		return errors.New("scm prepare returned nil response")
 	}
+	if resp.Socket == nil {
+		return errors.New("scm prepare returned nil socket state")
+	}
 	state := resp.Socket.State
 
 	if resp.RebootRequired {
@@ -87,7 +90,7 @@ func (cmd *prepareSCMCmd) preparePMem(prepareBackend scmPrepareResetFn) error {
 	case storage.ScmStateUnknown:
 		return errors.New("failed to report state")
 	case storage.ScmNoModules:
-		return storage.FaultScmNoModules
+		return storage.FaultScmNoPMem
 	case storage.ScmNoRegions:
 		return errors.New("failed to create regions")
 	case storage.ScmFreeCap:
@@ -171,7 +174,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	case storage.ScmNoRegions:
 		cmd.Info("PMem has been reset successfully!")
 	case storage.ScmNoModules:
-		return storage.FaultScmNoModules
+		return storage.FaultScmNoPMem
 	default:
 		return errors.Errorf("unexpected state %q after scm reset", state)
 	}

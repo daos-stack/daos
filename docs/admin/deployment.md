@@ -1050,6 +1050,9 @@ the list defining an individual storage tier.
 Each tier has a `class` parameter which defines the storage type.
 Typical class values are "dcpm" for PMem (Intel(R) Optane(TM) persistent
 memory) and "nvme" for NVMe SSDs.
+When persistent memory is unavailable, class may be set to "ram", which
+emulates SCM using a ramfs device, and metadata and small objects are
+saved to NVMe SSDs using logging and checkpointing.
 
 For class == "dcpm", the following parameters should be populated:
 
@@ -1060,9 +1063,41 @@ For class == "dcpm", the following parameters should be populated:
   for DAOS persistent storage mounted on the specified PMem device specified in
   `scm_list`.
 
+For class == "ram", `scm_list` is omitted and `scm_size` is specified instead.
+In this case, the subsequent bdev tiers describe the persistent storage used
+for both data and metadata.
+
+- `scm_size` specifies the amount of RAM dedicated to emulate SCM for holding
+  DAOS metadata.  As with SCM, the RAM size must be sufficient to hold metadata
+  to accommodate the size of data tiers.  Required metadata to data ratios vary
+  by usage, but typically metadata size will only be a few percent of data.
+  The [storage requirements](hardware.md#storage-requirements) discussion of
+  the ratio between SCM size and the size of NVMe data tiers is relevant, as
+  the required RAM / NVMe ratio will be similar.
+
 For class == "nvme", the following parameters should be populated:
 
 - `bdev_list` should be populated with NVMe PCI addresses.
+- `bdev_roles` optionally specifies a list of roles for this tier.
+  By default, the DAOS server will assign roles to bdev tiers
+  automatically, so the bdev_roles directive is only needed when that
+  assignment doesn't match your use case.
+
+  When "dcpm" is used for the first tier, this list should be omitted or
+  specify only "data".  Only a single NVMe tier is supported.
+
+  When class == "ram" is used, the NVMe tier roles can be one or more of
+  "wal" (write-ahead-log for tracking the changes made by local
+  transactions), "meta" (for persistent metadata and small object storage),
+  or "data" (contents of larger objects).  Only the "data" role may be
+  assigned to multiple tiers.  If no roles are specified, then the server
+  will assign them.  Otherwise all roles must be assigned to a tier.
+
+See the sample configuration file
+[`daos_server.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml)
+and example configuration files in the
+[examples](https://github.com/daos-stack/daos/tree/master/utils/config/examples)
+directory for more details.
 
 The default way for DAOS to access NVMe storage is through SPDK via the VFIO user-space driver.
 To use an alternative driver with SPDK, set `disable_vfio: true` in the global section of the
@@ -1195,7 +1230,7 @@ this goal:
 
 ```bash
 $ dmg network scan
-$ dgm network scan -p all
+$ dmg network scan -p all
 ```
 
 Typical network scan results look as follows:
@@ -1320,6 +1355,12 @@ per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
+
+The 'targets:' and 'nr_xs_helpers:' requirement are mandatory, if the number
+of physical cores are not enough it will fail the starting of the daos engine
+(notes that 2 cores reserved for system service), or configures with ENV
+"DAOS_TARGET_OVERSUBSCRIBE=1" to force starting daos engine (possibly hurts
+performance as multiple XS compete on same core).
 
 
 ## Storage Formatting
@@ -1552,3 +1593,17 @@ the `[Service]` section before reloading systemd and restarting the
 [^5]: https://github.com/pmem/ndctl/issues/130
 
 [6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+
+## Multi-user DFuse setup
+
+Running a single-user dfuse instance, for example on a compute node, requires no special setup.
+However configuration is required for allowing multi-user dfuse on a node.
+
+### Updating fuse config
+
+Multi-user dfuse makes use of the `allow_other` fuse mount option which allows requests from users
+other than the user running dfuse.  For reasons of safety this option is disabled by default for
+fuse and must be enabled by root before any user can use it.  To allow this then root must add or
+uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
+does not do this automatically. An administrator must set this option on all nodes on which they
+want to provide a persistent multi-user dfuse service.

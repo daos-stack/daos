@@ -23,16 +23,32 @@ import (
 )
 
 // ShouldDebug returns true if the protobuf message should be logged.
-func ShouldDebug(msg proto.Message) bool {
+func ShouldDebug(msg proto.Message, ldrChk func() bool) bool {
 	switch msg.(type) {
 	case *grpcpb.AppendEntriesRequest, *grpcpb.AppendEntriesResponse,
 		*grpcpb.RequestVoteRequest, *grpcpb.RequestVoteResponse,
 		*grpcpb.TimeoutNowRequest, *grpcpb.TimeoutNowResponse,
 		*grpcpb.InstallSnapshotRequest, *grpcpb.InstallSnapshotResponse,
+		*mgmtpb.LeaderQueryReq, *mgmtpb.SystemQueryReq,
 		*ctlpb.StorageScanResp, *ctlpb.NetworkScanResp,
-		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp:
+		*ctlpb.StorageFormatResp, *ctlpb.PrepareScmResp,
+		*mgmtpb.GetAttachInfoReq:
 		return false
 	default:
+		// Most mgmt messages must be processed by the leader, so if this node
+		// is not the leader, don't log them.
+		if !ldrChk() && strings.HasPrefix(string(proto.MessageName(msg)), "mgmt.") {
+			switch msg.(type) {
+			case *mgmtpb.PoolQueryReq, *mgmtpb.PoolGetPropReq,
+				*mgmtpb.ListPoolsReq, *mgmtpb.GetACLReq,
+				*mgmtpb.PoolQueryTargetReq, *mgmtpb.ListContReq,
+				*mgmtpb.SystemEraseReq, *mgmtpb.SystemGetPropReq,
+				*mgmtpb.SystemGetAttrReq:
+				return true
+			default:
+				return false
+			}
+		}
 		return true
 	}
 }
@@ -96,13 +112,31 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+	case *mgmtpb.PoolEvictReq:
+		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
+		if len(m.Handles) > 0 {
+			shortHdls := make([]string, 0, len(m.Handles))
+			for _, h := range m.Handles {
+				shortHdls = append(shortHdls, h[:8])
+			}
+			fmt.Fprintf(&bld, " handles:%s", strings.Join(shortHdls, ","))
+		}
+		if m.Destroy {
+			fmt.Fprint(&bld, " destroy:true")
+		}
+		if m.ForceDestroy {
+			fmt.Fprint(&bld, " force_destroy:true")
+		}
+		if m.Machine != "" {
+			fmt.Fprintf(&bld, " machine:%s", m.Machine)
+		}
 	case *mgmtpb.ListPoolsResp:
 		fmt.Fprintf(&bld, "%T%d %d pools:", m, m.DataVersion, len(m.Pools))
 		for _, p := range m.Pools {
 			fmt.Fprintf(&bld, " %s:%s", p.Label, p.State)
 		}
 	case *mgmtpb.JoinResp:
-		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t)", m, m.Rank, m.State, m.LocalJoin)
+		fmt.Fprintf(&bld, "%T rank:%d (state:%s, local:%t) map:%d", m, m.Rank, m.State, m.LocalJoin, m.MapVersion)
 	case *mgmtpb.GetAttachInfoResp:
 		msRanks := ranklist.RankSetFromRanks(ranklist.RanksFromUint32(m.MsRanks))
 		uriRanks := ranklist.NewRankSet()
@@ -111,7 +145,7 @@ func Debug(msg proto.Message) string {
 		}
 		fmt.Fprintf(&bld, "%T@%d ms:%s ranks:%s client:%+v", m, m.DataVersion, msRanks.String(), uriRanks.String(), m.ClientNetHint)
 	case *mgmtpb.LeaderQueryResp:
-		fmt.Fprintf(&bld, "%T leader:%s reps:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","))
+		fmt.Fprintf(&bld, "%T leader:%s Replica Set:%s Down Replicas:%s", m, m.CurrentLeader, strings.Join(m.Replicas, ","), strings.Join(m.DownReplicas, ","))
 	case *sharedpb.ClusterEventReq:
 		fmt.Fprintf(&bld, "%T seq:%d", m, m.Sequence)
 		if m.Event == nil {

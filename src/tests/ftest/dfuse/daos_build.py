@@ -130,27 +130,27 @@ class DaosBuild(DfuseTestBase):
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
         if cache_mode == 'writeback':
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
         elif cache_mode == 'writethrough':
             if intercept:
                 build_time *= 6
-            cont_attrs['dfuse-data-cache'] = 'on'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'metadata':
-            cont_attrs['dfuse-data-cache'] = 'off'
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = cache_time
             cont_attrs['dfuse-dentry-time'] = cache_time
             cont_attrs['dfuse-ndentry-time'] = cache_time
             self.dfuse.disable_wb_cache.value = True
         elif cache_mode == 'data':
             build_time *= 2
-            cont_attrs['dfuse-data-cache'] = True
+            cont_attrs['dfuse-data-cache'] = '1d'
             cont_attrs['dfuse-attr-time'] = '0'
             cont_attrs['dfuse-dentry-time'] = '0'
             cont_attrs['dfuse-ndentry-time'] = '0'
@@ -203,6 +203,9 @@ class DaosBuild(DfuseTestBase):
                 'python3 -m pip install pip --upgrade',
                 'python3 -m pip install -r {}/requirements.txt'.format(build_dir),
                 'scons -C {} --jobs {} --build-deps=only'.format(build_dir, build_jobs),
+                'daos filesystem query {}'.format(mount_dir),
+                'daos filesystem evict {}'.format(build_dir),
+                'daos filesystem query {}'.format(mount_dir),
                 'scons -C {} --jobs {}'.format(build_dir, intercept_jobs)]
         for cmd in cmds:
             command = '{};{}'.format(preload_cmd, cmd)

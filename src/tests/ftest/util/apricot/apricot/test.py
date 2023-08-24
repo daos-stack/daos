@@ -11,6 +11,7 @@ import json
 import re
 import sys
 from time import time
+import random
 
 from avocado import fail_on, skip, TestFail
 from avocado import Test as avocadoTest
@@ -33,7 +34,7 @@ from general_utils import \
 from host_utils import get_local_host, get_host_parameters, HostRole, HostInfo, HostException
 from logger_utils import TestLogger
 from server_utils import DaosServerManager
-from run_utils import stop_processes
+from run_utils import stop_processes, run_remote, command_as_user
 from slurm_utils import get_partition_hosts, get_reservation_hosts, SlurmFailed
 from test_utils_container import TestContainer
 from test_utils_pool import LabelGenerator, add_pool, POOL_NAMESPACE
@@ -75,29 +76,6 @@ class Test(avocadoTest):
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
 
-        # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
-        # Any unit combination may be used, but they must be specified in
-        # descending order. Spaces can optionally be used between units and
-        # values. The first unit character is required; other unit characters
-        # are optional. The units are case-insensitive.
-        # The following units are supported:
-        #   - days      e.g. 1d, 1 day
-        #   - hours     e.g. 2h, 2 hrs, 2 hours
-        #   - minutes   e.g. 3m, 3 mins, 3 minutes
-        #   - seconds   e.g. 4s, 4 secs, 4 seconds
-        if isinstance(self.timeout, str):
-            pattern = r""
-            for interval in ("days", "hours", "minutes", "seconds"):
-                pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
-                    interval[0], interval[1:])
-            # pylint: disable=no-member
-            dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
-            # pylint: enable=no-member
-            self.timeout = 0
-            for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
-                if dhms[index] is not None:
-                    self.timeout += multiplier * int(dhms[index])
-
         # Support unique test case timeout values.  These test case specific
         # timeouts are read from the test yaml using the test case method name
         # as the key, e.g.:
@@ -113,6 +91,29 @@ class Test(avocadoTest):
             self.timeout = 60
         elif self.timeouts:
             self.timeout = self.timeouts
+
+        # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
+        # Any unit combination may be used, but they must be specified in
+        # descending order. Spaces can optionally be used between units and
+        # values. The first unit character is required; other unit characters
+        # are optional. The units are case-insensitive.
+        # The following units are supported:
+        #   - days      e.g. 1d, 1 day
+        #   - hours     e.g. 2h, 2 hrs, 2 hours
+        #   - minutes   e.g. 3m, 3 mins, 3 minutes
+        #   - seconds   e.g. 4s, 4 secs, 4 seconds
+        if isinstance(self.timeout, str):
+            pattern = r""
+            for interval in ("days", "hours", "minutes", "seconds"):
+                pattern += r"(?:(\d+)(?:\s*{0}[{1}]*\s*)){{0,1}}".format(
+                    interval[0], interval[1:])
+            # pylint: disable-next=no-member
+            dhms = re.search(pattern, self.timeout, re.IGNORECASE).groups()
+            self.timeout = 0
+            for index, multiplier in enumerate([24 * 60 * 60, 60 * 60, 60, 1]):
+                if dhms[index] is not None:
+                    self.timeout += multiplier * int(dhms[index])
+
         self.log.info("self.timeout: %s", self.timeout)
 
         # Set the job_id to the unique sub directory name of the test-results sub directory
@@ -140,6 +141,14 @@ class Test(avocadoTest):
         if self._stage_name is None:
             self.log.info("Unable to get CI stage name: 'STAGE_NAME' not set")
         self._test_step = 1
+
+        # Random generator that could be seeded for reproducibility
+        seed = random.randrange(sys.maxsize)  # nosec
+        self.log.info("Test.random seed = %s", seed)
+        self.random = random.Random(seed)
+
+        # Avoid concatenating diff output.
+        self.maxDiff = None  # pylint: disable=invalid-name
 
     def setUp(self):
         """Set up each test case."""
@@ -198,9 +207,8 @@ class Test(avocadoTest):
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
-                                           'commit_title')) as commit_handle:
-                        if commit_handle.read().strip().startswith(
-                                ticket + " "):
+                                           'commit_fixes')) as commit_handle:
+                        if ticket in commit_handle.read().splitlines():
                             # fix is in this PR
                             self.log.info("This test variant is included "
                                           "in the skip list for ticket %s, "
@@ -286,8 +294,7 @@ class Test(avocadoTest):
         if skip_variant:
             self.cancelForTicket(ticket)
 
-    # pylint: disable=invalid-name
-    def cancelForTicket(self, ticket):
+    def cancelForTicket(self, ticket):  # pylint: disable=invalid-name
         """Skip a test due to a ticket needing to be completed.
 
         Args:
@@ -302,7 +309,6 @@ class Test(avocadoTest):
                 verb = "are"
             ticket = ", ".join(ticket)
         return self.cancel("Skipping until {} {} fixed.".format(ticket, verb))
-    # pylint: enable=invalid-name
 
     def add_cancel_ticket(self, ticket, reason=None):
         """Skip a test due to a ticket needing to be completed.
@@ -415,7 +421,8 @@ class Test(avocadoTest):
         """
         self._cleanup_methods.append({"method": method, "kwargs": kwargs})
         self.log.debug(
-            "Register: Adding calling %s(%s) during tearDown()", method, dict_to_str(kwargs))
+            "Register: Adding calling %s(%s) during tearDown()",
+            method.__name__, dict_to_str(kwargs))
 
     def increment_timeout(self, increment):
         """Increase the avocado runner timeout configuration settings by the provided value.
@@ -706,7 +713,11 @@ class TestWithServers(TestWithoutServers):
         # Access points to use by default when starting servers and agents
         #  - for 1 or 2 servers use 1 access point
         #  - for 3 or more servers use 3 access points
-        access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        default_access_points_qty = 1 if len(self.hostlist_servers) < 3 else 3
+        access_points_qty = self.params.get(
+            "access_points_qty", "/run/setup/*", default_access_points_qty)
+        if access_points_qty < 1 or access_points_qty > len(self.hostlist_servers):
+            self.fail("Invalid access points node quantity")
         default_access_points = self.hostlist_servers[:access_points_qty]
         self.access_points = NodeSet(
             self.params.get("access_points", "/run/setup/*", default_access_points))
@@ -818,8 +829,8 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.m.value = message
-            cart_ctl.n.value = None
+            cart_ctl.log_message.value = message
+            cart_ctl.no_sync.value = None
             cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
@@ -914,6 +925,8 @@ class TestWithServers(TestWithoutServers):
             errors.append(
                 "ERROR: At least one multi-variant server was not found in its expected state "
                 "after restarting all servers")
+        else:
+            self._list_server_manager_info()
         self.log.info("-" * 100)
         return errors
 
@@ -1224,6 +1237,9 @@ class TestWithServers(TestWithoutServers):
                 "All %s groups(s) of servers currently running",
                 len(self.server_managers))
 
+        # List active server log files and storage devices
+        self._list_server_manager_info()
+
         return force_agent_start
 
     def check_running(self, name, manager_list, prepare_dmg=False,
@@ -1285,6 +1301,17 @@ class TestWithServers(TestWithoutServers):
                 manager.get_config_value("filename"))
             manager.start()
 
+    def _list_server_manager_info(self):
+        """Display information about the running servers."""
+        self.log.info("-" * 100)
+        self.log.info("--- SERVER INFORMATION ---")
+        for manager in self.server_managers:
+            manager.get_host_log_files()
+            try:
+                manager.dmg.storage_query_list_devices()
+            except CommandFailure:
+                pass
+
     def remove_temp_test_dir(self):
         """Remove the test-specific temporary directory and its contents on all hosts.
 
@@ -1300,9 +1327,10 @@ class TestWithServers(TestWithoutServers):
         self.log.info(
             "Removing temporary test files in %s from %s",
             self.test_dir, str(NodeSet.fromlist(all_hosts)))
-        results = pcmd(all_hosts, "rm -fr {}".format(self.test_dir))
-        if 0 not in results or len(results) > 1:
-            errors.append("Error removing temporary test files")
+        result = run_remote(
+            self.log, all_hosts, command_as_user("rm -fr {}".format(self.test_dir), "root"))
+        if not result.passed:
+            errors.append("Error removing temporary test files on {}".format(result.failed_hosts))
         return errors
 
     def dump_engines_stacks(self, message):
@@ -1323,15 +1351,16 @@ class TestWithServers(TestWithoutServers):
             # dump engines ULT stacks upon test timeout
             self.dump_engines_stacks("Test has timed-out")
 
-    def fail(self, msg=None):
+    def fail(self, message=None):
         """Dump engines ULT stacks upon test failure."""
         self.dump_engines_stacks("Test has failed")
-        super().fail(msg)
+        super().fail(message)
 
-    def error(self, msg=None):
+    def error(self, message=None):
+        # pylint: disable=arguments-renamed
         """Dump engines ULT stacks upon test error."""
         self.dump_engines_stacks("Test has errored")
-        super().error(msg)
+        super().error(message)
 
     def tearDown(self):
         """Tear down after each test case."""
@@ -1674,7 +1703,9 @@ class TestWithServers(TestWithoutServers):
             DaosCommand: a new DaosCommand object
 
         """
-        return DaosCommand(self.bin)
+        daos_command = DaosCommand(self.bin)
+        daos_command.get_params(self)
+        return daos_command
 
     def prepare_pool(self):
         """Prepare the self.pool TestPool object.

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -330,22 +330,37 @@ func (m *Membership) HostList(rankSet *RankSet) []string {
 // Members returns slice of references to all system members ordered by rank.
 //
 // Empty rank list implies no filtering/include all and ignore ranks that are
-// not in the membership.
-func (m *Membership) Members(rankSet *RankSet) (members Members) {
+// not in the membership. Optionally filter on desired states.
+func (m *Membership) Members(rankSet *RankSet, desiredStates ...MemberState) (members Members, err error) {
 	m.RLock()
 	defer m.RUnlock()
 
+	mask, _ := MemberStates2Mask(desiredStates...)
+
 	if rankSet == nil || rankSet.Count() == 0 {
-		var err error
-		members, err = m.db.AllMembers()
-		if err != nil {
-			m.log.Errorf("failed to get all members: %s", err)
-			return nil
+		if mask == AllMemberFilter {
+			// No rank or member filtering required so copy database.
+			members, err = m.db.AllMembers()
+			if err != nil {
+				return
+			}
+		} else {
+			// No rank filtering so use full rank-set.
+			var rl []Rank
+			rl, err = m.db.MemberRanks()
+			if err != nil {
+				return
+			}
+			rankSet = RankSetFromRanks(rl)
 		}
-	} else {
+	}
+
+	if members == nil {
 		for _, rank := range rankSet.Ranks() {
 			if member, err := m.db.FindMemberByRank(rank); err == nil {
-				members = append(members, member)
+				if member.State&mask != 0 {
+					members = append(members, member)
+				}
 			}
 		}
 	}
@@ -547,18 +562,25 @@ func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
 	//
 	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
 
-	ns := MemberStateErrored
-	if member.State.isTransitionIllegal(ns) {
-		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
+	newState := MemberStateErrored
+	if member.State.isTransitionIllegal(newState) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, newState))
 		return
 	}
 
-	member.State = ns
+	oldState := member.State
+	member.State = newState
 	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
 	}
+
+	var msg string
+	if evt.Msg != "" {
+		msg = fmt.Sprintf(" (%s)", evt.Msg)
+	}
+	m.log.Errorf("rank %d: %s->%s%s", member.Rank, oldState, newState, msg)
 }
 
 // OnEvent handles events on channel and updates member states accordingly.

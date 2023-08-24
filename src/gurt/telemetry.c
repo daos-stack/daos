@@ -2322,8 +2322,7 @@ parse_path_fmt(char *path, size_t path_size, const char *fmt, va_list args)
 	rc = vsnprintf(path, path_size, fmt, args);
 
 	if (rc < 0) {
-		D_ERROR("error parsing arguments (errno=%d, %s)", errno,
-			strerror(errno));
+		D_ERROR("error parsing arguments (errno=%d, %s)\n", errno, strerror(errno));
 		return -DER_INVAL;
 	}
 

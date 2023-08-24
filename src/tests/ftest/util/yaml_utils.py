@@ -49,7 +49,7 @@ def get_yaml_data(yaml_file):
     if not os.path.isfile(yaml_file):
         raise YamlException(f"File not found: {yaml_file}")
 
-    class DaosLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
+    class DaosLoader(yaml.SafeLoader):
         """Helper class for parsing avocado yaml files."""
 
         def forward_mux(self, node):
@@ -85,6 +85,7 @@ class YamlUpdater():
         ("job_manager_timeout", "_timeout", int),
         ("pattern_timeout", "_timeout", int),
         ("pool_query_timeout", "_timeout", int),
+        ("pool_query_delay", "_timeout", int),
         ("rebuild_timeout", "_timeout", int),
         ("srv_timeout", "_timeout", int),
         ("storage_prepare_timeout", "_timeout", int),

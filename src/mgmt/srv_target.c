@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,6 +27,9 @@
 static char *newborns_path;
 /** directory for destroyed pool */
 static char *zombies_path;
+
+static int
+tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending);
 
 /* ds_pooltgts*
  * dpt_creates_ht tracks in-flight pool tgt creates
@@ -173,7 +176,7 @@ tgt_kill_pool(void *args)
 {
 	struct d_uuid	*id = args;
 
-	return vos_pool_kill(id->uuid);
+	return vos_pool_kill(id->uuid, 0);
 }
 
 /**
@@ -336,6 +339,160 @@ cleanup_leftover_pools(bool zombie_only)
 	cleanup_dead_list(&dead_list, newborns_path);
 }
 
+static int
+tgt_recreate(uuid_t pool_uuid, daos_size_t scm_size, int tgt_nr, daos_size_t rdb_blob_sz)
+{
+	char			*pool_newborn_path = NULL;
+	char			*pool_path = NULL;
+	char			*rdb_path = NULL;
+	bool			 dummy_cancel_state = false;
+	int			 rc;
+	int			 fd;
+	struct stat		 statbuf;
+
+	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
+
+	/** generate path to the target directory */
+	rc = ds_mgmt_tgt_file(pool_uuid, NULL, NULL, &pool_path);
+	if (rc) {
+		D_ERROR("newborn path_gen failed for "DF_UUID": "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	/** Skip recreation if directory already exists */
+	rc = stat(pool_path, &statbuf);
+	if ((rc == 0) && (statbuf.st_mode & S_IFDIR))
+		goto out;
+
+	/** create the pool directory under NEWBORNS */
+	rc = path_gen(pool_uuid, newborns_path, NULL,
+		      NULL, &pool_newborn_path);
+	if (rc) {
+		D_ERROR(DF_UUID": path_gen failed for: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+	rc = mkdir(pool_newborn_path, 0700);
+	if (rc < 0 && errno != EEXIST) {
+		rc = daos_errno2der(errno);
+		D_ERROR("failed to created pool directory: "DF_RC"\n",
+			DP_RC(rc));
+		/* avoid tgt_destroy(), nothing to do */
+		D_FREE(pool_newborn_path);
+		goto out;
+	}
+
+	/** create VOS files */
+	rc = tgt_vos_preallocate_parallel(pool_uuid, scm_size, tgt_nr,
+					  &dummy_cancel_state);
+	if (rc) {
+		D_ERROR(DF_UUID": failed to create tgt vos files: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	if (rdb_blob_sz) {
+		rc = path_gen(pool_uuid, newborns_path, RDB_FILE"pool",
+			      NULL, &rdb_path);
+		if (rdb_path == NULL) {
+			D_ERROR(DF_UUID": cannot retrieve rdb file info: "DF_RC"\n",
+				DP_UUID(pool_uuid), DP_RC(rc));
+			rc = -DER_NONEXIST;
+			goto out;
+		}
+		fd = open(rdb_path, O_RDWR|O_CREAT, 0600);
+		if (fd < 0) {
+			rc = daos_errno2der(errno);
+			D_ERROR("failed to create/open the vos file %s:"DF_RC"\n",
+				rdb_path, DP_RC(rc));
+			goto out;
+		}
+		rc = fallocate(fd, 0, 0, rdb_blob_sz);
+		close(fd);
+		if (rc) {
+			rc = daos_errno2der(errno);
+			D_ERROR("fallocate on rdb file %s failed:"DF_RC"\n",
+				rdb_path, DP_RC(rc));
+			goto out;
+		}
+		D_FREE(rdb_path);
+	}
+
+	/** move away from NEWBORNS dir */
+	rc = rename(pool_newborn_path, pool_path);
+	if (rc < 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to rename pool directory: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		goto out;
+	}
+
+	/** make sure the rename is persistent */
+	(void)dir_fsync(pool_path);
+
+out:
+	D_FREE(pool_newborn_path);
+	D_FREE(pool_path);
+
+	return rc;
+}
+
+static int
+recreate_pooltgts()
+{
+	struct smd_pool_info    *pool_info = NULL;
+	struct smd_pool_info    *tmp;
+	d_list_t                 pool_list;
+	int			 rc = 0;
+	int			 pool_list_cnt;
+	daos_size_t		 rdb_blob_sz = 0;
+	struct d_uuid		 id;
+
+	D_ASSERT(bio_nvme_configured(SMD_DEV_TYPE_META));
+	D_INIT_LIST_HEAD(&pool_list);
+	rc = smd_pool_list(&pool_list, &pool_list_cnt);
+	if (rc != 0) {
+		D_ERROR("Failed to get pool info list from SMD\n");
+		return rc;
+	}
+
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		/* Cleanup Newborns */
+		if ((pool_info->spi_blob_sz[SMD_DEV_TYPE_META] == 0) ||
+		    (pool_info->spi_flags[SMD_DEV_TYPE_META] & SMD_POOL_IN_CREATION)) {
+			D_INFO("cleaning up newborn pool "DF_UUID"\n",
+			       DP_UUID(pool_info->spi_id));
+			uuid_copy(id.uuid, pool_info->spi_id);
+			rc = dss_thread_collective(tgt_kill_pool, &id, 0);
+			if (rc) {
+				D_ERROR("failed to cleanup newborn pool "DF_UUID": "DF_RC"\n",
+					DP_UUID(pool_info->spi_id), DP_RC(rc));
+			}
+			continue;
+		}
+
+		D_INFO("recreating files for pool "DF_UUID"\n", DP_UUID(pool_info->spi_id));
+		rc = smd_rdb_get_blob_sz(pool_info->spi_id, &rdb_blob_sz);
+		if (rc && (rc != -DER_NONEXIST)) {
+			D_ERROR(DF_UUID": failed to extract the size of rdb file: "DF_RC"\n",
+				DP_UUID(pool_info->spi_id), DP_RC(rc));
+			goto out;
+		}
+		rc = tgt_recreate(pool_info->spi_id, pool_info->spi_blob_sz[SMD_DEV_TYPE_META],
+				  pool_info->spi_tgt_cnt[SMD_DEV_TYPE_META], rdb_blob_sz);
+		if (rc)
+			goto out;
+	}
+out:
+	d_list_for_each_entry_safe(pool_info, tmp, &pool_list, spi_link) {
+		d_list_del(&pool_info->spi_link);
+		/* Frees spi_tgts, spi_blobs, and pool_info */
+		smd_pool_free_info(pool_info);
+	}
+	return rc;
+}
+
 int
 ds_mgmt_tgt_setup(void)
 {
@@ -370,6 +527,14 @@ ds_mgmt_tgt_setup(void)
 
 	/** remove leftover from previous runs */
 	cleanup_leftover_pools(false);
+
+	if (bio_nvme_configured(SMD_DEV_TYPE_META)) {
+		rc = recreate_pooltgts();
+		if (rc) {
+			D_ERROR("failed to create pool tgts: "DF_RC"\n", DP_RC(rc));
+			goto err_zombies;
+		}
+	}
 
 	/* create lock/cv and hash table to track outstanding pool creates */
 	D_ALLOC_PTR(pooltgts);
@@ -483,64 +648,184 @@ tgt_vos_create_one(void *varg)
 }
 
 static int
-tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
+tgt_vos_preallocate(uuid_t uuid, daos_size_t scm_size, int tgt_id)
 {
-	char			*path = NULL;
-	int			 i;
-	int			 fd = -1;
-	int			 rc = 0;
+	char				*path = NULL;
+	int				 fd = -1, rc;
 
-	for (i = 0; i < tgt_nr; i++) {
-		rc = path_gen(uuid, newborns_path, VOS_FILE, &i, &path);
-		if (rc)
-			break;
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+	rc = path_gen(uuid, newborns_path, VOS_FILE, &tgt_id, &path);
+	if (rc)
+		goto out;
 
-		D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n",
-			DP_UUID(uuid), path);
+	D_DEBUG(DB_MGMT, DF_UUID": creating vos file %s\n", DP_UUID(uuid), path);
 
-		fd = open(path, O_CREAT|O_RDWR, 0600);
-		if (fd < 0) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to create vos file %s: "
-				DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-			break;
-		}
-
-		/** Align to 4K or locking the region based on the size will fail */
-		scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
-		/**
-		 * Pre-allocate blocks for vos files in order to provide
-		 * consistent performance and avoid entering into the backend
-		 * filesystem allocator through page faults.
-		 * Use fallocate(2) instead of posix_fallocate(3) since the
-		 * latter is bogus with tmpfs.
-		 */
-		rc = fallocate(fd, 0, 0, scm_size);
-		if (rc) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to allocate vos file %s with "
-				"size: "DF_U64": "DF_RC"\n",
-				DP_UUID(uuid), path, scm_size, DP_RC(rc));
-			break;
-		}
-
-		rc = fsync(fd);
-		(void)close(fd);
-		fd = -1;
-		if (rc) {
-			rc = daos_errno2der(errno);
-			D_ERROR(DF_UUID": failed to sync vos pool %s: "
-				DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
-			break;
-		}
-		D_FREE(path);
+	fd = open(path, O_CREAT|O_RDWR, 0600);
+	if (fd < 0) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create vos file %s: "
+			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		goto out;
 	}
 
+	/** Align to 4K or locking the region based on the size will fail */
+	scm_size = D_ALIGNUP(scm_size, 1ULL << 12);
+	/**
+	 * Pre-allocate blocks for vos files in order to provide
+	 * consistent performance and avoid entering into the backend
+	 * filesystem allocator through page faults.
+	 * Use fallocate(2) instead of posix_fallocate(3) since the
+	 * latter is bogus with tmpfs.
+	 */
+	rc = fallocate(fd, 0, 0, scm_size);
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to allocate vos file %s with "
+			"size: "DF_U64": "DF_RC"\n",
+			DP_UUID(uuid), path, scm_size, DP_RC(rc));
+		goto out;
+	}
+
+	rc = fsync(fd);
+	(void)close(fd);
+	fd = -1;
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to sync vos pool %s: "
+			DF_RC"\n", DP_UUID(uuid), path, DP_RC(rc));
+		goto out;
+	}
+out:
 	if (fd != -1)
 		close(fd);
-
 	D_FREE(path);
 	return rc;
+}
+
+struct tgt_vos_prealloc_args {
+	uuid_t		tvpa_uuid;
+	daos_size_t	tvpa_scm_size;
+	int		tvpa_tgt_id;
+};
+
+struct tgt_vos_thrdlist {
+	d_list_t			tvt_link;
+	pthread_t			tvt_tid;
+	struct tgt_vos_prealloc_args	tvt_args;
+};
+
+static void *
+tgt_vos_preallocate_thrd_func(void *arg)
+{
+	struct tgt_vos_prealloc_args	*tvpa = (struct tgt_vos_prealloc_args *)arg;
+
+	dss_bind_to_xstream_cpuset(tvpa->tvpa_tgt_id);
+	return (void *)(uintptr_t)tgt_vos_preallocate(tvpa->tvpa_uuid, tvpa->tvpa_scm_size,
+						      tvpa->tvpa_tgt_id);
+}
+
+static void
+tgt_vos_preallocate_thrds_cleanup(d_list_t *head)
+{
+	struct tgt_vos_thrdlist *entry;
+	int			 rc;
+
+	d_list_for_each_entry(entry, head, tvt_link) {
+		rc = pthread_cancel(entry->tvt_tid);
+		if (rc) {
+			rc = daos_errno2der(rc);
+			D_ERROR("pthread_cancel failed: "DF_RC"\n", DP_RC(rc));
+		}
+	}
+
+	d_list_for_each_entry(entry, head, tvt_link) {
+		rc = pthread_join(entry->tvt_tid, NULL);
+		if (rc) {
+			rc = daos_errno2der(rc);
+			D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+		}
+	}
+}
+
+static int
+tgt_vos_preallocate_sequential(uuid_t uuid, daos_size_t scm_size, int tgt_nr)
+{
+	int i, rc = 0;
+
+	for (i = 0; i < tgt_nr; i++) {
+		rc = tgt_vos_preallocate(uuid, scm_size, i);
+		if (rc)
+			break;
+	}
+	return rc;
+}
+
+static int
+tgt_vos_preallocate_parallel(uuid_t uuid, daos_size_t scm_size, int tgt_nr, bool *cancel_pending)
+{
+	int				 i;
+	int				 rc;
+	int				 saved_rc = 0;
+	int				 res;
+	int				 old_cancelstate;
+	struct tgt_vos_thrdlist		*entry, *tmp;
+	struct tgt_vos_thrdlist		*thrds_list;
+
+	D_LIST_HEAD(thrds_list_head);
+
+	D_INIT_LIST_HEAD(&thrds_list_head);
+	D_ALLOC_ARRAY(thrds_list, tgt_nr);
+
+	/* Disable cancellation to manage other threads created within. */
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_cancelstate);
+
+	for (i = 0; i < tgt_nr; i++) {
+		entry = &thrds_list[i];
+		uuid_copy(entry->tvt_args.tvpa_uuid, uuid);
+		entry->tvt_args.tvpa_scm_size = scm_size;
+		entry->tvt_args.tvpa_tgt_id = i;
+		rc = pthread_create(&entry->tvt_tid, NULL, tgt_vos_preallocate_thrd_func,
+				    &entry->tvt_args);
+		if (rc) {
+			saved_rc = daos_errno2der(rc);
+			D_ERROR(DF_UUID": failed to create thread for target file "
+				"creation: "DF_RC"\n", DP_UUID(uuid),
+				DP_RC(saved_rc));
+			goto out;
+		}
+		d_list_add_tail(&entry->tvt_link, &thrds_list_head);
+		if (*cancel_pending == true) {
+			saved_rc = -DER_CANCELED;
+			goto out;
+		}
+	}
+
+	while (!d_list_empty(&thrds_list_head)) {
+		sched_yield();
+		if (*cancel_pending == true) {
+			saved_rc = -DER_CANCELED;
+			goto out;
+		}
+		d_list_for_each_entry_safe(entry, tmp, &thrds_list_head, tvt_link) {
+			rc = pthread_tryjoin_np(entry->tvt_tid, (void **)&res);
+			if (rc == EBUSY)
+				continue;
+			else if (rc == 0)
+				rc = res;
+			else {
+				rc = daos_errno2der(rc);
+				D_ERROR("pthread_join failed: "DF_RC"\n", DP_RC(rc));
+			}
+			if (!saved_rc && rc)
+				saved_rc = rc;
+			d_list_del(&entry->tvt_link);
+		}
+	}
+out:
+	tgt_vos_preallocate_thrds_cleanup(&thrds_list_head);
+	D_FREE(thrds_list);
+	pthread_setcancelstate(old_cancelstate, NULL);
+	return saved_rc;
 }
 
 int
@@ -661,9 +946,16 @@ tgt_create_preallocate(void *arg)
 		 * 16MB minimum per pmemobj file (SCM partition)
 		 */
 		D_ASSERT(dss_tgt_nr > 0);
-		rc = tgt_vos_preallocate(tca->tca_ptrec->dptr_uuid,
-					 max(tca->tca_scm_size / dss_tgt_nr,
-					     1 << 24), dss_tgt_nr);
+		if (!bio_nvme_configured(SMD_DEV_TYPE_META)) {
+			rc = tgt_vos_preallocate_sequential(tca->tca_ptrec->dptr_uuid,
+							    max(tca->tca_scm_size / dss_tgt_nr,
+								1 << 24), dss_tgt_nr);
+		} else {
+			rc = tgt_vos_preallocate_parallel(tca->tca_ptrec->dptr_uuid,
+							  max(tca->tca_scm_size / dss_tgt_nr,
+							      1 << 24), dss_tgt_nr,
+							  &tca->tca_ptrec->cancel_create);
+		}
 		if (rc)
 			goto out;
 	} else {
@@ -730,7 +1022,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tca.tca_dx = dss_current_xstream();
 	rc = pthread_create(&thread, NULL, tgt_create_preallocate, &tca);
 	if (rc) {
-		rc = daos_errno2der(errno);
+		rc = daos_errno2der(rc);
 		D_ERROR(DF_UUID": failed to create thread for target file "
 			"creation: "DF_RC"\n", DP_UUID(tc_in->tc_pool_uuid),
 			DP_RC(rc));
@@ -801,6 +1093,8 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 
 		/** make sure the rename is persistent */
 		(void)dir_fsync(tca.tca_path);
+		/** Mark the pool as ready in smd */
+		smd_pool_mark_ready(tc_in->tc_pool_uuid);
 	}
 
 	D_ALLOC_PTR(rank);

@@ -105,6 +105,7 @@ ds_pool_child_put(struct ds_pool_child *child)
 		D_ASSERT(d_list_empty(&child->spc_list));
 		D_ASSERT(d_list_empty(&child->spc_cont_list));
 
+		ds_stop_chkpt_ult(child);
 		/* only stop gc ULT when all ops ULTs are done */
 		stop_gc_ult(child);
 		stop_flush_ult(child);
@@ -352,6 +353,10 @@ pool_child_add_one(void *varg)
 	if (rc != 0)
 		goto out_flush;
 
+	rc = ds_start_chkpt_ult(child);
+	if (rc != 0)
+		goto out_scrub;
+
 	d_list_add(&child->spc_list, &tls->dt_pool_list);
 
 	/* Load all containers */
@@ -364,6 +369,8 @@ pool_child_add_one(void *varg)
 out_list:
 	d_list_del_init(&child->spc_list);
 	ds_cont_child_stop_all(child);
+	ds_stop_chkpt_ult(child);
+out_scrub:
 	ds_stop_scrubbing_ult(child);
 out_flush:
 	stop_flush_ult(child);
@@ -397,6 +404,7 @@ pool_child_delete_one(void *uuid)
 
 	D_ASSERT(d_list_empty(&child->spc_cont_list));
 	d_list_del_init(&child->spc_list);
+	ds_stop_chkpt_ult(child);
 	ds_stop_scrubbing_ult(child);
 	ds_pool_child_put(child); /* -1 for the list */
 
@@ -506,7 +514,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
-	rc = dss_thread_collective(pool_child_add_one, &collective_arg, 0);
+	rc = dss_thread_collective(pool_child_add_one, &collective_arg, DSS_ULT_DEEP_STACK);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
 			DP_UUID(key), DP_RC(rc));
@@ -704,12 +712,14 @@ static int
 ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
+	uuid_t			anonym_uuid;
 
 	if (unlikely(ec_agg_disabled))
 		return 0;
 
 	D_ASSERT(pool->sp_ec_ephs_req == NULL);
-	sched_req_attr_init(&attr, SCHED_REQ_GC, &pool->sp_uuid);
+	uuid_clear(anonym_uuid);
+	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
 	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
 						DSS_DEEP_STACK_SZ);
 	if (pool->sp_ec_ephs_req == NULL) {
@@ -1576,10 +1586,23 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 2)
+	if (pool->sp_global_version >= 3) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.6 df=%d\n", VOS_POOL_DF_2_6);
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
+	} else if (pool->sp_global_version == 2) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.4 df=%d\n", VOS_POOL_DF_2_4);
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	else if (pool->sp_global_version == 1)
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	} else {
+		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
+		D_GOTO(out, ret = -DER_NO_PERM);
+	}
+
+	if (pool->sp_checkpoint_props_changed) {
+		pool->sp_checkpoint_props_changed = 0;
+		if (child->spc_chkpt_req != NULL)
+			sched_req_wakeup(child->spc_chkpt_req);
+	}
+	child->spc_reint_mode = pool->sp_reint_mode;
 out:
 	ds_pool_child_put(child);
 
@@ -1598,9 +1621,11 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 
-	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
+	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
 		pool->sp_disable_rebuild = 0;
 	else
 		pool->sp_disable_rebuild = 1;
@@ -1611,13 +1636,30 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 			iv_prop->pip_policy_str);
 		return -DER_MISMATCH;
 	}
-	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
-
 	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
 		iv_prop->pip_scrub_mode);
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
+	pool->sp_reint_mode = iv_prop->pip_reint_mode;
+
+	pool->sp_checkpoint_props_changed = 0;
+	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
+		pool->sp_checkpoint_mode          = iv_prop->pip_checkpoint_mode;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	if (pool->sp_checkpoint_freq != iv_prop->pip_checkpoint_freq) {
+		pool->sp_checkpoint_freq          = iv_prop->pip_checkpoint_freq;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	if (pool->sp_checkpoint_thresh != iv_prop->pip_checkpoint_thresh) {
+		pool->sp_checkpoint_thresh        = iv_prop->pip_checkpoint_thresh;
+		pool->sp_checkpoint_props_changed = 1;
+	}
+
+	ret = dss_thread_collective(update_vos_prop_on_targets, pool, 0);
 
 	return ret;
 }
@@ -1695,7 +1737,6 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out_version;
 
-	ds_rebuild_running_query(in->tmi_op.pi_uuid, &out->tmo_rebuild_ver);
 	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
 				      &out->tmo_map_buf_size);
 
@@ -1765,7 +1806,18 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 	epr.epr_hi = arg->tgt_discard->epoch;
 	epr.epr_lo = 0;
-	rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_discard(param->ip_hdl, &ent->ie_oid, &epr, NULL, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
+			DP_RC(rc), DP_UOID(ent->ie_oid));
+		dss_sleep(0);
+	} while (1);
+
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
 			DP_UUID(arg->tgt_discard->pool_uuid), DP_UOID(ent->ie_oid),
@@ -1812,9 +1864,19 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
 	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
+				 arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
-			 arg, NULL);
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		dss_sleep(0);
+	} while (1);
+
 	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
@@ -1855,8 +1917,16 @@ pool_child_discard(void *data)
 
 	cont_arg.tgt_discard = arg;
 	child->spc_discard_done = 0;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 cont_discard_cb, NULL, &cont_arg, NULL);
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+				 cont_discard_cb, NULL, &cont_arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(arg->pool_uuid));
+		dss_sleep(0);
+	} while (1);
 
 	child->spc_discard_done = 1;
 
@@ -1906,13 +1976,15 @@ ds_pool_tgt_discard_ult(void *data)
 		}
 	}
 
-	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
 	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
 		 DP_UUID(arg->pool_uuid), DP_RC(rc));
 put:
 	pool->sp_need_discard = 0;
+	pool->sp_discard_status = rc;
+
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
@@ -1947,6 +2019,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 
 	pool->sp_need_discard = 1;
+	pool->sp_discard_status = 0;
 	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
 
 	ds_pool_put(pool);

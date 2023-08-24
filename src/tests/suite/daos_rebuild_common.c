@@ -34,6 +34,18 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 {
 	int i;
 	int rc = 0;
+	int fail_tgts;
+
+	/* Increase pre_pool_ver to make sure the rebuild caused by this
+	 * exclude/kill to be waited in the following rebuild_pool_wait().
+	 */
+	if ((kill || tgt_idx == -1) && args[0]->srv_nnodes > 0)
+		fail_tgts = args[0]->srv_ntgts / args[0]->srv_nnodes;
+	else
+		fail_tgts = 1;
+
+	for (i = 0; i < arg_cnt; i++)
+		args[i]->rebuild_pre_pool_ver += fail_tgts;
 
 	if (kill) {
 		daos_kill_server(args[0], args[0]->pool.pool_uuid,
@@ -115,8 +127,8 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		int *tgts, int rank_nr, bool kill,
 		enum REBUILD_TEST_OP_TYPE op_type)
 {
-	int   i;
-	int   rc;
+	int	i;
+	int	rc;
 
 	for (i = 0; i < args_cnt; i++) {
 		daos_pool_info_t	pool_info;
@@ -135,19 +147,44 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_pre_cb)
 			args[i]->rebuild_pre_cb(args[i]);
 
-	par_barrier(PAR_COMM_WORLD);
 	/** include or exclude the target from the pool */
-	if (args[0]->myrank == 0) {
-		for (i = 0; i < rank_nr; i++) {
+	if (op_type == RB_OP_TYPE_FAIL) {
+		par_barrier(PAR_COMM_WORLD);
+		if (args[0]->myrank == 0) {
+			for (i = 0; i < rank_nr; i++)
+				rebuild_exclude_tgt(args, args_cnt, ranks[i],
+						    tgts ? tgts[i] : -1, kill);
+		}
+		par_barrier(PAR_COMM_WORLD);
+
+		for (i = 0; i < args_cnt; i++)
+			if (args[i]->rebuild_cb)
+				args[i]->rebuild_cb(args[i]);
+
+		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
+			test_rebuild_wait(args, args_cnt);
+
+		par_barrier(PAR_COMM_WORLD);
+		for (i = 0; i < args_cnt; i++) {
+			if (args[i]->rebuild_post_cb)
+				args[i]->rebuild_post_cb(args[i]);
+		}
+		return;
+
+	}
+
+	for (i = 0; i < rank_nr; i++) {
+		int j;
+
+		/* No concurrent drain/extend/reintegration are allowed, so
+		 * it has to reintegrate/extend one by one.
+		 */
+		par_barrier(PAR_COMM_WORLD);
+		if (args[0]->myrank == 0) {
 			switch (op_type) {
-			case RB_OP_TYPE_FAIL:
-				rebuild_exclude_tgt(args, args_cnt,
-						ranks[i], tgts ? tgts[i] : -1,
-						kill);
-				break;
 			case RB_OP_TYPE_REINT:
-				rebuild_reint_tgt(args, args_cnt, ranks[i], tgts ? tgts[i] : -1,
-						  kill);
+				rebuild_reint_tgt(args, args_cnt, ranks[i],
+						  tgts ? tgts[i] : -1, kill);
 				break;
 			case RB_OP_TYPE_ADD:
 				rebuild_extend_tgt(args, args_cnt, ranks[i],
@@ -166,25 +203,24 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 				 */
 				D_ASSERT(op_type != RB_OP_TYPE_RECLAIM);
 				break;
+			default:
+				break;
 			}
 		}
-	}
-	par_barrier(PAR_COMM_WORLD);
+		par_barrier(PAR_COMM_WORLD);
+		for (j = 0; j < args_cnt; j++)
+			if (args[j]->rebuild_cb)
+				args[j]->rebuild_cb(args[j]);
 
-	for (i = 0; i < args_cnt; i++)
-		if (args[i]->rebuild_cb)
-			args[i]->rebuild_cb(args[i]);
+		if (args[0]->myrank == 0 && !args[0]->no_rebuild)
+			test_rebuild_wait(args, args_cnt);
 
-	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
-		test_rebuild_wait(args, args_cnt);
-
-	par_barrier(PAR_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++) {
-		if (args[i]->rebuild_post_cb)
-			args[i]->rebuild_post_cb(args[i]);
+		for (j = 0; j < args_cnt; j++) {
+			if (args[j]->rebuild_post_cb)
+				args[j]->rebuild_post_cb(args[j]);
+		}
 	}
 }
-
 
 void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
@@ -1010,7 +1046,7 @@ rebuild_pool_create(test_arg_t **new_arg, test_arg_t *old_arg, int flag,
 	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 	while (!rc && (*new_arg)->setup_state != flag)
 		rc = test_setup_next_step((void **)new_arg, NULL, NULL, props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	daos_prop_free(props);
 
 	(*new_arg)->index = old_arg->index;
@@ -1092,6 +1128,16 @@ ec_parity_nr_get(daos_obj_id_t oid)
 	return oca->u.ec.e_p;
 }
 
+int
+ec_tgt_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k + oca->u.ec.e_p;
+}
+
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			int parity_nr, d_rank_t *ranks, int *ranks_num)
@@ -1168,7 +1214,7 @@ rebuild_sub_setup_common(void **state, daos_size_t pool_size, int node_nr, uint3
 	props->dpp_entries[0].dpe_val = rf;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	daos_prop_free(props);
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
 		arg->obj_class = dt_obj_class;

@@ -10,6 +10,7 @@ from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from collections import OrderedDict, defaultdict
 from tempfile import TemporaryDirectory
 import errno
+import getpass
 import json
 import logging
 import os
@@ -28,6 +29,7 @@ from ClusterShell.NodeSet import NodeSet
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import CoreFileProcessing, CoreFileException
+from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
@@ -47,7 +49,6 @@ from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
-DEFAULT_DAOS_APP_DIR = os.path.join(os.sep, "scratch")
 DEFAULT_DAOS_TEST_LOG_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing")
 DEFAULT_DAOS_TEST_USER_DIR = os.path.join(os.sep, "var", "tmp", "daos_testing", "user")
 DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test"))
@@ -56,14 +57,18 @@ FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp"),
-    ]
-)
+SUPPORTED_PROVIDERS = [
+    "ofi+cxi",
+    "ofi+verbs;ofi_rxm",
+    "ucx+dc_x",
+    "ofi+tcp;ofi_rxm",
+    "ofi+opx",
+]
+# Temporary pipeline-lib workaround until DAOS-13934 is implemented
+PROVIDER_ALIAS = {
+    "ofi+verbs": "ofi+verbs;ofi_rxm",
+    "ofi+tcp": "ofi+tcp;ofi_rxm"
+}
 PROCS_TO_CLEANUP = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]
 TYPES_TO_UNMOUNT = ["fuse.daos"]
@@ -122,7 +127,8 @@ class AvocadoInfo():
 
         job_results_dir = os.path.join(logs_dir, "avocado", "job-results")
         data_dir = os.path.join(logs_dir, "avocado", "data")
-        config_dir = os.path.expanduser(os.path.join("~", ".config", "avocado"))
+        config_dir = os.path.join(
+            os.environ.get("VIRTUAL_ENV", os.path.expanduser("~")), ".config", "avocado")
         config_file = os.path.join(config_dir, "avocado.conf")
         sysinfo_dir = os.path.join(config_dir, "sysinfo")
         sysinfo_files_file = os.path.join(sysinfo_dir, "files")
@@ -465,16 +471,23 @@ class TestInfo():
         "client_users",
     ]
 
-    def __init__(self, test_file, order):
+    def __init__(self, test_file, order, yaml_extension=None):
         """Initialize a TestInfo object.
 
         Args:
             test_file (str): the test python file
             order (int): order in which this test is executed
+            yaml_extension (str, optional): if defined and a test yaml file exists with this
+                extension, the yaml file will be used in place of the default test yaml file.
         """
         self.name = TestName(test_file, order, 0)
         self.test_file = test_file
         self.yaml_file = ".".join([os.path.splitext(self.test_file)[0], "yaml"])
+        if yaml_extension:
+            custom_yaml = ".".join(
+                [os.path.splitext(self.test_file)[0], str(yaml_extension), "yaml"])
+            if os.path.exists(custom_yaml):
+                self.yaml_file = custom_yaml
         parts = self.test_file.split(os.path.sep)[1:]
         self.python_file = parts.pop()
         self.directory = os.path.join(*parts)
@@ -577,15 +590,19 @@ class Launch():
     RESULTS_DIRS = (
         "daos_configs", "daos_logs", "cart_logs", "daos_dumps", "valgrind_logs", "stacktraces")
 
-    def __init__(self, name, mode):
+    def __init__(self, name, mode, slurm_install, slurm_setup):
         """Initialize a Launch object.
 
         Args:
             name (str): launch job name
             mode (str): execution mode, e.g. "normal", "manual", or "ci"
+            slurm_install (bool): whether or not to install slurm RPMs if needed
+            slurm_setup (bool): whether or not to enable configuring slurm if needed
         """
         self.name = name
         self.mode = mode
+        self.slurm_install = slurm_install
+        self.slurm_setup = slurm_setup
 
         self.avocado = AvocadoInfo()
         self.class_name = f"FTEST_launch.launch-{self.name.lower().replace('.', '-')}"
@@ -595,6 +612,7 @@ class Launch():
         self.tag_filters = []
         self.repeat = 1
         self.local_host = get_local_host()
+        self.user = getpass.getuser()
 
         # Results tracking settings
         self.job_results_dir = None
@@ -610,7 +628,6 @@ class Launch():
         # Options for creating slurm partitions
         self.slurm_control_node = NodeSet()
         self.slurm_partition_hosts = NodeSet()
-        self.slurm_add_partition = False
 
     def _start_test(self, class_name, test_name, log_file):
         """Start a new test result.
@@ -759,9 +776,8 @@ class Launch():
             try:
                 logger.debug("Creating results.xml: %s", results_xml_path)
                 create_xml(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.xml file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.xml file: %s", str(error))
             else:
                 if not os.path.exists(results_xml_path):
                     logger.error("results.xml does not exist: %s", results_xml_path)
@@ -771,9 +787,8 @@ class Launch():
             try:
                 logger.debug("Creating results.html: %s", results_html_path)
                 create_html(self.job, self.result)
-            except ModuleNotFoundError as error:
-                # When SRE-439 is fixed this should be an error
-                logger.warning("Unable to create results.html file: %s", str(error))
+            except Exception as error:      # pylint: disable=broad-except
+                logger.error("Unable to create results.html file: %s", str(error))
             else:
                 if not os.path.exists(results_html_path):
                     logger.error("results.html does not exist: %s", results_html_path)
@@ -863,7 +878,7 @@ class Launch():
 
         # Process the tags argument to determine which tests to run - populates self.tests
         try:
-            self.list_tests(args.tags)
+            self.list_tests(args.tags, args.yaml_extension)
         except RunException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -938,7 +953,6 @@ class Launch():
             message = f"Invalid '--slurm_control_node={args.slurm_control_node}' argument"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
         self.slurm_partition_hosts.add(args.test_clients or args.test_servers)
-        self.slurm_add_partition = args.slurm_setup
 
         # Execute the tests
         status = self.run_tests(
@@ -1055,8 +1069,6 @@ class Launch():
 
             # Set the default location for daos log files written during testing
             # if not already defined.
-            if "DAOS_APP_DIR" not in os.environ:
-                os.environ["DAOS_APP_DIR"] = DEFAULT_DAOS_APP_DIR
             if "DAOS_TEST_LOG_DIR" not in os.environ:
                 os.environ["DAOS_TEST_LOG_DIR"] = DEFAULT_DAOS_TEST_LOG_DIR
             if "DAOS_TEST_USER_DIR" not in os.environ:
@@ -1066,6 +1078,9 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"] = os.path.join(base_dir, "tmp")
                 else:
                     os.environ["DAOS_TEST_SHARED_DIR"] = DEFAULT_DAOS_TEST_SHARED_DIR
+            if "DAOS_TEST_APP_DIR" not in os.environ:
+                os.environ["DAOS_TEST_APP_DIR"] = os.path.join(
+                    os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
 
@@ -1107,12 +1122,12 @@ class Launch():
 
         except ValueError as error:
             if not list_tests:
-                raise LaunchException("Error setting test environment") from error
+                raise LaunchException("Error setting test environment:", str(error)) from error
 
         except IOError as error:
             if error.errno == errno.ENOENT:
                 if not list_tests:
-                    raise LaunchException("Error setting test environment") from error
+                    raise LaunchException("Error setting test environment:", str(error)) from error
 
         return json.loads(f'{{"PREFIX": "{os.getcwd()}"}}')
 
@@ -1270,6 +1285,7 @@ class Launch():
         """
         logger.debug("-" * 80)
         # Use the detected provider if one is not set
+        provider = PROVIDER_ALIAS.get(provider, provider)
         if not provider:
             provider = os.environ.get("CRT_PHY_ADDR_STR")
         if provider is None:
@@ -1282,41 +1298,63 @@ class Launch():
             if result.passed:
                 # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
                 logger.debug("  Excluding verbs provider for Omni-Path adapters")
-                PROVIDER_KEYS.pop("verbs")
+                for index, _provider in enumerate(SUPPORTED_PROVIDERS.copy()):
+                    if "verbs" in _provider:
+                        SUPPORTED_PROVIDERS.pop(index)
+
+            # Get all domains for the interface.
+            # Include the interface as a domain in case of tcp.
+            all_domains_found = set([interface])
+            for device_type in ["infiniband", "cxi"]:
+                command = f"find /sys/class/net/{interface}/device/{device_type}/* " \
+                    f"-maxdepth 0 -printf '%f\\n' 2>/dev/null"
+                result = run_remote(logger, servers, command)
+                if result.passed:
+                    for data in result.output:
+                        if data.stdout:
+                            all_domains_found.update(domain.strip() for domain in data.stdout)
+            logger.debug("Detected supported domains for %s:", interface)
+            logger.debug("  %s", ", ".join(all_domains_found))
 
             # Detect all supported providers
-            command = f"fi_info -d {interface} -l | grep -v 'version:'"
+            command = "hg_info"
             result = run_remote(logger, servers, command)
             if result.passed:
                 # Find all supported providers
-                keys_found = defaultdict(NodeSet)
+                providers_found = defaultdict(NodeSet)
                 for data in result.output:
-                    for line in data.stdout:
-                        provider_name = line.replace(":", "")
-                        if provider_name in PROVIDER_KEYS:
-                            keys_found[provider_name].update(data.hosts)
+                    # Output as:
+                    # <Class>  <Protocol>  <Device>
+                    # Filter by supported domains/devices
+                    domain_re = '|'.join(all_domains_found)
+                    class_protocol_device = re.findall(
+                        fr'(\S+) +([\S]+) +({domain_re})$', '\n'.join(data.stdout), re.MULTILINE)
+                    for _class, _protocol, _ in class_protocol_device:
+                        _provider = f"{_class}+{_protocol}"
+                        if _provider in SUPPORTED_PROVIDERS:
+                            providers_found[_provider].update(data.hosts)
 
                 # Only use providers available on all the server hosts
-                if keys_found:
-                    logger.debug("Detected supported providers:")
-                provider_name_keys = list(keys_found)
-                for provider_name in provider_name_keys:
-                    logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                    if keys_found[provider_name] != servers:
-                        keys_found.pop(provider_name)
+                if providers_found:
+                    logger.debug("Detected supported providers for %s:", interface)
+                for _provider, hosts in providers_found.items():
+                    logger.debug("  %4s: %s", _provider, str(hosts))
+                    if hosts != servers:
+                        providers_found.pop(_provider)
 
-                # Select the preferred found provider based upon PROVIDER_KEYS order
-                logger.debug("Supported providers detected: %s", list(keys_found))
-                for key in PROVIDER_KEYS:
-                    if key in keys_found:
-                        provider = PROVIDER_KEYS[key]
+                # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
+                logger.debug(
+                    "Supported providers detected for %s: %s", interface, list(providers_found))
+                for _provider in SUPPORTED_PROVIDERS:
+                    if _provider in providers_found:
+                        provider = _provider
                         break
 
             # Report an error if a provider cannot be found
             if not provider:
                 raise LaunchException(
                     f"Error obtaining a supported provider for {interface} "
-                    f"from: {list(PROVIDER_KEYS)}")
+                    f"from: {SUPPORTED_PROVIDERS}")
 
             logger.debug("  Found %s provider for %s", provider, interface)
 
@@ -1364,7 +1402,7 @@ class Launch():
             os.environ["PYTHONPATH"] = python_path
         logger.debug("Testing with PYTHONPATH=%s", os.environ["PYTHONPATH"])
 
-    def list_tests(self, tags):
+    def list_tests(self, tags, yaml_extension=None):
         """List the test files matching the tags.
 
         Populates the self.tests list and defines the self.tag_filters list to use when running
@@ -1372,6 +1410,8 @@ class Launch():
 
         Args:
             tags (list): a list of tags or test file names
+            yaml_extension (str, optional): optional test yaml file extension to use when creating
+                the TestInfo object.
 
         Raises:
             RunException: if there is a problem listing tests
@@ -1412,7 +1452,7 @@ class Launch():
         output = run_local(logger, " ".join(command), check=True)
         unique_test_files = set(re.findall(self.avocado.get_list_regex(), output.stdout))
         for index, test_file in enumerate(unique_test_files):
-            self.tests.append(TestInfo(test_file, index + 1))
+            self.tests.append(TestInfo(test_file, index + 1, yaml_extension))
             logger.info("  %s", self.tests[-1])
 
     @staticmethod
@@ -1455,6 +1495,12 @@ class Launch():
         #                             'filter' in the device description. If generating automatic
         #                             storage extra files, use a 'class: dcpm' first storage tier.
         #
+        #   auto_md_on_ssd[:filter] = replace any test bdev_list placeholders with any NVMe disk or
+        #                             VMD controller address found to exist on all server hosts. If
+        #                             a 'filter' is specified use it to find devices with the
+        #                             'filter' in the device description. If generating automatic
+        #                             storage extra files, use a 'class: ram' first storage tier.
+        #
         #   auto_nvme[:filter]      = replace any test bdev_list placeholders with any NVMe disk
         #                             found to exist on all server hosts. If a 'filter' is specified
         #                             use it to find devices with the 'filter' in the device
@@ -1475,7 +1521,7 @@ class Launch():
         storage = None
         storage_info = StorageInfo(logger, args.test_servers)
         tier_0_type = "pmem"
-        scm_size = 16
+        control_metadata = None
         max_nvme_tiers = 1
         if args.nvme:
             kwargs = {"device_filter": f"'({'|'.join(args.nvme.split(','))})'"}
@@ -1493,6 +1539,13 @@ class Launch():
                 storage = ",".join([dev.address for dev in storage_info.controller_devices])
             else:
                 storage = ",".join([dev.address for dev in storage_info.disk_devices])
+
+            # Change the auto-storage extra yaml format if md_on_ssd is requested
+            if args.nvme.startswith("auto_md_on_ssd"):
+                tier_0_type = "ram"
+                max_nvme_tiers = 5
+                control_metadata = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], 'control_metadata')
+
         self.details["storage"] = storage_info.device_dict()
 
         updater = YamlUpdater(
@@ -1507,7 +1560,9 @@ class Launch():
                 test.extra_yaml.extend(common_extra_yaml)
 
         # Generate storage configuration extra yaml files if requested
-        self._add_auto_storage_yaml(storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers)
+        self._add_auto_storage_yaml(
+            storage_info, yaml_dir, tier_0_type, args.scm_size, args.scm_mount, max_nvme_tiers,
+            control_metadata)
 
         # Replace any placeholders in the test yaml file
         for test in self.tests:
@@ -1528,7 +1583,8 @@ class Launch():
             # Collect the host information from the updated test yaml
             test.set_yaml_info(args.include_localhost)
 
-    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, max_nvme_tiers):
+    def _add_auto_storage_yaml(self, storage_info, yaml_dir, tier_0_type, scm_size, scm_mount,
+                               max_nvme_tiers, control_metadata):
         """Add extra storage yaml definitions for tests requesting automatic storage configurations.
 
         Args:
@@ -1536,7 +1592,10 @@ class Launch():
             yaml_dir (str): path in which to create the extra storage yaml files
             tier_0_type (str): storage tier 0 type to define; 'pmem' or 'ram'
             scm_size (int): scm_size to use with ram storage tiers
+            scm_mount (str): the base path for the storage tier 0 scm_mount.
             max_nvme_tiers (int): maximum number of NVMe tiers to generate
+            control_metadata (str, optional): directory to store control plane metadata when using
+                metadata on SSD.
 
         Raises:
             YamlException: if there is an error getting host information from the test yaml files
@@ -1561,12 +1620,14 @@ class Launch():
                 if engines not in engine_storage_yaml:
                     logger.debug("-" * 80)
                     storage_info.write_storage_yaml(
-                        yaml_file, engines, tier_0_type, scm_size, max_nvme_tiers)
+                        yaml_file, engines, tier_0_type, scm_size, scm_mount, max_nvme_tiers,
+                        control_metadata)
                     engine_storage_yaml[engines] = yaml_file
                 logger.debug(
                     "  - Adding auto-storage extra yaml %s for %s",
                     engine_storage_yaml[engines], str(test))
-                test.extra_yaml.append(engine_storage_yaml[engines])
+                # Allow extra yaml files to be to override the generated storage yaml
+                test.extra_yaml.insert(0, engine_storage_yaml[engines])
 
     @staticmethod
     def _query_create_group(hosts, group, create=False):
@@ -1778,8 +1839,11 @@ class Launch():
         # Display the location of the avocado logs
         logger.info("Avocado job results directory: %s", self.job_results_dir)
 
+        # Configure slurm if any tests use partitions
+        return_code |= self.setup_slurm()
+
         # Configure hosts to collect code coverage
-        self.setup_bullseye()
+        return_code |= self.setup_bullseye()
 
         # Run each test for as many repetitions as requested
         for repeat in range(1, self.repeat + 1):
@@ -1831,7 +1895,7 @@ class Launch():
                 logger.removeHandler(test_file_handler)
 
         # Collect code coverage files after all test have completed
-        self.finalize_bullseye()
+        return_code |= self.finalize_bullseye()
 
         # Summarize the run
         return self._summarize_run(return_code)
@@ -1903,6 +1967,80 @@ class Launch():
                             os.rename(old_file, new_file)
         return status
 
+    def setup_slurm(self):
+        """Set up slurm on the hosts if any tests are using partitions.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        status = 0
+        logger.info("Setting up slurm partitions if required by tests")
+        if not any(test.yaml_info["client_partition"] for test in self.tests):
+            logger.debug("  No tests using client partitions detected - skipping slurm setup")
+            return status
+
+        if not self.slurm_setup:
+            logger.debug("  The 'slurm_setup' argument is not set - skipping slurm setup")
+            return status
+
+        status |= self.setup_application_directory()
+
+        slurm_setup = SlurmSetup(logger, self.slurm_partition_hosts, self.slurm_control_node, True)
+        try:
+            if self.slurm_install:
+                slurm_setup.install()
+            slurm_setup.update_config(self.user, 'daos_client')
+            slurm_setup.start_munge(self.user)
+            slurm_setup.start_slurm(self.user, True)
+        except SlurmSetupException:
+            message = "Error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+        except Exception:       # pylint: disable=broad-except
+            message = "Unknown error setting up slurm"
+            self._fail_test(self.result.tests[-1], "Run", message, sys.exc_info())
+            status |= 128
+
+        return status
+
+    def setup_application_directory(self):
+        """Set up the application directory.
+
+        Returns:
+            int: status code: 0 = success, 128 = failure
+        """
+        app_dir = os.environ.get('DAOS_TEST_APP_DIR')
+        app_src = os.environ.get('DAOS_TEST_APP_SRC')
+
+        logger.debug("Setting up the '%s' application directory", app_dir)
+        if not os.path.exists(app_dir):
+            # Create the apps directory if it does not already exist
+            try:
+                logger.debug('  Creating the application directory')
+                os.makedirs(app_dir)
+            except OSError:
+                message = 'Error creating the application directory'
+                self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                return 128
+        else:
+            logger.debug('  Using the existing application directory')
+
+        if app_src and os.path.exists(app_src):
+            logger.debug("  Copying applications from the '%s' directory", app_src)
+            run_local(logger, f"ls -al '{app_src}'")
+            for app in os.listdir(app_src):
+                try:
+                    run_local(
+                        logger, f"cp -r '{os.path.join(app_src, app)}' '{app_dir}'", check=True)
+                except RunException:
+                    message = 'Error copying files to the application directory'
+                    self._fail_test(self.result.tests[-1], 'Run', message, sys.exc_info())
+                    return 128
+
+        logger.debug("  Applications in '%s':", app_dir)
+        run_local(logger, f"ls -al '{app_dir}'")
+        return 0
+
     @staticmethod
     def display_disk_space(path):
         """Display disk space of provided path destination.
@@ -1969,18 +2107,18 @@ class Launch():
             partition = test.yaml_info["client_partition"]
             logger.debug("Determining if the %s client partition exists", partition)
             exists = show_partition(logger, self.slurm_control_node, partition).passed
-            if not exists and not self.slurm_add_partition:
+            if not exists and not self.slurm_setup:
                 message = f"Error missing {partition} partition"
                 self._fail_test(self.result.tests[-1], "Prepare", message, None)
                 return 128
-            if self.slurm_add_partition and exists:
+            if self.slurm_setup and exists:
                 logger.info(
                     "Removing existing %s partition to ensure correct configuration", partition)
                 if not delete_partition(logger, self.slurm_control_node, partition).passed:
                     message = f"Error removing existing {partition} partition"
                     self._fail_test(self.result.tests[-1], "Prepare", message, None)
                     return 128
-            if self.slurm_add_partition:
+            if self.slurm_setup:
                 hosts = self.slurm_partition_hosts.difference(test.yaml_info["test_servers"])
                 logger.debug(
                     "Partition hosts from '%s', excluding test servers '%s': %s",
@@ -2027,11 +2165,13 @@ class Launch():
         logger.debug("-" * 80)
         test_dir = os.environ["DAOS_TEST_LOG_DIR"]
         user_dir = os.environ["DAOS_TEST_USER_DIR"]
-        logger.debug("Setting up '%s' on %s:", test_dir, test.host_info.all_hosts)
+        hosts = test.host_info.all_hosts
+        hosts.add(self.local_host)
+        logger.debug("Setting up '%s' on %s:", test_dir, hosts)
         commands = [
             f"sudo -n rm -fr {test_dir}",
             f"mkdir -p {test_dir}",
-            f"chmod a+wr {test_dir}",
+            f"chmod a+wrx {test_dir}",
             f"ls -al {test_dir}",
             f"mkdir -p {user_dir}"
         ]
@@ -2039,7 +2179,7 @@ class Launch():
         for directory in self.RESULTS_DIRS:
             commands.append(f"mkdir -p {test_dir}/{directory}")
         for command in commands:
-            if not run_remote(logger, test.host_info.all_hosts, command).passed:
+            if not run_remote(logger, hosts, command).passed:
                 message = "Error setting up the DAOS_TEST_LOG_DIR directory on all hosts"
                 self._fail_test(self.result.tests[-1], "Prepare", message, sys.exc_info())
                 return 128
@@ -2623,7 +2763,7 @@ class Launch():
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
                  f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
         result = run_remote(
-            logger, hosts, find_command(source, pattern, depth, other), timeout=2700)
+            logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
             message = f"Error running {cart_logtest} on the {source_files} files"
             self._fail_test(self.result.tests[-1], "Process", message)
@@ -2971,6 +3111,11 @@ def main():
         "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
         "\t\twith the 'filter' in the device description. If generating automatic storage extra",
         "\t\tfiles, use a 'class: dcpm' first storage tier.",
+        "\tauto_md_on_ssd[:filter]",
+        "\t\treplace any test bdev_list placeholders with any NVMe disk or VMD controller address",
+        "\t\tfound to exist on all server hosts. If 'filter' is specified use it to find devices",
+        "\t\twith the 'filter' in the device description. If generating automatic storage extra",
+        "\t\tfiles, use a 'class: ram' first storage tier.",
         "\tauto_nvme[:filter]",
         "\t\treplace any test bdev_list placeholders with any NVMe disk found to exist on all ",
         "\t\tserver hosts. If a 'filter' is specified use it to find devices with the 'filter' ",
@@ -2994,10 +3139,6 @@ def main():
         "-a", "--archive",
         action="store_true",
         help="archive host log files in the avocado job-results directory")
-    parser.add_argument(
-        "-c", "--clean",
-        action="store_true",
-        help="remove daos log files from the test hosts prior to the test")
     parser.add_argument(
         "-dsd", "--disable_stop_daos",
         action="store_true",
@@ -3054,7 +3195,8 @@ def main():
         action="store",
         help="Detect available disk options for replacing the devices specified in the server "
              "storage yaml configuration file. Supported options include:  auto[:filter], "
-             "auto_nvme[:filter], auto_vmd[:filter], or <address>[,<address>]")
+             "auto_md_on_ssd[:filter], auto_nvme[:filter], auto_vmd[:filter], or "
+             "<address>[,<address>]")
     parser.add_argument(
         "-o", "--override",
         action="store_true",
@@ -3070,11 +3212,11 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()),
+        choices=[None] + SUPPORTED_PROVIDERS + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values()))}")
+             f"e.g. {', '.join(SUPPORTED_PROVIDERS)}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",
@@ -3097,9 +3239,29 @@ def main():
         help="slurm control node where scontrol commands will be issued to check for the existence "
              "of any slurm partitions required by the tests")
     parser.add_argument(
+        "-si", "--slurm_install",
+        action="store_true",
+        help="enable installing slurm RPMs if required by the tests")
+    parser.add_argument(
+        "--scm_mount",
+        action="store",
+        default="/mnt/daos",
+        type=str,
+        help="the scm_mount base path to use in each server engine tier 0 storage config when "
+             "generating an automatic storage config (test yaml includes 'storage: auto'). The "
+             "engine number will be added at the end of this string, e.g. '/mnt/daos0'.")
+    parser.add_argument(
         "-ss", "--slurm_setup",
         action="store_true",
-        help="setup any slurm partitions required by the tests")
+        help="enable setting up slurm partitions if required by the tests")
+    parser.add_argument(
+        "--scm_size",
+        action="store",
+        default=0,
+        type=int,
+        help="the scm_size value (in GiB units) to use in each server engine tier 0 ram storage "
+             "config when generating an automatic storage config (test yaml includes 'storage: "
+             "auto'). Set value to '0' to automatically determine the optimal ramdisk size")
     parser.add_argument(
         "tags",
         nargs="*",
@@ -3146,15 +3308,19 @@ def main():
         help="directory in which to write the modified yaml files. A temporary "
              "directory - which only exists for the duration of the launch.py "
              "command - is used by default.")
+    parser.add_argument(
+        "-ye", "--yaml_extension",
+        action="store",
+        default=None,
+        help="extension used to run custom test yaml files. If a test yaml file "
+             "exists with the specified extension - e.g. dtx/basic.custom.yaml "
+             "for --yaml_extension=custom - this file will be used instead of the "
+             "standard test yaml file.")
     args = parser.parse_args()
-
-    # Setup the Launch object
-    launch = Launch(args.name, args.mode)
 
     # Override arguments via the mode
     if args.mode == "ci":
         args.archive = True
-        args.clean = True
         args.include_localhost = True
         args.jenkinslog = True
         args.process_cores = True
@@ -3162,8 +3328,12 @@ def main():
         args.sparse = True
         if not args.logs_threshold:
             args.logs_threshold = DEFAULT_LOGS_THRESHOLD
+        args.slurm_install = True
         args.slurm_setup = True
         args.user_create = True
+
+    # Setup the Launch object
+    launch = Launch(args.name, args.mode, args.slurm_install, args.slurm_setup)
 
     # Perform the steps defined by the arguments specified
     try:

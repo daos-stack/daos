@@ -14,7 +14,7 @@
 static void
 debug_dump(struct d_slab_type *type)
 {
-	D_TRACE_INFO(type, "DescAlloc type %p '%s'", type, type->st_reg.sr_name);
+	D_TRACE_INFO(type, "DescAlloc type %p '%s'\n", type, type->st_reg.sr_name);
 	D_TRACE_DEBUG(DB_ANY, type, "size %d offset %d", type->st_reg.sr_size,
 		      type->st_reg.sr_offset);
 	D_TRACE_DEBUG(DB_ANY, type, "Count: free %d pending %d total %d", type->st_free_count,
@@ -42,7 +42,6 @@ d_slab_init(struct d_slab *slab, void *arg)
 	D_TRACE_DEBUG(DB_ANY, slab, "Creating a data slab manager");
 
 	slab->slab_init = true;
-	slab->slab_arg  = arg;
 	return -DER_SUCCESS;
 }
 
@@ -63,19 +62,19 @@ d_slab_destroy(struct d_slab *slab)
 
 	in_use = d_slab_reclaim(slab);
 	if (in_use)
-		D_TRACE_WARN(slab, "Allocator has active objects");
+		D_TRACE_WARN(slab, "Allocator has active objects\n");
 
 	while ((type = d_list_pop_entry(&slab->slab_list, struct d_slab_type, st_type_list))) {
 		if (type->st_count != 0)
-			D_TRACE_WARN(type, "Freeing type with active objects");
+			D_TRACE_WARN(type, "Freeing type with active objects\n");
 		rc = pthread_mutex_destroy(&type->st_lock);
 		if (rc != 0)
-			D_TRACE_ERROR(type, "Failed to destroy lock %d %s", rc, strerror(rc));
+			D_TRACE_ERROR(type, "Failed to destroy lock %d %s\n", rc, strerror(rc));
 		D_FREE(type);
 	}
 	rc = pthread_mutex_destroy(&slab->slab_lock);
 	if (rc != 0)
-		D_TRACE_ERROR(slab, "Failed to destroy lock %d %s", rc, strerror(rc));
+		D_TRACE_ERROR(slab, "Failed to destroy lock %d %s\n", rc, strerror(rc));
 	D_TRACE_DOWN(DB_ANY, slab);
 }
 
@@ -120,7 +119,7 @@ restock(struct d_slab_type *type, int count)
 			d_list_add(entry, &type->st_free_list);
 			type->st_free_count++;
 		} else {
-			D_TRACE_INFO(ptr, "entry %p failed reset", ptr);
+			D_TRACE_INFO(ptr, "entry %p failed reset\n", ptr);
 			type->st_count--;
 			D_FREE(ptr);
 		}
@@ -175,7 +174,7 @@ d_slab_reclaim(struct d_slab *slab)
 		}
 		D_TRACE_DEBUG(DB_ANY, type, "%d in use", type->st_count);
 		if (type->st_count) {
-			D_TRACE_INFO(type, "Active descriptors (%d) of type '%s'", type->st_count,
+			D_TRACE_INFO(type, "Active descriptors (%d) of type '%s'\n", type->st_count,
 				     type->st_reg.sr_name);
 			active_descriptors = true;
 		}
@@ -200,11 +199,11 @@ create(struct d_slab_type *type)
 
 	type->st_init_count++;
 	if (type->st_reg.sr_init)
-		type->st_reg.sr_init(ptr, type->st_slab->slab_arg);
+		type->st_reg.sr_init(ptr, type->st_arg);
 
 	if (type->st_reg.sr_reset) {
 		if (!type->st_reg.sr_reset(ptr)) {
-			D_TRACE_INFO(type, "entry %p failed reset", ptr);
+			D_TRACE_INFO(type, "entry %p failed reset\n", ptr);
 			D_FREE(ptr);
 			return NULL;
 		}
@@ -244,7 +243,7 @@ create_many(struct d_slab_type *type)
 
 /* Register a data type */
 int
-d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type **_type)
+d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, void *arg, struct d_slab_type **_type)
 {
 	struct d_slab_type *type;
 	int                 rc;
@@ -270,6 +269,7 @@ d_slab_register(struct d_slab *slab, struct d_slab_reg *reg, struct d_slab_type 
 
 	type->st_count = 0;
 	type->st_reg   = *reg;
+	type->st_arg   = arg;
 
 	create_many(type);
 	create_many(type);
@@ -341,9 +341,9 @@ d_slab_acquire(struct d_slab_type *type)
 	if (ptr)
 		D_TRACE_DEBUG(DB_ANY, type, "Using %p", ptr);
 	else if (at_limit)
-		D_TRACE_INFO(type, "Descriptor limit hit");
+		D_TRACE_INFO(type, "Descriptor limit hit\n");
 	else
-		D_TRACE_WARN(type, "Failed to allocate for type");
+		D_TRACE_WARN(type, "Failed to allocate for type\n");
 	return ptr;
 }
 
@@ -358,7 +358,6 @@ d_slab_release(struct d_slab_type *type, void *ptr)
 {
 	d_list_t *entry = ptr + type->st_reg.sr_offset;
 
-	D_TRACE_DOWN(DB_ANY, ptr);
 	D_MUTEX_LOCK(&type->st_lock);
 	type->st_pending_count++;
 	d_list_add_tail(entry, &type->st_pending_list);

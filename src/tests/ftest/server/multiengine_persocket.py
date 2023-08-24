@@ -1,23 +1,22 @@
 """
   (C) Copyright 2020-2023 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-import random
 import base64
 import traceback
+
+from pydaos.raw import DaosApiError
 
 from general_utils import get_random_bytes, wait_for_result, check_ping, check_ssh
 from run_utils import run_remote, run_local
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from pydaos.raw import DaosApiError
 from server_utils_base import DaosServerCommand
 from storage_utils import StorageInfo, StorageException
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Daos server configuration tests.
     Test Class Description:
         Tests to verify that the multiple engines per socket on daos_server.
@@ -32,8 +31,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         self.setup_start_agents = False
         self.setup_start_servers = False
 
-    @staticmethod
-    def create_data_set(num_attributes):
+    def create_data_set(self, num_attributes):
         """Create the large attribute dictionary.
 
         Args:
@@ -44,7 +42,7 @@ class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):
         """
         data_set = {}
         for index in range(num_attributes):
-            size = random.randint(1, 10)  # nosec
+            size = self.random.randint(1, 10)
             key = str(index).encode("utf-8")
             data_set[key] = get_random_bytes(size)
         return data_set

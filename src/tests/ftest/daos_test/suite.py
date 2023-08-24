@@ -60,12 +60,6 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=DaosCoreTest,test_daos_pool
         """
         self.run_subtest()
-        try:
-            with open("/tmp/suite_dmg.log", 'r') as dmg_log:
-                log_data = dmg_log.readlines()
-                self.add_test_data("suite_pool_dmg.log", log_data)
-        except IOError as error:
-            print("unable to move dmg log:", error)
 
     def test_daos_container(self):
         """Jira ID: DAOS-1568
@@ -439,7 +433,7 @@ class DaosCoreTest(DaosCoreBase):
         """Jira ID: DAOS-10681
 
         Test Description:
-            Run daos_test -P
+            Run daos_test -G
 
         Use cases:
             Core tests for daos_test
@@ -447,5 +441,21 @@ class DaosCoreTest(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,provider
         :avocado: tags=daos_test,daos_core_test,test_daos_upgrade
+        """
+        self.run_subtest()
+
+    def test_daos_pipeline(self):
+        """Jira ID: DAOS-13160
+
+        Test Description:
+            Run daos_test -P
+
+        Use cases:
+            Core tests for daos_test
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,provider
+        :avocado: tags=daos_test,daos_core_test
+        :avocado: tags=DaosCoreTest,test_daos_pipeline
         """
         self.run_subtest()

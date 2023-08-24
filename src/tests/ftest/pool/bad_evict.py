@@ -8,7 +8,7 @@ import ctypes
 from apricot import TestWithServers
 
 
-class BadEvictTest(TestWithServers):
+class PoolBadEvictTest(TestWithServers):
     """Test pool evict calls.
 
     Test Class Description:
@@ -18,7 +18,7 @@ class BadEvictTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_evict(self):
+    def test_pool_bad_evict(self):
         """Test ID: DAOS-427.
 
         Test Description:
@@ -27,7 +27,7 @@ class BadEvictTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=bad_evict,test_evict
+        :avocado: tags=PoolBadEvictTest,test_pool_bad_evict
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the

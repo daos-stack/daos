@@ -462,10 +462,6 @@
    fun:malloc
    fun:hg_dlog_mkcount32
    ...
-   fun:NA_Initialize_opt
-   ...
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
 }
 {
    FI leak 9
@@ -490,6 +486,18 @@
    fun:ofi_bsock_sendv
    ...
    fun:fi_tsend
+}
+{
+   Tcp provider with ofi rxm 2
+   Memcheck:Param
+   sendmsg(msg.msg_iov[2])
+   ...
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
+   ...
 }
 {
    Go syscall.

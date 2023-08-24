@@ -623,7 +623,7 @@ iv_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	return 0;
 }
 
-static int
+static void
 iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 {
 	DBG_ENTRY();
@@ -635,8 +635,6 @@ iv_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *user_priv)
 
 	dump_all_keys("ON_PUTVALUE");
 	DBG_EXIT();
-
-	return 0;
 }
 
 static void
@@ -1268,7 +1266,7 @@ int main(int argc, char **argv)
 	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, 1 /* group_version_min */);
 	assert(rc == 0);
 
 	grp = crt_group_lookup(IV_GRP_NAME);

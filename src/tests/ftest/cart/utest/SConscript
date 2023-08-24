@@ -4,8 +4,6 @@
 #
 """Unit tests"""
 
-import os
-
 TEST_SRC = ['test_linkage.cpp', 'utest_hlc.c', 'utest_swim.c', 'utest_portnumber.c']
 LIBPATH = [Dir('../../'), Dir('../../../gurt')]
 
@@ -19,19 +17,16 @@ def scons():
 
     test_env = env.Clone()
     test_env.require('mercury', 'uuid', 'cmocka')
-    test_env.AppendUnique(LIBS=['pthread', 'm'])
+    # The test is checking that this feature works so disable the compile warnings for it.
+    test_env.AppendIfSupported(CCFLAGS=['-Wno-gnu-designator', '-Wno-missing-field-initializers'])
+    test_env.AppendUnique(LIBS=['pthread', 'm', 'yaml', 'dl'])
     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
     test_env.AppendUnique(LIBPATH=LIBPATH)
     test_env.AppendUnique(RPATH_FULL=LIBPATH)
 
     for test in TEST_SRC:
         flags = []
-        testobj = test_env.Object(test)
-        testname = os.path.splitext(test)[0]
-        testprog = test_env.d_test_program(target=testname,
-                                           source=[testobj, cart_targets, swim_targets,
-                                                   gurt_targets],
-                                           LIBS=test_env["LIBS"] + ['yaml'],
+        testprog = test_env.d_test_program(source=[test, cart_targets, swim_targets, gurt_targets],
                                            LINKFLAGS=flags)
         Default(testprog)
 

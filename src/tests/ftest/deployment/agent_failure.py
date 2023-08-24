@@ -4,13 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from datetime import datetime
 import os
 import threading
 
+from ClusterShell.NodeSet import NodeSet
+
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, get_journalctl
+from general_utils import report_errors, get_journalctl, journalctl_time
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
@@ -33,15 +34,17 @@ class AgentFailure(IorTestBase):
         """
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(
-            group=self.server_group, pool=self.pool, cont_uuid=self.container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
+        testfile = os.path.join(os.sep, file_name)
+        ior_cmd.update_params(test_file=testfile)
+
+        # We need to provide hostnames to the util files with NodeSet.
+        clients_nodeset = NodeSet.fromlist(clients)
 
         manager = get_job_manager(
             test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
             mpi_type="mpich")
-        manager.assign_hosts(clients, self.workdir, self.hostfile_clients_slots)
+        manager.assign_hosts(clients_nodeset, self.workdir, self.hostfile_clients_slots)
         ppn = self.params.get("ppn", '/run/ior/client_processes/*')
         manager.ppn.update(ppn, 'mpirun.ppn')
         manager.processes.update(None, 'mpirun.np')
@@ -68,7 +71,7 @@ class AgentFailure(IorTestBase):
         journalctl --system -t daos_agent --since <before> --until <after>
         This step verifies that DAOS, or daos_agent process in this case, prints useful
         logs for the user to troubleshoot the issue, which in this case the application
-        can’t be used.
+        can't be used.
         6. Restart daos_agent.
         7. Run IOR again. It should succeed this time without any error. This step
         verifies that DAOS can recover from the fault with minimal human intervention.
@@ -101,13 +104,13 @@ class AgentFailure(IorTestBase):
         errors = []
 
         # 3. Stop daos_agent process while IOR is running.
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         self.log.info("Stopping agent")
         stop_agent_errors = self.stop_agents()
         for error in stop_agent_errors:
             self.log.debug(error)
             errors.append(error)
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # Wait until the IOR thread ends.
         job.join()
@@ -205,7 +208,7 @@ class AgentFailure(IorTestBase):
         errors = []
 
         # 3. Stop daos_agent process while IOR is running on one of the clients.
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
         detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern)
@@ -217,7 +220,7 @@ class AgentFailure(IorTestBase):
             errors.append(msg)
         else:
             self.log.info("daos_agent processes on %s killed", detected)
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # 4. Wait until both of the IOR thread ends.
         thread_1.join()

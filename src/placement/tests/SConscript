@@ -10,7 +10,7 @@ def scons():
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'isal')
+    denv.require('isal')
 
     denv.AppendUnique(LIBPATH=[Dir('../../client/api')])
 
@@ -20,10 +20,13 @@ def scons():
                                        'place_obj_common.c'])
     jump_test_tgt = denv.SharedObject(['jump_map_place_obj.c',
                                        'place_obj_common.c',
+                                       'jump_map_pda.c',
+                                       'jump_map_pda_layout.c',
+                                       'jump_map_dist.c',
                                        'placement_test.c'])
     pl_bench_tgt = denv.SharedObject(['pl_bench.c', 'place_obj_common.c'])
 
-    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal']
+    libraries = ['daos', 'daos_common', 'gurt', 'uuid', 'cmocka', 'isal', 'm']
 
     ring_pl_test = denv.d_program('ring_pl_map', ring_test_tgt, LIBS=libraries)
 

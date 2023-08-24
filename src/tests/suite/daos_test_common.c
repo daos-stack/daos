@@ -762,23 +762,20 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo, NULL /* engine_ranks */);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_state == DRS_COMPLETED || rc != 0) && rst->rs_version != 0 &&
-	    rst->rs_version > arg->rebuild_pre_pool_ver) {
-		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
-			      "obj="DF_U64", rec="DF_U64".\n",
-			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			       arg->rebuild_pre_pool_ver,
-			       rc, rst->rs_errno, rst->rs_obj_nr,
-			       rst->rs_rec_nr);
+	if ((rst->rs_state == DRS_COMPLETED || rc != 0) &&
+	    (rst->rs_version > arg->rebuild_pre_pool_ver ||
+	     pinfo.pi_map_ver > arg->rebuild_pre_pool_ver)) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u pi_ver = %u orig_ver=%u) is done %d/%d,"
+			      "obj="DF_U64", rec="DF_U64".\n", DP_UUID(arg->pool.pool_uuid),
+			      rst->rs_version, pinfo.pi_map_ver, arg->rebuild_pre_pool_ver,
+			      rc, rst->rs_errno, rst->rs_obj_nr, rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
-			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
-			      DF_U64", rec="DF_U64"\n",
-			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
-			      arg->rebuild_pre_pool_ver,
-			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
-			      rst->rs_rec_nr);
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u pi_ver=%u orig_ver=%u),"
+			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="DF_U64","
+			      "rec="DF_U64"\n", DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      pinfo.pi_map_ver, arg->rebuild_pre_pool_ver, rst->rs_toberb_obj_nr,
+			      rst->rs_obj_nr, rst->rs_rec_nr);
 	}
 
 	return done;
@@ -1349,8 +1346,11 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
-		char *expected_state_dup = strdup(expected_state);
-		char *state = strtok(expected_state_dup, "|");
+		char *expected_state_dup;
+		char *state;
+
+		D_STRNDUP(expected_state_dup, expected_state, strlen(expected_state));
+		state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
 		if (rc) {

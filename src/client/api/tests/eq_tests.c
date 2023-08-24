@@ -143,7 +143,7 @@ eq_test_2(void **state)
 		goto out;
 	}
 
-	print_message("Test events / Query EQ with inflight events\n");
+	print_message("Test events / Query EQ with in-flight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		bool ev_flag;
 
@@ -159,15 +159,15 @@ eq_test_2(void **state)
 			goto out;
 		}
 		if (ev_flag) {
-			print_error("Event %d should be inflight\n", i);
+			print_error("Event %d should be in-flight\n", i);
 			rc = -1;
 			goto out;
 		}
 
 		rc = daos_eq_query(my_eqh, DAOS_EQR_WAITING, 0, NULL);
 		if (rc != i + 1) {
-			print_error("Expect to see %d inflight event, "
-				 "but got %d\n", i + 1, rc);
+			print_error("Expect to see %d in-flight event, "
+				    "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
@@ -187,8 +187,8 @@ eq_test_2(void **state)
 		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
-			print_error("Expect to see %d inflight event, "
-				 "but got %d\n", i + 1, rc);
+			print_error("Expect to see %d in-flight event, "
+				    "but got %d\n", i + 1, rc);
 			rc = -1;
 			goto out;
 		}
@@ -263,7 +263,7 @@ eq_test_3(void **state)
 	print_message("Add a child when parent is launched. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
+		print_error("Add child to in-flight parent should fail (%d)\n",
 			    rc);
 		goto out_free;
 	}
@@ -274,7 +274,7 @@ eq_test_3(void **state)
 	print_message("Add a child when parent is completed but not init\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
+		print_error("Add child to in-flight parent should fail (%d)\n",
 			    rc);
 		goto out_free;
 	}
@@ -282,7 +282,7 @@ eq_test_3(void **state)
 	print_message("Poll EQ, Parent should not be polled out of EQ.\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 0) {
-		print_error("Expect to get inflight parent event: %d\n", rc);
+		print_error("Expect to get in-flight parent event: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -290,7 +290,7 @@ eq_test_3(void **state)
 	print_message("Test parent completion - should return false\n");
 	rc = daos_event_test(&event, DAOS_EQ_NOWAIT, &ev_flag);
 	if (rc != 0 || ev_flag != false) {
-		print_error("expect to get inflight parent (%d)\n", rc);
+		print_error("expect to get in-flight parent (%d)\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -341,7 +341,7 @@ eq_test_3(void **state)
 	print_message("Add an EV when parent is not polled. should fail.\n");
 	rc = daos_event_init(&child_event, DAOS_HDL_INVAL, &event);
 	if (rc != -DER_INVAL) {
-		print_error("Add child to inflight parent should fail (%d)\n",
+		print_error("Add child to in-flight parent should fail (%d)\n",
 			    rc);
 		goto out_free;
 	}
@@ -349,7 +349,7 @@ eq_test_3(void **state)
 	print_message("Poll EQ, Parent should not be polled out of EQ.\n");
 	rc = daos_eq_poll(my_eqh, 0, DAOS_EQ_NOWAIT, 2, eps);
 	if (rc != 0) {
-		print_error("Expect to get inflight parent event: %d\n", rc);
+		print_error("Expect to get in-flight parent event: %d\n", rc);
 		rc = -1;
 		goto out_free;
 	}
@@ -663,7 +663,7 @@ eq_test_5(void **state)
 			goto out;
 	}
 
-	print_message("Launch and test inflight events\n");
+	print_message("Launch and test in-flight events\n");
 	for (i = 0; i < EQT_EV_COUNT; i++) {
 		rc = daos_event_launch(events[i]);
 		if (rc != 0) {
@@ -697,7 +697,7 @@ eq_test_5(void **state)
 				goto out;
 			}
 			if (ev_flag) {
-				print_error("Event %d should be inflight\n", i);
+				print_error("Event %d should be in-flight\n", i);
 				rc = -1;
 				goto out;
 			}
@@ -718,7 +718,7 @@ eq_test_5(void **state)
 		rc = daos_eq_query(my_eqh, DAOS_EQR_COMPLETED,
 				   EQT_EV_COUNT, eps);
 		if (rc != i + 1) {
-			print_error("Expected %d inflight event, but got %d\n",
+			print_error("Expected %d in-flight event, but got %d\n",
 				    i + 1, rc);
 			rc = -1;
 			goto out;
@@ -784,7 +784,7 @@ eq_test_6(void **state)
 		}
 	}
 
-	print_message("Launch and test inflight events\n");
+	print_message("Launch and test in-flight events\n");
 	for (j = 0; j < EQT_EV_COUNT; j++) {
 		for (i = 0; i < EQ_COUNT; i++) {
 			rc = daos_event_launch(events[i][j]);
@@ -818,7 +818,7 @@ eq_test_6(void **state)
 					goto out_ev;
 				}
 				if (ev_flag) {
-					print_error("EV Should be inflight\n");
+					print_error("EV Should be in-flight\n");
 					rc = -1;
 					goto out_ev;
 				}
@@ -915,7 +915,7 @@ eq_test_7(void **state)
 			goto out_free;
 		}
 		if (ev_flag) {
-			print_error("Event should be inflight\n");
+			print_error("Event should be in-flight\n");
 			rc = -1;
 			goto out_free;
 		}
@@ -931,7 +931,7 @@ eq_test_7(void **state)
 			goto out_free;
 		}
 		if (ev_flag) {
-			print_error("Parent Event should still be inflight\n");
+			print_error("Parent Event should still be in-flight\n");
 			rc = -1;
 			goto out_free;
 		}
@@ -1169,6 +1169,75 @@ out:
 }
 
 static int
+mul_cb(void *udata, daos_event_t *ev, int ret)
+{
+	int *num = (int *)udata;
+
+	D_ASSERT(ret == 0);
+	*num = (*num) * 2;
+
+	return 0;
+}
+
+static void
+eq_test_10(void **state)
+{
+	struct daos_event *ep;
+	struct daos_event  ev;
+	int	       *udata = NULL;
+	int                rc    = 0;
+
+	DAOS_TEST_ENTRY("10", "Multiple Event Completion Callback");
+
+	rc = daos_event_init(&ev, my_eqh, NULL);
+	if (rc) {
+		print_error("daos_event_init() failed (%d)\n", rc);
+		goto out;
+	}
+
+	D_ALLOC_ARRAY(udata, 1);
+	D_ASSERT(udata != NULL);
+	*udata = 0;
+
+	rc = daos_event_register_comp_cb(&ev, inc_cb, udata);
+	if (rc) {
+		print_error("daos_event_register_comp_cb() failed (%d)\n", rc);
+		goto out;
+	}
+
+	rc = daos_event_register_comp_cb(&ev, mul_cb, udata);
+	if (rc) {
+		print_error("daos_event_register_comp_cb() failed (%d)\n", rc);
+		goto out;
+	}
+
+	rc = daos_event_launch(&ev);
+	if (rc) {
+		print_error("daos_event_launch() failed (%d)\n", rc);
+		goto out;
+	}
+
+	daos_event_complete(&ev, 0);
+	if (*udata != 1998) {
+		print_error("invalid udata value (%d)\n", *udata);
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	rc = daos_eq_poll(my_eqh, 0, 0, 1, &ep);
+	if (rc != 1) {
+		print_error("Failed to drain EQ: %d\n", rc);
+		goto out;
+	}
+	rc = 0;
+
+	daos_event_fini(&ev);
+out:
+	D_FREE(udata);
+	DAOS_TEST_EXIT(rc);
+}
+
+static int
 eq_ut_setup(void **state)
 {
 	int rc;
@@ -1222,7 +1291,8 @@ static const struct CMUnitTest eq_uts[] = {
 	{ "EQ_Test_6", eq_test_6, NULL, NULL},
 	{ "EQ_Test_7", eq_test_7, NULL, NULL},
 	{ "EQ_Test_8", eq_test_8, NULL, NULL},
-	{ "EQ_Test_9", eq_test_9, NULL, NULL}
+	{ "EQ_Test_9", eq_test_9, NULL, NULL},
+	{ "EQ_Test_10", eq_test_10, NULL, NULL}
 };
 
 int main(int argc, char **argv)

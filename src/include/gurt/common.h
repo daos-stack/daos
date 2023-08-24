@@ -15,6 +15,8 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
+#include <malloc.h>
+
 #include <uuid/uuid.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -30,9 +32,14 @@
 #include <daos_errno.h>
 #ifdef D_HAS_VALGRIND
 #include <valgrind/valgrind.h>
+#include <valgrind/memcheck.h>
 #define D_ON_VALGRIND RUNNING_ON_VALGRIND
 #else
 #define D_ON_VALGRIND 0
+#define VALGRIND_MAKE_MEM_DEFINED(addr, len) do {\
+	(void)(addr);\
+	(void)(len);\
+} while (0)
 #endif
 
 #include <gurt/types.h>
@@ -70,15 +77,35 @@ extern "C" {
 void d_srand(long int);
 long int d_rand(void);
 
+/* Instruct the compiler these are allocation functions that return a pointer, and if possible
+ * which function needs to be used to free them.
+ */
+#if HAVE_DEALLOC
+#define _dalloc_ __attribute__((malloc, malloc(d_free)))
+#else
+#define _dalloc_ __attribute__((malloc))
+#endif
+
 /* memory allocating macros */
-void  d_free(void *);
-void *d_calloc(size_t, size_t);
-void *d_malloc(size_t);
-void *d_realloc(void *, size_t);
-char *d_strndup(const char *s, size_t n);
-int d_asprintf(char **strp, const char *fmt, ...);
-void *d_aligned_alloc(size_t alignment, size_t size);
-char *d_realpath(const char *path, char *resolved_path);
+void
+d_free(void *ptr);
+void *
+d_calloc(size_t nmemb, size_t size) _dalloc_ __attribute__((alloc_size(1, 2)));
+void *
+d_malloc(size_t size) _dalloc_ __attribute__((alloc_size(1)));
+void *
+d_realloc(void *, size_t) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_strndup(const char *s, size_t n) _dalloc_;
+int
+d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+/* Use a non-standard asprintf interface to enable compiler checks. */
+char *
+d_asprintf2(int *rc, const char *fmt, ...) _dalloc_ __attribute__((format(printf, 2, 3)));
+void *
+d_aligned_alloc(size_t alignment, size_t size, bool zero) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -111,11 +138,10 @@ char *d_realpath(const char *path, char *resolved_path);
 				(int)(size));				\
 	} while (0)
 
-#define D_ALLOC_CORE(ptr, size, count)					\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
-		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
-			      count, #count, 0);			\
+#define D_ALLOC_CORE(ptr, size, count)                                                             \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_calloc((count), (size));                                \
+		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size, count, #count, 0);                    \
 	} while (0)
 
 #define D_ALLOC_CORE_NZ(ptr, size, count)				\
@@ -149,13 +175,11 @@ char *d_realpath(const char *path, char *resolved_path);
 			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
-#define D_ASPRINTF(ptr, ...)						\
-	do {								\
-		int _rc;						\
-		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, _rc != -1,			\
-			      ptr, #ptr, _rc + 1, 0, #ptr,		\
-			      (ptr) = NULL);				\
+#define D_ASPRINTF(ptr, ...)                                                                       \
+	do {                                                                                       \
+		int _rc;                                                                           \
+		(ptr) = d_asprintf2(&_rc, __VA_ARGS__);                                            \
+		D_CHECK_ALLOC(asprintf, (ptr) != NULL, ptr, #ptr, _rc + 1, 0, #ptr, (ptr) = NULL); \
 	} while (0)
 
 /* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
@@ -174,12 +198,16 @@ char *d_realpath(const char *path, char *resolved_path);
 		}							\
 	} while (0)
 
-#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
-							 size);		\
-		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
-			      size, 0, #ptr, 0);			\
+#define D_ALIGNED_ALLOC(ptr, alignment, size)                                                      \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, true);                   \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
+	} while (0)
+
+#define D_ALIGNED_ALLOC_NZ(ptr, alignment, size)                                                   \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment, size, false);                  \
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr, size, 0, #ptr, 0);                   \
 	} while (0)
 
 /* Requires newptr and oldptr to be different variables.  Otherwise
@@ -265,7 +293,10 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
+/* TODO: Check for __builtin_dynamic_object_size at compile time */
+
 /* Free a pointer. Only logs if the pointer is non-NULL. */
+#ifdef DAOS_BUILD_RELEASE
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
@@ -274,6 +305,44 @@ char *d_realpath(const char *path, char *resolved_path);
 			(ptr) = NULL;                                                              \
 		}                                                                                  \
 	} while (0)
+
+#else
+
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_dynamic_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
+#define D_FREE(ptr)                                                                                \
+	do {                                                                                       \
+		if ((ptr) != NULL) {                                                               \
+			size_t _frs = _f_get_alloc_size(ptr);                                      \
+			memset(ptr, 0x42, _frs);                                                   \
+			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
+			d_free(ptr);                                                               \
+			(ptr) = NULL;                                                              \
+		}                                                                                  \
+	} while (0)
+#endif
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
@@ -419,6 +488,26 @@ d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_lis
 char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
 void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
+#ifdef FAULT_INJECTION
+
+/* Define as a macro to improve failure logging */
+
+#define d_sgl_init(_SGL, _NR)                                                                      \
+	({                                                                                         \
+		int _rc           = -DER_SUCCESS;                                                  \
+		(_SGL)->sg_nr_out = 0;                                                             \
+		(_SGL)->sg_nr     = (_NR);                                                         \
+		if (unlikely((_NR) == 0)) {                                                        \
+			(_SGL)->sg_iovs = NULL;                                                    \
+		} else {                                                                           \
+			D_ALLOC_ARRAY((_SGL)->sg_iovs, (_NR));                                     \
+			if ((_SGL)->sg_iovs == NULL)                                               \
+				_rc = -DER_NOMEM;                                                  \
+		}                                                                                  \
+		_rc;                                                                               \
+	})
+
+#else
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
@@ -434,6 +523,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
+#endif
 
 static inline void
 d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)

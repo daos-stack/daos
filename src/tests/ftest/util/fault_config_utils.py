@@ -283,7 +283,7 @@ class FaultInjection():
         self._fault_list = fault_list
         self._test_dir = test_dir
         if self._fault_list:
-            # not using workdir because the huge path was messing up
+            # not using "workdir" because the huge path was messing up
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
@@ -303,6 +303,9 @@ class FaultInjection():
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
+        if not self.fault_file:
+            return []
+
         # Remove the fault injection files on the hosts.
         error_list = []
         command = "rm -f {}".format(self.fault_file)

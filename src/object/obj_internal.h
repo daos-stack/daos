@@ -42,6 +42,9 @@ extern bool	cli_bypass_rpc;
 /** Switch of server-side IO dispatch */
 extern unsigned int	srv_io_mode;
 
+/* Whether check redundancy group validation when DTX resync. */
+extern bool	tx_verify_rdg;
+
 /** client object shard */
 struct dc_obj_shard {
 	/** refcount */
@@ -408,7 +411,7 @@ struct obj_auxi_args {
 	d_list_t			 shard_task_head;
 	struct obj_reasb_req		 reasb_req;
 	struct obj_auxi_tgt_list	*failed_tgt_list;
-	uint64_t			dkey_hash;
+	uint64_t			 dkey_hash;
 	/* one shard_args embedded to save one memory allocation if the obj
 	 * request only targets for one shard.
 	 */
@@ -644,13 +647,11 @@ obj_get_shard(void *data, int idx)
 static inline bool
 obj_retry_error(int err)
 {
-	return err == -DER_TIMEDOUT || err == -DER_STALE ||
-	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
-	       err == -DER_NEED_TX || err == -DER_NOTLEADER ||
-	       err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
-	       daos_crt_network_error(err);
+	return err == -DER_TIMEDOUT || err == -DER_STALE || err == -DER_INPROGRESS ||
+	       err == -DER_GRPVER || err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN || err == -DER_NEED_TX ||
+	       err == -DER_NOTLEADER || err == -DER_UPDATE_AGAIN || err == -DER_NVME_IO ||
+	       err == -DER_CHKPT_BUSY || daos_crt_network_error(err);
 }
 
 static inline daos_handle_t
@@ -712,10 +713,12 @@ dc_sgl_out_set(d_sg_list_t *sgl, daos_size_t data_size)
 
 void obj_shard_decref(struct dc_obj_shard *shard);
 void obj_shard_addref(struct dc_obj_shard *shard);
-void obj_addref(struct dc_object *obj);
+struct dc_object *obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
+uint32_t dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt,
+			    uint16_t *inprogress_cnt);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
@@ -870,8 +873,8 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
-	     tse_task_t *task);
+dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task,
+	     uint32_t backoff, bool comp);
 
 int
 dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
@@ -885,7 +888,7 @@ obj_pl_grp_idx(uint32_t layout_gl_ver, uint64_t hash, uint32_t grp_nr);
 
 int
 obj_pl_place(struct pl_map *map, uint16_t layout_ver, struct daos_obj_md *md,
-	     unsigned int mode, uint32_t rebuild_ver, struct daos_obj_shard_md *shard_md,
+	     unsigned int mode, struct daos_obj_shard_md *shard_md,
 	     struct pl_obj_layout **layout_pp);
 
 #endif /* __DAOS_OBJ_INTENRAL_H__ */

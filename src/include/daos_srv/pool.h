@@ -24,11 +24,6 @@
 #include <gurt/telemetry_common.h>
 #include <daos_srv/policy.h>
 
-/*
- * Aggregation of pool/container/object/keys disk format change.
- */
-#define DS_POOL_GLOBAL_VERSION		1
-
 /**
  * Each individual object layout format, like oid layout, dkey to group,
  * dkey to EC group start.
@@ -53,6 +48,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
@@ -74,17 +71,17 @@ struct ds_pool {
 	 */
 	uuid_t			sp_srv_cont_hdl;
 	uuid_t			sp_srv_pool_hdl;
-	uint32_t		sp_stopping:1,
-				sp_fetch_hdls:1,
-				sp_disable_rebuild:1,
-				sp_need_discard:1;
+	uint32_t sp_stopping : 1, sp_fetch_hdls : 1, sp_disable_rebuild : 1, sp_need_discard : 1,
+	    sp_checkpoint_props_changed : 1;
 
 	/* pool_uuid + map version + leader term + rebuild generation define a
 	 * rebuild job.
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
+
+	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -99,6 +96,11 @@ struct ds_pool {
 	uint64_t		sp_scrub_mode;
 	uint64_t		sp_scrub_freq_sec;
 	uint64_t		sp_scrub_thresh;
+	/** WAL checkpointing properties */
+	uint32_t                 sp_checkpoint_mode;
+	uint32_t                 sp_checkpoint_freq;
+	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -141,6 +143,7 @@ struct ds_pool_child {
 	struct sched_request	*spc_gc_req;	/* Track GC ULT */
 	struct sched_request	*spc_flush_req;	/* Dedicated VEA flush ULT */
 	struct sched_request	*spc_scrubbing_req; /* Track scrubbing ULT*/
+	struct sched_request    *spc_chkpt_req;     /* Track checkpointing ULT*/
 	d_list_t		spc_cont_list;
 
 	/* The current maxim rebuild epoch, (0 if there is no rebuild), so
@@ -158,6 +161,7 @@ struct ds_pool_child {
 	ABT_eventual	spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1;
+	uint32_t	spc_reint_mode;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -210,9 +214,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
+int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
+		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 
@@ -329,6 +333,10 @@ ds_pool_get_version(struct ds_pool *pool)
 	return ver;
 }
 
+int
+ds_start_chkpt_ult(struct ds_pool_child *child);
+void
+ds_stop_chkpt_ult(struct ds_pool_child *child);
 struct rdb_tx;
 int ds_pool_lookup_hdl_cred(struct rdb_tx *tx, uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 			    d_iov_t *cred);

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -75,9 +75,11 @@ const (
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
-	ScmNoModules
+	ScmNoPMem
 	ScmBadRegion
 	ScmInvalidPMem
+	ScmRamdiskLowMem
+	ScmConfigTierMissing
 )
 
 // Bdev fault codes
@@ -90,10 +92,18 @@ const (
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 	BdevAccelEngineUnknown
-	BdevAccelOptionUnknown
-	BdevConfigTypeMismatch
+	BdevConfigOptFlagUnknown
+	BdevConfigTierTypeMismatch
 	BdevNonRootVFIODisable
 	BdevNoIOMMU
+	BdevConfigRolesWithDCPM
+	BdevConfigRolesBadNr
+	BdevConfigRolesMissing
+	BdevConfigMultiTierWithoutRoles
+	BdevConfigBadNrTiersWithRoles
+	BdevConfigControlMetadataNoRoles
+	BdevConfigRolesNoControlMetadata
+	BdevConfigRolesWalDataNoMeta
 )
 
 // DAOS system fault codes
@@ -113,6 +123,7 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientConnectionTimedOut
 	ClientFormatRunningSystem
 	ClientRpcTimeout
 	ClientConfigVMDImbalance
@@ -130,7 +141,6 @@ const (
 	ServerPoolInvalidNumRanks
 	ServerPoolInvalidServiceReps
 	ServerPoolDuplicateLabel
-	ServerInsufficientFreeHugePageMem
 	ServerHarnessNotStarted
 	ServerDataPlaneNotStarted
 	ServerInstancesNotStopped
@@ -138,6 +148,7 @@ const (
 	ServerVfioDisabled
 	ServerPoolNoLabel
 	ServerIncompatibleComponents
+	ServerNoCompatibilityInsecure
 	ServerPoolHasContainers
 )
 
@@ -168,11 +179,16 @@ const (
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
 	ServerConfigFaultDomainTooManyLayers
-	ServerConfigInsufficientHugePages
 	ServerConfigNrHugepagesOutOfRange
 	ServerConfigHugepagesDisabled
 	ServerConfigVMDSettingDuplicate
 	ServerConfigEngineNUMAImbalance
+	ServerConfigControlMetadataNoPath
+	ServerConfigRamdiskUnderMinMem
+	ServerConfigRamdiskOverMaxMem
+	ServerConfigScmDiffClass
+	ServerConfigEngineBdevRolesMismatch
+	ServerConfigSysRsvdZero
 )
 
 // SPDK library bindings codes
@@ -189,4 +205,9 @@ const (
 	SecurityMissingCertFile
 	SecurityUnreadableCertFile
 	SecurityInvalidCert
+)
+
+const (
+	ControlMetadataUnknown Code = iota + 1000
+	ControlMetadataBadFilesystem
 )

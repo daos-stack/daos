@@ -207,8 +207,8 @@ type (
 	// PrimaryServiceRank provides a rank->uri mapping for a DAOS
 	// Primary Service Rank (PSR).
 	PrimaryServiceRank struct {
-		Rank uint32
-		Uri  string
+		Rank uint32 `json:"rank"`
+		Uri  string `json:"uri"`
 	}
 
 	ClientNetworkHint struct {
@@ -225,6 +225,7 @@ type (
 	}
 
 	GetAttachInfoResp struct {
+		System        string                `json:"sys"`
 		ServiceRanks  []*PrimaryServiceRank `json:"rank_uris"`
 		MSRanks       []uint32              `json:"ms_ranks"`
 		ClientNetHint ClientNetworkHint     `json:"client_net_hint"`

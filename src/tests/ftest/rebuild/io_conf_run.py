@@ -7,13 +7,12 @@ from daos_io_conf import IoConfTestBase
 
 
 class RbldRunIoConf(IoConfTestBase):
-    # pylint: disable=too-many-ancestors
     """Test daos_run_io_conf.
 
     :avocado: recursive
     """
 
-    def test_daos_run_io_conf(self):
+    def test_rebuild_run_io_conf(self):
         """Jira ID: DAOS-3150.
 
         Test Description:
@@ -31,6 +30,6 @@ class RbldRunIoConf(IoConfTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=rebuild,iorebuild
-        :avocado: tags=RbldRunIoConf,test_daos_run_io_conf
+        :avocado: tags=RbldRunIoConf,test_rebuild_run_io_conf
         """
         self.execute_io_conf_run_test()

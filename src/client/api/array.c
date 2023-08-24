@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,6 +115,9 @@ daos_array_close(daos_handle_t oh, daos_event_t *ev)
 	tse_task_t		*task;
 	int			 rc;
 
+	if (ev == NULL)
+		return dc_array_close_direct(oh);
+
 	rc = dc_task_create(dc_array_close, NULL, ev, &task);
 	if (rc)
 		return rc;
@@ -148,6 +151,12 @@ daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size)
 {
 	return dc_array_get_attr(oh, chunk_size, cell_size);
+}
+
+int
+daos_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size)
+{
+	return dc_array_update_chunk_size(oh, chunk_size);
 }
 
 int

@@ -8,12 +8,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
@@ -21,8 +21,8 @@ import (
 type dumpAttachInfoCmd struct {
 	configCmd
 	ctlInvokerCmd
+	cmdutil.JSONOutputCmd
 	Output string `short:"o" long:"output" default:"stdout" description:"Dump output to this location"`
-	JSON   bool   `short:"j" long:"json" description:"Enable JSON output"`
 }
 
 func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
@@ -46,16 +46,14 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 		return errors.Wrap(err, "GetAttachInfo failed")
 	}
 
-	if cmd.JSON {
-		data, err := json.MarshalIndent(resp, "", "  ")
-		if err != nil {
-			return err
-		}
-
-		_, err = out.Write(append(data, []byte("\n")...))
-		return err
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
+	system := cmd.cfg.SystemName
+	if resp.System != "" {
+		system = resp.System
+	}
 	/**
 	 * cart/crt_group.c:crt_group_config_save()
 	 *
@@ -78,7 +76,7 @@ func (cmd *dumpAttachInfoCmd) Execute(_ []string) error {
 	 * ========================
 	 */
 	ew := txtfmt.NewErrWriter(out)
-	fmt.Fprintf(ew, "name %s\n", cmd.cfg.SystemName)
+	fmt.Fprintf(ew, "name %s\n", system)
 	fmt.Fprintf(ew, "size %d\n", len(resp.ServiceRanks))
 	fmt.Fprintln(ew, "all")
 	for _, psr := range resp.ServiceRanks {

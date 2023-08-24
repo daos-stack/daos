@@ -5,6 +5,7 @@
 '''
 from __future__ import division
 
+from avocado import fail_on
 from avocado.core.exceptions import TestFail
 
 from dmg_utils import get_storage_query_pool_info, get_dmg_smd_info
@@ -13,12 +14,12 @@ from exception_utils import CommandFailure
 
 
 class NvmeHealth(ServerFillUp):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
 
+    @fail_on(CommandFailure)
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
@@ -75,7 +76,7 @@ class NvmeHealth(ServerFillUp):
         errors = 0
         for host in self.server_managers[0].hosts:
             dmg.hostlist = host
-            pool_info = get_storage_query_pool_info(self, dmg)
+            pool_info = get_storage_query_pool_info(dmg)
             self.log.info('Pools found on %s', host)
             for pool in pool_info:
                 try:
@@ -105,14 +106,20 @@ class NvmeHealth(ServerFillUp):
                 'Detected {} error(s) verifying dmg storage query list-pools output'.format(errors))
 
         # Get the device ID from all the servers.
-        device_ids = get_device_ids(self, dmg, self.hostlist_servers)
+        try:
+            device_ids = get_device_ids(dmg, self.hostlist_servers)
+        except CommandFailure as error:
+            self.fail(str(error))
 
         # Get the device health
         errors = 0
         for host, uuid_list in device_ids.items():   # pylint: disable=too-many-nested-blocks
             for uuid in uuid_list:
                 dmg.hostlist = host
-                info = get_dmg_smd_info(self, dmg.storage_query_device_health, 'devices', uuid=uuid)
+                try:
+                    info = get_dmg_smd_info(dmg.storage_query_device_health, 'devices', uuid=uuid)
+                except CommandFailure as error:
+                    self.fail(str(error))
                 self.log.info('Verifying the health of devices on %s', host)
                 for devices in info.values():
                     for device in devices:

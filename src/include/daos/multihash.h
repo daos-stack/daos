@@ -30,6 +30,7 @@ enum DAOS_HASH_TYPE {
 	HASH_TYPE_ADLER32 = 7,
 
 	HASH_TYPE_END	= 8,
+	HASH_TYPE_NOOP = 9, /* Should not be used in real systems */
 };
 
 /** Lookup the appropriate HASH_TYPE given daos container property */

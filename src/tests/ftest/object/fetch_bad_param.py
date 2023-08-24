@@ -1,16 +1,14 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import time
 import traceback
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
+
+from apricot import TestWithServers
 
 
 class ObjFetchBadParam(TestWithServers):
@@ -54,20 +52,19 @@ class ObjFetchBadParam(TestWithServers):
                     "setup.\n")
 
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
             self.fail("Test failed during the initial setup.\n")
 
-    def test_bad_handle(self):
-        """
-        Test ID: DAOS-1377
+    def test_obj_fetch_bad_handle(self):
+        """JIRA ID: DAOS-1377
 
         Test Description: Pass a bogus object handle, should return bad handle.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objbadhandle,test_bad_handle
+        :avocado: tags=ObjFetchBadParam,test_obj_fetch_bad_handle
         """
         try:
             # trash the handle and read again
@@ -75,9 +72,7 @@ class ObjFetchBadParam(TestWithServers):
             self.obj.obj_handle = 99999
 
             # expecting this to fail with -1002
-            dummy_thedata2 = self.container.read_an_obj(self.datasize,
-                                                        self.dkey, self.akey,
-                                                        self.obj)
+            self.container.read_an_obj(self.datasize, self.dkey, self.akey, self.obj)
 
             self.container.oh = saved_oh
             self.fail("Test was expected to return a -1002 but it has not.\n")
@@ -85,25 +80,23 @@ class ObjFetchBadParam(TestWithServers):
         except DaosApiError as excep:
             self.container.oh = saved_oh
             if '-1002' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
                 self.fail("Test was expected to get -1002 but it has not.\n")
 
     def test_null_ptrs(self):
-        """
-        Test ID: DAOS-1377
+        """JIRA ID: DAOS-1377
 
         Test Description: Pass null pointers for various fetch parameters.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objfetchnull,test_null_ptrs
+        :avocado: tags=ObjFetchBadParam,test_null_ptrs
         """
         try:
             # now try it with a bad dkey, expecting this to fail with -1003
-            dummy_thedata2 = self.container.read_an_obj(self.datasize, None,
-                                                        self.akey, self.obj)
+            self.container.read_an_obj(self.datasize, None, self.akey, self.obj)
 
             self.container.close()
             self.container.destroy()
@@ -112,32 +105,27 @@ class ObjFetchBadParam(TestWithServers):
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
             # now try it with a null SGL (iod_size is not set)
             test_hints = ['sglnull']
-            _ = self.container.read_an_obj(self.datasize,
-                                           self.dkey, self.akey,
-                                           self.obj, test_hints)
+            self.container.read_an_obj(self.datasize, self.dkey, self.akey, self.obj, test_hints)
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
             self.fail("Test was expected to pass but failed !\n")
 
         try:
-            # when DAOS-1449 is complete, uncomment and retest
             # now try it with a null iod, expecting this to fail with -1003
-            # test_hints = ['iodnull']
-            # thedata2 = self.container.read_an_obj(self.datasize, dkey, akey,
-            #                                 self.obj, test_hints)
-            pass
-            # self.fail("Test was expected to return a -1003 but it has not.\n")
+            test_hints = ['iodnull']
+            self.container.read_an_obj(self.datasize, self.dkey, self.akey, self.obj, test_hints)
+            self.fail("Test was expected to return a -1003 but it has not.")
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
-                self.fail("Test was expected to get -1003 but it has not.\n")
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
+                self.fail("Test was expected to get -1003 but it has not.")

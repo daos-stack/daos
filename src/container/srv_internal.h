@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -101,6 +101,7 @@ struct cont {
 	rdb_path_t		c_snaps;	/* snapshot KVS */
 	rdb_path_t		c_user;		/* user attribute KVS */
 	rdb_path_t		c_hdls;		/* handle index KVS */
+	rdb_path_t		c_oit_oids;	/* snapshot oit oids */
 };
 
 /* OID range for allocator */
@@ -144,6 +145,7 @@ struct cont_iv_prop {
 	uint64_t	cip_ec_cell_sz;
 	uint32_t	cip_ec_pda;
 	uint32_t	cip_rp_pda;
+	uint32_t	cip_perf_domain;
 	uint32_t	cip_global_version;
 	uint32_t	cip_obj_version;
 	uint64_t	cip_valid_bits;
@@ -221,6 +223,12 @@ int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
 			  int *snap_count);
 void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+int ds_cont_snap_oit_oid_get(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			     struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
+int ds_cont_snap_oit_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			    struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
+int ds_cont_snap_oit_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
+			    struct cont *cont, struct container_hdl *hdl, crt_rpc_t *rpc);
 
 /* srv_target.c */
 int ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid);
@@ -286,7 +294,7 @@ void ds_cont_metrics_free(void *data);
 int ds_cont_metrics_count(void);
 
 int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
-			   daos_epoch_t epoch);
+			   daos_epoch_t epoch, daos_obj_id_t oit_oid);
 
 int ds_cont_hdl_rdb_lookup(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 			   struct container_hdl *chdl);

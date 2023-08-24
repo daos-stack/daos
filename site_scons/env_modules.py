@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Intel Corporation
+# Copyright 2019-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -56,16 +56,18 @@ class _env_module():  # pylint: disable=invalid-name
 
         # pylint: disable=consider-using-with
         try:
+            print(f"Going to run {cmd}")
             proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
         except OSError as error:
             if error.errno == errno.ENOENT:
                 return None, None
+            raise
 
         stdout, stderr = proc.communicate()
 
-        # pylint: disable=exec-used
         if sys.version_info[0] > 2:
             ns = {}
+            # pylint: disable-next=exec-used
             exec(stdout.decode(), ns)  # nosec
 
             return ns['_mlstatus'], stderr.decode()
@@ -73,10 +75,10 @@ class _env_module():  # pylint: disable=invalid-name
         # Should not get to this point.
         assert False
 
+        # pylint: disable-next=exec-used
         # exec(stdout.decode()) # nosec
 
         # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
-        # pylint: enable=exec-used
 
     def _init_mpi_module(self):
         """init mpi module function"""
@@ -107,6 +109,7 @@ class _env_module():  # pylint: disable=invalid-name
                 self._module_func('unload', to_unload)
 
         for to_load in load:
+            print(f"Trying to load {to_load}")
             if self._module_func('is-avail', to_load)[0] and \
                self._module_func('load', to_load)[0]:
                 print(f'Loaded {to_load}')
@@ -189,6 +192,7 @@ def load_mpi(mpi):
             print("Error running update-alternatives")
             if error.errno == errno.ENOENT:
                 return False
+            raise
         for line in proc.stdout.readlines():
             if line.startswith(b"Value:"):
                 if line[line.rfind(b".") + 1:-1].decode() == mpi:

@@ -58,9 +58,6 @@ class DmgCommand(DmgCommandBase):
     METHOD_REGEX = {
         "run":
             r"(.*)",
-        "storage_set_faulty":
-            r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
-            r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
     def _get_new(self):
@@ -93,14 +90,14 @@ class DmgCommand(DmgCommandBase):
         #         "HostFabric": {
         #           "Interfaces": [
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib1",
         #               "NumaNode": 1,
         #               "Priority": 0,
         #               "NetDevClass": 32
         #             },
         #             {
-        #               "Provider": "ofi+psm2",
+        #               "Provider": "ofi+tcp",
         #               "Device": "ib0",
         #               "NumaNode": 0,
         #               "Priority": 1,
@@ -122,7 +119,6 @@ class DmgCommand(DmgCommandBase):
         #             }
         #           ],
         #           "Providers": [
-        #             "ofi+psm2",
         #             "ofi+verbs;ofi_rxm",
         #             "ofi+tcp;ofi_rxm",
         #             "ofi+verbs",
@@ -265,7 +261,7 @@ class DmgCommand(DmgCommandBase):
             force (bool, optional): Force setting device state to FAULTY.
                 Defaults to True.
         """
-        return self._get_result(
+        return self._get_json_result(
             ("storage", "set", "nvme-faulty"), uuid=uuid, force=force)
 
     def storage_query_list_devices(self, rank=None, health=False):
@@ -374,22 +370,6 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_json_result(("storage", "query", "device-health"), uuid=uuid)
 
-    def storage_query_target_health(self, rank, tgtid):
-        """Get the result of the 'dmg storage query target-health' command.
-
-        Args:
-            rank (int): Rank hosting target.
-            tgtid (int): Target index to query.
-
-        Raises:
-            CommandFailure: if the dmg storage query target-health command fails.
-
-        Returns:
-            dict: the dmg json command output converted to a python dictionary
-
-        """
-        return self._get_json_result(("storage", "query", "target-health"), rank=rank, tgtid=tgtid)
-
     def storage_scan_nvme_health(self):
         """Get the result of the 'dmg storage scan --nvme-health' command.
 
@@ -442,9 +422,16 @@ class DmgCommand(DmgCommandBase):
         #                   "rank": 0,
         #                   "total_bytes": 398358216704,
         #                   "avail_bytes": 0,
+        #                   "usable_bytes": 0
         #                   "cluster_size": 1073741824,
+        #                   "meta_size": 0,
+        #                   "meta_wal_size": 0,
+        #                   "rdb_size": 134217728,
+        #                   "rdb_wal_size": 268435456,
         #                   "health": null,
-        #                   "tr_addr": "0000:05:00.0"
+        #                   "tr_addr": "0000:05:00.0",
+        #                   "roles": "data",
+        #                   "has_sys_xs": false
         #                 }
         #               ]
         #             }
@@ -464,6 +451,7 @@ class DmgCommand(DmgCommandBase):
         #                 "path": "/mnt/daos",
         #                 "total_bytes": 17179869184,
         #                 "avail_bytes": 0
+        #                 "usable_bytes": 0
         #               }
         #             }
         #           ],
@@ -480,11 +468,14 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "query", "usage"))
 
-    def server_set_logmasks(self, masks=None, raise_exception=None):
+    def server_set_logmasks(self, masks=None, streams=None, subsystems=None, raise_exception=None):
         """Set engine log-masks at runtime.
 
         Args:
             masks (str, optional): log masks to set. Defaults to None.
+            streams (str, optional): log debug streams to set. Defaults to None.
+            subsystems (str, optional): logging subsystems to enable. Defaults to None (interpreted
+                as enable all).
             raise_exception (bool, optional): whether or not to raise an exception if the command
                 fails. This overrides the self.exit_status_exception
                 setting if defined. Defaults to None.
@@ -505,12 +496,36 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
 
+        return self._get_json_result(("server", "set-logmasks"),
+                                     raise_exception=raise_exception, masks=masks, streams=streams,
+                                     subsystems=subsystems)
+
+    def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
+                            extra_logs_dir=None, target_host=None):
+        """Collect logs for debug purpose.
+
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            target-host (str, optional): R sync all the logs to target system
+        Raises:
+            CommandFailure: if the dmg support collect-log command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
         kwargs = {
-            "masks": masks,
+            "stop_on_error": stop_on_error,
+            "target_folder": target_folder,
+            "archive": archive,
+            "extra_logs_dir": extra_logs_dir,
+            "target_host": target_host,
         }
 
-        return self._get_json_result(("server", "set-logmasks"),
-                                     raise_exception=raise_exception, **kwargs)
+        return self._get_json_result(("support", "collect-log"), **kwargs)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
@@ -727,6 +742,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
+    def pool_upgrade(self, pool):
+        """Call dmg pool upgrade.
+
+        Args:
+            pool (str): pool to upgrade
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(("pool", "upgrade"), pool=pool)
+
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
 
@@ -831,12 +861,12 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "set-prop"), pool=pool, properties=properties)
 
-    def pool_get_prop(self, pool, name):
+    def pool_get_prop(self, pool, name=None):
         """Get the Property for a given pool.
 
         Args:
             pool (str): Pool for which to get the property.
-            name (str): Get the Property value based on name.
+            name (str, optional): Get the Property value based on name.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1041,8 +1071,8 @@ class DmgCommand(DmgCommandBase):
         # Example JSON output:
         # {
         #   "response": {
-        #     "CurrentLeader": "127.0.0.1:10001",
-        #     "Replicas": [
+        #     "current_leader": "127.0.0.1:10001",
+        #     "replicas": [
         #       "127.0.0.1:10001"
         #     ]
         #   },
@@ -1137,7 +1167,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("pool", "evict"), pool=pool)
 
     def config_generate(self, access_points, num_engines=None, scm_only=False,
-                        net_class=None, net_provider=None, use_tmpfs_scm=False):
+                        net_class=None, net_provider=None, use_tmpfs_scm=False,
+                        control_metadata_path=None):
         """Produce a server configuration.
 
         Args:
@@ -1149,9 +1180,11 @@ class DmgCommand(DmgCommandBase):
             net_class (str): Network class preferred. Defaults to None.
                 i.e. "ethernet"|"infiniband"
             net_provider (str): Network provider preferred. Defaults to None.
-                i.e. "ofi+tcp;ofi_rxm"|"ofi+psm2" etc.
+                i.e. "ofi+tcp;ofi_rxm" etc.
             use_tmpfs_scm (bool, optional): Whether to use a ramdisk instead of PMem
                 as SCM. Defaults to False.
+            control_metadata_path (str): External directory provided to store control
+                metadata in MD-on-SSD mode. Defaults to None.
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -1161,7 +1194,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("config", "generate"), access_points=access_points,
             num_engines=num_engines, scm_only=scm_only, net_class=net_class,
-            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm)
+            net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=control_metadata_path)
 
     def telemetry_metrics_list(self, host):
         """List telemetry metrics.
@@ -1301,14 +1335,13 @@ class DmgCommand(DmgCommandBase):
         """Call dmg version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
 
 
 def check_system_query_status(data):
@@ -1341,19 +1374,47 @@ def check_system_query_status(data):
     return not bool(failed_rank_list)
 
 
-def get_dmg_response(test, dmg_method, key=None, **kwargs):
+def get_json_response(data, key, description):
+    """Get the response for the dmg command's json output.
+
+    Also checks for errors in the dmg command's json output.
+
+    Args:
+         data (dict): json result from the dmg command
+         key (str, optional): dmg command json response key to return. Defaults to None.
+         description (str): the dmg command/method description
+
+    Raises:
+         CommandFailure: if there are errors detected in the dmg command's json output
+
+    Returns:
+         dict: the 'response' or 'response.key' from the command json data
+    """
+    response = {}
+    try:
+        if 'error' in data and data['error']:
+            raise CommandFailure("{} failed: {}".format(description, data['error']))
+        if 'host_errors' in data['response'] and len(data['response']['host_errors']) > 0:
+            raise CommandFailure(
+                "{} failed: {}".format(description, data['response']['host_errors']))
+        response = data['response'][key] if key else data['response']
+    except KeyError as error:
+        raise CommandFailure("Error parsing {} json output".format(description)) from error
+    return response
+
+
+def get_dmg_response(dmg_method, key=None, **kwargs):
     """Get the data from the dmg command's json response key.
 
     Fail the test if any errors are detected running the dmg command or in the json output.
 
     Args:
-        test (Test): avocado test class
         dmg_method (object): the DmgCommand method from which to get the json response
         key (str, optional): dmg command json response key to return. Defaults to None.
         kwargs (dict): arguments to pass to the DmgCommand method
 
     Raises:
-        TestFail: if there is an error running the dmg command or parsing the json output
+        CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
         dict: the json data in the dmg command response, optionally indexed by the specified key
@@ -1361,48 +1422,33 @@ def get_dmg_response(test, dmg_method, key=None, **kwargs):
     try:
         data = dmg_method(**kwargs)
     except CommandFailure as error:
-        test.fail("dmg.{}({}) failed: {}".format(dmg_method.__name__, dict_to_str(kwargs), error))
-
-    response = {}
-    try:
-        if data['error']:
-            test.fail(
-                "dmg.{}({}) failed: {}".format(
-                    dmg_method.__name__, dict_to_str(kwargs), data['error']))
-        if len(data['response']['host_errors']) > 0:
-            test.fail(
-                "dmg.{}({}) failed: {}".format(
-                    dmg_method.__name__, dict_to_str(kwargs), data['response']['host_errors']))
-        response = data['response'][key] if key else data['response']
-    except KeyError as error:
-        test.fail(
-            "Error parsing dmg.{}({}) json output: {}".format(
-                dmg_method.__name__, dict_to_str(kwargs), error))
-    return response
+        raise CommandFailure(
+            "dmg.{}({}) failed".format(dmg_method.__name__, dict_to_str(kwargs))) from error
+    return get_json_response(
+        data, key, "dmg.{})({})".format(dmg_method.__name__, dict_to_str(kwargs)))
 
 
-def get_dmg_smd_info(test, dmg_method, smd_info_key=None, **kwargs):
+def get_dmg_smd_info(dmg_method, smd_info_key=None, **kwargs):
     """Get the smd_info entries from the json output of the specified dmg command method.
 
     Note: only works with dmg methods that produce json output with ['response']['host_storage_map']
         [<key>]['storage']['smd_info'] entries.
 
     Args:
-        test (Test): avocado test class
         dmg_method (object): the DmgCommand storage query method from which to get the json output
         smd_info_key (str, optional): smd_info dictionary key for the value to return. Defaults to
             None which will return the entire smd_info dictionary as the value.
         kwargs (dict): arguments to pass to the DmgCommand storage query method
 
     Raises:
-        TestFail: if there is an error running the dmg command or parsing the json output
+        CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
         dict: a dictionary of host keys and dmg json output smd_info values (type based upon the
             dmg_method and the smd_info_key)
     """
     smd_info = {}
-    response = get_dmg_response(test, dmg_method, 'host_storage_map', **kwargs)
+    response = get_dmg_response(dmg_method, 'host_storage_map', **kwargs)
     try:
         for value in response.values():
             if smd_info_key:
@@ -1410,28 +1456,27 @@ def get_dmg_smd_info(test, dmg_method, smd_info_key=None, **kwargs):
             else:
                 smd_info[value['hosts']] = value['storage']['smd_info']
     except KeyError as error:
-        test.fail(
-            "Error parsing dmg.{}({}) json output: {}".format(
-                dmg_method.__name__, dict_to_str(kwargs), error))
+        raise CommandFailure(
+            "Error parsing dmg.{}({}) json output".format(
+                dmg_method.__name__, dict_to_str(kwargs))) from error
     return smd_info
 
 
-def get_storage_query_device_uuids(test, dmg, **kwargs):
+def get_storage_query_device_uuids(dmg, **kwargs):
     """Get each NVMe device uuid from the dmg storage query list-devices command.
 
     Args:
-        test (Test): avocado test class
         dmg (DmgCommand): the DmgCommand class used to call the storage_query_list_devices() method
         kwargs (dict): arguments to pass to the DmgCommand.storage_query_list_devices() method
 
     Raises:
-        TestFail: if there is an error running the dmg command or parsing the json output
+        CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
         dict: a dictionary of host keys and list of device uuid values
     """
     uuids = {}
-    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_devices, 'devices', **kwargs)
+    smd_info = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices', **kwargs)
     for host, devices in smd_info.items():
         if host not in uuids:
             uuids[host] = []
@@ -1439,28 +1484,27 @@ def get_storage_query_device_uuids(test, dmg, **kwargs):
             try:
                 uuids[host].append(device['uuid'])
             except KeyError as error:
-                test.fail(
-                    "Error parsing dmg.storage_query_list_devices({}) json output: {}".format(
-                        dict_to_str(kwargs), error))
+                raise CommandFailure(
+                    "Error parsing dmg.storage_query_list_devices({}) json output".format(
+                        dict_to_str(kwargs))) from error
     return uuids
 
 
-def get_storage_query_device_info(test, dmg, **kwargs):
+def get_storage_query_device_info(dmg, **kwargs):
     """Get the device information from the dmg storage query list-devices command.
 
     Args:
-        test (Test): avocado test class
         dmg (DmgCommand): the DmgCommand class used to call the storage_query_list_devices() method
         kwargs (dict): arguments to pass to the DmgCommand.storage_query_list_devices() method
 
     Raises:
-        TestFail: if there is an error running the dmg command or parsing the json output
+        CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
         list: a list of device information dictionaries
     """
     device_info = []
-    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_devices, 'devices', **kwargs)
+    smd_info = get_dmg_smd_info(dmg.storage_query_list_devices, 'devices', **kwargs)
     for hosts, devices in smd_info.items():
         for device in devices:
             device_info.append(device)
@@ -1468,22 +1512,21 @@ def get_storage_query_device_info(test, dmg, **kwargs):
     return device_info
 
 
-def get_storage_query_pool_info(test, dmg, **kwargs):
+def get_storage_query_pool_info(dmg, **kwargs):
     """Get the pool information from the dmg storage query list-pools command.
 
     Args:
-        test (Test): avocado test class
         dmg (DmgCommand): the DmgCommand class used to call the storage_query_list_pools() method
         kwargs (dict): arguments to pass to the DmgCommand.storage_query_list_pools() method
 
     Raises:
-        TestFail: if there is an error running the dmg command or parsing the json output
+        CommandFailure: if there is an error running the dmg command or parsing the json output
 
     Returns:
         list: a list of pool information dictionaries
     """
     pool_info = []
-    smd_info = get_dmg_smd_info(test, dmg.storage_query_list_pools, 'pools', **kwargs)
+    smd_info = get_dmg_smd_info(dmg.storage_query_list_pools, 'pools', **kwargs)
     for hosts, pools in smd_info.items():
         for pool_list in pools.values():
             for pool in pool_list:

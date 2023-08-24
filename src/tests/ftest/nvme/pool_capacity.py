@@ -5,20 +5,17 @@
 """
 import time
 import threading
-import uuid
 from itertools import product
 import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
-from test_utils_container import TestContainer
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from exception_utils import CommandFailure
 
 
 class NvmePoolCapacity(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify NOSPC
     condition is reported when accessing data beyond
     pool size.
@@ -32,13 +29,10 @@ class NvmePoolCapacity(TestWithServers):
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get("obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
-        self.hostfile_clients = write_host_file(
-            self.hostlist_clients, self.workdir, None)
+        self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.out_queue = queue.Queue()
 
     def ior_thread(self, pool, oclass, api, test, flags, results):
@@ -52,30 +46,22 @@ class NvmePoolCapacity(TestWithServers):
             flags (str): IOR flags
             results (queue): queue for returning thread results
 
-        Returns:
-            None
-
         """
         processes = self.params.get("slots", "/run/ior/clientslots/*")
-        container_info = {}
 
         # Define the arguments for the ior_runner_thread method
         ior_cmd = IorCommand()
         ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, pool)
+        ior_cmd.set_daos_params(
+            self.server_group, pool, self.label_generator.get_label('TestContainer'))
         ior_cmd.dfs_oclass.update(oclass)
         ior_cmd.api.update(api)
         ior_cmd.transfer_size.update(test[2])
         ior_cmd.block_size.update(test[3])
         ior_cmd.flags.update(flags)
 
-        container_info["{}{}{}"
-                       .format(oclass, api, test[2])] = str(uuid.uuid4())
-
         # Define the job manager for the IOR command
         job_manager = get_job_manager(self, job=ior_cmd)
-        key = "{}{}{}".format(oclass, api, test[2])
-        job_manager.job.dfs_cont.update(container_info[key])
         env = ior_cmd.get_default_env(str(job_manager))
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(processes)
@@ -84,10 +70,10 @@ class NvmePoolCapacity(TestWithServers):
         # run IOR Command
         try:
             job_manager.run()
-        except CommandFailure:
-            results.put("FAIL")
+        except CommandFailure as error:
+            results.put("FAIL - {}".format(str(error)))
 
-    def test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
+    def run_test_create_delete(self, num_pool=2, num_cont=5, total_count=100):
         """
         Test Description:
             This method is used to create/delete pools
@@ -101,7 +87,6 @@ class NvmePoolCapacity(TestWithServers):
                 None
         """
         self.pool = []
-        cont = {}
         nvme_size_begin = {}
         nvme_size_end = {}
 
@@ -115,15 +100,16 @@ class NvmePoolCapacity(TestWithServers):
                 display_string = "pool{} space at the Beginning".format(val)
                 self.pool[-1].display_pool_daos_space(display_string)
                 nvme_size_begin[val] = self.pool[-1].get_pool_free_space("NVME")
-                for cont_val in range(0, num_cont):
-                    cont[cont_val] = TestContainer(self.pool[-1])
+                # To be fixed by DAOS-12974
+                for _ in range(num_cont):
+                    # self.get_container(self.pool[-1])
+                    pass
 
             m_leak = 0
 
             # Destroy the last num_pool pools created
             for index in range(offset, offset + num_pool):
-                display_string = "Pool {} space at the End".format(
-                    self.pool[index].uuid)
+                display_string = "{} space at the End".format(str(self.pool[index]))
                 self.pool[index].display_pool_daos_space(display_string)
                 nvme_size_end[index] = self.pool[index].get_pool_free_space("NVME")
                 self.pool[index].destroy()
@@ -133,9 +119,9 @@ class NvmePoolCapacity(TestWithServers):
 
             # After destroying pools, check memory leak for each test loop.
             if m_leak != 0:
-                self.fail("Memory leak : iteration {0} \n".format(m_leak))
+                self.fail("Memory leak : iteration {}".format(m_leak))
 
-    def test_run(self, num_pool=1):
+    def run_test(self, num_pool=1):
         """
         Method Description:
             This method is called with different test_cases.
@@ -185,8 +171,9 @@ class NvmePoolCapacity(TestWithServers):
             # Verify the queue and make sure no FAIL for any IOR run
             # Test should fail with ENOSPC.
             while not self.out_queue.empty():
-                if (self.out_queue.get() == "FAIL" and test[4] == "PASS"):
-                    self.fail("FAIL")
+                result = self.out_queue.get()
+                if ("FAIL" in result and test[4] == "PASS"):
+                    self.fail(result)
 
             # Destroy the last num_pool pools created
             offset = loop_count * num_pool
@@ -214,16 +201,17 @@ class NvmePoolCapacity(TestWithServers):
         Use case:
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=ib2,nvme,nvme_pool_capacity,test_nvme_pool_capacity
+        :avocado: tags=nvme,pool
+        :avocado: tags=NvmePoolCapacity,test_nvme_pool_capacity
         """
         # Run test with one pool.
         self.log.info("Running Test Case 1 with one Pool")
-        self.test_run(1)
+        self.run_test(1)
         time.sleep(5)
         # Run test with two pools.
         self.log.info("Running Test Case 1 with two Pools")
-        self.test_run(2)
+        self.run_test(2)
         time.sleep(5)
         # Run Create/delete pool/container
         self.log.info("Running Test Case 3: Pool/Cont Create/Destroy")
-        self.test_create_delete(10, 50, 20)
+        self.run_test_create_delete(10, 50, 20)

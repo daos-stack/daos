@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -166,9 +166,9 @@ typedef struct daos_event {
 typedef enum {
 	/** Query outstanding completed event */
 	DAOS_EQR_COMPLETED	= (1),
-	/** Query # inflight event */
+	/** Query # in-flight event */
 	DAOS_EQR_WAITING	= (1 << 1),
-	/** Query # inflight + completed events in EQ */
+	/** Query # in-flight + completed events in EQ */
 	DAOS_EQR_ALL		= (DAOS_EQR_COMPLETED | DAOS_EQR_WAITING),
 } daos_eq_query_t;
 
@@ -225,6 +225,30 @@ typedef struct {
 	/** most significant (high) bits of object ID */
 	uint64_t	hi;
 } daos_obj_id_t;
+
+/**
+ * Corresponding rank and URI for a DAOS engine
+ */
+struct daos_rank_uri {
+	/** DAOS engine rank */
+	uint32_t	 dru_rank;
+	/** URI associated with rank */
+	char		*dru_uri;
+};
+
+/**
+ * DAOS general system information for clients
+ */
+struct daos_sys_info {
+	/** name of DAOS system */
+	char			 dsi_system_name[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** fabric provider in use by this system */
+	char			 dsi_fabric_provider[DAOS_SYS_INFO_STRING_MAX + 1];
+	/** length of ranks array */
+	uint32_t		 dsi_nr_ranks;
+	/** ranks and their client-accessible URIs */
+	struct daos_rank_uri	*dsi_ranks;
+};
 
 /** max pool/cont attr size */
 #define DAOS_ATTR_NAME_MAX 511

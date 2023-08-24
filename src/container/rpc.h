@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -85,6 +85,15 @@
 		hdlr, NULL),								\
 	X(CONT_DESTROY_BYLABEL,								\
 		0, &CQF_cont_destroy_bylabel,						\
+		hdlr, NULL),								\
+	X(CONT_SNAP_OIT_OID_GET,							\
+		0, &CQF_cont_snap_oit_oid_get,						\
+		hdlr, NULL),								\
+	X(CONT_SNAP_OIT_CREATE,								\
+		0, &CQF_cont_epoch_op,							\
+		hdlr, NULL),								\
+	X(CONT_SNAP_OIT_DESTROY,							\
+		0, &CQF_cont_epoch_op,							\
 		hdlr, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -119,6 +128,7 @@ enum cont_operation {
 
 extern struct crt_proto_format cont_proto_fmt_v7;
 extern struct crt_proto_format cont_proto_fmt_v6;
+extern int dc_cont_proto_version;
 
 #define DAOS_ISEQ_CONT_OP	/* input fields */		 \
 				/* pool handle UUID */		 \
@@ -271,8 +281,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_GLOBAL_VERSION	(1ULL << 22)
 #define DAOS_CO_QUERY_PROP_SCRUB_DIS		(1ULL << 23)
 #define DAOS_CO_QUERY_PROP_OBJ_VERSION		(1ULL << 24)
+#define DAOS_CO_QUERY_PROP_PERF_DOMAIN		(1ULL << 25)
 
-#define DAOS_CO_QUERY_PROP_BITS_NR		(25)
+#define DAOS_CO_QUERY_PROP_BITS_NR		(26)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
@@ -384,6 +395,22 @@ CRT_RPC_DECLARE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_snap_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
 		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DECLARE(cont_snap_oit_create, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+CRT_RPC_DECLARE(cont_snap_oit_destroy, DAOS_ISEQ_CONT_EPOCH_OP,
+		DAOS_OSEQ_CONT_EPOCH_OP)
+
+#define DAOS_ISEQ_CONT_SNAP_OIT_OID_GET /* input fields */	 \
+	((struct cont_op_in)	(ogi_op)		CRT_VAR) \
+	((daos_epoch_t)		(ogi_epoch)		CRT_VAR)
+
+#define DAOS_OSEQ_CONT_SNAP_OIT_OID_GET /* output fields */	 \
+	((struct cont_op_out)	(ogo_op)		CRT_VAR) \
+	((daos_obj_id_t)	(ogo_oid)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_snap_oit_oid_get, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET,
+		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
+
 
 #define DAOS_ISEQ_TGT_DESTROY	/* input fields */		 \
 	((uuid_t)		(tdi_pool_uuid)		CRT_VAR) \
@@ -431,7 +458,8 @@ CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 	((uuid_t)		(tsi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(tsi_coh_uuid)		CRT_VAR) \
 	((daos_epoch_t)		(tsi_epoch)		CRT_VAR) \
-	((uint64_t)		(tsi_opts)		CRT_VAR)
+	((uint64_t)		(tsi_opts)		CRT_VAR) \
+	((daos_obj_id_t)	(tsi_oit_oid)		CRT_VAR)
 
 #define DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY /* output fields */	 \
 				/* number of errors */		 \
@@ -477,7 +505,8 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 {
 	crt_opcode_t opcode;
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, DAOS_CONT_VERSION);
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, dc_cont_proto_version ?
+				 dc_cont_proto_version : DAOS_CONT_VERSION);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
 

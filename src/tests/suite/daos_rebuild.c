@@ -376,6 +376,8 @@ rebuild_destroy_pool_cb(void *data)
 		/* Disable fail_loc and start rebuild */
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				     0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				      0, 0, NULL);
 		rc = dmg_pool_destroy(dmg_config_file, arg->pool.pool_uuid,
 				      NULL, true);
 		if (rc) {
@@ -908,7 +910,7 @@ rebuild_multiple_tgts(void **state)
 
 	test_get_leader(arg, &leader);
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	if (arg->myrank == 0) {
 		int fail_cnt = 0;
 
@@ -1087,7 +1089,7 @@ rebuild_multiple_failures(void **state)
 	/* prepare the data */
 	rebuild_io(arg, oids, OBJ_NR);
 
-	/* Remove this inflight IO temporarily XXX */
+	/* Remove this in-flight IO temporarily XXX */
 	arg->rebuild_cb = rebuild_io_cb;
 	arg->rebuild_cb_arg = cb_arg_oids;
 	/* Disable data validation because of DAOS-2915. */
@@ -1122,7 +1124,7 @@ rebuild_fail_all_replicas_before_rebuild(void **state)
 	rebuild_io(arg, &oid, 1);
 
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* HOLD rebuild ULT */
 	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -1185,7 +1187,7 @@ rebuild_fail_all_replicas(void **state)
 	rebuild_io(arg, &oid, 1);
 
 	rc = daos_obj_layout_get(arg->coh, oid, &layout);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	for (i = 0; i < layout->ol_nr; i++) {
 		int j;
 
@@ -1261,13 +1263,31 @@ out:
 		rebuild_pool_destroy(args[i]);
 }
 
+static int
+rebuild_kill_cb(void *data)
+{
+	test_arg_t	*arg = data;
+
+	print_message("sleep 10 seconds for rebuild to start\n");
+	sleep(10);
+	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
+			 arg->pool.alive_svc, ranks_to_kill[0]);
+
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0,
+				      0, NULL);
+	}
+
+	return 0;
+}
 static void
 rebuild_kill_rank_during_rebuild(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
-	int		rc = 0;
 
 	if (!test_runable(arg, 6))
 		return;
@@ -1288,17 +1308,12 @@ rebuild_kill_rank_during_rebuild(void **state)
 				      0, NULL);
 	}
 
-	arg->rebuild_cb = rebuild_destroy_pool_cb;
+	arg->rebuild_cb = rebuild_kill_cb;
 
-	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
-			      ranks_to_kill[0], -1);
-	assert_success(rc);
+	rebuild_single_pool_rank(arg, ranks_to_kill[0], false);
 
-	sleep(2);
-	daos_kill_server(arg, arg->pool.pool_uuid, arg->group,
-			 arg->pool.alive_svc, ranks_to_kill[0]);
-
-	sleep(10);
+	sleep(5);
+	arg->rebuild_cb = NULL;
 	reintegrate_single_pool_rank(arg, ranks_to_kill[0], true);
 }
 
