@@ -191,14 +191,11 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_rebuilding) {
-		if (vos_agg)
-			cont->sc_vos_agg_active = 0;
-		else
-			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during rebuild %d.\n",
+	if (pool->sp_rebuilding && !vos_agg) {
+		cont->sc_ec_agg_active = 0;
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_rebuilding);
+			pool->sp_rebuilding);
 		return false;
 	}
 
