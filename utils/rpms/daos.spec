@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.3.108
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -171,15 +171,8 @@ Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
-%else
-# because our repo has a deprecated fuse-3.x RPM, make sure we don't
-# get it when fuse3 Requires: /etc/fuse.conf
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%endif
+Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 
 %description client
@@ -223,6 +216,11 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod
 Requires: capstone-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: fuse3-devel >= 3
+%else
+Requires: fuse3-devel >= 3.4.2
 %endif
 
 %description client-tests
@@ -557,6 +555,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Aug 24 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.108-5
+- Update fuse3 requirement to R: /usr/bin/fusermount3 by path
+  rather than by package name, for portability and future-proofing
+- Adding fuse3-devel as a requirement for daos-client-tests subpackage
+
 * Mon Jul 17 2023 Michael MacDonald <mjmac.macdonald@intel.com> 2.3.108-4
 - Install go >= 1.18 as a daos-client-tests dependency
 
