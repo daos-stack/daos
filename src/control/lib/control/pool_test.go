@@ -507,7 +507,9 @@ func TestControl_PoolCreate(t *testing.T) {
 	}
 }
 
-func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
+func TestControl_PoolQueryResp_MarshalJSON(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		pqr *PoolQueryResp
 		exp string
@@ -518,8 +520,8 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 		"null rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -530,13 +532,13 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"status":0,"enabled_ranks":null,"disabled_ranks":null,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -549,7 +551,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"status":0,"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -565,18 +567,20 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 	}
 }
 
-func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
+func TestControl_PoolQueryResp_UnmarshalJSON(t *testing.T) {
+	poolUUID := test.MockPoolUUID()
+
 	for name, tc := range map[string]struct {
 		data    string
 		expResp PoolQueryResp
 		expErr  error
 	}{
 		"null rankset": {
-			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -589,11 +593,11 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			},
 		},
 		"valid rankset": {
-			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data: `{"enabled_ranks":"[0,1-3,5]","disabled_ranks":"[]","status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expResp: PoolQueryResp{
 				Status: 0,
-				UUID:   "foo",
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             poolUUID,
 					TotalTargets:     1,
 					ActiveTargets:    2,
 					TotalEngines:     3,
@@ -612,7 +616,7 @@ func TestControl_PoolQueryResp_UnmarshallJSON(t *testing.T) {
 			expErr: errors.New("invalid character"),
 		},
 		"invalid rankset": {
-			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			data:   `{"enabled_ranks":"a cow goes quack","disabled_ranks":null,"status":0,"uuid":"` + poolUUID.String() + `","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 			expErr: errors.New("unexpected alphabetic character(s)"),
 		},
 	} {
@@ -672,7 +676,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -680,33 +684,33 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 					},
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             test.MockPoolUUID(),
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -714,7 +718,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 				},
@@ -742,7 +746,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -750,7 +754,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 						EnabledRanks: "[0,1,2,3,5]",
@@ -758,26 +762,26 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             test.MockPoolUUID(),
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -785,7 +789,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 					EnabledRanks: ranklist.MustCreateRankSet("[0-3,5]"),
@@ -814,7 +818,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeScm),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeScm),
 							},
 							{
 								Total:     123456,
@@ -822,7 +826,7 @@ func TestControl_PoolQuery(t *testing.T) {
 								Min:       1,
 								Max:       2,
 								Mean:      3,
-								MediaType: mgmtpb.StorageMediaType(StorageMediaTypeNvme),
+								MediaType: mgmtpb.StorageMediaType(daos.StorageMediaTypeNvme),
 							},
 						},
 						DisabledRanks: "[]",
@@ -830,26 +834,26 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
-				PoolInfo: PoolInfo{
+				PoolInfo: daos.PoolInfo{
+					UUID:             test.MockPoolUUID(),
 					TotalTargets:     42,
 					ActiveTargets:    16,
 					DisabledTargets:  17,
 					PoolLayoutVer:    1,
 					UpgradeLayoutVer: 2,
-					Rebuild: &PoolRebuildStatus{
-						State:   PoolRebuildStateBusy,
+					Rebuild: &daos.PoolRebuildStatus{
+						State:   daos.PoolRebuildStateBusy,
 						Objects: 1,
 						Records: 2,
 					},
-					TierStats: []*StorageUsageStats{
+					TierStats: []*daos.StorageUsageStats{
 						{
 							Total:     123456,
 							Free:      0,
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeScm,
+							MediaType: daos.StorageMediaTypeScm,
 						},
 						{
 							Total:     123456,
@@ -857,7 +861,7 @@ func TestControl_PoolQuery(t *testing.T) {
 							Min:       1,
 							Max:       2,
 							Mean:      3,
-							MediaType: StorageMediaTypeNvme,
+							MediaType: daos.StorageMediaTypeNvme,
 						},
 					},
 					DisabledRanks: &ranklist.RankSet{},
@@ -1382,21 +1386,21 @@ func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
 func TestControl_Pool_setUsage(t *testing.T) {
 	for name, tc := range map[string]struct {
 		status        int32
-		scmStats      *StorageUsageStats
-		nvmeStats     *StorageUsageStats
+		scmStats      *daos.StorageUsageStats
+		nvmeStats     *daos.StorageUsageStats
 		totalTargets  uint32
 		activeTargets uint32
 		expPool       *Pool
 		expErr        error
 	}{
 		"successful query": {
-			scmStats: &StorageUsageStats{
+			scmStats: &daos.StorageUsageStats{
 				Total: humanize.GByte * 30,
 				Free:  humanize.GByte * 15,
 				Min:   humanize.GByte * 1.6,
 				Max:   humanize.GByte * 2,
 			},
-			nvmeStats: &StorageUsageStats{
+			nvmeStats: &daos.StorageUsageStats{
 				Total: humanize.GByte * 500,
 				Free:  humanize.GByte * 250,
 				Min:   humanize.GByte * 29.5,
@@ -1422,13 +1426,13 @@ func TestControl_Pool_setUsage(t *testing.T) {
 			},
 		},
 		"disabled targets": {
-			scmStats: &StorageUsageStats{
+			scmStats: &daos.StorageUsageStats{
 				Total: humanize.GByte * 30,
 				Free:  humanize.GByte * 15,
 				Min:   humanize.GByte * 1.6,
 				Max:   humanize.GByte * 2,
 			},
-			nvmeStats: &StorageUsageStats{
+			nvmeStats: &daos.StorageUsageStats{
 				Total: humanize.GByte * 500,
 				Free:  humanize.GByte * 250,
 				Min:   humanize.GByte * 29.5,

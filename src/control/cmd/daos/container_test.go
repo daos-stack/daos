@@ -7,8 +7,9 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"context"
+	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -16,6 +17,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common/test"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/client"
+	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/client/mocks"
+	"github.com/daos-stack/daos/src/control/lib/dfs"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -105,9 +110,13 @@ func TestDaos_existingContainerCmd_parseContPathArgs(t *testing.T) {
 }
 
 func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
+	connPool := test.MockPoolUUID(1)
+	connCont := test.MockPoolUUID(2)
+
 	for name, tc := range map[string]struct {
-		contPath string
+		daosCtx  context.Context
 		contType string
+		contPath string
 		poolID   string
 		contID   string
 		expErr   error
@@ -115,20 +124,78 @@ func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
 		"no path, no pool, no cont": {
 			expErr: errors.New("no container label or UUID"),
 		},
-		"bad DUNS path (POSIX)": {
+		"bad dfuse path; bad DUNS path (POSIX)": {
+			daosCtx: func() context.Context {
+				if ctx, err := daosAPI.MockApiClientContext(context.Background(), &daosAPI.MockApiClientConfig{
+					ReturnCodeMap: map[string]int{
+						"dfuse_ioctl":       int(syscall.ENOTTY),
+						"duns_resolve_path": int(syscall.ENODATA),
+					},
+				}); err == nil {
+					return ctx
+				} else {
+					t.Fatal(err)
+					return nil
+				}
+			}(),
+			contPath: "path",
 			contType: "POSIX",
-			contPath: "bad-path",
-			expErr:   errors.New("DER_NONEXIST"),
+			expErr:   daos.BadPath,
+		},
+		"bad dfuse path; valid DUNS path (POSIX)": {
+			daosCtx: func() context.Context {
+				if ctx, err := daosAPI.MockApiClientContext(context.Background(), &daosAPI.MockApiClientConfig{
+					ReturnCodeMap: map[string]int{
+						"dfuse_ioctl": int(syscall.ENOTTY),
+					},
+					ConnectedPool: connPool,
+					ConnectedCont: connCont,
+				}); err == nil {
+					return ctx
+				} else {
+					t.Fatal(err)
+					return nil
+				}
+			}(),
+			contPath: "path",
+			contType: "POSIX",
+			poolID:   connPool.String(),
+			contID:   connCont.String(),
 		},
 		"valid DUNS path (POSIX)": {
+			daosCtx: func() context.Context {
+				if ctx, err := daosAPI.MockApiClientContext(context.Background(), &daosAPI.MockApiClientConfig{
+					ConnectedPool: connPool,
+					ConnectedCont: connCont,
+				}); err == nil {
+					return ctx
+				} else {
+					t.Fatal(err)
+					return nil
+				}
+			}(),
+			contPath: "path",
 			contType: "POSIX",
-			contPath: "valid-path",
-			poolID:   test.MockUUID(1),
-			contID:   test.MockUUID(2),
+			poolID:   connPool.String(),
+			contID:   connCont.String(),
 		},
 		"pool UUID + cont UUID": {
-			poolID: test.MockUUID(1),
-			contID: test.MockUUID(2),
+			daosCtx: func() context.Context {
+				if ctx, err := daosAPI.MockApiClientContext(context.Background(), &daosAPI.MockApiClientConfig{
+					ReturnCodeMap: map[string]int{
+						"dfuse_ioctl": int(syscall.ENOTTY),
+					},
+					ConnectedPool: connPool,
+					ConnectedCont: connCont,
+				}); err == nil {
+					return ctx
+				} else {
+					t.Fatal(err)
+					return nil
+				}
+			}(),
+			poolID: connPool.String(),
+			contID: connCont.String(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -138,28 +205,20 @@ func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
 			cmd := &existingContainerCmd{
 				Path: tc.contPath,
 			}
-			cmd.SetLog(log)
-
-			if tc.contPath != "" && tc.contPath != "bad-path" {
-				path := filepath.Join(t.TempDir(), tc.contPath)
-				if tc.contType == "POSIX" {
-					if err := os.MkdirAll(path, 0755); err != nil {
+			if tc.daosCtx == nil {
+				tc.daosCtx = func() context.Context {
+					ctx, err := daosAPI.MockApiClientContext(context.Background(), nil)
+					if err != nil {
 						t.Fatal(err)
 					}
-				}
-				poolUUID, err := uuid.Parse(tc.poolID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				contUUID, err := uuid.Parse(tc.contID)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := _writeDunsPath(path, tc.contType, poolUUID, contUUID); err != nil {
-					t.Fatal(err)
-				}
-				cmd.Path = path
-			} else {
+					return ctx
+				}()
+			}
+			cmd.daosCtx = tc.daosCtx
+			cmd.SetLog(log)
+			daosAPI.SetDebugLog(log)
+
+			if cmd.Path == "" {
 				if tc.poolID != "" {
 					gotErr := cmd.poolBaseCmd.Args.Pool.UnmarshalFlag(tc.poolID)
 					test.CmpErr(t, tc.expErr, gotErr)
@@ -186,6 +245,265 @@ func TestDaos_existingContainerCmd_resolveContainer(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, tc.poolID, cmd.poolBaseCmd.Args.Pool.String(), "PoolID")
 			test.AssertEqual(t, tc.contID, cmd.Args.Container.String(), "ContainerID")
+		})
+	}
+}
+
+func makeArgs(base []string, in ...string) []string {
+	return append(base, in...)
+}
+
+func objClass(t *testing.T, str string) daosAPI.ObjectClass {
+	t.Helper()
+
+	var cls daosAPI.ObjectClass
+	if err := cls.FromString(str); err != nil {
+		t.Fatal(err)
+	}
+
+	return cls
+}
+
+func mockApiCtx(t *testing.T, cfg *daosAPI.MockApiClientConfig) context.Context {
+	t.Helper()
+
+	ctx, err := daosAPI.MockApiClientContext(test.Context(t), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return ctx
+}
+
+func TestDaos_ContainerCreateCmd(t *testing.T) {
+	flagTestFini, err := flagTestInit()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer flagTestFini()
+
+	tmpDir := t.TempDir()
+	goodACL := test.CreateTestFile(t, tmpDir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
+
+	baseArgs := makeArgs(nil, "container", "create")
+	poolUUID := test.MockPoolUUID(1)
+	poolLabel := "poolLabel"
+	contUUID := test.MockPoolUUID(2)
+	contLabel := "contLabel"
+	consMode := dfs.ConsistencyModeBalanced
+	contHints := "dir:single,file:max"
+	defOClass := objClass(t, "SX")
+	dirOClass := objClass(t, "RP_2G1")
+	fileOClass := objClass(t, "EC_2P1GX")
+	testProps := make(daosAPI.ContainerPropertySet)
+	if err := testProps.AddValue("rd_fac", "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := testProps.AddValue("ec_cell_sz", "131072"); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		args     []string
+		ctx      context.Context
+		mpcc     *apiMocks.PoolConnCfg
+		expInfo  *daosAPI.ContainerInfo
+		expProps daosAPI.ContainerPropertySet
+		expErr   error
+	}{
+		"no arguments given": {
+			args:   baseArgs,
+			expErr: errors.New("no pool ID"),
+		},
+		"label supplied as arg and prop": {
+			args: makeArgs(baseArgs, poolLabel, contLabel,
+				"--properties", "label:"+contLabel,
+			),
+			expErr: errors.New("can't supply"),
+		},
+		"invalid label": {
+			args:   makeArgs(baseArgs, poolLabel, strings.Repeat("x", daos.MaxLabelLength+1)),
+			expErr: errors.New("invalid label"),
+		},
+		"bad ACL path": {
+			args:   makeArgs(baseArgs, poolLabel, contLabel, "--acl-file", "/bad/path"),
+			expErr: errors.New("no such file"),
+		},
+		"pool connect fails with -DER_NOPERM": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				Connect: apiMocks.Err{
+					Error: daos.NoPermission,
+				},
+			},
+			expErr: daos.NoPermission,
+		},
+		"create fails with -DER_NOPERM": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				CreateContainer: apiMocks.ContainerInfoResp{
+					Err: apiMocks.Err{
+						Error: daos.NoPermission,
+					},
+				},
+			},
+			expErr: daos.NoPermission,
+		},
+		"create succeeds but open fails": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				ConnectedPool: poolUUID,
+				ContConnCfg: &apiMocks.ContConnCfg{
+					ConnectedPool:      poolUUID,
+					ConnectedContainer: contUUID,
+				},
+				OpenContainer: apiMocks.OpenContainerResp{
+					Err: apiMocks.Err{
+						Error: daos.IOError,
+					},
+				},
+			},
+			expErr: daos.IOError,
+		},
+		"create succeeds but open fails due to lack of permissions": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				ConnectedPool: poolUUID,
+				ContConnCfg: &apiMocks.ContConnCfg{
+					ConnectedPool:      poolUUID,
+					ConnectedContainer: contUUID,
+				},
+				OpenContainer: apiMocks.OpenContainerResp{
+					Err: apiMocks.Err{
+						Error: daos.NoPermission,
+					},
+				},
+			},
+			expInfo: &daosAPI.ContainerInfo{
+				PoolUUID: poolUUID,
+				UUID:     contUUID,
+				Label:    contLabel,
+			},
+		},
+		"create succeeds but query fails": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				ConnectedPool: poolUUID,
+				ContConnCfg: &apiMocks.ContConnCfg{
+					ConnectedPool:      poolUUID,
+					ConnectedContainer: contUUID,
+					Query: apiMocks.ContainerInfoResp{
+						Err: apiMocks.Err{
+							Error: errors.New("whoops"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
+		"pooLabel/contLabel (posix)": {
+			args: makeArgs(baseArgs, poolLabel, contLabel,
+				"--type", daosAPI.ContainerLayoutPOSIX.String(),
+				"--oclass", defOClass.String(),
+				"--dir-oclass", dirOClass.String(),
+				"--file-oclass", fileOClass.String(),
+				"--chunk-size", "4MB",
+				"--mode", consMode.String(),
+				"--hints", contHints,
+				"--properties", testProps.String(),
+				"--acl-file", goodACL,
+			),
+			expInfo: &daosAPI.ContainerInfo{
+				PoolUUID: poolUUID,
+				UUID:     contUUID,
+				Label:    contLabel,
+				Type:     daosAPI.ContainerLayoutPOSIX,
+				POSIXAttributes: &daosAPI.POSIXAttributes{
+					ObjectClass:     defOClass,
+					DirObjectClass:  dirOClass,
+					FileObjectClass: fileOClass,
+					ChunkSize:       4000000,
+					ConsistencyMode: uint32(consMode),
+					Hints:           contHints,
+				},
+			},
+			expProps: func() daosAPI.ContainerPropertySet {
+				props := make(daosAPI.ContainerPropertySet)
+				for key, prop := range testProps {
+					if err := props.AddValue(key, prop.String()); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := props.AddValue("label", contLabel); err != nil {
+					t.Fatal(err)
+				}
+
+				return props
+			}(),
+		},
+		"invalid pool path": {
+			args: makeArgs(baseArgs, "--path", "/path", contLabel),
+			ctx: mockApiCtx(t, &daosAPI.MockApiClientConfig{
+				ReturnCodeMap: map[string]int{
+					"dfuse_open": int(syscall.ENOENT),
+				},
+			}),
+			expErr: syscall.ENOENT,
+		},
+		"valid pool path": {
+			args: makeArgs(baseArgs, "--path", "/path", contLabel),
+			ctx: mockApiCtx(t, &daosAPI.MockApiClientConfig{
+				ConnectedPool: poolUUID,
+			}),
+			expInfo: &daosAPI.ContainerInfo{
+				PoolUUID: poolUUID,
+				UUID:     contUUID,
+				Label:    contLabel,
+			},
+		},
+		"valid pool path and pool label": {
+			args:   makeArgs(baseArgs, "--path", "/path", poolLabel, contLabel),
+			expErr: errors.New("pool ID or path"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var opts cliOptions
+
+			parent := tc.ctx
+			if parent == nil {
+				parent = test.Context(t)
+			}
+			if tc.mpcc == nil {
+				tc.mpcc = &apiMocks.PoolConnCfg{
+					ConnectedPool: poolUUID,
+					ContConnCfg: &apiMocks.ContConnCfg{
+						ConnectedPool:      poolUUID,
+						ConnectedContainer: contUUID,
+					},
+				}
+			}
+			ctx := apiMocks.PoolConnCtx(parent, tc.mpcc)
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			gotErr := parseOpts(ctx, tc.args, &opts, log)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expInfo, tc.mpcc.CreateContainer.ContainerInfo); diff != "" {
+				t.Fatalf("unexpected container info (-want,+got): %s", diff)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.Comparer(func(a, b daosAPI.ContainerPropertySet) bool {
+					return a.String() == b.String()
+				}),
+			}
+			if diff := cmp.Diff(tc.expProps, tc.mpcc.ContConnCfg.GetProperties.Properties, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected container props (-want,+got): %s", diff)
+			}
 		})
 	}
 }
