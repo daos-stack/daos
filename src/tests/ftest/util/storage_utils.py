@@ -573,7 +573,8 @@ class StorageInfo():
 
         mounted_devices = {}
         self._log.debug('  Detecting mounted device names on %s', self._hosts)
-        result = run_remote(self._log, self._hosts, 'lsblk --output NAME,MOUNTPOINT --json')
+        result = run_remote(
+            self._log, self._hosts, 'lsblk --output NAME,MOUNTPOINT --json', stderr=True)
         for data in result.output:
             if not data.passed:
                 self._log.debug('  - Error detecting mounted devices on %s', data.hosts)
@@ -615,8 +616,10 @@ class StorageInfo():
         self._log.debug('  Detecting addresses for %s on %s', device, hosts)
 
         # Find the mounted device names on each host
-        command = (f'find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\' | '
-                   f'grep -w \'{device}\' | sort')
+        command = ' | '.join(
+            [r'find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\'',
+             f'grep -w \'{device}\'',
+             'sort'])
         result = run_remote(self._log, self._hosts, command)
         self._log.debug('  Detected addresses for %s:', device)
         for data in result.output:
