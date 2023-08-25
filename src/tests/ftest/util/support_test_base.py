@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 from control_test_base import ControlTestBase
-from run_utils import run_remote
+from run_utils import run_remote, command_as_user
 
 
 class SupportTestBase(ControlTestBase):
@@ -21,6 +21,7 @@ class SupportTestBase(ControlTestBase):
         self.custom_log_file = None
         self.custom_log_data = None
         self.log_hosts = None
+        self.run_user = 'root'
         self.extract_dir = os.path.join(self.base_test_dir, "extracted_support_logs")
 
     def create_custom_log(self, folder_name):
@@ -54,10 +55,12 @@ class SupportTestBase(ControlTestBase):
         """Verify custom log files is collected and part of archive.
 
         """
-        read_filedata = "find {}  -name {} | xargs cat".format(
+        getfilename = "find {} -name {}".format(
             self.extract_dir, os.path.basename(self.custom_log_file))
+        findcmd = command_as_user(getfilename, self.run_user)
+        readfiledata = command_as_user("xargs cat", self.run_user)
 
-        result = run_remote(self.log, self.log_hosts, read_filedata)
+        result = run_remote(self.log, self.log_hosts, findcmd + "|" + readfiledata)
         if not result.passed:
             self.fail("Failed to read the custom log file {} ".format(result))
 
@@ -77,14 +80,15 @@ class SupportTestBase(ControlTestBase):
 
         """
         # Create the new extract directory
-        cmd = "mkdir -p {}".format(self.extract_dir)
-        result = run_remote(self.log, self.log_hosts, cmd)
+        command = command_as_user("mkdir -p {}".format(self.extract_dir), self.run_user)
+        result = run_remote(self.log, self.log_hosts, command)
         if not result.passed:
-            self.fail("cmd {} failed, result:{}".format(cmd, result))
+            self.fail("cmd {} failed, result:{}".format(command, result))
 
         # Extract The tar.gz file to newly created directory
-        cmd = "tar -xf {} -C {}".format(tar_gz_filename, self.extract_dir)
-        result = run_remote(self.log, self.log_hosts, cmd)
+        command = command_as_user("tar -xf {} -C {}".format(tar_gz_filename, self.extract_dir),
+                                  self.run_user)
+        result = run_remote(self.log, self.log_hosts, command)
         if not result.passed:
             self.fail("Failed to extract the {} file, result:{}".format(tar_gz_filename, result))
 
@@ -106,7 +110,8 @@ class SupportTestBase(ControlTestBase):
         # Verify server log files are collected.
         for log_file in log_files:
             list_file = "ls -lsaRt {} | grep {}".format(self.extract_dir, log_file)
-            result = run_remote(self.log, self.log_hosts, list_file)
+            command = command_as_user(list_file, self.run_user)
+            result = run_remote(self.log, self.log_hosts, command)
             if not result.passed:
                 self.fail("Failed to list the {} file from extracted folder{}".format(
                           result, self.extract_dir))
