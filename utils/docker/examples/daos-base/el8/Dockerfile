@@ -18,7 +18,7 @@
 #                       "https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023")
 # - DAOS_REPOS_NOAUTH   Space separated list of repos to use without GPG authentication
 #                       (optional)
-# - DAOS_VERSION        Version of DAOS to use (default "2.4.0-2.el8")
+# - DAOS_VERSION        Version of DAOS to use (default "2.4.1-2.el8")
 
 # Pull base image
 ARG	LINUX_IMAGE_NAME="rockylinux/rockylinux"
@@ -45,7 +45,7 @@ ARG	BUST_CACHE=""
 ARG	DAOS_REPOS="https://packages.daos.io/v2.4/EL8/packages/x86_64/"
 ARG	DAOS_GPG_KEYS="https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023"
 ARG	DAOS_REPOS_NOAUTH=""
-ARG	DAOS_VERSION="2.4.0-2.el8"
+ARG	DAOS_VERSION="2.4.1-2.el8"
 RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
 		echo "[INFO] Busting cache" ;                                                      \
 		dnf update ;                                                                       \

@@ -34,7 +34,7 @@ properly build a docker image:
 The following environment variables allow to customize the Docker image to build:
 - `LINUX_DISTRO`: Linux distribution identifier (default "el8")
 - `DAOS_DOCKER_IMAGE_NSP`: Namespace identifier of the base DAOS docker image (default "daos")
-- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.0")
+- `DAOS_DOCKER_IMAGE_TAG`: Tag identifier of the base DAOS docker image (default "v2.4.1")
 - `BUST_CACHE`: Manage docker building cache (default "").  To invalidate the cache, a random value
    such as the date of day shall be given.
 - `LINUX_IMAGE_NAME`: Base docker image name to use (default "rockylinux/rockylinux")
@@ -45,7 +45,7 @@ The following environment variables allow to customize the Docker image to build
    "https://packages.daos.io/v2.4.0/RPM-GPG-KEY-2023")
 - `DAOS_REPOS_NOAUTH`: Space separated list of repos to use without GPG authentication
    (default "")
-- `DAOS_VERSION`: Version of DAOS to use (default "2.4.0-2.el8")
+- `DAOS_VERSION`: Version of DAOS to use (default "2.4.1-2.el8")
 
 When the environment file has been properly filled, run the following command to build the base DAOS
 docker image.

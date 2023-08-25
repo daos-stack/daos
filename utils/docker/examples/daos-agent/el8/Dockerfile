@@ -6,8 +6,8 @@
 # This Dockerfile accept the following input build arguments:
 # - LINUX_DISTRO             Linux distribution identifier (default "el8")
 # - DAOS_DOCKER_IMAGE_NSP    Namespace identifier of the base DAOS docker image (default "daos")
-# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "v2.4.0")
-# - DAOS_VERSION             Version of DAOS to use (default "2.4.0-2.el8")
+# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "v2.4.1")
+# - DAOS_VERSION             Version of DAOS to use (default "2.4.1-2.el8")
 
 # Pull base image
 ARG	LINUX_DISTRO="el8"
