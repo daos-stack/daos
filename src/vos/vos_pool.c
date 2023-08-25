@@ -793,7 +793,7 @@ pool_hop_free(struct d_ulink *hlink)
 	}
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, 0);
+		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
 	D_FREE(pool);
 }
