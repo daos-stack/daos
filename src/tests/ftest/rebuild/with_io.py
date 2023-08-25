@@ -5,6 +5,7 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
+from run_utils import run_remote
 
 
 class RbldWithIO(TestWithServers):
@@ -16,6 +17,23 @@ class RbldWithIO(TestWithServers):
 
     :avocado: recursive
     """
+
+    def _libfabric_debug(self):
+        """Collect libfabric debug information."""
+        self.log.debug("#" * 80)
+        run_remote(self.log, self.host_info.all_hosts, "fi_info --version")
+        run_remote(self.log, self.host_info.all_hosts, "fi_info -l")
+        self.log.debug("#" * 80)
+
+    def setUp(self):
+        """Set up the test case."""
+        super().setUp()
+        self._libfabric_debug()
+
+    def pre_tear_down(self):
+        """Run preliminary tear down steps."""
+        self._libfabric_debug()
+        return []
 
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
