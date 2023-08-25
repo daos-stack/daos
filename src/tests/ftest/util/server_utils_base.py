@@ -11,6 +11,7 @@ from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import FormattedParameter, CommandWithParameters
 from command_utils import YamlCommand, CommandWithSubCommand
+from data_utils import dict_extract_values, list_flatten
 from dmg_utils import get_dmg_response
 from exception_utils import CommandFailure
 from general_utils import get_display_size
@@ -145,6 +146,20 @@ class DaosServerCommand(YamlCommand):
         else:
             self.pattern = self.NORMAL_PATTERN
         self.pattern_count = host_qty * len(self.yaml.engine_params)
+
+    def update_pattern_timeout(self):
+        """Update the pattern timeout if undefined."""
+        if self.pattern_timeout.value is None:
+            self.log.debug('Updating pattern timeout based upon server config')
+            try:
+                data = self.yaml.get_yaml_data()
+                bdev_lists = list_flatten(dict_extract_values(data, ['storage', '*', 'bdev_list']))
+                self.log.debug('  Detected bdev_list entries: %s', bdev_lists)
+            except (AttributeError, TypeError, RecursionError):
+                # Default if the bdev_list cannot be obtained from the server configuration
+                bdev_lists = []
+            self.pattern_timeout.update(
+                max(len(bdev_lists), 2) * 20, 'DaosServerCommand.pattern_timeout')
 
     @property
     def using_nvme(self):
