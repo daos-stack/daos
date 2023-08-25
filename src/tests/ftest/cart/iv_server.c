@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -717,8 +717,7 @@ init_iv(void)
 			assert(rc == 0);
 			assert(output->rc == 0);
 
-			rc = crt_req_decref(rpc);
-			assert(rc == 0);
+			crt_req_decref(rpc);
 		}
 	}
 }
@@ -800,8 +799,7 @@ static int fetch_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(rpc);
-	assert(rc == 0);
+	crt_req_decref(rpc);
 
 	rc = crt_bulk_free(cb_info->bci_bulk_desc->bd_local_hdl);
 	assert(rc == 0);
@@ -905,8 +903,7 @@ fail_reply:
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(rpc);
-	assert(rc == 0);
+	crt_req_decref(rpc);
 
 	return 0;
 }
@@ -939,8 +936,7 @@ update_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(cb_info->rpc);
-	assert(rc == 0);
+	crt_req_decref(cb_info->rpc);
 
 	D_FREE(cb_info);
 
@@ -1005,8 +1001,7 @@ iv_test_update_iv(crt_rpc_t *rpc)
 	update_cb_info->key = key;
 	update_cb_info->rpc = rpc;
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
 	rc = crt_iv_update(g_ivns, 0, key, 0, &iv_value, 0, *sync, update_done,
 			   update_cb_info);
@@ -1089,8 +1084,7 @@ iv_get_grp_version(crt_rpc_t *rpc)
 int
 iv_test_fetch_iv(crt_rpc_t *rpc)
 {
-	struct RPC_TEST_FETCH_IV_in	*input;
-	int				 rc;
+	struct RPC_TEST_FETCH_IV_in *input;
 
 	DBG_ENTRY();
 	wait_for_namespace();
@@ -1098,10 +1092,9 @@ iv_test_fetch_iv(crt_rpc_t *rpc)
 	input = crt_req_get(rpc);
 	assert(input != NULL);
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
-	rc = crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
+	crt_iv_fetch(g_ivns, 0, &input->key, 0, 0, fetch_done, rpc);
 
 	/*
 	 * Test break case:
@@ -1160,8 +1153,7 @@ invalidate_done(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = crt_reply_send(cb_info->rpc);
 	assert(rc == 0);
 
-	rc = crt_req_decref(cb_info->rpc);
-	assert(rc == 0);
+	crt_req_decref(cb_info->rpc);
 
 	D_FREE(cb_info->expect_key->iov_buf);
 	D_FREE(cb_info->expect_key);
@@ -1178,8 +1170,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	crt_iv_key_t				*key;
 	struct invalidate_cb_info		*cb_info;
 	crt_iv_sync_t				 dsync = CRT_IV_SYNC_MODE_NONE;
-	crt_iv_sync_t				*sync = &dsync;
-	int					 rc;
+	crt_iv_sync_t                           *sync  = &dsync;
 
 	DBG_ENTRY();
 
@@ -1192,8 +1183,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	key = alloc_key(key_struct->rank, key_struct->key_id);
 	assert(key != NULL);
 
-	rc = crt_req_addref(rpc);
-	assert(rc == 0);
+	crt_req_addref(rpc);
 
 	D_ALLOC_PTR(cb_info);
 	assert(cb_info != NULL);
@@ -1204,8 +1194,7 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc)
 	if (input->iov_sync.iov_buf != NULL)
 		sync = (crt_iv_sync_t *)input->iov_sync.iov_buf;
 
-	rc = crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE,
-			       *sync, invalidate_done, cb_info);
+	crt_iv_invalidate(g_ivns, 0, key, 0, CRT_IV_SHORTCUT_NONE, *sync, invalidate_done, cb_info);
 	DBG_EXIT();
 	return 0;
 }
