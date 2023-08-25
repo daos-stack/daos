@@ -259,6 +259,11 @@ post_provision_config_nodes() {
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
+    # Remove DAOS dependencies to prevent masking packaging bugs
+    if rpm -qa | grep fuse3; then
+        dnf -y erase fuse3\*
+    fi
+
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload               \

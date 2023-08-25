@@ -487,9 +487,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		D_GOTO(output, rc);
 	}
 
-	if (invalidate)
-		entry->iv_valid = false;
-	else
+	/* If the entry is being invalidate, then iv_valid is set inside the callback */
+	if (!invalidate)
 		entry->iv_valid = true;
 
 	D_DEBUG(DB_MD, "key id %d rank %d myrank %d valid %s\n",

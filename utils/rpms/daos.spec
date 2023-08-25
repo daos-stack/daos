@@ -15,7 +15,7 @@
 
 Name:          daos
 Version:       2.5.100
-Release:       8%{?relval}%{?dist}
+Release:       9%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -176,15 +176,8 @@ Requires: libfabric >= %{libfabric_version}
 %if (0%{?suse_version} >= 1500)
 Requires: libfabric1 >= %{libfabric_version}
 Requires: libfuse3-3 >= 3.4.2
-%else
-# because our repo has a deprecated fuse-3.x RPM, make sure we don't
-# get it when fuse3 Requires: /etc/fuse.conf
-%if (0%{?rhel} >= 8)
-Requires: fuse3 >= 3
-%else
-Requires: fuse < 3, fuse3-libs >= 3.4.2
 %endif
-%endif
+Requires: /usr/bin/fusermount3
 %{?systemd_requires}
 
 %description client
@@ -231,6 +224,11 @@ Requires: libcapstone-devel
 %else
 Requires: Lmod
 Requires: capstone-devel
+%endif
+%if (0%{?rhel} >= 8)
+Requires: fuse3-devel >= 3
+%else
+Requires: fuse3-devel >= 3.4.2
 %endif
 
 %description client-tests
@@ -587,6 +585,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
+- Update fuse3 requirement to R: /usr/bin/fusermount3 by path
+  rather than by package name, for portability and future-proofing
+- Adding fuse3-devel as a requirement for daos-client-tests subpackage
+
 * Tue Aug 08 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-8
 - Build on EL9
 - Add a client-tests-mpich subpackage for mpich test dependencies.
