@@ -17,6 +17,8 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
+#include <malloc.h>
+
 #include <gurt/common.h>
 #include <gurt/atomic.h>
 
@@ -38,11 +40,49 @@ d_rand()
 	return result;
 }
 
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+#ifdef DAOS_BUILD_RELEASE
 void
 d_free(void *ptr)
 {
 	free(ptr);
 }
+
+#else
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_dynamic_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
+void
+d_free(void *ptr)
+{
+	size_t msize = _f_get_alloc_size(ptr);
+
+	memset(ptr, 0x42, msize);
+	free(ptr);
+}
+
+#endif
 
 void *
 d_calloc(size_t count, size_t eltsize)
@@ -185,22 +225,15 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)
-				rank_list->rl_ranks[j - 1] =
-					rank_list->rl_ranks[j];
-			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
-				rank_list, i, rank_tmp);
+				rank_list->rl_ranks[j - 1] = rank_list->rl_ranks[j];
 
 			i--;
 			rank_num--;
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
-	if (identical_num != 0) {
+	if (identical_num != 0)
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
-			__FILE__, __LINE__, rank_list, identical_num);
-	}
 
 out:
 	return rc;
@@ -238,18 +271,12 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			continue;
 		filter_num++;
 		for (j = i; j < rank_num - 1; j++)
-			dst_set->rl_ranks[j] =
-				dst_set->rl_ranks[j + 1];
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
-			__FILE__, __LINE__, dst_set, i, rank);
+			dst_set->rl_ranks[j] = dst_set->rl_ranks[j + 1];
 		/* as dst_set moved one item ahead */
 		i--;
 	}
-	if (filter_num != 0) {
+	if (filter_num != 0)
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
-			__FILE__, __LINE__, dst_set, filter_num);
-	}
 }
 
 int

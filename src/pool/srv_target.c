@@ -1586,16 +1586,23 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 2)
+	if (pool->sp_global_version >= 3) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.6 df=%d\n", VOS_POOL_DF_2_6);
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
+	} else if (pool->sp_global_version == 2) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.4 df=%d\n", VOS_POOL_DF_2_4);
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	else if (pool->sp_global_version == 1)
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	} else {
+		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
+		D_GOTO(out, ret = -DER_NO_PERM);
+	}
 
 	if (pool->sp_checkpoint_props_changed) {
 		pool->sp_checkpoint_props_changed = 0;
 		if (child->spc_chkpt_req != NULL)
 			sched_req_wakeup(child->spc_chkpt_req);
 	}
+	child->spc_reint_mode = pool->sp_reint_mode;
 out:
 	ds_pool_child_put(child);
 
@@ -1617,7 +1624,8 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 
-	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
+	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
 		pool->sp_disable_rebuild = 0;
 	else
 		pool->sp_disable_rebuild = 1;
@@ -1633,6 +1641,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
+	pool->sp_reint_mode = iv_prop->pip_reint_mode;
 
 	pool->sp_checkpoint_props_changed = 0;
 	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
@@ -1806,11 +1815,8 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
 			DP_RC(rc), DP_UOID(ent->ie_oid));
-		/* Busy - inform iterator and yield */
-		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);
 	} while (1);
-
 
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
@@ -1858,9 +1864,19 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
 	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
+				 arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
-			 arg, NULL);
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		dss_sleep(0);
+	} while (1);
+
 	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
@@ -1901,8 +1917,16 @@ pool_child_discard(void *data)
 
 	cont_arg.tgt_discard = arg;
 	child->spc_discard_done = 0;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 cont_discard_cb, NULL, &cont_arg, NULL);
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+				 cont_discard_cb, NULL, &cont_arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(arg->pool_uuid));
+		dss_sleep(0);
+	} while (1);
 
 	child->spc_discard_done = 1;
 

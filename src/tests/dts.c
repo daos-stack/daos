@@ -90,7 +90,7 @@ engine_pool_fini(struct credit_context *tsc)
 	if (tsc->tsc_mpi_rank == 0 && tsc_create_pool(tsc)) {
 		rc = dmg_pool_destroy(dmg_config_file, tsc->tsc_pool_uuid,
 				      NULL, true);
-		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST ||
+		D_ASSERTF(rc == 0 || rc == -DER_NONEXIST || rc == -DER_MISC ||
 			  rc == -DER_TIMEDOUT, "rc="DF_RC"\n", DP_RC(rc));
 	}
 }

@@ -1713,21 +1713,21 @@ dc_obj_layout_refresh(daos_handle_t oh)
 	return rc;
 }
 
-static inline uint32_t
-dc_obj_retry_delay(struct obj_auxi_args *obj_auxi, int err)
+uint32_t
+dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt, uint16_t *inprogress_cnt)
 {
 	uint32_t	delay = 0;
 
-	/* Randomly delay 5 - 36 us if it is not the first retry for
-	 * -DER_INPROGRESS && -DER_UPDATE_AGAIN case.
-	 **/
+	/*
+	 * Randomly delay 5 - 68 us if it is not the first retry for
+	 * -DER_INPROGRESS || -DER_UPDATE_AGAIN cases.
+	 */
+	++(*retry_cnt);
 	if (err == -DER_INPROGRESS || err == -DER_UPDATE_AGAIN) {
-		obj_auxi->inprogress_cnt++;
-		if (obj_auxi->inprogress_cnt > 1) {
-			delay = (d_rand() & ((1 << 5) - 1)) + 5;
+		if (++(*inprogress_cnt) > 1) {
+			delay = (d_rand() & ((1 << 6) - 1)) + 5;
 			D_DEBUG(DB_IO, "Try to re-sched task %p for %d/%d times with %u us delay\n",
-				obj_auxi->obj_task, (int)obj_auxi->inprogress_cnt,
-				(int)obj_auxi->retry_cnt, delay);
+				task, (int)*inprogress_cnt, (int)*retry_cnt, delay);
 		}
 	}
 
@@ -1741,6 +1741,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
+	uint32_t	  delay;
 	int		  result = task->dt_result;
 	int		  rc;
 
@@ -1760,8 +1761,9 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 			}
 		}
 
-		obj_auxi->retry_cnt++;
-		rc = tse_task_reinit_with_delay(task, dc_obj_retry_delay(obj_auxi, result));
+		delay = dc_obj_retry_delay(task, result, &obj_auxi->retry_cnt,
+					   &obj_auxi->inprogress_cnt);
+		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			D_GOTO(err, rc);
 
@@ -2721,6 +2723,7 @@ shard_auxi_set_param(struct shard_auxi_args *shard_arg, uint32_t map_ver,
 struct shard_task_sched_args {
 	struct dtx_epoch	tsa_epoch;
 	bool			tsa_scheded;
+	bool			tsa_prev_scheded; /* previously scheduled */
 };
 
 static int
@@ -2738,7 +2741,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 	obj_auxi = shard_auxi->obj_auxi;
 	map_ver = obj_auxi->map_ver_req;
 	obj_task = obj_auxi->obj_task;
-	if (obj_auxi->shards_scheded && !obj_auxi->new_shard_tasks) {
+	if (sched_arg->tsa_prev_scheded && !obj_auxi->new_shard_tasks) {
 		/* For retried IO, check if the shard's target changed after
 		 * pool map query. If match then need not do anything, if
 		 * mismatch then need to re-schedule the shard IO on the new
@@ -2781,8 +2784,9 @@ shard_task_sched(tse_task_t *task, void *arg)
 			sched_arg->tsa_scheded = true;
 		}
 	} else {
-		tse_task_schedule(task, true);
+		obj_auxi->shards_scheded = 1;
 		sched_arg->tsa_scheded = true;
+		tse_task_schedule(task, true);
 	}
 
 out:
@@ -2798,14 +2802,13 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, struct dtx_epoch *epoch)
 
 	D_ASSERT(!d_list_empty(&obj_auxi->shard_task_head));
 	sched_arg.tsa_scheded = false;
+	sched_arg.tsa_prev_scheded = obj_auxi->shards_scheded;
 	sched_arg.tsa_epoch = *epoch;
-	tse_task_list_traverse(&obj_auxi->shard_task_head, shard_task_sched,
-			       &sched_arg);
+	tse_task_list_traverse_adv(&obj_auxi->shard_task_head, shard_task_sched, &sched_arg);
 	/* It is possible that the IO retried by stale pm version found, but
 	 * the IO involved shards' targets not changed. No any shard task
 	 * re-scheduled for this case, can complete the obj IO task.
 	 */
-	obj_auxi->shards_scheded = 1;
 	if (sched_arg.tsa_scheded == false)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }
@@ -3724,9 +3727,25 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 				shard_auxi->shard);
 		}
 	} else if (obj_retry_error(ret)) {
+		int rc;
+
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
 		if (obj_auxi->result == 0)
 			obj_auxi->result = ret;
+		/* If the failure needs to be retried from different redundancy shards,
+		 * then let's remember the failure targets to make sure these targets
+		 * will be skipped during retry, see obj_ec_valid_shard_get() and
+		 * need_retry_redundancy().
+		 */
+		if ((ret == -DER_TX_UNCERTAIN || ret == -DER_CSUM || ret == -DER_NVME_IO) &&
+		    obj_auxi->is_ec_obj) {
+			rc = obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			if (rc != 0) {
+				D_ERROR("failed to add tgt %u to failed list: %d\n",
+					shard_auxi->target, rc);
+				ret = rc;
+			}
+		}
 	} else if (ret == -DER_TGT_RETRY) {
 		/* some special handing for DER_TGT_RETRY, as we use that errno for
 		 * some retry cases.
@@ -3760,11 +3779,17 @@ obj_shard_comp_cb(tse_task_t *task, struct shard_auxi_args *shard_auxi,
 			   ret != -DER_TX_RESTART && ret != -DER_RF &&
 			   !DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY)) {
 			int new_tgt;
+			int rc;
 
 			/* Check if there are other replicas available to
 			 * fulfill the request
 			 */
-			obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			rc = obj_auxi_add_failed_tgt(obj_auxi, shard_auxi->target);
+			if (rc != 0) {
+				D_ERROR("failed to add tgt %u to failed list: %d\n",
+					shard_auxi->target, rc);
+				ret = rc;
+			}
 			new_tgt = obj_shard_find_replica(obj_auxi->obj,
 						 shard_auxi->target,
 						 obj_auxi->failed_tgt_list);
@@ -4226,9 +4251,25 @@ obj_list_obj_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 		struct comp_iter_arg *arg)
 {
 	daos_obj_list_t *obj_arg = dc_task_get_args(obj_auxi->obj_task);
+	daos_anchor_t	*anchor = obj_arg->dkey_anchor;
+	uint32_t	grp;
 
 	*obj_arg->nr = arg->merge_nr;
 	anchor_update_check_eof(obj_auxi, obj_arg->dkey_anchor);
+
+	grp = dc_obj_anchor2shard(anchor) / obj_get_grp_size(obj_auxi->obj);
+	if (!daos_anchor_is_eof(anchor)) {
+		D_DEBUG(DB_IO, "More in grp %d\n", grp);
+	} else if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
+		   (grp < (obj_auxi->obj->cob_shards_nr / obj_get_grp_size(obj_auxi->obj) - 1))) {
+		D_DEBUG(DB_IO, DF_OID" next grp %u total grp %u\n",
+			DP_OID(obj_auxi->obj->cob_md.omd_id), grp + 1,
+			obj_auxi->obj->cob_shards_nr / obj_get_grp_size(obj_auxi->obj));
+		daos_anchor_set_zero(anchor);
+		dc_obj_shard2anchor(anchor, (grp + 1) * obj_get_grp_size(obj_auxi->obj));
+	} else {
+		D_DEBUG(DB_IO, "Enumerated All shards\n");
+	}
 }
 
 static int
@@ -5087,7 +5128,36 @@ obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 static inline bool
 need_retry_redundancy(struct obj_auxi_args *obj_auxi)
 {
+	/* NB: If new failure being added here, then please update failure check in
+	 * obj_shard_comp_cb() as well.
+	 */
 	return (obj_auxi->csum_retry || obj_auxi->tx_uncertain || obj_auxi->nvme_io_err);
+}
+
+/* Check if the shard was failed in the previous fetch, so these shards can be skipped */
+static inline bool
+shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
+{
+	struct obj_auxi_tgt_list *failed_list;
+	uint32_t tgt_id;
+
+	if (obj_auxi->force_degraded) {
+		D_DEBUG(DB_IO, DF_OID" fail idx %u\n",
+			DP_OID(obj_auxi->obj->cob_md.omd_id), shard_idx);
+		obj_auxi->force_degraded = 0;
+		return true;
+	}
+
+	if (obj_auxi->failed_tgt_list == NULL)
+		return false;
+
+	failed_list = obj_auxi->failed_tgt_list;
+	tgt_id = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
+
+	if (tgt_in_failed_tgts_list(tgt_id, failed_list))
+		return true;
+
+	return false;
 }
 
 static int
@@ -5097,18 +5167,14 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 	struct dc_object	*obj = obj_auxi->obj;
 	uint32_t		grp_start = grp_idx * obj_get_grp_size(obj);
 	uint32_t		shard_idx = grp_start + *tgt_idx;
-	bool			force_ec_degrade = false;
-	bool			ec_degrade = false;
 	int			rc = 0;
 
-	if (need_retry_redundancy(obj_auxi) || obj_auxi->force_degraded)
-		force_ec_degrade = true;
-
-	while (obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH) || force_ec_degrade) {
-		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d/%d on "DF_OID"\n", shard_idx, *tgt_idx,
+	while (shard_was_fail(obj_auxi, shard_idx) ||
+	       obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH)) {
+		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d on "DF_OID"\n", shard_idx, *tgt_idx,
 			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
 			obj->cob_shards->do_shards[shard_idx].do_target_id,
-			obj->cob_shards->do_shards[shard_idx].do_shard, force_ec_degrade,
+			obj->cob_shards->do_shards[shard_idx].do_shard,
 			DP_OID(obj->cob_md.omd_id));
 		rc = obj_ec_fail_info_insert(&obj_auxi->reasb_req, (uint16_t)*tgt_idx);
 		if (rc)
@@ -5119,24 +5185,15 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 		if (rc)
 			break;
 		shard_idx = grp_start + *tgt_idx;
-		force_ec_degrade = false;
-		obj_auxi->force_degraded = false;
-		ec_degrade = true;
 	}
 
 	if (rc) {
-		if (force_ec_degrade) {
-			obj_auxi->no_retry = 1;
-			rc = retry_errcode(obj_auxi, rc);
-		}
+		/* Can not find any valid shards anymore, so no need retry, and also to check
+		 * if it needs to restore the original failure. */
+		obj_auxi->no_retry = 1;
+		rc = retry_errcode(obj_auxi, rc);
 		D_ERROR(DF_OID" can not get parity shard: "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
-	}
-
-	if (ec_degrade) {
-		obj_auxi->tx_uncertain = 0;
-		obj_auxi->csum_retry = 0;
-		obj_auxi->nvme_io_err = 0;
 	}
 
 	return rc;
@@ -6045,6 +6102,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		}
 		memcpy(shard_arg->la_dkey_anchor,
 		       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_dkey_anchor->da_flags = obj_args->dkey_anchor->da_flags;
 	}
 
 	if (obj_args->akey_anchor) {
@@ -6059,6 +6117,7 @@ obj_shard_list_prep(struct obj_auxi_args *obj_auxi, struct dc_object *obj,
 		else
 			memcpy(shard_arg->la_akey_anchor,
 			       &sub_anchors->sa_anchors[idx].ssa_anchor, sizeof(daos_anchor_t));
+		shard_arg->la_akey_anchor->da_flags = obj_args->akey_anchor->da_flags;
 	}
 out:
 	return rc;

@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/container.h>
+#include <daos_srv/security.h>
 #include "srv_internal.h"
 #include "rpc.h"
 #include <daos_srv/iv.h>
@@ -464,7 +465,7 @@ again:
 				D_ERROR("create cont prop iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_CAPA) {
-				struct container_hdl	chdl;
+				struct container_hdl	chdl = { 0 };
 				int			rc1;
 
 				/* If PS leader switches, it may not in IV cache,
@@ -478,12 +479,19 @@ again:
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
 
+					if (uuid_is_null(chdl.ch_cont)) {
+						/* Skip for container server handler */
+						iv_entry.iv_capa.sec_capas =
+							ds_sec_get_rebuild_cont_capabilities();
+						iv_entry.iv_capa.flags = 0;
+						D_GOTO(out, rc = 0);
+					}
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
-							      civ_key->cont_uuid, &prop);
+							      chdl.ch_cont, &prop);
 					if (rc) {
 						D_ERROR(DF_CONT "get prop: "DF_RC"\n",
 							DP_CONT(entry->ns->iv_pool_uuid,
-								civ_key->cont_uuid), DP_RC(rc));
+								chdl.ch_cont), DP_RC(rc));
 						D_GOTO(out, rc);
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -635,6 +643,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			if (rc)
 				D_GOTO(out, rc);
 		}
+		entry->iv_valid = false;
 	} else {
 		struct cont_iv_entry *iv_entry;
 

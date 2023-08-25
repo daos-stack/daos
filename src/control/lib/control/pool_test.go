@@ -512,6 +512,67 @@ func TestControl_PoolCreate(t *testing.T) {
 	}
 }
 
+func TestControl_UpdateState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pqr      *PoolQueryResp
+		expState string
+	}{
+		"Pool state as Ready": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					DisabledTargets: 0,
+				},
+			},
+			expState: system.PoolServiceStateReady.String(),
+		},
+		"Pool state as Degraded": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					DisabledTargets: 4,
+				},
+			},
+			expState: system.PoolServiceStateDegraded.String(),
+		},
+		"Pool state as Unknown": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
+				PoolInfo: PoolInfo{
+					TotalTargets: 0,
+				},
+			},
+			expState: system.PoolServiceStateUnknown.String(),
+		},
+		"Pool state as Default": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateUnknown,
+				PoolInfo: PoolInfo{
+					TotalTargets: 1,
+				},
+			},
+			expState: system.PoolServiceStateReady.String(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.pqr.UpdateState()
+
+			if diff := cmp.Diff(tc.expState, tc.pqr.State.String()); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 	for name, tc := range map[string]struct {
 		pqr *PoolQueryResp
@@ -524,6 +585,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -535,12 +597,13 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -554,7 +617,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -665,6 +728,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -692,7 +756,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -735,6 +800,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -763,7 +829,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -807,6 +874,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -835,7 +903,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -1093,6 +1162,10 @@ func TestControl_PoolGetProp(t *testing.T) {
 			Number: propWithVal("checkpoint_thresh", "").Number,
 			Value:  &mgmtpb.PoolProperty_Numval{20},
 		},
+		{
+			Number: propWithVal("reintegration", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolReintModeNoDataSync},
+		},
 	}...)
 
 	for name, tc := range map[string]struct {
@@ -1184,6 +1257,7 @@ func TestControl_PoolGetProp(t *testing.T) {
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("reintegration", "no_data_sync"),
 				propWithVal("rp_pda", "2"),
 				propWithVal("scrub", "timed"),
 				propWithVal("scrub-freq", "1024"),
@@ -1566,7 +1640,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1617,7 +1692,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1625,7 +1701,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1636,14 +1713,16 @@ func TestControl_ListPools(t *testing.T) {
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    test.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(1),
+								SvcReps:      []uint32{1, 3, 5, 8},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1658,6 +1737,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryErrorMsg:   "remote failed",
 						State:           system.PoolServiceStateReady.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1665,7 +1745,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1676,14 +1757,16 @@ func TestControl_ListPools(t *testing.T) {
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    test.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(1),
+								SvcReps:      []uint32{1, 3, 5, 8},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1700,6 +1783,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
 						State:           system.PoolServiceStateReady.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1707,7 +1791,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1723,9 +1808,10 @@ func TestControl_ListPools(t *testing.T) {
 								State:   system.PoolServiceStateReady.String(),
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateDestroying.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateDestroying.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1741,12 +1827,14 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						State:           system.PoolServiceStateDestroying.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
