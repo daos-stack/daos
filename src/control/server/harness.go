@@ -156,17 +156,21 @@ func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error
 
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
+	hasDRPCErr := false
+	isTransient := func(errIn error) bool {
+		switch errors.Cause(errIn) {
+		case errDRPCNotReady:
+			hasDRPCErr = true
+			return true
+		case errEngineNotReady, FaultDataPlaneNotStarted:
+			return true
+		default:
+			return false
+		}
+	}
+
 	defer func() {
 		if err == nil {
-			return
-		}
-		// If the context was canceled, don't trigger callbacks.
-		if errors.Cause(err) == context.Canceled {
-			return
-		}
-		// Don't trigger callbacks for these errors which can happen when
-		// things are still starting up.
-		if err == FaultHarnessNotStarted || err == errEngineNotReady {
 			return
 		}
 
@@ -174,7 +178,13 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		h.RLock()
 		defer h.RUnlock()
 		for _, fn := range h.onDrpcFailure {
-			fn(ctx, err)
+			// If no engines can service request and errDRPCNotReady has been returned
+			// then pass errDRPCNotReady to trigger failure handlers.
+			if hasDRPCErr {
+				fn(ctx, errDRPCNotReady)
+			} else {
+				fn(ctx, err)
+			}
 		}
 	}()
 
@@ -182,18 +192,19 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		return nil, FaultHarnessNotStarted
 	}
 
-	// Iterate through the managed instances, looking for
-	// the first one that is available to service the request.
-	// If the request fails, that error will be returned.
+	// Iterate through the managed instances, looking for the first one that is available to
+	// service the request. If the request fails, that error will be returned. If a
+	// non-transient error is returned from CallDrpc, that error will be returned immediately.
 	for _, i := range h.Instances() {
 		resp, err = i.CallDrpc(ctx, method, body)
-
-		switch errors.Cause(err) {
-		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
-			continue
-		default:
-			return
+		if err != nil {
+			h.log.Debugf("drpc call failed on engine instance %d: %s", i.Index(), err)
+			if isTransient(err) {
+				continue
+			}
 		}
+
+		return
 	}
 
 	return
