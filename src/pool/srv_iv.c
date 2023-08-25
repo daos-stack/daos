@@ -928,6 +928,8 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	struct ds_pool		*pool;
 	int			rc;
 
+	D_DEBUG(DB_MD, DF_UUID "iv ent %d invalid\n", DP_UUID(entry->ns->iv_pool_uuid),
+		entry->iv_class->iv_class_id);
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
 			entry->iv_valid = false;
