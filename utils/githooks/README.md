@@ -46,6 +46,10 @@ the version output, it will fail.  Try running
 4. yamllint
 5. gofmt
 
+There is a daos wrapper around pylint at `utils/cq/daos_pylint.py` which will perform standard
+pylint checks whilst managing scons and PYTHONPATH setup changes automatically.  Installing
+the python packages in `utils/cq/requirements.txt` will allow it to test for all the python dependencies.
+
 It is important to check the output on commit for any errors that may indicate
 any one of the required tools is missing.
 
