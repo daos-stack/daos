@@ -2041,7 +2041,7 @@ again:
 	goto again;
 
 handle:
-	if (!d_list_empty(&ins->ci_rank_list) || ins->ci_start_flags & CSF_ORPHAN_POOL) {
+	if (!d_list_empty(&ins->ci_pool_list) || ins->ci_start_flags & CSF_ORPHAN_POOL) {
 		rc = chk_leader_handle_pools_list(ins);
 		if (rc != 0)
 			D_GOTO(out, bcast = true);

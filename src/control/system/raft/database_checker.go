@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/chk"
 	"github.com/daos-stack/daos/src/control/system/checker"
 )
@@ -23,8 +24,10 @@ type (
 		seq uint64
 	}
 
+	// CheckerFindingMap allows the lookup of a Finding by its sequence number.
 	CheckerFindingMap map[uint64]*checker.Finding
 
+	// CheckerDatabase is the database containing all checker Findings.
 	CheckerDatabase struct {
 		Findings CheckerFindingMap
 	}
@@ -34,10 +37,13 @@ func (e *errFindingNotFound) Error() string {
 	return errors.Errorf("finding 0x%x not found", e.seq).Error()
 }
 
+// ErrFindingNotFound creates an error that indicates a specified finding wasn't found in the
+// database.
 func ErrFindingNotFound(seq uint64) error {
 	return &errFindingNotFound{seq: seq}
 }
 
+// IsFindingNotFound checks whether an error is an ErrFindingNotFound.
 func IsFindingNotFound(err error) bool {
 	_, ok := errors.Cause(err).(*errFindingNotFound)
 	return ok
@@ -64,8 +70,7 @@ func (cdb *CheckerDatabase) addFinding(finding *checker.Finding) error {
 }
 
 func (cdb *CheckerDatabase) updateFinding(finding *checker.Finding) error {
-	_, found := cdb.Findings[finding.Seq]
-	if !found {
+	if _, found := cdb.Findings[finding.Seq]; !found {
 		return ErrFindingNotFound(finding.Seq)
 	}
 	// TODO: Selectively update fields?
@@ -74,6 +79,16 @@ func (cdb *CheckerDatabase) updateFinding(finding *checker.Finding) error {
 	return nil
 }
 
+func (cdb *CheckerDatabase) removeFinding(finding *checker.Finding) error {
+	if _, found := cdb.Findings[finding.Seq]; !found {
+		return ErrFindingNotFound(finding.Seq)
+	}
+
+	delete(cdb.Findings, finding.Seq)
+	return nil
+}
+
+// AddCheckerFinding adds a finding to the database.
 func (db *Database) AddCheckerFinding(finding *checker.Finding) error {
 	db.Lock()
 	defer db.Unlock()
@@ -81,6 +96,8 @@ func (db *Database) AddCheckerFinding(finding *checker.Finding) error {
 	return db.submitCheckerUpdate(raftOpAddCheckerFinding, finding)
 }
 
+// AddOrUpdateCheckerFinding updates a finding in the database if it is already stored, or stores
+// it if not.
 func (db *Database) AddOrUpdateCheckerFinding(finding *checker.Finding) error {
 	db.Lock()
 	defer db.Unlock()
@@ -92,6 +109,7 @@ func (db *Database) AddOrUpdateCheckerFinding(finding *checker.Finding) error {
 	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, finding)
 }
 
+// UpdateCheckerFinding updates a finding that is already in the database.
 func (db *Database) UpdateCheckerFinding(finding *checker.Finding) error {
 	db.Lock()
 	defer db.Unlock()
@@ -102,6 +120,33 @@ func (db *Database) UpdateCheckerFinding(finding *checker.Finding) error {
 	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, finding)
 }
 
+// RemoveCheckerFindingsForPools removes any findings in the database associated with one or more
+// pool IDs.
+func (db *Database) RemoveCheckerFindingsForPools(poolIDs ...string) error {
+	db.Lock()
+	defer db.Unlock()
+
+	poolIDSet := common.NewStringSet(poolIDs...)
+	for seq, f := range db.data.Checker.Findings {
+		if poolIDSet.Has(f.PoolUuid) || poolIDSet.Has(f.PoolLabel) {
+			delete(db.data.Checker.Findings, seq)
+		}
+	}
+	return nil
+}
+
+// RemoveCheckerFinding removes a given finding from the checker database.
+func (db *Database) RemoveCheckerFinding(finding *checker.Finding) error {
+	db.Lock()
+	defer db.Unlock()
+
+	if _, err := db.GetCheckerFinding(finding.Seq); err != nil {
+		return err
+	}
+	return db.submitCheckerUpdate(raftOpRemoveCheckerFinding, finding)
+}
+
+// SetCheckerFindingAction sets the action chosen for a giving finding.
 func (db *Database) SetCheckerFindingAction(seq uint64, action int32) error {
 	if _, ok := chk.CheckInconsistAction_name[action]; !ok {
 		return errors.Errorf("invalid action %d", action)
@@ -130,6 +175,7 @@ func (db *Database) SetCheckerFindingAction(seq uint64, action int32) error {
 	return db.submitCheckerUpdate(raftOpUpdateCheckerFinding, f)
 }
 
+// ResetCheckerData clears all findings in the database.
 func (db *Database) ResetCheckerData() error {
 	db.Lock()
 	defer db.Unlock()
@@ -137,6 +183,8 @@ func (db *Database) ResetCheckerData() error {
 	return db.submitCheckerUpdate(raftOpClearCheckerFindings, nil)
 }
 
+// GetCheckerFindings fetches findings from the database by sequence number, or fetches all of them
+// if no list is provided.
 func (db *Database) GetCheckerFindings(searchList ...uint64) ([]*checker.Finding, error) {
 	db.data.RLock()
 	defer db.data.RUnlock()
@@ -158,6 +206,7 @@ func (db *Database) GetCheckerFindings(searchList ...uint64) ([]*checker.Finding
 	return out, nil
 }
 
+// GetCheckerFinding looks up a finding by sequence number.
 func (db *Database) GetCheckerFinding(seq uint64) (*checker.Finding, error) {
 	db.data.RLock()
 	defer db.data.RUnlock()

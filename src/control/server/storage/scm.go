@@ -45,14 +45,15 @@ const (
 	// ScmUnknownMode indicates a pMem AppDirect region is in an unsupported memory mode.
 	ScmUnknownMode
 
-	// DefaultSysMemRsvd is the default amount of memory reserved for system when calculating
-	// RAM-disk size for DAOS I/O engine.
-	DefaultSysMemRsvd = humanize.GiByte * 6
-	// DefaultEngineMemRsvd is the default amount of memory reserved per-engine when
-	// calculating RAM-disk size for DAOS I/O engine.
-	DefaultEngineMemRsvd = humanize.GiByte * 1
 	// MinRamdiskMem is the minimum amount of memory needed for each engine's tmpfs RAM-disk.
 	MinRamdiskMem = humanize.GiByte * 4
+)
+
+// Memory reservation constant defaults to be used when calculating RAM-disk size for DAOS I/O engine.
+const (
+	DefaultSysMemRsvd    = humanize.GiByte * 16  // per-system
+	DefaultTgtMemRsvd    = humanize.MiByte * 128 // per-engine-target
+	DefaultEngineMemRsvd = humanize.GiByte * 1   // per-engine
 )
 
 func (ss ScmState) String() string {
@@ -561,20 +562,28 @@ func (f *ScmFwForwarder) UpdateFirmware(req ScmFirmwareUpdateRequest) (*ScmFirmw
 }
 
 // CalcRamdiskSize returns recommended tmpfs RAM-disk size calculated as
-// (total mem - hugepage mem - sys rsvd mem - (engine rsvd mem * nr engines)) / nr engines.
+// (total mem - hugepage mem - sys rsvd mem - engine rsvd mem) / nr engines.
 // All values in units of bytes and return value is for a single RAM-disk/engine.
-func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
+func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys uint64, tgtCount, engCount int) (uint64, error) {
 	if memTotal == 0 {
 		return 0, errors.New("requires nonzero total mem")
 	}
-	if engCount == 0 {
-		return 0, errors.New("requires nonzero nr engines")
+	if tgtCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engine targets")
+	}
+	if engCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engines")
+	}
+
+	memEng := uint64(tgtCount) * DefaultTgtMemRsvd
+	if memEng < DefaultEngineMemRsvd {
+		memEng = DefaultEngineMemRsvd
 	}
 
 	msgStats := fmt.Sprintf("mem stats: total %s (%d) - (hugepages %s + sys rsvd %s + "+
-		"(engine rsvd %s * nr engines %d))", humanize.IBytes(memTotal), memTotal,
-		humanize.IBytes(memHuge), humanize.IBytes(memSys), humanize.IBytes(memEng),
-		engCount)
+		"(engine rsvd %s * nr engines %d). %d tgts-per-engine)", humanize.IBytes(memTotal),
+		memTotal, humanize.IBytes(memHuge), humanize.IBytes(memSys),
+		humanize.IBytes(memEng), engCount, tgtCount)
 
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
 	if memTotal < memRsvd {
@@ -590,18 +599,26 @@ func CalcRamdiskSize(log logging.Logger, memTotal, memHuge, memSys, memEng uint6
 }
 
 // CalcMemForRamdiskSize returns the minimum RAM required for the input requested RAM-disk size.
-func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys, memEng uint64, engCount int) (uint64, error) {
+func CalcMemForRamdiskSize(log logging.Logger, ramdiskSize, memHuge, memSys uint64, tgtCount, engCount int) (uint64, error) {
 	if ramdiskSize == 0 {
 		return 0, errors.New("requires nonzero ram-disk size")
+	}
+	if tgtCount <= 0 {
+		return 0, errors.New("requires positive nonzero nr engine targets")
 	}
 	if engCount == 0 {
 		return 0, errors.New("requires nonzero nr engines")
 	}
 
+	memEng := uint64(tgtCount) * DefaultTgtMemRsvd
+	if memEng < DefaultEngineMemRsvd {
+		memEng = DefaultEngineMemRsvd
+	}
+
 	msgStats := fmt.Sprintf("required ram-disk size %s (%d). mem hugepage: %s, nr engines: %d, "+
-		"sys mem rsvd: %s, engine mem rsvd: %s", humanize.IBytes(ramdiskSize), ramdiskSize,
-		humanize.IBytes(memHuge), engCount, humanize.IBytes(memSys),
-		humanize.IBytes(memEng))
+		"sys mem rsvd: %s, engine mem rsvd: %s, %d tgts-per-engine",
+		humanize.IBytes(ramdiskSize), ramdiskSize, humanize.IBytes(memHuge), engCount,
+		humanize.IBytes(memSys), humanize.IBytes(memEng), tgtCount)
 
 	memRsvd := memHuge + memSys + (memEng * uint64(engCount))
 	memReqd := memRsvd + (ramdiskSize * uint64(engCount))

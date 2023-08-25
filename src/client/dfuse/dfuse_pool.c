@@ -21,7 +21,6 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	daos_prop_t              *prop       = NULL;
 	struct daos_prop_entry   *prop_entry;
 	daos_pool_info_t          pool_info = {};
-	d_list_t                 *rlink;
 	int                       rc;
 	uuid_t                    pool;
 	uuid_t                    cont = {};
@@ -41,7 +40,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, pool) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
+		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid");
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}
@@ -59,11 +58,9 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	/* Drop the reference on the pool */
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
 
-	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &dfc->dfs_ino, sizeof(dfc->dfs_ino));
-	if (rlink) {
+	ie = dfuse_inode_lookup(dfuse_info, dfc->dfs_ino);
+	if (ie) {
 		struct fuse_entry_param entry = {0};
-
-		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 		DFUSE_TRA_INFO(ie, "Reusing existing pool entry without reconnect");
 

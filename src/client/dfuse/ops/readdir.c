@@ -31,19 +31,19 @@ struct iterate_data {
  * the unlinked file, and a inval() call here does not change that.
  */
 void
-dfuse_cache_evict_dir(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie)
+dfuse_cache_evict_dir(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
 	uint32_t open_count = atomic_load_relaxed(&ie->ie_open_count);
 
 	if (open_count != 0)
 		DFUSE_TRA_DEBUG(ie, "Directory change whilst open");
 
-	D_SPIN_LOCK(&fs_handle->di_lock);
+	D_SPIN_LOCK(&dfuse_info->di_lock);
 	if (ie->ie_rd_hdl) {
 		DFUSE_TRA_DEBUG(ie, "Setting shared readdir handle as invalid");
 		ie->ie_rd_hdl->drh_valid = false;
 	}
-	D_SPIN_UNLOCK(&fs_handle->di_lock);
+	D_SPIN_UNLOCK(&dfuse_info->di_lock);
 
 	dfuse_cache_evict(ie);
 }
@@ -56,8 +56,8 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 
 	dre = &idata->id_hdl->drh_dre[idata->id_index];
 
-	DFUSE_TRA_DEBUG(idata->id_hdl, "Adding at index %d offset %#lx '%s'", idata->id_index,
-			idata->id_base_offset + idata->id_index, name);
+	DFUSE_TRA_DEBUG(idata->id_hdl, "Adding at index %d offset %#lx " DF_DE, idata->id_index,
+			idata->id_base_offset + idata->id_index, DP_DE(name));
 
 	strncpy(dre->dre_name, name, NAME_MAX);
 	dre->dre_offset      = idata->id_base_offset + idata->id_index;
@@ -125,7 +125,7 @@ _handle_init(struct dfuse_cont *dfc)
 
 /* Drop a ref on a readdir handle and release if required. Handle will no longer be usable */
 void
-dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
 	struct dfuse_readdir_hdl *hdl;
 	struct dfuse_readdir_c   *drc, *next;
@@ -143,7 +143,7 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 	oh->doh_rd_nextc = NULL;
 
 	/* Lock is to protect oh->doh_ie->ie_rd_hdl between readdir/closedir calls */
-	D_SPIN_LOCK(&fs_handle->di_lock);
+	D_SPIN_LOCK(&dfuse_info->di_lock);
 
 	oldref = atomic_fetch_sub_relaxed(&hdl->drh_ref, 1);
 	if (oldref != 1) {
@@ -163,18 +163,17 @@ dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh
 			 drc->drc_next_offset == READDIR_EOD);
 		expected_offset = drc->drc_next_offset;
 		if (drc->drc_rlink)
-			d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
+			d_hash_rec_decref(&dfuse_info->dpi_iet, drc->drc_rlink);
 		D_FREE(drc);
 	}
 	D_FREE(hdl);
 unlock:
-	D_SPIN_UNLOCK(&fs_handle->di_lock);
+	D_SPIN_UNLOCK(&dfuse_info->di_lock);
 }
 
 static int
-create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *parent,
-	     struct stat *stbuf, dfs_obj_t *obj, char *name, char *attr, daos_size_t attr_len,
-	     d_list_t **rlinkp)
+create_entry(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent, struct stat *stbuf,
+	     dfs_obj_t *obj, char *name, char *attr, daos_size_t attr_len, d_list_t **rlinkp)
 {
 	struct dfuse_inode_entry *ie;
 	d_list_t                 *rlink;
@@ -188,7 +187,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(fs_handle, ie);
+	dfuse_ie_init(dfuse_info, ie);
 	ie->ie_obj  = obj;
 	ie->ie_stat = *stbuf;
 
@@ -199,7 +198,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		/* Check for UNS entry point, this will allocate a new inode number if successful */
-		rc = check_for_uns_ep(fs_handle, ie, attr, attr_len);
+		rc = check_for_uns_ep(dfuse_info, ie, attr, attr_len);
 		if (rc != 0) {
 			DFUSE_TRA_WARNING(ie, "check_for_uns_ep() returned %d, ignoring", rc);
 			rc = 0;
@@ -212,7 +211,7 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o", stbuf->st_ino, ie->ie_stat.st_mode);
 
-	rlink = d_hash_rec_find_insert(&fs_handle->dpi_iet, &ie->ie_stat.st_ino,
+	rlink = d_hash_rec_find_insert(&dfuse_info->dpi_iet, &ie->ie_stat.st_ino,
 				       sizeof(ie->ie_stat.st_ino), &ie->ie_htl);
 
 	if (rlink != &ie->ie_htl) {
@@ -244,13 +243,13 @@ create_entry(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		dfuse_ie_close(fs_handle, ie);
+		dfuse_ie_close(dfuse_info, ie);
 		ie = inode;
 	}
 
 	*rlinkp = rlink;
 	if (rc != 0)
-		dfuse_ie_close(fs_handle, ie);
+		dfuse_ie_close(dfuse_info, ie);
 out:
 	return rc;
 }
@@ -290,12 +289,12 @@ dfuse_readdir_reset(struct dfuse_readdir_hdl *hdl)
  * protect this section with a spinlock.
  */
 static int
-ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh)
+ensure_rd_handle(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh)
 {
 	if (oh->doh_rd != NULL)
 		return 0;
 
-	D_SPIN_LOCK(&fs_handle->di_lock);
+	D_SPIN_LOCK(&dfuse_info->di_lock);
 
 	if (oh->doh_ie->ie_rd_hdl && oh->doh_ie->ie_rd_hdl->drh_valid) {
 		oh->doh_rd = oh->doh_ie->ie_rd_hdl;
@@ -304,7 +303,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 	} else {
 		oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 		if (oh->doh_rd == NULL) {
-			D_SPIN_UNLOCK(&fs_handle->di_lock);
+			D_SPIN_UNLOCK(&dfuse_info->di_lock);
 			return ENOMEM;
 		}
 
@@ -315,7 +314,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 			oh->doh_ie->ie_rd_hdl   = oh->doh_rd;
 		}
 	}
-	D_SPIN_UNLOCK(&fs_handle->di_lock);
+	D_SPIN_UNLOCK(&dfuse_info->di_lock);
 	return 0;
 }
 
@@ -323,7 +322,7 @@ ensure_rd_handle(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *
 #define FAD  fuse_add_direntry
 
 int
-dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct dfuse_obj_hdl *oh,
+dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj_hdl *oh,
 		 char *reply_buff, size_t *out_size, off_t offset, bool plus)
 {
 	off_t                     buff_offset = 0;
@@ -334,7 +333,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 	struct dfuse_readdir_hdl *hdl;
 	size_t                    size = *out_size;
 
-	rc = ensure_rd_handle(fs_handle, oh);
+	rc = ensure_rd_handle(dfuse_info, oh);
 	if (rc != 0)
 		return rc;
 
@@ -413,8 +412,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		while (nextp != (void *)&hdl->drh_cache_list) {
 			drc = container_of(nextp, struct dfuse_readdir_c, drc_list);
 
-			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
-					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
+			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx " DF_DE, drc,
+					drc->drc_offset, drc->drc_next_offset,
+					DP_DE(drc->drc_name));
 
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
@@ -423,7 +423,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				if (drc->drc_rlink) {
 					entry.attr = drc->drc_stbuf;
 
-					d_hash_rec_addref(&fs_handle->dpi_iet, drc->drc_rlink);
+					d_hash_rec_addref(&dfuse_info->dpi_iet, drc->drc_rlink);
 					ie = container_of(drc->drc_rlink, struct dfuse_inode_entry,
 							  ie_htl);
 				} else {
@@ -457,7 +457,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 					dfuse_compute_inode(oh->doh_ie->ie_dfs, &oid,
 							    &stbuf.st_ino);
 
-					rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj,
+					rc = create_entry(dfuse_info, oh->doh_ie, &stbuf, obj,
 							  drc->drc_name, out, attr_len, &rlink);
 					if (rc != 0) {
 						D_GOTO(reply, rc);
@@ -471,7 +471,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 						entry.attr = stbuf;
 					}
 					drc->drc_stbuf = entry.attr;
-					d_hash_rec_addref(&fs_handle->dpi_iet, rlink);
+					d_hash_rec_addref(&dfuse_info->dpi_iet, rlink);
 					drc->drc_rlink = rlink;
 				}
 
@@ -480,7 +480,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       drc->drc_name, &entry, drc->drc_next_offset);
 				if (written > size - buff_offset)
-					d_hash_rec_decref(&fs_handle->dpi_iet, drc->drc_rlink);
+					d_hash_rec_decref(&dfuse_info->dpi_iet, drc->drc_rlink);
 
 			} else {
 				written = FAD(req, &reply_buff[buff_offset], size - buff_offset,
@@ -537,7 +537,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 		/* Drop if shared */
 		if (oh->doh_rd->drh_caching) {
 			DFUSE_TRA_DEBUG(oh, "Switching to private handle");
-			dfuse_dre_drop(fs_handle, oh);
+			dfuse_dre_drop(dfuse_info, oh);
 			oh->doh_rd = _handle_init(oh->doh_ie->ie_dfs);
 			hdl        = oh->doh_rd;
 			if (oh->doh_rd == NULL)
@@ -636,8 +636,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 
 			hdl->drh_dre_index += 1;
 
-			DFUSE_TRA_DEBUG(hdl, "Checking offset %#lx next %#lx '%s'", dre->dre_offset,
-					dre->dre_next_offset, dre->dre_name);
+			DFUSE_TRA_DEBUG(hdl, "Checking offset %#lx next %#lx " DF_DE,
+					dre->dre_offset, dre->dre_next_offset,
+					DP_DE(dre->dre_name));
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,
@@ -666,8 +667,8 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				struct dfuse_inode_entry *ie;
 				d_list_t                 *rlink;
 
-				rc = create_entry(fs_handle, oh->doh_ie, &stbuf, obj, dre->dre_name,
-						  out, attr_len, &rlink);
+				rc = create_entry(dfuse_info, oh->doh_ie, &stbuf, obj,
+						  dre->dre_name, out, attr_len, &rlink);
 				if (rc != 0) {
 					dfs_release(obj);
 					D_FREE(drc);
@@ -687,7 +688,7 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				 */
 				if (drc) {
 					drc->drc_stbuf = entry.attr;
-					d_hash_rec_addref(&fs_handle->dpi_iet, rlink);
+					d_hash_rec_addref(&dfuse_info->dpi_iet, rlink);
 					drc->drc_rlink = rlink;
 				}
 
@@ -696,9 +697,9 @@ dfuse_do_readdir(struct dfuse_projection_info *fs_handle, fuse_req_t req, struct
 				written = FADP(req, &reply_buff[buff_offset], size - buff_offset,
 					       dre->dre_name, &entry, dre->dre_next_offset);
 				if (written > size - buff_offset) {
-					d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+					d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
 					if (drc)
-						d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+						d_hash_rec_decref(&dfuse_info->dpi_iet, rlink);
 				}
 			} else {
 				dfs_release(obj);
@@ -784,9 +785,9 @@ out_reset:
 void
 dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t offset, bool plus)
 {
-	struct dfuse_projection_info *fs_handle  = fuse_req_userdata(req);
-	char                         *reply_buff = NULL;
-	int                           rc         = EIO;
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	char              *reply_buff = NULL;
+	int                rc         = EIO;
 
 	D_ASSERTF(atomic_fetch_add_relaxed(&oh->doh_readdir_number, 1) == 0,
 		  "Multiple readdir per handle");
@@ -817,7 +818,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh, size_t size, off_t of
 	if (reply_buff == NULL)
 		D_GOTO(out, rc = ENOMEM);
 
-	rc = dfuse_do_readdir(fs_handle, req, oh, reply_buff, &size, offset, plus);
+	rc = dfuse_do_readdir(dfuse_info, req, oh, reply_buff, &size, offset, plus);
 
 out:
 	atomic_fetch_sub_relaxed(&oh->doh_readdir_number, 1);

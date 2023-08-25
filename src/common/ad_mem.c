@@ -1476,7 +1476,7 @@ arena_addr2grp(struct ad_arena *arena, daos_off_t addr, struct ad_group **grp_p)
 			return -DER_INVAL;
 		}
 
-		size = gd->gd_unit_nr * gd->gd_unit;
+		size = (daos_size_t)gd->gd_unit_nr * gd->gd_unit;
 		if (gd->gd_addr <= addr && gd->gd_addr + size > addr) {
 			found = true;
 			break;
@@ -2001,6 +2001,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	/* run out of ad groups */
 	if (grp_idx == ARENA_GRP_MAX) {
 		D_DEBUG(DB_TRACE, "Arena=%d, no group found\n", arena2id(arena));
+		arena_decref(arena);
 		return -DER_NOSPACE;
 	}
 	arena->ar_last_grp = max(arena->ar_last_grp, grp_idx);

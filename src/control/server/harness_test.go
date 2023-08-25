@@ -241,8 +241,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
-						atomic.StoreUint32(&instanceStarts,
-							atomic.AddUint32(&instanceStarts, 1))
+						_ = atomic.AddUint32(&instanceStarts, 1)
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
@@ -439,7 +438,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
 			}
-			members := membership.Members(nil)
+			members, err := membership.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),

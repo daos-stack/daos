@@ -29,6 +29,7 @@ extern bool g_verbose;
 #define is_false assert_false
 
 #define PLT_LAYOUT_VERSION	1
+extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);
 
@@ -112,7 +113,7 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 
 void
 gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
-			   int vos_per_target, pl_map_type_t pl_type,
+			   int vos_per_target, pl_map_type_t pl_type, int fdom_lvl,
 			   struct pool_map **po_map_out,
 			   struct pl_map **pl_map_out);
 
@@ -151,6 +152,8 @@ placement_tests_run(bool verbose);
 int
 pda_tests_run(bool verbose);
 int
+pda_layout_run(bool verbose);
+int
 dist_tests_run(bool verbose, uint32_t num_obj, int obj_class);
 
 static inline void
@@ -172,7 +175,19 @@ gen_maps(int num_pds, int fdoms_per_pd, int nodes_per_domain, int vos_per_target
 	*po_map = NULL;
 	*pl_map = NULL;
 	gen_pool_and_placement_map(num_pds, fdoms_per_pd, nodes_per_domain, vos_per_target,
-				   PL_TYPE_JUMP_MAP, po_map, pl_map);
+				   PL_TYPE_JUMP_MAP, PO_COMP_TP_RANK, po_map, pl_map);
+	assert_non_null(*po_map);
+	assert_non_null(*pl_map);
+}
+
+static inline void
+gen_maps_adv(int num_pds, int fdoms_per_pd, int nodes_per_domain, int vos_per_target, int fdom_lvl,
+	     struct pool_map **po_map, struct pl_map **pl_map)
+{
+	*po_map = NULL;
+	*pl_map = NULL;
+	gen_pool_and_placement_map(num_pds, fdoms_per_pd, nodes_per_domain, vos_per_target,
+				   PL_TYPE_JUMP_MAP, fdom_lvl, po_map, pl_map);
 	assert_non_null(*po_map);
 	assert_non_null(*pl_map);
 }

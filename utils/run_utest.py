@@ -299,11 +299,15 @@ class AIO():
             config_file.write(contents)
 
     def prepare_test(self, name="AIO_1", min_size=4):
-        """Prepare AIO for a test, min_size in GB"""
+        """Prepare AIO for a test, min_size in GB. Erase 4K header if device exists (no truncate
+        opt makes dd behavior consistent across device disks and files enabling unit tests to be
+        run locally with /dev/vdb filt).
+        """
         if self.device is None:
             run_cmd(["dd", "if=/dev/zero", f"of={self.fname}", "bs=1G", f"count={min_size}"])
         else:
-            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1"])
+            run_cmd(["sudo", "-E", "dd", "if=/dev/zero", f"of={self.fname}", "bs=4K", "count=1",
+                     "conv=notrunc"])
         self.create_config(name)
 
     def finalize_test(self):

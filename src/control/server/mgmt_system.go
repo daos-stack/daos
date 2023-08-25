@@ -515,7 +515,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
-	members := svc.membership.Members(hitRanks)
+	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
+	if err != nil {
+		return nil, errors.Wrap(err, "get membership")
+	}
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}
@@ -683,7 +686,9 @@ func (svc *mgmtSvc) checkMemberStates(requiredStates ...system.MemberState) erro
 	}
 	invalidMembers := &ranklist.RankSet{}
 
+	svc.log.Tracef("checking %d members", len(allMembers))
 	for _, m := range allMembers {
+		svc.log.Tracef("member %d: %s", m.Rank.Uint32(), m.State)
 		if m.State&stateMask == 0 {
 			invalidMembers.Add(m.Rank)
 		}

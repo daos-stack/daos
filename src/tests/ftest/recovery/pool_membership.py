@@ -7,12 +7,12 @@ import time
 
 from ClusterShell.NodeSet import NodeSet
 
-from apricot import TestWithServers
+from ior_test_base import IorTestBase
 from general_utils import report_errors
 from run_utils import run_remote
 
 
-class PoolMembershipTest(TestWithServers):
+class PoolMembershipTest(IorTestBase):
     """Test Pass 2: Pool Membership
 
     :avocado: recursive
@@ -38,6 +38,28 @@ class PoolMembershipTest(TestWithServers):
                 rank_to_free[rank] = free
 
         return rank_to_free
+
+    def wait_for_check_complete(self):
+        """Repeatedly call dmg check query until status becomes COMPLETED.
+
+        If the status doesn't become COMPLETED, fail the test.
+
+        Returns:
+            list: List of repair reports.
+
+        """
+        repair_reports = None
+        for _ in range(8):
+            check_query_out = self.get_dmg_command().check_query()
+            if check_query_out["response"]["status"] == "COMPLETED":
+                repair_reports = check_query_out["response"]["reports"]
+                break
+            time.sleep(5)
+
+        if not repair_reports:
+            self.fail("Checker didn't detect or repair any inconsistency!")
+
+        return repair_reports
 
     def test_orphan_pool_shard(self):
         """Test orphan pool shard.
@@ -176,18 +198,18 @@ class PoolMembershipTest(TestWithServers):
         # 6. Enable and start the checker.
         self.log_step("Enable and start the checker.")
         dmg_command.check_enable()
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
         dmg_command.check_start()
 
         # 7. Query the checker and verify that the issue was fixed.
         # i.e., Current status is COMPLETED.
         errors = []
-        query_msg = ""
-        for _ in range(8):
-            check_query_out = dmg_command.check_query()
-            if check_query_out["response"]["status"] == "COMPLETED":
-                query_msg = check_query_out["response"]["reports"][0]["msg"]
-                break
-            time.sleep(5)
+        repair_reports = self.wait_for_check_complete()
+        query_msg = repair_reports[0]["msg"]
         if "orphan rank" not in query_msg:
             errors.append(
                 "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
@@ -208,6 +230,181 @@ class PoolMembershipTest(TestWithServers):
         if dst_free_fixed < dst_free_orig:
             msg = (f"Destination rank space was not recovered by checker! "
                    f"Original = {dst_free_orig}; With fixed = {dst_free_fixed}")
+            errors.append(msg)
+
+        report_errors(test=self, errors=errors)
+
+    def test_dangling_pool_map(self):
+        """Test dangling pool map.
+
+        1. Create a pool.
+        2. Stop servers.
+        3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
+        4. Enable and start the checker.
+        5. Query the checker and verify that the issue was fixed. i.e., Current status is
+        COMPLETED.
+        6. Disable the checker.
+        7. Verify that the pool has one less target.
+
+        Jira ID: DAOS-11736
+
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,pool_membership
+        :avocado: tags=PoolMembershipTest,test_dangling_pool_map
+        """
+        # 1. Create a pool.
+        self.log_step("Creating a pool (dmg pool create)")
+        pool = self.get_pool(connect=False)
+
+        # 2. Stop servers.
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        # 3. Manually remove /<scm_mount>/<pool_uuid>/vos-0 from rank 0 node.
+        rank_0_host = NodeSet(self.server_managers[0].get_host(0))
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rm_cmd = f"sudo rm {scm_mount}/{pool.uuid.lower()}/vos-0"
+        if not run_remote(log=self.log, hosts=rank_0_host, command=rm_cmd).passed:
+            self.fail(f"Following command failed on {rank_0_host}! {rm_cmd}")
+
+        # 4. Enable and start the checker.
+        self.log_step("Enable and start the checker.")
+        dmg_command.check_enable(stop=False)
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
+        # Start checker.
+        dmg_command.check_start()
+
+        # 5. Query the checker and verify that the issue was fixed.
+        repair_reports = self.wait_for_check_complete()
+
+        errors = []
+        query_msg = repair_reports[0]["msg"]
+        if "dangling target" not in query_msg:
+            errors.append(
+                "Checker didn't fix orphan pool shard! msg = {}".format(query_msg))
+
+        # 6. Disable the checker.
+        self.log_step("Disable and start the checker.")
+        dmg_command.check_disable()
+
+        # 7. Verify that the pool has one less target.
+        query_out = pool.query()
+        total_targets = query_out["response"]["total_targets"]
+        active_targets = query_out["response"]["active_targets"]
+        expected_targets = total_targets - 1
+        if active_targets != expected_targets:
+            msg = (f"Unexpected number of active targets! Expected = {expected_targets}; "
+                   f"Actual = {active_targets}")
+            errors.append(msg)
+
+        report_errors(test=self, errors=errors)
+
+    def test_dangling_rank_entry(self):
+        """Test dangling target entry.
+
+        1. Create a pool and a container.
+        2. Write some data with IOR using SX.
+        3. Stop servers.
+        4. Remove pool directory from one of the mount points.
+        5. Enable checker.
+        6. Start checker.
+        7. Query the checker until expected number of inconsistencies are repaired.
+        8. Disable checker and start servers.
+        9. Wait for rebuild to finish.
+        10. Query the pool and verify that expected number of targets are disabled.
+
+        Jira ID: DAOS-11735
+
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
+        :avocado: tags=recovery,pool_membership
+        :avocado: tags=PoolMembershipTest,test_dangling_rank_entry
+        """
+        targets = self.params.get("targets", "/run/server_config/engines/0/*")
+        exp_msg = "dangling rank entry"
+
+        # 1. Create a pool and a container.
+        self.log_step("Create a pool and a container.")
+        self.pool = self.get_pool(connect=False)
+        self.container = self.get_container(pool=self.pool)
+
+        # 2. Write some data with IOR using SX.
+        self.log_step("Write some data with IOR.")
+        self.ior_cmd.set_daos_params(
+            self.server_group, self.pool, self.container.identifier)
+        self.run_ior_with_pool(create_pool=False, create_cont=False)
+
+        # 3. Stop servers.
+        self.log_step("Stop servers.")
+        dmg_command = self.get_dmg_command()
+        dmg_command.system_stop()
+
+        # 4. Remove pool directory from one of the mount points.
+        self.log_step("Remove pool directory from one of the mount points.")
+        rank_1_host = NodeSet(self.server_managers[0].get_host(1))
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+        rm_cmd = f"sudo rm -rf {scm_mount}/{self.pool.uuid.lower()}"
+        if not run_remote(log=self.log, hosts=rank_1_host, command=rm_cmd).passed:
+            self.fail(f"Following command failed on {rank_1_host}! {rm_cmd}")
+
+        # 5. Enable checker.
+        self.log_step("Enable checker.")
+        dmg_command.check_enable(stop=False)
+
+        # If we call check start immediately after check enable, checker may not detect
+        # the fault. Developer is fixing this issue.
+        time.sleep(3)
+
+        # 6. Start checker.
+        self.log_step("Start checker.")
+        dmg_command.check_start()
+
+        # 7. Query the checker until expected number of inconsistencies are repaired.
+        self.log_step(
+            "Query the checker until expected number of inconsistencies are repaired.")
+        repair_reports = self.wait_for_check_complete()
+
+        # Verify that the checker repaired target count + 1 faults. (+1 is for rank.
+        # Checker marks it as down.)
+        errors = []
+        repair_count = len(repair_reports)
+        expected_repair_count = targets + 1
+        if repair_count != expected_repair_count:
+            msg = (f"Unexpected number of repair count! Expected = "
+                   f"{expected_repair_count}, Actual = {repair_count}")
+            errors.append(msg)
+
+        # Verify that the message contains dangling rank entry.
+        exp_msg_found = False
+        for repair_report in repair_reports:
+            if exp_msg in repair_report["msg"]:
+                exp_msg_found = True
+                break
+        if not exp_msg_found:
+            errors.append(f"{exp_msg} not in repair message!")
+
+        # 8. Disable checker.
+        self.log_step("Disable checker.")
+        dmg_command.check_disable()
+
+        # 9. Wait for rebuild to finish.
+        self.log_step("Wait for rebuild to finish.")
+        self.pool.wait_for_rebuild_to_start(interval=5)
+        self.pool.wait_for_rebuild_to_end(interval=5)
+
+        # 10. Query the pool and verify that expected number of targets are disabled.
+        self.log_step(
+            "Query the pool and verify that expected number of targets are disabled.")
+        self.pool.set_query_data()
+        disabled_targets = self.pool.query_data["response"]["disabled_targets"]
+        if disabled_targets != targets:
+            msg = (f"Unexpected number of targets are disabled! Expected = {targets}; "
+                   f"Actual = {disabled_targets}")
             errors.append(msg)
 
         report_errors(test=self, errors=errors)

@@ -742,6 +742,21 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
 
+    def pool_upgrade(self, pool):
+        """Call dmg pool upgrade.
+
+        Args:
+            pool (str): pool to upgrade
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(("pool", "upgrade"), pool=pool)
+
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
 
@@ -1421,6 +1436,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
             auto=auto, find_orphans=find_orphans, policies=policies)
+
+    def check_stop(self, pool=None):
+        """Call dmg check stop.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "stop"), pool=pool)
 
     def check_query(self, pool=None):
         """Call dmg check query.
