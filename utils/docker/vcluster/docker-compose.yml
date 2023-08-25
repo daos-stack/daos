@@ -32,6 +32,7 @@ services:
         - "DAOS_IFACE_NAME=${DAOS_IFACE_NAME}"
         - "DAOS_SCM_SIZE=${DAOS_SCM_SIZE}"
         - "DAOS_BDEV_SIZE=${DAOS_BDEV_SIZE}"
+        - "DAOS_MD_ON_SSD=${DAOS_MD_ON_SSD}"
     container_name: daos-server
     hostname: daos-server
     # FIXME Refine needed capabilities

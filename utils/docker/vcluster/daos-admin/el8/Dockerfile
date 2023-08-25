@@ -29,14 +29,14 @@ ARG	DAOS_ADMIN_GROUP=root
 COPY	daos_control.yml.in /tmp/daos_control.yml.in
 RUN	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 		sed --regexp-extended                                                              \
-		    --expression '/^@DAOS_NOAUTH_SECTION_BEGIN@$/,/^@DAOS_NOAUTH_SECTION_END@/d'   \
-		    --expression '/(^@DAOS_AUTH_SECTION_BEGIN@$)|(^@DAOS_AUTH_SECTION_END@$)/d'    \
+		    --expression '/^@DAOS_NOAUTH_BEGIN@$/,/^@DAOS_NOAUTH_END@/d'                   \
+		    --expression '/(^@DAOS_AUTH_BEGIN@$)|(^@DAOS_AUTH_END@$)/d'                    \
 		    /tmp/daos_control.yml.in > /etc/daos/daos_control.yml &&                       \
 # XXX WARNING XXX With a production platform, these certificates should be provided with a volume
 # XXX WARNING XXX (or Secrets with K8S).
 		chmod 644 /root/daosCA/certs/daosCA.crt &&                                         \
 		chmod 644 /root/daosCA/certs/admin.crt &&                                          \
-		chmod 600 /root/daosCA/certs/admin.key &&                                          \
+		chmod 400 /root/daosCA/certs/admin.key &&                                          \
 		chown "$DAOS_ADMIN_USER:$DAOS_ADMIN_GROUP" /root/daosCA/certs/daosCA.crt &&        \
 		chown "$DAOS_ADMIN_USER:$DAOS_ADMIN_GROUP" /root/daosCA/certs/admin.crt &&         \
 		chown "$DAOS_ADMIN_USER:$DAOS_ADMIN_GROUP" /root/daosCA/certs/admin.key &&         \
@@ -46,8 +46,8 @@ RUN	if [ "$DAOS_AUTH" == yes ] ; then                                           
 		rm -fr /root/daosCA ;                                                              \
 	else                                                                                       \
 		sed --regexp-extended                                                              \
-		    --expression '/^@DAOS_AUTH_SECTION_BEGIN@$/,/^@DAOS_AUTH_SECTION_END@/d'       \
-		    --expression '/(^@DAOS_NOAUTH_SECTION_BEGIN@$)|(^@DAOS_NOAUTH_SECTION_END@$)/d'\
+		    --expression '/^@DAOS_AUTH_BEGIN@$/,/^@DAOS_AUTH_END@/d'       \
+		    --expression '/(^@DAOS_NOAUTH_BEGIN@$)|(^@DAOS_NOAUTH_END@$)/d'\
 		    /tmp/daos_control.yml.in > /etc/daos/daos_control.yml ;                        \
 	fi &&                                                                                      \
 	rm -f /tmp/daos_control.yml.in

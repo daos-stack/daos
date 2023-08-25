@@ -11,6 +11,7 @@
 # - DAOS_IFACE_NAME      Fabric network interface used by the DAOS engine (default "eth0")
 # - DAOS_SCM_SIZE        Size in GB of the RAM emulating SCM devices (default 4)
 # - DAOS_BDEV_SIZE       Size in GB of the file created to emulate NVMe devices (derault 16)
+# - DAOS_MD_ON_SSD       Enable DAOS MD-on-SSD feature when set to "yes" (default "no")
 
 # Pull base image
 ARG	DAOS_BASE_IMAGE=daos-base
@@ -29,6 +30,7 @@ ARG	DAOS_HUGEPAGES_NBR=4096
 ARG	DAOS_IFACE_NAME=eth0
 ARG	DAOS_SCM_SIZE=4
 ARG	DAOS_BDEV_SIZE=16
+ARG	DAOS_MD_ON_SSD=no
 # XXX NOTE XXX With a production platform, this configuration file should be provided with a volume
 # XXX NOTE XXX (or ConfigMaps for K8S).
 COPY	daos_server.yml.in /tmp/daos_server.yml.in
@@ -40,20 +42,31 @@ RUN	sed --regexp-extended --in-place                                            
 	    --expression "s/^User=daos_server$/User=root/"                                         \
 	    --expression "s/^Group=daos_server$/Group=root/"                                       \
 	    /usr/lib/systemd/system/daos_server.service &&                                         \
+	sed_opts="--regexp-extended" ;                                                             \
+	sed_opts+=" --expression s/@DAOS_HUGEPAGES_NBR@/${DAOS_HUGEPAGES_NBR}/" ;                  \
+	sed_opts+=" --expression s/@DAOS_IFACE_NAME@/${DAOS_IFACE_NAME}/" ;                        \
+	sed_opts+=" --expression s/@DAOS_SCM_SIZE@/${DAOS_SCM_SIZE}/" ;                            \
+	sed_opts+=" --expression s/@DAOS_BDEV_SIZE@/${DAOS_BDEV_SIZE}/" ;                          \
 	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
-		sed --regexp-extended                                                              \
-		    --expression "s/@DAOS_HUGEPAGES_NBR@/${DAOS_HUGEPAGES_NBR}/"                   \
-		    --expression "s/@DAOS_IFACE_NAME@/${DAOS_IFACE_NAME}/"                         \
-		    --expression "s/@DAOS_SCM_SIZE@/${DAOS_SCM_SIZE}/"                             \
-		    --expression "s/@DAOS_BDEV_SIZE@/${DAOS_BDEV_SIZE}/"                           \
-		    --expression '/^@DAOS_NOAUTH_SECTION_BEGIN@$/,/^@DAOS_NOAUTH_SECTION_END@/d'   \
-		    --expression '/(^@DAOS_AUTH_SECTION_BEGIN@$)|(^@DAOS_AUTH_SECTION_END@$)/d'    \
-		    /tmp/daos_server.yml.in > /etc/daos/daos_server.yml &&                         \
+		sed_opts+=' --expression /^@DAOS_NOAUTH_BEGIN@$/,/^@DAOS_NOAUTH_END@/d' ;          \
+		sed_opts+=' --expression /(^@DAOS_AUTH_BEGIN@$)|(^@DAOS_AUTH_END@$)/d' ;           \
+	else                                                                                       \
+		sed_opts+=' --expression /^@DAOS_AUTH_BEGIN@$/,/^@DAOS_AUTH_END@/d' ;              \
+		sed_opts+=' --expression /(^@DAOS_NOAUTH_BEGIN@$)|(^@DAOS_NOAUTH_END@$)/d' ;       \
+	fi ;                                                                                       \
+	if [ "$DAOS_MD_ON_SSD" == yes ] ; then                                                     \
+		sed_opts+=' --expression /(^@DAOS_MD_ON_SSD_BEGIN@$)|(^@DAOS_MD_ON_SSD_END@$)/d' ; \
+	else                                                                                       \
+		sed_opts+=' --expression /^@DAOS_MD_ON_SSD_BEGIN@$/,/^@DAOS_MD_ON_SSD_END@/d' ;    \
+	fi ;                                                                                       \
+	sed $sed_opts /tmp/daos_server.yml.in > /etc/daos/daos_server.yml &&                       \
+	rm -f /tmp/daos_server.yml.in &&                                                           \
+	if [ "$DAOS_AUTH" == yes ] ; then                                                          \
 # XXX WARNING XXX With a production platform, these certificates should be provided with a volume
 # XXX WARNING XXX (or Secrets with K8S).
 		chmod 644 /root/daosCA/certs/daosCA.crt &&                                         \
 		chmod 644 /root/daosCA/certs/server.crt &&                                         \
-		chmod 600 /root/daosCA/certs/server.key &&                                         \
+		chmod 400 /root/daosCA/certs/server.key &&                                         \
 		chmod 644 /root/daosCA/certs/agent.crt &&                                          \
 		chown daos_server:daos_server /root/daosCA/certs/daosCA.crt &&                     \
 		chown daos_server:daos_server /root/daosCA/certs/server.crt &&                     \
@@ -64,14 +77,4 @@ RUN	sed --regexp-extended --in-place                                            
 		mv /root/daosCA/certs/server.key /etc/daos/certs/. &&                              \
 		mv /root/daosCA/certs/agent.crt /etc/daos/certs/clients/. &&                       \
 		rm -fr /root/daosCA ;                                                              \
-	else                                                                                       \
-		sed --regexp-extended                                                              \
-		    --expression "s/@DAOS_HUGEPAGES_NBR@/${DAOS_HUGEPAGES_NBR}/"                   \
-		    --expression "s/@DAOS_IFACE_NAME@/${DAOS_IFACE_NAME}/"                         \
-		    --expression "s/@DAOS_SCM_SIZE@/${DAOS_SCM_SIZE}/"                             \
-		    --expression "s/@DAOS_BDEV_SIZE@/${DAOS_BDEV_SIZE}/"                           \
-		    --expression '/^@DAOS_AUTH_SECTION_BEGIN@$/,/^@DAOS_AUTH_SECTION_END@/d'       \
-		    --expression '/(^@DAOS_NOAUTH_SECTION_BEGIN@$)|(^@DAOS_NOAUTH_SECTION_END@$)/d'\
-		    /tmp/daos_server.yml.in > /etc/daos/daos_server.yml ;                          \
-	fi &&                                                                                      \
-	rm -f /tmp/daos_server.yml.in
+	fi
