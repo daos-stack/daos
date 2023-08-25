@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -21,6 +22,9 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
+	apiMocks "github.com/daos-stack/daos/src/control/lib/daos/api/mocks"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 )
@@ -29,6 +33,60 @@ import (
 #include "util.h"
 */
 import "C"
+
+type (
+	wrappedPoolHandle struct {
+		*daosAPI.PoolHandle
+	}
+
+	wrappedPoolMock struct {
+		*apiMocks.PoolConn
+	}
+
+	poolConnection interface {
+		UUID() uuid.UUID
+		Pointer() unsafe.Pointer
+		Disconnect(context.Context) error
+		OpenContainer(context.Context, string, daos.ContainerOpenFlag) (contConnection, error)
+		CreateContainer(context.Context, daosAPI.ContainerCreateReq) (*daos.ContainerInfo, error)
+		DestroyContainer(context.Context, string, bool) error
+		ListContainers(context.Context, bool) ([]*daos.ContainerInfo, error)
+		ListAttributes(context.Context) ([]string, error)
+		GetAttributes(context.Context, ...string) ([]*daos.Attribute, error)
+		SetAttributes(context.Context, []*daos.Attribute) error
+		DeleteAttribute(context.Context, string) error
+	}
+)
+
+func (wph *wrappedPoolHandle) UUID() uuid.UUID {
+	return wph.PoolHandle.UUID
+}
+
+func (wph *wrappedPoolHandle) OpenContainer(ctx context.Context, contID string, flags daos.ContainerOpenFlag) (contConnection, error) {
+	ch, err := wph.PoolHandle.OpenContainer(ctx, contID, flags)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wrappedContHandle{ch}, nil
+}
+
+func (wpm *wrappedPoolMock) Pointer() unsafe.Pointer {
+	return unsafe.Pointer(&C.daos_handle_t{})
+}
+
+func (wpm *wrappedPoolMock) OpenContainer(ctx context.Context, contID string, flags daos.ContainerOpenFlag) (contConnection, error) {
+	cm, err := wpm.PoolConn.OpenContainer(ctx, contID, flags)
+	if err != nil {
+		return nil, err
+	}
+
+	return &wrappedContMock{cm}, nil
+}
+
+var (
+	_ poolConnection = (*wrappedPoolHandle)(nil)
+)
 
 // argOrID is used to handle a positional argument that can be a label or UUID,
 // or a non-ID positional argument to be consumed by the command handler if the
@@ -70,8 +128,8 @@ type PoolID struct {
 
 type poolBaseCmd struct {
 	daosCmd
-	poolUUID uuid.UUID
 
+	poolConn    poolConnection
 	cPoolHandle C.daos_handle_t
 
 	SysName string `long:"sys-name" short:"G" description:"DAOS system name"`
@@ -81,94 +139,77 @@ type poolBaseCmd struct {
 }
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
-	if cmd.poolUUID == uuid.Nil {
-		cmd.Errorf("poolUUIDPtr(): nil UUID")
-		return nil
+	poolUUID := cmd.poolUUID()
+	return (*C.uchar)(unsafe.Pointer(&poolUUID[0]))
+}
+
+func (cmd *poolBaseCmd) poolUUID() uuid.UUID {
+	if cmd.poolConn == nil || cmd.poolConn.UUID() == uuid.Nil {
+		cmd.Error("poolConn.UUID: nil UUID")
+		return uuid.Nil
 	}
-	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
+
+	return cmd.poolConn.UUID()
 }
 
 func (cmd *poolBaseCmd) PoolID() ui.LabelOrUUIDFlag {
 	return cmd.Args.Pool.LabelOrUUIDFlag
 }
 
-func (cmd *poolBaseCmd) connectPool(flags C.uint) error {
+func (cmd *poolBaseCmd) connectPool(flags uint) error {
 	sysName := cmd.SysName
 	if sysName == "" {
 		sysName = build.DefaultSystemName
 	}
-	cSysName := C.CString(sysName)
-	defer freeString(cSysName)
-
-	var rc C.int
-	switch {
-	case cmd.PoolID().HasLabel():
-		var poolInfo C.daos_pool_info_t
-		cLabel := C.CString(cmd.PoolID().Label)
-		defer freeString(cLabel)
-
-		cmd.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect(cLabel, cSysName, flags,
-			&cmd.cPoolHandle, &poolInfo, nil)
-		if rc == 0 {
-			var err error
-			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
-			if err != nil {
-				cmd.disconnectPool()
-				return err
-			}
-		}
-	case cmd.PoolID().HasUUID():
-		cmd.poolUUID = cmd.PoolID().UUID
-		cmd.Debugf("connecting to pool: %s", cmd.poolUUID)
-		cUUIDstr := C.CString(cmd.poolUUID.String())
-		defer freeString(cUUIDstr)
-		rc = C.daos_pool_connect(cUUIDstr, cSysName, flags,
-			&cmd.cPoolHandle, nil, nil)
-	default:
-		return errors.New("no pool UUID or label supplied")
+	poolConnReq := daosAPI.PoolConnectReq{
+		SystemName: sysName,
+		PoolID:     cmd.PoolID().String(),
+		Flags:      flags,
 	}
 
-	return daosError(rc)
+	if mpc := apiMocks.GetPoolConn(cmd.daosCtx); mpc != nil {
+		if err := mpc.Connect(cmd.daosCtx, poolConnReq); err != nil {
+			return err
+		}
+		cmd.poolConn = &wrappedPoolMock{mpc}
+	} else {
+		resp, err := daosAPI.PoolConnect(cmd.daosCtx, poolConnReq)
+		if err != nil {
+			return err
+		}
+		cmd.poolConn = &wrappedPoolHandle{resp.PoolConnection}
+	}
+	cmd.cPoolHandle = *conn2HdlPtr(cmd.poolConn)
+
+	return nil
 }
 
 func (cmd *poolBaseCmd) disconnectPool() {
 	cmd.Debugf("disconnecting pool %s", cmd.PoolID())
-	// Hack for NLT fault injection testing: If the rc
-	// is -DER_NOMEM, retry once in order to actually
-	// shut down and release resources.
-	rc := C.daos_pool_disconnect(cmd.cPoolHandle, nil)
-	if rc == -C.DER_NOMEM {
-		rc = C.daos_pool_disconnect(cmd.cPoolHandle, nil)
-		// DAOS-8866, daos_pool_disconnect() might have failed, but worked anyway.
-		if rc == -C.DER_NO_HDL {
-			rc = -C.DER_SUCCESS
-		}
-	}
 
-	if err := daosError(rc); err != nil {
+	if err := cmd.poolConn.Disconnect(cmd.daosCtx); err != nil {
 		cmd.Errorf("pool disconnect failed: %s", err)
 	}
 }
 
-func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s) (func(), error) {
+func (cmd *poolBaseCmd) resolveAndConnect(flags uint, ap *C.struct_cmd_args_s) (func(), error) {
 	if err := cmd.connectPool(flags); err != nil {
 		return nil, errors.Wrapf(err,
 			"failed to connect to pool %s", cmd.PoolID())
 	}
 
 	if ap != nil {
-		if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
+		if err := copyUUID(&ap.p_uuid, cmd.poolUUID()); err != nil {
 			return nil, err
 		}
-		ap.pool = cmd.cPoolHandle
+		ap.pool = *conn2HdlPtr(cmd.poolConn)
 		switch {
 		case cmd.PoolID().HasLabel():
 			pLabel := C.CString(cmd.PoolID().Label)
 			defer freeString(pLabel)
 			C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
 		case cmd.PoolID().HasUUID():
-			pUUIDstr := C.CString(cmd.poolUUID.String())
+			pUUIDstr := C.CString(cmd.poolUUID().String())
 			defer freeString(pUUIDstr)
 			C.strncpy(&ap.pool_str[0], pUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
 		}
@@ -177,10 +218,6 @@ func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s)
 	return func() {
 		cmd.disconnectPool()
 	}, nil
-}
-
-func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
-	return getDaosAttribute(cmd.cPoolHandle, poolAttr, name)
 }
 
 type poolCmd struct {
@@ -321,7 +358,7 @@ func (cmd *poolQueryCmd) Execute(_ []string) error {
 	defer C.d_rank_list_free(rl)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
-			"failed to query pool %s", cmd.poolUUID)
+			"failed to query pool %s", cmd.poolUUID())
 	}
 
 	pqr, err := convertPoolInfo(&pinfo)
@@ -400,7 +437,7 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 		rc = C.daos_pool_query_target(cmd.cPoolHandle, C.uint32_t(idxList[tgt]), C.uint32_t(cmd.Rank), ptInfo, nil)
 		if err := daosError(rc); err != nil {
 			return errors.Wrapf(err,
-				"failed to query pool %s rank:target %d:%d", cmd.poolUUID, cmd.Rank, idxList[tgt])
+				"failed to query pool %s rank:target %d:%d", cmd.poolUUID(), cmd.Rank, idxList[tgt])
 		}
 
 		tgtInfo, err := convertPoolTargetInfo(ptInfo)
@@ -424,8 +461,56 @@ func (cmd *poolQueryTargetsCmd) Execute(_ []string) error {
 	return nil
 }
 
-type poolListAttrsCmd struct {
+type poolGetOrListAttributesCmd struct {
 	poolBaseCmd
+}
+
+func (cmd *poolGetOrListAttributesCmd) listAttributes() error {
+	names, err := cmd.poolConn.ListAttributes(cmd.daosCtx)
+	if err != nil {
+		return errors.Wrapf(err, "failed to list attributes for pool %s", cmd.poolUUID())
+	}
+
+	attrList := make([]*daos.Attribute, len(names))
+	for i, name := range names {
+		attrList[i] = &daos.Attribute{Name: name}
+	}
+	var bld strings.Builder
+	title := fmt.Sprintf("Attributes for pool %s:", cmd.PoolID())
+	printAttributes(&bld, title, attrList...)
+
+	cmd.Info(bld.String())
+
+	return nil
+}
+
+func (cmd *poolGetOrListAttributesCmd) getAttributes(names ...string) error {
+	attrs, err := cmd.poolConn.GetAttributes(cmd.daosCtx, names...)
+	if err != nil {
+		return errors.Wrapf(err,
+			"failed to get attributes for pool %s",
+			cmd.PoolID())
+	}
+
+	if cmd.JSONOutputEnabled() {
+		// Maintain compatibility with older behavior.
+		if len(names) == 1 && len(attrs) == 1 {
+			return cmd.OutputJSON(attrs[0], nil)
+		}
+		return cmd.OutputJSON(attrs, nil)
+	}
+
+	var bld strings.Builder
+	title := fmt.Sprintf("Attributes for pool %s:", cmd.PoolID())
+	printAttributes(&bld, title, attrs...)
+
+	cmd.Info(bld.String())
+
+	return nil
+}
+
+type poolListAttrsCmd struct {
+	poolGetOrListAttributesCmd
 
 	Verbose bool `long:"verbose" short:"V" description:"Include values"`
 }
@@ -437,30 +522,15 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	attrs, err := listDaosAttributes(cmd.cPoolHandle, poolAttr, cmd.Verbose)
-	if err != nil {
-		return errors.Wrapf(err,
-			"failed to list attributes for pool %s", cmd.poolUUID)
+	if cmd.Verbose {
+		return cmd.getAttributes()
 	}
 
-	if cmd.JSONOutputEnabled() {
-		if cmd.Verbose {
-			return cmd.OutputJSON(attrs.asMap(), nil)
-		}
-		return cmd.OutputJSON(attrs.asList(), nil)
-	}
-
-	var bld strings.Builder
-	title := fmt.Sprintf("Attributes for pool %s:", cmd.poolUUID)
-	printAttributes(&bld, title, attrs...)
-
-	cmd.Info(bld.String())
-
-	return nil
+	return cmd.listAttributes()
 }
 
 type poolGetAttrCmd struct {
-	poolBaseCmd
+	poolGetOrListAttributesCmd
 
 	Args struct {
 		Attrs ui.GetPropertiesFlag `positional-arg-name:"key[,key...]"`
@@ -474,31 +544,11 @@ func (cmd *poolGetAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	var attrs attrList
 	if len(cmd.Args.Attrs.ParsedProps) == 0 {
-		attrs, err = listDaosAttributes(cmd.cPoolHandle, poolAttr, true)
+		return cmd.listAttributes()
 	} else {
-		attrs, err = getDaosAttributes(cmd.cPoolHandle, poolAttr, cmd.Args.Attrs.ParsedProps.ToSlice())
+		return cmd.getAttributes(cmd.Args.Attrs.ParsedProps.ToSlice()...)
 	}
-	if err != nil {
-		return errors.Wrapf(err, "failed to get attributes for pool %s", cmd.PoolID())
-	}
-
-	if cmd.JSONOutputEnabled() {
-		// Maintain compatibility with older behavior.
-		if len(cmd.Args.Attrs.ParsedProps) == 1 && len(attrs) == 1 {
-			return cmd.OutputJSON(attrs[0], nil)
-		}
-		return cmd.OutputJSON(attrs, nil)
-	}
-
-	var bld strings.Builder
-	title := fmt.Sprintf("Attributes for pool %s:", cmd.PoolID())
-	printAttributes(&bld, title, attrs...)
-
-	cmd.Info(bld.String())
-
-	return nil
 }
 
 type poolSetAttrCmd struct {
@@ -520,15 +570,15 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 		return errors.New("attribute name and value are required")
 	}
 
-	attrs := make(attrList, 0, len(cmd.Args.Attrs.ParsedProps))
+	attrs := make([]*daos.Attribute, 0, len(cmd.Args.Attrs.ParsedProps))
 	for key, val := range cmd.Args.Attrs.ParsedProps {
-		attrs = append(attrs, &attribute{
+		attrs = append(attrs, &daos.Attribute{
 			Name:  key,
 			Value: []byte(val),
 		})
 	}
 
-	if err := setDaosAttributes(cmd.cPoolHandle, poolAttr, attrs); err != nil {
+	if err := cmd.poolConn.SetAttributes(cmd.daosCtx, attrs); err != nil {
 		return errors.Wrapf(err, "failed to set attributes on pool %s", cmd.PoolID())
 	}
 
@@ -550,10 +600,10 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	if err := delDaosAttribute(cmd.cPoolHandle, poolAttr, cmd.Args.Name); err != nil {
+	if err := cmd.poolConn.DeleteAttribute(cmd.daosCtx, cmd.Args.Name); err != nil {
 		return errors.Wrapf(err,
 			"failed to delete attribute %q on pool %s",
-			cmd.Args.Name, cmd.poolUUID)
+			cmd.Args.Name, cmd.poolUUID())
 	}
 
 	return nil
@@ -580,7 +630,7 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	defer cleanup()
 
 	ap.pool = cmd.cPoolHandle
-	if err := copyUUID(&ap.p_uuid, cmd.poolUUID); err != nil {
+	if err := copyUUID(&ap.p_uuid, cmd.poolUUID()); err != nil {
 		return err
 	}
 	ap.p_op = C.POOL_AUTOTEST
@@ -598,7 +648,7 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to run autotest for pool %s",
-			cmd.poolUUID)
+			cmd.poolUUID())
 	}
 
 	return nil
