@@ -46,7 +46,7 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     transport_config = DaosServerTransportCredentials(cert_dir)
     common_config = CommonConfig(group, transport_config)
     config = DaosServerYamlParameters(config_file, common_config)
-    command = DaosServerCommand(bin_dir, config)
+    command = DaosServerCommand(bin_dir, config, None)
     if config_temp:
         # Setup the DaosServerCommand to write the config file data to the
         # temporary file and then copy the file to all the hosts using the
@@ -132,6 +132,8 @@ class DaosServerManager(SubprocessManager):
         # Parameters to set storage prepare and format timeout
         self.storage_prepare_timeout = BasicParameter(None, 40)
         self.storage_format_timeout = BasicParameter(None, 40)
+        self.storage_reset_timeout = BasicParameter(None, 120)
+        self.collect_log_timeout = BasicParameter(None, 120)
 
         # Optional external yaml data to use to create the server config file, bypassing the values
         # defined in the self.manager.job.yaml object.
@@ -215,6 +217,7 @@ class DaosServerManager(SubprocessManager):
         # Create the daos_server yaml file
         self.manager.job.temporary_file_hosts = self._hosts.copy()
         self.manager.job.create_yaml_file(self._external_yaml_data)
+        self.manager.job.update_pattern_timeout()
 
         # Copy certificates
         self.manager.job.copy_certificates(get_log_file("daosCA/certs"), self._hosts)
@@ -520,7 +523,8 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.ignore_config.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
-        result = run_remote(self.log, self._hosts, cmd.with_exports, timeout=120)
+        result = run_remote(
+            self.log, self._hosts, cmd.with_exports, timeout=self.storage_reset_timeout.value)
         if not result.passed:
             raise ServerFailed("Error resetting NVMe storage")
 
