@@ -625,7 +625,7 @@ dtx_batched_commit_one(void *arg)
 
 		if ((stat.dtx_committable_count <= DTX_THRESHOLD_COUNT) &&
 		    (stat.dtx_oldest_committable_time == 0 ||
-		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) <
+		     d_hlc_age2sec(stat.dtx_oldest_committable_time) <
 		     DTX_COMMIT_THRESHOLD_AGE))
 			break;
 	}
@@ -690,7 +690,7 @@ dtx_batched_commit(void *arg)
 		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
-		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
+		      d_hlc_age2sec(stat.dtx_oldest_committable_time) >=
 		      DTX_COMMIT_THRESHOLD_AGE))) {
 			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
