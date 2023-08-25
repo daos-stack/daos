@@ -1104,7 +1104,11 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
-                        unstash('nltr')
+                        try {
+                            unstash('nltr')
+                        } catch (e) {
+                            print 'Unstash failed, ignoring'
+                        }
                         job_step_update(nlt_test())
                         recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
                                        skipPublishingChecks: true,
