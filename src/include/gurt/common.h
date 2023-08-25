@@ -969,6 +969,16 @@ d_hlc_epsilon_get(void);
 uint64_t
 d_hlc_epsilon_get_bound(uint64_t hlc);
 
+/**
+ * Get the age of the hlc in second.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The age of the hlc in second
+ */
+uint64_t
+d_hlc_age2sec(uint64_t hlc);
+
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);
 
