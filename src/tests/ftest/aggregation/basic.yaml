@@ -9,6 +9,7 @@ server_config:
     0:
       log_mask: INFO
       storage: auto
+  system_ram_reserved: 64
 pool:
   scm_size: 50000000000
   nvme_size: 500000000000
