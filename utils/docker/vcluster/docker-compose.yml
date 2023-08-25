@@ -1,4 +1,4 @@
-# Copyright 2021-2023 Intel Corporation
+# Copyright 2021-2024 Intel Corporation
 # All rights reserved.
 #
 # Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
@@ -8,37 +8,51 @@ version: "3.8"
 services:
 
   daos_base:
-    image: "daos-base:${DAOS_SERVER_VERSION}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-base-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
       context: "daos-base/el8"
       args:
-        - "RHEL_BASE_IMAGE=${RHEL_BASE_IMAGE}"
-        - "RHEL_BASE_VERSION=${RHEL_BASE_VERSION}"
         - "BUST_CACHE=${BUST_CACHE}"
-        - "DAOS_AUTH=${DAOS_AUTH}"
+        - "LINUX_IMAGE_NAME=${LINUX_IMAGE_NAME}"
+        - "LINUX_IMAGE_TAG=${LINUX_IMAGE_TAG}"
         - "DAOS_REPOS=${DAOS_REPOS}"
         - "DAOS_GPG_KEYS=${DAOS_GPG_KEYS}"
         - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
+        - "DAOS_AUTH=${DAOS_AUTH}"
+    privileged: true
+    cgroup: host
+    volumes:
+      - type: bind
+        read_only: true
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: tmpfs
+        target: /run
 
   daos_server:
-    image: "daos-server:${DAOS_SERVER_VERSION}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-server-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
       context: "daos-server/el8"
       args:
-        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
-        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
+        - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
         - "DAOS_HUGEPAGES_NBR=${DAOS_HUGEPAGES_NBR}"
         - "DAOS_IFACE_NAME=${DAOS_IFACE_NAME}"
         - "DAOS_SCM_SIZE=${DAOS_SCM_SIZE}"
         - "DAOS_BDEV_SIZE=${DAOS_BDEV_SIZE}"
+        - "DAOS_MD_ON_SSD=${DAOS_MD_ON_SSD}"
     container_name: daos-server
     hostname: daos-server
-    # FIXME Refine needed capabilities
     privileged: true
-    # FIXME virtual network such as bridge are not yet supported
+    # XXX Needed for some linux distro
+    cgroup: host
+    # XXX NOTE virtual network such as bridge are not yet supported
     network_mode: host
-    # FIXME List of hosts needed until virtual network will be supported
+    # XXX NOTE List of hosts needed until virtual network will be supported
     extra_hosts:
       - "daos-server:${DAOS_IFACE_IP}"
       - "daos-admin:${DAOS_IFACE_IP}"
@@ -64,19 +78,20 @@ services:
         target: /run
 
   daos_admin:
-    image: "daos-admin:${DAOS_ADMIN_VERSION}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-admin-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
       context: "daos-admin/el8"
       args:
-        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
-        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
+        - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
-        - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
-        - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
     container_name: daos-admin
     hostname: daos-admin
-    # FIXME Refine needed capabilities
     privileged: true
+    # XXX Needed for some linux distro
+    cgroup: host
     # FIXME virtual network such as bridge are not yet supported
     network_mode: host
     # FIXME List of hosts needed until virtual network will be supported
@@ -95,23 +110,24 @@ services:
       - daos_server
 
   daos_client:
-    image: "daos-client:${DAOS_CLIENT_VERSION}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-client-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
       context: "daos-client/el8"
       args:
-        - "DAOS_BASE_IMAGE=${DAOS_BASE_IMAGE}"
-        - "DAOS_BASE_VERSION=${DAOS_BASE_VERSION}"
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
+        - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_AUTH=${DAOS_AUTH}"
-        - "DAOS_ADMIN_USER=${DAOS_ADMIN_USER}"
-        - "DAOS_ADMIN_GROUP=${DAOS_ADMIN_GROUP}"
         - "DAOS_AGENT_IFACE_CFG=${DAOS_AGENT_IFACE_CFG}"
         - "DAOS_AGENT_IFACE_NUMA_NODE=${DAOS_AGENT_IFACE_NUMA_NODE}"
         - "DAOS_AGENT_IFACE_NAME=${DAOS_AGENT_IFACE_NAME}"
         - "DAOS_AGENT_IFACE_DOMAIN_NAME=${DAOS_AGENT_IFACE_DOMAIN_NAME}"
     container_name: daos-client
     hostname: daos-client
-    # FIXME Refine needed capabilities
     privileged: true
+    # XXX Needed for some linux distro
+    cgroup: host
     # FIXME virtual network such as bridge are not yet supported
     network_mode: host
     # FIXME List of hosts needed until virtual network will be supported
