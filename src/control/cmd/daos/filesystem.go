@@ -14,6 +14,7 @@ import "C"
 import (
 	"fmt"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/pkg/errors"
 )
 
@@ -172,7 +173,7 @@ func fsModifyAttr(cmd *fsAttrCmd, op uint32, updateAP func(*C.struct_cmd_args_s)
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_RW)
+	flags := daos.ContainerOpenFlag(C.DAOS_COO_RW)
 
 	ap.fs_op = op
 	if updateAP != nil {
@@ -202,7 +203,7 @@ type fsSetAttrCmd struct {
 func (cmd *fsSetAttrCmd) Execute(_ []string) error {
 	return fsModifyAttr(&cmd.fsAttrCmd, C.FS_SET_ATTR, func(ap *C.struct_cmd_args_s) {
 		if cmd.ObjectClass.Set {
-			ap.oclass = cmd.ObjectClass.Class
+			ap.oclass = C.uint(cmd.ObjectClass.Class)
 		}
 		if cmd.ChunkSize.Set {
 			ap.chunk_size = cmd.ChunkSize.Size
@@ -246,7 +247,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_GET_ATTR
-	flags := C.uint(C.DAOS_COO_RO)
+	flags := daos.ContainerOpenFlag(C.DAOS_COO_RO)
 
 	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
@@ -331,7 +332,7 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := C.uint(C.DAOS_COO_EX)
+	flags := daos.ContainerOpenFlag(C.DAOS_COO_EX)
 
 	ap.fs_op = C.FS_CHECK
 	cleanup, err := cmd.resolveAndConnect(flags, ap)
@@ -381,16 +382,16 @@ func (cmd *fsFixSBCmd) Execute(_ []string) error {
 		ap.chunk_size = cmd.ChunkSize.Size
 	}
 	if cmd.ObjectClass.Set {
-		ap.oclass = cmd.ObjectClass.Class
+		ap.oclass = C.uint(cmd.ObjectClass.Class)
 	}
 	if cmd.DirObjectClass.Set {
-		ap.dir_oclass = cmd.DirObjectClass.Class
+		ap.dir_oclass = C.uint(cmd.DirObjectClass.Class)
 	}
 	if cmd.FileObjectClass.Set {
-		ap.file_oclass = cmd.FileObjectClass.Class
+		ap.file_oclass = C.uint(cmd.FileObjectClass.Class)
 	}
 	if cmd.Mode.Set {
-		ap.mode = cmd.Mode.Mode
+		ap.mode = C.uint(cmd.Mode.Mode)
 	}
 	if cmd.CHints != "" {
 		ap.hints = C.CString(cmd.CHints)

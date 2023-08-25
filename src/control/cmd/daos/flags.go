@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 )
@@ -113,7 +114,7 @@ func (f *ChunkSizeFlag) String() string {
 
 type ObjClassFlag struct {
 	Set   bool
-	Class C.uint
+	Class daos.ObjectClass
 }
 
 func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
@@ -121,12 +122,8 @@ func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
 		return errors.New("empty object class")
 	}
 
-	cObjClass := C.CString(fv)
-	defer freeString(cObjClass)
-
-	f.Class = (C.uint)(C.daos_oclass_name2id(cObjClass))
-	if f.Class == C.OC_UNKNOWN {
-		return errors.Errorf("unknown object class %q", fv)
+	if err := f.Class.FromString(fv); err != nil {
+		return err
 	}
 
 	f.Set = true
@@ -134,10 +131,7 @@ func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
 }
 
 func (f *ObjClassFlag) String() string {
-	var oclass [10]C.char
-
-	C.daos_oclass_id2name(f.Class, &oclass[0])
-	return C.GoString(&oclass[0])
+	return f.Class.String()
 }
 
 func makeOid(hi, lo uint64) C.daos_obj_id_t {
@@ -185,18 +179,11 @@ func (f *OidFlag) UnmarshalFlag(fv string) error {
 
 type ConsModeFlag struct {
 	Set  bool
-	Mode C.uint32_t
+	Mode daos.DFSConsistencyMode
 }
 
 func (f *ConsModeFlag) String() string {
-	switch f.Mode {
-	case C.DFS_RELAXED:
-		return "relaxed"
-	case C.DFS_BALANCED:
-		return "balanced"
-	default:
-		return fmt.Sprintf("unknown mode %d", f.Mode)
-	}
+	return f.Mode.String()
 }
 
 func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
@@ -204,13 +191,8 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 		return errors.New("empty cons mode")
 	}
 
-	switch strings.ToLower(fv) {
-	case "relaxed":
-		f.Mode = C.DFS_RELAXED
-	case "balanced":
-		f.Mode = C.DFS_BALANCED
-	default:
-		return errors.Errorf("unknown consistency mode %q", fv)
+	if err := f.Mode.FromString(fv); err != nil {
+		return err
 	}
 
 	f.Set = true
@@ -219,14 +201,11 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 
 type ContTypeFlag struct {
 	Set  bool
-	Type C.ushort
+	Type daos.ContainerLayout
 }
 
 func (f *ContTypeFlag) String() string {
-	cTypeStr := [16]C.char{}
-	C.daos_unparse_ctype(f.Type, &cTypeStr[0])
-
-	return C.GoString(&cTypeStr[0])
+	return f.Type.String()
 }
 
 func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
@@ -234,12 +213,8 @@ func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
 		return errors.New("empty container type")
 	}
 
-	cTypeStr := C.CString(strings.ToUpper(fv))
-	defer freeString(cTypeStr)
-
-	C.daos_parse_ctype(cTypeStr, &f.Type)
-	if f.Type == C.DAOS_PROP_CO_LAYOUT_UNKNOWN {
-		return errors.Errorf("unknown container type %q", fv)
+	if err := f.Type.FromString(fv); err != nil {
+		return err
 	}
 
 	f.Set = true
