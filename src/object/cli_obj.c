@@ -1818,14 +1818,17 @@ recov_task_cb(tse_task_t *task, void *data)
 {
 	struct obj_ec_recov_task	*recov_task = *((struct obj_ec_recov_task **)data);
 
-	if (task->dt_result != -DER_FETCH_AGAIN)
+	if (task->dt_result != -DER_FETCH_AGAIN) {
+		D_DEBUG(DB_IO, "EC recov sub_task %p completed: %d\n", task, task->dt_result);
 		return 0;
+	}
 
 	/* For the case of EC singv overwritten, in degraded fetch data recovery possibly always
 	 * hit conflict case and need fetch again. Should update iod_size to avoid endless retry.
 	 */
 	recov_task->ert_uiod->iod_size = recov_task->ert_iod.iod_size;
-	D_DEBUG(DB_IO, "update iod_size as "DF_U64"\n", recov_task->ert_oiod->iod_size);
+	D_DEBUG(DB_IO, "update iod_size as "DF_U64" for EC recov sub_task %p\n",
+		recov_task->ert_oiod->iod_size, task);
 
 	return 0;
 }
@@ -1943,8 +1946,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 			goto out;
 		}
 		recov_task->ert_th = th;
-		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover epoch "DF_X64"\n",
-			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey), recov_task->ert_epoch);
+
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
@@ -1961,6 +1963,10 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 				task, DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 			goto out;
 		}
+
+		D_DEBUG(DB_IO, DF_C_OID_DKEY" Fetching to recover epoch "DF_X64", sub_task %p\n",
+			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey), recov_task->ert_epoch,
+			sub_task);
 
 		tse_task_list_add(sub_task, &task_list);
 
