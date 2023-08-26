@@ -1,0 +1,37 @@
+name: 'RPM Build and Test Report'
+on:
+  workflow_run:
+    workflows: ['RPM Build and Test']
+    types:
+      - completed
+
+jobs:
+  report:
+    runs-on: [self-hosted, docker]
+    strategy:
+      matrix:
+        distro: ['el8', 'leap15']
+    env:
+      STAGE_NAME:
+    steps:
+      - name: Set variables
+        run: |
+            case ${{ matrix.distro }} in
+                'el8')
+                    DISTRO_NAME="EL"
+                    DISTRO_VERSION="8"
+                    ;;
+                'leap15')
+                    DISTRO_NAME="Leap"
+                    DISTRO_VERSION="15.4"
+                    ;;
+            esac
+            echo "STAGE_NAME=Build RPM on $DISTRO_NAME $DISTRO_VERSION" >> $GITHUB_ENV
+      - name: Test Report
+        uses: phoenix-actions/test-reporting@v10
+        with:
+          artifact: ${{ env.STAGE_NAME }} test-results
+          name: ${{ env.STAGE_NAME }} Test Results (new)
+          path: ${{ env.STAGE_NAME }}/**/results.xml
+          reporter: java-junit        # Format of test results
+          fail-on-error: false
