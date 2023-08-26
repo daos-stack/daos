@@ -814,8 +814,8 @@ type CheckQueryResp struct {
 	ReqStatus int32 `protobuf:"varint,1,opt,name=req_status,json=reqStatus,proto3" json:"req_status,omitempty"` // DAOS error code.
 	// The whole check instance status depends on the each engine status:
 	// As long as one target is in CIS_RUNNING, then the instance is CIS_RUNNING.
-	// Otherwise, in turn with the status of CIS_FAILED, CIS_CRASHED, CIS_PAUSED,
-	// CIS_STOPPED, CIS_COMPLETED.
+	// Otherwise, in turn with the status of CIS_FAILED, CIS_STOPPED, CIS_IMPLICATED,
+	// CIS_COMPLETED, CIS_PAUSED, CIS_INIT.
 	InsStatus chk.CheckInstStatus `protobuf:"varint,2,opt,name=ins_status,json=insStatus,proto3,enum=chk.CheckInstStatus" json:"ins_status,omitempty"`
 	// Scan phase - see CheckScanPhase. Before moving to CSP_POOL_MBS, the check
 	// instance status is maintained on the check leader. And then multiple pools
