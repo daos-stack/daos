@@ -76,7 +76,7 @@ message BioHealthResp {
 }
 
 enum NvmeDevState {
-	UNKNOWN   = 0; // Device state is unknown, zer6o value
+	UNKNOWN   = 0; // Device state is unknown, zero value
 	NORMAL    = 1; // Device is in a normal operational state
 	NEW       = 2; // Device is new and is not yet in-use
 	EVICTED   = 3; // Device is faulty and has been evicted
