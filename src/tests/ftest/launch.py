@@ -55,7 +55,7 @@ DEFAULT_DAOS_TEST_SHARED_DIR = os.path.expanduser(os.path.join("~", "daos_test")
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
-MAX_CI_REPETITIONS = 10
+MAX_CI_REPETITIONS = 30
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
 SUPPORTED_PROVIDERS = [
     "ofi+cxi",
