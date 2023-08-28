@@ -55,10 +55,11 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* EC aggregation needs to be parsed during rebuilding to avoid the race
-	 * between EC rebuild and EC aggregation.
+	/*
+	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
+	 * to avoid the race between EC rebuild and EC aggregation.
 	 **/
-	if (pool->sp_rebuilding && cont->sc_ec_agg_active)
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
