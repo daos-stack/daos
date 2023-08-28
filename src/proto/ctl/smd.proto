@@ -76,10 +76,11 @@ message BioHealthResp {
 }
 
 enum NvmeDevState {
-	NORMAL = 0;	// Device is in a normal operational state
-	NEW = 1;	// Device is new and is not yet in-use
-	EVICTED = 2;	// Device is faulty and has been evicted
-	UNPLUGGED = 3;	// Device has been physically removed
+	UNKNOWN   = 0; // Device state is unknown, zer6o value
+	NORMAL    = 1; // Device is in a normal operational state
+	NEW       = 2; // Device is new and is not yet in-use
+	EVICTED   = 3; // Device is faulty and has been evicted
+	UNPLUGGED = 4; // Device has been physically removed
 }
 
 enum LedState {
