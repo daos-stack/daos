@@ -2804,8 +2804,7 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, struct dtx_epoch *epoch)
 	sched_arg.tsa_scheded = false;
 	sched_arg.tsa_prev_scheded = obj_auxi->shards_scheded;
 	sched_arg.tsa_epoch = *epoch;
-	tse_task_list_traverse(&obj_auxi->shard_task_head, shard_task_sched,
-			       &sched_arg);
+	tse_task_list_traverse_adv(&obj_auxi->shard_task_head, shard_task_sched, &sched_arg);
 	/* It is possible that the IO retried by stale pm version found, but
 	 * the IO involved shards' targets not changed. No any shard task
 	 * re-scheduled for this case, can complete the obj IO task.

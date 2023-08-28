@@ -349,9 +349,8 @@ crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_addref(crt_rpc_t *req);
 
 /**
@@ -359,9 +358,8 @@ crt_req_addref(crt_rpc_t *req);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_decref(crt_rpc_t *req);
 
 /**
