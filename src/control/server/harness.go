@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -158,44 +159,19 @@ func (h *EngineHarness) OnDrpcFailure(fns ...onDrpcFailureFn) {
 
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
-	instances := h.Instances()
-	drpcErrs := make([]error, 0, len(instances))
-	defer func() {
-		if err == nil {
-			return // At least one engine was accessed.
-		}
-
-		var e error
-		hasDRPCErr := false
-		for _, e = range drpcErrs {
-			switch e {
-			case errDRPCNotReady, FaultDataPlaneNotStarted:
-				// If no engines can service request and drpc specific error has
-				// been returned then pass that error to failure handlers.
-				hasDRPCErr = true
-				break
-			}
-		}
-		if !hasDRPCErr {
-			// Don't shutdown on other failures which are not related to dRPC comms.
-			return
-		}
-
-		h.log.Debugf("invoking dRPC failure handlers for %s", e)
-		h.RLock()
-		defer h.RUnlock()
-		for _, fn := range h.onDrpcFailure {
-			fn(ctx, e)
-		}
-	}()
-
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
 
+	instances := h.Instances()
+	if len(instances) == 0 {
+		return nil, errors.New("no engine instances to service drpc call")
+	}
+
 	// Iterate through the managed instances, looking for the first one that is available to
-	// service the request. If the request fails, that error will be returned. If a
-	// non-transient error is returned from CallDrpc, that error will be returned immediately.
+	// service the request. If non-transient error is returned from CallDrpc, that error will
+	// be returned immediately. If a transient error is returned, continue to the next engine.
+	drpcErrs := make([]error, 0, len(instances))
 	for _, i := range instances {
 		resp, err = i.CallDrpc(ctx, method, body)
 		if err == nil {
@@ -203,16 +179,42 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 		}
 
 		drpcErrs = append(drpcErrs, errors.Cause(err))
+		msg := fmt.Sprintf("failure on engine instance %d: %s", i.Index(), err)
 
 		switch errors.Cause(err) {
 		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
-			h.log.Debugf("drpc call transient failure on engine instance %d: %s",
-				i.Index(), err)
+			h.log.Debug("drpc call transient " + msg)
 			continue
 		}
 
-		h.log.Debugf("drpc call hard failure on engine instance %d: %s", i.Index(), err)
+		h.log.Debug("drpc call hard " + msg)
 		break
+	}
+
+	if err == nil {
+		return // Request sent.
+	}
+
+	var e error
+	hasDRPCErr := false
+	for _, e = range drpcErrs {
+		switch e {
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
+			// If no engines can service request and drpc specific error has
+			// been returned then pass that error to the failure handlers.
+			hasDRPCErr = true
+			break
+		}
+	}
+	if !hasDRPCErr {
+		return // Don't trigger handlers on failures not related to dRPC comms.
+	}
+
+	h.log.Debugf("invoking dRPC failure handlers for %s", e)
+	h.RLock()
+	defer h.RUnlock()
+	for _, fn := range h.onDrpcFailure {
+		fn(ctx, e)
 	}
 
 	return
