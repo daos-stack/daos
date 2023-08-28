@@ -617,7 +617,7 @@ class StorageInfo():
 
         # Find the mounted device names on each host
         command = ' | '.join(
-            [r'find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\'',
+            ['find /dev/disk/by-path/ -type l -printf \'%f -> %l\n\'',
              f'grep -w \'{device}\'',
              'sort'])
         result = run_remote(self._log, self._hosts, command)
