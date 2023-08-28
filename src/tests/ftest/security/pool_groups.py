@@ -12,7 +12,7 @@ from pool_security_test_base import PoolSecurityTestBase
 PERMISSIONS = ["", "r", "w", "rw"]
 
 
-class DaosRunPoolSecurityTest(PoolSecurityTestBase):
+class SecurityPoolGroupsTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
 
     :avocado: recursive
@@ -40,7 +40,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,pool
-        :avocado: tags=DaosRunPoolSecurityTest,pool_acl,sec_acl_groups,test_daos_pool_acl_groups
+        :avocado: tags=SecurityPoolGroupsTest,pool_acl,sec_acl_groups,test_daos_pool_acl_groups
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
