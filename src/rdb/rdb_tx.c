@@ -792,8 +792,7 @@ rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 
 	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
 	return rc;
 }
 

@@ -434,17 +434,22 @@ test_drpc_listen_fails_if_listen_fails(void **state)
 static void
 test_drpc_accept_fails_with_null_ctx(void **state)
 {
-	assert_null(drpc_accept(NULL));
+	int rc;
+
+	rc = drpc_accept(NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 }
 
 static void
 test_drpc_accept_fails_with_null_handler(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(15);
+	int          rc;
 
 	ctx->handler = NULL;
 
-	assert_null(drpc_accept(ctx));
+	rc = drpc_accept(ctx, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
 
 	free_drpc(ctx);
 }
@@ -452,10 +457,12 @@ test_drpc_accept_fails_with_null_handler(void **state)
 static void
 test_drpc_accept_success(void **state)
 {
-	struct drpc	*ctx = new_drpc_with_fd(15);
-	struct drpc	*session_ctx;
+	struct drpc *ctx = new_drpc_with_fd(15);
+	struct drpc *session_ctx;
+	int          rc;
 
-	session_ctx = drpc_accept(ctx);
+	rc = drpc_accept(ctx, &session_ctx);
+	assert_rc_equal(rc, -DER_SUCCESS);
 
 	/* got context back for the new accepted connection */
 	assert_non_null(session_ctx);
@@ -479,10 +486,12 @@ static void
 test_drpc_accept_fails_if_accept_fails(void **state)
 {
 	struct drpc *ctx = new_drpc_with_fd(15);
+	int          rc;
 
-	accept_return = -1;
+	accept_return = -EIO;
 
-	assert_null(drpc_accept(ctx));
+	rc = drpc_accept(ctx, NULL);
+	assert_rc_equal(rc, -DER_IO);
 
 	free_drpc(ctx);
 }
