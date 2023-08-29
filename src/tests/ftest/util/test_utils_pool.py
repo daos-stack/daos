@@ -90,8 +90,6 @@ def remove_pool(test, pool):
     if exit_status_exception is False:
         pool.dmg.exit_status_exception = exit_status_exception
 
-    sleep(120)
-
     return error_list
 
 
