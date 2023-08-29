@@ -284,8 +284,3 @@ class ReaddirTracer():
         self.all_handles[line.descriptor] = handle
         if not isinstance(handle, RootHandle):
             self.all_handles[line.parent].add_child(handle)
-
-
-def new():
-    """Return a new iterator"""
-    return ReaddirTracer()

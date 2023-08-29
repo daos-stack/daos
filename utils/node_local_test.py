@@ -4434,7 +4434,7 @@ def log_test(conf,
     lto = nlt_lt.LogTest(log_iter, quiet=quiet)
 
     if not quiet:
-        lto.add_tracer(nlt_lc.new, ('dfuse'))
+        lto.add_tracer(nlt_lc.ReaddirTracer(), ('dfuse'))
 
     # Add the code coverage tracer.
     lto.add_tracer(nlt_ct, None)
