@@ -2885,11 +2885,10 @@ exit:
 	return rc;
 
 send_error:
-	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
-			   cb_info->buc_user_priv);
-
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	output->rc = rc;
+	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
+			   cb_info->buc_user_priv);
 
 	crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
