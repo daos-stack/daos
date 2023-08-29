@@ -362,35 +362,36 @@ struct dfuse_pool {
 	struct d_hash_table dfp_cont_table;
 };
 
-/*
- * TODO: Move these to the ioctl header file and use X macros to define these elements.
- *
- * Actually use atomics to measure them.
- */
-enum dfuse_stat_idx {
-	DS_CREATE = 0,
-	DS_MKNOD,
-	DS_FGETATTR,
-	DS_GETATTR,
-	DS_FSETATTR,
-	DS_SETATTR,
-	DS_LOOKUP,
-	DS_MKDIR,
-	DS_UNLINK,
-	DS_READDIR,
-	DS_SYMLINK,
-	DS_OPENDIR,
-	DS_RELEASEDIR,
-	DS_SETXATTR,
-	DS_GETXATTR,
-	DS_RMXATTR,
-	DS_LISTXATTR,
-	DS_RENAME,
-	DS_STATFS,
+#define D_FOREACH_DFUSE_STATX(ACTION)                                                              \
+	ACTION(CREATE)                                                                             \
+	ACTION(MKNOD)                                                                              \
+	ACTION(FGETATTR)                                                                           \
+	ACTION(GETATTR)                                                                            \
+	ACTION(FSETATTR)                                                                           \
+	ACTION(SETATTR)                                                                            \
+	ACTION(LOOKUP)                                                                             \
+	ACTION(MKDIR)                                                                              \
+	ACTION(UNLINK)                                                                             \
+	ACTION(READDIR)                                                                            \
+	ACTION(SYMLINK)                                                                            \
+	ACTION(OPENDIR)                                                                            \
+	ACTION(RELEASEDIR)                                                                         \
+	ACTION(SETXATTR)                                                                           \
+	ACTION(GETXATTR)                                                                           \
+	ACTION(RMXATTR)                                                                            \
+	ACTION(LISTXATTR)                                                                          \
+	ACTION(RENAME)                                                                             \
+	ACTION(STATFS)
+
+#define DFUSE_STAT_DEFINE(name, ...) DS_##name,
+
+enum dfuse_stat {
+	/** Return value representing success */
+	D_FOREACH_DFUSE_STATX(DFUSE_STAT_DEFINE) DS_LIMIT,
 };
 
 struct dfuse_stats {
-	ATOMIC uint64_t values[DS_STATFS + 1];
+	ATOMIC uint64_t values[DS_LIMIT];
 };
 
 /** Container information
@@ -437,7 +438,8 @@ struct dfuse_cont {
 	bool                    dfc_direct_io_disable;
 };
 
-#define DFUSE_IE_STAT_ADD(_ie, _stat) (_ie)->ie_dfs->dfc_stats.values[(_stat)] += 1
+#define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
+	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfc_stats.values[(_stat)], 1)
 
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
