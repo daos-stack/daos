@@ -6312,8 +6312,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 				    &iod, NULL, NULL, NULL);
 	}
 	if (rc) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
-			 "Failed to fetch xattr '%s' " DF_RC "\n", name, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc, "Failed to fetch xattr '%s'",
+			  name);
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 

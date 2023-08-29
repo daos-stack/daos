@@ -1709,10 +1709,9 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		}
 		rc = ds_pool_hdl_is_from_srv(pool, in->tmi_op.pi_hdl);
 		if (rc < 0) {
-			D_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR,
-				 DF_UUID": failed to check server pool handle "DF_UUID": "DF_RC"\n",
-				 DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl),
-				 DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR, rc,
+				  DF_UUID ": failed to check server pool handle " DF_UUID,
+				  DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
 			if (rc == -DER_NOTLEADER)
 				rc = -DER_AGAIN;
 			goto out_pool;
@@ -1979,8 +1978,7 @@ ds_pool_tgt_discard_ult(void *data)
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
-	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
-		 DP_UUID(arg->pool_uuid), DP_RC(rc));
+	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " tgt discard", DP_UUID(arg->pool_uuid));
 put:
 	pool->sp_need_discard = 0;
 	pool->sp_discard_status = rc;

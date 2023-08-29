@@ -172,9 +172,8 @@ smd_dev_get_info(struct d_uuid *id, struct smd_dev_info **dev_info)
 
 	rc = smd_db_fetch(TABLE_DEV, id, sizeof(*id), &dev, sizeof(dev));
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch dev "DF_UUID" failed. "DF_RC"\n",
-			 DP_UUID(&id->uuid), DP_RC(rc));
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc,
+			  "Fetch dev " DF_UUID " failed", DP_UUID(&id->uuid));
 		return rc;
 	}
 
@@ -208,9 +207,8 @@ smd_dev_get_by_tgt(uint32_t tgt_id, enum smd_dev_type st, struct smd_dev_info **
 	smd_db_lock();
 	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
-			 DP_RC(rc));
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc, "Fetch target %d failed",
+			  tgt_id);
 		goto out;
 	}
 	rc = smd_dev_get_info(&id, dev_info);
