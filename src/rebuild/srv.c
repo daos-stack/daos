@@ -215,13 +215,26 @@ rpt_lookup(uuid_t pool_uuid, unsigned int ver, unsigned int gen)
 
 	/* Only stream 0 will access the list */
 	d_list_for_each_entry(rpt, &rebuild_gst.rg_tgt_tracker_list, rt_list) {
-		if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 &&
-		    rpt->rt_finishing == 0 &&
-		    (ver == (unsigned int)(-1) || rpt->rt_rebuild_ver == ver) &&
-		    (gen == (unsigned int)(-1) || rpt->rt_rebuild_gen == gen)) {
-			rpt_get(rpt);
-			found = rpt;
-			break;
+		if (uuid_compare(rpt->rt_pool_uuid, pool_uuid) == 0 && rpt->rt_finishing == 0) {
+			if (ver == -1 && gen == -1) {
+				if (found == NULL) {
+					rpt_get(rpt);
+					found = rpt;
+				} else if (rpt->rt_rebuild_gen < found->rt_rebuild_gen ||
+					   rpt->rt_rebuild_ver < found->rt_rebuild_ver) {
+					/* Found lowest ver and generation rpt in the list */
+					rpt_put(found);
+					rpt_get(rpt);
+					found = rpt;
+				}
+				continue;
+			}
+
+			if (rpt->rt_rebuild_ver == ver && rpt->rt_rebuild_gen == gen) {
+				rpt_get(rpt);
+				found = rpt;
+				break;
+			}
 		}
 	}
 
@@ -2114,8 +2127,9 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	struct rebuild_pool_tls	*pool_tls;
 	int			 rc;
 
-	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u\n",
-	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount);
+	D_INFO("finishing rebuild for "DF_UUID", map_ver=%u refcount %u gen %u\n",
+	       DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver, rpt->rt_refcount,
+	       rpt->rt_rebuild_gen);
 
 	D_ASSERT(rpt->rt_pool->sp_rebuilding > 0);
 	rpt->rt_pool->sp_rebuilding--;
