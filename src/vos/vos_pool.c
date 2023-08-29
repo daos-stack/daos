@@ -793,7 +793,7 @@ pool_hop_free(struct d_ulink *hlink)
 	}
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, 0);
+		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
 	D_FREE(pool);
 }
@@ -1101,7 +1101,8 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
-	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+	D_DEBUG(DB_MGMT, DF_UUID": No open handles, OK to delete: flags=%x\n", DP_UUID(uuid),
+		flags);
 
 	vos_delete_blob(uuid, flags);
 	return 0;
