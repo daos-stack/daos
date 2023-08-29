@@ -273,8 +273,7 @@ vos_ilog_fetch_internal(struct umem_instance *umm, daos_handle_t coh, uint32_t i
 	if (rc == -DER_NONEXIST)
 		goto init;
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR,
-			 "Could not fetch ilog: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_INPROGRESS, DB_IO, DLOG_ERR, rc, "Could not fetch ilog");
 		return rc;
 	}
 

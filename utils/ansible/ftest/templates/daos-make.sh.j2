@@ -325,12 +325,18 @@ if [[ $MPICH_PATH ]] ; then
 	prepend-path  PKG_CONFIG_PATH $DAOS_INSTALL_DIR/man/lib/pkgconfig
 	EOF
 
-	if [[ -f /usr/share/modulefiles/mpi/mpich-x86_64 && ! -f /usr/share/modulefiles/mpi/mpich-x86_64.orig ]] ; then
-		warning "MPICH already installed: backup module file /usr/share/modulefiles/mpi/mpich-x86_64.orig"
-		run sudo mv /usr/share/modulefiles/mpi/mpich-x86_64 /usr/share/modulefiles/mpi/mpich-x86_64.orig
-	fi
-	run sudo mkdir -p /usr/share/modulefiles/mpi
-	run sudo ln -fs "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64" /usr/share/modulefiles/mpi/mpich-x86_64
+	{
+		cat <<- EOF
+		set -e -o pipefail
+
+		if [[ -f /usr/share/modulefiles/mpi/mpich-x86_64 && ! -f /usr/share/modulefiles/mpi/mpich-x86_64.orig ]] ; then
+			echo "[WARNING] MPICH already installed: backup module file /usr/share/modulefiles/mpi/mpich-x86_64.orig"
+			mv /usr/share/modulefiles/mpi/mpich-x86_64 /usr/share/modulefiles/mpi/mpich-x86_64.orig
+		fi
+		mkdir -p /usr/share/modulefiles/mpi
+		ln -fs "$DAOS_INSTALL_DIR/share/modulefiles/mpich-x86_64" /usr/share/modulefiles/mpi/mpich-x86_64
+		EOF
+	} | run $CLUSH_EXE $CLUSH_OPTS -l root -w $CLIENTS_LIST bash -s
 fi
 
 if [[ $HDF5_PATH ]] ; then
