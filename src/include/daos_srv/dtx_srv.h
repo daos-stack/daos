@@ -298,17 +298,6 @@ dtx_dsp_free(struct dtx_share_peer *dsp)
 	D_FREE(dsp);
 }
 
-static inline uint64_t
-dtx_hlc_age2sec(uint64_t hlc)
-{
-	uint64_t now = d_hlc_get();
-
-	if (now <= hlc)
-		return 0;
-
-	return d_hlc2sec(now - hlc);
-}
-
 static inline struct dtx_entry *
 dtx_entry_get(struct dtx_entry *dte)
 {
