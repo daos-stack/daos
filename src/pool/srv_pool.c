@@ -5758,8 +5758,8 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 	 */
 	rc = ds_cont_rf_check(pool_uuid, cont_uuid, tx);
 	if (rc)
-		D_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, DF_CONT" check_rf: "DF_RC"\n",
-			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, rc, DF_CONT " check_rf",
+			  DP_CONT(pool_uuid, cont_uuid));
 
 	if (sched->psc_canceled) {
 		D_DEBUG(DB_MD, DF_CONT" is canceled.\n", DP_CONT(pool_uuid, cont_uuid));

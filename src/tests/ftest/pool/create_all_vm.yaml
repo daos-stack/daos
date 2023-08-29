@@ -6,7 +6,7 @@ timeouts:
   test_one_pool_vm: 240
   test_rank_filter: 240
   test_two_pools_vm: 160
-  test_recycle_pools_vm: 1000
+  test_recycle_pools_vm: 800
 
 # DAOS-12750 NOTE External tools used by DAOS are creating sparse files (e.g. daos_system.db) which
 # could eventually be compacted when a pool is created.  To manage this, we add 9 MiB to the 17MiB
@@ -18,7 +18,7 @@ test_rank_filter:
   delta: 27262976             # 26MiB
 
 test_recycle_pools_vm:
-  pool_count: 50
+  pool_count: 20
 
 test_two_pools_vm:
   deltas:

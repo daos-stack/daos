@@ -6022,7 +6022,7 @@ def run(wf, args):
 
                 # This test is disabled by default, it takes ~4 hours to run and can fill Jenkins
                 # available space, no not enable in CI.
-                fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
+                # fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
 
                 wf_client.close()
 

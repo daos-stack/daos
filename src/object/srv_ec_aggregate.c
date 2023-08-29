@@ -972,9 +972,9 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
-			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
-			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
+			  DF_UOID " fetch parity from peer shard %d", DP_UOID(entry->ae_oid),
+			  peer_shard);
 		if (rc)
 			goto out;
 	}
@@ -2649,13 +2649,11 @@ ds_obj_ec_aggregate(void *arg)
 	param.ap_cont = cont;
 	rc = ec_agg_param_init(cont, &param);
 	if (rc) {
-		/* To make sure the EC aggregation can be run on this xstream,
-		 * let's do not exit here, and in cont_ec_aggregate_cb(), it will
-		 * keep retrying parameter init.
+		/* To make sure the EC aggregation can be run on this xstream, let's do not exit
+		 * here, and in cont_ec_aggregate_cb(), it will keep retrying parameter init.
 		 */
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR,
-			 DF_UUID" EC aggregation failed: "DF_RC"\n",
-			 DP_UUID(cont->sc_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR, rc,
+			  DF_UUID " EC aggregation failed", DP_UUID(cont->sc_uuid));
 	}
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);
