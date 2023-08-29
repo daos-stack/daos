@@ -2856,6 +2856,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_ERROR("crt_ivu_rpc_issue(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(send_error, rc);
 		}
+		rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+
 	} else if (update_rc == 0) {
 		/* If sync was bi-directional - transfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
@@ -2867,7 +2869,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 			D_GOTO(exit, rc);
 		}
-		output->rc = -DER_SUCCESS;
+		rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+		output->rc = rc;
 		iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value, cb_info->buc_user_priv);
 
 		crt_reply_send(info->bci_bulk_desc->bd_rpc);
@@ -2878,8 +2881,6 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
-
-	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 exit:
 	return rc;
 
