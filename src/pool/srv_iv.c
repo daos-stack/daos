@@ -1475,9 +1475,8 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
-			 DB_ANY, DLOG_ERR,
-			 "iv fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN, DB_ANY, DLOG_ERR, rc,
+			  "iv fetch failed");
 		D_GOTO(out, rc);
 	}
 

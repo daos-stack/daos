@@ -1874,7 +1874,7 @@ err_super:
 err_close:
 	rc2 = daos_cont_close(coh, NULL);
 	if (rc2)
-		D_ERROR("daos_cont_close failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_cont_close failed " DF_RC "\n", DP_RC(rc2));
 err_destroy:
 	/*
 	 * DAOS container create returns success even if container exists -
@@ -6312,8 +6312,8 @@ dfs_getxattr(dfs_t *dfs, dfs_obj_t *obj, const char *name, void *value,
 				    &iod, NULL, NULL, NULL);
 	}
 	if (rc) {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR,
-			 "Failed to fetch xattr '%s' " DF_RC "\n", name, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc, "Failed to fetch xattr '%s'",
+			  name);
 		D_GOTO(close, rc = daos_der2errno(rc));
 	}
 
@@ -7186,8 +7186,8 @@ out_oit:
 	rc2 = daos_oit_close(oit_args->oit, NULL);
 	if (rc == 0)
 		rc = daos_der2errno(rc2);
-	D_FREE(oit_args);
 out_snap:
+	D_FREE(oit_args);
 	epr.epr_hi = epr.epr_lo = snap_epoch;
 	rc2 = daos_cont_destroy_snap(coh, epr, NULL);
 	if (rc == 0)

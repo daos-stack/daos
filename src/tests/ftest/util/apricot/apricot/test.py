@@ -408,6 +408,9 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
+                if str(error) == "Test interrupted by SIGTERM":
+                    # Abort testing if timed out by avocado.
+                    raise error
                 errors.append(
                     "Unhandled exception when calling {}({}): {}".format(
                         str(cleanup["method"]), dict_to_str(cleanup["kwargs"]), str(error)))

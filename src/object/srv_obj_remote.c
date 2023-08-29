@@ -426,10 +426,9 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		D_ERROR("crt_req_send failed, rc "DF_RC"\n", DP_RC(rc));
 	}
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
-		 "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT "
-		 DF_DTI": "DF_RC"\n", tgt_ep.ep_rank, tgt_ep.ep_tag, idx,
-		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
+		  "Forwarded CPD RPC to rank:%d tag:%d idx %u for DXT " DF_DTI, tgt_ep.ep_rank,
+		  tgt_ep.ep_tag, idx, DP_DTI(&dcsh->dcsh_xid));
 
 	return rc;
 out:
