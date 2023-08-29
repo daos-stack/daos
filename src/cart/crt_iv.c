@@ -1650,9 +1650,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "Failed to get hash, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "Failed to get hash");
 		D_GOTO(exit, rc);
 	}
 
@@ -1759,9 +1757,7 @@ exit:
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "Failed to issue IV fetch, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "Failed to issue IV fetch");
 
 		if (cb_info) {
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
@@ -3277,9 +3273,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "ivo_on_hash() failed");
 		D_GOTO(exit, rc);
 	}
 
@@ -3370,10 +3364,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
-			 DLOG_INFO, DLOG_ERR,
-			 "ivo_on_update failed with rc = "DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+			  "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);
@@ -3466,9 +3458,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "ivo_on_hash() failed");
 		D_GOTO(exit, rc);
 	}
 

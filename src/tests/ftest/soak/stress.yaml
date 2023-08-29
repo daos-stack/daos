@@ -90,6 +90,7 @@ soak_stress:
     - datamover_stress
   ignore_soak_errors: false
   enable_intercept_lib: true
+  enable_remote_logging: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO

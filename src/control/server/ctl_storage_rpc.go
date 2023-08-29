@@ -309,15 +309,15 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -327,15 +327,15 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetRdbSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB clusters the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB clusters (cluster size: %d) the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetRdbWalSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 

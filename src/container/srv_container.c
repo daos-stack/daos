@@ -759,7 +759,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_STATUS);
 	D_ASSERT(entry_def != NULL);
 	entry_def->dpe_val = DAOS_PROP_CO_STATUS_VAL(DAOS_PROP_CO_HEALTHY, 0,
-				     ds_pool_get_version(pool_hdl->sph_pool));
+				ds_pool_get_version(pool_hdl->sph_pool));
 
 	/* Validate the result */
 	if (!daos_prop_valid(prop_def, false /* pool */, true /* input */)) {
@@ -1426,8 +1426,11 @@ belongs_to_user(d_iov_t *key, struct find_hdls_by_cont_arg *arg)
 
 	rc = ds_sec_creds_are_same_user(&cred, arg->fha_cred);
 
-	if (pool_hdl == NULL)
+	if (pool_hdl)
+		ds_pool_hdl_put(pool_hdl);
+	else
 		D_FREE(cred.iov_buf);
+
 	return rc;
 }
 
@@ -1862,12 +1865,9 @@ cont_agg_eph_leader_ult(void *arg)
 							ec_agg->ea_cont_uuid,
 							min_eph);
 			if (rc) {
-				D_CDEBUG(rc == -DER_NONEXIST,
-					 DLOG_INFO, DLOG_ERR,
-					 DF_CONT": refresh failed: "DF_RC"\n",
-					 DP_CONT(svc->cs_pool_uuid,
-						 ec_agg->ea_cont_uuid),
-					DP_RC(rc));
+				DL_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR, rc,
+					  DF_CONT ": refresh failed",
+					  DP_CONT(svc->cs_pool_uuid, ec_agg->ea_cont_uuid));
 
 				/* If there are network error or pool map inconsistency,
 				 * let's skip the following eph sync, which will fail
@@ -4861,8 +4861,8 @@ ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx)
 	rc = ds_pool_rf_verify(pool, stat.dcs_pm_ver, daos_cont_prop2redunlvl(prop),
 			       daos_cont_prop2redunfac(prop));
 	if (rc != -DER_RF) {
-		D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_CONT", verify" DF_RC"\n",
-			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_CONT ", verify",
+			  DP_CONT(pool_uuid, cont_uuid));
 		D_GOTO(out, rc);
 	}
 

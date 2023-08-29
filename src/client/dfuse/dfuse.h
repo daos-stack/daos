@@ -66,9 +66,6 @@ struct dfuse_info {
 	ATOMIC uint64_t      di_container_count;
 };
 
-/* legacy, allow the old name for easier migration */
-#define dfuse_projection_info dfuse_info
-
 struct dfuse_eq {
 	struct dfuse_info  *de_handle;
 
@@ -281,7 +278,7 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
+dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
@@ -367,11 +364,10 @@ struct dfuse_pool {
 
 /** Container information
  *
- * This represents a container that DFUSE is accessing.  All containers
- * will have a valid dfs_handle.
+ * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
+ * handle.
  *
- * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's
- * members.
+ * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
  *
  * uuid may be NULL for pool inodes.
  */

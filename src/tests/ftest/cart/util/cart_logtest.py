@@ -357,10 +357,11 @@ class LogTest():
             cb_list.append((RpcReporting(), ('hg', 'rpc')))
         for tracer in self._tracers:
             cb_list.append((tracer[0](), tracer[1]))
+            cb_list.append((tracer[0], tracer[1]))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             for (cbe, facs) in cb_list:
-                if line.fac in facs:
+                if facs is None or line.fac in facs:
                     cbe.add_line(line)
             self.save_log_line(line)
             try:
