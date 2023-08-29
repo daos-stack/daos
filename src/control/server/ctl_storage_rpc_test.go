@@ -2353,7 +2353,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
-					if err := ei.createSuperblock(false); err != nil {
+					if err := ei.createSuperblock(); err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -2384,7 +2384,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				go func(ctx context.Context, e *EngineInstance) {
 					select {
 					case <-ctx.Done():
-					case awaitCh <- e.awaitStorageReady(ctx, false):
+					case awaitCh <- e.awaitStorageReady(ctx):
 					}
 				}(ctx, ei.(*EngineInstance))
 			}

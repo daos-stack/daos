@@ -18,12 +18,21 @@ type ServerLegacy struct {
 	EnableVMD *bool `yaml:"enable_vmd,omitempty"`
 	// Detect outdated "servers" config, to direct users to change their config file.
 	Servers []*engine.Config `yaml:"servers,omitempty"`
+	// Detect outdated "recreate_superblocks" config, to direct users to change their config file.
+	RecreateSuperblocks bool `yaml:"recreate_superblocks,omitempty"`
 }
 
 // WithEnableVMD can be used to set the state of VMD functionality,
 // if not enabled then VMD devices will not be used if they exist.
 func (sl *ServerLegacy) WithEnableVMD(enabled bool) *ServerLegacy {
 	sl.EnableVMD = &enabled
+	return sl
+}
+
+// WithRecreateSuperblocks indicates that a missing superblock should not be treated as
+// an error. The server will create new superblocks as necessary.
+func (sl *ServerLegacy) WithRecreateSuperblocks() *ServerLegacy {
+	sl.RecreateSuperblocks = true
 	return sl
 }
 

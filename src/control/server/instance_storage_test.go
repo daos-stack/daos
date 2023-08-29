@@ -361,7 +361,6 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		engineStarted  bool
 		needsScmFormat bool
 		hasSB          bool
-		skipMissingSB  bool
 		engineIndex    uint32
 		expFmtType     string
 		expErr         error
@@ -369,14 +368,6 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 		"already started": {
 			engineStarted: true,
 			expErr:        errStarted,
-		},
-		"needs format but skip missing superblock": {
-			needsScmFormat: true,
-			skipMissingSB:  true,
-			expErr:         FaultScmUnmanaged("/mnt/test"),
-		},
-		"no need to format and skip missing superblock": {
-			skipMissingSB: true,
 		},
 		"no need to format and existing superblock": {
 			hasSB: true,
@@ -432,9 +423,9 @@ func TestIOEngineInstance_awaitStorageReady(t *testing.T) {
 			ctx, cancel := context.WithTimeout(test.Context(t), time.Millisecond*100)
 			defer cancel()
 
-			gotErr := engine.awaitStorageReady(ctx, tc.skipMissingSB)
+			gotErr := engine.awaitStorageReady(ctx)
 			test.CmpErr(t, tc.expErr, gotErr)
-			if tc.expErr == errStarted || tc.skipMissingSB == true || tc.hasSB == true {
+			if tc.expErr == errStarted || tc.hasSB == true {
 				return
 			}
 

@@ -64,7 +64,9 @@ func (cmd *startCmd) setCLIOverrides() error {
 	if cmd.Modules != nil {
 		cmd.config.WithModules(*cmd.Modules)
 	}
-	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
+	if cmd.RecreateSuperblocks {
+		cmd.Notice("--recreate-superblocks is deprecated and no longer needed to use externally-managed tmpfs")
+	}
 
 	for _, srv := range cmd.config.Engines {
 		if cmd.Targets > 0 {
