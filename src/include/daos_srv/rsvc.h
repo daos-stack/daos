@@ -107,6 +107,7 @@ struct ds_rsvc {
 	int			s_ref;
 	ABT_mutex		s_mutex;	/* for the following members */
 	bool			s_stop;
+	bool			s_destroy;	/* when putting last ref */
 	uint64_t		s_term;		/**< leader term */
 	enum ds_rsvc_state	s_state;
 	ABT_cond		s_state_cv;

@@ -74,6 +74,7 @@ class SoakTestBase(TestWithServers):
         self.slurm_exclude_servers = True
         self.control = get_local_host()
         self.enable_il = False
+        self.selected_host = None
         self.enable_remote_logging = False
         self.soak_log_dir = None
         self.soak_dir = None
@@ -631,7 +632,10 @@ class SoakTestBase(TestWithServers):
                 self.harasser_results = {}
                 self.harassers, self.offline_harassers = get_harassers(harasser)
             if not single_test_pool and "extend-pool" in self.harassers + self.offline_harassers:
-                ranks = self.server_managers[0].get_host_ranks(self.hostlist_servers[:-1])
+                # create a pool excluding the ranks from the selected host
+                self.selected_host = self.random.choice(self.hostlist_servers)
+                ranks = self.server_managers[0].get_host_ranks(
+                    self.hostlist_servers - NodeSet(self.selected_host))
                 add_pools(self, ["pool_jobs"], ranks)
             elif not single_test_pool:
                 add_pools(self, ["pool_jobs"])
