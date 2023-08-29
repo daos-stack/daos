@@ -2686,7 +2686,10 @@ out_tx:
 		 */
 		D_DEBUG(DB_MD, DF_UUID": trying to finish stepping up\n",
 			DP_UUID(in->pri_op.pi_uuid));
-		rc = pool_svc_step_up_cb(&svc->ps_rsvc);
+		if (DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
+			rc = -DER_GRPVER;
+		else
+			rc = pool_svc_step_up_cb(&svc->ps_rsvc);
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);

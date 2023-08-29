@@ -440,6 +440,51 @@ get_sys_info_test(void **state)
 	daos_mgmt_put_sys_info(info);
 }
 
+/*
+ * A pool service who steps down from the UP_EMPTY state shall not leak
+ * map_distd. This is a regression test for DAOS-14138.
+ */
+static void
+pool_create_steps_down_from_up_empty(void **state)
+{
+	test_arg_t   *arg = *state;
+	uuid_t        uuid;
+	d_rank_list_t svc;
+	d_rank_t      rank;
+	int           rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("setting DAOS_POOL_CREATE_FAIL_STEP_UP ... ");
+	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
+				   DAOS_POOL_CREATE_FAIL_STEP_UP | DAOS_FAIL_ONCE, 0, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	/*
+	 * Request a single PS replica so that this replica will step up again
+	 * after stepping down. The assertion on s_map_distd in init_map_distd
+	 * would fail if we had leaked map_distd during the step down process.
+	 */
+	print_message("creating pool synchronously ... ");
+	rank = -1;
+	svc.rl_ranks = &rank;
+	svc.rl_nr = 1;
+	rc = dmg_pool_create(dmg_config_file, geteuid(), getegid(), arg->group, NULL /* tgts */,
+			     256 * 1024 * 1024 /* minimal size */, 0 /* nvme size */,
+			     NULL /* prop */, &svc, uuid);
+	assert_rc_equal(rc, 0);
+	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
+
+	print_message("destroying pool synchronously ... ");
+	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
 static const struct CMUnitTest tests[] = {
 	{ "MGMT1: create/destroy pool on all tgts",
 	  pool_create_all, async_disable, test_case_teardown},
@@ -453,6 +498,8 @@ static const struct CMUnitTest tests[] = {
 	  pool_create_and_destroy_retry, async_disable, test_case_teardown},
 	{ "MGMT6: daos_mgmt_get_sys_info",
 	  get_sys_info_test, async_disable, test_case_teardown},
+	{ "MGMT7: create: PS steps down from UP_EMPTY",
+	  pool_create_steps_down_from_up_empty, async_disable, test_case_teardown},
 };
 
 static int
