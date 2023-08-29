@@ -3629,7 +3629,7 @@ lookup_rel_path_loop:
 			if (flags & O_TRUNC) {
 				rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
 				if (rc) {
-					D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
+					DL_ERROR(rc, "Failed to truncate file");
 					daos_array_close(obj->oh, NULL);
 					D_GOTO(err_obj, rc = daos_der2errno(rc));
 				}
