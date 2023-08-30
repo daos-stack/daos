@@ -2401,17 +2401,16 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	child_output->rc = rc;
 
 	ivns = cb_info->uci_ivns_internal;
-
-	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
-	D_ASSERT(iv_ops != NULL);
-
-	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
-			   cb_info->uci_user_priv);
-
 	crt_reply_send(cb_info->uci_child_rpc);
 
 	/* ADDREF done in crt_hdlr_iv_update */
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+
+	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+			   cb_info->uci_user_priv);
+
 	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 
 	/* addref in transfer_back_to_child() */
@@ -2458,11 +2457,11 @@ int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 				     &cb_info->uci_iv_value, update_rc,
 				     cb_info->uci_cb_arg);
 
-		/* Corresponding on_get() done in crt_iv_update_internal */
-		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
-
 		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(cb_info->uci_bulk_hdl);
+
+		/* Corresponding on_get() done in crt_iv_update_internal */
+		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
 
 		/* addref done in crt_hdlr_iv_update */
 		IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2521,10 +2520,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
 					   iv_info->uci_user_priv);
-
+		}
 		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
@@ -2539,7 +2539,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	} else {
 		d_sg_list_t *tmp_iv_value;
 
-		if (iv_info->uci_bulk_hdl == NULL)
+		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
 			tmp_iv_value = NULL;
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
@@ -2560,14 +2560,13 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_cb_arg,
 					  iv_info->uci_user_priv,
 					  rc);
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 		if (rc != 0) {
 			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, tmp_iv_value,
 					   iv_info->uci_user_priv);
 		}
 	}
-
-	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
-		crt_bulk_free(iv_info->uci_bulk_hdl);
 
 	/* addref done in crt_hdlr_iv_update */
 	IVNS_DECREF(iv_info->uci_ivns_internal);
