@@ -177,7 +177,7 @@ fi_dfs(daos_handle_t poh, daos_handle_t coh, int op, const char *path, daos_prop
 		dirp = path;
 		printf("punching object %s\n", path);
 	} else {
-		D_ASSERT(0);
+		D_ABORT("invalid op");
 	}
 
 	rc = dfs_lookup(dfs, dirp, O_RDWR, &obj, NULL, NULL);
