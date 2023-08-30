@@ -163,69 +163,67 @@ String vm9_label(String distro) {
 
 def functional_hw_stages = [
     [name: 'Functional Hardware Medium',
-     cluster: cachedCommitPragma(pragma: 'Test-label-hw-medium',
-                                 def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+     label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
+                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
      tags: 'pr',
      nvme: 'auto',
      provider: 'ofi+verbs;ofi_rxm'],
     // [name: 'Functional Hardware Medium MD on SSD',
-    //  cluster: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
-    //                              def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+    //  label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
+    //                            def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
     //  tags: 'pr',
     //  nvme: 'auto_md_on_ssd',
     //  provider: 'ofi+verbs;ofi_rxm'],
     [name: 'Functional Hardware Medium Verbs Provider',
-     cluster: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
-                                 def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
+                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
      tags: 'pr',
      nvme: 'auto',
      provider: 'ofi+verbs;ofi_rxm'],
     [name: 'Functional Hardware Medium UCX Provider',
-     cluster: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
-                                 def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
+     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
+                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
      tags: 'pr',
      nvme: 'auto',
      provider: 'ucx+dc_x'],
     [name: 'Functional Hardware Large',
-     cluster: cachedCommitPragma(pragma: 'Test-label-hw-large',
-                                 def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+     label: cachedCommitPragma(pragma: 'Test-label-hw-large',
+                               def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
      tags: 'pr',
      nvme: 'auto',
      provider: 'ofi+verbs;ofi_rxm'],
 ]
 
 def functionalHwStageMap = functional_hw_stages.collectEntries {
-    ["${it.get('name')}" : generateFunctionalTestStage(it)]
+    ["${it.get('name')}" : generateFunctionalTestStage(it.get('name'),
+                                                       it.get('label'),
+                                                       it.get('tags', 'pr'),
+                                                       it.get('nvme', 'auto'),
+                                                       it.get('provider', 'ofi+verbs;ofi_rxm'))]
 }
 
-def generateFunctionalTestStage(Map kwargs = [:]) {
-    String name = kwargs.get('name')
-    String cluster = kwargs.get('cluster')
-    String tags = kwargs.get('tags', 'pr')
-    String nvme = kwargs.get('nvme', 'auto')
-    String provider = kwargs.get('provider', 'ofi+verbs;ofi_rxm')
+def generateFunctionalTestStage(String name, String cluster, String tags, String nvme, String provider) {
     return {
         stage('${name}') {
-            when {
-                beforeAgent true
-                expression { !skipStage() }
-            }
-            agent {
-                label cluster
-            }
-            steps {
-                job_step_update(
-                    functionalTest(
-                        inst_repos: daosRepos(),
-                        inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                        test_tag: getFunctionalTags(default_tags: tags),
-                        ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-                        test_function: 'runTestFunctionalV2'))
-            }
-            post {
-                always {
-                    functionalTestPostV2()
-                    job_status_update()
+            node(label) {
+                when {
+                    beforeAgent true
+                    expression { !skipStage() }
+                }
+                steps {
+                    job_step_update(
+                        functionalTest(
+                            inst_repos: daosRepos(),
+                            inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                            test_tag: getFunctionalTags(default_tags: tags),
+                            ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+                            test_function: 'runTestFunctionalV2'))
+                }
+                post {
+                    always {
+                        functionalTestPostV2()
+                        job_status_update()
+                    }
                 }
             }
         }
