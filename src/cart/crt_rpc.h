@@ -616,13 +616,14 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
 	} while (0)
 
-#define RPC_DECREF(RPC) do {						\
-		int __ref;						\
-		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
-		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
-		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
-		if (__ref == 1)						\
-			crt_req_destroy(RPC);				\
+#define RPC_DECREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));                             \
+		D_DEBUG(DB_NET, "%p: decref to %u", (RPC), __ref - 1);                             \
+		if (__ref == 1)                                                                    \
+			crt_req_destroy(RPC);                                                      \
 	} while (0)
 
 #define RPC_PUB_ADDREF(RPC) do {					\
