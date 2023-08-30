@@ -134,7 +134,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		}
 		break;
 	default:
-		D_ASSERT(0);
+		D_ABORT("Unknown op");
 	}
 
 out_release:

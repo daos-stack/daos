@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -306,9 +306,9 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 {
 	uint32_t idx = 0;
 
-	if (htable->ht_ops->hop_rec_hash)
+	if (htable->ht_ops->hop_rec_hash) {
 		idx = htable->ht_ops->hop_rec_hash(htable, link);
-	else {
+	} else {
 		D_ASSERT(htable->ht_feats & (D_HASH_FT_NOLOCK | D_HASH_FT_GLOCK));
 	}
 

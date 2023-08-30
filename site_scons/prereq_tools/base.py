@@ -617,6 +617,7 @@ class PreReqComponent():
 
         if not self.__env.get('ASSERT_ENABLED'):
             self.__env.AppendUnique(CCFLAGS='-Wno-unused-but-set-variable')
+            self.__env.AppendUnique(CCFLAGS='-Wno-unused-but-set-parameter')
             self.__env.AppendUnique(CCFLAGS='-Wno-unused-variable')
             self.__env.AppendUnique(CCFLAGS='-Wno-unused-function')
             self.__env.Append(CPPDEFINES={'DAOS_ASSERT_DISABLE': '1'})

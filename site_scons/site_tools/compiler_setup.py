@@ -49,9 +49,10 @@ def _base_setup(env):
         print('Env already setup')
         Exit(2)
 
-    # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options
-    # that this brings in.
-    env.Append(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
+    # Turn on -Wall first, then DESIRED_FLAGS may disable some of the options that this brings in.
+    # Ensure this goes at the start as -W options may have already been enabled/disabled and clang
+    # reads it's args left to right.
+    env.Prepend(CCFLAGS=['-g', '-Wextra', '-Wshadow', '-Wall', '-fpic'])
 
     env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
 

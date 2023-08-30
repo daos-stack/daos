@@ -211,7 +211,7 @@ obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_si
 			lat = tls->ot_fetch_vos_lat[lat_bucket(io_size)];
 			break;
 		default:
-			D_ASSERT(0);
+			D_ABORT("Invalid type");
 		}
 	} else if (opc == DAOS_OBJ_RPC_UPDATE || opc == DAOS_OBJ_RPC_TGT_UPDATE) {
 		switch (type) {
@@ -225,7 +225,7 @@ obj_update_latency(uint32_t opc, uint32_t type, uint64_t latency, uint64_t io_si
 			lat = tls->ot_update_vos_lat[lat_bucket(io_size)];
 			break;
 		default:
-			D_ASSERT(0);
+			D_ABORT("Invalid type");
 		}
 	} else {
 		/* Ignore other ops for the moment */
