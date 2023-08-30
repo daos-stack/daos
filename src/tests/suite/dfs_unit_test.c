@@ -3053,6 +3053,129 @@ dfs_test_fix_chunk_size(void **state)
 	D_FREE(buf);
 }
 
+#define NUM_ENTRIES	1024
+#define NR_ENUM		64
+
+static void
+dfs_test_pipeline_find(void **state)
+{
+	dfs_obj_t	*dir1, *f1;
+	int		i;
+	time_t		ts = 0;
+	mode_t		create_mode = S_IWUSR | S_IRUSR;
+	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
+	char		*dirname = "pipeline_dir";
+	int		rc;
+
+	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
+		      OC_SX, 0, NULL, &dir1);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < NUM_ENTRIES; i++) {
+		char name[24];
+
+		/* create 1 dir for every 100 files */
+		if (i % 100 == 0) {
+			sprintf(name, "dir.%d", i);
+			rc = dfs_mkdir(dfs_mt, dir1, name, create_mode | S_IFDIR, 0);
+			assert_int_equal(rc, 0);
+		} else {
+			daos_obj_id_t oid;
+
+			sprintf(name, "file.%d", i);
+			rc = dfs_open(dfs_mt, dir1, name, create_mode | S_IFREG, create_flags, 0, 0,
+				      NULL, &f1);
+			assert_int_equal(rc, 0);
+
+			dfs_obj2id(f1, &oid);
+			/* printf("File %s \t OID: %"PRIu64".%"PRIu64"\n", name, oid.hi, oid.lo); */
+
+			rc = dfs_release(f1);
+			assert_int_equal(rc, 0);
+		}
+
+		if (i == NUM_ENTRIES / 2) {
+			sleep(1);
+			ts = time(NULL);
+			sleep(1);
+		}
+	}
+
+	dfs_predicate_t pred = {0};
+	dfs_pipeline_t *dpipe = NULL;
+
+	strcpy(pred.dp_name, "%.6%");
+	pred.dp_newer = ts;
+	rc = dfs_pipeline_create(dfs_mt, pred, DFS_FILTER_NAME | DFS_FILTER_NEWER, &dpipe);
+	assert_int_equal(rc, 0);
+
+
+	uint32_t num_split = 0, j;
+
+	rc = dfs_obj_anchor_split(dir1, &num_split, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Anchor split in %u parts\n", num_split);
+
+	daos_anchor_t *anchors;
+	struct dirent *dents = NULL;
+	daos_obj_id_t *oids = NULL;
+	daos_size_t *csizes = NULL;
+
+	anchors = malloc(sizeof(daos_anchor_t) * num_split);
+	dents = malloc (sizeof(struct dirent) * NR_ENUM);
+	oids = calloc(NR_ENUM, sizeof(daos_obj_id_t));
+	csizes = calloc(NR_ENUM, sizeof(daos_size_t));
+
+	uint64_t nr_total = 0, nr_matched = 0, nr_scanned;
+
+	for (j = 0; j < num_split; j++) {
+		daos_anchor_t *anchor = &anchors[j];
+		uint32_t nr;
+
+		memset(anchor, 0, sizeof(daos_anchor_t));
+
+		rc = dfs_obj_anchor_set(dir1, j, anchor);
+		assert_int_equal(rc, 0);
+
+		while (!daos_anchor_is_eof(anchor)) {
+			nr = NR_ENUM;
+			rc = dfs_readdir_with_filter(dfs_mt, dir1, dpipe, anchor, &nr, dents, oids,
+						     csizes, &nr_scanned);
+			assert_int_equal(rc, 0);
+
+			nr_total += nr_scanned;
+			nr_matched += nr;
+
+			for (i = 0; i < nr; i++) {
+				print_message("Name: %s\t", dents[i].d_name);
+				print_message("OID: %"PRIu64".%"PRIu64"\t", oids[i].hi, oids[i].lo);
+				print_message("CSIZE = %zu\n", csizes[i]);
+				if (dents[i].d_type == DT_DIR)
+					print_message("Type: DIR\n");
+				else if (dents[i].d_type == DT_REG)
+					print_message("Type: FILE\n");
+				else
+					assert(0);
+			}
+		}
+	}
+
+	print_message("total entries scanned = %"PRIu64"\n", nr_total);
+	print_message("total entries matched = %"PRIu64"\n", nr_matched);
+
+	free(dents);
+	free(anchors);
+	free(oids);
+	free(csizes);
+	rc = dfs_pipeline_destroy(dpipe);
+	assert_int_equal(rc, 0);
+	/** close / finalize */
+	rc = dfs_release(dir1);
+	assert_int_equal(rc, 0);
+	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -3106,6 +3229,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_relink_root, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST26: dfs MWC chunk size fix",
 	  dfs_test_fix_chunk_size, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST27: dfs pipeline find",
+	  dfs_test_pipeline_find, async_disable, test_case_teardown},
 };
 
 static int
