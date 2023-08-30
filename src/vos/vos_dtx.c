@@ -1165,8 +1165,9 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
 		 */
-		D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) aggregated\n",
-		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
+		if (d_hlc_age2sec(DAE_XID(dae).dti_hlc) >= DAOS_AGG_THRESHOLD)
+			D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) "
+			       "aggregated\n", DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
 
 		return ALB_AVAILABLE_DIRTY;
 	}
