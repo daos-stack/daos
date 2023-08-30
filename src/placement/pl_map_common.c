@@ -54,13 +54,13 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 }
 
 /**
-   * Allocate a new failed shard then add it into remap list
-   *
-   * \param[in] remap_list        List for the failed shard to be added onto.
-   * \param[in] shard_idx         The shard number of the failed shard.
-   * \paramp[in] tgt              The failed target that will be added to the
-   *                              remap list.
-   */
+ * Allocate a new failed shard then add it into remap list
+ *
+ * \param[in] remap_list        List for the failed shard to be added onto.
+ * \param[in] shard_idx         The shard number of the failed shard.
+ * \param[in] tgt               The failed target that will be added to the
+ *                              remap list.
+ */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint, void *data)
@@ -294,12 +294,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * try next spare.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
-			D_ASSERTF(spare_tgt->ta_comp.co_status !=
-				  PO_COMP_ST_DOWNOUT,
-				  "down fseq(%u) < downout fseq(%u)\n",
-				  f_shard->fs_fseq,
+		    f_shard->fs_status == PO_COMP_ST_DRAIN) {
+			D_ASSERTF(spare_tgt->ta_comp.co_status != PO_COMP_ST_DOWNOUT,
+				  "down fseq(%u) < downout fseq(%u)\n", f_shard->fs_fseq,
 				  spare_tgt->ta_comp.co_fseq);
+		}
 
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;

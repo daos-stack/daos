@@ -154,8 +154,9 @@ crt_proc_struct_dcs_iod_csums_adv(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (ENCODING(proc_op)) {
 		if (iod_csum->ic_nr != 0) {
 			D_ASSERT(nr <= iod_csum->ic_nr);
-			if (!singv)
+			if (!singv) {
 				D_ASSERT(idx < iod_csum->ic_nr);
+			}
 		} else {
 			/* only with akey csum */
 			idx = 0;

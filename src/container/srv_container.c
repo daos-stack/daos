@@ -515,7 +515,7 @@ get_nhandles(struct rdb_tx *tx, struct d_hash_table *nhc, struct cont *cont, enu
 		result = lookup_val - 1;
 		break;
 	default:
-		D_ASSERTF(0, "invalid op=%d\n", op);
+		D_ABORT("invalid op=%d\n", op);
 		break;
 	}
 
@@ -699,7 +699,7 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 				entry->dpe_type);
 			return -DER_INVAL;
 		default:
-			D_ASSERTF(0, "bad dpt_type %d.\n", entry->dpe_type);
+			D_ABORT("bad dpt_type %d.\n", entry->dpe_type);
 			break;
 		}
 	}
@@ -720,8 +720,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_EC_PDA);
-	if (pool_hdl->sph_global_ver > 0)
+	if (pool_hdl->sph_global_ver > 0) {
 		D_ASSERT(entry_def != NULL);
+	}
 	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified ec pda from container, inherit from pool */
 		D_ASSERT(pool_hdl->sph_pool->sp_ec_pda != 0);
@@ -729,8 +730,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_RP_PDA);
-	if (pool_hdl->sph_global_ver > 0)
+	if (pool_hdl->sph_global_ver > 0) {
 		D_ASSERT(entry_def != NULL);
+	}
 	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified ec pda from container, inherit from pool */
 		D_ASSERT(pool_hdl->sph_pool->sp_rp_pda != 0);
@@ -738,8 +740,9 @@ cont_create_prop_prepare(struct ds_pool_hdl *pool_hdl,
 	}
 
 	entry_def = daos_prop_entry_get(prop_def, DAOS_PROP_CO_PERF_DOMAIN);
-	if (pool_hdl->sph_global_ver > 2)
+	if (pool_hdl->sph_global_ver > 2) {
 		D_ASSERT(entry_def != NULL);
+	}
 	if (entry_def && entry_def->dpe_val == 0) {
 		/* No specified perf_domain from container, inherit from pool */
 		entry_def->dpe_val = pool_hdl->sph_pool->sp_perf_domain;
@@ -3425,8 +3428,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 				break;
 
 			default:
-				D_ASSERTF(0, "bad dpe_type %d\n",
-					  entry->dpe_type);
+				D_ABORT("bad dpe_type %d\n", entry->dpe_type);
 				break;
 			};
 		}

@@ -3635,8 +3635,9 @@ evt_node_delete(struct evt_context *tcx)
 			child_off = *child_offp;
 			child_size = sizeof(child_off);
 		}
-		if (!UMOFF_IS_NULL(old_cur))
+		if (!UMOFF_IS_NULL(old_cur)) {
 			D_ASSERT(old_cur == child_off);
+		}
 		if (leaf) {
 			/* Free the evt_desc */
 			rc = evt_node_entry_free(tcx, ne);

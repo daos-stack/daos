@@ -682,7 +682,7 @@ get_integer(void *addr, int size)
 {
 	switch (size) {
 	default:
-		D_ASSERT(0);
+		D_ABORT("Invalid size param");
 		break;
 	case 1:
 		return *((uint8_t *)addr);
@@ -698,7 +698,7 @@ assign_integer(void *addr, int size, uint32_t val)
 {
 	switch (size) {
 	default:
-		D_ASSERT(0);
+		D_ABORT("Invalid size param");
 		break;
 	case 1:
 		*((uint8_t *)addr) = (uint8_t)val;

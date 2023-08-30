@@ -651,8 +651,9 @@ gc_get_container(struct vos_pool *pool)
 	 */
 	cont = d_list_pop_entry(&pool->vp_gc_cont, struct vos_container,
 				vc_gc_link);
-	if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT_NULL))
+	if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT_NULL)) {
 		D_ASSERT(cont == NULL);
+	}
 
 	return cont;
 }
@@ -720,11 +721,11 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 			continue;
 		}
 
-		if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT))
+		if (DAOS_FAIL_CHECK(DAOS_VOS_GC_CONT)) {
 			D_ASSERT(cont != NULL);
+		}
 
-		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
-				   &empty);
+		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds, &empty);
 		if (rc < 0) {
 			D_ERROR("GC=%s error: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 			break;

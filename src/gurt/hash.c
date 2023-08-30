@@ -308,9 +308,9 @@ ch_rec_hash(struct d_hash_table *htable, d_list_t *link)
 
 	if (htable->ht_ops->hop_rec_hash)
 		idx = htable->ht_ops->hop_rec_hash(htable, link);
-	else
-		D_ASSERT(htable->ht_feats &
-			 (D_HASH_FT_NOLOCK | D_HASH_FT_GLOCK));
+	else {
+		D_ASSERT(htable->ht_feats & (D_HASH_FT_NOLOCK | D_HASH_FT_GLOCK));
+	}
 
 	return idx & ((1U << htable->ht_bits) - 1);
 }
@@ -1062,8 +1062,9 @@ rl_op_empty(struct d_rlink *rlink)
 		return true;
 
 	is_unlinked = (atomic_load_relaxed(&rlink->rl_ref) == 0);
-	if (is_unlinked)
+	if (is_unlinked) {
 		D_ASSERT(d_hash_rec_unlinked(&rlink->rl_link));
+	}
 
 	return is_unlinked;
 }

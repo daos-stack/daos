@@ -130,7 +130,7 @@ main(int argc, char **argv)
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
-		D_ASSERTF(0, "Error in creating lru cache\n");
+		D_ABORT("Error in creating lru cache\n");
 
 	/* make sure csize and num_keys can
 	 * fit into int variable, since
@@ -144,7 +144,7 @@ main(int argc, char **argv)
 
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)
-		D_ASSERTF(0, "Error in allocating keys_array\n");
+		D_ABORT("Error in allocating keys_array\n");
 
 	keys[0] = 0; keys[1] = 1;
 

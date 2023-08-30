@@ -2901,8 +2901,9 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			}
 		} else {
 			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
-			if (dth->dth_ent != NULL)
+			if (dth->dth_ent != NULL) {
 				D_ASSERT(dth->dth_ent == dae);
+			}
 
 			/* Cannot cleanup 'prepare'/'commit' DTX entry. */
 			if (vos_dae_is_prepare(dae) || vos_dae_is_commit(dae))
@@ -2987,10 +2988,11 @@ vos_dtx_attach(struct dtx_handle *dth, bool persistent, bool exist)
 				goto out;
 
 			dae = riov.iov_buf;
-			if (dae->dae_dth == NULL)
+			if (dae->dae_dth == NULL) {
 				dae->dae_dth = dth;
-			else
+			} else {
 				D_ASSERT(dae->dae_dth == dth);
+			}
 
 			dth->dth_ent = dae;
 			dth->dth_need_validation = dae->dae_need_validation;
@@ -3034,8 +3036,9 @@ out:
 		if (persistent) {
 			dth->dth_active = 1;
 			rc = vos_dtx_prepared(dth, &dce);
-			if (!dth->dth_solo)
+			if (!dth->dth_solo) {
 				D_ASSERT(dce == NULL);
+			}
 		} else {
 			dth->dth_pinned = 1;
 		}

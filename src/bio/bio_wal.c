@@ -1357,13 +1357,14 @@ entry_move_next(struct wal_trans_blk *entry_blk, struct wal_blks_desc *bd)
 	if ((entry_blk->tb_off + entry_sz) > entry_blk->tb_blk_sz)
 		next_wal_blk(entry_blk);
 
-	if (entry_blk->tb_idx < bd->bd_payload_idx)
+	if (entry_blk->tb_idx < bd->bd_payload_idx) {
 		D_ASSERT((entry_blk->tb_off + entry_sz) <= entry_blk->tb_blk_sz);
-	else if (entry_blk->tb_idx == bd->bd_payload_idx)
+	} else if (entry_blk->tb_idx == bd->bd_payload_idx) {
 		D_ASSERT((entry_blk->tb_off + entry_sz) <= bd->bd_payload_off);
-	else
+	} else {
 		D_ASSERTF(0, "Entry blk idx:%u > Payload blk idx:%u\n",
 			  entry_blk->tb_idx, bd->bd_payload_idx);
+	}
 }
 
 static int

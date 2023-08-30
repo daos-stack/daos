@@ -1027,9 +1027,9 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 		if (rc == -DER_TX_ID_REUSED && tx->tx_retry)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
-			D_ASSERTF(0,
-				  "We miss to set 'RESEND' flag (%d) when resend RPC for TX "
-				  DF_DTI"\n", tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
+			D_ABORT("We miss to set 'RESEND' flag (%d) when resend RPC for TX " DF_DTI
+				"\n",
+				tx->tx_set_resend ? 1 : 0, DP_DTI(&tx->tx_id));
 
 		daos_dti_copy(&old_dti, &tx->tx_id);
 		daos_dti_gen(&tx->tx_id, false);

@@ -46,8 +46,7 @@
 #endif
 
 /* produce output and exit */
-#define FATAL(fmt, ...)					\
-	D_ASSERTF(0, fmt "\n", ## __VA_ARGS__)
+#define FATAL(fmt, ...) D_ABORT(fmt, ##__VA_ARGS__)
 
 /* assert a condition is true at runtime */
 #define ASSERT_rt(cnd) do {				\

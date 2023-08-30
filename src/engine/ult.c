@@ -329,8 +329,9 @@ sched_ult2xs(int xs_type, int tgt_id)
 {
 	uint32_t	xs_id;
 
-	if (xs_type == DSS_XS_VOS || xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW)
+	if (xs_type == DSS_XS_VOS || xs_type == DSS_XS_OFFLOAD || xs_type == DSS_XS_IOFW) {
 		D_ASSERT(tgt_id >= 0 && tgt_id < dss_tgt_nr);
+	}
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;

@@ -485,7 +485,7 @@ vos_agg_akey(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_param->ap_max_epoch = 0;
 	/* The merge window for EV tree aggregation should have been closed */
 	if (merge_window_status(&agg_param->ap_window) != MW_CLOSED)
-		D_ASSERTF(false, "Merge window isn't closed.\n");
+		D_ABORT("Merge window isn't closed.\n");
 
 	return 0;
 }
@@ -2349,7 +2349,7 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		}
 		break;
 	default:
-		D_ASSERTF(false, "Invalid iter type\n");
+		D_ABORT("Invalid iter type\n");
 		rc = -DER_INVAL;
 		break;
 	}
@@ -2413,7 +2413,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_RECX:
 		return 0;
 	default:
-		D_ASSERTF(false, "Invalid iter type\n");
+		D_ABORT("Invalid iter type\n");
 		return -DER_INVAL;
 	}
 
@@ -2728,7 +2728,7 @@ exit:
 	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 
 	if (run_agg && merge_window_status(&ad->ad_agg_param.ap_window) != MW_CLOSED)
-		D_ASSERTF(false, "Merge window resource leaked.\n");
+		D_ABORT("Merge window resource leaked.\n");
 
 free_agg_data:
 	D_FREE(ad);

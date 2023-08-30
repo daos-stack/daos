@@ -252,8 +252,9 @@ rdb_vos_set_sgls(enum rdb_vos_op op, int n, d_iov_t values[],
 	for (i = 0; i < n; i++) {
 		sgls[i].sg_nr = 1;
 		sgls[i].sg_nr_out = 0;
-		if (op == RDB_VOS_UPDATE)
+		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
+		}
 		sgls[i].sg_iovs = &values[i];
 	}
 }

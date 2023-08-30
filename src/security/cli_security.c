@@ -191,7 +191,7 @@ acl_from_prop(daos_prop_t *prop, uint32_t prop_type, struct daos_acl **acl_out)
 		type_str = "container";
 		break;
 	default:
-		D_ASSERTF(false, "prop type %d", prop_type);
+		D_ABORT("prop type %d", prop_type);
 	}
 
 	entry = daos_prop_entry_get(prop, prop_type);

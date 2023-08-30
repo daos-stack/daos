@@ -166,10 +166,11 @@ daos_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	daos_handle_t			 th_open;
 	daos_epoch_t		         snap_epoch;
 
-	if (array)
+	if (array) {
 		D_ASSERT(uf_arg->ua_recxs != NULL && uf_arg->ua_recx_num >= 1);
-	else
+	} else {
 		D_ASSERT(uf_arg->ua_recxs == NULL);
+	}
 
 	iod_type = array ? DAOS_IOD_ARRAY : DAOS_IOD_SINGLE;
 	ioreq_init(&req, arg->coh, eio_arg->op_oid, iod_type, arg);
@@ -272,10 +273,11 @@ fio_test_cb_uf(test_arg_t *arg, struct test_op_record *op, char **rbuf,
 	int				 i;
 	int				 rc = 0;
 
-	if (array)
+	if (array) {
 		D_ASSERT(uf_arg->ua_recxs != NULL && uf_arg->ua_recx_num >= 1);
-	else
+	} else {
 		D_ASSERT(uf_arg->ua_recxs == NULL);
+	}
 
 	buf_size = test_recx_size(uf_arg->ua_recxs, uf_arg->ua_recx_num,
 				  iod_size);

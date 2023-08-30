@@ -432,11 +432,11 @@ dss_srv_handler(void *arg)
 					  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
 					  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
 			} else {
-				if (dss_helper_pool)
+				if (dss_helper_pool) {
 					D_ASSERTF(dx->dx_ctx_id == (dx->dx_xs_id - DRPC_XS_NR),
 						  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
 						  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
-				else
+				} else {
 					D_ASSERTF(dx->dx_ctx_id ==
 						  (dx->dx_tgt_id + dss_sys_xs_nr - DRPC_XS_NR +
 						   dss_tgt_nr),
@@ -444,6 +444,7 @@ dss_srv_handler(void *arg)
 						  "tgt_id %d tgt_nr %d\n",
 						  dx->dx_ctx_id, dx->dx_xs_id,
 						  dx->dx_tgt_id, dss_tgt_nr);
+				}
 			}
 		}
 	}

@@ -868,9 +868,10 @@ obj_shard2tgtid(struct dc_object *obj, uint32_t shard, uint32_t map_ver,
 		uint32_t *tgt_id)
 {
 	D_RWLOCK_RDLOCK(&obj->cob_lock);
-	if (map_ver == obj->cob_version)
-		D_ASSERTF(shard < obj->cob_shards_nr, "bad shard %d exceed %d "
-			  "map_ver %d\n", shard, obj->cob_shards_nr, map_ver);
+	if (map_ver == obj->cob_version) {
+		D_ASSERTF(shard < obj->cob_shards_nr, "bad shard %d exceed %d map_ver %d\n", shard,
+			  obj->cob_shards_nr, map_ver);
+	}
 	if (shard >= obj->cob_shards_nr) {
 		D_RWLOCK_UNLOCK(&obj->cob_lock);
 		return -DER_NONEXIST;
@@ -1151,8 +1152,9 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	D_ASSERT(shard_cnt >= 1);
 	grp_size = shard_cnt / grp_nr;
 	D_ASSERT(grp_size * grp_nr == shard_cnt);
-	if (cli_disp || bit_map != NIL_BITMAP)
+	if (cli_disp || bit_map != NIL_BITMAP) {
 		D_ASSERT(grp_nr == 1);
+	}
 	/* start_shard is the shard index, but ort_start_shard is the start shard ID.
 	 * in OSA case, possibly obj_get_grp_size > daos_oclass_grp_size so the start_shard
 	 * is different with ort_start_shard.
@@ -1314,8 +1316,9 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	if (flags & OBJ_TGT_FLAG_FW_LEADER_INFO)
 		obj_auxi->flags |= ORF_CONTAIN_LEADER;
 
-	if ((flags == 0 || flags & OBJ_TGT_FLAG_FW_LEADER_INFO) && bit_map == NIL_BITMAP)
+	if ((flags == 0 || flags & OBJ_TGT_FLAG_FW_LEADER_INFO) && bit_map == NIL_BITMAP) {
 		D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_cnt);
+	}
 
 out:
 	DL_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE, DLOG_ERR, rc,
@@ -4785,9 +4788,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		if (task->dt_result == -DER_TX_ID_REUSED && obj_auxi->retry_cnt != 0)
 			/* XXX: it is must because miss to set "RESEND" flag, that is bug. */
-			D_ASSERTF(0,
-				  "Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
-				  obj_auxi->flags, task, obj_auxi->retry_cnt);
+			D_ABORT("Miss 'RESEND' flag (%x) when resend the RPC for task %p: %u\n",
+				obj_auxi->flags, task, obj_auxi->retry_cnt);
 
 		if (obj_auxi->opc == DAOS_OBJ_RPC_UPDATE) {
 			daos_obj_rw_t		*api_args = dc_task_get_args(obj_auxi->obj_task);
@@ -6930,8 +6932,9 @@ dc_obj_query_key(tse_task_t *api_task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	if (api_args->flags)
+	if (api_args->flags) {
 		D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
+	}
 	obj_auxi->dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
 		grp_idx = 0;

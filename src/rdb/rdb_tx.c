@@ -211,8 +211,8 @@ rdb_tx_hdr_decode(const void *buf, size_t len, struct rdb_tx_hdr *hdr)
 static bool
 rdb_tx_is_critical(struct rdb_tx *tx)
 {
-	struct rdb_tx_hdr	hdr;
-	bool			crit = true;
+	struct rdb_tx_hdr hdr  = {0};
+	bool              crit = true;
 
 	D_ASSERT(tx != NULL);
 	if (tx->dt_entry) {

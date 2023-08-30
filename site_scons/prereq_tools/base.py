@@ -449,8 +449,8 @@ class PreReqComponent():
                               PathVariable.PathIsDirCreate))
         opts.Add('USE_INSTALLED', 'Comma separated list of preinstalled dependencies', 'none')
         opts.Add(('MPI_PKG', 'Specifies name of pkg-config to load for MPI', None))
-        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', 0))
-        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', 0))
+        opts.Add(BoolVariable('FIRMWARE_MGMT', 'Build in device firmware management.', False))
+        opts.Add(BoolVariable('STACK_MMAP', 'Allocate ABT ULTs stacks with mmap()', False))
         opts.Add(EnumVariable('BUILD_TYPE', "Set the build type", 'release',
                               ['dev', 'debug', 'release'], ignorecase=1))
         opts.Add(EnumVariable('TARGET_TYPE', "Set the prerequisite type", 'default',
@@ -459,7 +459,7 @@ class PreReqComponent():
                               ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
-
+        opts.Add(BoolVariable('ASSERT_ENABLED', 'D_ASSERT macro enabled', False))
         opts.Update(self.__env)
 
         self._setup_compiler()
@@ -614,6 +614,12 @@ class PreReqComponent():
             else:
                 warning_flag = '-Werror'
             self.__env.AppendUnique(CCFLAGS=warning_flag)
+
+        if not self.__env.get('ASSERT_ENABLED'):
+            self.__env.AppendUnique(CCFLAGS='-Wno-unused-but-set-variable')
+            self.__env.AppendUnique(CCFLAGS='-Wno-unused-variable')
+            self.__env.AppendUnique(CCFLAGS='-Wno-unused-function')
+            self.__env.Append(CPPDEFINES={'DAOS_ASSERT_DISABLE': '1'})
 
         env = self.__env.Clone()
         config = env.Configure()
@@ -1244,7 +1250,6 @@ class _Component():
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with the external component"""
-
         if self.skip_arch:
             return
 

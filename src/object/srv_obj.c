@@ -547,9 +547,10 @@ obj_bulk_transfer(crt_rpc_t *rpc, crt_bulk_op_t bulk_op, bool bulk_bind, crt_bul
 		while (skips != NULL && isset(skips, i + skip_nr))
 			skip_nr++;
 
-		if (bulk_nr > 0)
+		if (bulk_nr > 0) {
 			D_ASSERTF(i + skip_nr < bulk_nr, "i %d, skip_nr %d, bulk_nr %d\n",
 				  i, skip_nr, bulk_nr);
+		}
 		if (remote_bulks[i + skip_nr] == NULL)
 			continue;
 
@@ -1066,8 +1067,9 @@ obj_fetch_create_maps(crt_rpc_t *rpc, struct bio_desc *biod, daos_iod_t *iods, u
 	 * Will be freed in obj_rw_reply
 	 */
 	total_nr = orw->orw_iod_array.oia_iod_nr;
-	if (skips == NULL)
+	if (skips == NULL) {
 		D_ASSERTF(total_nr == iods_nr, "total nr %d, iods_nr %d\n", total_nr, iods_nr);
+	}
 
 	/* Re-entry case. */
 	if (orwo->orw_maps.ca_count != 0) {
@@ -3592,9 +3594,10 @@ obj_punch_agg_cb(struct dtx_leader_handle *dlh, int allow_failure)
 	 * For conditional punch, let's ignore DER_NONEXIST if some shard succeed,
 	 * since the object may not exist on some shards due to EC partial update.
 	 */
-	if (allow_failure != 0)
+	if (allow_failure != 0) {
 		D_ASSERTF(allow_failure == -DER_NONEXIST,
 			  "Unexpected allow failure %d\n", allow_failure);
+	}
 
 	for (i = 0; i < sub_cnt; i++) {
 		sub = &dlh->dlh_subs[i];

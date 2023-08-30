@@ -322,7 +322,7 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 				dom->do_comp.co_out_ver =
 					target->ta_comp.co_out_ver;
 			} else
-				D_ASSERTF(false, "evict rank by %d\n", opc);
+				D_ABORT("evict rank by %d\n", opc);
 			D_DEBUG(DB_MD, "change rank %u to DOWN\n",
 				dom->do_comp.co_rank);
 			version++;

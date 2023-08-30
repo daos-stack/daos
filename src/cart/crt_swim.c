@@ -819,7 +819,7 @@ static swim_id_t crt_swim_get_dping_target(struct swim_context *ctx)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	struct crt_swim_target	 cst;
+	struct crt_swim_target   cst      = {0};
 	swim_id_t		 self_id = swim_self_get(ctx);
 	uint32_t		 count = 0;
 
@@ -848,7 +848,7 @@ static swim_id_t crt_swim_get_iping_target(struct swim_context *ctx)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	struct crt_swim_target	 cst;
+	struct crt_swim_target   cst      = {0};
 	swim_id_t		 self_id = swim_self_get(ctx);
 	uint32_t		 count = 0;
 
