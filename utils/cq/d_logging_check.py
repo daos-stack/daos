@@ -132,9 +132,11 @@ PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FAT
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG',
-                'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN', 'DL_INFO', 'DHL_INFO']
+                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG']
 
+for prefix in ['DL', 'DHL', 'DS', 'DHS']:
+    for suffix in ['ERROR', 'WARN', 'INFO']:
+        PREFIXES_NNL.append(f'{prefix}_{suffix}')
 
 PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
@@ -183,6 +185,7 @@ class AllChecks():
             self.check_df_rc(line)
             self.remove_trailing_period(line)
             self.check_quote(line)
+            self.check_failed(line)
 
             line.write(self._output)
             if line.modified:
@@ -368,6 +371,23 @@ class AllChecks():
 
         if new_code != code:
             line.correct(new_code)
+
+    def check_failed(self, line):
+        """Check for 'Failed' with uppercase F
+
+        Lots of message are of the form 'function() failed' but some use Failed.
+        """
+        code = line.raw()
+
+        if 'Failed' not in code:
+            return
+        if '"Failed' in code:
+            return
+        if 'Failed to' in code:
+            return
+
+        print(code)
+        line.note('Failed')
 
 
 def one_entry(fname):

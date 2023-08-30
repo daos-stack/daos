@@ -117,24 +117,21 @@ mem_pin_workaround(void)
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
+		DS_WARN(errno, "Failed to disable malloc fastbins");
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
-		D_WARN("getrlimit() failed; errno=%d (%s)\n",
-		       errno, strerror(errno));
+		DS_WARN(errno, "getrlimit() failed");
 		goto exit;
 	}
 
-	if (rlim.rlim_cur == RLIM_INFINITY &&
-	    rlim.rlim_max == RLIM_INFINITY) {
+	if (rlim.rlim_cur == RLIM_INFINITY && rlim.rlim_max == RLIM_INFINITY) {
 		D_INFO("Infinite rlimit detected; performing mlockall()\n");
 
 		/* Lock all pages */
 		rc = mlockall(MCL_CURRENT | MCL_FUTURE);
 		if (rc)
-			D_WARN("Failed to mlockall(); errno=%d (%s)\n",
-			       errno, strerror(errno));
+			DS_WARN(errno, "mlockall() failed");
 
 	} else {
 		D_INFO("mlockall() skipped\n");
@@ -1068,7 +1065,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
-		D_ERROR("cannot getifaddrs, errno: %d(%s).\n", errno, strerror(errno));
+		DS_ERROR(errno, "getifaddrs() failed");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -1085,7 +1082,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 			tmp_ptr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 			ip_str = inet_ntop(AF_INET, tmp_ptr, na_cfg->noc_ip_str, INET_ADDRSTRLEN);
 			if (ip_str == NULL) {
-				D_ERROR("inet_ntop errno: %d(%s).\n", errno, strerror(errno));
+				DS_ERROR(errno, "inet_ntop() failed");
 				freeifaddrs(if_addrs);
 				D_GOTO(out, rc = -DER_PROTO);
 			}

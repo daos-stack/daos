@@ -60,7 +60,7 @@ crt_swim_csm_lock(struct crt_swim_membs *csm)
 
 	rc = D_SPIN_LOCK(&csm->csm_lock);
 	if (rc != 0)
-		D_ERROR("D_SPIN_LOCK(): %s\n", strerror(rc));
+		DS_ERROR(rc, "D_SPIN_LOCK()");
 }
 
 static inline void
@@ -70,7 +70,7 @@ crt_swim_csm_unlock(struct crt_swim_membs *csm)
 
 	rc = D_SPIN_UNLOCK(&csm->csm_lock);
 	if (rc != 0)
-		D_ERROR("D_SPIN_UNLOCK(): %s\n", strerror(rc));
+		DS_ERROR(rc, "D_SPIN_UNLOCK()");
 }
 
 static inline uint32_t
