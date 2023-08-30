@@ -551,9 +551,8 @@ iterate_biov(struct bio_desc *biod,
 				struct bio_copy_args *arg = data;
 
 				D_ASSERT(i < arg->ca_sgl_cnt);
-				/* Avoid a compiler warning here */
-				if (i >= arg->ca_sgl_cnt)
-					return -DER_INVAL;
+				/* Test for compiler warning */
+				assert(i < arg->ca_sgl_cnt);
 				arg->ca_sgl_idx = i;
 				arg->ca_iov_idx = 0;
 				arg->ca_iov_off = 0;
