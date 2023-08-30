@@ -523,3 +523,119 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 		})
 	}
 }
+
+func TestServer_mgmtSvc_SystemCheckSetPolicy(t *testing.T) {
+	uuids := testPoolUUIDs(4)
+	interactReq := &mgmtpb.CheckSetPolicyReq{
+		Sys:      "daos_server",
+		Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_INTERACT),
+	}
+
+	for name, tc := range map[string]struct {
+		createMS    func(*testing.T, logging.Logger) *mgmtSvc
+		req         *mgmtpb.CheckSetPolicyReq
+		expResp     *mgmtpb.DaosResp
+		expErr      error
+		expPolicies []*mgmtpb.CheckInconsistPolicy
+	}{
+		"not MS replica": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := newTestMgmtSvc(t, log)
+				svc.sysdb = raft.MockDatabaseWithCfg(t, log, &raft.DatabaseConfig{
+					SystemName: build.DefaultSystemName,
+					Replicas:   []*net.TCPAddr{{IP: net.IP{111, 222, 1, 1}}},
+				})
+				return svc
+			},
+			req:    interactReq,
+			expErr: errors.New("replica"),
+		},
+		"checker is not enabled": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcWithMemberState(t, log, system.MemberStateCheckerStarted, uuids)
+			},
+			req:    interactReq,
+			expErr: checker.FaultCheckerNotEnabled,
+		},
+		"bad member states": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				return testSvcCheckerEnabled(t, log, system.MemberStateJoined, uuids)
+			},
+			req:    interactReq,
+			expErr: errors.New("expected states"),
+		},
+		"corrupted policy map": {
+			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
+				svc := testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+				if err := system.SetMgmtProperty(svc.sysdb, checkerPoliciesKey, "garbage"); err != nil {
+					t.Fatal(err)
+				}
+				return svc
+			},
+			req:    interactReq,
+			expErr: errors.New("unmarshal checker policies"),
+		},
+		"no policies in request": {
+			req: &mgmtpb.CheckSetPolicyReq{
+				Sys: "daos_server",
+			},
+			expResp:     &mgmtpb.DaosResp{},
+			expPolicies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
+		},
+		"set all policies": {
+			req:         interactReq,
+			expResp:     &mgmtpb.DaosResp{},
+			expPolicies: interactReq.Policies,
+		},
+		"set single policy": {
+			req: &mgmtpb.CheckSetPolicyReq{
+				Sys: "daos_server",
+				Policies: []*mgmtpb.CheckInconsistPolicy{
+					{
+						InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+						InconsistAct: chkpb.CheckInconsistAction_CIA_TRUST_MS,
+					},
+				},
+			},
+			expResp: &mgmtpb.DaosResp{},
+			expPolicies: mergeTestPolicies(testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
+				[]*mgmtpb.CheckInconsistPolicy{
+					{
+						InconsistCas: chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+						InconsistAct: chkpb.CheckInconsistAction_CIA_TRUST_MS,
+					},
+				}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.createMS == nil {
+				tc.createMS = func(t *testing.T, log logging.Logger) *mgmtSvc {
+					return testSvcCheckerEnabled(t, log, system.MemberStateCheckerStarted, uuids)
+				}
+			}
+			svc := tc.createMS(t, log)
+
+			resp, err := svc.SystemCheckSetPolicy(test.Context(t), tc.req)
+
+			test.CmpErr(t, tc.expErr, err)
+			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.DaosResp{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+
+			if tc.expPolicies == nil {
+				return
+			}
+
+			policies, err := svc.getCheckerPolicyMap()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.expPolicies, policies.ToSlice(), cmpopts.IgnoreUnexported(mgmtpb.CheckInconsistPolicy{})); diff != "" {
+				t.Fatalf("want-, got+:\n%s", diff)
+			}
+		})
+	}
+}

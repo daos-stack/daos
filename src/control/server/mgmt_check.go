@@ -236,19 +236,11 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		return nil, err
 	}
 
-	pm, err := svc.getCheckerPolicyMap()
+	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
 	if err != nil {
 		return nil, err
 	}
-
-	// Allow the request to override any policies stored in the policy map.
-	for _, pol := range req.Policies {
-		pm[pol.InconsistCas] = pol
-	}
-	req.Policies = make([]*mgmtpb.CheckInconsistPolicy, 0, len(pm))
-	for _, pol := range pm {
-		req.Policies = append(req.Policies, pol)
-	}
+	req.Policies = policies
 
 	if err := svc.setLastPoliciesUsed(req.Policies); err != nil {
 		svc.log.Errorf("failed to save the policies used: %s", err.Error())
@@ -281,6 +273,23 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	}
 
 	return resp, nil
+}
+
+func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPolicy) ([]*mgmtpb.CheckInconsistPolicy, error) {
+	pm, err := svc.getCheckerPolicyMap()
+	if err != nil {
+		return nil, err
+	}
+
+	// Allow the requested policies to override any policies stored in the policy map.
+	for _, pol := range policies {
+		pm[pol.InconsistCas] = pol
+	}
+	result := make([]*mgmtpb.CheckInconsistPolicy, 0, len(pm))
+	for _, pol := range pm {
+		result = append(result, pol)
+	}
+	return result, nil
 }
 
 func (svc *mgmtSvc) setLastPoliciesUsed(polList []*mgmtpb.CheckInconsistPolicy) error {
@@ -473,7 +482,16 @@ func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckS
 		return nil, err
 	}
 
-	if err := svc.setCheckerPolicyMap(req.Policies); err != nil {
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.setCheckerPolicyMap(policies); err != nil {
 		return nil, err
 	}
 
