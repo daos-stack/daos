@@ -195,7 +195,7 @@ def functional_hw_stages = [
 ]
 
 def functionalHwStageMap = functional_hw_stages.collectEntries {
-    [it.get('name') : generateFunctionalTestStage(it)]
+    ['${it.get('name')}' : generateFunctionalTestStage(it)]
 }
 
 def generateFunctionalTestStage(Map kwargs = [:]) {
