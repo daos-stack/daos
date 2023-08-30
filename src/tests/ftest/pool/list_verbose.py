@@ -36,8 +36,8 @@ class ListVerboseTest(IorTestBase):
                 Defaults to 0.
             scm_size (int, optional): SCM size to fill in the output. Defaults to None.
             nvme_size (int, optional): NVMe size to fill in the output. Defaults to None.
-            state (str, optional): Expect pool state. Defaults to None.
-            rebuild_state (str, optional): Expect pool rebuild state. Defaults to None.
+            state (str, optional): Expected pool state. Defaults to None.
+            rebuild_state (str, optional): Expected pool rebuild state. Defaults to None.
 
         Returns:
             dict: Expected in the same format of actual.
