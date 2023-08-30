@@ -5,6 +5,7 @@ timeout: 360
 server_config:
   name: daos_server
   engines_per_host: 2
+  crt_timeout: 60
   engines:
     0:
       pinned_numa_node: 0
@@ -12,28 +13,14 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
     allow_insecure: True
 agent_config:
@@ -45,7 +32,6 @@ dmg:
 pool:
   size: 50G
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -53,18 +39,22 @@ container:
 mdtest:
   client_processes:
     ppn: 32
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
   test_dir: "/"
   manager: "MPICH"
   mdtest_params:
-    # [api, write, read, branching_factor, num_of_dir_files, depth, flags]
-    - [DFS,   4096, 4096, 1, 100, 0,   ' ']
-    - [DFS,   4096, 4096, 1, 100, 20,  ' ']
-    - [DFS,   4096, 4096, 1, 100, 100, ' ']
-    - [DFS,   4096, 4096, 2, 10,  5,   ' ']
-    - [POSIX, 0,    0,    1, 100, 0,   ' ']
-    - [POSIX, 0,    0,    1, 100, 20,  ' ']
-    - [POSIX, 4096, 4096, 2, 10,  5,   ' ']
-    - [DFS,   4096, 4096, 1, 100, 20,  '-u']
-    - [POSIX, 0,    0,    2, 10,  5,   '-u']
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
+    # [api, write, read, branching_factor, num_of_dir_files, depth, flags, IL]
+    - [DFS,   4096, 4096, 1, 100, 0,   ' ', False]
+    - [DFS,   4096, 4096, 1, 100, 20,  ' ', False]
+    - [DFS,   4096, 4096, 1, 100, 100, ' ', False]
+    - [DFS,   4096, 4096, 2, 10,  5,   ' ', False]
+    - [DFS,   4096, 4096, 1, 100, 20,  '-u', False]
+    - [POSIX, 0,    0,    1, 100, 0,   ' ', False]
+    - [POSIX, 0,    0,    1, 100, 0,   ' ', True]
+    - [POSIX, 0,    0,    1, 100, 20,  ' ', False]
+    - [POSIX, 0,    0,    1, 100, 20,  ' ', True]
+    - [POSIX, 4096, 4096, 2, 10,  5,   ' ', False]
+    - [POSIX, 4096, 4096, 2, 10,  5,   ' ', True]
+    - [POSIX, 0,    0,    2, 10,  5,   '-u', False]
+    - [POSIX, 0,    0,    2, 10,  5,   '-u', True]

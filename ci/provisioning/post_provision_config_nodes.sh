@@ -31,8 +31,8 @@ add_repo() {
         local repo_url="${REPOSITORY_URL}${add_repo}"
         local repo_name
         repo_name=$(url_to_repo "$repo_url")
-        if ! dnf repolist | grep "$repo_name"; then
-            dnf config-manager --add-repo="${repo_url}" >&2
+        if ! dnf -y repolist | grep "$repo_name"; then
+            dnf -y config-manager --add-repo="${repo_url}" >&2
             if ! $gpg_check; then
                 disable_gpg_check "$add_repo" >&2
             fi
@@ -57,8 +57,8 @@ disable_gpg_check() {
 
     repo="$(url_to_repo "$url")"
     # bug in EL7 DNF: this needs to be enabled before it can be disabled
-    dnf config-manager --save --setopt="$repo".gpgcheck=1
-    dnf config-manager --save --setopt="$repo".gpgcheck=0
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=1
+    dnf -y config-manager --save --setopt="$repo".gpgcheck=0
     # but even that seems to be not enough, so just brute-force it
     if [ -d /etc/yum.repos.d ] &&
        ! grep gpgcheck /etc/yum.repos.d/"$repo".repo; then
@@ -101,8 +101,8 @@ echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
 if ! post_provision_config_nodes; then
-    rc=${PIPESTATUS[0]}
-    exit "$rc"
+  rc=${PIPESTATUS[0]}
+  exit "$rc"
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
@@ -110,6 +110,7 @@ fi
 # for that device and future bindings to the device do not work, resulting in messages like, "NVMe
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
 if lspci | grep -i nvme; then
+  export COVFILE=/tmp/test.cov
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 

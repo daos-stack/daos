@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -36,7 +35,7 @@ class MfuCommandBase(ExecutableCommand):
             namespace (str): yaml namespace (path to parameters)
             command: command (str): string of the command to be executed.
             hosts (list): list of hosts to specify in the hostfile.
-            tmp (str): path for hostfiles.
+            tmp (str): path for host-files.
 
         """
         super().__init__(namespace, command)
@@ -51,40 +50,37 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for k, v in kwargs.items():
-            attr = getattr(self, k)
-            attr.update(v, k)
-
-    @staticmethod
-    def __param_sort(k):
-        """Key sort for get_param_names. Moves src and dst
-           to the end of the list.
-
-        Args:
-            k (str): the key
-
-        Returns:
-            int: the sort priority
-
-        """
-        return {
-            'dst': 3,
-            'src': 2
-        }.get(k, 0)
+        for key, value in kwargs.items():
+            attr = getattr(self, key)
+            attr.update(value, key)
 
     def get_param_names(self):
-        """Override the original get_param_names to sort
-           the src and dst paths.
+        """Override the original get_param_names to sort the src and dst paths.
 
         Returns:
             list: the sorted param names.
 
         """
+        def _param_sort(key):
+            """Key sort for get_param_names. Moves src and dst to the end of the list.
+
+            Args:
+                key (str): the key
+
+            Returns:
+                int: the sort priority
+
+            """
+            return {
+                'dst': 3,
+                'src': 2
+            }.get(key, 0)
+
         param_names = super().get_param_names()
-        param_names.sort(key=self.__param_sort)
+        param_names.sort(key=_param_sort)
         return param_names
 
-    def run(self, processes, job_manager, ppn=None):
+    def run(self, processes, job_manager, ppn=None, env=None):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
@@ -92,6 +88,7 @@ class MfuCommandBase(ExecutableCommand):
             processes (int): Number of processes for the command.
             job_manager (JobManager): Job manager variable to set/assign
             ppn (int, optional): client processes per node for the command.
+            env (dict, optional): environment variables to update before running
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other information.
@@ -111,6 +108,7 @@ class MfuCommandBase(ExecutableCommand):
             job_manager.ppn.update(ppn, 'mpirun.ppn')
             job_manager.processes.update(None, 'mpirun.np')
         job_manager.exit_status_exception = self.exit_status_exception
+        job_manager.assign_environment(env or {}, True)
 
         # Run the command
         out = job_manager.run()
@@ -127,6 +125,7 @@ class DcpCommand(MfuCommandBase):
 
         # dcp options
 
+        # pylint: disable=wrong-spelling-in-comment
         # IO buffer size in bytes (default 64MB)
         self.blocksize = FormattedParameter("--blocksize {}")
         # New versions use bufsize instead of blocksize
@@ -190,7 +189,7 @@ class DsyncCommand(MfuCommandBase):
         self.no_dereference = FormattedParameter("--no-dereference", False)
         # open files with O_DIRECT
         self.direct = FormattedParameter("--direct", False)
-        # hardlink to files in DIR when unchanged
+        # hard-link to files in DIR when unchanged
         self.link_dest = FormattedParameter("--link-dest {}")
         # create sparse files when possible
         self.sparse = FormattedParameter("--sparse", False)
@@ -206,6 +205,7 @@ class DsyncCommand(MfuCommandBase):
         self.src = BasicParameter(None)
         # destination path
         self.dst = BasicParameter(None)
+
 
 class DserializeCommand(MfuCommandBase):
     """Defines an object representing a daos-serialize command."""
@@ -251,9 +251,8 @@ class DdeserializeCommand(MfuCommandBase):
 
 class FsCopy():
     """Class defining an object of type FsCopy.
-       Allows interfacing with daos fs copy in a similar
-       manner to DcpCommand.
 
+    Allows interfacing with daos fs copy in a similar manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):
@@ -305,10 +304,12 @@ class FsCopy():
         return self.daos_cmd.filesystem_copy(src=self.src, dst=self.dst,
                                              preserve_props=self.preserve_props)
 
+
 class ContClone():
     """Class defining an object of type ContClone.
-       Allows interfacing with daos container copy in a similar
-       manner to DcpCommand.
+
+    Allows interfacing with daos container copy in a similar
+    manner to DcpCommand.
     """
 
     def __init__(self, daos_cmd, log):

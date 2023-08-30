@@ -127,10 +127,8 @@ to that CPU from that server instance. The DAOS control plane is
 responsible for detecting the storage and network affinity and starting
 the I/O Engines accordingly.
 
-![](media/image3.png)
 
 ## Fault Domains
-
 
 DAOS relies on single-ported storage massively distributed across
 different storage nodes. Each storage node is thus a single point of

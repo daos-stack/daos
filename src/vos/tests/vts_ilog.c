@@ -339,7 +339,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 
 	ilog_fetch_init(&ilog_entries);
 
-	rc = ilog_fetch(umm, root, cbs, 0, &ilog_entries);
+	rc = ilog_fetch(umm, root, cbs, 0, false, &ilog_entries);
 	if (rc != expected_rc) {
 		print_message("Unexpected fetch rc: %s\n", d_errstr(rc));
 		if (rc == 0)

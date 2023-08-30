@@ -42,14 +42,14 @@ bring-up DAOS servers and clients.
 
 ## Run with dfuse fio
 
-### required rpm
+### Required rpm
 
 	$ sudo yum install -y fio
 
-### run fio
+### Run fio
 
 	$ dmg pool create --size 10G Pool1
-	$ daos cont create --label Cont1 --type POSIX Pool1
+	$ daos cont create --type POSIX Pool1 Cont1
 	$ daos cont query Pool1 Cont1
 	$ /usr/bin/mkdir /tmp/daos_test1
 	$ /usr/bin/touch /tmp/daos_test1/testfile
@@ -59,6 +59,7 @@ bring-up DAOS servers and clients.
 	$ /usr/bin/df -h -t fuse.daos
 	Filesystem Size Used Avail Use% Mounted on
 	dfuse 954M 144K 954M 1% /tmp/daos_test1
+
 	$ /usr/bin/fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
 	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
@@ -126,16 +127,16 @@ bring-up DAOS servers and clients.
 	rw-rr- 1 user1 user1 33525760 Apr 21 23:28 random-write.7.2
 	rw-rr- 1 user1 user1 33542144 Apr 21 23:28 random-write.7.3
 
-### unmount
+### Unmount
 
 	$ fusermount -u /tmp/daos_test1/
 
 	$ df -h -t fuse.daos
 	df: no file systems processed
 
-## Run with mpirun mdtest
+## Run with mpirun: ior and mdtest
 
-### required rpms
+### Required rpms
 
 	$ sudo yum install -y mpich
 	$ sudo yum install -y ior
@@ -143,9 +144,10 @@ bring-up DAOS servers and clients.
 	$ sudo module load mpi/mpich-x86_64
 	$ /usr/bin/touch /tmp/daos_test1/testfile
 
-### run mpirun ior and mdtest
+### Run mpirun ior
 
         $ /usr/bin/dfuse --m=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
+
 	# Run mpirun ior
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 ior -a POSIX -b 26214400 -v -w -k -i 1 -o /tmp/daos_test1/testfile -t 25M
 	IOR-3.4.0+dev: MPI Coordinated Test of Parallel I/O
@@ -187,12 +189,12 @@ bring-up DAOS servers and clients.
 	Finished : Fri Apr 16 18:07:57 2021
 
 
-# Run mpirun mdtest
+### Run mpirun mdtest
 
-	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont <container.uuid> --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool <pool_uuid>
+	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont Cont1 --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool Pool1
 	- started at 04/16/2021 22:01:55 -
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
-	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' '3e661024-2f1f-4d7a-9cd4-1b05601e0789' 'dfs.destroy' 'dfs.dir_oclass' 'SX' 'dfs.group' 'daos_server' 'dfs.oclass' 'SX' '-dfs.pool' 'd546a7f5-586c-4d8f-aecd-372878df7b97'
+	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' 'Cont1' 'dfs.destroy' 'dfs.dir_oclass' 'PR_3G1' 'dfs.group' 'daos_server' 'dfs.oclass' 'RP_3G1' '-dfs.pool' 'Pool1'
 	WARNING: unable to use realpath() on file system.
 	Path:
 	FS: 0.0 GiB Used FS: -nan% Inodes: 0.0 Mi Used Inodes: -nan%
@@ -208,26 +210,6 @@ bring-up DAOS servers and clients.
 	Tree creation : 1869.791 1869.791 1869.791 0.000
 	Tree removal : 0.000 0.000 0.000 0.000
 	- finished at 04/16/2021 22:01:58 -
-
-	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 50 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont 3e661024-2f1f-4d7a-9cd4-1b05601e0789 --dfs.destroy --dfs.dir_oclass SX --dfs.group daos_server --dfs.oclass SX --dfs.pool d546a7f5-586c-4d8f-aecd-372878df7b97
-	- started at 04/16/2021 22:02:21 -
-	mdtest-3.4.0+dev was launched with 50 total task(s) on 1 node(s)
-	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '1' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' '3e661024-2f1f-4d7a-9cd4-1b05601e0789' 'dfs.destroy' 'dfs.dir_oclass' 'SX' 'dfs.group' 'daos_server' 'dfs.oclass' 'SX' '-dfs.pool' 'd546a7f5-586c-4d8f-aecd-372878df7b97'
-	WARNING: unable to use realpath() on file system.
-	Path:
-	FS: 0.0 GiB Used FS: -nan% Inodes: 0.0 Mi Used Inodes: -nan%
-	Nodemap: 11111111111111111111111111111111111111111111111111
-	50 tasks, 83350 files
-	SUMMARY rate: (of 1 iterations)
-	Operation Max Min Mean Std Dev
-	--------- - - ---- -------
-	File creation : 13342.303 13342.093 13342.228 0.059
-	File stat : 0.000 0.000 0.000 0.000
-	File read : 0.000 0.000 0.000 0.000
-	File removal : 0.000 0.000 0.000 0.000
-	Tree creation : 1782.938 1782.938 1782.938 0.000
-	Tree removal : 0.000 0.000 0.000 0.000
-	- finished at 04/16/2021 22:02:27 -
 
 ## Run with 4 DAOS hosts server, rebuild with dfuse io and mpirun
 
@@ -250,14 +232,14 @@ bring-up DAOS servers and clients.
 	  -----             ----------- ------------
 	  boro-[8,35,52-53] 1           0
 
-	$ dmg pool create --size 10G Pool1
-	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1
-	$ daos pool list-cont Pool1
+	$ dmg pool create --size 10G Pool2
+	$ daos cont create --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool2 Cont2
+	$ daos pool list-cont Pool2
 	UUID                                 Label
 	----                                 -----
-	2649aa0f-3ad7-4943-abf5-4343205a637b Cont1
+	2649aa0f-3ad7-4943-abf5-4343205a637b Cont2
 
-	$ dmg pool query Pool1
+	$ dmg pool query Pool2
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
 	- Target(VOS) count:32
@@ -274,7 +256,7 @@ bring-up DAOS servers and clients.
 
 	$ mkdir /tmp/daos_test1
 
-	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool1 --cont=Cont1
+	$ dfuse --mountpoint=/tmp/daos_test1 --pool=Pool2 --cont=Cont2
 
 	$ df -h -t fuse.daos
 	Filesystem      Size  Used Avail Use% Mounted on
@@ -320,7 +302,8 @@ bring-up DAOS servers and clients.
 
 ### Run dfuse with rebuild
 
-	# Start dfuse
+	$ echo Start dfuse
+
 	$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
 
 	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
@@ -407,14 +390,14 @@ bring-up DAOS servers and clients.
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
 
-	$ daos cont create --label Cont1 --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1
+	$ daos cont create --type POSIX --oclass RP_3G1 --properties rd_fac:2 Pool1 Cont1
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
 
 	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont Cont1 --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool Pool1
 
 	started at 04/22/2021 17:46:20 -
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
-	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '100' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' 'd71ff6a5-15a5-43fe-b829-bef9c65b9ccb' 'dfs.destroy' 'dfs.dir_oclass' 'RP_3G1' 'dfs.group' 'daos_server' 'dfs.oclass' 'RP_3G1' '-dfs.pool' '4eda8a8c-028c-461c-afd3-704534961572'
+	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '100' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' 'Cont1' 'dfs.destroy' 'dfs.dir_oclass' 'RP_3G1' 'dfs.group' 'daos_server' 'dfs.oclass' 'RP_3G1' '-dfs.pool' 'Pool1'
 	WARNING: unable to use realpath() on file system.
 	Path:
 	FS: 0.0 GiB Used FS: -nan% Inodes: 0.0 Mi Used Inodes: -nan%
@@ -454,9 +437,11 @@ bring-up DAOS servers and clients.
 
 	# destroy container
 	$ daos container destroy Pool1 Cont1
+	$ daos container destroy Pool2 Cont2
 
 	# destroy pool
 	$ dmg pool destroy Pool1
+	$ dmg pool destroy Pool2
 	Pool-destroy command succeeded
 
 	# stop clients

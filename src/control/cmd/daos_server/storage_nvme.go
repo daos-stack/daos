@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,7 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
-	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -23,9 +22,12 @@ import (
 
 const cliPCIAddrSep = ","
 
-type nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+type (
+	nvmePrepareResetFn func(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+	nvmeScanFn         func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
+)
 
-type nvmeCmd struct {
+type nvmeStorageCmd struct {
 	Prepare prepareNVMeCmd `command:"prepare" description:"Prepare NVMe SSDs for use by DAOS"`
 	Reset   resetNVMeCmd   `command:"reset" description:"Reset NVMe SSDs for use by OS"`
 	Scan    scanNVMeCmd    `command:"scan" description:"Scan NVMe SSDs"`
@@ -57,9 +59,28 @@ func validateVFIOSetting(targetUser string, reqDisableVFIO bool, iommuEnabled bo
 	return nil
 }
 
+func nvmeBdevsFromCfg(cfg *config.Server) *storage.BdevDeviceList {
+	if cfg == nil {
+		return nil
+	}
+
+	// Combine engine bdev_lists to create total device list.
+	var bdevCfgs storage.TierConfigs
+	for _, ec := range cfg.Engines {
+		bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
+	}
+
+	bds := bdevCfgs.NVMeBdevs()
+	if bds.Len() == 0 {
+		return nil
+	}
+
+	return bds
+}
+
 func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *storage.BdevPrepareRequest) error {
 	if cfg == nil {
-		log.Debugf("nil input server config so skip updating request from config")
+		log.Debugf("skip updating request from config")
 		return nil
 	}
 
@@ -73,31 +94,25 @@ func updateNVMePrepReqFromConfig(log logging.Logger, cfg *config.Server, req *st
 
 	req.DisableVFIO = req.DisableVFIO || cfg.DisableVFIO
 
-	if req.HugePageCount == 0 && cfg.NrHugepages > 0 {
-		req.HugePageCount = cfg.NrHugepages
+	if req.HugepageCount == 0 && cfg.NrHugepages > 0 {
+		req.HugepageCount = cfg.NrHugepages
 	}
 
 	if req.PCIAllowList == "" {
-		// Combine engine bdev_lists to use as allow list.
-		var bdevCfgs storage.TierConfigs
-		for _, ec := range cfg.Engines {
-			bdevCfgs = append(bdevCfgs, ec.Storage.Tiers.BdevConfigs()...)
-		}
-
-		allowed := bdevCfgs.NVMeBdevs()
-		log.Debugf("no allow list set in req so reading bdev_lists (%q) from cfg", allowed)
+		allowed := nvmeBdevsFromCfg(cfg)
 		if allowed.Len() != 0 {
+			log.Debugf("reading bdev_list entries (%q) from cfg", allowed)
 			req.PCIAllowList = strings.Join(allowed.Strings(), storage.BdevPciAddrSep)
 		}
 	}
 
 	if req.PCIBlockList == "" && len(cfg.BdevExclude) > 0 {
-		log.Debugf("no block list set in req so reading bdev_exclude (%q) from cfg", cfg.BdevExclude)
 		blocked, err := hardware.NewPCIAddressSet(cfg.BdevExclude...)
 		if err != nil {
 			return errors.Wrap(err, "invalid addresses in pci block list")
 		}
 		if blocked.Len() != 0 {
+			log.Debugf("reading bdev_exclude entries (%q) from cfg", blocked)
 			req.PCIBlockList = strings.Join(blocked.Strings(), storage.BdevPciAddrSep)
 		}
 	}
@@ -127,11 +142,7 @@ func sanitizePCIAddrLists(req *storage.BdevPrepareRequest) error {
 }
 
 type prepareNVMeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	iommuCheckerCmd `json:"-"`
-	cfgCmd          `json:"-"`
-
+	nvmeCmd
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
@@ -201,16 +212,8 @@ func processNVMePrepReq(log logging.Logger, cfg *config.Server, iommuChecker har
 	return nil
 }
 
-func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error {
-	cmd.Info("Prepare locally-attached NVMe storage...")
-
-	req := storage.BdevPrepareRequest{
-		HugePageCount: cmd.NrHugepages,
-		TargetUser:    cmd.TargetUser,
-		PCIAllowList:  cmd.Args.PCIAllowList,
-		PCIBlockList:  cmd.PCIBlockList,
-		DisableVFIO:   cmd.DisableVFIO,
-	}
+func prepareNVMe(req storage.BdevPrepareRequest, cmd *nvmeCmd, prepareBackend nvmePrepareResetFn) error {
+	cmd.Debug("Prepare locally-attached NVMe storage...")
 
 	cfgParam := cmd.config
 	if cmd.IgnoreConfig {
@@ -229,23 +232,28 @@ func (cmd *prepareNVMeCmd) prepareNVMe(prepareBackend nvmePrepareResetFn) error 
 	return err
 }
 
-func (cmd *prepareNVMeCmd) Execute(args []string) error {
-	if err := cmd.setHelperLogFile(); err != nil {
+func (cmd *prepareNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
 		return err
 	}
 
 	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
 
 	cmd.Debugf("executing prepare drives command: %+v", cmd)
-	return cmd.prepareNVMe(scs.NvmePrepare)
+
+	req := storage.BdevPrepareRequest{
+		HugepageCount: cmd.NrHugepages,
+		TargetUser:    cmd.TargetUser,
+		PCIAllowList:  cmd.Args.PCIAllowList,
+		PCIBlockList:  cmd.PCIBlockList,
+		DisableVFIO:   cmd.DisableVFIO,
+	}
+
+	return prepareNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
 }
 
 type resetNVMeCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	iommuCheckerCmd `json:"-"`
-	cfgCmd          `json:"-"`
-
+	nvmeCmd
 	PCIBlockList string `long:"pci-block-list" description:"Comma-separated list of PCI devices (by address) to be ignored when unbinding devices from Kernel driver to be used with SPDK (default is no PCI devices)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 	DisableVFIO  bool   `long:"disable-vfio" description:"Force SPDK to use the UIO driver for NVMe device access"`
@@ -274,8 +282,54 @@ func (cmd *resetNVMeCmd) WithIgnoreConfig(b bool) *resetNVMeCmd {
 	return cmd
 }
 
-func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
-	cmd.Info("Reset locally-attached NVMe storage...")
+func resetNVMe(resetReq storage.BdevPrepareRequest, cmd *nvmeCmd, resetBackend nvmePrepareResetFn) error {
+	cmd.Debug("Reset locally-attached NVMe storage...")
+
+	cleanReq := storage.BdevPrepareRequest{
+		CleanHugepagesOnly: true,
+	}
+
+	msg := "cleanup hugepages before nvme reset"
+
+	if resp, err := resetBackend(cleanReq); err != nil {
+		cmd.Errorf("%s", errors.Wrap(err, msg))
+	} else {
+		cmd.Debugf("%s: %d removed", msg, resp.NrHugepagesRemoved)
+	}
+
+	cfgParam := cmd.config
+	if cmd.IgnoreConfig {
+		cfgParam = nil
+	}
+
+	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &resetReq); err != nil {
+		return errors.Wrap(err, "processing request parameters")
+	}
+	// As reset nvme backend doesn't use NrHugepages, overwrite any set value with zero.
+	resetReq.HugepageCount = 0
+
+	cmd.Debugf("nvme reset request parameters: %+v", resetReq)
+
+	// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
+	//                 controllers (as specified in the server config file) then the backing
+	//                 devices of the unselected VMD controllers will be bound to no driver
+	//                 and therefore inaccessible from both OS and SPDK. Workaround is to run
+	//                 nvme scan --ignore-config to reset driver bindings.
+
+	// Reset NVMe device access.
+	_, err := resetBackend(resetReq)
+
+	return err
+}
+
+func (cmd *resetNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
+		return err
+	}
+
+	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+
+	cmd.Debugf("executing reset nvme command: %+v", cmd)
 
 	req := storage.BdevPrepareRequest{
 		TargetUser:   cmd.TargetUser,
@@ -285,67 +339,88 @@ func (cmd *resetNVMeCmd) resetNVMe(resetBackend nvmePrepareResetFn) error {
 		Reset_:       true,
 	}
 
-	cfgParam := cmd.config
-	if cmd.IgnoreConfig {
-		cfgParam = nil
-	}
-
-	if err := processNVMePrepReq(cmd.Logger, cfgParam, cmd, &req); err != nil {
-		return errors.Wrap(err, "processing request parameters")
-	}
-	// As reset nvme backend doesn't use NrHugepages, set to zero value.
-	req.HugePageCount = 0
-
-	cmd.Debugf("nvme reset request parameters: %+v", req)
-
-	// Reset NVMe device access.
-	_, err := resetBackend(req)
-
-	return err
-}
-
-func (cmd *resetNVMeCmd) Execute(args []string) error {
-	if err := cmd.setHelperLogFile(); err != nil {
-		return err
-	}
-
-	scs := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-
-	cmd.Debugf("executing reset nvme command: %+v", cmd)
-	return cmd.resetNVMe(scs.NvmePrepare)
+	return resetNVMe(req, &cmd.nvmeCmd, scs.NvmePrepare)
 }
 
 type scanNVMeCmd struct {
-	cmdutil.LogCmd `json:"-"`
-	helperLogCmd   `json:"-"`
-
-	DisableVMD bool `short:"d" long:"disable-vmd" description:"Disable VMD-aware scan."`
+	nvmeCmd
+	DisableVMD bool `long:"disable-vmd" description:"Disable VMD-aware scan."`
+	SkipPrep   bool `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
-func (cmd *scanNVMeCmd) Execute(args []string) error {
+func (cmd *scanNVMeCmd) getVMDState() bool {
+	cfgDisableVMD := false
+	if !cmd.IgnoreConfig && cmd.config != nil && cmd.config.DisableVMD != nil {
+		cfgDisableVMD = *cmd.config.DisableVMD
+	}
+	return !cmd.DisableVMD && !cfgDisableVMD
+}
+
+func (cmd *scanNVMeCmd) scanNVMe(scanBackend nvmeScanFn, prepResetBackend nvmePrepareResetFn) error {
 	var bld strings.Builder
+	req := storage.BdevScanRequest{}
 
-	if err := cmd.setHelperLogFile(); err != nil {
-		return err
+	if !cmd.IgnoreConfig && cmd.config != nil {
+		req.DeviceList = nvmeBdevsFromCfg(cmd.config)
+		if req.DeviceList.Len() > 0 {
+			cmd.Debugf("applying devices filter derived from config file: %s", req.DeviceList)
+		}
 	}
 
-	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
-	if !cmd.DisableVMD {
-		svc.WithVMDEnabled()
+	if !cmd.SkipPrep {
+		req := storage.BdevPrepareRequest{
+			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+		}
+		if err := prepareNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
+			return errors.Wrap(err,
+				"nvme prep before scan failed, try with --skip-prep after manual nvme prepare")
+		}
 	}
 
-	cmd.Info("Scanning locally-attached NVMe storage...\n")
+	cmd.Info("Scan locally-attached NVMe storage...")
 
-	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
+	resp, err := scanBackend(req)
 	if err != nil {
 		return err
 	}
 
-	if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+	if err := pretty.PrintNvmeControllers(resp.Controllers, &bld); err != nil {
 		return err
 	}
 
 	cmd.Info(bld.String())
 
+	if !cmd.SkipPrep {
+		// TODO SPDK-2926: If VMD is enabled and PCI_ALLOWED list is set to a subset of VMD
+		//                 controllers (as specified in the server config file) then the
+		//                 backing devices of the unselected VMD controllers will be bound
+		//                 to no driver and therefore inaccessible from both OS and SPDK.
+		//                 Workaround is to run nvme scan --ignore-config to reset driver
+		//                 bindings.
+
+		req := storage.BdevPrepareRequest{
+			PCIAllowList: strings.Join(req.DeviceList.Devices(), storage.BdevPciAddrSep),
+			Reset_:       true,
+		}
+		if err := resetNVMe(req, &cmd.nvmeCmd, prepResetBackend); err != nil {
+			return errors.Wrap(err,
+				"nvme reset after scan failed, try with --skip-prep before manual nvme reset")
+		}
+	}
+
 	return nil
+}
+
+func (cmd *scanNVMeCmd) Execute(_ []string) error {
+	if err := cmd.init(); err != nil {
+		return err
+	}
+
+	svc := server.NewStorageControlService(cmd.Logger, config.DefaultServer().Engines)
+	if cmd.getVMDState() {
+		svc.WithVMDEnabled()
+	}
+
+	cmd.Debugf("executing scan nvme command: %+v", cmd)
+	return cmd.scanNVMe(svc.NvmeScan, svc.NvmePrepare)
 }

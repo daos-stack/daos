@@ -13,10 +13,9 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 1G
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -27,17 +26,13 @@ container:
     rf2:
       properties: rd_fac:2
       oclass: RP_3GX
-telemetry_metrics:
-  # remove this variable and it's use from the code,
-  # DAOS-8592 is resolved.
-  threshold_percent: 7  # 7%
 ior:
   api: DFS
   flags: "-v -w -r -k"
   max_duration: 10
-  transfer_size: 1M
+  # 1MiB
+  transfer_size: 1048576
+  # 0,5GiB, 512MiB
   block_size: 536870912
   dfs_destroy: false
   test_file: /testFile
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"

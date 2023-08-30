@@ -248,6 +248,8 @@ int main(int argc, char **argv)
 	char		str_rank[255];
 	char		str_port[255];
 
+	setenv("D_PORT_AUTO_ADJUST", "1", true);
+
 	if (argc < 2) {
 		show_usage("Insufficient number of arguments");
 		return -1;
@@ -313,7 +315,8 @@ int main(int argc, char **argv)
 	sprintf(str_port, "%d", hostbuf->ofi_port);
 	/* Set CRT_L_RANK and OFI_PORT */
 	setenv("CRT_L_RANK", str_rank, true);
-	setenv("OFI_PORT", str_port, true);
+	setenv("D_PORT", str_port, true);
+
 exit:
 	if (hostbuf)
 		free(hostbuf);

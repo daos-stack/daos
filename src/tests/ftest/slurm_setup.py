@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -17,14 +17,16 @@ import sys
 from ClusterShell.NodeSet import NodeSet
 
 from util.logger_utils import get_console_handler
-from util.run_utils import get_clush_command_list, run_local, run_remote, RunException
+from util.run_utils import get_clush_command, run_remote
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.INFO))
+logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 SLURM_CONF = "/etc/slurm/slurm.conf"
+
+EPILOG_FILE = "/var/tmp/epilog_soak.sh"
 
 PACKAGE_LIST = ["slurm", "slurm-example-configs",
                 "slurm-slurmctld", "slurm-slurmd"]
@@ -55,6 +57,27 @@ SLURMD_STARTUP_DEBUG = [
     "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
 
 
+def create_epilog_script(args):
+    """Create epilog script to run after each job.
+
+    Args:
+        args (Namespace): command line arguments
+
+     Returns:
+        int: 0 if command passes; 1 otherwise
+
+    """
+    sudo = "sudo" if args.sudo else ""
+    with open(EPILOG_FILE, 'w') as script_file:
+        script_file.write("#!/bin/bash\n#\n")
+        script_file.write("/usr/bin/bash -c 'pkill --signal 9 dfuse'\n")
+        script_file.write("/usr/bin/bash -c 'for dir in $(find /tmp/daos_dfuse);"
+                          "do fusermount3 -uz $dir;rm -rf $dir; done'\n")
+        script_file.write("exit 0\n")
+    command = f"{sudo} chmod 755 {EPILOG_FILE}"
+    return execute_cluster_cmds(args.control, [command])
+
+
 def update_config_cmdlist(args):
     """Create the command lines to update slurmd.conf file.
 
@@ -66,9 +89,13 @@ def update_config_cmdlist(args):
 
     """
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = ["sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(SLURM_CONF),
-                "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(args.user, SLURM_CONF),
-                "sed -i -e 's/NodeName/#NodeName/g' {}".format(SLURM_CONF)]
+    if create_epilog_script(args) > 1:
+        logger.error("%s could not be updated. Check if file exists", EPILOG_FILE)
+        sys.exit(1)
+    cmd_list = [f"sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {SLURM_CONF}",
+                f"sed -i -e 's/SlurmUser=slurm/SlurmUser={args.user}/g' {SLURM_CONF}",
+                f"sed -i -e 's/NodeName/#NodeName/g' {SLURM_CONF}",
+                f"sed -i -e 's#EpilogSlurmctld=#EpilogSlurmctld={EPILOG_FILE}#g' {SLURM_CONF}"]
     sudo = "sudo" if args.sudo else ""
     # Copy the slurm*example.conf files to /etc/slurm/
     if execute_cluster_cmds(all_nodes, COPY_LIST, args.sudo) > 0:
@@ -128,7 +155,7 @@ def execute_cluster_cmds(nodes, cmdlist, sudo=False):
     for cmd in cmdlist:
         if sudo:
             cmd = "sudo {}".format(cmd)
-        if not run_remote(logger, nodes, cmd).passed:
+        if not run_remote(logger, nodes, cmd, timeout=600).passed:
             # Do not bother executing any remaining commands if this one failed
             return 1
     return 0
@@ -139,16 +166,14 @@ def configuring_packages(args, action):
 
     Args:
         args (Namespace): command line arguments
-        action (str):  install or remove
+        action (str): 'install' or 'remove'
 
     """
     # Install packages on control and compute nodes
     all_nodes = NodeSet("{},{}".format(str(args.control), str(args.nodes)))
-    cmd_list = []
-    for package in PACKAGE_LIST:
-        logger.info("%s %s on %s", action, package, all_nodes)
-        cmd_list.append("dnf {} -y ".format(action) + package)
-    return execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+    logger.info("%s slurm packages on %s: %s", action, all_nodes, ", ".join(PACKAGE_LIST))
+    command = ["dnf", action, "-y"] + PACKAGE_LIST
+    return execute_cluster_cmds(all_nodes, [" ".join(command)], args.sudo)
 
 
 def start_munge(args):
@@ -190,11 +215,9 @@ def start_munge(args):
         return 1
 
     # copy munge.key to all hosts
-    command = get_clush_command_list(nodes)
-    command.extend(["--copy", "/etc/munge/munge.key", "--dest", "/etc/munge/munge.key"])
-    try:
-        run_local(logger, command, check=True)
-    except RunException:
+    command = get_clush_command(
+        nodes, args="--copy /etc/munge/munge.key --dest /etc/munge/munge.key")
+    if execute_cluster_cmds(args.control, [command]) > 0:
         return 1
 
     # set the protection back to defaults
@@ -253,9 +276,9 @@ def start_slurm(args):
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
     status = execute_cluster_cmds(args.nodes, cmd_list, args.sudo)
     if status > 0 or args.debug:
-        cmd_list = (SLURMCTLD_STARTUP_DEBUG)
+        cmd_list = SLURMCTLD_STARTUP_DEBUG
         execute_cluster_cmds(args.control, cmd_list, args.sudo)
-        cmd_list = (SLURMD_STARTUP_DEBUG)
+        cmd_list = SLURMD_STARTUP_DEBUG
         execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
     if status > 0:
         return 1

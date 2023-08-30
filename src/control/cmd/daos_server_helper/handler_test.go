@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
@@ -39,6 +40,232 @@ func expectPayload(t *testing.T, resp *pbin.Response, payload interface{}, expPa
 
 var nilPayloadErr = pbin.PrivilegedHelperRequestFailed("unexpected end of JSON input")
 
+func TestDaosAdmin_MetadataMountHandler(t *testing.T) {
+	mountReqPayload, err := json.Marshal(storage.MetadataMountRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req        *pbin.Request
+		provider   *storage.MockMetadataProvider
+		expPayload *storage.MountResponse
+		expErr     *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataMount",
+			},
+			expErr: nilPayloadErr,
+		},
+		"mount failed": {
+			req: &pbin.Request{
+				Method:  "MetadataMount",
+				Payload: mountReqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				MountErr: errors.New("mock Mount"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Mount"),
+		},
+		"mount success": {
+			req: &pbin.Request{
+				Method:  "MetadataMount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &storage.MountResponse{},
+		},
+		"unmount failed": {
+			req: &pbin.Request{
+				Method:  "MetadataUnmount",
+				Payload: mountReqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				UnmountErr: errors.New("mock Unmount"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Unmount"),
+		},
+		"unmount success": {
+			req: &pbin.Request{
+				Method:  "MetadataUnmount",
+				Payload: mountReqPayload,
+			},
+			expPayload: &storage.MountResponse{},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{
+					MountRes:   &storage.MountResponse{},
+					UnmountRes: &storage.MountResponse{},
+				}
+			}
+
+			handler := &metadataMountHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+			if tc.expPayload == nil {
+				tc.expPayload = &storage.MountResponse{}
+			}
+			expectPayload(t, resp, &storage.MountResponse{}, tc.expPayload)
+		})
+	}
+}
+
+func TestDaosAdmin_MetadataFormatHandler(t *testing.T) {
+	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+		DataPath: "datapath",
+		OwnerUID: 100,
+		OwnerGID: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req      *pbin.Request
+		provider *storage.MockMetadataProvider
+		expErr   *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"format failed": {
+			req: &pbin.Request{
+				Method:  "MetadataFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				FormatErr: errors.New("mock Format"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock Format"),
+		},
+		"format success": {
+			req: &pbin.Request{
+				Method:  "MetadataFormat",
+				Payload: reqPayload,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{}
+			}
+
+			handler := &metadataFormatHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestDaosAdmin_MetadataNeedsFormatHandler(t *testing.T) {
+	reqPayload, err := json.Marshal(storage.MetadataFormatRequest{
+		RootPath: "something",
+		Device:   "somethingelse",
+		DataPath: "datapath",
+		OwnerUID: 100,
+		OwnerGID: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		req      *pbin.Request
+		provider *storage.MockMetadataProvider
+		expRes   bool
+		expErr   *fault.Fault
+	}{
+		"nil request": {
+			expErr: pbin.PrivilegedHelperRequestFailed("nil request"),
+		},
+		"nil payload": {
+			req: &pbin.Request{
+				Method: "MetadataNeedsFormat",
+			},
+			expErr: nilPayloadErr,
+		},
+		"format check failed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				NeedsFormatErr: errors.New("mock NeedsFormat"),
+			},
+			expErr: pbin.PrivilegedHelperRequestFailed("mock NeedsFormat"),
+		},
+		"format needed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+			provider: &storage.MockMetadataProvider{
+				NeedsFormatRes: true,
+			},
+			expRes: true,
+		},
+		"format not needed": {
+			req: &pbin.Request{
+				Method:  "MetadataNeedsFormat",
+				Payload: reqPayload,
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			if tc.provider == nil {
+				tc.provider = &storage.MockMetadataProvider{}
+			}
+
+			handler := &metadataFormatHandler{metadataHandler: metadataHandler{mdProvider: tc.provider}}
+
+			resp := handler.Handle(log, tc.req)
+
+			if diff := cmp.Diff(tc.expErr, resp.Error); diff != "" {
+				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
+			}
+
+			var result bool
+			if err := json.Unmarshal(resp.Payload, &result); err != nil {
+				t.Fatal(err)
+			}
+			test.AssertEqual(t, tc.expRes, result, "")
+		})
+	}
+}
+
 func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	testTarget, cleanup := test.CreateTestDir(t)
 	defer cleanup()
@@ -57,8 +284,8 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
-		expPayload *storage.ScmMountResponse
+		smsc       *system.MockSysConfig
+		expPayload *storage.MountResponse
 		expErr     *fault.Fault
 	}{
 		"nil request": {
@@ -75,14 +302,14 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: true},
+			expPayload: &storage.MountResponse{Target: testTarget, Mounted: true},
 		},
 		"ScmMount failure": {
 			req: &pbin.Request{
 				Method:  "ScmMount",
 				Payload: mountReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				MountErr: errors.New("test mount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
@@ -98,14 +325,14 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			expPayload: &storage.ScmMountResponse{Target: testTarget, Mounted: false},
+			expPayload: &storage.MountResponse{Target: testTarget, Mounted: false},
 		},
 		"ScmUnmount failure": {
 			req: &pbin.Request{
 				Method:  "ScmUnmount",
 				Payload: mountReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				UnmountErr: errors.New("test unmount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("failed to unmount %s: test unmount failed", testTarget)),
@@ -124,9 +351,9 @@ func TestDaosAdmin_ScmMountUnmountHandler(t *testing.T) {
 				t.Errorf("got wrong fault (-want, +got)\n%s\n", diff)
 			}
 			if tc.expPayload == nil {
-				tc.expPayload = &storage.ScmMountResponse{}
+				tc.expPayload = &storage.MountResponse{}
 			}
-			expectPayload(t, resp, &storage.ScmMountResponse{}, tc.expPayload)
+			expectPayload(t, resp, &storage.MountResponse{}, tc.expPayload)
 		})
 	}
 }
@@ -151,7 +378,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 		Mountpoint: testTarget,
 		OwnerUID:   os.Getuid(),
 		OwnerGID:   os.Getgid(),
-		Dcpm: &storage.DcpmParams{
+		Dcpm: &storage.DeviceParams{
 			Device: "/foo/bar",
 		},
 	})
@@ -164,7 +391,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmFormatResponse
 		expErr     *fault.Fault
 	}{
@@ -193,7 +420,7 @@ func TestDaosAdmin_ScmFormatCheckHandler(t *testing.T) {
 				Method:  "ScmFormat",
 				Payload: scmFormatReqPayload,
 			},
-			smsc: &scm.MockSysConfig{
+			smsc: &system.MockSysConfig{
 				MountErr: errors.New("test mount failed"),
 			},
 			expErr: pbin.PrivilegedHelperRequestFailed(fmt.Sprintf("mount tmpfs->%s failed: test mount failed", testTarget)),
@@ -253,7 +480,7 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmPrepareResponse
 		expErr     *fault.Fault
 	}{
@@ -274,14 +501,14 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 			smbc: &scm.MockBackendConfig{
 				GetModulesRes: []*storage.ScmModule{},
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket: storage.ScmSocketState{
+					Socket: &storage.ScmSocketState{
 						State: storage.ScmNoModules,
 					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				Socket: storage.ScmSocketState{
+				Socket: &storage.ScmSocketState{
 					State: storage.ScmNoModules,
 				},
 				Namespaces: storage.ScmNamespaces{},
@@ -297,14 +524,14 @@ func TestDaosAdmin_ScmPrepHandler(t *testing.T) {
 					storage.MockScmModule(0),
 				},
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket: storage.ScmSocketState{
+					Socket: &storage.ScmSocketState{
 						State: storage.ScmFreeCap,
 					},
 					Namespaces: storage.ScmNamespaces{},
 				},
 			},
 			expPayload: &storage.ScmPrepareResponse{
-				Socket: storage.ScmSocketState{
+				Socket: &storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				Namespaces: storage.ScmNamespaces{},
@@ -352,7 +579,7 @@ func TestDaosAdmin_ScmScanHandler(t *testing.T) {
 	for name, tc := range map[string]struct {
 		req        *pbin.Request
 		smbc       *scm.MockBackendConfig
-		smsc       *scm.MockSysConfig
+		smsc       *system.MockSysConfig
 		expPayload *storage.ScmScanResponse
 		expErr     *fault.Fault
 	}{

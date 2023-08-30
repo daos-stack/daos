@@ -199,11 +199,11 @@ pool_exclude(void **state)
 	}
 	rank = info.pi_nnodes - 1;
 	print_message("rank 0 excluding rank %u... ", rank);
-	/* TODO: remove the loop, call daos_exclude_target passing in the rank just calculated? */
+	/* TODO: remove the loop, call dmg_pool_exclude passing in the rank just calculated? */
 	for (idx = 0; idx < arg->pool.svc->rl_nr; idx++) {
-		daos_exclude_target(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config,
-				    arg->pool.svc->rl_ranks[idx], tgt);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      arg->pool.svc->rl_ranks[idx], tgt);
+		assert_success(rc);
 	}
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("success\n");
@@ -550,14 +550,12 @@ pool_properties(void **state)
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
-		print_message("label verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("label verification filed.\n");
 	}
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SPACE_RB);
 	if (entry == NULL || entry->dpe_val != space_rb) {
-		print_message("space_rb verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("space_rb verification filed.\n");
 	}
 #endif
 	/* not set properties should get default value */
@@ -565,20 +563,17 @@ pool_properties(void **state)
 	if (entry == NULL ||
 	    entry->dpe_val != (DAOS_SELF_HEAL_AUTO_EXCLUDE |
 			       DAOS_SELF_HEAL_AUTO_REBUILD)) {
-		print_message("self-heal verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("self-heal verification filed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_RECLAIM);
 	if (entry == NULL || entry->dpe_val != DAOS_RECLAIM_LAZY) {
-		print_message("reclaim verification filed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("reclaim verification filed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
 	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
-		print_message("ACL prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("ACL prop verification failed.\n");
 	}
 
 	/* default owner should be effective uid */
@@ -588,8 +583,7 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, expected_owner,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner prop verification failed.\n");
 	}
 
 	/* default owner-group should be effective gid */
@@ -599,8 +593,7 @@ pool_properties(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, expected_group,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner-group prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner-group prop verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
@@ -609,14 +602,12 @@ pool_properties(void **state)
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
 	if (entry == NULL) {
-		print_message("scrubber frequency verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("scrubber frequency verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_THRESH);
 	if (entry == NULL) {
-		print_message("scrubber threshold verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("scrubber threshold verification failed.\n");
 	}
 
 	if (arg->myrank == 0)
@@ -769,15 +760,17 @@ setup_containers(void **state, daos_size_t nconts)
 	for (i = 0; i < nconts; i++) {
 		/* TODO: make test_setup_cont_create() generic, call here */
 		if (arg->myrank == 0) {
-			print_message("setup: creating container\n");
-			rc = daos_cont_create(lcarg->tpool.poh,
-					      &lcarg->conts[i], NULL /* prop */,
-					      NULL /* ev */);
+			char	clabel[DAOS_PROP_LABEL_MAX_LEN+1];
+
+			rc = snprintf(clabel, sizeof(clabel), "daos_pool_test_container_%d", i);
+			assert_true(rc > 0);
+			rc = daos_cont_create_with_label(lcarg->tpool.poh, clabel, NULL /* prop */,
+							 &lcarg->conts[i], NULL /* ev */);
 			if (rc != 0)
-				print_message("setup: daos_cont_create "
-						"failed: %d\n", rc);
+				print_message("setup: daos_cont_create_with_label failed: %d\n",
+					      rc);
 			else
-				print_message("setup: container "DF_UUIDF" created\n",
+				print_message("setup: container %s "DF_UUIDF" created\n", clabel,
 					      DP_UUID(lcarg->conts[i]));
 		}
 
@@ -799,14 +792,14 @@ setup_containers(void **state, daos_size_t nconts)
 
 err_destroy_conts:
 	if (arg->myrank == 0) {
-		char	str[37];
-
 		for (i = 0; i < nconts; i++) {
+			char	clabel[DAOS_PROP_LABEL_MAX_LEN+1];
+
 			if (uuid_is_null(lcarg->conts[i]))
 				break;
-			uuid_unparse(lcarg->conts[i], str);
-			daos_cont_destroy(lcarg->tpool.poh, str,
-					  1 /* force */, NULL /* ev */);
+			rc = snprintf(clabel, sizeof(clabel), "daos_pool_test_container_%d", i);
+			assert_true(rc > 0);
+			daos_cont_destroy(lcarg->tpool.poh, clabel, 1 /* force */, NULL /* ev */);
 		}
 	}
 
@@ -875,6 +868,7 @@ teardown_containers(void **state)
 static int
 setup_zerocontainers(void **state)
 {
+	async_disable(state);
 	return setup_containers(state, 0 /* nconts */);
 }
 
@@ -883,6 +877,7 @@ setup_manycontainers(void **state)
 {
 	const daos_size_t nconts = 16;
 
+	async_disable(state);
 	return setup_containers(state, nconts);
 }
 
@@ -896,11 +891,17 @@ clean_cont_info(daos_size_t nconts, struct daos_pool_cont_info *conts) {
 	}
 }
 
+static void
+clean_cont_info2(daos_size_t nconts, struct daos_pool_cont_info2 *conts) {
+	if (conts)
+		memset(conts, 0, (nconts * sizeof(struct daos_pool_cont_info2)));
+}
+
 /* Search for container information in pools created in setup (pool_lc_args)
  * Return matching index or -1 if no match.
  */
 static int
-find_cont(void **state, struct daos_pool_cont_info *cont)
+find_cont(void **state, uuid_t cuuid)
 {
 	test_arg_t		*arg = *state;
 	struct test_list_cont	*lcarg = arg->pool_lc_args;
@@ -908,22 +909,34 @@ find_cont(void **state, struct daos_pool_cont_info *cont)
 	int			 found_idx = -1;
 
 	for (i = 0; i < lcarg->nconts; i++) {
-		if (uuid_compare(cont->pci_uuid, lcarg->conts[i]) == 0) {
+		if (uuid_compare(cuuid, lcarg->conts[i]) == 0) {
 			found_idx = i;
 			break;
 		}
 	}
 
 	print_message("container "DF_UUIDF" %sfound in list result\n",
-		      DP_UUID(cont->pci_uuid),
-		      ((found_idx == -1) ? "NOT " : ""));
+		      DP_UUID(cuuid), ((found_idx == -1) ? "NOT " : ""));
 	return found_idx;
+}
+
+/* Find the item in infos[] with UUID matching cuuid */
+static struct daos_pool_cont_info2 *
+find_cont2(uuid_t cuuid, daos_size_t n_infos, struct daos_pool_cont_info2 *infos)
+{
+	int	i;
+
+	for (i = 0; i < n_infos; i++) {
+		if (uuid_compare(cuuid, infos[i].pci_id.pci_uuid) == 0)
+			return &infos[i];
+	}
+	return NULL;
 }
 
 /* Verify container info returned by DAOS API
  * rc_ret:	return code from daos_pool_list_cont()
- * npools_in:	ncont input argument to daos_pool_list_cont()
- * npools_out:	ncont output argument value after daos_pool_list_cont()
+ * nconts_in:	ncont input argument to daos_pool_list_cont()
+ * nconts_out:	ncont output argument value after daos_pool_list_cont()
  */
 static void
 verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
@@ -951,7 +964,7 @@ verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
 	for (i = 0; i < nconts_in; i++) {
 		if (i < nfilled) {
 			/* container is found in the setup state */
-			rc = find_cont(state, &conts[i]);
+			rc = find_cont(state, conts[i].pci_uuid);
 			assert_int_not_equal(rc, -1);
 		} else {
 			/* Expect no content in conts[>=nfilled] */
@@ -985,11 +998,11 @@ list_containers_test(void **state)
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
 	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
-	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, NULL /* conts */,
+	rc = daos_pool_list_cont(lcarg->tpool.poh, &nconts, conts,
 			NULL /* ev */);
 	print_message("daos_pool_list_cont returned rc=%d\n", rc);
 	assert_rc_equal(rc, 0);
-	verify_cont_info(state, rc, nconts_orig, NULL /* conts */, nconts);
+	verify_cont_info(state, rc, nconts_orig, conts, nconts);
 
 	print_message("success t%d: output nconts=%zu\n", tnum++,
 		      lcarg->nconts);
@@ -1026,8 +1039,7 @@ list_containers_test(void **state)
 	conts = NULL;
 
 	/***** Test: invalid nconts=NULL *****/
-	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */,
-				  NULL /* conts */, NULL /* ev */);
+	rc = daos_pool_list_cont(lcarg->tpool.poh, NULL /* nconts */, conts, NULL /* ev */);
 	assert_rc_equal(rc, -DER_INVAL);
 	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
 
@@ -1071,7 +1083,776 @@ list_containers_test(void **state)
 		/* Teardown */
 		D_FREE(conts);
 		conts = NULL;
-	} /* if (lcarg->nconts  > 0) */
+	} /* if (lcarg->nconts  > 1) */
+
+	print_message("success\n");
+}
+
+/* Verify container info returned by DAOS API
+ * rc_ret:	return code from daos_pool_filter_cont()
+ * nconts_in:	ncont input argument to daos_pool_filter_cont()
+ * nconts_out:	ncont output argument value after daos_pool_filter_cont()
+ */
+static void
+verify_cont_info2(void **state, int rc_ret, daos_size_t nconts_in,
+		  struct daos_pool_cont_info2 *conts, daos_size_t nconts_out,
+		  daos_size_t exp_nconts, uuid_t *exp_cuuids)
+{
+	daos_size_t		 nfilled;
+	int			 i;
+	int			 rc;
+
+	assert_int_equal(nconts_out, exp_nconts);
+
+	if (conts == NULL)
+		return;
+
+	/* How many entries of conts[] expected to be populated? In successful calls, nconts_out. */
+	nfilled = (rc_ret == 0) ? nconts_out : 0;
+
+	if (nfilled > 0)
+		assert_ptr_not_equal(exp_cuuids, NULL);
+
+	/* Find all of the expected container uuids in the output */
+	print_message("verifying conts[0..%zu], nfilled=%zu\n", nconts_in, nfilled);
+	for (i = 0; i < nfilled; i++) {
+		struct daos_pool_cont_info2	*found = find_cont2(exp_cuuids[i], nfilled, conts);
+		size_t				 idx;
+
+		assert_ptr_not_equal(found, NULL);
+		idx = found - conts;
+		print_message("expected container "DF_UUID" (%s) found in returned conts[%zu]\n",
+			      DP_UUID(exp_cuuids[i]), found->pci_id.pci_label, idx);
+	}
+
+	/* Verify no content was filled in conts[>=nfilled] */
+	for (i = nfilled; i < nconts_in; i++) {
+		rc = uuid_is_null(conts[i].pci_id.pci_uuid);
+		assert_int_not_equal(rc, 0);
+	}
+}
+
+static inline void
+init_one_part_filter(daos_pool_cont_filter_t *filt, uint32_t combine_func,
+		     daos_pool_cont_filter_part_t *part,
+		     uint32_t key, uint32_t compare_func, uint64_t val)
+{
+	int	rc;
+
+	rc = daos_pool_cont_filter_init(filt, combine_func);
+	assert_rc_equal(rc, 0);
+
+	part->pcfp_key = key;
+	part->pcfp_func = compare_func;
+	part->pcfp_val64 = val;
+	rc = daos_pool_cont_filter_add(filt, part);
+	assert_rc_equal(rc, 0);
+}
+
+static inline void
+init_two_part_filter(daos_pool_cont_filter_t *filt, uint32_t combine_func,
+		     daos_pool_cont_filter_part_t *p0,
+		     uint32_t p0_key, uint32_t p0_comp, uint64_t p0_val,
+		     daos_pool_cont_filter_part_t *p1,
+		     uint32_t p1_key, uint32_t p1_comp, uint64_t p1_val)
+{
+	int	rc;
+
+	rc = daos_pool_cont_filter_init(filt, combine_func);
+	assert_rc_equal(rc, 0);
+
+	p0->pcfp_key = p0_key;
+	p0->pcfp_func = p0_comp;
+	p0->pcfp_val64 = p0_val;
+	rc = daos_pool_cont_filter_add(filt, p0);
+	assert_rc_equal(rc, 0);
+
+	p1->pcfp_key = p1_key;
+	p1->pcfp_func = p1_comp;
+	p1->pcfp_val64 = p1_val;
+	rc = daos_pool_cont_filter_add(filt, p1);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+init_invalid_filter(daos_pool_cont_filter_t *filt) {
+	daos_pool_cont_filter_part_t	dummy_part;
+	int				i;
+	int				rc;
+
+	rc = daos_pool_cont_filter_init(filt, PCF_COMBINE_LOGICAL_AND);
+	assert_rc_equal(rc, 0);
+
+	dummy_part.pcfp_key = PCF_KEY_MD_OTIME;
+	dummy_part.pcfp_func = PCF_FUNC_EQ;
+	dummy_part.pcfp_val64 = 0;
+
+	for (i = 0; i < DAOS_POOL_CONT_FILTER_MAX_NPARTS + 1; i++) {
+		rc = daos_pool_cont_filter_add(filt, &dummy_part);
+		assert_rc_equal(rc, 0);
+	}
+}
+
+static inline void
+run_filter_check(void **state, daos_pool_cont_filter_t *filt, int exp_rc, daos_size_t nconts,
+		 struct daos_pool_cont_info2 *conts, daos_size_t exp_nconts, uuid_t *exp_cuuids,
+		 bool cleanup, int tnum)
+{
+	test_arg_t		*arg = *state;
+	struct test_list_cont	*lcarg = arg->pool_lc_args;
+	daos_size_t		 nconts_orig;
+	int			 rc;
+
+	nconts_orig = nconts;
+
+	switch (filt->pcf_nparts) {
+	case 1:
+		print_message("testing t%d: (%s %s "DF_U64") %s , expect nconts=%zu\n", tnum,
+			      daos_pool_cont_filter_key_str(filt->pcf_parts[0]->pcfp_key),
+			      daos_pool_cont_filter_func_str(filt->pcf_parts[0]->pcfp_func),
+			      filt->pcf_parts[0]->pcfp_val64,
+			      ((filt->pcf_combine_func == PCF_COMBINE_LOGICAL_AND) ? "&&" : "||"),
+			      exp_nconts);
+		break;
+	case 2:
+		print_message("testing t%d: ((%s %s "DF_U64") %s (%s %s "DF_U64"))"
+			      "expect nconts=%zu\n", tnum,
+			      daos_pool_cont_filter_key_str(filt->pcf_parts[0]->pcfp_key),
+			      daos_pool_cont_filter_func_str(filt->pcf_parts[0]->pcfp_func),
+			      filt->pcf_parts[0]->pcfp_val64,
+			      ((filt->pcf_combine_func == PCF_COMBINE_LOGICAL_AND) ? "&&" : "||"),
+			      daos_pool_cont_filter_key_str(filt->pcf_parts[1]->pcfp_key),
+			      daos_pool_cont_filter_func_str(filt->pcf_parts[1]->pcfp_func),
+			      filt->pcf_parts[1]->pcfp_val64,
+			      exp_nconts);
+		break;
+	default:
+		print_message("testing t%d: %u part filter, output nconts=%zu\n", tnum,
+			      filt->pcf_nparts, nconts);
+		break;
+	}
+
+	/* Always clean prior results before running */
+	clean_cont_info2(lcarg->nconts, conts);
+
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, filt, &nconts, conts, NULL /* ev */);
+	assert_rc_equal(rc, exp_rc);
+	verify_cont_info2(state, rc, nconts_orig, conts, nconts, exp_nconts, exp_cuuids);
+
+	/* Caller determines whether to clean up results from this execution */
+	if (cleanup)
+		clean_cont_info2(lcarg->nconts, conts);
+	print_message("success t%d\n", tnum);
+}
+
+/* Common function for testing filter containers feature.
+ * Some tests can only be run when multiple containers have been created,
+ * Other tests may run when there are zero or more containers in the pool.
+ */
+static void
+filter_containers_test(void **state)
+{
+	test_arg_t			*arg = *state;
+	struct test_list_cont		*lcarg = arg->pool_lc_args;
+	int				 rc;
+	daos_size_t			 nconts;
+	daos_size_t			 nconts_alloc;
+	daos_size_t			 nconts_orig;
+	daos_pool_cont_filter_t		 filt;
+	daos_pool_cont_filter_part_t	 part0;
+	daos_pool_cont_filter_part_t	 part1;
+	struct daos_pool_cont_info2	*conts = NULL;
+	daos_size_t			 exp_nconts;
+	const bool			 CLEAN = true;
+	const bool			 NOCLEAN = false;
+	int				 tnum = 0;
+	int				 exp_rc;
+
+	par_barrier(PAR_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		return;
+
+	print_message("starting test\n");
+
+	/***** Test: retrieve number of containers in pool (same as list containers interface) */
+	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
+	exp_nconts = lcarg->nconts;
+	assert_true(daos_handle_is_valid(lcarg->tpool.poh));
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, &nconts, conts,
+				   NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	verify_cont_info2(state, rc, nconts_orig, conts, nconts, exp_nconts, NULL);
+	print_message("success t%d: output nconts=%zu\n", tnum++, lcarg->nconts);
+
+
+	/*** First batch of tests match no containers, conts==NULL, and output nconts=0 ***/
+
+	print_message("=== test batch from t%d: match none, input conts==NULL\n", tnum);
+	exp_nconts = 0;
+	nconts = 0;
+	exp_rc = 0;
+
+	/* Test: 1-part filter (AND, nhandles > 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, nhandles > 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, mtime == 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, mtime == 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, otime > 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, otime > 0) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, snaps >= 1) match none, NULL conts, check nconts=0  */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, snaps >= 1) match none, NULL conts, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+
+	/*** Second batch of tests match all, conts==NULL, output the number of containers ***/
+
+	print_message("=== test batch from t%d: match all, input conts==NULL\n", tnum);
+
+	exp_nconts = lcarg->nconts;
+
+	/* Test: 1-part filter (AND, nhandles == 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, nhandles == 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, mtime > 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, mtime > 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, otime == 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, otime == 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, snaps >= 0) match all, NULL conts, check nconts  */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, snaps >= 0) match all, NULL conts, check nconts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Setup for next tests: conts[] */
+	nconts_alloc = lcarg->nconts + 10;
+	D_ALLOC_ARRAY(conts, nconts_alloc);
+	assert_ptr_not_equal(conts, NULL);
+	nconts = nconts_alloc;
+
+
+	/*** Third batch repeats batch 1 tests (match none), but with conts != NULL here ***/
+
+	print_message("=== test batch from t%d: match none, input conts!=NULL\n", tnum);
+	exp_nconts = 0;
+
+	/* Test: 1-part filter (AND, nhandles > 0) match none, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (OR, nhandles > 0) match none, check nconts=0 */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, mtime == 0) match none, check nconts=0 and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, otime > 0) match none, check nconts=0 and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, snaps >= 1) match none, check nconts=0 and and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, NULL, CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/*** Fourth batch repeats batch 2 tests (match all), but with conts != NULL here ***/
+
+	print_message("=== test batch from t%d: match all, input conts!=NULL\n", tnum);
+	exp_nconts = lcarg->nconts;
+
+	/* Test: 1-part filter (AND, nhandles == 0) match all, check nconts and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+			 CLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, mtime > 0) match all, check nconts and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_GT, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+			 CLEAN, tnum++);
+	clean_cont_info2(nconts_alloc, conts);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, otime == 0) match all, check nconts and conts */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_EQ, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+			 CLEAN, tnum++);
+	clean_cont_info2(nconts_alloc, conts);
+	daos_pool_cont_filter_fini(&filt);
+
+	/* Test: 1-part filter (AND, snaps >= 0) match all, check nconts and conts */
+	/* Do not clean conts contents - use info to set up for next batch of tests */
+	init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+			     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 0);
+	run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+			 NOCLEAN, tnum++);
+	daos_pool_cont_filter_fini(&filt);
+
+	if (lcarg-> nconts > 3) {
+		struct daos_pool_cont_info2    *info;
+		struct daos_pool_cont_info2	c0, c1, c2;	/* first three containers created */
+		struct daos_pool_cont_info2	clast;		/* last container created */
+		daos_handle_t			c0h, c1h, c2h;	/* container open handles */
+		daos_handle_t			clasth;
+		daos_epoch_t			clast_epc;
+		daos_epoch_t			c0_epc;
+		daos_epoch_range_t		epr;
+		uint64_t			c1_mtime;	/* create time */
+		daos_cont_info_t		clast_ci;
+		uuid_t			       *exp_cuuids;
+		int				i;
+
+		/*** Set up for fifth and sixth batches ***/
+
+		info = find_cont2(lcarg->conts[0], nconts, conts);
+		assert_ptr_not_equal(info, NULL);
+		c0 = *info;
+		info = find_cont2(lcarg->conts[1], nconts, conts);
+		assert_ptr_not_equal(info, NULL);
+		c1 = *info;
+		info = find_cont2(lcarg->conts[2], nconts, conts);
+		assert_ptr_not_equal(info, NULL);
+		c2 = *info;
+		info = find_cont2(lcarg->conts[lcarg->nconts - 1], nconts, conts);
+		assert_ptr_not_equal(info, NULL);
+		clast = *info;
+
+		/* Get container create time (metadata modify time) of second container created */
+		c1_mtime = c1.pci_cinfo.ci_md_mtime;
+
+		/* open the first three containers created */
+		print_message("open container %s\n", c0.pci_id.pci_label);
+		rc = daos_cont_open(lcarg->tpool.poh, c0.pci_id.pci_label, DAOS_COO_RW, &c0h,
+				    NULL /* info */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("open container %s\n", c1.pci_id.pci_label);
+		rc = daos_cont_open(lcarg->tpool.poh, c1.pci_id.pci_label, DAOS_COO_RO, &c1h,
+				    NULL /* info */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("open container %s\n", c2.pci_id.pci_label);
+		rc = daos_cont_open(lcarg->tpool.poh, c2.pci_id.pci_label, DAOS_COO_RO, &c2h,
+				    NULL /* info */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+
+		D_ALLOC_ARRAY(exp_cuuids, lcarg->nconts);
+		assert_ptr_not_equal(exp_cuuids, NULL);
+		for (i = 0; i < lcarg->nconts; i++)
+			uuid_clear(exp_cuuids[i]);
+
+		/*** Fifth batch of tests, match some containers, specify NULL for conts arg ***/
+
+		print_message("=== test batch from t%d: match some, input conts==NULL\n", tnum);
+
+		/* Test: 1-part filter (AND, nhandles > 0), match some, NULL conts arg */
+		exp_nconts = 3;
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (OR, nhandles > 0), match some, NULL conts arg */
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (AND, mtime <= second container create time), match some,
+		 * NULL conts arg
+		 */
+		exp_nconts = 2;
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_LE, c1_mtime);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (OR, mtime <= second container create time), match some,
+		 * NULL conts arg
+		 */
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_LE, c1_mtime);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (AND, otime != 0) match some open, NULL conts arg */
+		exp_nconts = 3;
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_NE, 0);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (OR, otime != 0) match some open, NULL conts arg */
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_NE, 0);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* create snapshot on last container created, used by the below 2 tests */
+		print_message("open container %s\n", clast.pci_id.pci_label);
+		rc = daos_cont_open(lcarg->tpool.poh, clast.pci_id.pci_label, DAOS_COO_RW, &clasth,
+				    &clast_ci, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_create_snap(clasth, &clast_epc, NULL /* name */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created snapshot on container %s, epoch "DF_X64"(%zu)\n",
+			      clast.pci_id.pci_label, clast_epc, clast_epc);
+
+		/* Test: 1-part filter (AND, snaps < 1) match some, NULL conts arg */
+		exp_nconts = lcarg->nconts - 1;
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (OR, snaps < 1) match some, NULL conts arg, */
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* close the container and destroy the snapshot used by the above 2 tests */
+		epr.epr_lo = epr.epr_hi = clast_epc;
+		print_message("destroy snapshot on container %s, epoch %zu\n",
+			      clast.pci_id.pci_label, clast_epc);
+		rc = daos_cont_destroy_snap(clasth, epr, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("close container %s\n", clast.pci_id.pci_label);
+		rc = daos_cont_close(clasth, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+
+		/* Test: 2-part filter (AND, otime > 0, snaps >= 1) match some, NULL conts */
+		/* create snapshot on first container (already open) */
+		rc = daos_cont_create_snap(c0h, &c0_epc, NULL /* name */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created snapshot on container %s, epoch %zu\n",
+			      c0.pci_id.pci_label, c0_epc);
+		exp_nconts = 1;
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 2-part filter (OR, otime > 0, snaps >= 1) match some, NULL conts arg.
+		 * Expect 4 matching containers:
+		 * First 3 containers currently open (one with a snapshot created on it);
+		 * And last container opened previously and closed.
+		 */
+		exp_nconts = 4;
+		uuid_copy(exp_cuuids[0], lcarg->conts[0]);
+		uuid_copy(exp_cuuids[1], lcarg->conts[1]);
+		uuid_copy(exp_cuuids[2], lcarg->conts[2]);
+		uuid_copy(exp_cuuids[3], lcarg->conts[lcarg->nconts - 1]);
+
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 2-part filter (OR, nhandles > 0, snaps >= 1) match some, NULL conts arg.
+		 * First 3 containers currently open (one with a snapshot created on it);
+		 * Do not match last container opened previously and closed and no snapshots.
+		 */
+		exp_nconts = 3;		/* exp_cuuids[0..2] == lcarg->conts[0..2] */
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, NULL, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		epr.epr_lo = epr.epr_hi = c0_epc;
+		print_message("destroy snapshot on container %s, epoch %zu\n",
+			      c0.pci_id.pci_label, c0_epc);
+		rc = daos_cont_destroy_snap(c0h, epr, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+
+
+		/*** Sixth batch repeats batch 5 with conts != NULL ***/
+
+		print_message("=== test batch from t%d: match some, input conts!=NULL\n", tnum);
+
+		/* Test: 1-part filter (AND, mtime <= second container create time) match some,
+		 * check nconts and conts. Expect 1 (not 2) matches - first container was modified.
+		 */
+		exp_nconts = 1;
+		uuid_copy(exp_cuuids[0], lcarg->conts[1]);
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_MTIME, PCF_FUNC_LE, c1_mtime);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 1-part filter (AND, otime != 0) match some open, check nconts and conts */
+		exp_nconts = 4;
+		uuid_copy(exp_cuuids[0], lcarg->conts[0]);
+		uuid_copy(exp_cuuids[1], lcarg->conts[1]);
+		uuid_copy(exp_cuuids[2], lcarg->conts[2]);
+		uuid_copy(exp_cuuids[3], lcarg->conts[lcarg->nconts - 1]);
+
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_NE, 0);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* create snapshot on last container created, used by the following test */
+		print_message("open container %s\n", clast.pci_id.pci_label);
+		rc = daos_cont_open(lcarg->tpool.poh, clast.pci_id.pci_label, DAOS_COO_RW, &clasth,
+				    &clast_ci, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_create_snap(clasth, &clast_epc, NULL /* name */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created snapshot on container %s, epoch %zu\n",
+			      clast.pci_id.pci_label, clast_epc);
+
+		/* Test: 1-part filter (AND, snaps < 1) match some, check nconts and conts */
+		exp_nconts = lcarg->nconts - 1;
+		init_one_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_LT, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* close the container and destroy the snapshot used by the above 2 tests */
+		epr.epr_lo = epr.epr_hi = clast_epc;
+		print_message("destroy snapshot on container %s, epoch %zu\n",
+			      clast.pci_id.pci_label, clast_epc);
+		rc = daos_cont_destroy_snap(clasth, epr, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("close container %s\n", clast.pci_id.pci_label);
+		rc = daos_cont_close(clasth, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+
+		/* Test: 2-part filter (AND, otime > 0, snaps >= 1) match some,
+		 * check nconts and conts
+		 */
+		/* create snapshot on first container (already open) */
+		rc = daos_cont_create_snap(c0h, &c0_epc, NULL /* name */, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created snapshot on container %s, epoch %zu\n",
+			      c0.pci_id.pci_label, c0_epc);
+		exp_nconts = 1;
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_AND,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, lcarg->conts,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 2-part filter (OR, otime > 0, snaps >= 1) match some,
+		 * check nconts and conts.
+		 * Expect 4 matching containers:
+		 * First 3 containers currently open (one with a snapshot created on it);
+		 * And last container opened previously and closed.
+		 */
+		exp_nconts = 4;
+		uuid_copy(exp_cuuids[0], lcarg->conts[0]);
+		uuid_copy(exp_cuuids[1], lcarg->conts[1]);
+		uuid_copy(exp_cuuids[2], lcarg->conts[2]);
+		uuid_copy(exp_cuuids[3], lcarg->conts[lcarg->nconts - 1]);
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_MD_OTIME, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		/* Test: 2-part filter (OR, nhandles > 0, snaps >= 1) match some,
+		 * check nconts and conts.
+		 * First 3 containers currently open (one with a snapshot created on it);
+		 * Do not match last container opened previously and closed and no snapshots.
+		 */
+		exp_nconts = 3;		/* exp_cuuids[0..2] == lcarg->conts[0..2] */
+		init_two_part_filter(&filt, PCF_COMBINE_LOGICAL_OR,
+				     &part0, PCF_KEY_NUM_HANDLES, PCF_FUNC_GT, 0,
+				     &part1, PCF_KEY_NUM_SNAPSHOTS, PCF_FUNC_GE, 1);
+		run_filter_check(state, &filt, exp_rc, nconts, conts, exp_nconts, exp_cuuids,
+				 CLEAN, tnum++);
+		daos_pool_cont_filter_fini(&filt);
+
+		epr.epr_lo = epr.epr_hi = c0_epc;
+		print_message("destroy snapshot on container %s, epoch %zu\n",
+			      c0.pci_id.pci_label, c0_epc);
+		rc = daos_cont_destroy_snap(c0h, epr, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+
+		D_FREE(exp_cuuids);
+	}	/* Fifth and sixth batches if (lcarg->nconts > 3) */
+
+	/* Test: NULL filter to get list of all containers */
+	print_message("testing t%d: NULL filter to get list of all containers\n", tnum);
+	nconts = nconts_orig = nconts_alloc;
+	exp_nconts = lcarg->nconts;
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filt */, &nconts, conts,
+				   NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	verify_cont_info2(state, rc, nconts_orig, conts, nconts, exp_nconts, lcarg->conts);
+	print_message("success t%d\n", tnum++);
+
+	/* Test: 10-part filter, invalid input (exceeds limit on pcf_nparts) */
+	init_invalid_filter(&filt);
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, &filt /* filt */, &nconts, conts,
+				   NULL /* ev */);
+	assert_rc_equal(rc, -DER_INVAL);
+	daos_pool_cont_filter_fini(&filt);
+	print_message("success t%d (filter pcf_nparts too large/invalid)\n", tnum++);
+
+	/***** Test: provide nconts=0, non-NULL conts ****/
+	nconts = 0;
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, &nconts, conts,
+				   NULL /* ev */);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(nconts, lcarg->nconts);
+	print_message("success t%d: nconts=0, non-NULL conts[] rc=%d\n", tnum++, rc);
+
+	/* Teardown for above tests */
+	D_FREE(conts);
+	conts = NULL;
+
+	/***** Test: invalid nconts=NULL *****/
+	rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, NULL /* nconts */,
+				   conts, NULL /* ev */);
+	assert_rc_equal(rc, -DER_INVAL);
+	print_message("success t%d: in &nconts NULL, -DER_INVAL\n", tnum++);
+
+
+	/*** Tests that can only run with multiple containers ***/
+	if (lcarg->nconts > 1) {
+		/***** Test: Exact size buffer *****/
+		/* Setup */
+		nconts_alloc = lcarg->nconts;
+		D_ALLOC_ARRAY(conts, nconts_alloc);
+		assert_ptr_not_equal(conts, NULL);
+
+		/* Test: Exact size buffer */
+		nconts = nconts_alloc;
+		rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, &nconts, conts,
+					   NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		verify_cont_info2(state, rc, nconts_alloc, conts, nconts, lcarg->nconts,
+				  lcarg->conts);
+
+		/* Teardown */
+		D_FREE(conts);
+		conts = NULL;
+		print_message("success t%d: conts[] exact length\n", tnum++);
+
+		/***** Test: Under-sized buffer (negative) -DER_TRUNC *****/
+		/* Setup */
+		nconts_alloc = lcarg->nconts - 1;
+		D_ALLOC_ARRAY(conts, nconts_alloc);
+		assert_ptr_not_equal(conts, NULL);
+
+		/* Test: Under-sized buffer */
+		nconts = nconts_alloc;
+		rc = daos_pool_filter_cont(lcarg->tpool.poh, NULL /* filter */, &nconts, conts,
+					   NULL /* ev */);
+		assert_rc_equal(rc, -DER_TRUNC);
+		verify_cont_info2(state, rc, nconts_alloc, conts, nconts, lcarg->nconts, NULL);
+
+		print_message("success t%d: conts[] under-sized\n", tnum++);
+
+		/* Teardown */
+		D_FREE(conts);
+		conts = NULL;
+	} /* if (lcarg->nconts  > 1) */
 
 	print_message("success\n");
 }
@@ -1284,6 +2065,7 @@ static int
 pool_map_refreshes_setup(void **state)
 {
 	async_enable(state);
+	dt_redun_fac = DAOS_PROP_CO_REDUN_RF1;
 	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
 }
 
@@ -1334,6 +2116,10 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
 	{ "POOL17: pool map refreshes (fallback)",
 	  pool_map_refreshes_fallback, pool_map_refreshes_setup, test_case_teardown},
+	{ "POOL18: pool filter containers (zero)",
+	  filter_containers_test, setup_zerocontainers, teardown_containers},
+	{ "POOL19: pool filter containers (many)",
+	  filter_containers_test, setup_manycontainers, teardown_containers},
 };
 
 int

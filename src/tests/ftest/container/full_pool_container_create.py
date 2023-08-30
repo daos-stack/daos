@@ -1,11 +1,10 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from general_utils import get_random_bytes, DaosTestError
 from test_utils_container import TestContainerData
 
@@ -16,7 +15,6 @@ class FullPoolContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-8400, DAOS-5813")
     def test_no_space_cont_create(self):
         """JIRA ID: DAOS-1169 DAOS-7374
 
@@ -36,11 +34,10 @@ class FullPoolContainerCreate(TestWithServers):
             the original free space.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=fullpoolcontcreate
+        :avocado: tags=FullPoolContainerCreate,test_no_space_cont_create
         """
-
         # full storage rc
         err = "-1007"
 
@@ -53,8 +50,7 @@ class FullPoolContainerCreate(TestWithServers):
         # query the pool
         self.log.info("Pool Query before write")
         self.pool.set_query_data()
-        self.log.info(
-            "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # create a container
         self.add_container(self.pool)
@@ -69,8 +65,7 @@ class FullPoolContainerCreate(TestWithServers):
         for obj_sz in [1048576, 10240, 10, 1]:
             write_count = 0
             while True:
-                self.d_log.debug("writing obj {0} sz {1} to "
-                                 "container".format(write_count, obj_sz))
+                self.d_log.debug("writing obj {0} sz {1} to container".format(write_count, obj_sz))
                 my_str = b"a" * obj_sz
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
@@ -78,26 +73,21 @@ class FullPoolContainerCreate(TestWithServers):
                     self.container.written_data.append(TestContainerData(False))
                     self.container.written_data[-1].write_record(
                         self.container, akey, dkey, my_str, obj_class='OC_SX')
-                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
-                                                                    obj_sz))
+                    self.d_log.debug("wrote obj {0}, sz {1}".format(write_count, obj_sz))
                     write_count += 1
                 except DaosTestError as excep:
                     if err not in repr(excep):
-                        self.log.error("caught exception while writing "
-                                       "object: %s", repr(excep))
+                        self.log.error("caught exception while writing object: %s", repr(excep))
                         self.container.close()
-                        self.fail("caught exception while writing "
-                                  "object: {}".format(repr(excep)))
+                        self.fail("caught exception while writing object: {}".format(repr(excep)))
                     else:
-                        self.log.info("pool is too full for %s byte "
-                                      "objects", obj_sz)
+                        self.log.info("pool is too full for %s byte objects", obj_sz)
                         break
 
         # query the pool
         self.log.info("Pool Query after filling")
         self.pool.set_query_data()
-        self.log.info(
-            "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
+        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
 
         # destroy container
         self.container.destroy()
@@ -112,10 +102,8 @@ class FullPoolContainerCreate(TestWithServers):
             # try to wait for 4 x 30 secs for aggregation to be completed or
             # else exit the test with a failure.
             if counter > 4:
-                self.log.info("Free space when test terminated: %s",
-                              free_space)
-                self.log.info("Threshold value when test terminated: %s",
-                              threshold_value)
+                self.log.info("Free space when test terminated: %s", free_space)
+                self.log.info("Threshold value when test terminated: %s", threshold_value)
                 self.fail("Aggregation did not complete as expected")
             time.sleep(30)
             free_space = self.pool.get_pool_free_space()

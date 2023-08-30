@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,20 +31,15 @@ do {								\
 		FAIL(__VA_ARGS__);				\
 } while (0)
 
-#define NUM_ENTRIES	1024
-#define NR_ENUM		64
-
 int
 main(int argc, char **argv)
 {
 	dfs_t		*dfs;
 	dfs_obj_t	*dir1, *f1;
-	int		i;
-	time_t		ts = 0;
 	int		rc;
 
-	if (argc != 4) {
-		fprintf(stderr, "usage: ./exec pool cont dirname\n");
+	if (argc != 3) {
+		fprintf(stderr, "usage: ./exec pool cont\n");
 		exit(1);
 	}
 
@@ -52,127 +47,54 @@ main(int argc, char **argv)
 	rc = dfs_init();
 	ASSERT(rc == 0, "dfs_init failed with %d", rc);
 
-	rc = dfs_connect(argv[1], NULL, argv[2], O_RDWR, NULL, &dfs);
+	/** this creates and mounts the POSIX container */
+	rc = dfs_connect(argv[1], NULL, argv[2], O_CREAT | O_RDWR, NULL, &dfs);
 	ASSERT(rc == 0, "dfs_connect failed with %d", rc);
 
 	mode_t	create_mode = S_IWUSR | S_IRUSR;
 	int	create_flags = O_RDWR | O_CREAT | O_EXCL;
 
-	/*
-	 * Create & open /dir1 - need to close later. NULL for parent, means
-	 * create at root.
-	 */
-	rc = dfs_open(dfs, NULL, argv[3], create_mode | S_IFDIR,
-		      create_flags, 0, 0, NULL, &dir1);
+	/** Create & open /dir1 - need to close later. NULL for parent, means create at root. */
+	rc = dfs_open(dfs, NULL, "dir1", create_mode | S_IFDIR, create_flags, 0, 0, NULL, &dir1);
 	ASSERT(rc == 0, "create /dir1 failed\n");
 
-	for (i = 0; i < NUM_ENTRIES; i++) {
-		char name[16];
+	/** mkdir /dir1/dir2. The directory here is not open though, no release required. */
+	rc = dfs_mkdir(dfs, dir1, "dir2", create_mode | S_IFDIR, 0);
+	ASSERT(rc == 0, "create /dir1/dir2 failed\n");
 
-		/* create 1 dir for every 100 files */
-		if (i % 100 == 0) {
-			sprintf(name, "dir.%d", i);
-			rc = dfs_mkdir(dfs, dir1, name, create_mode | S_IFDIR, 0);
-			ASSERT(rc == 0, "create /dir1/%s failed\n", name);
-		} else {
-			daos_obj_id_t oid;
+	/** create & open /dir1/file1 */
+	rc = dfs_open(dfs, dir1, "file1", create_mode | S_IFREG, create_flags, 0, 0, NULL, &f1);
+	ASSERT(rc == 0, "create /dir1/file failed\n");
 
-			sprintf(name, "file.%d", i);
-			rc = dfs_open(dfs, dir1, name, create_mode | S_IFREG, create_flags, 0, 0,
-				      NULL, &f1);
-			ASSERT(rc == 0, "create /dir1/%s failed\n", name);
+	/** write a "hello world!" string to the file at offset 0 */
 
-			dfs_obj2id(f1, &oid);
-			/* printf("File %s \t OID: %"PRIu64".%"PRIu64"\n", name, oid.hi, oid.lo); */
+	char		*wbuf = "hello world!";
+	d_sg_list_t     sgl;
+	d_iov_t         iov;
 
-			rc = dfs_release(f1);
-			ASSERT(rc == 0, "dfs_release failed\n");
-		}
+	/** setup iovec (sgl in DAOS terms) for write buffer */
+	d_iov_set(&iov, wbuf, strlen(wbuf) + 1);
+	sgl.sg_nr = 1;
+	sgl.sg_iovs = &iov;
+	rc = dfs_write(dfs, f1, &sgl, 0 /** offset */, NULL);
+	ASSERT(rc == 0, "dfs_write() failed\n");
 
-		if (i == NUM_ENTRIES / 2) {
-			sleep(1);
-			ts = time(NULL);
-			sleep(1);
-		}
-	}
+	char		rbuf[1024];
+	daos_size_t	read_size;
 
-	dfs_predicate_t pred = {0};
-	dfs_pipeline_t *dpipe = NULL;
+	/** reset iovec for read buffer */
+	d_iov_set(&iov, rbuf, sizeof(rbuf));
+	rc = dfs_read(dfs, f1, &sgl, 0 /** offset */, &read_size, NULL);
+	ASSERT(rc == 0, "dfs_read() failed\n");
+	ASSERT(read_size == strlen(wbuf) + 1, "not enough data read\n");
+	printf("read back: %s\n", rbuf);
 
-	strcpy(pred.dp_name, "%.6%");
-	pred.dp_newer = ts;
-	rc = dfs_pipeline_create(dfs, pred, DFS_FILTER_NAME | DFS_FILTER_NEWER, &dpipe);
-	ASSERT(rc == 0, "dfs_pipeline_create failed with %d\n", rc);
-
-
-	uint32_t num_split = 0, j;
-
-	rc = dfs_obj_anchor_split(dir1, &num_split, NULL);
-	ASSERT(rc == 0, "dfs_obj_anchor_split failed with %d\n", rc);
-	printf("Anchor split in %u parts\n", num_split);
-
-	daos_anchor_t *anchors;
-	struct dirent *dents = NULL;
-	daos_obj_id_t *oids = NULL;
-	daos_size_t *csizes = NULL;
-
-	anchors = malloc(sizeof(daos_anchor_t) * num_split);
-	dents = malloc (sizeof(struct dirent) * NR_ENUM);
-	oids = calloc(NR_ENUM, sizeof(daos_obj_id_t));
-	csizes = calloc(NR_ENUM, sizeof(daos_size_t));
-
-	uint64_t nr_total = 0, nr_matched = 0, nr_scanned;
-
-	for (j = 0; j < num_split; j++) {
-		daos_anchor_t *anchor = &anchors[j];
-		uint32_t nr;
-
-		memset(anchor, 0, sizeof(daos_anchor_t));
-
-		rc = dfs_obj_anchor_set(dir1, j, anchor);
-		ASSERT(rc == 0, "dfs_obj_anchor_set failed with %d\n", rc);
-
-		while (!daos_anchor_is_eof(anchor)) {
-			nr = NR_ENUM;
-			rc = dfs_readdir_with_filter(dfs, dir1, dpipe, anchor, &nr, dents, oids,
-						     csizes, &nr_scanned);
-			ASSERT(rc == 0, "dfs_readdir_with_filter failed with %d\n", rc);
-
-			nr_total += nr_scanned;
-			nr_matched += nr;
-
-			for (i = 0; i < nr; i++) {
-				printf("Name: %s\t", dents[i].d_name);
-				printf("OID: %"PRIu64".%"PRIu64"\t", oids[i].hi, oids[i].lo);
-				printf("CSIZE = %zu\n", csizes[i]);
-				if (dents[i].d_type == DT_DIR)
-					printf("Type: DIR\n");
-				else if (dents[i].d_type == DT_REG)
-					printf("Type: FILE\n");
-				else
-					ASSERT(0, "INVALID dentry type\n");
-			}
-		}
-	}
-
-	printf("total entries scanned = %"PRIu64"\n", nr_total);
-	printf("total entries matched = %"PRIu64"\n", nr_matched);
-
-	free(dents);
-	free(anchors);
-	free(oids);
-	free(csizes);
-	rc = dfs_pipeline_destroy(dpipe);
-	ASSERT(rc == 0, "dfs_release failed\n");
 	/** close / finalize */
-	rc = dfs_release(dir1);
-	ASSERT(rc == 0, "dfs_release failed\n");
-	rc = dfs_remove(dfs, NULL, argv[3], true, NULL);
-	ASSERT(rc == 0, "dfs_remove failed\n");
+	dfs_release(f1);
+	dfs_release(dir1);
 	rc = dfs_disconnect(dfs);
-	ASSERT(rc == 0, "dfs_disconnect failed");
+	ASSERT(rc == 0, "disconnect failed");
 	rc = dfs_fini();
 	ASSERT(rc == 0, "dfs_fini failed with %d", rc);
-
 	return rc;
 }

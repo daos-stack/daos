@@ -794,10 +794,11 @@ int
 dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 	     struct stat *buf)
 {
-	int		rc;
-	struct sys_path	sys_path;
-	dfs_obj_t	*obj;
-	int		lookup_flags = O_RDWR;
+	int             rc;
+	int             rc2;
+	struct sys_path sys_path;
+	dfs_obj_t      *obj;
+	int             lookup_flags = O_RDWR;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
@@ -824,7 +825,10 @@ dfs_sys_stat(dfs_sys_t *dfs_sys, const char *path, int flags,
 			sys_path.name, rc);
 		D_GOTO(out_free_path, rc);
 	}
-	dfs_release(obj);
+
+	rc2 = dfs_release(obj);
+	if (rc2 == ENOMEM)
+		dfs_release(obj);
 
 out_free_path:
 	sys_path_free(dfs_sys, &sys_path);

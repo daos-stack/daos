@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,9 +9,7 @@ import threading
 import copy
 import queue
 from osa_utils import OSAUtils
-from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
-from exception_utils import CommandFailure
 from test_utils_pool import add_pool
 
 
@@ -24,13 +22,12 @@ class OSAOfflineParallelTest(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.daos_command = DaosCommand(self.bin)
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
         # Start an additional server.
         self.extra_servers = self.get_hosts_from_yaml(
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
@@ -39,52 +36,47 @@ class OSAOfflineParallelTest(OSAUtils):
         self.dmg_command.exit_status_exception = True
         self.server_boot = None
 
-    def dmg_thread(self, action, action_args, results):
+    def dmg_thread(self, action, results, **kwargs):
         """Generate different dmg command related to OSA.
-            Args:
-            action_args(dict) : {action: {"puuid":
-                                          pool[val].uuid,
-                                          "rank": rank,
-                                          "target": t_string,
-                                          "action": action,}
-            results (queue) : dmg command output queue.
+
+        Args:
+            action (str): dmg subcommand string such as drain, exclude, extend.
+            results (queue): dmg command output queue to store results.
+            kwargs (dict): Parameters for the dmg command methods in dmg_utils.py, plus
+                'action' and 'results' params above.
         """
         dmg = copy.copy(self.dmg_command)
         try:
             if action == "reintegrate":
-                text = "Waiting for rebuild to complete"
+                text = "Waiting for rebuild to complete before pool reintegrate"
                 time.sleep(3)
                 self.print_and_assert_on_rebuild_failure(text)
-                # For each action, read the values from the
-                # dictionary.
-                # example {"exclude" : {"puuid": self.pool, "rank": rank
-                #                       "target": t_string, "action": exclude}}
-                # getattr is used to obtain the method in dmg object.
+            if action == "exclude" and self.server_boot is True:
+                ranks = str(kwargs["rank"])
+                dmg.system_stop(ranks=ranks)
+                self.print_and_assert_on_rebuild_failure("Stopping rank {}".format(ranks))
+                dmg.system_start(ranks=ranks)
+                self.print_and_assert_on_rebuild_failure("Starting rank {}".format(ranks))
+            else:
+                # For each action, pass in necessary parameters to the dmg method with
+                # kwargs. getattr is used to obtain the method in dmg object.
                 # eg: dmg -> pool_exclude method, then pass arguments like
                 # puuid, rank, target to the pool_exclude method.
-            if action == "exclude" and self.server_boot is True:
-                ranks = action_args[action][1]
-                getattr(dmg, "system stop --ranks={}".format(ranks))
-                output = "Stopping the rank : {}".format(ranks)
-                self.print_and_assert_on_rebuild_failure(output)
-                getattr(dmg, "system start --ranks={}".format(ranks))
-                self.print_and_assert_on_rebuild_failure(output)
-            else:
-                getattr(dmg, "pool_{}".format(action))(**action_args[action])
-        except CommandFailure as _error:
-            results.put("{} failed".format(action))
+                getattr(dmg, "pool_{}".format(action))(**kwargs)
+        except Exception as error:      # pylint: disable=broad-except
+            results.put("pool {} failed: {}".format(action, str(error)))
 
     def run_offline_parallel_test(self, num_pool, data=False, oclass=None):
         """Run multiple OSA commands in parallel with or without data.
-            Args:
+
+        Args:
             num_pool (int) : total pools to create for testing purposes.
-            data (bool) : whether pool has no data or to create
-                          some data in pool. Defaults to False.
+            data (bool) : whether pool has no data or to create some data in pool. Defaults to
+                False.
             oclass (str) : Daos object class (RP_2G1,etc)
         """
         # Create a pool
         pool = {}
-        pool_uuid = []
         target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -102,7 +94,6 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
             self.pool = pool[val]
-            pool_uuid.append(self.pool.uuid)
             # Use only pool UUID while running the test.
             self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
@@ -133,7 +124,7 @@ class OSAOfflineParallelTest(OSAUtils):
         for val in range(0, num_pool):
             self.pool = pool[val]
             self.pool.display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
+            pver_begin = self.pool.get_version(True)
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # If we need to trigger aggregation on pool 1, delete
             # the second container which has IOR data.
@@ -142,53 +133,48 @@ class OSAOfflineParallelTest(OSAUtils):
             # Create the threads here
             threads = []
             # Action dictionary with OSA dmg command parameters
-            action_args = {
-                "drain": {"pool": self.pool.uuid, "rank": rank,
-                          "tgt_idx": None},
-                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
-                            "tgt_idx": t_string},
-                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
-                                "tgt_idx": t_string},
-                "extend": {"pool": self.pool.uuid, "ranks": (rank + 2),
-                           "scm_size": self.pool.scm_size,
-                           "nvme_size": self.pool.nvme_size}
+            action_kwargs = {
+                "drain": {"pool": self.pool.identifier, "rank": rank, "tgt_idx": None},
+                "exclude": {"pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "reintegrate": {
+                    "pool": self.pool.identifier, "rank": (rank + 1), "tgt_idx": t_string},
+                "extend": {"pool": self.pool.identifier, "ranks": (rank + 2)}
             }
-            for action in sorted(action_args):
+            for action in sorted(action_kwargs):
                 # Add a dmg thread
-                process = threading.Thread(target=self.dmg_thread,
-                                           kwargs={"action": action,
-                                                   "action_args":
-                                                   action_args,
-                                                   "results":
-                                                   self.out_queue})
+                kwargs = action_kwargs[action].copy()
+                kwargs['action'] = action
+                kwargs['results'] = self.out_queue
+                process = threading.Thread(target=self.dmg_thread, kwargs=kwargs)
+                self.log.info("Starting pool %s in a thread", action)
                 process.start()
                 threads.append(process)
 
         # Wait to finish the threads
-        for thrd in threads:
-            thrd.join()
+        for thread in threads:
+            thread.join()
             time.sleep(5)
 
-        # Check the queue for any failure.
-        tmp_list = list(self.out_queue.queue)
-        for failure in tmp_list:
-            if "FAIL" in failure:
+        # Verify the queue result and make sure test has no failure
+        while not self.out_queue.empty():
+            failure = self.out_queue.get()
+            if "failed" in failure:
                 self.fail("Test failed : {0}".format(failure))
 
         for val in range(0, num_pool):
             self.pool = pool[val]
             display_string = "Pool{} space at the End".format(val)
             self.pool.display_pool_daos_space(display_string)
-            self.is_rebuild_done(3)
+            self.pool.wait_for_rebuild_to_end(3)
             self.assert_on_rebuild_failure()
-            pver_end = self.get_pool_version()
+            pver_end = self.pool.get_version(True)
             self.log.info("Pool Version at the End %s", pver_end)
             if self.server_boot is True:
-                self.assertTrue(pver_end >= 17,
-                                "Pool Version Error:  at the end")
+                self.assertTrue(
+                    pver_end >= 17, "Pool Version Error: {} at the end < 17".format(pver_end))
             else:
-                self.assertTrue(pver_end >= 25,
-                                "Pool Version Error:  at the end")
+                self.assertTrue(
+                    pver_end >= 25, "Pool Version Error: {} at the end < 25".format(pver_end))
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):
@@ -198,36 +184,30 @@ class OSAOfflineParallelTest(OSAUtils):
                 if oclass != "S1":
                     self.run_mdtest_thread()
                 self.container = self.pool_cont_dict[self.pool][0]
-                kwargs = {"pool": self.pool.uuid,
-                          "cont": self.container.uuid}
-                output = self.daos_command.container_check(**kwargs)
-                self.log.info(output)
+                self.container.check()
 
     def test_osa_offline_parallel_test(self):
-        """
-        JIRA ID: DAOS-4752
+        """JIRA ID: DAOS-4752.
 
         Test Description: Runs multiple OSA commands in parallel.
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa,checksum
-        :avocado: tags=offline_parallel,test_osa_offline_parallel_test
+        :avocado: tags=osa,checksum,offline_parallel
+        :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test
         """
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_without_csum(self):
-        """
-        JIRA ID: DAOS-7161
+        """JIRA ID: DAOS-7161.
 
-        Test Description: Runs multiple OSA commands in parallel
-        without enabling checksum.
+        Test Description: Runs multiple OSA commands in parallel without enabling checksum.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa
-        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_without_csum
+        :avocado: tags=osa,offline_parallel
+        :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_without_csum
         """
         self.test_with_checksum = self.params.get("test_with_checksum",
                                                   '/run/checksum/*')
@@ -235,35 +215,30 @@ class OSAOfflineParallelTest(OSAUtils):
         self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_rank_boot(self):
-        """
-        JIRA ID: DAOS-7161
+        """JIRA ID: DAOS-7161.
 
-        Test Description: Runs multiple OSA commands in parallel
-        with a rank rebooted using system stop/start.
+        Test Description: Runs multiple OSA commands in parallel with a rank rebooted using system
+        stop/start.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa
-        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_rank_boot
+        :avocado: tags=osa,offline_parallel
+        :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_rank_boot
         """
-        self.test_with_checksum = self.params.get("test_with_checksum",
-                                                  '/run/checksum/*')
-        self.server_boot = self.params.get("flags",
-                                           '/run/system_stop_start/*')
+        self.test_with_checksum = self.params.get("test_with_checksum", '/run/checksum/*')
+        self.server_boot = self.params.get("flags", '/run/system_stop_start/*')
         self.log.info("Offline Parallel Test: Restart a rank")
         self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_with_aggregation(self):
-        """
-        JIRA ID: DAOS-7161
+        """JIRA ID: DAOS-7161.
 
-        Test Description: Runs multiple OSA commands in parallel
-        with aggregation turned on.
+        Test Description: Runs multiple OSA commands in parallel with aggregation turned on.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa
-        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_with_aggregation
+        :avocado: tags=osa,offline_parallel
+        :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_with_aggregation
         """
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
@@ -271,16 +246,14 @@ class OSAOfflineParallelTest(OSAUtils):
         self.run_offline_parallel_test(1, data=True)
 
     def test_osa_offline_parallel_test_oclass(self):
-        """
-        JIRA ID: DAOS-7161
+        """JIRA ID: DAOS-7161.
 
-        Test Description: Runs multiple OSA commands in parallel
-        with different object class.
+        Test Description: Runs multiple OSA commands in parallel with different object class.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=osa
-        :avocado: tags=offline_parallel,test_osa_offline_parallel_test_oclass
+        :avocado: tags=osa,offline_parallel
+        :avocado: tags=OSAOfflineParallelTest,test_osa_offline_parallel_test_oclass
         """
         self.log.info("Offline Parallel Test : OClass")
         # Presently, the script is limited and supports only one extra

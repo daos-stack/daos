@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -37,9 +37,10 @@ message PoolCreateReq {
 // PoolCreateResp returns created pool uuid and ranks.
 message PoolCreateResp {
 	int32 status = 1; // DAOS error code
-	repeated uint32 svc_reps = 2; // pool service replica ranks
-	repeated uint32 tgt_ranks = 3; // pool target ranks
-	repeated uint64 tier_bytes = 4; // storage tiers allocated to pool
+	uint32 leader = 2; // Current service leader
+	repeated uint32 svc_reps = 3; // pool service replica ranks
+	repeated uint32 tgt_ranks = 4; // pool target ranks
+	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -124,6 +125,7 @@ message PoolReintegrateReq {
 	uint32 rank = 3; // target to move to the up state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
+	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.
@@ -146,6 +148,7 @@ message ListPoolsResp {
 	}
 	int32 status = 1; // DAOS error code
 	repeated Pool pools = 2; // pools list
+	uint64 data_version = 3; // Version of the system database.
 }
 
 // ListContainers

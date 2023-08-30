@@ -9,8 +9,8 @@ hosts:
   test_clients: 1
 timeout: 300
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -22,14 +22,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -37,17 +30,9 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
-  scm_size: 10%
-  nvme_size: 50%
+  size: 50%
   control_method: dmg
 container:
   type: POSIX
@@ -66,14 +51,14 @@ fio:
     verify_pattern: '0xabcdabcd'
     do_verify: 1
     bs:
-      size: '10485760' #10MB
+      size: '10485760'  # 10MB
     read_write:
       rw: 'write'
-  truncate_size: '26214400' #25Mb
+  truncate_size: '26214400'  # 25Mb
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
   caching: !mux
     disable:
-      disable_caching: True
+      disable_caching: true
     enable:
-      enable_caching: True
+      enable_caching: true

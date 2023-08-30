@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
   (C) Copyright 2018-2022 Intel Corporation.
 
@@ -9,7 +8,7 @@ from ior_test_base import IorTestBase
 
 
 class RbldWithIOR(IorTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
+    # pylint: disable=too-few-public-methods
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -29,10 +28,9 @@ class RbldWithIOR(IorTestBase):
              sequence while failure/rebuild is triggered in another process
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild
-        :avocado: tags=rebuildwithior
-
+        :avocado: tags=RbldWithIOR,test_rebuild_with_ior
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")
@@ -46,8 +44,8 @@ class RbldWithIOR(IorTestBase):
 
         # make sure pool looks good before we start
         checks = {
-            "pi_nnodes": len(self.hostlist_servers),
-            "pi_ntargets": len(self.hostlist_servers) * targets,
+            "pi_nnodes": self.server_managers[0].engines,
+            "pi_ntargets": self.server_managers[0].engines * targets,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -55,8 +53,7 @@ class RbldWithIOR(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1, rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
         # perform IOR write before rebuild
@@ -67,10 +64,10 @@ class RbldWithIOR(IorTestBase):
         self.server_managers[0].stop_ranks([rank_to_kill], self.d_log)
 
         # wait for rebuild to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
         # wait for rebuild to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # verify the pool information after rebuild
         self.log.info("Verifying pool info after rebuild")

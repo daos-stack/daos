@@ -1,11 +1,11 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 from exception_utils import CommandFailure
 
 
@@ -18,7 +18,7 @@ class ListPoolsTest(TestWithServers):
     :avocado: recursive
     """
 
-    def run_case(self, rank_lists, sr=None):
+    def run_case(self, rank_lists, svcn=None):
         """Run test case.
 
         Create pools, call dmg pool list to get the list, and compare against
@@ -26,7 +26,7 @@ class ListPoolsTest(TestWithServers):
 
         Args:
             rank_lists (list): Rank lists. List of list of int.
-            sr (str, optional): Service replicas. Defaults to None.
+            svcn (str, optional): Service replicas. Defaults to None.
 
         Raises:
             CommandFailure: if there was an error destroying pools
@@ -38,10 +38,7 @@ class ListPoolsTest(TestWithServers):
         self.pool = []
         expected_uuids = {}
         for rank_list in rank_lists:
-            self.pool.append(self.get_pool(create=False))
-            self.pool[-1].target_list.update(rank_list)
-            self.pool[-1].svcn.update(sr)
-            self.pool[-1].create()
+            self.pool.append(self.get_pool(target_list=rank_list, svcn=svcn))
             expected_uuids[self.pool[-1].uuid.lower()] = self.pool[-1].svc_ranks
 
         # Verify the 'dmg pool info' command lists the correct created pool
@@ -108,7 +105,7 @@ class ListPoolsTest(TestWithServers):
             ),
             (
                 "Create 3 pools using all ranks with --nsvc=3",
-                {"rank_lists": [None for _ in ranks[:3]], "sr": 3}
+                {"rank_lists": [None for _ in ranks[:3]], "svcn": 3}
             ),
         ]
         errors = []

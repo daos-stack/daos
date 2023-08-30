@@ -1,9 +1,10 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2019-2022 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
+
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
 
@@ -128,5 +129,5 @@ class DaosPerfCommand(ExecutableCommand):
         #       dmg configuration file
         self.dmg_config_file = FormattedParameter("-g {}")
 
-        # Environment variable names to export when running daos_perf
-        self._env_names = ["D_LOG_FILE"]
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")

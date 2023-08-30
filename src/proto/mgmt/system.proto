@@ -88,6 +88,7 @@ message SystemQueryResp {
 	repeated SystemMember members = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
+	uint64 data_version = 4; // Version of the system database.
 }
 
 // SystemEraseReq supplies system erase parameters.

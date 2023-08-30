@@ -1,5 +1,6 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
@@ -12,13 +13,14 @@ from general_utils import DaosTestError, run_command
 
 
 class PosixSimul(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
-    """Tests a posix container with simul
+    """Tests a posix container with simul.
+
     From : https://github.com/LLNL/simul
     "simul" is an MPI coordinated test of parallel filesystem system calls and
     library functions.  It was designed to perform filesystem operations
     simultaneously from many nodes and processes to test the correctness
-    and coherence of parallel filesystems.
+    and coherence of parallel file systems.
+
     List of tests:
         Test #0: open, shared mode.
         Test #1: close, shared mode.
@@ -62,15 +64,27 @@ class PosixSimul(DfuseTestBase):
         Test #39: link to one file, individual mode.
         Test #40: link to a file per process, individual mode.
         Test #41: fcntl locking, individual mode.
+
     :avocado: recursive
     """
 
     @fail_on(DaosTestError)
     def run_simul(self, include=None, exclude=None, raise_exception=True):
-        """ Run simul
-        include str: comma-separated list of tests to include
-        exclude str: comma-separated list of tests to exclude
-        If include value is set, exclude value is ignored and vice versa.
+        """Run simul.
+
+        If an include value is set, the exclude value is ignored and vice versa.
+
+        Args:
+            include (str, optional): comma-separated list of tests to include. Defaults to None.
+            exclude (str, optional): comma-separated list of tests to exclude. Defaults to None.
+            raise_exception (bool, optional): whether to raise an exception. Defaults to True.
+
+        Raises:
+            MPILoadError: if there is an error loading the MPI
+
+        Returns:
+            CmdResult: result from the simul command
+
         """
         mpi_type = self.params.get("mpi_type", "/run/*", "")
         simul_path = self.params.get("simul_path", "/run/*", "")
@@ -112,17 +126,21 @@ class PosixSimul(DfuseTestBase):
 
     def test_posix_simul(self):
         """Test simul.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=posix,simul,dfuse
+        :avocado: tags=PosixSimul,test_posix_simul
         """
         self.run_simul(exclude="9,18,30,39,40")
 
     def test_posix_expected_failures(self):
-        """Test simul, expected failures
+        """Test simul, expected failures.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=posix,simul_failure,dfuse
+        :avocado: tags=hw,medium
+        :avocado: tags=posix,simul,dfuse
+        :avocado: tags=PosixSimul,test_posix_expected_failures
         """
         expected_failures = {"9": None, "18": None, "30": None, "39": None, "40": None}
         for test in sorted(expected_failures):

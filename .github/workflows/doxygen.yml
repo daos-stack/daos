@@ -1,11 +1,8 @@
 name: Doxygen
 
+# Always run on Pull Requests as then this check can be marked as required.
 on:
   pull_request:
-    paths:
-      - Doxyfile
-      - 'src/include/*.h'
-      - .github/workflows/doxygen.yml
 
 jobs:
 

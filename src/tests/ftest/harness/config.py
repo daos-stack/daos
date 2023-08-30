@@ -27,7 +27,7 @@ class HarnessConfigTest(TestWithServers):
         :avocado: tags=all
         :avocado: tags=vm
         :avocado: tags=harness
-        :avocado: tags=harness_config,test_harness_config
+        :avocado: tags=HarnessConfigTest,test_harness_config
         """
         self.log.info('Verify access_points_suffix set from yaml')
         access_points_suffix = self.params.get("access_points_suffix", "/run/setup/*")

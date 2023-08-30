@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +7,6 @@ from mdtest_test_base import MdtestBase
 
 
 class EcodMdtest(MdtestBase):
-    # pylint: disable=too-many-ancestors
     """EC MDtest class to run smoke tests.
 
     Test Class Description: To validate Erasure code object type classes.
@@ -27,7 +25,7 @@ class EcodMdtest(MdtestBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_smoke,mdtest
-        :avocado: tags=ec_mdtest_smoke
+        :avocado: tags=ec_mdtest_smoke,test_ec_mdtest_smoke
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

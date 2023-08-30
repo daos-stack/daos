@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -209,5 +209,8 @@ daos_rpc_from_client(crt_rpc_t *rpc)
 
 	return (srcrank == CRT_NO_RANK);
 }
+
+int
+daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int *ret_ver);
 
 #endif /* __DRPC_API_H__ */

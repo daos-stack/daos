@@ -10,11 +10,10 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 16
 extra_servers:
   test_servers: server-[3-5]
 pool:
   scm_size: 1G
   control_method: dmg
 dmg:
-  json: True
+  json: true

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,7 +7,6 @@ from ior_test_base import IorTestBase
 from general_utils import report_errors
 
 
-# pylint: disable=too-many-ancestors
 class ListVerboseTest(IorTestBase):
     """DAOS-8267: Test class for dmg pool list --verbose tests.
 
@@ -67,6 +66,7 @@ class ListVerboseTest(IorTestBase):
             "query_error_msg": "",
             "query_status_msg": "",
             "state": "Ready",
+            "svc_ldr": 0,
             "usage": [
                 {
                     "tier_name": "SCM",
@@ -242,9 +242,8 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_basic
+        :avocado: tags=list_verbose,list_verbose_basic,test_fields_basic
         """
-        self.maxDiff = None
         self.pool = []
 
         # 1. Create first pool with a given SCM and NVMe size.
@@ -305,7 +304,6 @@ class ListVerboseTest(IorTestBase):
             list: Errors.
 
         """
-        self.maxDiff = None
 
         # 1. Create a pool of 80GB.
         self.pool = []
@@ -379,7 +377,7 @@ class ListVerboseTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=list_verbose,list_verbose_imbalance
+        :avocado: tags=list_verbose,list_verbose_imbalance,test_used_imbalance
         """
         errors = []
         self.log.debug("---------- NVME test ----------")

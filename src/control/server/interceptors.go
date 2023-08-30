@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,6 +9,7 @@ package server
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -17,11 +18,14 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func componentFromContext(ctx context.Context) (comp *security.Component, err error) {
@@ -128,13 +132,14 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 	if err == nil {
 		buildComponent = build.Component(secComponent.String())
 	}
+	isInsecure := status.Code(err) == codes.Unauthenticated
 
-	otherVersion := "0.0.0"
+	otherVersion := build.MustNewVersion("0.0.0")
 	if sReq, ok := req.(interface{ GetSys() string }); ok {
 		comps := strings.Split(sReq.GetSys(), "-")
 		if len(comps) > 1 {
 			if ver, err := build.NewVersion(comps[len(comps)-1]); err == nil {
-				otherVersion = ver.String()
+				otherVersion = ver
 			}
 		}
 	} else {
@@ -144,11 +149,15 @@ func checkVersion(ctx context.Context, self *build.VersionedComponent, req inter
 		return nil
 	}
 
-	other, err := build.NewVersionedComponent(buildComponent, otherVersion)
+	if isInsecure && !self.Version.Equals(otherVersion) {
+		return FaultNoCompatibilityInsecure(self.Version, otherVersion)
+	}
+
+	other, err := build.NewVersionedComponent(buildComponent, otherVersion.String())
 	if err != nil {
 		other = &build.VersionedComponent{
 			Component: "unknown",
-			Version:   build.MustNewVersion(otherVersion),
+			Version:   build.MustNewVersion(otherVersion.String()),
 		}
 		return FaultIncompatibleComponents(self, other)
 	}
@@ -204,4 +213,54 @@ func unaryStatusInterceptor(ctx context.Context, req interface{}, info *grpc.Una
 	}
 
 	return res, err
+}
+
+// isSentinelErr indicates whether or not the error is a sentinel
+// error used to convey a specific state to the client.
+func isSentinelErr(err error) bool {
+	return system.IsNotReady(err) || system.IsNotReplica(err) || system.IsNotLeader(err)
+}
+
+// shouldLogMsg determines whether or not the given message should be logged.
+func shouldLogMsg(msg interface{}, log logging.Logger, ldrChk func() bool) (protoreflect.ProtoMessage, bool) {
+	m, ok := msg.(protoreflect.ProtoMessage)
+	return m, ok && log.EnabledFor(logging.LogLevelDebug) && proto.ShouldDebug(m, ldrChk)
+}
+
+// unaryLoggingInterceptor generates a grpc.UnaryServerInterceptor that
+// will log an error if the RPC handler returned an error. If debugging is
+// enabled, it will also log the request and response messages.
+//
+// NB: This interceptor should be the last in the chain, i.e. first in the
+// list of interceptors passed to grpc.NewServer.
+func unaryLoggingInterceptor(log logging.Logger, ldrChk func() bool) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if m, ok := shouldLogMsg(req, log, ldrChk); ok {
+			log.Debugf("gRPC request: %s", proto.Debug(m))
+		}
+
+		startTime := time.Now()
+		res, err := handler(ctx, req)
+		elapsed := time.Since(startTime)
+		logErr := err
+		if logErr != nil {
+			// Unwrap the message if it's a gRPC status error.
+			if st, ok := status.FromError(err); ok {
+				logErr = proto.UnwrapError(st)
+			}
+		}
+
+		// Log the unwrapped error if it's not a sentinel error.
+		if logErr != nil {
+			if !isSentinelErr(logErr) {
+				log.Errorf("gRPC handler for %T failed: %s (elapsed: %s)", req, logErr, elapsed)
+			}
+			return res, err
+		}
+
+		if m, ok := shouldLogMsg(res, log, ldrChk); ok {
+			log.Debugf("gRPC response for %T: %s (elapsed: %s)", req, proto.Debug(m), elapsed)
+		}
+		return res, err
+	}
 }

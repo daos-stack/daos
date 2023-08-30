@@ -4,18 +4,18 @@ hosts:
   test_servers: 2
 timeout: 120
 faults: !mux
-# commenting out the fault injection bit
-# as it's still under development. Uncomment
-# them, once fault injection is developed.
-#    two_faults:
-#      fault_list:
-#        - obj_update_timeout
-#        - bogus_2nd_fault
-#    just_one:
-#      fault_list:
-#        - obj_update_timeout
-    no_faults:
-      fault_list: []
+  # commenting out the fault injection bit
+  # as it's still under development. Uncomment
+  # them, once fault injection is developed.
+  #    two_faults:
+  #      fault_list:
+  #        - obj_update_timeout
+  #        - bogus_2nd_fault
+  #    just_one:
+  #      fault_list:
+  #        - obj_update_timeout
+  no_faults:
+    fault_list: []
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -27,7 +27,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 1073741824
   control_method: dmg

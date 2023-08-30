@@ -52,10 +52,10 @@ struct ioil_global {
 
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
-	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
-	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
-	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
+	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
+	ATOMIC uint64_t iog_read_count;  /**< Number of read operations intercepted */
+	ATOMIC uint64_t iog_write_count; /**< Number of write operations intercepted */
+	ATOMIC uint64_t iog_fstat_count; /**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
@@ -482,8 +482,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		if (rc != 0) {
 			rc = errno;
 
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  rc, strerror(rc));
+			DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 			goto out;
 		}
 		errno = 0;
@@ -503,8 +502,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		if (rc != 0) {
 			rc = errno;
 
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  rc, strerror(rc));
+			DFUSE_LOG_WARNING("ioctl call on %d failed: %d (%s)", fd, rc, strerror(rc));
 			goto out;
 		}
 	}
@@ -514,8 +512,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 
 	rc = daos_pool_global2local(iov, &pool->iop_poh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use pool handle "DF_RC,
-				  DP_RC(rc));
+		DFUSE_LOG_WARNING("Failed to use pool handle: " DF_RC, DP_RC(rc));
 		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 out:
@@ -678,6 +675,65 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply, struct ioil_cont
 	return true;
 }
 
+/* Wrapper function for daos_init()
+ * Within ioil there are some use-cases where the caller opens files in sequence and expects back
+ * specific file descriptors, specifically some configure scripts which hard-code fd numbers.  To
+ * avoid problems here then if the fd being intercepted is low then pre-open a number of fds before
+ * calling daos_init() and close them afterwards so that daos itself does not use and of the low
+ * number file descriptors.
+ * The DAOS logging uses fnctl calls to force it's FDs to higher numbers to avoid the same problems.
+ * See DAOS-13381 for more details. Returns true on success
+ */
+
+#define IOIL_MIN_FD 10
+
+static bool
+call_daos_init(int fd)
+{
+	int  fds[IOIL_MIN_FD] = {};
+	int  i                = 0;
+	int  rc;
+	bool rcb = false;
+
+	if (fd < IOIL_MIN_FD) {
+		fds[0] = __real_open("/", O_RDONLY);
+
+		while (fds[i] < IOIL_MIN_FD) {
+			fds[i + 1] = __real_dup(fds[i]);
+			if (fds[i + 1] == -1) {
+				DFUSE_LOG_DEBUG("Pre-opening files failed: %d (%s)", errno,
+						strerror(errno));
+				goto out;
+			}
+			i++;
+			D_ASSERT(i < IOIL_MIN_FD);
+		}
+	}
+
+	rc = daos_init();
+	if (rc) {
+		DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
+		goto out;
+	}
+	rcb = true;
+
+out:
+	i = 0;
+	while (fds[i] > 0) {
+		__real_close(fds[i]);
+		i++;
+		D_ASSERT(i < IOIL_MIN_FD);
+	}
+
+	if (rcb)
+		ioil_iog.iog_daos_init = true;
+	else
+		ioil_iog.iog_no_daos = true;
+
+	return rcb;
+}
+
+/* Returns true on success */
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 {
@@ -712,15 +768,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
 
-	if (!ioil_iog.iog_daos_init) {
-		rc = daos_init();
-		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC, DP_RC(rc));
-			ioil_iog.iog_no_daos = true;
-			D_GOTO(err, 0);
-		}
-		ioil_iog.iog_daos_init = true;
-	}
+	if (!ioil_iog.iog_daos_init)
+		if (!call_daos_init(fd))
+			goto err;
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)
@@ -2363,8 +2413,6 @@ dfuse_fputws(const wchar_t *ws, FILE *stream)
 	int              fd;
 	int              rc;
 
-	D_ERROR("Unsupported function\n");
-
 	fd = fileno(stream);
 	if (fd == -1)
 		goto do_real_fn;
@@ -2465,6 +2513,110 @@ do_real_fn:
 	return __real_getc_unlocked(stream);
 }
 
+DFUSE_PUBLIC wint_t
+dfuse_getwc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getwc(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_getwc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_getwc_unlocked(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_fgetwc(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgetwc(stream);
+}
+
+DFUSE_PUBLIC wint_t
+dfuse_fgetwc_unlocked(FILE *stream)
+{
+	struct fd_entry *entry = NULL;
+	int              fd;
+	int              rc;
+
+	fd = fileno(stream);
+	if (fd == -1)
+		goto do_real_fn;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fn;
+
+	if (drop_reference_if_disabled(entry))
+		goto do_real_fn;
+
+	DISABLE_STREAM(entry, stream);
+
+	vector_decref(&fd_table, entry);
+
+do_real_fn:
+	return __real_fgetwc_unlocked(stream);
+}
+
 DFUSE_PUBLIC char *
 dfuse_fgets(char *str, int n, FILE *stream)
 {
@@ -2493,13 +2645,11 @@ do_real_fn:
 }
 
 DFUSE_PUBLIC wchar_t *
-dfuse_fgetws(const wchar_t *ws, FILE *stream)
+dfuse_fgetws(wchar_t *ws, int n, FILE *stream)
 {
 	struct fd_entry *entry = NULL;
 	int              fd;
 	int              rc;
-
-	D_ERROR("Unsupported function\n");
 
 	fd = fileno(stream);
 	if (fd == -1)
@@ -2520,7 +2670,7 @@ dfuse_fgetws(const wchar_t *ws, FILE *stream)
 	return NULL;
 
 do_real_fn:
-	return __real_fgetws(ws, stream);
+	return __real_fgetws(ws, n, stream);
 }
 
 DFUSE_PUBLIC int

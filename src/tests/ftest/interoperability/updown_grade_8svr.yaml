@@ -1,0 +1,48 @@
+hosts:
+  test_servers: 8
+  test_clients: 1
+timeout: 950
+server_config:
+  name: daos_server
+  engines_per_host: 1
+  servers:
+    0:
+      targets: 1
+      log_mask: DEBUG
+      env_vars:
+        - DD_MASK=mgmt,md,dsms,any
+        - D_LOG_FLUSH=DEBUG
+pool:
+  control_method: dmg
+  scm_size: 5G
+  name: daos_server
+container:
+  control_method: daos
+  type: POSIX
+  properties: rf:3
+attrtests:
+  num_attributes: 20
+dfuse:
+  mount_dir: "/tmp/daos_dfuse1/"
+  disable_caching: True
+ior:
+  ior_timeout: 180
+  client_processes:
+    np: 2
+  test_file: daos:/testFile
+  api: HDF5  # HDF5, POSIX
+  dfs_oclass: "EC_4P2GX"
+  transfer_size: '1M'
+  block_size: '128M'
+  iorflags:
+    write_flg: "-w -W -k -G 1 -i 1"
+    read_flg: "-C -k -e -r -R -g -G 1 -Q 1 -vv"
+hdf5_vol:
+  plugin_path: "/usr/lib64/mpich/lib"
+interop:
+  # Example of upgrade/downgrade RPMs from local tar file
+  # upgrade_rpms: ["/home/dinghwah/RPM/2.1.104/daos-2.1.104-1.el8.x86_64.rpm"]
+  # downgrade_rpms: ["/home/dinghwah/RPM/2.0.3.rc4.signed/daos-2.0.3-5.el8.x86_64.rpm"]
+  #  upgrade_repo: "/etc/yum.repos.d/test23-101.repo"
+  downgrade_repo: "/etc/yum.repos.d/test22-1.repo"
+  upgrade_repo: "/etc/yum.repos.d/test23-101.repo"

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -337,6 +337,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_global_version = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
 			break;
+		case DAOS_PROP_CO_OBJ_VERSION:
+			iv_prop->cip_obj_version = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_OBJ_VERSION;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
@@ -466,7 +470,24 @@ again:
 							     civ_key->cont_uuid, &chdl);
 				if (rc1 == 0) {
 					struct cont_iv_entry	iv_entry = { 0 };
+					daos_prop_t		*prop = NULL;
+					struct daos_prop_entry	*prop_entry;
+					struct daos_co_status	stat = { 0 };
 
+					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
+							      civ_key->cont_uuid, &prop);
+					if (rc) {
+						D_ERROR(DF_CONT "get prop: "DF_RC"\n",
+							DP_CONT(entry->ns->iv_pool_uuid,
+								civ_key->cont_uuid), DP_RC(rc));
+						D_GOTO(out, rc);
+					}
+					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
+					D_ASSERT(prop_entry != NULL);
+
+					daos_prop_val_2_co_status(prop_entry->dpe_val, &stat);
+					iv_entry.iv_capa.status_pm_ver = stat.dcs_pm_ver;
+					daos_prop_free(prop);
 					/* Only happens on xstream 0 */
 					D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 					iv_entry.iv_capa.flags = chdl.ch_flags;
@@ -557,8 +578,6 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_PROP) {
 			daos_prop_t		*prop = NULL;
-			struct daos_prop_entry	*iv_entry;
-			struct daos_co_status	 co_stat = {0};
 
 			rc = cont_iv_prop_g2l(&civ_ent->iv_prop, &prop);
 			if (rc) {
@@ -567,20 +586,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 				D_GOTO(out, rc);
 			}
 
-			iv_entry = daos_prop_entry_get(prop,
-						       DAOS_PROP_CO_STATUS);
-			if (iv_entry != NULL) {
-				daos_prop_val_2_co_status(iv_entry->dpe_val,
-							  &co_stat);
-				rc = ds_cont_status_pm_ver_update(
-					entry->ns->iv_pool_uuid,
-					civ_ent->cont_uuid,
-					co_stat.dcs_pm_ver);
-				if (rc) {
-					daos_prop_free(prop);
-					goto out;
-				}
-			}
+			rc = ds_cont_tgt_prop_update(entry->ns->iv_pool_uuid,
+						     civ_ent->cont_uuid, prop);
 			daos_prop_free(prop);
 		} else if (entry->iv_class->iv_class_id == IV_CONT_SNAP &&
 			   civ_ent->iv_snap.snap_cnt != (uint64_t)(-1)) {
@@ -923,10 +930,11 @@ cont_iv_capa_refresh_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	if (arg->invalidate_current) {
 		rc = cont_iv_capability_invalidate(pool->sp_iv_ns,
 						   arg->cont_hdl_uuid,
@@ -1023,11 +1031,17 @@ cont_iv_ec_agg_eph_update_internal(void *ns, uuid_t cont_uuid,
 	iv_entry.iv_agg_eph.eph = eph;
 	uuid_copy(iv_entry.cont_uuid, cont_uuid);
 	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
-	if (rc)
+	if (rc) {
+		D_ERROR(DF_UUID" op %d, crt_group_rank failed "DF_RC"\n",
+			DP_UUID(cont_uuid), op, DP_RC(rc));
 		return rc;
+	}
 
 	rc = cont_iv_update(ns, op, cont_uuid, &iv_entry, sizeof(iv_entry),
-			    shortcut, sync_mode, false /* retry */);
+			    shortcut, sync_mode, true /* retry */);
+	if (rc)
+		D_ERROR(DF_UUID" op %d, cont_iv_update failed "DF_RC"\n",
+			DP_UUID(cont_uuid), op, DP_RC(rc));
 	return rc;
 }
 
@@ -1252,6 +1266,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = iv_prop->cip_global_version;
 		prop_entry->dpe_type = DAOS_PROP_CO_GLOBAL_VERSION;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_OBJ_VERSION) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_obj_version;
+		prop_entry->dpe_type = DAOS_PROP_CO_OBJ_VERSION;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_ACL) {
 		prop_entry = &prop->dpp_entries[i++];
 		acl = &iv_prop->cip_acl;
@@ -1315,7 +1334,7 @@ out:
 }
 
 int
-cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
+cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 {
 	struct cont_iv_entry	*iv_entry;
 	uint32_t		iv_entry_size;
@@ -1329,12 +1348,33 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop)
 	if (iv_entry == NULL)
 		return -DER_NOMEM;
 
+	/* IV property should include all entries for the moment, since IV entry
+	 * cache can not tell individual entry, so it can not update single entry.
+	 */
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP_THRESHOLD) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM_SERVER_VERIFY) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM_CHUNK_SIZE) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_COMPRESS) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_ENCRYPT) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_LVL) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_ALLOCED_OID) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_EC_PDA) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_GLOBAL_VERSION) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA) != NULL);
+
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
 
 	rc = cont_iv_update(ns, IV_CONT_PROP, cont_uuid, iv_entry,
 			    iv_entry_size, CRT_IV_SHORTCUT_TO_ROOT,
-			    CRT_IV_SYNC_EAGER, false /* retry */);
+			    sync ? CRT_IV_SYNC_EAGER : CRT_IV_SYNC_LAZY,
+			    true/* retry */);
 	D_FREE(iv_entry);
 	return rc;
 }
@@ -1359,10 +1399,11 @@ cont_iv_prop_fetch_ult(void *data)
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
-	pool = ds_pool_lookup(arg->pool_uuid);
-	if (pool == NULL)
-		D_GOTO(out, rc = -DER_NONEXIST);
+	rc = ds_pool_lookup(arg->pool_uuid, &pool);
+	if (rc)
+		D_GOTO(out, rc);
 
+	D_ASSERT(pool != NULL);
 	iv_entry_size = cont_iv_prop_ent_size(DAOS_ACL_MAX_ACE_LEN);
 	D_ALLOC(iv_entry, iv_entry_size);
 	if (iv_entry == NULL)

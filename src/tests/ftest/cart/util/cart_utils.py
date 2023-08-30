@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,16 +8,16 @@ import os
 import shlex
 import subprocess  # nosec
 import logging
-import socket
 import re
 import glob
-import cart_logparse
-import cart_logtest
 
-from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import stop_processes
+import cart_logparse
+import cart_logtest
+from apricot import TestWithoutServers
+from run_utils import stop_processes
+from host_utils import get_local_host
 from write_host_file import write_host_file
 from job_manager_utils import Orterun
 
@@ -32,7 +31,6 @@ class CartTest(TestWithoutServers):
         self.stdout = logging.getLogger('avocado.test.stdout')
         self.progress_log = logging.getLogger("progress")
         self.module_init = False
-        self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
         self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
@@ -154,24 +152,15 @@ class CartTest(TestWithoutServers):
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
-        localhost = NodeSet(socket.gethostname().split(".")[0])
+        localhost = get_local_host()
         processes = r"'\<(crt_launch|orterun)\>'"
-        retry_count = 0
-        while retry_count < 2:
-            result = stop_processes(localhost,
-                                    processes,
-                                    added_filter=r"'\<(grep|defunct)\>'")
-            if 1 in result:
-                self.log.info(
-                    "Stopped '%s' processes on %s", processes, str(result[1]))
-                retry_count += 1
-            elif 0 in result:
-                self.log.info("All '%s' processes have been stopped", processes)
-                retry_count = 99
-            else:
-                error_list.append("Error detecting/stopping cart processes")
-                retry_count = 99
-        if retry_count == 2:
+        negative_filter = r"'\<(grep|defunct)\>'"
+        running = True
+        for _ in range(2):
+            _, running = stop_processes(self.log, localhost, processes, exclude=negative_filter)
+            if not running:
+                break
+        if running:
             error_list.append("Unable to stop cart processes!")
         return error_list
 
@@ -201,9 +190,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_ccsa = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
-        env_phy_addr_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+        provider_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
 
-        os.environ["CRT_PHY_ADDR_STR"] = env_phy_addr_str
+        os.environ["CRT_PHY_ADDR_STR"] = provider_str
 
         if env_ccsa is not None:
             log_dir = "{}-{}".format(test_name, env_ccsa)
@@ -214,40 +203,28 @@ class CartTest(TestWithoutServers):
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR', os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_path = log_path.replace(";", "_")
-
         log_file = os.path.join(log_path, log_dir, test_name + "_" + env_ccsa + "_"
-                                + env_phy_addr_str + "_cart.log").replace(";", "_")
+                                + provider_str + "_cart.log").replace(";", "_")
 
-        # Default env vars for orterun to None
-        log_mask = None
-        self.provider = None
-        ofi_interface = None
-        ofi_domain = None
-        ofi_share_addr = None
+        # Parse out envs of interest from the yaml file
+        envars_to_parse = ["D_LOG_MASK", "CRT_PHY_ADDR_STR", "D_PROVIDER", "D_INTERFACE",
+                           "D_DOMAIN", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CTX_SHARE_ADDR",
+                           "D_PORT", "OFI_PORT", "HG_LOG_LEVEL", "HG_LOG_SUBSYS"]
+        yaml_envs = ""
 
-        if "D_LOG_MASK" in os.environ:
-            log_mask = os.environ.get("D_LOG_MASK")
+        for env_name in envars_to_parse:
+            env_value = os.environ.get(env_name)
 
-        if "CRT_PHY_ADDR_STR" in os.environ:
-            self.provider = os.environ.get("CRT_PHY_ADDR_STR")
-
-        if "OFI_INTERFACE" in os.environ:
-            ofi_interface = os.environ.get("OFI_INTERFACE")
-
-        if "OFI_DOMAIN" in os.environ:
-            ofi_domain = os.environ.get("OFI_DOMAIN")
-
-        if "CRT_CTX_SHARE_ADDR" in os.environ:
-            ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
+            if env_value is not None:
+                yaml_envs += " -x %s=%s" % (env_name, env_value)
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_ccsa + "_" + env_phy_addr_str + "_" + \
+        log_filename = test_name + "_" + env_ccsa + "_" + provider_str + "_" + \
             "output.orterun_log"
 
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
@@ -255,23 +232,10 @@ class CartTest(TestWithoutServers):
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
+        env += yaml_envs
+
         if os.environ.get("PATH") is not None:
             env += " -x PATH"
-
-        if log_mask is not None:
-            env += " -x D_LOG_MASK={!s}".format(log_mask)
-
-        if self.provider is not None:
-            env += " -x CRT_PHY_ADDR_STR={!s}".format(self.provider)
-
-        if ofi_interface is not None:
-            env += " -x OFI_INTERFACE={!s}".format(ofi_interface)
-
-        if ofi_domain is not None:
-            env += " -x OFI_DOMAIN={!s}".format(ofi_domain)
-
-        if ofi_share_addr is not None:
-            env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
         env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
@@ -292,18 +256,6 @@ class CartTest(TestWithoutServers):
                     os.unlink(file_path)
 
         return env
-
-    def get_srv_cnt(self, host):
-        """Get server count for 'host' test yaml parameter.
-
-        Args:
-            host (str): test yaml parameter name
-
-        Returns:
-            int: length of the 'host' test yaml parameter
-
-        """
-        return len(self.params.get("{}".format(host), "/run/hosts/*/", []))
 
     @staticmethod
     def get_yaml_list_elem(param, index):
@@ -385,9 +337,6 @@ class CartTest(TestWithoutServers):
         else:
             hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
         mca_flags = ["btl self,tcp"]
-
-        if self.provider == "ofi+psm2":
-            mca_flags.append("pml ob1")
 
         tst_cmd = env
 

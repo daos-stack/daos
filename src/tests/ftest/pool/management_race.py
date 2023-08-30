@@ -1,16 +1,16 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import time
 import random
+
+from pydaos.raw import DaosApiError
+
 from apricot import TestWithServers
 from thread_manager import ThreadManager
 from command_utils_base import CommandFailure
-from pydaos.raw import DaosApiError
 
 
 class PoolManagementRace(TestWithServers):
@@ -90,9 +90,9 @@ class PoolManagementRace(TestWithServers):
             4. Launch all the threads with number of test loops.
             5. Check for failure from thread_manager
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=pool,boundary_test
-        :avocado: tags=pool_mgmt_race
+        :avocado: tags=pool_mgmt_race,test_pool_management_race
         Args:
         """
 
@@ -100,7 +100,7 @@ class PoolManagementRace(TestWithServers):
         test_loop = self.params.get("test_loop", '/run/boundary_test/*')
         self.pool = []
         for pool_number in range(num_pools):
-            self.pool.append(self.get_pool())
+            self.pool.append(self.get_pool(dmg=self.get_dmg_command().copy()))
             self.log.info("==(1.%d) pool created, %s.", pool_number, self.pool[-1].identifier)
 
         # Randomly select a pool for delete, recreate and query

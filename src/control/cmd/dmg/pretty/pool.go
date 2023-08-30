@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -97,6 +97,12 @@ func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writ
 	return w.Err
 }
 
+// PrintTierRatio generates a human-readable representation of the supplied
+// tier ratio.
+func PrintTierRatio(ratio float64) string {
+	return fmt.Sprintf("%.2f%%", ratio*100)
+}
+
 // PrintPoolCreateResponse generates a human-readable representation of the pool create
 // response and prints it to the supplied io.Writer.
 func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ...PrintConfigOption) error {
@@ -113,10 +119,10 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		totalSize += tierBytes
 	}
 
-	tierRatio := make([]float64, len(pcr.TierBytes))
+	tierRatios := make([]float64, len(pcr.TierBytes))
 	if totalSize != 0 {
 		for tierIdx, tierBytes := range pcr.TierBytes {
-			tierRatio[tierIdx] = float64(tierBytes) / float64(totalSize)
+			tierRatios[tierIdx] = float64(tierBytes) / float64(totalSize)
 		}
 	}
 
@@ -127,19 +133,20 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	numRanks := uint64(len(pcr.TgtRanks))
 	fmtArgs := make([]txtfmt.TableRow, 0, 6)
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"UUID": pcr.UUID})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Leader": fmt.Sprintf("%d", pcr.Leader)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Ranks": formatRanks(pcr.SvcReps)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Storage Ranks": formatRanks(pcr.TgtRanks)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Total Size": humanize.Bytes(totalSize * numRanks)})
 
 	title := "Pool created with "
 	tierName := "SCM"
-	for tierIdx, tierRatio := range tierRatio {
+	for tierIdx, tierRatio := range tierRatios {
 		if tierIdx > 0 {
 			title += ","
 			tierName = "NVMe"
 		}
 
-		title += fmt.Sprintf("%0.2f%%", tierRatio*100)
+		title += PrintTierRatio(tierRatio)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
 		fmtArgs = append(fmtArgs, txtfmt.TableRow{fmtName: fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.TierBytes[tierIdx]*numRanks), humanize.Bytes(pcr.TierBytes[tierIdx]))})
 	}

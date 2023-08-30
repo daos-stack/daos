@@ -37,6 +37,7 @@ void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
+void dss_bind_to_xstream_cpuset(int tgt_id);
 
 /** srv_system.c */
 /* Management service (used only for map broadcast) */
@@ -71,8 +72,8 @@ int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handl
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
 		       char *machine, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				     struct pool_target_addr_list *tgt_addr,
-				     pool_comp_state_t new_state);
+				     struct pool_target_addr_list *target_addrs,
+				     pool_comp_state_t state, size_t scm_size, size_t nvme_size);
 int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     uint32_t reint_rank,
 			     struct pool_target_id_list *reint_list);
@@ -110,21 +111,20 @@ int ds_mgmt_cont_set_owner(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 /* Device health stats from nvme_stats */
 struct mgmt_bio_health {
-	struct nvme_stats		mb_dev_state;
-	uuid_t				mb_devid;
+	struct nvme_stats	mb_dev_state;
+	uuid_t			mb_devid;
+	uint64_t		mb_meta_size;
+	uint64_t		mb_rdb_size;
 };
 
-int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid,
-			     char *tgt_id);
+int ds_mgmt_bio_health_query(struct mgmt_bio_health *mbh, uuid_t uuid);
 int ds_mgmt_smd_list_devs(Ctl__SmdDevResp *resp);
 int ds_mgmt_smd_list_pools(Ctl__SmdPoolResp *resp);
-int ds_mgmt_dev_state_query(uuid_t uuid, Ctl__DevStateResp *resp);
-int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevStateResp *resp);
+int ds_mgmt_dev_set_faulty(uuid_t uuid, Ctl__DevManageResp *resp);
+int ds_mgmt_dev_manage_led(Ctl__LedManageReq *req, Ctl__DevManageResp *resp);
 int ds_mgmt_get_bs_state(uuid_t bs_uuid, int *bs_state);
 void ds_mgmt_hdlr_get_bs_state(crt_rpc_t *rpc_req);
-int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid,
-			Ctl__DevReplaceResp *resp);
-int ds_mgmt_dev_identify(uuid_t uuid, Ctl__DevIdentifyResp *resp);
+int ds_mgmt_dev_replace(uuid_t old_uuid, uuid_t new_uuid, Ctl__DevManageResp *resp);
 
 /** srv_target.c */
 int ds_mgmt_tgt_setup(void);

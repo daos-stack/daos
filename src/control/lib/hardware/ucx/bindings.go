@@ -221,11 +221,11 @@ func Load() (func(), error) {
 }
 
 func openUCT() (*dlopen.LibHandle, error) {
-	return dlopen.GetHandle([]string{"libuct.so"})
+	return dlopen.GetHandle([]string{"libuct.so.0"})
 }
 
 func openUCS() (*dlopen.LibHandle, error) {
-	return dlopen.GetHandle([]string{"libucs.so"})
+	return dlopen.GetHandle([]string{"libucs.so.0"})
 }
 
 func ucsDisableSignal(hdl *dlopen.LibHandle, sig syscall.Signal) error {

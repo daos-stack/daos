@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -80,7 +80,10 @@ struct pool_map {
 	 * of component found in the pool
 	 */
 	struct pool_fail_comp	*po_comp_fail_cnts;
-
+	/* Current least in version from all UP/NEW targets. */
+	uint32_t		po_in_ver;
+	/* Current least fseq version from all DOWN targets. */
+	uint32_t		po_fseq;
 };
 
 static struct pool_comp_state_dict comp_state_dict[] = {
@@ -510,9 +513,9 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 			goto out;
 		}
 
-		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d\n",
+		D_DEBUG(DB_TRACE, "Parse %s[%d] i %d nr %d status %u\n",
 			pool_comp_type2str(comp->co_type), comp->co_id,
-			i, comp->co_nr);
+			i, comp->co_nr, comp->co_status);
 
 		if (comp->co_type == type)
 			continue;
@@ -889,8 +892,7 @@ pool_map_finalise(struct pool_map *map)
 
 	comp_sorter_fini(&map->po_target_sorter);
 
-	if (map->po_comp_fail_cnts != NULL)
-		D_FREE(map->po_comp_fail_cnts);
+	D_FREE(map->po_comp_fail_cnts);
 
 	if (map->po_domain_sorters != NULL) {
 		D_ASSERT(map->po_domain_layers != 0);
@@ -907,6 +909,28 @@ pool_map_finalise(struct pool_map *map)
 	}
 
 	D_MUTEX_DESTROY(&map->po_lock);
+}
+
+void
+pool_map_init_in_fseq(struct pool_map *map)
+{
+	struct pool_comp_cntr cntr = {0};
+	int i;
+
+	pool_tree_count(map->po_tree, &cntr);
+
+	for (i = 0; i < cntr.cc_targets; i++) {
+		struct pool_target *ta;
+
+		ta = &map->po_tree->do_targets[i];
+		if (ta->ta_comp.co_status == PO_COMP_ST_UP)
+			map->po_in_ver = min(map->po_in_ver, ta->ta_comp.co_in_ver);
+
+		if (ta->ta_comp.co_status == PO_COMP_ST_DOWN ||
+		    ta->ta_comp.co_status == PO_COMP_ST_DRAIN)
+			map->po_fseq = min(map->po_fseq, ta->ta_comp.co_fseq);
+	}
+
 }
 
 /**
@@ -988,6 +1012,8 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 	if (rc != 0)
 		goto out_domain_sorters;
 
+	map->po_in_ver = -1;
+	map->po_fseq = -1;
 	for (i = 0; i < cntr.cc_targets; i++) {
 		struct pool_target *ta;
 
@@ -995,6 +1021,7 @@ pool_map_initialise(struct pool_map *map, struct pool_domain *tree)
 		map->po_target_sorter.cs_comps[i] = &ta->ta_comp;
 	}
 
+	pool_map_init_in_fseq(map);
 	rc = comp_sorter_sort(&map->po_target_sorter);
 	if (rc != 0)
 		goto out_target_sorter;
@@ -1428,6 +1455,7 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 	struct d_fd_tree	tree = {0};
 	struct d_fd_node	node = {0};
 	bool			updated = false;
+	bool			found_new_dom = false;
 	int			i = 0;
 
 	if (map != NULL) {
@@ -1467,13 +1495,11 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 				struct pool_domain	*current;
 				int			already_in_map;
 
-				already_in_map = pool_map_find_domain(map,
-								      PO_COMP_TP_NODE,
-									map_comp.co_id,
-									&current);
+				already_in_map = pool_map_find_domain(map, PO_COMP_TP_NODE,
+								      map_comp.co_id, &current);
 				if (already_in_map > 0) {
-					D_DEBUG(DB_TRACE, "domain %d already in map\n",
-						map_comp.co_id);
+					D_DEBUG(DB_TRACE, "domain %d/%u already in map\n",
+						map_comp.co_id, current->do_comp.co_status);
 					map_comp.co_status = current->do_comp.co_status;
 					map_comp.co_index = current->do_comp.co_index;
 				} else {
@@ -1492,7 +1518,10 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 				found_dom = pool_map_find_node_by_rank(map, rank);
 				if (found_dom) {
-					D_DEBUG(DB_TRACE, "rank %u already in map\n", rank);
+					if (found_dom->do_comp.co_status == PO_COMP_ST_NEW)
+						found_new_dom = true;
+					D_DEBUG(DB_TRACE, "rank/status %u/%u already in map\n",
+						rank, found_dom->do_comp.co_status);
 					continue;
 				}
 			}
@@ -1524,8 +1553,19 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 	ordered_ranks->rl_nr = i;
 
-	if (rc == 0 && !updated)
-		return -DER_ALREADY;
+	if (rc == 0) {
+		/* Those ranks already exists in the pool map, but some of them are new, so
+		 * still need extend the pool, though does not need update the pool map
+		 */
+		if (!updated && found_new_dom)
+			return -DER_EXIST;
+
+		/* Those ranks already exists in the pool map, and they are not new, then return
+		 * EALREADY
+		 */
+		if (!updated && !found_new_dom)
+			return -DER_ALREADY;
+	}
 
 	return rc;
 }
@@ -1563,8 +1603,12 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out, int map_versio
 
 	rc = add_domain_tree_to_pool_buf(map, map_buf, map_version, dss_tgt_nr, ndomains,
 					 domains, ordered_ranks);
-	if (rc != 0)
+	if (rc != 0) {
+		/* Do not need update the pool map anymore */
+		if (rc == -DER_EXIST)
+			rc = 0;
 		D_GOTO(out_map_buf, rc);
+	}
 
 	if (map != NULL) {
 		new_status = PO_COMP_ST_NEW;
@@ -2001,7 +2045,8 @@ activate_new_target(struct pool_domain *domain, uint32_t id)
 		struct pool_component *comp = &domain->do_targets[i].ta_comp;
 
 		if (comp->co_id == id && (comp->co_status == PO_COMP_ST_NEW ||
-					  comp->co_status == PO_COMP_ST_UP)) {
+					  comp->co_status == PO_COMP_ST_UP ||
+					  comp->co_status == PO_COMP_ST_DRAIN)) {
 			comp->co_status = PO_COMP_ST_UPIN;
 			domain->do_comp.co_status = PO_COMP_ST_UPIN;
 			return 1;
@@ -3012,8 +3057,7 @@ pool_target_id_list_free(struct pool_target_id_list *id_list)
 	if (id_list == NULL)
 		return;
 
-	if (id_list->pti_ids)
-		D_FREE(id_list->pti_ids);
+	D_FREE(id_list->pti_ids);
 }
 
 int
@@ -3079,4 +3123,27 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 	addr_list->pta_number++;
 
 	return 0;
+}
+
+bool is_pool_map_adding(struct pool_map *map)
+{
+	return map->po_in_ver != (uint32_t)(-1);
+}
+
+int
+pool_map_failure_domain_level(struct pool_map *map, uint32_t level)
+{
+	struct pool_domain *tree = map->po_tree;
+
+	D_ASSERT(tree != NULL);
+
+	for (; tree != NULL; tree = tree[0].do_children) {
+		if (tree->do_comp.co_type == level)
+			return level;
+
+		if (tree->do_children == NULL)
+			return tree->do_comp.co_type;
+	}
+
+	return -DER_INVAL;
 }

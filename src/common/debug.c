@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,6 +90,10 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_SRV_BULK_CACHE,
 	},
 	{
+		.iob_bit	= IOBP_WAL_COMMIT,
+		.iob_str	= IOBP_ENV_WAL_COMMIT,
+	},
+	{
 		.iob_bit	= IOBP_OFF,
 		.iob_str	= NULL,
 	},
@@ -102,15 +106,16 @@ io_bypass_init(void)
 {
 	char	*str = getenv(DENV_IO_BYPASS);
 	char	*tok;
+	char	*saved_ptr;
 
 	if (!str)
 		return;
 
-	tok = strtok(str, ",");
+	tok = strtok_r(str, ",", &saved_ptr);
 	while (tok) {
 		struct io_bypass *iob;
 
-		str = strtok(NULL, ",");
+		str = strtok_r(NULL, ",", &saved_ptr);
 		if (str)
 			str[-1] = '\0';
 
@@ -160,6 +165,9 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	logfile = getenv(D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
+		logfile = NULL;
+	} else if (!strncmp(logfile, "/dev/null", 9)) {
+		/* Don't set up logging or log to stdout if the log file is /dev/null */
 		logfile = NULL;
 	}
 

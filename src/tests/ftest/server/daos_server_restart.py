@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -92,22 +91,23 @@ class DaosServerTest(TestWithServers):
            fresh installation.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server_test,server_reformat,DAOS_5610
+        :avocado: tags=hw,medium
+        :avocado: tags=server
+        :avocado: tags=DaosServerTest,test_daos_server_reformat
         """
         self.pool = []
         self.container = []
 
-        self.log.info("(1)Verify daos server pool list after started.")
+        self.log.info("(1) Verify daos server pool list after started.")
         self.verify_pool_list()
-        self.log.info("(2)Restart server without pool created and verify.")
+        self.log.info("(2) Restart server without pool created and verify.")
         self.restart_daos_server()
         self.verify_pool_list()
-        self.log.info("(3)Create pools, containers.")
+        self.log.info("(3) Create pools, containers.")
         self.create_pool_and_container()
-        self.log.info("(4)Shutdown, restart and reformat the server")
+        self.log.info("(4) Shutdown, restart and reformat the server")
         self.restart_daos_server()
-        self.log.info("(5)Verify after server restarted.")
+        self.log.info("(5) Verify after server restarted.")
         self.verify_pool_list()
 
         self.container = None
@@ -129,37 +129,30 @@ class DaosServerTest(TestWithServers):
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server_test,server_restart,DAOS_5610
+        :avocado: tags=hw,medium
+        :avocado: tags=server
+        :avocado: tags=DaosServerTest,test_engine_restart
         """
         self.pool = []
         self.container = []
 
-        self.log.info(
-            "(1)Shutdown and restart the daos engine "
-            "from a quiescent state.")
+        self.log.info("(1) Shutdown and restart the daos engine from a quiescent state.")
         self.agent_managers[0].stop()
         self.verify_pool_list()
         self.restart_engine()
         self.agent_managers[0].start()
-        self.log.info(
-            "(2)Shutdown and restart the daos engine with pools "
-            "and containers created.")
+        self.log.info("(2) Shutdown and restart the daos engine with pools and containers created.")
         self.create_pool_and_container()
         pool_list = self.get_dmg_command().get_pool_list_uuids()
         self.restart_engine()
-        self.log.info(
-            "(3)Force shutdown and restart the daos engine.")
+        self.log.info("(3) Force shutdown and restart the daos engine.")
         self.restart_engine()
-        self.log.info(
-            "(4)Verify pool list after forced shutdown and restart "
-            "the daos engine.")
+        self.log.info("(4) Verify pool list after forced shutdown and restart the daos engine.")
         self.verify_pool_list(pool_list)
         hosts = self.hostlist_servers
         self.hostlist_servers = hosts[-1]
-        self.log.info(
-            "(5)Restart daos io server for the last server on the cluster."
-            "   self.hostlist_servers= %s", self.hostlist_servers)
+        self.log.info("(5) Restart daos io server for the last server on the cluster.")
+        self.log.info("    self.hostlist_servers= %s", self.hostlist_servers)
         self.restart_engine()
         self.verify_pool_list(pool_list)
         # Blocked by DAOS-3883 causing intermittent failures on CI

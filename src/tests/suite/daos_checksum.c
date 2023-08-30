@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -192,7 +192,7 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -1327,9 +1327,6 @@ dtx_with_csum(void **state)
 	daos_oclass_id_t	 oc = dts_csum_oc;
 	int			 rc;
 
-	/* Skipping test because of DAOS-6381 */
-	skip();
-
 	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
 		skip();
 
@@ -1835,9 +1832,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	rank_to_exclude = layout1->ol_shards[0]->os_shard_loc[0].sd_rank;
 	print_message("Excluding rank %d\n", rank_to_exclude);
 	disabled_nr = disabled_targets(arg, NULL /* affected_engines */);
-	daos_exclude_server(arg->pool.pool_uuid, arg->group,
-			    arg->dmg_config,
-			    layout1->ol_shards[0]->os_shard_loc[0].sd_rank);
+	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+			      layout1->ol_shards[0]->os_shard_loc[0].sd_rank, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, &affected_engines);
 	assert_true(disabled_nr < after_disabled_nr);
 	assert_true(d_rank_list_find(affected_engines, rank_to_exclude, NULL));
@@ -1872,8 +1869,9 @@ rebuild_test(void **state, int chunksize, int data_len_bytes, int iod_type)
 	daos_fail_loc_reset();
 	daos_fail_num_set(0);
 
-	daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config,
-			  rank_to_exclude);
+	rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				  rank_to_exclude, -1);
+	assert_success(rc);
 	after_disabled_nr = disabled_targets(arg, NULL);
 	assert_int_equal(disabled_nr, after_disabled_nr);
 	/** wait for rebuild */
@@ -2623,6 +2621,86 @@ scrubbing_with_large_sleep(void **state)
 	basic_scrubbing_test(state, "100000");
 }
 
+static void
+multiple_ec_singv_csum(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	daos_handle_t		 oh;
+	d_iov_t			 dkey;
+	d_sg_list_t		 sgl[3];
+	d_iov_t			 sg_iov[3];
+	daos_iod_t		 iod[3];
+	char			*buf[3];
+	size_t			 len[3];
+	int			 i, rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	if (csum_ec_enabled() && !test_runable(arg, csum_ec_grp_size()))
+		skip();
+
+	setup_from_test_args(&ctx, *state);
+	setup_cont_obj(&ctx, dts_csum_prop_type, true, 0, oc);
+
+	for (i = 0; i < 3; i++) {
+		buf[i] = NULL;
+		len[i] = 0;
+	}
+
+	len[0] = 195;
+	len[1] = 5822;
+	len[2] = 6162;
+	for (i = 0; i < 3; i++) {
+		D_ALLOC(buf[i], len[i]);
+		assert_non_null(buf[i]);
+		dts_buf_render(buf[i], len[i]);
+	}
+
+	oh = ctx.oh;
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** init scatter/gather */
+	for (i = 0; i < 3; i++)
+		d_iov_set(&sg_iov[i], buf[i], len[i]);
+
+	d_iov_set(&iod[0].iod_name, "akey1", strlen("akey1"));
+	d_iov_set(&iod[1].iod_name, "akey2", strlen("akey2"));
+	d_iov_set(&iod[2].iod_name, "akey3", strlen("akey2"));
+
+	for (i = 0; i < 3; i++) {
+		sgl[i].sg_nr = 1;
+		sgl[i].sg_nr_out = 0;
+		sgl[i].sg_iovs = &sg_iov[i];
+		iod[i].iod_nr = 1;
+		iod[i].iod_recxs = NULL;
+		iod[i].iod_type = DAOS_IOD_SINGLE;
+		iod[i].iod_size = len[i];
+	}
+
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	iod[0].iod_size = 0;
+	daos_fail_loc_set(DAOS_CSUM_CORRUPT_FETCH | DAOS_FAIL_ALWAYS);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_CSUM);
+	assert_rc_equal(iod[0].iod_size, 195);
+
+	daos_fail_loc_set(0);
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 3, iod, sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < 3; i++)
+		D_FREE(buf[i]);
+	client_clear_fault();
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+
+}
+
 static int
 setup(void **state)
 {
@@ -2722,6 +2800,7 @@ static const struct CMUnitTest csum_tests[] = {
 		  "EC chunk", ec_chunk_plus_one),
 	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
 		  "2 EC chunks", ec_two_chunk_plus_one),
+	EC_CSUM_TEST("DAOS_EC_CSUM05: multiple EC single value csum", multiple_ec_singv_csum),
 	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
 		  "running very frequently",
 		  scrubbing_a_lot),

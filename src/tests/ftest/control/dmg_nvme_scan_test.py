@@ -1,16 +1,14 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
+
+from avocado.utils import process
 
 from dmg_utils import DmgCommand
 from apricot import TestWithServers
-from avocado.utils import process
 
 
 class DmgNvmeScanTest(TestWithServers):

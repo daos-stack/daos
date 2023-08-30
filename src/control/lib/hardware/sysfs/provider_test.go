@@ -7,7 +7,6 @@
 package sysfs
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -510,7 +508,7 @@ func TestProvider_GetTopology(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetTopology(context.Background())
+			result, err := tc.p.GetTopology(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
 
@@ -532,6 +530,7 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		p         *Provider
+		provider  string
 		setup     func(*testing.T, string)
 		expErr    error
 		expResult *hardware.FabricInterfaceSet
@@ -548,16 +547,53 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 			p: &Provider{},
 			expResult: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Name:      "cxi0",
-					OSName:    "cxi0",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 				&hardware.FabricInterface{
-					Name:      "cxi1",
-					OSName:    "cxi1",
-					Providers: common.NewStringSet("ofi+cxi"),
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
 				},
 			),
+		},
+		"CXI specified": {
+			p:        &Provider{},
+			provider: "ofi+cxi",
+			expResult: hardware.NewFabricInterfaceSet(
+				&hardware.FabricInterface{
+					Name:   "cxi0",
+					OSName: "cxi0",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+				&hardware.FabricInterface{
+					Name:   "cxi1",
+					OSName: "cxi1",
+					Providers: hardware.NewFabricProviderSet(
+						&hardware.FabricProvider{
+							Name: "ofi+cxi",
+						},
+					),
+				},
+			),
+		},
+		"specified different fabric provider": {
+			p:         &Provider{},
+			provider:  "ofi+tcp",
+			expResult: hardware.NewFabricInterfaceSet(),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -579,12 +615,13 @@ func TestSysfs_Provider_GetFabricInterfaces(t *testing.T) {
 				tc.p.root = testDir
 			}
 
-			result, err := tc.p.GetFabricInterfaces(context.Background())
+			result, err := tc.p.GetFabricInterfaces(test.Context(t), tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
 
 			if diff := cmp.Diff(tc.expResult, result,
 				cmp.AllowUnexported(hardware.FabricInterfaceSet{}),
+				cmp.AllowUnexported(hardware.FabricProviderSet{}),
 			); diff != "" {
 				t.Errorf("(-want, +got)\n%s\n", diff)
 			}

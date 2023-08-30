@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2021 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +9,6 @@ import grp
 import re
 
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 import agent_utils as agu
 import security_test_base as secTestBase
 
@@ -28,6 +26,7 @@ class PoolSecurityTestBase(TestWithServers):
 
     :avocado: recursive
     """
+
     def modify_acl_file_entry(self, file_name, entry, new_entry):
         """Modify the acl_file acl list entry.
 
@@ -36,21 +35,18 @@ class PoolSecurityTestBase(TestWithServers):
             entry (str): acl entry to be modified.
             new_entry (str): new acl entry.
         """
-        acl_file = open(file_name, "r+")
-        new_permissions = ""
-        for line in acl_file.readlines():
-            line = line.split("\n")[0]
-            if line == entry:
-                line = new_entry
-                self.log.info(
-                    "==>replaceing \n %s  with\n %s", entry, new_entry)
-            new_permissions = new_permissions + line + "\n"
-        if entry is None:
-            new_permissions = new_permissions + new_entry + "\n"
-        acl_file.close()
-        acl_file = open(file_name, "w")
-        acl_file.write(new_permissions)
-        acl_file.close()
+        with open(file_name, "r+") as acl_file:
+            new_permissions = ""
+            for line in acl_file.readlines():
+                line = line.split("\n")[0]
+                if line == entry:
+                    line = new_entry
+                    self.log.info("==>replaceing \n %s  with\n %s", entry, new_entry)
+                new_permissions = new_permissions + line + "\n"
+            if entry is None:
+                new_permissions = new_permissions + new_entry + "\n"
+        with open(file_name, "w") as acl_file:
+            acl_file.write(new_permissions)
 
     def get_pool_acl_list(self):
         """Get daos pool acl list by dmg get-acl.
@@ -104,7 +100,7 @@ class PoolSecurityTestBase(TestWithServers):
             return result["status"] != 0 or result["error"] is not None
 
         # Result is CmdResult.
-        return result.exit_status != 0 or result.stderr_text != ""
+        return result.exit_status != 0
 
     @staticmethod
     def _command_missing_err_code(result, err_code):
@@ -271,7 +267,7 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
         """
         action = "cont_delete"
-        result = self.destroy_test_container(self.pool.uuid, self.container)
+        result = self.destroy_test_container(self.pool.identifier, self.container.identifier)
         self.log.info(
             "  In verify_cont_delete %s.\n =destroy_test_container() result:"
             "\n%s", action, result)
@@ -314,11 +310,11 @@ class PoolSecurityTestBase(TestWithServers):
                 "##setup_container_acl_and_permission, fail on "
                 "update_container_acl, expected Pass, but Failed.")
 
-    def verify_pool_readwrite(self, uuid, action, expect='Pass'):
+    def verify_pool_readwrite(self, pool, action, expect='Pass'):
         """Verify client is able to perform read or write on a pool.
 
         Args:
-            uuid (str): pool uuid number.
+            pool (TestPool): pool to run verify in.
             action (str): read or write on pool.
             expect (str): expecting behavior pass or deny with RC -1001.
 
@@ -327,12 +323,13 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         deny_access = '-1001'
-        daos_cmd = DaosCommand(self.bin)
+        daos_cmd = self.get_daos_command()
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
-            result = daos_cmd.container_create(pool=uuid)
+            container = self.get_container(pool, create=False, daos_command=daos_cmd)
+            result = container.create()
         elif action.lower() == "read":
-            result = daos_cmd.pool_query(pool=uuid)
+            result = daos_cmd.pool_query(pool.identifier)
         else:
             self.fail(
                 "##In verify_pool_readwrite, invalid action: {}".format(action))
@@ -457,13 +454,13 @@ class PoolSecurityTestBase(TestWithServers):
         # daos pool query <pool name>
         self.log.info("  (8-6)Verify pool read by: daos pool query --pool")
         exp_read = sec_group_rw[0]
-        self.verify_pool_readwrite(self.pool.uuid, "read", expect=exp_read)
+        self.verify_pool_readwrite(self.pool, "read", expect=exp_read)
 
         # Verify pool write operation
-        # daos container create --pool <uuid>
+        # daos container create <pool>
         self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
-        self.verify_pool_readwrite(self.pool.uuid, "write", expect=exp_write)
+        self.verify_pool_readwrite(self.pool, "write", expect=exp_write)
 
         for group in sec_group:
             secTestBase.add_del_user(self.hostlist_clients, "groupdel", group)
@@ -541,14 +538,14 @@ class PoolSecurityTestBase(TestWithServers):
             self.update_pool_acl_entry("delete", principal)
 
         # (7)Verify pool read operation
-        #    daos pool query --pool <uuid>
+        #    daos pool query <pool>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
-        self.verify_pool_readwrite(self.pool.uuid, "read", expect=read)
+        self.verify_pool_readwrite(self.pool, "read", expect=read)
 
         # (8)Verify pool write operation
-        #    daos container create --pool <uuid>
+        #    daos container create <pool>
         self.log.info("  (8)Verify pool write by: daos container create --pool")
-        self.verify_pool_readwrite(self.pool.uuid, "write", expect=write)
+        self.verify_pool_readwrite(self.pool, "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(pool_acl_list, acl_file)

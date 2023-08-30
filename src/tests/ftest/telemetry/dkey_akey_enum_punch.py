@@ -1,13 +1,13 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import ctypes
 
-from telemetry_test_base import TestWithTelemetry
 from pydaos.raw import DaosContainer, IORequest, DaosObjClass
+
+from telemetry_test_base import TestWithTelemetry
 from general_utils import create_string_buffer
 
 

@@ -313,7 +313,7 @@ perf_setup_keys(void)
 int
 objects_update(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	int		i;
 	int		rc = 0;
 	int		rc_drain;
@@ -348,7 +348,7 @@ objects_fetch(struct pf_param *param)
 	int		rc = 0;
 	int		rc_drain;
 	uint64_t	start = 0;
-	daos_epoch_t	epoch = crt_hlc_get();
+	daos_epoch_t	epoch = d_hlc_get();
 
 	if (dts_is_async(&ts_ctx))
 		TS_TIME_START(&param->pa_duration, start);

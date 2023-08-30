@@ -73,6 +73,7 @@ arg
 argobots
 argparse
 args
+ascii
 async
 attachinfo
 attr
@@ -145,6 +146,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -160,12 +162,14 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
 env
 environ
 epcrange
+epilog
 errored
 ethernet
 fchmod
@@ -175,7 +179,6 @@ filesystem
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -187,9 +190,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -198,6 +203,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -209,6 +215,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -282,6 +289,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -306,6 +314,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -314,6 +323,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -331,11 +341,14 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
+puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -344,6 +357,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor
@@ -358,6 +373,7 @@ rpc
 rpms
 rsvc
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -370,6 +386,7 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
 slurmctl
 spdk
@@ -383,6 +400,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -397,6 +415,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
@@ -405,6 +424,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
@@ -414,6 +434,7 @@ teardowns
 testcase
 testcases
 testdata
+testFile
 testname
 testrunner
 tgt
@@ -444,6 +465,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
@@ -458,6 +481,7 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
 xattr
 xattrs

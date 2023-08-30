@@ -1,11 +1,11 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 
 
 class AutoOCSelectionTest(TestWithServers):
@@ -31,7 +31,7 @@ class AutoOCSelectionTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=container
+        :avocado: tags=container,dfs
         :avocado: tags=oc_selection,test_oc_selection
         """
         self.add_pool()
@@ -74,20 +74,28 @@ class AutoOCSelectionTest(TestWithServers):
             oclass = prop_oclass[1]
             failure_expected = prop_oclass[2]
 
-            try:
-                self.log.info("Creating container with RF = %s, OC = %s", properties, oclass)
-                self.container.append(
-                    self.get_container(pool=self.pool, properties=properties, oclass=oclass))
-                if failure_expected:
-                    msg = ("Container create succeeded with invalid RF-OC "
-                           "pair! RF = {}, OC = {}".format(properties, oclass))
-                    errors.append(msg)
-            except TestFail as error:
-                self.log.info("error = %s", error)
-                if not failure_expected:
-                    msg = ("Container create failed with valid RF-OC pair! "
-                           "RF = {}, OC = {}".format(properties, oclass))
-                    errors.append(msg)
+            for item in ['oclass', 'dir_oclass', 'file_oclass']:
+                try:
+                    self.log.info(
+                        "Creating container with rd_fac = %s, %s = %s", properties, item, oclass)
+                    kwargs = {
+                        "pool": self.pool,
+                        "properties": properties,
+                        item: oclass
+                    }
+                    self.container.append(self.get_container(**kwargs))
+                    if failure_expected:
+                        msg = ("Container create succeeded with invalid rd_fac-{item} "
+                               "pair! rd_fac = {properties}, {item} = {oclass}"
+                               .format(item=item, properties=properties, oclass=oclass))
+                        errors.append(msg)
+                except TestFail as error:
+                    self.log.info("error = %s", error)
+                    if not failure_expected:
+                        msg = ("Container create failed with valid rd_fac-{item} pair! "
+                               "rd_fac = {properties}, {item} = {oclass}"
+                               .format(item=item, properties=properties, oclass=oclass))
+                        errors.append(msg)
 
         if errors:
             self.fail("\n---- Errors detected! ----\n{}".format(

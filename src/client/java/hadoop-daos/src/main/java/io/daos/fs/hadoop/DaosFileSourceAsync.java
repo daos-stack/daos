@@ -33,15 +33,15 @@ public class DaosFileSourceAsync extends DaosFileSource {
   private final static int TIMEOUT_MS = Integer.valueOf(System.getProperty(Constants.CFG_DAOS_TIMEOUT,
       Constants.DEFAULT_DAOS_TIMEOUT_MS)); // MILLI SEC
 
-  public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen, boolean readOrWrite,
+  public DaosFileSourceAsync(DaosFile daosFile, int bufCapacity, long fileLen, boolean readOrWrite, boolean append,
                              FileSystem.Statistics stats) {
-    super(daosFile, bufCapacity, fileLen, stats);
+    super(daosFile, bufCapacity, fileLen, append, stats);
     createDesc(readOrWrite);
   }
 
   public DaosFileSourceAsync(DaosFile daosFile, ByteBuf buffer, long fileLen,
-                             boolean readOrWrite, FileSystem.Statistics stats) {
-    super(daosFile, buffer, fileLen, stats);
+                             boolean readOrWrite, boolean append, FileSystem.Statistics stats) {
+    super(daosFile, buffer, fileLen, append, stats);
     createDesc(readOrWrite);
   }
 

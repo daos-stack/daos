@@ -126,14 +126,11 @@ func FaultPoolDuplicateLabel(dupe string) *fault.Fault {
 	)
 }
 
-func FaultInsufficientFreeHugePageMem(engineIndex, required, available, pagesReq, pagesAvail int) *fault.Fault {
+func FaultEngineNUMAImbalance(nodeMap map[int]int) *fault.Fault {
 	return serverFault(
-		code.ServerInsufficientFreeHugePageMem,
-		fmt.Sprintf("insufficient amount of hugepage memory allocated for engine %d: "+
-			"want %s (%d hugepages), got %s (%d hugepages)", engineIndex,
-			humanize.IBytes(uint64(humanize.MiByte*required)), pagesReq,
-			humanize.IBytes(uint64(humanize.MiByte*available)), pagesAvail),
-		"reboot the system or manually clear /dev/hugepages as appropriate",
+		code.ServerConfigEngineNUMAImbalance,
+		fmt.Sprintf("uneven distribution of engines across NUMA nodes %v", nodeMap),
+		"config requires an equal number of engines assigned to each NUMA node",
 	)
 }
 
@@ -158,6 +155,14 @@ func FaultIncompatibleComponents(self, other *build.VersionedComponent) *fault.F
 		code.ServerIncompatibleComponents,
 		fmt.Sprintf("components %s and %s are not compatible", self, other),
 		"retry the request with compatible components",
+	)
+}
+
+func FaultNoCompatibilityInsecure(self, other build.Version) *fault.Fault {
+	return serverFault(
+		code.ServerNoCompatibilityInsecure,
+		fmt.Sprintf("versions %s and %s are not compatible in insecure mode", self, other),
+		"enable certificates or use identical component versions",
 	)
 }
 

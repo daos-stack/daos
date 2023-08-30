@@ -68,7 +68,6 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
 		   tm->tm_min, tm->tm_sec, tv.tv_usec, zone);
 	if (evt->timestamp == NULL) {
-		D_ERROR("failed to generate timestamp string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -88,6 +87,8 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	D_STRNDUP(evt->hostname, dss_hostname, DSS_HOSTNAME_MAX_LEN);
+	if (evt->hostname == NULL)
+		D_GOTO(out_ts, rc = -DER_NOMEM);
 
 	if ((msg == NULL) || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
 		D_ERROR("missing msg parameter\n");

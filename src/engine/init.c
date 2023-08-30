@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,7 +30,11 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
+#if BUILD_PIPELINE
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
+#else
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
+#endif
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
@@ -113,7 +117,7 @@ get_module_info(void)
 static uint64_t
 hlc_recovery_begin(void)
 {
-	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+	return d_hlc_epsilon_get_bound(d_hlc_get());
 }
 
 /* See the comment near where this function is called. */
@@ -122,12 +126,12 @@ hlc_recovery_end(uint64_t bound)
 {
 	int64_t	diff;
 
-	diff = bound - crt_hlc_get();
+	diff = bound - d_hlc_get();
 	if (diff > 0) {
 		struct timespec	tv;
 
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+		tv.tv_sec = d_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = d_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -260,6 +264,8 @@ dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
 	/* at most 2 helper XS per target */
 	if (dss_tgt_offload_xs_nr > 2 * nr)
 		dss_tgt_offload_xs_nr = 2 * nr;
+	else if (dss_tgt_offload_xs_nr == 0)
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 
 	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
 	 * offload XS. Calculate the tgt_nr as the number of main XS based
@@ -558,24 +564,40 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
-	struct engine_metrics	*metrics;
+	struct engine_metrics	*metrics = &dss_engine_metrics;
 
 	/* We only care about dead ranks for now */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
-			src, type);
+	if (type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d\n", src, type);
 		return;
 	}
 
-	metrics = &dss_engine_metrics;
-
-	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank, incarnation);
-	if (rc)
-		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
-			src, type, DP_RC(rc));
+	if (src == CRT_EVS_SWIM) {
+		d_tm_inc_counter(metrics->dead_rank_events, 1);
+		rc = ds_notify_swim_rank_dead(rank, incarnation);
+		if (rc)
+			D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+				src, type, DP_RC(rc));
+	} else if (src == CRT_EVS_GRPMOD) {
+		d_rank_t self_rank = dss_self_rank();
+
+		if (rank == dss_self_rank()) {
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
+			       self_rank);
+			/*
+			 * For now, we just raise a SIGKILL to ourselves; we could
+			 * inform daos_server, who would initiate a termination and
+			 * decide whether to restart us.
+			 */
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+			return;
+		}
+
+	}
 }
 
 static void
@@ -624,6 +646,15 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 }
 
+static uint64_t
+metrics_region_size(int num_tgts)
+{
+	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+
+	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -645,8 +676,12 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/** initialize server topology data - this is needed to set up the number of targets */
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	rc = d_tm_init(dss_instance_idx, metrics_region_size(dss_tgt_nr), D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -667,11 +702,6 @@ server_init(int argc, char *argv[])
 	}
 
 	rc = register_dbtree_classes();
-	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
-
-	/** initialize server topology data */
-	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
@@ -738,22 +768,23 @@ server_init(int argc, char *argv[])
 	hlc_recovery_end(bound);
 	dss_set_start_epoch();
 
+	/* init nvme */
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_nvme_init, rc);
 	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -807,6 +838,8 @@ exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
 	dss_srv_fini(true);
+exit_nvme_init:
+	bio_nvme_fini();
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
@@ -859,6 +892,8 @@ server_fini(bool force)
 	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	bio_nvme_fini();
+	D_INFO("bio_nvme_fini() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
 	dss_module_unload_all();
@@ -1038,8 +1073,8 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
-				printf("Requires 1 or 2 tiers\n");
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 4) {
+				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
 			break;

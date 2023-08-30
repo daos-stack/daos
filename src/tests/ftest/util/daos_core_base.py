@@ -1,9 +1,11 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
+import shutil
 from avocado import fail_on
 
 from apricot import TestWithServers
@@ -16,7 +18,7 @@ from test_utils_pool import POOL_TIMEOUT_INCREMENT
 
 class DaosCoreBase(TestWithServers):
     # pylint: disable=too-many-nested-blocks
-    """Runs the daos_test subtests with multiple servers.
+    """Runs the daos_test sub-tests with multiple servers.
 
     :avocado: recursive
     """
@@ -121,7 +123,7 @@ class DaosCoreBase(TestWithServers):
             self.hostlist_clients, self.subtest_name, self.outputdir, self.test_dir, self.log)
         daos_test_env = cmocka_utils.get_cmocka_env()
         daos_test_env["D_LOG_FILE"] = get_log_file(self.client_log)
-        daos_test_env["D_LOG_MASK"] = "DEBUG"
+        daos_test_env["D_LOG_MASK"] = self.get_test_param("test_log_mask", "DEBUG")
         daos_test_env["DD_MASK"] = "mgmt,io,md,epc,rebuild,test"
         daos_test_env["COVFILE"] = "/tmp/test.cov"
         daos_test_env["POOL_SCM_SIZE"] = str(scm_size)
@@ -148,3 +150,13 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         cmocka_utils.run_cmocka_test(self, job)
+
+        try:
+            tmp_log_path = "/tmp/suite_dmg.log"
+            log_path = os.path.join(self.outputdir, f"{self.subtest_name}_dmg.log")
+            shutil.move(tmp_log_path, log_path)
+        except FileNotFoundError:
+            # if dmg wasn't called, there will not be a dmg log file
+            self.log.info("dmg log file not found")
+        except IOError as error:
+            self.log.error("unable to move dmg log: %s", error)

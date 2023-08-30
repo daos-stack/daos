@@ -15,64 +15,42 @@ setup:
   start_agents: true
 server_config:
   name: daos_server
-  provider: ofi+verbs;ofi_rxm
   control_log_mask: INFO
   control_log_file: daos_control0.log
   engines_per_host: 2
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
-      fabric_iface: ib0
+      nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+        - FI_UNIVERSE_SIZE=16383
+      storage: auto
     1:
       pinned_numa_node: 1
-      nr_xs_helpers: 1
-      fabric_iface: ib1
+      nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
-        - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["cccc:cc:cc.c", "dddd:dd:dd.d"]
+        - FI_UNIVERSE_SIZE=16383
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 30GB
-  nvme_size: 500GB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
   control_method: daos
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: RP_2G1
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 faults:
   fault_list:
@@ -104,7 +82,8 @@ faults:
 soak_faults:
   name: soak_faults
   # harasser test timeout in hours
-  test_timeout: 24
+  test_timeout:
+    test_soak_faults: 24
   joblist:
     - ior_faults
 # Commandline parameters
@@ -139,9 +118,7 @@ ior_faults:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - 'RP_2G1'
-  dfs_dir_oclass:
-    - 'RP_2G1'
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true

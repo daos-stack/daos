@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,7 +8,6 @@ from exception_utils import CommandFailure
 
 
 class NvmeFault(ServerFillUp):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate IO works fine when NVMe fault generated
                             on single or multiple servers with single drive.
@@ -36,7 +34,7 @@ class NvmeFault(ServerFillUp):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fault
+        :avocado: tags=nvme_fault,test_nvme_fault
         """
         # Create the Pool with Maximum NVMe size
         self.create_pool_max_size(nvme=True)

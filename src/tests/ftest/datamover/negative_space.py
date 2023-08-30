@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -16,6 +15,7 @@ class DmvrNegativeSpaceTest(DataMoverTestBase):
         Tests the following cases:
             Destination pool out of space.
             Destination POSIX out of space.
+
     :avocado: recursive
     """
 
@@ -27,10 +27,11 @@ class DmvrNegativeSpaceTest(DataMoverTestBase):
         Test Description:
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
-        :avocado: tags=dm_negative,dm_negative_space_dcp
+        :avocado: tags=DmvrNegativeSpaceTest,test_dm_negative_space_dcp
         """
         self.set_tool("DCP")
 

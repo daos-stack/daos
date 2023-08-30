@@ -105,8 +105,18 @@ engine_cont_init(struct credit_context *tsc)
 		char str[37];
 
 		if (tsc_create_cont(tsc)) {
+			daos_prop_t *cont_prop;
+
+			cont_prop = daos_prop_alloc(1);
+			if (cont_prop == NULL) {
+				rc = -DER_NOMEM;
+				goto bcast;
+			}
+			cont_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_LVL;
+			cont_prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 			rc = daos_cont_create(tsc->tsc_poh, &tsc->tsc_cont_uuid,
-					      NULL, NULL);
+					      cont_prop, NULL);
+			daos_prop_free(cont_prop);
 			if (rc != 0)
 				goto bcast;
 		}

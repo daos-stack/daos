@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +9,6 @@ from dfuse_test_base import DfuseTestBase
 
 
 class DfuseContainerCheck(DfuseTestBase):
-    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive

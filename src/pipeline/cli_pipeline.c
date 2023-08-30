@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -545,7 +545,7 @@ pipeline_create_layout(daos_handle_t coh, struct dc_pool *pool, struct daos_obj_
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = pl_obj_place(map, obj_md, 0, pool->dp_rebuild_version, NULL, layout);
+	rc = pl_obj_place(map, 0, obj_md, 0, NULL, layout);
 	pl_map_decref(map);
 	if (rc != 0) {
 		D_DEBUG(DB_PL, "Failed to generate object layout\n");
@@ -671,10 +671,10 @@ dc_pipeline_run(tse_task_t *api_task)
 	shard           = dc_obj_anchor2shard(api_args->anchor);
 
 	/** object id */
-
-	oid.id_pub      = obj_md.omd_id;
-	oid.id_shard    = shard;
-	oid.id_pad_32   = 0;
+	oid.id_pub		= obj_md.omd_id;
+	oid.id_shard		= shard;
+	oid.id_layout_ver	= dc_obj_hdl2layout_ver(api_args->oh);
+	oid.id_padding		= 0;
 
 	/** queue shard task */
 

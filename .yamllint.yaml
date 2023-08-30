@@ -13,7 +13,7 @@ rules:
       /src/tests/ftest/
       /src/vos/storage_estimator/
   indentation:
-    ignore: /src/tests/ftest/
+    spaces: 2
   commas:
     ignore: /src/tests/ftest/
   truthy:
@@ -23,8 +23,6 @@ rules:
     present: false
   document-end:
     present: false
-  comments-indentation:
-    ignore: /src/tests/ftest/
   comments:
     ignore: |
       /src/tests/ftest/

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -23,6 +23,11 @@ const (
 	// Agent-internal methods not linked to engine handlers.
 	flushAllHandles drpc.MgmtMethod = drpc.MgmtMethod(^uint32(0) >> 1)
 )
+
+// dbgId returns a truncated representation of the UUID string.
+func dbgId(uuidStr string) string {
+	return uuidStr[:8]
+}
 
 type procMonRequest struct {
 	// Pid of the process that the request is for
@@ -58,6 +63,7 @@ func (phm poolHandleMap) add(poolUUID, handleUUID string) {
 type procInfo struct {
 	log       logging.Logger
 	pid       int32
+	name      string
 	cancelCtx func()
 	response  chan *procMonResponse
 	handles   poolHandleMap
@@ -85,22 +91,17 @@ const MonWaitTime = 3 * time.Second
 // monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
 func (p *procInfo) monitorProcess(ctx context.Context) {
-	err := checkProcPidExists(p.pid)
-	if err != nil {
-		p.sendResponse(ctx, p.pid, err)
-		return
-	}
+	monTicker := time.NewTicker(MonWaitTime)
+	defer monTicker.Stop()
 
-	p.log.Debugf("Monitoring pid:%d\n", p.pid)
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(MonWaitTime):
-			err = checkProcPidExists(p.pid)
-			if err != nil {
+		case <-monTicker.C:
+			if err := checkProcPidExists(p.pid); err != nil {
 				if os.IsNotExist(err) {
-					p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
+					p.sendResponse(ctx, p.pid, fmt.Errorf("%s terminated unexpectedly", p))
 				} else {
 					p.sendResponse(ctx, p.pid, err)
 				}
@@ -108,6 +109,14 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (p *procInfo) String() string {
+	var name string
+	if p.name != "" {
+		name = fmt.Sprintf(" (%s)", p.name)
+	}
+	return fmt.Sprintf("pid:%d%s", p.pid, name)
 }
 
 // procMon is the top level process monitoring struct which accepts requests to
@@ -167,7 +176,11 @@ func (p *procMon) NotifyExit(ctx context.Context, Pid int32) {
 // open pool handles for local DAOS client processes. Blocks until the
 // request has been completely processed.
 func (p *procMon) FlushAllHandles(ctx context.Context) {
-	p.log.Info("Flushing all open local pool handles")
+	var onShutdown string
+	if agentIsShuttingDown(ctx) {
+		onShutdown = " on shutdown"
+	}
+	p.log.Infof("flushing all open local pool handles%s", onShutdown)
 
 	done := make(chan struct{})
 	p.submitRequest(ctx, &procMonRequest{
@@ -186,15 +199,19 @@ func (p *procMon) submitRequest(ctx context.Context, request *procMonRequest) {
 }
 
 func (p *procMon) handleNotifyPoolConnect(ctx context.Context, request *procMonRequest) {
-	p.log.Debugf("Received request to connect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
-
 	info, found := p.procs[request.pid]
-
 	if !found {
+		procName, err := common.GetProcName(int(request.pid))
+		if err != nil {
+			p.log.Errorf("failed to get process name for pid %d: %s", request.pid, err)
+			return
+		}
+
 		child, cancel := context.WithCancel(ctx)
 		info = &procInfo{
 			log:       p.log,
 			pid:       request.pid,
+			name:      procName,
 			cancelCtx: cancel,
 			response:  p.response,
 			handles:   make(poolHandleMap),
@@ -204,22 +221,19 @@ func (p *procMon) handleNotifyPoolConnect(ctx context.Context, request *procMonR
 		go info.monitorProcess(child)
 	}
 
+	p.log.Debugf("%s, connect %s/%s", info, dbgId(request.poolUUID), dbgId(request.poolHandleUUID))
 	info.handles.add(request.poolUUID, request.poolHandleUUID)
 }
 
 func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
-	p.log.Debugf("Received request to disconnect pool:%s with handle %s, for pid:%d", request.poolUUID, request.poolHandleUUID, request.pid)
-
 	info, found := p.procs[request.pid]
-
 	if !found || len(info.handles) == 0 {
-		p.log.Debugf("Process has no registered pools to disconnect from.")
 		return
 	}
 
 	_, found = info.handles[request.poolUUID][request.poolHandleUUID]
-
 	if found {
+		p.log.Debugf("%s, disconnect %s/%s", info, dbgId(request.poolUUID), dbgId(request.poolHandleUUID))
 		delete(info.handles[request.poolUUID], request.poolHandleUUID)
 		if len(info.handles[request.poolUUID]) == 0 {
 			delete(info.handles, request.poolUUID)
@@ -229,7 +243,6 @@ func (p *procMon) handleNotifyPoolDisconnect(request *procMonRequest) {
 			delete(p.procs, info.pid)
 		}
 	}
-
 }
 
 // A process will leak handles when it either dies illegally or exits without
@@ -241,16 +254,27 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 		return
 	}
 
-	for poolUUID, element := range info.handles {
-		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
+	for poolUUID, handleMap := range info.handles {
+		if len(handleMap) == 0 {
+			continue
+		}
 
-		handles := info.handles[poolUUID].ToSlice()
-		req := &control.PoolEvictReq{ID: poolUUID, Handles: handles}
+		var fromPid string
+		if info.pid != 0 {
+			fromPid = fmt.Sprintf(" from %s", info)
+		}
+		ctxStr := "leaked handles"
+		if agentIsShuttingDown(ctx) {
+			ctxStr = "handles on shutdown"
+		}
+		p.log.Infof("pool %s: cleaning up %d %s%s", poolUUID, len(handleMap), ctxStr, fromPid)
+
+		req := &control.PoolEvictReq{ID: poolUUID, Handles: handleMap.ToSlice()}
 		req.SetSystem(p.systemName)
 
 		err := control.PoolEvict(ctx, p.ctlInvoker, req)
 		if err != nil {
-			p.log.Debugf("Cleaning Pool %s failed:%s", poolUUID, err)
+			p.log.Errorf("pool %s: failed to evict %d handles: %s", poolUUID, len(handleMap), err)
 		}
 	}
 
@@ -259,8 +283,6 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 
 func (p *procMon) handleNotifyExit(ctx context.Context, request *procMonRequest) {
 	info, found := p.procs[request.pid]
-
-	p.log.Debugf("Received request to exit pid:%d\n", request.pid)
 	if found {
 		info.cancelCtx()
 		p.cleanupLeakedHandles(ctx, info)
@@ -302,16 +324,14 @@ func (p *procMon) handleRequests(ctx context.Context) {
 			case flushAllHandles:
 				p.flushAllHandles(ctx)
 			default:
-				p.log.Debugf("Received request with invalid action type %s", request.action)
+				p.log.Errorf("failed to handle request with invalid action type %s", request.action)
 			}
 
 			if request.doneChan != nil {
 				close(request.doneChan)
 			}
 		case resp := <-p.response:
-			p.log.Debugf("Received response from Process %d, terminated with %s", resp.pid, resp.err)
 			info, found := p.procs[resp.pid]
-
 			if found {
 				p.cleanupLeakedHandles(ctx, info)
 			}

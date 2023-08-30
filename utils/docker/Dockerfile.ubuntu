@@ -1,4 +1,4 @@
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 # All rights reserved.
 #
 # 'recipe' for Docker to build an image of Ubuntu-based
@@ -62,8 +62,10 @@ RUN python3 -m pip --no-cache-dir install --upgrade pip && \
     python3 -m pip --no-cache-dir install --requirement requirements.txt
 
 WORKDIR /home/daos/pre
+RUN mkdir -p /home/daos/pre/site_scons/prereq_tools /home/daos/pre/site_scons/components
 COPY --chown=daos_server:daos_server SConstruct .
-COPY --chown=daos_server:daos_server site_scons site_scons
+COPY --chown=daos_server:daos_server site_scons/prereq_tools site_scons/prereq_tools
+COPY --chown=daos_server:daos_server site_scons/components site_scons/components
 COPY --chown=daos_server:daos_server utils/build.config utils/
 
 # Control what to build.  By default Dockerfiles build everything to allow for
@@ -127,7 +129,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
-        cp /home/daos/daos/utils/ci/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
         mvn clean install -ntp -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;      \
     }
 WORKDIR /home/daos

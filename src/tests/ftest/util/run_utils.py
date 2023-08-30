@@ -1,11 +1,12 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from socket import gethostname
 import subprocess   # nosec
-
+import shlex
+import time
 from ClusterShell.NodeSet import NodeSet
 from ClusterShell.Task import task_self
 
@@ -37,6 +38,16 @@ class RemoteCommandResult():
             self.stdout = stdout
             self.timeout = timeout
 
+        @property
+        def passed(self):
+            """Did the command pass.
+
+            Returns:
+                bool: if the command was successful
+
+            """
+            return self.returncode == 0
+
     def __init__(self, command, task):
         """Create a RemoteCommandResult object.
 
@@ -65,7 +76,7 @@ class RemoteCommandResult():
             bool: if the command was successful on each host
 
         """
-        all_zero = all(data.returncode == 0 for data in self.output)
+        all_zero = all(data.passed for data in self.output)
         return all_zero and not self.timeout
 
     @property
@@ -77,6 +88,39 @@ class RemoteCommandResult():
 
         """
         return any(data.timeout for data in self.output)
+
+    @property
+    def passed_hosts(self):
+        """Get all passed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command passed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode == 0)
+
+    @property
+    def failed_hosts(self):
+        """Get all failed hosts.
+
+        Returns:
+            NodeSet: all nodes where the command failed
+
+        """
+        return NodeSet.fromlist(data.hosts for data in self.output if data.returncode != 0)
+
+    @property
+    def all_stdout(self):
+        """Get all of the stdout from the issued command from each host.
+
+        Returns:
+            dict: the stdout (the values) from each set of hosts (the keys, as a str of the NodeSet)
+
+        """
+        stdout = {}
+        for data in self.output:
+            stdout[str(data.hosts)] = '\n'.join(data.stdout)
+        return stdout
 
     def _process_task(self, task, command):
         """Populate the output list and determine the passed result for the specified task.
@@ -119,64 +163,50 @@ class RemoteCommandResult():
 
         """
         for data in self.output:
-            if data.timeout:
-                log.debug("  %s (rc=%s): timed out", str(data.hosts), data.returncode)
-            elif len(data.stdout) == 1:
-                log.debug("  %s (rc=%s): %s", str(data.hosts), data.returncode, data.stdout[0])
-            else:
-                log.debug("  %s (rc=%s):", str(data.hosts), data.returncode)
-                for line in data.stdout:
-                    log.debug("    %s", line)
+            log_result_data(log, data)
 
 
-def get_clush_command_list(hosts, args=None, sudo=False):
-    """Get the clush command with optional sudo arguments.
+def log_result_data(log, data):
+    """Log a single command result data entry.
 
     Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
-
-    Returns:
-        list: list of the clush command
-
+        log (logger): logger for the messages produced by this method
+        data (ResultData): command result common to a set of hosts
     """
-    command = ["clush", "-w", str(hosts)]
-    if args:
-        command.insert(1, args)
-    if sudo:
-        # If ever needed, this is how to disable host key checking:
-        # command.extend(["-o", "-oStrictHostKeyChecking=no", "sudo"])
-        command.append("sudo")
-    return command
+    info = " timed out" if data.timeout else ""
+    if not data.stdout:
+        log.debug("  %s (rc=%s)%s: <no output>", str(data.hosts), data.returncode, info)
+    elif len(data.stdout) == 1:
+        log.debug("  %s (rc=%s)%s: %s", str(data.hosts), data.returncode, info, data.stdout[0])
+    else:
+        log.debug("  %s (rc=%s)%s:", str(data.hosts), data.returncode, info)
+        for line in data.stdout:
+            log.debug("    %s", line)
 
 
-def get_clush_command(hosts, args=None, sudo=False):
+def get_clush_command(hosts, args=None, command="", command_env=None, command_sudo=False):
     """Get the clush command with optional sudo arguments.
 
     Args:
-        hosts (NodeSet): hosts with which to use the clush command
-        args (str, optional): additional clush command line arguments. Defaults
-            to None.
-        sudo (bool, optional): if set the clush command will be configured to
-            run a command with sudo privileges. Defaults to False.
+        hosts (NodeSet): hosts with which to use the clush command.
+        args (str, optional): additional clush command line arguments. Defaults to None.
+        command (str, optional): command to execute with clush. Defaults to empty string.
+        command_env (EnvironmentVariables, optional): environment variables to export with the
+            command. Defaults to None.
+        sudo (bool, optional): whether to run the command with sudo privileges. Defaults to False.
 
     Returns:
         str: the clush command
 
     """
-    return " ".join(get_clush_command_list(hosts, args, sudo))
-
-
-def get_local_host():
-    """Get the local host name.
-
-    Returns:
-        str: name of the local host
-    """
-    return gethostname().split(".")[0]
+    cmd_list = ["clush"]
+    if args:
+        cmd_list.append(args)
+    cmd_list.extend(["-w", str(hosts)])
+    # If ever needed, this is how to disable host key checking:
+    # cmd_list.extend(["-o", "-oStrictHostKeyChecking=no"])
+    cmd_list.append(command_as_user(command, "root" if command_sudo else "", command_env))
+    return " ".join(cmd_list)
 
 
 def run_local(log, command, capture_output=True, timeout=None, check=False, verbose=True):
@@ -184,7 +214,7 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
 
     Args:
         log (logger): logger for the messages produced by this method
-        command (list): command from which to obtain the output
+        command (str): command from which to obtain the output
         capture_output(bool, optional): whether or not to include the command output in the
             subprocess.CompletedProcess.stdout returned by this method. Defaults to True.
         timeout (int, optional): number of seconds to wait for the command to complete.
@@ -208,44 +238,43 @@ def run_local(log, command, capture_output=True, timeout=None, check=False, verb
                 - stderr (not used; included in stdout)
 
     """
-    local_host = get_local_host()
-    command_str = " ".join(command)
+    local_host = gethostname().split(".")[0]
     kwargs = {"encoding": "utf-8", "shell": False, "check": check, "timeout": timeout}
     if capture_output:
         kwargs["stdout"] = subprocess.PIPE
         kwargs["stderr"] = subprocess.STDOUT
-    if timeout:
-        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command_str)
-    else:
-        log.debug("Running on %s: %s", local_host, command_str)
+    if timeout and verbose:
+        log.debug("Running on %s with a %s timeout: %s", local_host, timeout, command)
+    elif verbose:
+        log.debug("Running on %s: %s", local_host, command)
 
     try:
         # pylint: disable=subprocess-run-check
-        result = subprocess.run(command, **kwargs)
+        result = subprocess.run(shlex.split(command), **kwargs)     # nosec
 
     except subprocess.TimeoutExpired as error:
         # Raised if command times out
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise RunException(f"Command '{command_str}' exceed {timeout}s timeout") from error
+        raise RunException(f"Command '{command}' exceed {timeout}s timeout") from error
 
     except subprocess.CalledProcessError as error:
         # Raised if command yields a non-zero return status with check=True
         log.debug(str(error))
         log.debug("  output: %s", error.output)
         log.debug("  stderr: %s", error.stderr)
-        raise RunException(f"Command '{command_str}' returned non-zero status") from error
+        raise RunException(f"Command '{command}' returned non-zero status") from error
 
     except KeyboardInterrupt as error:
         # User Ctrl-C
-        message = f"Command '{command_str}' interrupted by user"
+        message = f"Command '{command}' interrupted by user"
         log.debug(message)
         raise RunException(message) from error
 
     except Exception as error:
         # Catch all
-        message = f"Command '{command_str}' encountered unknown error"
+        message = f"Command '{command}' encountered unknown error"
         log.debug(message)
         log.debug(str(error))
         raise RunException(message) from error
@@ -282,9 +311,136 @@ def run_remote(log, hosts, command, verbose=True, timeout=120, task_debug=False)
         task.set_info('debug', True)
     # Enable forwarding of the ssh authentication agent connection
     task.set_info("ssh_options", "-oForwardAgent=yes")
-    log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
+    if verbose:
+        if timeout is None:
+            log.debug("Running on %s without a timeout: %s", hosts, timeout, command)
+        else:
+            log.debug("Running on %s with a %s second timeout: %s", hosts, timeout, command)
     task.run(command=command, nodes=hosts, timeout=timeout)
     results = RemoteCommandResult(command, task)
     if verbose:
         results.log_output(log)
+    else:
+        # Always log any failed commands
+        for data in results.output:
+            if not data.passed:
+                log_result_data(log, data)
     return results
+
+
+def command_as_user(command, user, env=None):
+    """Adjust a command to be ran as another user.
+
+    Args:
+        command (str): the original command
+        user (str): user to run as
+        env (EnvironmentVariables, optional): environment variables to export with the command.
+            Defaults to None.
+
+    Returns:
+        str: command adjusted to run as another user
+
+    """
+    if not user:
+        if not env:
+            return command
+        return " ".join([env.to_export_str(), command]).strip()
+
+    cmd_list = ["sudo"]
+    if env:
+        cmd_list.extend(env.to_list())
+    cmd_list.append("-n")
+    if user != "root":
+        # Use runuser to avoid using a password
+        cmd_list.extend(["runuser", "-u", user, "--"])
+    cmd_list.append(command)
+    return " ".join(cmd_list)
+
+
+def find_command(source, pattern, depth, other=None):
+    """Get the find command.
+
+    Args:
+        source (str): where the files are currently located
+        pattern (str): pattern used to limit which files are processed
+        depth (int): max depth for find command
+        other (object, optional): other commands, as a list or str, to include at the end of the
+            base find command. Defaults to None.
+
+    Returns:
+        str: the find command
+
+    """
+    command = ["find", source, "-maxdepth", str(depth), "-type", "f", "-name", f"'{pattern}'"]
+    if isinstance(other, list):
+        command.extend(other)
+    elif isinstance(other, str):
+        command.append(other)
+    return " ".join(command)
+
+
+def stop_processes(log, hosts, pattern, verbose=True, timeout=60, exclude=None, force=False):
+    """Stop the processes on each hosts that match the pattern.
+
+    Args:
+        log (logger): logger for the messages produced by this method
+        hosts (NodeSet): hosts on which to stop any processes matching the pattern
+        pattern (str): regular expression used to find process names to stop
+        verbose (bool, optional): display command output. Defaults to True.
+        timeout (int, optional): command timeout in seconds. Defaults to 60 seconds.
+        exclude (str, optional): negative filter to better identify processes. Defaults to None.
+        force (bool, optional): if set use the KILL signal to immediately stop any running
+            processes. Defaults to False which will attempt to kill w/o a signal, then with the ABRT
+            signal, and finally with the KILL signal.
+
+    Returns:
+        tuple: (NodeSet, NodeSet) where the first NodeSet indicates on which hosts processes
+            matching the pattern were initially detected and the second NodeSet indicates on which
+            hosts the processes matching the pattern are still running (will be empty if every
+            process was killed or no process matching the pattern were found).
+
+    """
+    processes_detected = NodeSet()
+    processes_running = NodeSet()
+    command = f"/usr/bin/pgrep --list-full {pattern}"
+    pattern_match = str(pattern)
+    if exclude:
+        command = f"/usr/bin/ps xa | grep -E {pattern} | grep -vE {exclude}"
+        pattern_match += " and doesn't match " + str(exclude)
+
+    # Search for any active processes
+    log.debug("Searching for any processes on %s that match %s", hosts, pattern_match)
+    result = run_remote(log, hosts, command, verbose, timeout)
+    if not result.passed_hosts:
+        log.debug("No processes found on %s that match %s", result.failed_hosts, pattern_match)
+        return processes_detected, processes_running
+
+    # Indicate on which hosts processes matching the pattern were found running in the return status
+    processes_detected.add(result.passed_hosts)
+
+    # Initialize on which hosts the processes matching the pattern are still running
+    processes_running.add(result.passed_hosts)
+
+    # Attempt to kill any processes found on any of the hosts with increasing force
+    steps = [("", 5), (" --signal ABRT", 1), (" --signal KILL", 0)]
+    if force:
+        steps = [(" --signal KILL", 5)]
+    while steps and result.passed_hosts:
+        step = steps.pop(0)
+        log.debug(
+            "Killing%s any processes on %s that match %s and then waiting %s seconds",
+            step[0], result.passed_hosts, pattern_match, step[1])
+        kill_command = f"sudo /usr/bin/pkill{step[0]} {pattern}"
+        run_remote(log, result.passed_hosts, kill_command, verbose, timeout)
+        time.sleep(step[1])
+        result = run_remote(log, result.passed_hosts, command, verbose, timeout)
+        if not result.passed_hosts:
+            # Indicate all running processes matching the pattern were stopped in the return status
+            log.debug(
+                "All processes running on %s that match %s have been stopped.",
+                result.failed_hosts, pattern_match)
+        # Update the set of hosts on which the processes matching the pattern are still running
+        processes_running.difference_update(result.failed_hosts)
+    if processes_running:
+        log.debug("Processes still running on %s that match: %s", processes_running, pattern_match)
+    return processes_detected, processes_running

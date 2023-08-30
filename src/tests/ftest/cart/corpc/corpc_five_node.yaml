@@ -3,8 +3,8 @@
 
 ENV:
   default:
-    #!filter-only : /run/envs_CRT_CTX_SHARE_ADDR/no_sep
-    #!filter-only : /run/tests/corpc_prefwd
+    # !filter-only : /run/envs_CRT_CTX_SHARE_ADDR/no_sep
+    # !filter-only : /run/tests/corpc_prefwd
     - D_LOG_MASK: "WARN,CORPC=DEBUG"
     - OFI_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "0"

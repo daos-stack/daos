@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -76,25 +76,23 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	      __func__, ptr, ##__VA_ARGS__)
 
 /** Internal macro for saving the log, checking it, and printing, if enabled */
-#define _D_LOG_CHECK(func, saved_mask, mask, ...)			\
-	do {								\
-		(saved_mask) = d_log_check(mask);			\
-									\
-		if (saved_mask)						\
-			func(saved_mask, ##__VA_ARGS__);		\
+#define _D_LOG_CHECK(func, saved_mask, mask, ...)                                                  \
+	do {                                                                                       \
+		(saved_mask) = d_log_check(mask);                                                  \
+		if (saved_mask) {                                                                  \
+			func(saved_mask, ##__VA_ARGS__);                                           \
+		}                                                                                  \
 	} while (0)
 
 /**
- * The _D_LOG internal macro checks the specified mask and, if enabled, it
- * logs the message, prependng the file, line, and function name.  This
- * function can be used directly by users or by user defined macros if the
- * provided log level macros are not flexible enough.
+ * The _D_LOG internal macro checks the specified mask and, if enabled, it logs the message,
+ * prependng the file, line, and function name.  This function can be used directly by users or by
+ * user defined macros if the provided log level macros are not flexible enough.
  */
-#define _D_LOG(func, mask, ...)						\
-	do {								\
-		int __tmp_mask;						\
-									\
-		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);	\
+#define _D_LOG(func, mask, ...)                                                                    \
+	do {                                                                                       \
+		int __tmp_mask;                                                                    \
+		_D_LOG_CHECK(func, __tmp_mask, mask, ##__VA_ARGS__);                               \
 	} while (0)
 
 #define _D_DEBUG(func, flag, ...)					   \
@@ -310,6 +308,11 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define DF_U64		"%" PRIu64
 #define DF_X64		"%" PRIx64
+
+#ifndef DF_HG_RC
+#define DF_HG_RC "%d (%s)"
+#define DP_HG_RC(rc) rc, HG_Error_to_string(rc)
+#endif /* DF_HG_RC */
 
 /** @}
  */

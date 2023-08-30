@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2021 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -16,7 +16,7 @@ struct smd_device {
 };
 
 int
-smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id)
+smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 {
 	struct smd_device	dev;
 	struct d_uuid		id_org;
@@ -27,7 +27,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id)
 	smd_db_lock();
 
 	/* Check if the target is already bound to a device */
-	rc = smd_db_fetch(TABLE_TGT, &tgt_id, sizeof(tgt_id),
+	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id),
 			  &id_org, sizeof(id_org));
 	if (rc == 0) {
 		D_ERROR("Target %d is already bound to dev "DF_UUID"\n",
@@ -73,7 +73,7 @@ smd_dev_add_tgt(uuid_t dev_id, uint32_t tgt_id)
 		goto out_tx;
 	}
 
-	rc = smd_db_upsert(TABLE_TGT, &tgt_id, sizeof(tgt_id), &id, sizeof(id));
+	rc = smd_db_upsert(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
 		D_ERROR("Update target %d failed: "DF_RC"\n",
 			tgt_id, DP_RC(rc));
@@ -87,7 +87,7 @@ out:
 }
 
 int
-smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id)
+smd_dev_del_tgt(uuid_t dev_id, uint32_t tgt_id, enum smd_dev_type st)
 {
 	return -DER_NOSYS;
 }
@@ -200,13 +200,13 @@ smd_dev_get_by_id(uuid_t dev_id, struct smd_dev_info **dev_info)
 }
 
 int
-smd_dev_get_by_tgt(uint32_t tgt_id, struct smd_dev_info **dev_info)
+smd_dev_get_by_tgt(uint32_t tgt_id, enum smd_dev_type st, struct smd_dev_info **dev_info)
 {
 	struct d_uuid	id;
 	int		rc;
 
 	smd_db_lock();
-	rc = smd_db_fetch(TABLE_TGT, &tgt_id, sizeof(tgt_id), &id, sizeof(id));
+	rc = smd_db_fetch(TABLE_TGTS[st], &tgt_id, sizeof(tgt_id), &id, sizeof(id));
 	if (rc) {
 		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
 			 "Fetch target %d failed. "DF_RC"\n", tgt_id,
@@ -350,7 +350,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 	for (i = 0; i < dev.sd_tgt_cnt; i++) {
 		uint32_t tgt_id = dev.sd_tgts[i];
 
-		rc = smd_db_upsert(TABLE_TGT, &tgt_id, sizeof(tgt_id),
+		rc = smd_db_upsert(TABLE_TGTS[SMD_DEV_TYPE_DATA], &tgt_id, sizeof(tgt_id),
 				   &id, sizeof(id));
 		if (rc) {
 			D_ERROR("Update target %d failed. "DF_RC"\n",
@@ -364,8 +364,7 @@ smd_dev_replace(uuid_t old_id, uuid_t new_id, d_list_t *pool_list)
 
 	/* Replace old blob IDs with new blob IDs in pool map */
 	d_list_for_each_entry(pool_info, pool_list, spi_link) {
-		rc = smd_pool_replace_blobs_locked(pool_info, dev.sd_tgt_cnt,
-						   &dev.sd_tgts[0]);
+		rc = smd_pool_replace_blobs_locked(pool_info, dev.sd_tgt_cnt, &dev.sd_tgts[0]);
 		if (rc) {
 			D_ERROR("Update pool "DF_UUID" failed. "DF_RC"\n",
 				DP_UUID(pool_info->spi_id), DP_RC(rc));

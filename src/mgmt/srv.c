@@ -111,17 +111,11 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SMD_LIST_POOLS:
 		ds_mgmt_drpc_smd_list_pools(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_DEV_STATE_QUERY:
-		ds_mgmt_drpc_dev_state_query(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_DEV_REPLACE:
 		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_DEV_IDENTIFY:
-		ds_mgmt_drpc_dev_identify(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
@@ -155,6 +149,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_GROUP_UPDATE:
 		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_LED_MANAGE:
+		ds_mgmt_drpc_dev_manage_led(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
@@ -451,16 +448,16 @@ ds_mgmt_cleanup()
 }
 
 struct dss_module mgmt_module = {
-	.sm_name		= "mgmt",
-	.sm_mod_id		= DAOS_MGMT_MODULE,
-	.sm_ver			= DAOS_MGMT_VERSION,
-	.sm_proto_count		= 1,
-	.sm_init		= ds_mgmt_init,
-	.sm_fini		= ds_mgmt_fini,
-	.sm_setup		= ds_mgmt_setup,
-	.sm_cleanup		= ds_mgmt_cleanup,
-	.sm_proto_fmt		= &mgmt_proto_fmt,
-	.sm_cli_count		= MGMT_PROTO_CLI_COUNT,
-	.sm_handlers		= mgmt_handlers,
-	.sm_drpc_handlers	= mgmt_drpc_handlers,
+    .sm_name          = "mgmt",
+    .sm_mod_id        = DAOS_MGMT_MODULE,
+    .sm_ver           = DAOS_MGMT_VERSION,
+    .sm_proto_count   = 1,
+    .sm_init          = ds_mgmt_init,
+    .sm_fini          = ds_mgmt_fini,
+    .sm_setup         = ds_mgmt_setup,
+    .sm_cleanup       = ds_mgmt_cleanup,
+    .sm_proto_fmt     = {&mgmt_proto_fmt},
+    .sm_cli_count     = {MGMT_PROTO_CLI_COUNT},
+    .sm_handlers      = {mgmt_handlers},
+    .sm_drpc_handlers = mgmt_drpc_handlers,
 };

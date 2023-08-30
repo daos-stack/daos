@@ -3,8 +3,11 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
+
+#include <sys/stat.h>
 
 /**
  * Generic mocks for external functions
@@ -34,6 +37,29 @@ __wrap_socket(int family, int type, int protocol)
 		return -1;
 	}
 	return socket_return;
+}
+
+void
+mock_fchmod_setup(void)
+{
+	fchmod_return = 0; /* 0 is success */
+	fchmod_fd = 0;
+	fchmod_mode = 0;
+}
+
+int fchmod_return; /* value to be returned by fchmod() */
+int fchmod_fd; /* saved input */
+mode_t fchmod_mode; /* saved input */
+int
+__wrap_fchmod(int fd, mode_t mode)
+{
+	fchmod_fd = fd;
+	fchmod_mode = mode;
+	if (fchmod_return != 0) {
+		errno = -fchmod_return;
+		return -1;
+	}
+	return 0;
 }
 
 void

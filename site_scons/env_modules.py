@@ -1,4 +1,4 @@
-# Copyright 2019-2022 Intel Corporation
+# Copyright 2019-2023 Intel Corporation
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,7 @@ import distro
 
 class _env_module():  # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
+
     env_module_init = None
     _mpi_map = {"mpich": ['mpi/mpich-x86_64', 'gnu-mpich'],
                 "openmpi": ['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
@@ -62,9 +63,9 @@ class _env_module():  # pylint: disable=invalid-name
 
         stdout, stderr = proc.communicate()
 
-        # pylint: disable=exec-used
         if sys.version_info[0] > 2:
             ns = {}
+            # pylint: disable-next=exec-used
             exec(stdout.decode(), ns)  # nosec
 
             return ns['_mlstatus'], stderr.decode()
@@ -72,14 +73,13 @@ class _env_module():  # pylint: disable=invalid-name
         # Should not get to this point.
         assert False
 
+        # pylint: disable-next=exec-used
         # exec(stdout.decode()) # nosec
 
         # return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
-        # pylint: enable=exec-used
 
     def _init_mpi_module(self):
         """init mpi module function"""
-
         return self._mpi_module
 
     def _mpi_module(self, mpi):
@@ -109,7 +109,7 @@ class _env_module():  # pylint: disable=invalid-name
         for to_load in load:
             if self._module_func('is-avail', to_load)[0] and \
                self._module_func('load', to_load)[0]:
-                print("Loaded %s" % to_load)
+                print(f'Loaded {to_load}')
                 return True
 
         return False
@@ -124,9 +124,9 @@ class _env_module():  # pylint: disable=invalid-name
         self._module_func('purge')
         for to_load in load:
             self._module_func('load', to_load)
-            print("Looking for %s" % to_load)
+            print(f'Looking for {to_load}')
             if shutil.which('mpirun'):
-                print("Loaded %s" % to_load)
+                print('Loaded {to_load}')
                 return True
         return False
 
@@ -149,11 +149,11 @@ class _env_module():  # pylint: disable=invalid-name
     def load_mpi(self, mpi):
         """Invoke the mpi loader"""
         if not self._module_load(mpi):
-            print("No %s found\n" % mpi)
+            print(f'No {mpi} found\n')
             return False
         exe_path = shutil.which('mpirun')
         if not exe_path:
-            print("No mpirun found in path. Could not configure %s\n" % mpi)
+            print(f'No mpirun found in path. Could not configure {mpi}\n')
             return False
         self.setup_pkg_config(exe_path)
         return True
@@ -202,14 +202,14 @@ def load_mpi(mpi):
 
 
 def show_avail():
-    """ global function to show the available modules"""
+    """global function to show the available modules"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.show_avail()
 
 
 def get_module_list(key):
-    """ global function to show the modules that map to a key"""
+    """global function to show the modules that map to a key"""
     if _env_module.env_module_init is None:
         _env_module.env_module_init = _env_module()
     return _env_module.env_module_init.get_map(key)

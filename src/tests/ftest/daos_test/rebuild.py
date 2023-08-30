@@ -1,14 +1,13 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 
 from daos_core_base import DaosCoreBase
 
+
 class DaosCoreTestRebuild(DaosCoreBase):
-    # pylint: disable=too-many-ancestors
     """Run just the daos_test rebuild tests.
 
     :avocado: recursive
@@ -24,9 +23,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_0to10
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_0to10
         """
         self.run_subtest()
 
@@ -40,9 +39,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,2,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_12to15
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_12to15
         """
         self.run_subtest()
 
@@ -56,9 +55,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_16
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_16
         """
         self.run_subtest()
 
@@ -72,9 +71,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_17
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_17
         """
         self.run_subtest()
 
@@ -88,9 +87,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_18
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_18
         """
         self.run_subtest()
 
@@ -104,9 +103,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_19
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_19
         """
         self.run_subtest()
 
@@ -120,9 +119,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_20
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_20
         """
         self.run_subtest()
 
@@ -136,9 +135,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_21
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_21
         """
         self.run_subtest()
 
@@ -152,9 +151,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_22
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_22
         """
         self.run_subtest()
 
@@ -168,9 +167,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_23
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_23
         """
         self.run_subtest()
 
@@ -184,9 +183,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_24
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_24
         """
         self.run_subtest()
 
@@ -200,9 +199,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_25
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_25
         """
         self.run_subtest()
 
@@ -216,9 +215,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_26
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_26
         """
         self.run_subtest()
 
@@ -232,9 +231,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_27
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_27
         """
         self.run_subtest()
 
@@ -248,9 +247,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_28
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_28
         """
         self.run_subtest()
 
@@ -264,9 +263,9 @@ class DaosCoreTestRebuild(DaosCoreBase):
             Core tests for daos_test rebuild
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,ib2,medium
+        :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_29
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_29
         """
         self.run_subtest()
 
@@ -282,6 +281,6 @@ class DaosCoreTestRebuild(DaosCoreBase):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=unittest
-        :avocado: tags=daos_test,daos_core_test_rebuild,test_rebuild_30
+        :avocado: tags=DaosCoreTestRebuild,daos_test,daos_core_test_rebuild,test_rebuild_30
         """
         self.run_subtest()

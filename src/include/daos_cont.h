@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -25,14 +25,24 @@ extern "C" {
 
 #include <daos_security.h>
 
-/** Opens the container for reading only. This flag conflicts with DAOS_COO_RW. */
+/**
+ * Opens the container for reading only. This flag conflicts with DAOS_COO_RW
+ * and DAOS_COO_EX.
+ */
 #define DAOS_COO_RO		(1U << 0)
 
-/** Opens the container for reading and writing. This flag conflicts with DAOS_COO_RO. */
+/**
+ * Opens the container for reading and writing. This flag conflicts with
+ * DAOS_COO_RO and DAOS_COO_EX.
+ */
 #define DAOS_COO_RW		(1U << 1)
 
-/** Disables the automatic epoch slip at epoch commit time. See daos_epoch_commit(). */
-#define DAOS_COO_NOSLIP		(1U << 2)
+/**
+ * Opens the container for exclusive reading and writing. This flag conflicts
+ * with DAOS_COO_RO and DAOS_COO_RW. The current user must be the owner of the
+ * container.
+ */
+#define DAOS_COO_EX		(1U << 2)
 
 /** Skips the check to see if the pool meets the redundancy factor/level requirements of the
  * container.
@@ -42,31 +52,35 @@ extern "C" {
 /** Skips container metadata time updates on DAOS_COO_RO open, and subsequent close */
 #define DAOS_COO_RO_MDSTATS	(1U << 4)
 
+/**
+ * Before opening the container, evict current user's handles. This flag
+ * conflicts with DAOS_COO_EVICT_ALL. This flag can only be used with
+ * DAOS_COO_RO or DAOS_COO_RW at the moment.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT		(1U << 5)
+
+/**
+ * Before opening the container, evict all handles, including other users'.
+ * This flag conflicts with DAOS_COO_EVICT. This flag can only be used with
+ * DAOS_COO_EX at the moment. The current user must be the owner of the
+ * container.
+ *
+ * This flag is for recovery purposes and shall not be used by regular
+ * applications.
+ */
+#define DAOS_COO_EVICT_ALL	(1U << 6)
+
 /** Number of bits in the container open mode flag, DAOS_COO_ bits */
-#define DAOS_COO_NBITS	(5)
+#define DAOS_COO_NBITS	(7)
 
 /** Mask for all of the bits in the container open mode flag, DAOS_COO_ bits */
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
 
 /** Maximum length for container hints */
 #define DAOS_CONT_HINT_MAX_LEN	128
-
-/** Container information */
-typedef struct {
-	/** Container UUID */
-	uuid_t			ci_uuid;
-	/** Epoch of latest persistent snapshot */
-	daos_epoch_t		ci_lsnapshot;
-	/** Redundancy factor */
-	uint32_t		ci_redun_fac;
-	/** Number of snapshots */
-	uint32_t		ci_nsnapshots;
-	/** Latest open time (hybrid logical clock) */
-	uint64_t		ci_md_otime;
-	/** Latest close/modify time (hybrid logical clock) */
-	uint64_t		ci_md_mtime;
-	/* TODO: add more members, e.g., size, # objects, uid, gid... */
-} daos_cont_info_t;
 
 /**
  * Generate a rank list from a string with a separator argument. This is a
@@ -189,7 +203,8 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to identify the container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[in]	flags	Open flags (DAOS_COO_RO, etc.). Must include one of
+ *			DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX.
  * \param[out]	coh	Returned open handle.
  * \param[out]	info	Optional, return container information
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -669,6 +684,50 @@ daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
 int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
+
+/**
+ * Fetch a user's permissions for a specific container.
+ *
+ * \param[in]	cont_prop	Container property containing DAOS_PROP_CO_ACL/OWNER/OWNER_GROUP
+ *				entries
+ * \param[in]	uid		User's local uid
+ * \param[in]	gids		Gids of the user's groups
+ * \param[in]	nr_gids		Length of the gids list
+ * \param[out]	perms		Bitmap representing the user's permissions. Bits are defined
+ *				in enum daos_acl_perm.
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NONEXIST	UID or GID not found on the system
+ *		-DER_NOMEM	Could not allocate memory
+ */
+int
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids,
+		    uint64_t *perms);
+
+/**
+ * Create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	epoch of snapshot
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
+			  daos_event_t *ev);
+
+/**
+ * Destroy object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	oh	OIT open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_snap_oit_destroy(daos_handle_t coh, daos_handle_t oh, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }

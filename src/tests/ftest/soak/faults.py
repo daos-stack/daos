@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +8,6 @@ from soak_test_base import SoakTestBase
 
 
 class SoakFaultInject(SoakTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs soak with fault injectors.
 
     :avocado: recursive
@@ -26,7 +24,7 @@ class SoakFaultInject(SoakTestBase):
 
         :avocado: tags=manual
         :avocado: tags=hw,24
-        :avocado: tags=soak,soak_harassers
+        :avocado: tags=soak,soak_faults
         :avocado: tags=test_soak_faults
         """
         test_param = "/run/soak_faults/"

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +73,24 @@ map_ranks_fini(d_rank_list_t *ranks)
 	} else {
 		D_ASSERT(ranks->rl_nr == 0);
 	}
+}
+
+/**
+ * Is \a rank considered up in \a map? Note that when \a rank does not exist in
+ * \a map, false is returned.
+ */
+bool
+ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
+{
+	struct pool_domain     *node;
+	int			rc;
+
+	rc = pool_map_find_nodes(map, rank, &node);
+	if (rc == 0)
+		return false;
+	D_ASSERTF(rc == 1, "%d\n", rc);
+
+	return node->do_comp.co_status & POOL_GROUP_MAP_STATUS;
 }
 
 int
@@ -829,9 +847,11 @@ int ds_pool_get_ranks(const uuid_t pool_uuid, int status,
 	struct ds_pool	*pool;
 	int		rc;
 
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, "Lookup "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		return 0;
+	}
 
 	/* This may not be the pool leader node, so down targets
 	 * may not be updated, then the following collective RPC
@@ -863,9 +883,11 @@ int ds_pool_get_tgt_idx_by_state(const uuid_t pool_uuid, unsigned int status, in
 	int			rc;
 
 	*tgts_cnt = 0;
-	pool = ds_pool_lookup(pool_uuid);
-	if (pool == NULL || pool->sp_map == NULL)
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (pool == NULL || pool->sp_map == NULL) {
+		D_DEBUG(DB_MD, "pool look "DF_UUID": %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(output, rc = 0);
+	}
 
 	/* Check if we need excluded the failure targets, NB:
 	 * since the ranks in the pool map are ranks of primary

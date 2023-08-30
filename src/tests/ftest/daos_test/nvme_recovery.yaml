@@ -3,9 +3,9 @@
 hosts:
   test_servers: 2
 timeout: 600
-#Remove this once DAOS-5134 is resolved
+# Remove this once DAOS-5134 is resolved
 setup:
-  start_servers_once: False
+  start_servers_once: false
 pool:
   scm_size: 8G
   nvme_size: 16G
@@ -22,14 +22,7 @@ server_config:
       log_mask: DEBUG
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -39,22 +32,15 @@ server_config:
       log_mask: DEBUG
       env_vars:
         - D_LOG_FILE_APPEND_PID=1
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 agent_config:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 dmg:
   transport_config:
-    allow_insecure: True
+    allow_insecure: true
 daos_tests:
   num_clients: 1
   test_name:

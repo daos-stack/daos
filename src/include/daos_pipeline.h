@@ -1,7 +1,11 @@
 /**
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
+/*
+ * The Pipeline API is under heavy development and should not be used in production. The API is
+ * subject to change.
  */
 
 #ifndef __DAOS_PIPE_H__
@@ -167,23 +171,23 @@ typedef struct {
 	daos_filter_t **aggr_filters;
 } daos_pipeline_t;
 
-/*
+/**
  * Gather some statistics of daos_pipeline_run(); like the number of items that have been scanned.
  */
 typedef struct {
-	/*
+	/**
 	 * If filtering by object ids, \a nr_objs will register the number of objects
 	 * considered. Otherwise (i.e., if an object handle is passed), \a nr_objs will always be
 	 * zero (not one).
 	 */
 	uint64_t nr_objs;
-	/*
+	/**
 	 * If filtering by dkey or akeys (or a combination of both), \a nr_dkeys will register the
 	 * total number of dkeys scanned. If a dkey is provided to daos_pipeline_run(), \a nr_dkeys
 	 * will always be zero (not one).
 	 */
 	uint64_t nr_dkeys;
-	/*
+	/**
 	 * This variable will only be non-zero when a dkey is provided to daos_pipeline_run(), where
 	 * akeys are being filtered from a particular dkey.
 	 */

@@ -3,8 +3,8 @@
 
 ENV:
   default:
-    #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
-    #!filter-only : /run/tests/rpc_error
+    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+    # !filter-only : /run/tests/rpc_error
     - D_LOG_MASK: "WARN,RPC=DEBUG,HG=DEBUG"
     - OFI_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"

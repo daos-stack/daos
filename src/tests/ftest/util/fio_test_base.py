@@ -1,16 +1,13 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
-from daos_utils import DaosCommand
 
 
 class FioBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base fio class.
 
     :avocado: recursive
@@ -42,8 +39,7 @@ class FioBase(DfuseTestBase):
 
         Args:
             directory (str): path for fio run dir
-            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this
-                               method.
+            stop_dfuse (bool): Flag to stop or not stop dfuse as part of this method.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -58,16 +54,10 @@ class FioBase(DfuseTestBase):
             else:
                 self.add_container(self.pool)
 
-                daos_cmd = DaosCommand(self.bin)
-
                 # Instruct dfuse to disable direct-io for this container
-                daos_cmd.container_set_attr(pool=self.pool.uuid,
-                                            cont=self.container.uuid,
-                                            attr='dfuse-direct-io-disable',
-                                            val='on')
+                self.container.set_attr(attrs={'dfuse-direct-io-disable': 'on'})
 
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                self.start_dfuse(self.hostlist_clients, self.pool, self.container)
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")

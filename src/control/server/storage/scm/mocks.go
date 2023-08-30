@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -7,14 +7,260 @@
 package scm
 
 import (
-	"os"
-	"strings"
+	"encoding/xml"
+	"math"
 	"sync"
+	"testing"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/lib/ipmctl"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/mount"
+)
+
+const (
+	defaultMountOpts = "defaults"
+)
+
+const testXMLRegions = `<?xml version="1.0"?>
+ <RegionList>
+  <Region>
+   <SocketID>0x0000</SocketID>
+   <PersistentMemoryType>AppDirect</PersistentMemoryType>
+   <Capacity>1008.000 GiB</Capacity>
+   <FreeCapacity>0.000 GiB</FreeCapacity>
+   <HealthState>Healthy</HealthState>
+   <DimmID>0x0001, 0x0011, 0x0101, 0x0111, 0x0201, 0x0211, 0x0301, 0x0311</DimmID>
+   <RegionID>0x0001</RegionID>
+   <ISetID>0xb8c12120c7bd1110</ISetID>
+  </Region>
+ </RegionList>
+`
+
+func mockXMLRegions(t *testing.T, variant string) string {
+	t.Helper()
+
+	var rl RegionList
+	if err := xml.Unmarshal([]byte(testXMLRegions), &rl); err != nil {
+		t.Fatal(err)
+	}
+
+	switch variant {
+	case "sock-zero", "no-free":
+	case "sock-one":
+		rl.Regions[0].ID = 2
+		rl.Regions[0].SocketID = 1
+		rl.Regions[0].ISetID++
+	case "sock-one-full-free":
+		rl.Regions[0].ID = 2
+		rl.Regions[0].SocketID = 1
+		rl.Regions[0].ISetID++
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
+	case "unhealthy":
+		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
+	case "not-interleaved":
+		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
+	case "unknown-memtype":
+		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
+	case "part-free":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity / 2
+	case "full-free":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
+	case "dual-sock", "dual-sock-no-free":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
+	case "dual-sock-full-free":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].ISetID++
+	case "dual-sock-isetid-switch":
+		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[0].ISetID = 0x04a32120b4fe1110
+		rl.Regions[1].ISetID = 0x3a7b2120bb081110
+	case "same-sock":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ISetID++
+	case "unhealthy-2nd-sock":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
+	case "full-free-2nd-sock":
+		rl.Regions = append(rl.Regions, rl.Regions[0])
+		rl.Regions[1].ID = 2
+		rl.Regions[1].SocketID = 1
+		rl.Regions[1].FreeCapacity = rl.Regions[1].Capacity
+	default:
+		t.Fatalf("unknown variant %q", variant)
+	}
+
+	out, err := xml.Marshal(&rl)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(out)
+}
+
+const (
+	// JSON output from "ndctl list -Rv" illustrating mismatch issue.
+	// See: https://github.com/pmem/ndctl/issues/235
+	ndctlRegionsDual = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":13312958398157623569,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":13312958398157623568,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
+
+	// JSON output from "ndctl list -Nv" illustrating mismatch issue.
+	// See: https://github.com/pmem/ndctl/issues/235
+	ndctlNamespaceDualR1 = `[
+  {
+    "dev":"namespace1.0",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"8075b7f1-2c68-45b9-81a9-7bc411ca0743",
+    "raw_uuid":"bac5a182-f9c3-49df-93fb-64fb1f7864d4",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem1",
+    "numa_node":0,
+    "target_node":3
+  },
+  {
+    "dev":"namespace1.1",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"1057916f-b8a2-4aba-bd00-0cc9f843b1d9",
+    "raw_uuid":"07df4036-5728-4340-bc6d-b8bd682acd52",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem1.1",
+    "numa_node":0,
+    "target_node":3
+  }
+]
+`
+
+	ndctlNamespaceDualR0 = `[
+  {
+    "dev":"namespace0.0",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"8075b7f1-2c68-45b9-81a9-7bc411ca0743",
+    "raw_uuid":"bac5a182-f9c3-49df-93fb-64fb1f7864d4",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem0",
+    "numa_node":1,
+    "target_node":2
+  },
+  {
+    "dev":"namespace0.1",
+    "mode":"fsdax",
+    "map":"dev",
+    "size":532708065280,
+    "uuid":"1057916f-b8a2-4aba-bd00-0cc9f843b1d9",
+    "raw_uuid":"07df4036-5728-4340-bc6d-b8bd682acd52",
+    "sector_size":512,
+    "align":2097152,
+    "blockdev":"pmem0.1",
+    "numa_node":1,
+    "target_node":2
+  }
+]
+`
+
+	// iset_ids swapped to illustrate mapping regions by it.
+	ndctlRegionsSwapISet = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":13312958398157623568,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":13312958398157623569,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
+
+	// JSON output from "ndctl list -Nv" illustrating ISetID overflow.
+	ndctlRegionsNegISet = `[
+  {
+    "dev":"region1",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":0,
+    "target_node":3,
+    "iset_id":-1989147235780849392,
+    "persistence_domain":"memory_controller"
+  },
+  {
+    "dev":"region0",
+    "size":1082331758592,
+    "align":16777216,
+    "available_size":1082331758592,
+    "max_available_extent":1082331758592,
+    "type":"pmem",
+    "numa_node":1,
+    "target_node":2,
+    "iset_id":13312958398157623569,
+    "persistence_domain":"memory_controller"
+  }
+]
+`
 )
 
 type (
@@ -115,158 +361,6 @@ func mockModule(dIn ...ipmctl.DeviceDiscovery) *storage.ScmModule {
 	}
 }
 
-type (
-	// GetfsUsageRetval encapsulates return values from a GetfsUsage call.
-	GetfsUsageRetval struct {
-		Total, Avail uint64
-		Err          error
-	}
-
-	mountMap struct {
-		sync.RWMutex
-		mounted map[string]bool
-	}
-
-	// MockSysConfig alters mock SystemProvider behavior.
-	MockSysConfig struct {
-		IsMountedBool   bool
-		IsMountedErr    error
-		MountErr        error
-		UnmountErr      error
-		MkfsErr         error
-		ChmodErr        error
-		GetfsStr        string
-		GetfsErr        error
-		SourceToTarget  map[string]string
-		getfsIndex      int
-		GetfsUsageResps []GetfsUsageRetval
-		statErrors      map[string]error
-		realStat        bool
-	}
-
-	// MockSysProvider gives a mock SystemProvider implementation.
-	MockSysProvider struct {
-		sync.RWMutex
-		log       logging.Logger
-		cfg       MockSysConfig
-		isMounted mountMap
-	}
-)
-
-func (mm *mountMap) Set(mount string, mounted bool) {
-	mm.Lock()
-	defer mm.Unlock()
-
-	mm.mounted[mount] = mounted
-}
-
-func (mm *mountMap) Get(mount string) (bool, bool) {
-	mm.RLock()
-	defer mm.RUnlock()
-
-	mounted, exists := mm.mounted[mount]
-	return mounted, exists
-}
-
-func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
-	err := msp.cfg.IsMountedErr
-	// hack... don't fail the format tests which also want
-	// to make sure that the device isn't already formatted.
-	if os.IsNotExist(err) && strings.HasPrefix(target, "/dev") {
-		err = nil
-	}
-
-	msp.Lock()
-	defer msp.Unlock()
-
-	// lookup target of a given source device (target actually a source
-	// device in this case)
-	mount, exists := msp.cfg.SourceToTarget[target]
-	if exists {
-		target = mount
-	}
-
-	isMounted, exists := msp.isMounted.Get(target)
-	if !exists {
-		return msp.cfg.IsMountedBool, err
-	}
-	return isMounted, err
-}
-
-func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
-	if msp.cfg.MountErr == nil {
-		msp.Lock()
-		msp.isMounted.Set(target, true)
-		msp.Unlock()
-	}
-	return msp.cfg.MountErr
-}
-
-func (msp *MockSysProvider) Unmount(target string, _ int) error {
-	if msp.cfg.UnmountErr == nil {
-		msp.Lock()
-		msp.isMounted.Set(target, false)
-		msp.Unlock()
-	}
-	return msp.cfg.UnmountErr
-}
-
-func (msp *MockSysProvider) Mkfs(_, _ string, _ bool) error {
-	return msp.cfg.MkfsErr
-}
-
-func (msp *MockSysProvider) Chmod(string, os.FileMode) error {
-	return msp.cfg.ChmodErr
-}
-
-func (msp *MockSysProvider) Getfs(_ string) (string, error) {
-	return msp.cfg.GetfsStr, msp.cfg.GetfsErr
-}
-
-func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
-	msp.cfg.getfsIndex += 1
-	if len(msp.cfg.GetfsUsageResps) < msp.cfg.getfsIndex {
-		return 0, 0, nil
-	}
-	resp := msp.cfg.GetfsUsageResps[msp.cfg.getfsIndex-1]
-	return resp.Total, resp.Avail, resp.Err
-}
-
-func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
-	msp.RLock()
-	defer msp.RUnlock()
-
-	if msp.cfg.realStat {
-		return os.Stat(path)
-	}
-
-	// default return value for missing key is nil so
-	// add entries to indicate path failure e.g. perms or not-exist
-	return nil, msp.cfg.statErrors[path]
-}
-
-func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {
-	if cfg == nil {
-		cfg = &MockSysConfig{}
-	}
-	if cfg.statErrors == nil {
-		cfg.realStat = true
-	}
-	msp := &MockSysProvider{
-		log: log,
-		cfg: *cfg,
-		isMounted: mountMap{
-			mounted: make(map[string]bool),
-		},
-	}
-	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
-	return msp
-}
-
-func DefaultMockSysProvider(log logging.Logger) *MockSysProvider {
-	return NewMockSysProvider(log, nil)
-}
-
 // MockBackendConfig specifies behavior for a mock SCM backend
 // implementation providing capability to access and configure
 // SCM modules and namespaces.
@@ -286,16 +380,24 @@ type MockBackendConfig struct {
 
 type MockBackend struct {
 	sync.RWMutex
-	cfg          MockBackendConfig
-	PrepareCalls []storage.ScmPrepareRequest
-	ResetCalls   []storage.ScmPrepareRequest
+	cfg                MockBackendConfig
+	PrepareCalls       []storage.ScmPrepareRequest
+	ResetCalls         []storage.ScmPrepareRequest
+	GetModulesCalls    []int
+	GetNamespacesCalls []int
 }
 
-func (mb *MockBackend) getModules(int) (storage.ScmModules, error) {
+func (mb *MockBackend) getModules(sockID int) (storage.ScmModules, error) {
+	mb.Lock()
+	mb.GetModulesCalls = append(mb.GetModulesCalls, sockID)
+	mb.Unlock()
 	return mb.cfg.GetModulesRes, mb.cfg.GetModulesErr
 }
 
-func (mb *MockBackend) getNamespaces(int) (storage.ScmNamespaces, error) {
+func (mb *MockBackend) getNamespaces(sockID int) (storage.ScmNamespaces, error) {
+	mb.Lock()
+	mb.GetNamespacesCalls = append(mb.GetNamespacesCalls, sockID)
+	mb.Unlock()
 	return mb.cfg.GetNamespacesRes, mb.cfg.GetNamespacesErr
 }
 
@@ -307,7 +409,9 @@ func (mb *MockBackend) prep(req storage.ScmPrepareRequest, _ *storage.ScmScanRes
 	if mb.cfg.PrepErr != nil {
 		return nil, mb.cfg.PrepErr
 	} else if mb.cfg.PrepRes == nil {
-		return &storage.ScmPrepareResponse{}, nil
+		return &storage.ScmPrepareResponse{
+			Socket: &storage.ScmSocketState{},
+		}, nil
 	}
 	return mb.cfg.PrepRes, mb.cfg.PrepErr
 }
@@ -320,7 +424,9 @@ func (mb *MockBackend) prepReset(req storage.ScmPrepareRequest, _ *storage.ScmSc
 	if mb.cfg.PrepResetErr != nil {
 		return nil, mb.cfg.PrepResetErr
 	} else if mb.cfg.PrepResetRes == nil {
-		return &storage.ScmPrepareResponse{}, nil
+		return &storage.ScmPrepareResponse{
+			Socket: &storage.ScmSocketState{},
+		}, nil
 	}
 	return mb.cfg.PrepResetRes, mb.cfg.PrepResetErr
 }
@@ -346,10 +452,14 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(log, msc))
+func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *system.MockSysConfig) *Provider {
+	sysProv := system.NewMockSysProvider(log, msc)
+	mountProv := mount.NewProvider(log, sysProv)
+	return NewProvider(log, NewMockBackend(mbc), sysProv, mountProv)
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider(log))
+	sysProv := system.DefaultMockSysProvider(log)
+	mountProv := mount.NewProvider(log, sysProv)
+	return NewProvider(log, DefaultMockBackend(), sysProv, mountProv)
 }

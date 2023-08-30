@@ -9,10 +9,12 @@ package raft
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -91,11 +93,70 @@ func createRaftDir(dbPath string) error {
 	return nil
 }
 
+func copyFile(src, dst string) error {
+	st, err := os.Stat(src)
+	if err != nil {
+		return errors.Wrapf(err, "failed to stat %q", src)
+	}
+
+	r, err := os.Open(src)
+	if err != nil {
+		return errors.Wrapf(err, "failed to open %q", src)
+	}
+	defer r.Close()
+
+	w, err := os.Create(dst)
+	if err != nil {
+		return errors.Wrapf(err, "failed to create %q", dst)
+	}
+	defer w.Close()
+
+	if _, err := io.Copy(w, r); err != nil {
+		return errors.Wrapf(err, "failed to copy %q to %q", src, dst)
+	}
+
+	if err := w.Sync(); err != nil {
+		return errors.Wrapf(err, "failed to sync %q", dst)
+	}
+
+	if err := w.Chmod(st.Mode()); err != nil {
+		return errors.Wrapf(err, "failed to chmod %q", dst)
+	}
+
+	return nil
+}
+
+func copySnapshot(src, dst string) error {
+	if err := copyFile(filepath.Join(src, snapshotMetaFile), filepath.Join(dst, snapshotMetaFile)); err != nil {
+		return errors.Wrap(err, "failed to copy snapshot metadata")
+	}
+
+	if err := copyFile(filepath.Join(src, snapshotDataFile), filepath.Join(dst, snapshotDataFile)); err != nil {
+		return errors.Wrap(err, "failed to copy snapshot data")
+	}
+
+	return nil
+}
+
 // RestoreLocalReplica restores the MS from the snapshot at the supplied path.
 func RestoreLocalReplica(log logging.Logger, cfg *DatabaseConfig, snapPath string) error {
 	sInfo, err := ReadSnapshotInfo(snapPath)
 	if err != nil {
 		return errors.Wrapf(err, "failed to verify snapshot at %q", snapPath)
+	}
+
+	if strings.HasPrefix(snapPath, cfg.RaftDir) {
+		tmpDir, err := ioutil.TempDir("", "daos-raft-restore")
+		if err != nil {
+			return errors.Wrap(err, "failed to create temporary directory")
+		}
+		defer os.RemoveAll(tmpDir)
+
+		log.Info("Copying snapshot to intermediate temporary directory")
+		if err := copySnapshot(snapPath, tmpDir); err != nil {
+			return errors.Wrap(err, "failed to copy snapshot")
+		}
+		snapPath = tmpDir
 	}
 
 	// Nuke the existing raft directory to ensure we're restarting from a clean slate.
@@ -267,6 +328,9 @@ func GetLogEntries(log logging.Logger, cfg *DatabaseConfig, maxEntries ...uint64
 					close(entries)
 					return
 				}
+			} else {
+				details.Time = details.Log.AppendedAt
+				details.Operation = details.Log.Type.String()
 			}
 
 			entries <- details

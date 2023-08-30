@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -86,7 +86,39 @@ typedef struct crt_init_options {
 	/** If set, used as a port setting instead of OFI_PORT env */
 	char		*cio_port;
 
+	/** If set, used as the authentication key instead of D_PROVIDER_AUTH_KEY env */
+	char		*cio_auth_key;
 } crt_init_options_t;
+
+/**
+ * Enumeration specifying providers supported by the library
+ */
+typedef enum {
+	CRT_PROV_SM		= 0,
+	CRT_PROV_OFI_SOCKETS,
+	CRT_PROV_OFI_VERBS_RXM,
+	CRT_PROV_OFI_GNI,
+	CRT_PROV_OFI_TCP_RXM,
+	CRT_PROV_OFI_CXI,
+	CRT_PROV_OFI_OPX,
+	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
+	CRT_PROV_UCX_RC,
+	CRT_PROV_UCX_UD,
+	CRT_PROV_UCX_RC_UD,
+	CRT_PROV_UCX_RC_O,
+	CRT_PROV_UCX_UD_O,
+	CRT_PROV_UCX_RC_UD_O,
+	CRT_PROV_UCX_RC_X,
+	CRT_PROV_UCX_UD_X,
+	CRT_PROV_UCX_RC_UD_X,
+	CRT_PROV_UCX_DC_X,
+	CRT_PROV_UCX_TCP,
+	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
+	/* Note: This entry should be the last valid one in enum */
+	CRT_PROV_COUNT,
+	CRT_PROV_UNKNOWN = -1,
+} crt_provider_t;
+
 
 typedef int		crt_status_t;
 /**
@@ -108,6 +140,9 @@ typedef d_string_t	crt_group_id_t;
 
 /** Indicates rank not being set */
 #define CRT_NO_RANK 0xFFFFFFFF
+
+/** Indicates incarnation unavailable or inapplicable */
+#define CRT_NO_INCARNATION 0
 
 typedef struct crt_group {
 	/** the group ID of this group */

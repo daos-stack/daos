@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,8 +9,8 @@ import time
 from file_count_test_base import FileCountTestBase
 from data_mover_test_base import DataMoverTestBase
 from general_utils import human_to_bytes
-from pool_test_base import PoolTestBase
 import security_test_base as secTestBase
+from test_utils_pool import check_pool_creation
 
 
 class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
@@ -32,10 +31,11 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         Test Description: Performs tests to generate large data sets over
                           various middleware, perform various system admin
                           operations, datamover operations.
-        :avocado: tags=all,deployment,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=datamover,ior,mdtest
-        :avocado: tags=iosysadmin
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=deployment,datamover,ior,mdtest
+        :avocado: tags=IoSysAdmin,test_io_sys_admin
         """
         # local param
         new_test_user = self.params.get("new_user", "/run/container_acl/*")
@@ -51,15 +51,15 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
 
         for idx in range(1, 4):
             self.add_pool_qty(1, namespace="/run/pool_{}/".format(idx), create=False)
-            PoolTestBase.check_pool_creation(self, 60)
+            check_pool_creation(self, self.pool, 60)
             self.pool[-1].connect()
             for cont_idx in range(1, 4):
                 self.add_container_qty(1, self.pool[-1],
                                        namespace="/run/container_{}/".format(cont_idx))
-                daos.container_set_owner(self.pool[-1].uuid, self.container[-1].uuid,
+                daos.container_set_owner(self.pool[-1].identifier, self.container[-1].identifier,
                                          new_test_user, new_test_group)
 
-            daos.container_list(self.pool[-1].uuid)
+            daos.container_list(self.pool[-1].identifier)
             self.destroy_containers(self.container)
             self.container = None
             self.destroy_pools(self.pool)
@@ -76,6 +76,8 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].create_snap()
         # overwrite the last ior file
         self.ior_cmd.signature.update('456')
+        self.processes = self.ior_np
+        self.ppn = self.ior_ppn
         self.run_ior_with_pool(create_pool=False, create_cont=False)
 
         nvme_free_space_before_snap_destroy = self.get_free_space()[1]
@@ -83,7 +85,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.container[-1].destroy_snap(epc=self.container[-1].epoch)
         # Now check if the space is returned back.
         counter = 1
-        returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+        returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
 
         data_written = (int(self.ppn) * human_to_bytes(self.ior_cmd.block_size.value))
         while returned_space < int(data_written):
@@ -97,7 +99,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_free_space()[1] - nvme_free_space_before_snap_destroy)
+            returned_space = self.get_free_space()[1] - nvme_free_space_before_snap_destroy
             counter += 1
 
         self.log.info("#####Starting FS_COPY Test")
@@ -106,5 +108,7 @@ class IoSysAdmin(DataMoverTestBase, FileCountTestBase):
         self.run_dm_activities_with_ior("DCP", self.pool, self.container[-1])
         self.log.info("#####Starting DSERIAL Test")
         self.run_dm_activities_with_ior("DSERIAL", self.pool, self.container[-1])
+        self.log.info("#####Starting CONT_CLONE Test")
+        self.run_dm_activities_with_ior("CONT_CLONE", self.pool, self.container[-1])
         self.log.info("#####Completed all Datamover tests")
         self.container.pop(0)
