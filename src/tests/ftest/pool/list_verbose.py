@@ -23,7 +23,7 @@ class ListVerboseTest(IorTestBase):
 
     def create_expected(self, pool, scm_free, nvme_free, scm_imbalance,
                         nvme_imbalance, targets_disabled=0, scm_size=None,
-                        state=None, rebuild_state=None, nvme_size=None):
+                        nvme_size=None, state=None, rebuild_state=None):
         """Create expected dmg pool list output to compare against the actual.
 
         Args:
@@ -38,6 +38,7 @@ class ListVerboseTest(IorTestBase):
             nvme_size (int, optional): NVMe size to fill in the output. Defaults to None.
             state (str, optional): Expect pool state. Defaults to None.
             rebuild_state (str, optional): Expect pool rebuild state. Defaults to None.
+
         Returns:
             dict: Expected in the same format of actual.
 
@@ -159,6 +160,7 @@ class ListVerboseTest(IorTestBase):
             nvme_size (list): List of NVMe size for pools.
             state (list): List of pool state for pools.
             rebuild_state (list): List of pool rebuild state for pools.
+
         Returns:
             list: a list of dictionaries containing information for each pool from the dmg
                 pool list json output. Used to verify free and imbalance to reduce the
