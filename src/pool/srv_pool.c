@@ -1802,15 +1802,14 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": failed to read pool map buffer", DP_UUID(svc->ps_uuid));
 		goto out;
 	}
 
 	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
-			DP_UUID(svc->ps_uuid), map_version, rc);
+		DL_ERROR(rc, DF_UUID ": failed to distribute pool map %u", DP_UUID(svc->ps_uuid),
+			 map_version);
 		D_GOTO(out, rc);
 	}
 	svc->ps_global_map_version = max(svc->ps_global_map_version, map_version);
@@ -5758,8 +5757,8 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 	 */
 	rc = ds_cont_rf_check(pool_uuid, cont_uuid, tx);
 	if (rc)
-		D_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, DF_CONT" check_rf: "DF_RC"\n",
-			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, rc, DF_CONT " check_rf",
+			  DP_CONT(pool_uuid, cont_uuid));
 
 	if (sched->psc_canceled) {
 		D_DEBUG(DB_MD, DF_CONT" is canceled.\n", DP_CONT(pool_uuid, cont_uuid));
@@ -6697,8 +6696,7 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": failed to create pool evict rpc", DP_UUID(pool_uuid));
 		D_GOTO(out_client, rc);
 	}
 
@@ -6728,8 +6726,7 @@ rechoose:
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0)
-		D_ERROR(DF_UUID ": pool destroy failed to evict handles, rc: " DF_RC "\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID ": pool destroy failed to evict handles", DP_UUID(pool_uuid));
 	if (count)
 		*count = out->pvo_n_hdls_evicted;
 

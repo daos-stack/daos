@@ -1117,8 +1117,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
-			D_ERROR("_unpack_body failed, rc: %d, opc: %#x.\n",
-				rc, rpc_pub->cr_opc);
+			DHL_ERROR(rpc_priv, rc, "_unpack_body failed, opc: %#x", rpc_pub->cr_opc);
 			crt_hg_reply_error_send(rpc_priv, -DER_MISC);
 			D_GOTO(decref, hg_ret = HG_SUCCESS);
 		}

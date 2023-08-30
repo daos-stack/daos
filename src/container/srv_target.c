@@ -476,10 +476,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR,
-				 DF_CONT": VOS aggregate failed. "DF_RC"\n",
-				 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				 DP_RC(rc));
+			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
+				  DF_CONT ": VOS aggregate failed",
+				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
@@ -860,9 +859,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			       pool_child->spc_uuid, true /* create */,
 			       &cont_child);
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD,
-			 DF_CONT"[%d]: Load container error:%d\n",
-			 DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, rc);
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT "[%d]: Load container error",
+			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		return rc;
 	}
 

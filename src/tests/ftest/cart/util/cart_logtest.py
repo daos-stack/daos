@@ -368,6 +368,8 @@ class LogTest():
 
                 if 'DER_UNKNOWN' in msg:
                     show_line(line, 'NORMAL', 'Use of DER_UNKNOWN')
+                if 'Unknown error' in msg:
+                    show_line(line, 'NORMAL', 'Invalid strerror value')
                 # Warn if a line references the name of the function it was in,
                 # but skip short function names or _internal suffixes.
                 if line.function in msg and len(line.function) > 6 and \
