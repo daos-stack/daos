@@ -192,10 +192,10 @@ ext_overlapping(struct vea_free_extent *ext1, struct vea_free_extent *ext2)
 /**
  * Verify if an extent is allocated in persistent or transient metadata.
  *
- * \param vsi       [IN]	In-memory compound index
- * \param transient [IN]	Persistent or transient
- * \param off       [IN]	Block offset of extent
- * \param cnt       [IN]	Block count of extent
+ * \param[in] vsi		In-memory compound index
+ * \param[in] transient		Persistent or transient
+ * \param[in] off		Block offset of extent
+ * \param[in] cnt		Block count of extent
  *
  * \return			0 - Allocated
  *				1 - Not allocated

@@ -268,13 +268,13 @@ daos_pipeline_free(daos_pipeline_t *pipeline);
  * \param[in]		dkey		Optional dkey. When passed, no key iteration is done and
  *					processing is only performed on this specific dkey.
  *
- * \param[in/out]	nr_iods		[in]: Number of I/O descriptors in the iods table.
+ * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the iods table.
  *					[out]: Number of returned I/O descriptors. Only relevant
  *					when \dkey is passed (in that case filtering is done to
  *					return those akeys that pass a particular filter for a
  *					given dkey).
  *
- * \param[in/out]	iods		[in]: Array of I/O descriptors. Each descriptor is
+ * \param[in,out]	iods		[in]: Array of I/O descriptors. Each descriptor is
  *					associated with a given akey and describes the list of
  *					record extents to fetch from the array.
  *					[out]: Only relevant when \dkey is passed (see comment for
