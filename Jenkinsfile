@@ -208,15 +208,13 @@ def generateFunctionalTestStage(String name, String cluster, String tags, String
             node(label) {
                 if (!skipStage()) {
                     try {
-                        steps {
-                            job_step_update(
-                                functionalTest(
-                                    inst_repos: daosRepos(),
-                                    inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                    test_tag: getFunctionalTags(default_tags: tags),
-                                    ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-                                    test_function: 'runTestFunctionalV2'))
-                        }
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                test_tag: getFunctionalTags(default_tags: tags),
+                                ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+                                test_function: 'runTestFunctionalV2'))
                     }
                     finally {
                         functionalTestPostV2()
