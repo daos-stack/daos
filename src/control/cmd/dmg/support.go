@@ -193,7 +193,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
-				// fmt.Println(err)
 				if cmd.Stop {
 					return err
 				}
