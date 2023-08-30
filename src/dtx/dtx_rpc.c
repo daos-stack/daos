@@ -20,6 +20,7 @@
 #include "dtx_internal.h"
 
 CRT_RPC_DEFINE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
+CRT_RPC_DEFINE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define X(a, b, c, d, e, f)	\
 {				\
@@ -80,8 +81,12 @@ struct dtx_req_rec {
 	int				 drr_count; /* DTX count */
 	int				 drr_result; /* The RPC result */
 	uint32_t			 drr_comp:1;
+	uint32_t			 drr_bitmap_sz;
 	struct dtx_id			*drr_dti; /* The DTX array */
-	uint32_t			*drr_flags;
+	union {
+		uint32_t		*drr_flags;
+		uint8_t			*drr_bitmap;
+	};
 	struct dtx_share_peer		**drr_cb_args; /* Used by dtx_req_cb. */
 };
 
@@ -123,7 +128,8 @@ dtx_drr_cleanup(struct dtx_req_rec *drr)
 		D_FREE(drr->drr_cb_args);
 	}
 	D_FREE(drr->drr_dti);
-	D_FREE(drr->drr_flags);
+	if (drr->drr_bitmap_sz == 0)
+		D_FREE(drr->drr_flags);
 	D_FREE(drr);
 }
 
@@ -227,7 +233,6 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 	crt_rpc_t		*req;
 	crt_endpoint_t		 tgt_ep;
 	crt_opcode_t		 opc;
-	struct dtx_in		*din = NULL;
 	int			 rc;
 
 	tgt_ep.ep_grp = NULL;
@@ -237,31 +242,43 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
 	if (rc == 0) {
-		din = crt_req_get(req);
-		uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
-		uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
-		din->di_epoch = epoch;
-		din->di_dtx_array.ca_count = drr->drr_count;
-		din->di_dtx_array.ca_arrays = drr->drr_dti;
-		if (drr->drr_flags != NULL) {
-			din->di_flags.ca_count = drr->drr_count;
-			din->di_flags.ca_arrays = drr->drr_flags;
-		} else {
-			din->di_flags.ca_count = 0;
-			din->di_flags.ca_arrays = NULL;
-		}
+		if (dra->dra_opc == DTX_COLL_COMMIT || dra->dra_opc == DTX_COLL_ABORT) {
+			struct dtx_coll_in	*dci = crt_req_get(req);
 
-		if (dra->dra_opc == DTX_REFRESH) {
-			if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
-				rc = crt_req_set_timeout(req, 3);
-			else
-				/*
-				 * If related DTX is committable, then it will be committed
-				 * within DTX_COMMIT_THRESHOLD_AGE time. So if need to wait
-				 * for longer, then just let related client to retry.
-				 */
-				rc = crt_req_set_timeout(req, DTX_COMMIT_THRESHOLD_AGE);
-			D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
+			uuid_copy(dci->dci_po_uuid, dra->dra_po_uuid);
+			uuid_copy(dci->dci_co_uuid, dra->dra_co_uuid);
+			dci->dci_xid = drr->drr_dti[0];
+			dci->dci_epoch = epoch;
+			dci->dci_tgt_bitmap.ca_count = drr->drr_bitmap_sz;
+			dci->dci_tgt_bitmap.ca_arrays = drr->drr_bitmap;
+		} else {
+			struct dtx_in	*din = crt_req_get(req);
+
+			uuid_copy(din->di_po_uuid, dra->dra_po_uuid);
+			uuid_copy(din->di_co_uuid, dra->dra_co_uuid);
+			din->di_epoch = epoch;
+			din->di_dtx_array.ca_count = drr->drr_count;
+			din->di_dtx_array.ca_arrays = drr->drr_dti;
+			if (drr->drr_flags != NULL) {
+				din->di_flags.ca_count = drr->drr_count;
+				din->di_flags.ca_arrays = drr->drr_flags;
+			} else {
+				din->di_flags.ca_count = 0;
+				din->di_flags.ca_arrays = NULL;
+			}
+
+			if (dra->dra_opc == DTX_REFRESH) {
+				if (DAOS_FAIL_CHECK(DAOS_DTX_RESYNC_DELAY))
+					rc = crt_req_set_timeout(req, 3);
+				else
+					/*
+					 * If related DTX is committable, then it will be committed
+					 * within DTX_COMMIT_THRESHOLD_AGE time. So if need to wait
+					 * for longer, then just let related client to retry.
+					 */
+					rc = crt_req_set_timeout(req, DTX_COMMIT_THRESHOLD_AGE);
+				D_ASSERTF(rc == 0, "crt_req_set_timeout failed: %d\n", rc);
+			}
 		}
 
 		rc = crt_req_send(req, dtx_req_cb, drr);
@@ -269,8 +286,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	D_DEBUG(DB_TRACE, "DTX req for opc %x to %d/%d (req %p future %p) sent "
 		"epoch "DF_X64" : rc %d.\n", dra->dra_opc, drr->drr_rank,
-		drr->drr_tag, req, dra->dra_future,
-		din != NULL ? din->di_epoch : 0, rc);
+		drr->drr_tag, req, dra->dra_future, epoch, rc);
 
 	if (rc != 0 && drr->drr_comp == 0) {
 		drr->drr_comp = 1;
@@ -608,7 +624,7 @@ dtx_rpc_internal(struct dtx_common_args *dca)
 	int			 rc;
 	int			 i;
 
-	if (dca->dca_dra.dra_opc != DTX_REFRESH) {
+	if (dca->dca_dtes != NULL) {
 		D_ASSERT(dca->dca_dtis != NULL);
 
 		if (dca->dca_count > 1) {
@@ -778,7 +794,7 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	 * Some RPC may has been sent, so need to wait even if dtx_rpc_prep hit failure.
 	 */
 	rc = dtx_rpc_post(&dca, rc, false);
-	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED)
+	if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED || rc == -DER_OOG)
 		rc = 0;
 
 	if (rc != 0) {
@@ -1293,4 +1309,197 @@ dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont)
 	}
 
 	return rc;
+}
+
+static int
+dtx_coll_rpc_prep(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+		  uint32_t count, uint32_t opc, daos_epoch_t epoch, d_list_t *head,
+		  struct dtx_common_args *dca)
+{
+	struct dtx_req_rec	*drr;
+	int			 rc = 0;
+	int			 i;
+
+	for (i = 0; i < count; i++) {
+		D_ALLOC_PTR(drr);
+		if (drr == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		D_ALLOC_PTR(drr->drr_dti);
+		if (drr->drr_dti == NULL) {
+			D_FREE(drr);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		drr->drr_rank = oct[i].oct_rank;
+		/* Collective DTX RPC is sent to the system XS. */
+		drr->drr_tag = 0;
+		drr->drr_count = 1;
+		drr->drr_dti[0] = *xid;
+		drr->drr_bitmap_sz = oct[i].oct_bitmap_sz;
+		drr->drr_bitmap = oct[i].oct_bitmap;
+
+		d_list_add_tail(&drr->drr_link, head);
+	}
+
+	rc = dtx_rpc_prep(cont, head, NULL, count, opc, epoch, NULL, NULL, NULL, dca);
+
+out:
+	return rc;
+}
+
+int
+dtx_coll_local_exec(void *args)
+{
+	struct dtx_coll_local_args	*dcla = args;
+	struct ds_cont_child		*cont = NULL;
+	struct dtx_coll_in		*dci = dcla->dcla_dci;
+	uint32_t			 opc = dcla->dcla_opc;
+	int				 rc;
+
+	rc = ds_cont_child_lookup(dci->dci_po_uuid, dci->dci_co_uuid, &cont);
+	if (rc != 0) {
+		D_ERROR("Failed to locate "DF_UUID"/"DF_UUID" for collective DTX "
+			DF_DTI" rpc %u: "DF_RC"\n", DP_UUID(dci->dci_po_uuid),
+			DP_UUID(dci->dci_co_uuid), DP_DTI(&dci->dci_xid), opc, DP_RC(rc));
+		goto out;
+	}
+
+	switch (opc) {
+	case DTX_COLL_COMMIT:
+		rc = vos_dtx_commit(cont->sc_hdl, &dci->dci_xid, 1, NULL);
+		break;
+	case DTX_COLL_ABORT:
+		rc = vos_dtx_abort(cont->sc_hdl, &dci->dci_xid, dci->dci_epoch);
+		break;
+	default:
+		rc = -DER_INVAL;
+		break;
+	}
+
+out:
+	if (cont != NULL)
+		ds_cont_child_put(cont);
+
+	return (rc > 0 || rc == -DER_NONEXIST) ? 0 : rc;
+}
+
+static int
+dtx_coll_local_ops(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+		   daos_epoch_t epoch, uint32_t opc)
+{
+	struct dtx_coll_in		dci = { 0 };
+	struct dtx_coll_local_args	dcla = { 0 };
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
+	int				rc;
+
+	uuid_copy(dci.dci_po_uuid, cont->sc_pool_uuid);
+	uuid_copy(dci.dci_co_uuid, cont->sc_uuid);
+	dci.dci_xid = *xid;
+	dci.dci_epoch = epoch;
+
+	dcla.dcla_dci = &dci;
+	dcla.dcla_opc = opc;
+
+	coll_ops.co_func = dtx_coll_local_exec;
+	coll_args.ca_func_args = &dcla;
+	coll_args.ca_tgt_sz = oct->oct_bitmap_sz;
+	coll_args.ca_tgt_bitmap = oct->oct_bitmap;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
+		 "Locally exec collective DTX PRC %u for "DF_DTI": "DF_RC"\n",
+		 opc, DP_DTI(xid), DP_RC(rc));
+
+	return rc;
+}
+
+int
+dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+		uint32_t count)
+{
+	struct dtx_req_rec	*drr;
+	struct dtx_common_args	 dca;
+	d_list_t		 head;
+	int			 rc = 0;
+	int			 rc1 = 0;
+	int			 rc2 = 0;
+
+	D_INIT_LIST_HEAD(&head);
+
+	/* oct[0] is for the target(s) on the leader rank. */
+	if (count > 1)
+		rc = dtx_coll_rpc_prep(cont, xid, &oct[1], count - 1, DTX_COLL_COMMIT, 0, &head,
+				       &dca);
+
+	rc1 = dtx_coll_local_ops(cont, xid, &oct[0], 0, DTX_COLL_COMMIT);
+	if (rc1 > 0 || rc1 == -DER_NONEXIST)
+		rc1 = 0;
+
+	if (count > 1) {
+		rc = dtx_rpc_post(&dca, rc, false);
+		if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED)
+			rc = 0;
+	}
+
+	if (rc == 0 && rc1 == 0)
+		rc2 = vos_dtx_commit(cont->sc_hdl, xid, 1, NULL);
+	else
+		/* Mark the DTX as "PARTIAL_COMMITTED" and re-commit it later via batched commit. */
+		rc2 = vos_dtx_set_flags(cont->sc_hdl, xid, 1, DTE_PARTIAL_COMMITTED);
+	if (rc2 > 0 || rc2 == -DER_NONEXIST)
+		rc2 = 0;
+
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec, drr_link)) != NULL)
+		dtx_drr_cleanup(drr);
+
+	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
+		 "Collectively commit DTX "DF_DTI": %d/%d/%d\n", DP_DTI(xid), rc, rc1, rc2);
+
+	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
+}
+
+int
+dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+	       uint32_t count, daos_epoch_t epoch)
+{
+	struct dtx_req_rec	*drr;
+	struct dtx_common_args	 dca;
+	d_list_t		 head;
+	int			 rc = 0;
+	int			 rc1 = 0;
+	int			 rc2 = 0;
+
+	D_INIT_LIST_HEAD(&head);
+
+	/* oct[0] is for the leader rank. */
+	if (count > 1)
+		rc = dtx_coll_rpc_prep(cont, xid, &oct[1], count - 1, DTX_COLL_ABORT, epoch, &head,
+				       &dca);
+
+	rc1 = dtx_coll_local_ops(cont, xid, &oct[0], epoch, DTX_COLL_ABORT);
+	if (rc1 > 0 || rc1 == -DER_NONEXIST)
+		rc1 = 0;
+
+	if (count > 1) {
+		rc = dtx_rpc_post(&dca, rc, false);
+		if (rc > 0 || rc == -DER_NONEXIST || rc == -DER_EXCLUDED)
+			rc = 0;
+	}
+
+	if (epoch != 0)
+		rc2 = vos_dtx_abort(cont->sc_hdl, xid, epoch);
+	else
+		rc2 = vos_dtx_set_flags(cont->sc_hdl, xid, 1, DTE_CORRUPTED);
+	if (rc2 > 0 || rc2 == -DER_NONEXIST)
+		rc2 = 0;
+
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec, drr_link)) != NULL)
+		dtx_drr_cleanup(drr);
+
+	D_CDEBUG(rc != 0 || rc1 != 0 || rc2 != 0, DLOG_ERR, DB_TRACE,
+		 "Collectively abort DTX "DF_DTI": %d/%d/%d\n", DP_DTI(xid), rc, rc1, rc2);
+
+	return rc != 0 ? rc : rc1 != 0 ? rc1 : rc2;
 }

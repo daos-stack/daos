@@ -351,6 +351,18 @@ class TelemetryUtils():
         "engine_io_ops_migrate_latency_mean",
         "engine_io_ops_migrate_latency_min",
         "engine_io_ops_migrate_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS = [
+        "engine_io_ops_obj_coll_punch_active",
+        "engine_io_ops_obj_coll_punch_active_max",
+        "engine_io_ops_obj_coll_punch_active_mean",
+        "engine_io_ops_obj_coll_punch_active_min",
+        "engine_io_ops_obj_coll_punch_active_stddev"]
+    ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS = [
+        "engine_io_ops_obj_coll_punch_latency",
+        "engine_io_ops_obj_coll_punch_latency_max",
+        "engine_io_ops_obj_coll_punch_latency_mean",
+        "engine_io_ops_obj_coll_punch_latency_min",
+        "engine_io_ops_obj_coll_punch_latency_stddev"]
     ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_obj_enum_active",
         "engine_io_ops_obj_enum_active_max",
@@ -479,6 +491,8 @@ class TelemetryUtils():
         ENGINE_IO_OPS_KEY2ANCHOR_LATENCY_METRICS +\
         ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_COLL_PUNCH_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
         ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
         ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\

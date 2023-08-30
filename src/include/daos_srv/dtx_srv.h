@@ -64,7 +64,6 @@ struct dtx_handle {
 					 dth_pinned:1,
 					 /* DTXs in CoS list are committed. */
 					 dth_cos_done:1,
-					 dth_resent:1, /* For resent case. */
 					 /* Only one participator in the DTX. */
 					 dth_solo:1,
 					 /* Do not keep committed entry. */
@@ -166,6 +165,8 @@ struct dtx_leader_handle {
 	uint32_t			dlh_normal_sub_done:1,
 					/* Drop conditional flags when forward RPC. */
 					dlh_drop_cond:1;
+	struct obj_coll_target		*dlh_coll_tgts;
+	uint32_t			dlh_coll_tgt_nr;
 	/* How many normal sub request. */
 	uint32_t			dlh_normal_sub_cnt;
 	/* How many delay forward sub request. */
@@ -205,7 +206,7 @@ enum dtx_flags {
 	DTX_FOR_MIGRATION	= (1 << 3),
 	/** Ignore other uncommitted DTXs. */
 	DTX_IGNORE_UNCOMMITTED	= (1 << 4),
-	/** Resent request. */
+	/** Resent request. Out-of-date. */
 	DTX_RESEND		= (1 << 5),
 	/** Force DTX refresh if hit non-committed DTX on non-leader. Out-of-date DAOS-7878. */
 	DTX_FORCE_REFRESH	= (1 << 6),
@@ -225,6 +226,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
+		 struct obj_coll_target *coll_tgts, int coll_tgt_nr,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh);
 int
 dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int result);
@@ -260,9 +262,18 @@ void dtx_cont_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
+int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
+	       struct dtx_cos_key *dcks, int count);
+
 int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch);
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
+
+int dtx_coll_commit(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+		    uint32_t count);
+
+int dtx_coll_abort(struct ds_cont_child *cont, struct dtx_id *xid, struct obj_coll_target *oct,
+		   uint32_t count, daos_epoch_t epoch);
 
 /**
  * Check whether the given DTX is resent one or not.

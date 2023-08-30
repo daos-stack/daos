@@ -850,7 +850,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		daos_unit_oid_t *leader_oid, struct dtx_id *dti_cos,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration, bool ignore_uncommitted,
-		bool resent, bool prepared, bool drop_cmt, struct dtx_handle *dth)
+		bool prepared, bool drop_cmt, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -871,7 +871,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 
 	dth->dth_pinned = 0;
 	dth->dth_cos_done = 0;
-	dth->dth_resent = resent ? 1 : 0;
 	dth->dth_solo = solo ? 1 : 0;
 	dth->dth_drop_cmt = drop_cmt ? 1 : 0;
 	dth->dth_modify_shared = 0;
@@ -1100,6 +1099,8 @@ out:
  * \param tgts		[IN]	targets for distribute transaction.
  * \param tgt_cnt	[IN]	number of targets (not count the leader itself).
  * \param flags		[IN]	See dtx_flags.
+ * \param coll_tgts	[IN]	targets for collective option.
+ * \param coll_tgt_nr	[IN]	length of coll_tgts array.
  * \param mbs		[IN]	DTX participants information.
  * \param p_dlh		[OUT]	Pointer to the DTX handle.
  *
@@ -1111,27 +1112,49 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
 		 struct daos_shard_tgt *tgts, int tgt_cnt, uint32_t flags,
+		 struct obj_coll_target *coll_tgts, int coll_tgt_nr,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh)
 {
 	struct dtx_leader_handle	*dlh;
 	struct dtx_handle		*dth;
+	int				 cnt;
 	int				 rc;
 	int				 i;
 
-	D_ALLOC(dlh, sizeof(*dlh) + sizeof(struct dtx_sub_status) * tgt_cnt);
+	if (coll_tgt_nr > 0)
+		/* coll_tgts[0] is for the target(s) on the leader rank. */
+		cnt = coll_tgt_nr - 1;
+	else
+		cnt = tgt_cnt;
+
+	D_ALLOC(dlh, sizeof(*dlh) + sizeof(struct dtx_sub_status) * cnt);
 	if (dlh == NULL)
 		return -DER_NOMEM;
 
-	if (tgt_cnt > 0) {
+	if (cnt > 0) {
 		dlh->dlh_future = ABT_FUTURE_NULL;
 		dlh->dlh_subs = (struct dtx_sub_status *)(dlh + 1);
-		for (i = 0; i < tgt_cnt; i++) {
-			dlh->dlh_subs[i].dss_tgt = tgts[i];
-			if (unlikely(tgts[i].st_flags & DTF_DELAY_FORWARD))
-				dlh->dlh_delay_sub_cnt++;
+
+		if (coll_tgt_nr > 0) {
+			for (i = 0; i < cnt; i++)
+				dlh->dlh_subs[i].dss_tgt.st_rank = coll_tgts[i + 1].oct_rank;
+
+			/* NOTE: currently do not support DTF_DELAY_FORWARD for collective DTX. */
+			dlh->dlh_delay_sub_cnt = 0;
+			dlh->dlh_normal_sub_cnt = cnt;
+		} else {
+			for (i = 0; i < cnt; i++) {
+				dlh->dlh_subs[i].dss_tgt = tgts[i];
+				if (unlikely(tgts[i].st_flags & DTF_DELAY_FORWARD))
+					dlh->dlh_delay_sub_cnt++;
+			}
+
+			dlh->dlh_normal_sub_cnt = cnt - dlh->dlh_delay_sub_cnt;
 		}
-		dlh->dlh_normal_sub_cnt = tgt_cnt - dlh->dlh_delay_sub_cnt;
 	}
+
+	dlh->dlh_coll_tgts = coll_tgts;
+	dlh->dlh_coll_tgt_nr = coll_tgt_nr;
 
 	dth = &dlh->dlh_handle;
 	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
@@ -1140,16 +1163,15 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
-			     (flags & DTX_RESEND) ? true : false,
 			     (flags & DTX_PREPARED) ? true : false,
 			     (flags & DTX_DROP_CMT) ? true : false, dth);
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
-		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
+		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x, coll_len %d: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
-		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
+		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, coll_tgt_nr, DP_RC(rc));
 
 	if (rc != 0)
 		D_FREE(dlh);
@@ -1345,11 +1367,20 @@ sync:
 		 *	batched commit.
 		 */
 		vos_dtx_mark_committable(dth);
-		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1);
+
+		if (dlh->dlh_coll_tgts != NULL) {
+			rc = dtx_coll_commit(cont, &dth->dth_xid, dlh->dlh_coll_tgts,
+					     dlh->dlh_coll_tgt_nr);
+		} else {
+			dte = &dth->dth_dte;
+			rc = dtx_commit(cont, &dte, NULL, 1);
+		}
+
 		if (rc != 0)
-			D_WARN(DF_UUID": Fail to sync commit DTX "DF_DTI": "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
+			D_WARN(DF_UUID": Fail to sync %s commit DTX "DF_DTI": "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid),
+			       dlh->dlh_coll_tgts != NULL ? "collective" : "non-collective",
+			       DP_DTI(&dth->dth_xid), DP_RC(rc));
 
 		/*
 		 * NOTE: The semantics of 'sync' commit does not guarantee that all
@@ -1374,7 +1405,11 @@ abort:
 		 * 2. Remove the pinned DTX entry.
 		 */
 		vos_dtx_cleanup(dth, true);
-		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
+		if (dlh->dlh_coll_tgts != NULL)
+			dtx_coll_abort(cont, &dth->dth_xid, dlh->dlh_coll_tgts,
+				       dlh->dlh_coll_tgt_nr, dth->dth_epoch);
+		else
+			dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
 
@@ -1460,8 +1495,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     false, false, false,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
-			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
-			     (flags & DTX_RESEND) ? true : false, false, false, dth);
+			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false, false, false, dth);
 	if (rc == 0 && sub_modification_cnt > 0)
 		rc = vos_dtx_attach(dth, false, false);
 

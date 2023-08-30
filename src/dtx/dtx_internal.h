@@ -22,16 +22,18 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	3
+#define DAOS_DTX_VERSION	4
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
-#define DTX_PROTO_SRV_RPC_LIST						\
-	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")	\
-	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")	\
-	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")	\
-	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")
+#define DTX_PROTO_SRV_RPC_LIST								\
+	X(DTX_COMMIT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_commit")			\
+	X(DTX_ABORT, 0, &CQF_dtx, dtx_handler, NULL, "dtx_abort")			\
+	X(DTX_CHECK, 0, &CQF_dtx, dtx_handler, NULL, "dtx_check")			\
+	X(DTX_REFRESH, 0, &CQF_dtx, dtx_handler, NULL, "dtx_refresh")			\
+	X(DTX_COLL_COMMIT, 0, &CQF_dtx_coll, dtx_coll_handler, NULL, "dtx_coll_commit")	\
+	X(DTX_COLL_ABORT, 0, &CQF_dtx_coll, dtx_coll_handler, NULL, "dtx_coll_abort")
 
 #define X(a, b, c, d, e, f) a,
 enum dtx_operation {
@@ -55,6 +57,21 @@ enum dtx_operation {
 	((int32_t)		(do_sub_rets)		CRT_ARRAY)
 
 CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
+
+/* DTX collective RPC input fields */
+#define DAOS_ISEQ_COLL_DTX						\
+	((uuid_t)		(dci_po_uuid)		CRT_VAR)	\
+	((uuid_t)		(dci_co_uuid)		CRT_VAR)	\
+	((struct dtx_id)	(dci_xid)		CRT_VAR)	\
+	((uint64_t)		(dci_epoch)		CRT_VAR)	\
+	((uint8_t)		(dci_tgt_bitmap)	CRT_ARRAY)
+
+/* DTX collective RPC output fields */
+#define DAOS_OSEQ_COLL_DTX						\
+	((int32_t)		(dco_status)		CRT_VAR)	\
+	((uint32_t)		(dco_padding)		CRT_VAR)
+
+CRT_RPC_DECLARE(dtx_coll, DAOS_ISEQ_COLL_DTX, DAOS_OSEQ_COLL_DTX);
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
 
@@ -164,6 +181,11 @@ struct dtx_tls {
 	uint32_t		 dt_batched_ult_cnt;
 };
 
+struct dtx_coll_local_args {
+	struct dtx_coll_in	*dcla_dci;
+	uint32_t		 dcla_opc;
+};
+
 extern struct dss_module_key dtx_module_key;
 
 static inline struct dtx_tls *
@@ -207,8 +229,6 @@ int dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
-int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 
@@ -219,6 +239,8 @@ int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 
 int dtx_leader_get(struct ds_pool *pool, struct dtx_memberships *mbs,
 		   struct pool_target **p_tgt);
+
+int dtx_coll_local_exec(void *args);
 
 enum dtx_status_handle_result {
 	DSHR_NEED_COMMIT	= 1,
