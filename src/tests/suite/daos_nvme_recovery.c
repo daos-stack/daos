@@ -634,6 +634,9 @@ nvme_test_simulate_IO_error(void **state)
 	assert_non_null(control_log_file);
 	D_ALLOC(server_config_file, DAOS_SERVER_CONF_LENGTH);
 	assert_non_null(server_config_file);
+	/* Avoid a compiler warning of print NULL via %s */
+	if (server_config_file == NULL)
+		return;
 	rc = get_server_config(devices[rank_pos].host, server_config_file);
 	assert_rc_equal(rc, 0);
 	print_message("server_config_file = %s\n", server_config_file);
