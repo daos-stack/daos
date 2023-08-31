@@ -161,44 +161,6 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-// def functional_hw_stages = [
-//     'Functional Hardware Medium': [
-//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
-//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-//         tags: 'pr',
-//         nvme: 'auto',
-//         provider: 'ofi+verbs;ofi_rxm'
-//     ],
-//     // 'Functional Hardware Medium MD on SSD': [
-//     //     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
-//     //                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-//     //     tags: 'pr',
-//     //     nvme: 'auto_md_on_ssd',
-//     //     provider: 'ofi+verbs;ofi_rxm'
-//     // ],
-//     'Functional Hardware Medium Verbs Provider': [
-//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
-//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
-//         tags: 'pr',
-//         nvme: 'auto',
-//         provider: 'ofi+verbs;ofi_rxm'
-//     ],
-//     'Functional Hardware Medium UCX Provider': [
-//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
-//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
-//         tags: 'pr',
-//         nvme: 'auto',
-//         provider: 'ucx+dc_x'
-//     ],
-//     'Functional Hardware Large': [
-//         label: cachedCommitPragma(pragma: 'Test-label-hw-large',
-//                                   def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
-//         tags: 'pr',
-//         nvme: 'auto',
-//         provider: 'ofi+verbs;ofi_rxm'
-//     ]
-// ]
-
 def functionalHwStageMap2 = [
     'Functional Hardware Medium': generateFunctionalTestStage(
         'Functional Hardware Medium',
@@ -246,6 +208,11 @@ def functionalHwStageMap2 = [
 // }
 
 def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
+    return {
+        stage("${name}") {
+            println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+        }
+    }
     // return {
     //     node(label) {
     //         if (!skipStage()) {
@@ -266,26 +233,26 @@ def generateFunctionalTestStage(String name, String label, String tags, String n
     //         }
     //     }
     // }
-    return {
-        stage('${name}') {
-            node(label) {
-                if (!skipStage()) {
-                    try {
-                        job_step_update(
-                            functionalTest(
-                                inst_repos: daosRepos(),
-                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-                                test_tag: getFunctionalTags(default_tags: tags),
-                                ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-                                test_function: 'runTestFunctionalV2'))
-                    } finally {
-                        functionalTestPostV2()
-                        job_status_update()
-                    }
-                }
-            }
-        }
-    }
+    // return {
+    //     stage('${name}') {
+    //         node(label) {
+    //             if (!skipStage()) {
+    //                 try {
+    //                     job_step_update(
+    //                         functionalTest(
+    //                             inst_repos: daosRepos(),
+    //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+    //                             test_tag: getFunctionalTags(default_tags: tags),
+    //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+    //                             test_function: 'runTestFunctionalV2'))
+    //                 } finally {
+    //                     functionalTestPostV2()
+    //                     job_status_update()
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 def functional_hw_stages = ['Functional Hardware Medium', 'Functional Hardware Medium Verbs Provider', 'Functional Hardware Medium UCX Provider', 'Functional Hardware Large']
