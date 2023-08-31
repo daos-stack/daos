@@ -258,7 +258,7 @@ type ledCmd struct {
 	smdManageCmd
 
 	Args struct {
-		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs"`
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs. All SSDs selected if arg not provided."`
 	} `positional-args:"yes"`
 }
 
@@ -278,7 +278,7 @@ type ledIdentifyCmd struct {
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
 func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation:       control.LedBlinkOp,
@@ -303,7 +303,7 @@ type ledCheckCmd struct {
 // Runs SPDK VMD API commands to query the LED state on VMD devices
 func (cmd *ledCheckCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
 		Operation: control.LedCheckOp,
