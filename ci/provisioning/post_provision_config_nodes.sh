@@ -67,10 +67,10 @@ disable_gpg_check() {
 }
 
 dump_repos() {
-        for file in "$REPOS_DIR"/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+    for file in "$REPOS_DIR"/*.repo; do
+        echo "---- $file ----"
+        cat "$file"
+    done
 }
 
 env > /root/last_run-env.txt
