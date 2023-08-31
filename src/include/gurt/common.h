@@ -15,8 +15,6 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
-#include <malloc.h>
-
 #include <uuid/uuid.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -293,10 +291,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-/* TODO: Check for __builtin_dynamic_object_size at compile time */
-
 /* Free a pointer. Only logs if the pointer is non-NULL. */
-#ifdef DAOS_BUILD_RELEASE
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
@@ -305,44 +300,6 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 			(ptr) = NULL;                                                              \
 		}                                                                                  \
 	} while (0)
-
-#else
-
-/* Developer/debug version, poison memory on free.
- * This tries several ways to access the buffer size however none of them are perfect so for now
- * this is no in release builds.
- */
-
-static size_t
-_f_get_alloc_size(void *ptr)
-{
-	size_t size = malloc_usable_size(ptr);
-	size_t obs;
-
-	obs = __builtin_object_size(ptr, 0);
-	if (obs != -1 && obs < size)
-		size = obs;
-
-#if __USE_FORTIFY_LEVEL > 2
-	obs = __builtin_dynamic_object_size(ptr, 0);
-	if (obs != -1 && obs < size)
-		size = obs;
-#endif
-
-	return size;
-}
-
-#define D_FREE(ptr)                                                                                \
-	do {                                                                                       \
-		if ((ptr) != NULL) {                                                               \
-			size_t _frs = _f_get_alloc_size(ptr);                                      \
-			memset(ptr, 0x42, _frs);                                                   \
-			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
-			d_free(ptr);                                                               \
-			(ptr) = NULL;                                                              \
-		}                                                                                  \
-	} while (0)
-#endif
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
@@ -968,6 +925,16 @@ d_hlc_epsilon_get(void);
  */
 uint64_t
 d_hlc_epsilon_get_bound(uint64_t hlc);
+
+/**
+ * Get the age of the hlc in second.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The age of the hlc in second
+ */
+uint64_t
+d_hlc_age2sec(uint64_t hlc);
 
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);

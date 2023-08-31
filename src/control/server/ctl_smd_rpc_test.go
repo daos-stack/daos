@@ -847,7 +847,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 	pbIdentifyDev := &ctlpb.SmdDevice{
 		TrAddr:   test.MockPCIAddr(1),
 		Uuid:     test.MockUUID(1),
-		DevState: devStateNormal,
 		LedState: ledStateIdentify,
 	}
 	devManageBusyResp := &ctlpb.DevManageResp{Status: int32(daos.Busy), Device: pbNormDev}
@@ -1221,7 +1220,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 								{
 									TrAddr:   "d50505:01:00.0",
 									Uuid:     test.MockUUID(2),
-									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},
@@ -1232,7 +1230,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 							Device: &ctlpb.SmdDevice{
 								TrAddr:   "d50505:01:00.0",
 								Uuid:     test.MockUUID(2),
-								DevState: devStateNormal,
 								LedState: ledStateNormal,
 							},
 						},
@@ -1253,7 +1250,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 								Device: &ctlpb.SmdDevice{
 									TrAddr:   "d50505:01:00.0",
 									Uuid:     test.MockUUID(2),
-									DevState: devStateNormal,
 									LedState: ledStateNormal,
 								},
 							},
