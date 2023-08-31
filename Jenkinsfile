@@ -162,37 +162,80 @@ String vm9_label(String distro) {
 }
 
 // def functional_hw_stages = [
-//     [name: 'Functional Hardware Medium',
-//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
-//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-//      tags: 'pr',
-//      nvme: 'auto',
-//      provider: 'ofi+verbs;ofi_rxm'],
-//     // [name: 'Functional Hardware Medium MD on SSD',
-//     //  label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
-//     //                            def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-//     //  tags: 'pr',
-//     //  nvme: 'auto_md_on_ssd',
-//     //  provider: 'ofi+verbs;ofi_rxm'],
-//     [name: 'Functional Hardware Medium Verbs Provider',
-//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
-//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
-//      tags: 'pr',
-//      nvme: 'auto',
-//      provider: 'ofi+verbs;ofi_rxm'],
-//     [name: 'Functional Hardware Medium UCX Provider',
-//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
-//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
-//      tags: 'pr',
-//      nvme: 'auto',
-//      provider: 'ucx+dc_x'],
-//     [name: 'Functional Hardware Large',
-//      label: cachedCommitPragma(pragma: 'Test-label-hw-large',
-//                                def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
-//      tags: 'pr',
-//      nvme: 'auto',
-//      provider: 'ofi+verbs;ofi_rxm'],
+//     'Functional Hardware Medium': [
+//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
+//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+//         tags: 'pr',
+//         nvme: 'auto',
+//         provider: 'ofi+verbs;ofi_rxm'
+//     ],
+//     // 'Functional Hardware Medium MD on SSD': [
+//     //     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
+//     //                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+//     //     tags: 'pr',
+//     //     nvme: 'auto_md_on_ssd',
+//     //     provider: 'ofi+verbs;ofi_rxm'
+//     // ],
+//     'Functional Hardware Medium Verbs Provider': [
+//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
+//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+//         tags: 'pr',
+//         nvme: 'auto',
+//         provider: 'ofi+verbs;ofi_rxm'
+//     ],
+//     'Functional Hardware Medium UCX Provider': [
+//         label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
+//                                   def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
+//         tags: 'pr',
+//         nvme: 'auto',
+//         provider: 'ucx+dc_x'
+//     ],
+//     'Functional Hardware Large': [
+//         label: cachedCommitPragma(pragma: 'Test-label-hw-large',
+//                                   def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+//         tags: 'pr',
+//         nvme: 'auto',
+//         provider: 'ofi+verbs;ofi_rxm'
+//     ]
 // ]
+
+def functionalHwStageMap2 = [
+    'Functional Hardware Medium': generateFunctionalTestStage(
+        'Functional Hardware Medium',
+        cachedCommitPragma(pragma: 'Test-label-hw-medium',
+                           def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+        'pr',
+        'auto',
+        'ofi+verbs;ofi_rxm'),
+    // 'Functional Hardware Medium MD on SSD': generateFunctionalTestStage(
+    //     'Functional Hardware Medium MD on SSD',
+    //     cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
+    //                        def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SSD_LABEL),
+    //     'pr',
+    //     'auto_md_on_ssd',
+    //     'ofi+verbs;ofi_rxm'),
+    'Functional Hardware Medium': generateFunctionalTestStage(
+        'Functional Hardware Medium',
+        cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
+                           def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+        'pr',
+        'auto',
+        'ofi+verbs;ofi_rxm'),
+    'Functional Hardware Medium UCX Provider': generateFunctionalTestStage(
+        'Functional Hardware Medium UCX Provider',
+        cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
+                           def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
+        'pr',
+        'auto',
+        'ucx+dc_x'),
+    'Functional Hardware Large': generateFunctionalTestStage(
+        'Functional Hardware Large',
+        cachedCommitPragma(pragma: 'Test-label-hw-large',
+                           def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+        'pr',
+        'auto',
+        'ofi+verbs;ofi_rxm'),
+]
 
 // def functionalHwStageMap = functional_hw_stages.collectEntries {
 //     ["${it.get('name')}" : generateFunctionalTestStage(it.get('name'),
@@ -202,57 +245,59 @@ String vm9_label(String distro) {
 //                                                        it.get('provider', 'ofi+verbs;ofi_rxm'))]
 // }
 
-// def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
-//     return {
-//         node(label) {
-//             if (!skipStage()) {
-//                 try {
-//                     stage('${name}') {
-//                         job_step_update(
-//                             functionalTest(
-//                                 inst_repos: daosRepos(),
-//                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-//                                 test_tag: getFunctionalTags(default_tags: tags),
-//                                 ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-//                                 test_function: 'runTestFunctionalV2'))
-//                     }
-//                 } finally {
-//                     functionalTestPostV2()
-//                     job_status_update()
-//                 }
-//             }
-//         }
-//     }
-//     return {
-//         stage('${name}') {
-//             node(label) {
-//                 if (!skipStage()) {
-//                     try {
-//                         job_step_update(
-//                             functionalTest(
-//                                 inst_repos: daosRepos(),
-//                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-//                                 test_tag: getFunctionalTags(default_tags: tags),
-//                                 ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-//                                 test_function: 'runTestFunctionalV2'))
-//                     } finally {
-//                         functionalTestPostV2()
-//                         job_status_update()
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
+def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
+    // return {
+    //     node(label) {
+    //         if (!skipStage()) {
+    //             try {
+    //                 stage('${name}') {
+    //                     job_step_update(
+    //                         functionalTest(
+    //                             inst_repos: daosRepos(),
+    //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+    //                             test_tag: getFunctionalTags(default_tags: tags),
+    //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+    //                             test_function: 'runTestFunctionalV2'))
+    //                 }
+    //             } finally {
+    //                 functionalTestPostV2()
+    //                 job_status_update()
+    //             }
+    //         }
+    //     }
+    // }
+    return {
+        stage('${name}') {
+            node(label) {
+                if (!skipStage()) {
+                    try {
+                        job_step_update(
+                            functionalTest(
+                                inst_repos: daosRepos(),
+                                inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+                                test_tag: getFunctionalTags(default_tags: tags),
+                                ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+                                test_function: 'runTestFunctionalV2'))
+                    } finally {
+                        functionalTestPostV2()
+                        job_status_update()
+                    }
+                }
+            }
+        }
+    }
+}
 
 def functional_hw_stages = ['Functional Hardware Medium', 'Functional Hardware Medium Verbs Provider', 'Functional Hardware Medium UCX Provider', 'Functional Hardware Large']
 def functionalHwStageMap = functional_hw_stages.collectEntries {
-    ["${it}" : generateFunctionalTestStage(it)]
+    ["${it}" : generateFunctionalTestStageDebug(it)]
 }
-def generateFunctionalTestStage(String name) {
+def generateFunctionalTestStageDebug(String name) {
     return {
         stage("${name}") {
+            node {
                 println("This is the ${name} stage.")
+            }
         }
     }
 }
