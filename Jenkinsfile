@@ -211,11 +211,11 @@ def functionalHwStageMap = [
 def generateFunctionalTestStage(String name, String tags, String nvme, String provider) {
     String label = hw_label(name)
     return {
-        // node(label) {
-        stage("${name}") {
-            println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+        node(label) {
+            stage("${name}") {
+                println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+            }
         }
-        // }
     }
     // return {
     //     node(label) {
