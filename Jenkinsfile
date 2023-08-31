@@ -164,30 +164,34 @@ String vm9_label(String distro) {
 String hw_label(String name) {
     switch (name) {
         case 'Functional Hardware Medium':
-            return cachedCommitPragma(
-                pragma: 'Test-label-hw-medium',
-                def_val: 'ci_nvme5')
-            //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL)
+            return 'ci_nvme5'
+            // return cachedCommitPragma(
+            //     pragma: 'Test-label-hw-medium',
+            //     def_val: 'ci_nvme5')
+            // //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL)
         // case 'Functional Hardware Medium MD on SSD':
         //     return cachedCommitPragma(
         //         pragma: 'Test-label-hw-medium-md-on-ssd',
         //         def_val: 'ci_nvme5')
         //     //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL)
         case 'Functional Hardware Medium Verbs Provider':
-            return cachedCommitPragma(
-                pragma: 'Test-label-hw-medium-verbs-provider',
-                def_val: 'ci_nvme5')
-            //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL)
+            return 'ci_nvme5'
+            // return cachedCommitPragma(
+            //     pragma: 'Test-label-hw-medium-verbs-provider',
+            //     def_val: 'ci_nvme5')
+            // //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL)
         case 'Functional Hardware Medium UCX Provider':
-            return cachedCommitPragma(
-                pragma: 'Test-label-hw-medium-ucx-provider',
-                def_val: 'ci_ofed5')
-            //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL)
+            return 'ci_ofed5'
+            // return cachedCommitPragma(
+            //     pragma: 'Test-label-hw-medium-ucx-provider',
+            //     def_val: 'ci_ofed5')
+            // //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL)
         default:
-            return cachedCommitPragma(
-                pragma: 'Test-label-hw-large',
-                def_val: 'ci_nvme9')
-            //     def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL)
+            return 'ci_nvme9'
+            // return cachedCommitPragma(
+            //     pragma: 'Test-label-hw-large',
+            //     def_val: 'ci_nvme9')
+            // //     def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL)
     }
 }
 
