@@ -31,6 +31,8 @@ const (
 	checkerLatestPolicyKey = "checker_latest_policy"
 )
 
+var errNoSavedPolicies = errors.New("no previous policies have been saved")
+
 func (svc *mgmtSvc) enableChecker() error {
 	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "true"); err != nil {
 		return errors.Wrap(err, "failed to enable checker")
@@ -434,7 +436,7 @@ func (svc *mgmtSvc) defaultPolicyMap() policyMap {
 func (svc *mgmtSvc) getLastPoliciesUsed() (policyMap, error) {
 	pm, err := svc.getCheckerPolicyMapWithKey(checkerLatestPolicyKey)
 	if system.IsErrSystemAttrNotFound(err) {
-		return nil, errors.New("no previous policies have been saved")
+		return nil, errNoSavedPolicies
 	}
 	return pm, nil
 }
@@ -455,6 +457,9 @@ func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckG
 	var err error
 	if req.Latest {
 		pm, err = svc.getLastPoliciesUsed()
+		if errors.Is(err, errNoSavedPolicies) {
+			pm, err = svc.getCheckerPolicyMap()
+		}
 	} else {
 		pm, err = svc.getCheckerPolicyMap()
 	}

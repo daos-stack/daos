@@ -469,7 +469,9 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 				Sys:    "daos_server",
 				Latest: true,
 			},
-			expErr: errors.New("no previous policies"),
+			expResp: &mgmtpb.CheckGetPolicyResp{
+				Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
+			},
 		},
 		"latest policy with requested classes": {
 			createMS: func(t *testing.T, log logging.Logger) *mgmtSvc {
