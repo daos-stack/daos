@@ -295,9 +295,9 @@ def functionalHwStageMap = functional_hw_stages.collectEntries {
 def generateFunctionalTestStageDebug(String name) {
     return {
         stage("${name}") {
-            node {
+            // node {
                 println("This is the ${name} stage.")
-            }
+            // }
         }
     }
 }
