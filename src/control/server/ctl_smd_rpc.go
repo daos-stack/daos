@@ -362,7 +362,7 @@ func (svc *ControlService) mapIDsToEngine(ctx context.Context, ids string, useTr
 func sendManageReq(c context.Context, e Engine, m drpc.Method, b proto.Message) (*ctlpb.SmdManageResp_Result, error) {
 	if !e.IsReady() {
 		return &ctlpb.SmdManageResp_Result{
-			Status: daos.Unreachable.Int32(),
+			Status: int32(daos.Unreachable),
 		}, nil
 	}
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -24,10 +24,6 @@ func (ds Status) Error() string {
 	dErrStr := C.GoString(C.d_errstr(C.int(ds)))
 	dErrDesc := C.GoString(C.d_errdesc(C.int(ds)))
 	return fmt.Sprintf("%s(%d): %s", dErrStr, ds, dErrDesc)
-}
-
-func (ds Status) Int32() int32 {
-	return int32(ds)
 }
 
 const (
