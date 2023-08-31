@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,7 +52,7 @@ crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protoc
 /**
  * Free protocol_info from crt_protocol_info_get().
  * 
- * \param[inout] protocol_info linked-list of protocol infos
+ * \param[in,out] protocol_info linked-list of protocol infos
 */
 void
 crt_protocol_info_free(struct crt_protocol_info *protocol_info);
