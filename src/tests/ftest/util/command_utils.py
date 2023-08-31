@@ -25,6 +25,7 @@ from general_utils import check_file_exists, \
     get_subprocess_stdout
 from user_utils import get_primary_group
 from run_utils import command_as_user
+from yaml_utils import get_yaml_data
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -871,6 +872,15 @@ class YamlCommand(SubProcessCommand):
 
         """
         return ".".join((self._command, "service"))
+
+    @property
+    def yaml_data(self):
+        """Get the yaml config file contents as a dictionary.
+
+        Returns:
+            dict: the yaml config file contents as a dictionary
+        """
+        return get_yaml_data(self.temporary_file)
 
     def get_params(self, test):
         """Get values for the daos command and its yaml config file.
