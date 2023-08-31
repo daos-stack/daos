@@ -212,8 +212,12 @@ def generateFunctionalTestStage(String name, String tags, String nvme, String pr
     String label = hw_label(name)
     return {
         node(label) {
-            stage("${name}") {
-                println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+            try {
+                stage("${name}") {
+                    println("Start of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+                }
+            } finally {
+                println("End of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
             }
         }
     }
