@@ -1275,7 +1275,7 @@ pipeline {
             steps {
                 script {
                     // parallel functionalHwStageMap
-                    parallel
+                    parallel [
                         'Functional Hardware Medium Branch': generateFunctionalTestStage(
                             'Functional Hardware Medium',
                             cachedCommitPragma(pragma: 'Test-label-hw-medium', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
@@ -1284,6 +1284,7 @@ pipeline {
                             'Functional Hardware Large',
                             cachedCommitPragma(pragma: 'Test-label-hw-large', def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
                             'pr', 'auto', 'ofi+verbs;ofi_rxm')
+                        ]
                 }
             }
         } // stage('Test Hardware')
