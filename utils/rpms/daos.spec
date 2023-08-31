@@ -14,8 +14,8 @@
 %endif
 
 Name:          daos
-Version:       2.3.108
-Release:       5%{?relval}%{?dist}
+Version:       2.4.0
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -555,6 +555,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Thu Aug 31 2023 Phillip Henderson <phillip.henderson@intel.com> 2.4.0-1
+- First release candidate for 2.4.0
+
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.3.108-5
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing
