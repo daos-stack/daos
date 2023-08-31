@@ -682,6 +682,66 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 	}
 }
 
+func TestServer_engineDevMap(t *testing.T) {
+	e1 := EngineInstance{}
+	e2 := EngineInstance{}
+	dev1 := devID{uuid: test.MockUUID(1)}
+	dev2 := devID{trAddr: test.MockPCIAddr(1)}
+
+	for name, tc := range map[string]struct {
+		devs1        []devID
+		devs2        []devID
+		expMap       engineDevMap
+		expFirstDev1 *devID
+		expFirstDev2 *devID
+	}{
+		"simple": {
+			devs1: []devID{dev1},
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e1: devIDMap{dev1.String(): dev1},
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev1: &dev1,
+			expFirstDev2: &dev2,
+		},
+		"multiple devs": {
+			devs2: []devID{dev1, dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev1.String(): dev1, dev2.String(): dev2},
+			},
+			expFirstDev2: &dev1,
+		},
+		"missing dev": {
+			devs2: []devID{dev2},
+			expMap: engineDevMap{
+				&e2: devIDMap{dev2.String(): dev2},
+			},
+			expFirstDev2: &dev2,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			edm := make(engineDevMap)
+
+			for _, id := range tc.devs1 {
+				edm.add(&e1, id)
+			}
+			for _, id := range tc.devs2 {
+				edm.add(&e2, id)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmp.AllowUnexported(devID{}),
+			}
+			if diff := cmp.Diff(tc.expMap, edm, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected map (-want, +got)\n%s\n", diff)
+			}
+			test.AssertEqual(t, tc.expFirstDev1, edm[&e1].getFirst(), "unexpected first dev1")
+			test.AssertEqual(t, tc.expFirstDev2, edm[&e2].getFirst(), "unexpected first dev2")
+		})
+	}
+}
+
 func TestServer_CtlSvc_SmdManage(t *testing.T) {
 	pbNormDev := &ctlpb.SmdDevice{
 		TrAddr:   test.MockPCIAddr(1),
@@ -735,14 +795,6 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 		"missing operation in drpc request": {
 			req:    &ctlpb.SmdManageReq{},
 			expErr: errors.New("Unrecognized operation"),
-		},
-		"led-manage; missing ids": {
-			req: &ctlpb.SmdManageReq{
-				Op: &ctlpb.SmdManageReq_Led{
-					Led: &ctlpb.LedManageReq{},
-				},
-			},
-			expErr: errors.New("empty id string"),
 		},
 		"dev-replace; missing uuid": {
 			req: &ctlpb.SmdManageReq{
@@ -1022,6 +1074,44 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 				},
 			},
 		},
+		"led-manage; dual-engine; no ids in request": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					// No ids specified in request should return all.
+					Led: &ctlpb.LedManageReq{},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{pbNormDev},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentifyDev,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{},
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentifyDev},
+						},
+					},
+				},
+			},
+		},
 		"led-manage; mixed id types in request": {
 			req: &ctlpb.SmdManageReq{
 				Op: &ctlpb.SmdManageReq_Led{
@@ -1087,6 +1177,47 @@ func TestServer_CtlSvc_SmdManage(t *testing.T) {
 									LedState: ledStateNormal,
 								},
 							},
+						},
+					},
+				},
+			},
+		},
+		// Multiple NVMe namespaces per SSD.
+		"led-manage; multiple dev ids for the same traddr": {
+			req: &ctlpb.SmdManageReq{
+				Op: &ctlpb.SmdManageReq_Led{
+					Led: &ctlpb.LedManageReq{
+						// Matches IDs returned in initial list query.
+						Ids: test.MockUUID(1) + "," + test.MockUUID(2),
+					},
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								pbNormDev,
+								func() *ctlpb.SmdDevice {
+									d := *pbNormDev
+									d.Uuid = test.MockUUID(2)
+									return &d
+								}(),
+							},
+						},
+					},
+					{
+						Message: &ctlpb.DevManageResp{
+							Device: pbIdentifyDev,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdManageResp{
+				Ranks: []*ctlpb.SmdManageResp_RankResp{
+					{
+						Results: []*ctlpb.SmdManageResp_Result{
+							{Device: pbIdentifyDev},
 						},
 					},
 				},
