@@ -1,5 +1,5 @@
 """Build DAOS"""
-import os
+import os 
 import sys
 import subprocess  # nosec
 import time
