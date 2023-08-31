@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -2411,17 +2411,16 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	child_output->rc = rc;
 
 	ivns = cb_info->uci_ivns_internal;
-
-	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
-	D_ASSERT(iv_ops != NULL);
-
-	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
-			   cb_info->uci_user_priv);
-
 	crt_reply_send(cb_info->uci_child_rpc);
 
 	/* ADDREF done in crt_hdlr_iv_update */
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+
+	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+			   cb_info->uci_user_priv);
+
 	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 
 	/* addref in transfer_back_to_child() */
@@ -2468,11 +2467,11 @@ int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 				     &cb_info->uci_iv_value, update_rc,
 				     cb_info->uci_cb_arg);
 
-		/* Corresponding on_get() done in crt_iv_update_internal */
-		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
-
 		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(cb_info->uci_bulk_hdl);
+
+		/* Corresponding on_get() done in crt_iv_update_internal */
+		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
 
 		/* addref done in crt_hdlr_iv_update */
 		IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2532,6 +2531,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 
 		/* uci_bulk_hdl will not be set for invalidate call */
 		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						&iv_info->uci_iv_value,
 						iv_info->uci_user_priv);
@@ -2559,7 +2559,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	} else {
 		d_sg_list_t *tmp_iv_value;
 
-		if (iv_info->uci_bulk_hdl == NULL)
+		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
 			tmp_iv_value = NULL;
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
@@ -2580,15 +2580,14 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_cb_arg,
 					  iv_info->uci_user_priv,
 					  rc);
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 		if (rc != 0) {
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						tmp_iv_value,
 						iv_info->uci_user_priv);
 		}
 	}
-
-	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
-		crt_bulk_free(iv_info->uci_bulk_hdl);
 
 	/* addref done in crt_hdlr_iv_update */
 	IVNS_DECREF(iv_info->uci_ivns_internal);
@@ -2877,6 +2876,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_ERROR("crt_ivu_rpc_issue(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(send_error, rc);
 		}
+		rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+
 	} else if (update_rc == 0) {
 		/* If sync was bi-directional - transfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
@@ -2888,7 +2889,7 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 			D_GOTO(exit, rc);
 		}
-
+		crt_bulk_free(cb_info->buc_bulk_hdl);
 		output->rc = iv_ops->ivo_on_put(ivns_internal,
 						&cb_info->buc_iv_value,
 						cb_info->buc_user_priv);
@@ -2901,17 +2902,14 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
-
-	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 exit:
 	return rc;
 
 send_error:
-	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
-			   cb_info->buc_user_priv);
-
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	output->rc = rc;
+	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
+			   cb_info->buc_user_priv);
 
 	crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
