@@ -207,53 +207,53 @@ String vm9_label(String distro) {
 //                                                        it.get('provider', 'ofi+verbs;ofi_rxm'))]
 // }
 
-// def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
-//     return {
-//         stage("${name}") {
-//             println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
-//         }
-//     }
-//     // return {
-//     //     node(label) {
-//     //         if (!skipStage()) {
-//     //             try {
-//     //                 stage('${name}') {
-//     //                     job_step_update(
-//     //                         functionalTest(
-//     //                             inst_repos: daosRepos(),
-//     //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-//     //                             test_tag: getFunctionalTags(default_tags: tags),
-//     //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-//     //                             test_function: 'runTestFunctionalV2'))
-//     //                 }
-//     //             } finally {
-//     //                 functionalTestPostV2()
-//     //                 job_status_update()
-//     //             }
-//     //         }
-//     //     }
-//     // }
-//     // return {
-//     //     stage('${name}') {
-//     //         node(label) {
-//     //             if (!skipStage()) {
-//     //                 try {
-//     //                     job_step_update(
-//     //                         functionalTest(
-//     //                             inst_repos: daosRepos(),
-//     //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
-//     //                             test_tag: getFunctionalTags(default_tags: tags),
-//     //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
-//     //                             test_function: 'runTestFunctionalV2'))
-//     //                 } finally {
-//     //                     functionalTestPostV2()
-//     //                     job_status_update()
-//     //                 }
-//     //             }
-//     //         }
-//     //     }
-//     // }
-// }
+def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
+    return {
+        stage("${name}") {
+            println("This is the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+        }
+    }
+    // return {
+    //     node(label) {
+    //         if (!skipStage()) {
+    //             try {
+    //                 stage('${name}') {
+    //                     job_step_update(
+    //                         functionalTest(
+    //                             inst_repos: daosRepos(),
+    //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+    //                             test_tag: getFunctionalTags(default_tags: tags),
+    //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+    //                             test_function: 'runTestFunctionalV2'))
+    //                 }
+    //             } finally {
+    //                 functionalTestPostV2()
+    //                 job_status_update()
+    //             }
+    //         }
+    //     }
+    // }
+    // return {
+    //     stage('${name}') {
+    //         node(label) {
+    //             if (!skipStage()) {
+    //                 try {
+    //                     job_step_update(
+    //                         functionalTest(
+    //                             inst_repos: daosRepos(),
+    //                             inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
+    //                             test_tag: getFunctionalTags(default_tags: tags),
+    //                             ftest_arg: getFunctionalArgs(default_nvme: nvme, provider: provider),
+    //                             test_function: 'runTestFunctionalV2'))
+    //                 } finally {
+    //                     functionalTestPostV2()
+    //                     job_status_update()
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+}
 
 def functional_hw_stages = ['Functional Hardware Medium', 'Functional Hardware Medium Verbs Provider', 'Functional Hardware Medium UCX Provider', 'Functional Hardware Large']
 def functionalHwStageMap = functional_hw_stages.collectEntries {
@@ -1274,7 +1274,16 @@ pipeline {
             }
             steps {
                 script {
-                    parallel functionalHwStageMap
+                    // parallel functionalHwStageMap
+                    parallel
+                        'Functional Hardware Medium Branch': generateFunctionalTestStage(
+                            'Functional Hardware Medium',
+                            cachedCommitPragma(pragma: 'Test-label-hw-medium', def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+                            'pr', 'auto', 'ofi+verbs;ofi_rxm'),
+                        'Functional Hardware Large Branch': generateFunctionalTestStage(
+                            'Functional Hardware Large',
+                            cachedCommitPragma(pragma: 'Test-label-hw-large', def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+                            'pr', 'auto', 'ofi+verbs;ofi_rxm')
                 }
             }
         } // stage('Test Hardware')
