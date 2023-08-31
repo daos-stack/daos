@@ -168,11 +168,11 @@ String hw_label(String name) {
                 pragma: 'Test-label-hw-medium',
                 def_val: 'ci_nvme5')
             //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL)
-        case 'Functional Hardware Medium MD on SSD':
-            return cachedCommitPragma(
-                pragma: 'Test-label-hw-medium-md-on-ssd',
-                def_val: 'ci_nvme5')
-            //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL)
+        // case 'Functional Hardware Medium MD on SSD':
+        //     return cachedCommitPragma(
+        //         pragma: 'Test-label-hw-medium-md-on-ssd',
+        //         def_val: 'ci_nvme5')
+        //     //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL)
         case 'Functional Hardware Medium Verbs Provider':
             return cachedCommitPragma(
                 pragma: 'Test-label-hw-medium-verbs-provider',
