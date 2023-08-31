@@ -53,7 +53,8 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        run: docker run --name build-post
+              --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
       - name: Fetch results
@@ -141,6 +142,6 @@ jobs:
 
 # Should work, but enable on master only for now.
 #    - name: Run NLT
-#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-#               --name build-post build-image
+#      run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
+#                --user root:root --name build-post build-image
 #               ./daos/utils/node_local_test.py --no-root --memcheck no --test cont_copy

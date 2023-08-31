@@ -122,7 +122,8 @@ jobs:
                             --build-arg DAOS_KEEP_SRC=yes
                             --tag build-image
       - name: Build and Test
-        run: docker run --name build-post --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        run: docker run --name build-post
+              --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
               --env COMPILER --env DEPS_JOBS --user root:root build-image
               ./daos/utils/ci/run_in_gha.sh
       - name: Fetch results
@@ -212,7 +213,7 @@ jobs:
                             --build-arg COMPILER
         # Fails with Ubuntu still for the spdk issue.
         # - name: Run NLT
-        # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777
+        # run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
         #        --user root:root build-image ./daos/utils/node_local_test.py --no-root
         #        --memcheck no --test cont_copy
 
@@ -295,8 +296,8 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
+                 --user root:root build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
@@ -381,6 +382,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
-                 build-image ./daos/utils/node_local_test.py --no-root
+        run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-size=4g,tmpfs-mode=1777
+                 --user root:root build-image ./daos/utils/node_local_test.py --no-root
                  --memcheck no --test cont_copy --system-ram-reserved 6
