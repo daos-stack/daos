@@ -11,19 +11,15 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <linux/xattr.h>
-#include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/pool.h>
 #include <daos/container.h>
-#include <daos/cont_props.h>
 #include <daos/array.h>
 #include <daos/object.h>
-#include <daos/placement.h>
 
 #include "daos.h"
 #include "daos_fs.h"
-
 #include "dfs_internal.h"
 
 /** D-key name of SB metadata */
