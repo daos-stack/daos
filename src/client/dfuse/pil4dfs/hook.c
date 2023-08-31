@@ -45,6 +45,12 @@
 #include "hook.h"
 #include "hook_int.h"
 
+#ifndef min_max
+#define min_max
+#define min(a,b) ((a) < (b) ? (a) : (b))
+#define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
 #define MAX_LEN_DISASSEMBLE (28)
 
 static int                        num_hook;
@@ -223,7 +229,7 @@ determine_lib_path(void)
 		printf("Warning: Failed to allocate memory for path_libc.\n");
 		goto err;
 	}
-	memcpy(path_libc, start, end - start);
+	memcpy(path_libc, start, min(PATH_MAX, (size_t)(end - start)));
 	path_libc[end - start] = 0;
 
 	/* compose path_libpthread with path_libc string */
