@@ -161,45 +161,50 @@ String vm9_label(String distro) {
                                                           def_val: params.FUNCTIONAL_VM_LABEL))
 }
 
-def functional_hw_stages = [
-    [name: 'Functional Hardware Medium',
-     label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
-                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-     tags: 'pr',
-     nvme: 'auto',
-     provider: 'ofi+verbs;ofi_rxm'],
-    // [name: 'Functional Hardware Medium MD on SSD',
-    //  label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
-    //                            def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-    //  tags: 'pr',
-    //  nvme: 'auto_md_on_ssd',
-    //  provider: 'ofi+verbs;ofi_rxm'],
-    [name: 'Functional Hardware Medium Verbs Provider',
-     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
-                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
-     tags: 'pr',
-     nvme: 'auto',
-     provider: 'ofi+verbs;ofi_rxm'],
-    [name: 'Functional Hardware Medium UCX Provider',
-     label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
-                               def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
-     tags: 'pr',
-     nvme: 'auto',
-     provider: 'ucx+dc_x'],
-    [name: 'Functional Hardware Large',
-     label: cachedCommitPragma(pragma: 'Test-label-hw-large',
-                               def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
-     tags: 'pr',
-     nvme: 'auto',
-     provider: 'ofi+verbs;ofi_rxm'],
-]
+// def functional_hw_stages = [
+//     [name: 'Functional Hardware Medium',
+//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium',
+//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+//      tags: 'pr',
+//      nvme: 'auto',
+//      provider: 'ofi+verbs;ofi_rxm'],
+//     // [name: 'Functional Hardware Medium MD on SSD',
+//     //  label: cachedCommitPragma(pragma: 'Test-label-hw-medium-md-on-ssd',
+//     //                            def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+//     //  tags: 'pr',
+//     //  nvme: 'auto_md_on_ssd',
+//     //  provider: 'ofi+verbs;ofi_rxm'],
+//     [name: 'Functional Hardware Medium Verbs Provider',
+//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium-verbs-provider',
+//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+//      tags: 'pr',
+//      nvme: 'auto',
+//      provider: 'ofi+verbs;ofi_rxm'],
+//     [name: 'Functional Hardware Medium UCX Provider',
+//      label: cachedCommitPragma(pragma: 'Test-label-hw-medium-ucx-provider',
+//                                def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
+//      tags: 'pr',
+//      nvme: 'auto',
+//      provider: 'ucx+dc_x'],
+//     [name: 'Functional Hardware Large',
+//      label: cachedCommitPragma(pragma: 'Test-label-hw-large',
+//                                def_val: params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+//      tags: 'pr',
+//      nvme: 'auto',
+//      provider: 'ofi+verbs;ofi_rxm'],
+// ]
 
+// def functionalHwStageMap = functional_hw_stages.collectEntries {
+//     ["${it.get('name')}" : generateFunctionalTestStage(it.get('name'),
+//                                                        it.get('label'),
+//                                                        it.get('tags', 'pr'),
+//                                                        it.get('nvme', 'auto'),
+//                                                        it.get('provider', 'ofi+verbs;ofi_rxm'))]
+// }
+
+def functional_hw_stages = ['Functional Hardware Medium', 'Functional Hardware Medium Verbs Provider', 'Functional Hardware Medium UCX Provider', 'Functional Hardware Large']
 def functionalHwStageMap = functional_hw_stages.collectEntries {
-    ["${it.get('name')}" : generateFunctionalTestStage(it.get('name'),
-                                                       it.get('label'),
-                                                       it.get('tags', 'pr'),
-                                                       it.get('nvme', 'auto'),
-                                                       it.get('provider', 'ofi+verbs;ofi_rxm'))]
+    ["${it}" : generateFunctionalTestStage(it)]
 }
 
 def generateFunctionalTestStage(String name, String label, String tags, String nvme, String provider) {
