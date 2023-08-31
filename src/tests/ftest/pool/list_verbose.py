@@ -197,9 +197,9 @@ class ListVerboseTest(IorTestBase):
                     nvme_imbalance=pool_free_data["nvme_imbalance"],
                     targets_disabled=targets_disabled[index],
                     scm_size=pool_free_data["scm_size"],
+                    nvme_size=nvme_size[index],
                     state=state[index],
-                    rebuild_state=rebuild_state[index],
-                    nvme_size[index]))
+                    rebuild_state=rebuild_state[index]))
 
         # Sort pools by UUID.
         actual_pools.sort(key=lambda item: item.get("uuid"))
