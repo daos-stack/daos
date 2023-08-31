@@ -385,6 +385,7 @@ static off_t (*libc_lseek)(int fd, off_t offset, int whence);
 static off_t (*pthread_lseek)(int fd, off_t offset, int whence);
 
 static int (*next_fxstat)(int vers, int fd, struct stat *buf);
+static int (*next_fstat)(int fd, struct stat *buf);
 
 static int (*next_statfs)(const char *pathname, struct statfs *buf);
 static int (*next_fstatfs)(int fd, struct statfs *buf);
@@ -408,6 +409,8 @@ static int (*next_xstat)(int ver, const char *path, struct stat *stat_buf);
 static int (*libc_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*next_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
+
+static int (*next_fstatat)(int dirfd, const char *path, struct stat *stat_buf, int flags);
 
 static int (*next_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
@@ -2176,6 +2179,49 @@ new_fxstat(int vers, int fd, struct stat *buf)
 	return 0;
 }
 
+int
+fstat(int fd, struct stat *buf)
+{
+	int rc, fd_directed;
+
+	if (next_fstat == NULL) {
+		next_fstat = dlsym(RTLD_NEXT, "fstat");
+		D_ASSERT(next_fstat != NULL);
+	}
+	if (!hook_enabled)
+		return next_fstat(fd, buf);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fstat(fd, buf);
+
+	if (fd_directed < FD_DIR_BASE) {
+		rc          = dfs_ostat(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+					file_list[fd_directed - FD_FILE_BASE]->file, buf);
+		buf->st_ino = file_list[fd_directed - FD_FILE_BASE]->st_ino;
+	} else {
+		rc          = dfs_ostat(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+					dir_list[fd_directed - FD_DIR_BASE]->dir, buf);
+		buf->st_ino = dir_list[fd_directed - FD_DIR_BASE]->st_ino;
+	}
+
+	if (rc) {
+		D_ERROR("dfs_ostat() failed: %d (%s)\n", rc, strerror(rc));
+		errno = rc;
+		rc    = -1;
+	}
+
+	atomic_fetch_add_relaxed(&num_stat, 1);
+
+	return 0;
+}
+
+int
+fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull, nothrow));
+
+int
+__fstat64(int fd, struct stat64 *buf) __attribute__((alias("fstat"), leaf, nonnull, nothrow));
+
 static int
 new_xstat(int ver, const char *path, struct stat *stat_buf)
 {
@@ -2307,6 +2353,56 @@ out_err:
 	errno = error;
 	return (-1);
 }
+
+int
+fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf, int flags)
+{
+	int  idx_dfs, error = 0, rc;
+	char *full_path = NULL;
+
+	if (next_fstatat == NULL) {
+		next_fstatat = dlsym(RTLD_NEXT, "fstatat");
+		D_ASSERT(fstatat != NULL);
+	}
+	if (!hook_enabled)
+		return next_fstatat(dirfd, path, stat_buf, flags);
+
+	if (path[0] == '/') {
+		/* Absolute path, dirfd is ignored */
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			return new_lxstat(1, path, stat_buf);
+		else
+			return new_xstat(1, path, stat_buf);
+	}
+
+	idx_dfs = check_path_with_dirfd(dirfd, &full_path, path, &error);
+	if (error)
+		goto out_err;
+
+	if (idx_dfs >= 0) {
+		if (flags & AT_SYMLINK_NOFOLLOW)
+			rc = new_lxstat(1, full_path, stat_buf);
+		else
+			rc = new_xstat(1, full_path, stat_buf);
+	} else {
+		rc = next_fstatat(dirfd, path, stat_buf, flags);
+	}
+
+	error = errno;
+	if (full_path) {
+		free(full_path);
+		errno = error;
+	}
+	return rc;
+
+out_err:
+	errno = error;
+	return (-1);
+}
+
+int
+fstatat64(int dirfd, const char *__restrict path, struct stat64 *__restrict stat_buf, int flags)
+	__attribute__((alias("fstatat")));
 
 static void
 copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
