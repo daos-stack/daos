@@ -24,6 +24,7 @@ class ListVerboseTest(IorTestBase):
     def create_expected(self, pool, scm_free, nvme_free, scm_imbalance,
                         nvme_imbalance, targets_disabled=0, scm_size=None,
                         nvme_size=None, state=None, rebuild_state=None):
+        # pylint: disable=too-many-arguments
         """Create expected dmg pool list output to compare against the actual.
 
         Args:
