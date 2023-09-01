@@ -66,8 +66,10 @@ create_free_class(struct vea_free_class *vfc, struct vea_space_df *md)
 		goto out;
 	}
 
-	for (i = 0; i < VEA_MAX_BITMAP_CLASS; i++)
+	for (i = 0; i < VEA_MAX_BITMAP_CLASS; i++) {
 		D_INIT_LIST_HEAD(&vfc->vfc_bitmap_lru[i]);
+		D_INIT_LIST_HEAD(&vfc->vfc_bitmap_empty[i]);
+	}
 
 out:
 	return rc;
@@ -79,11 +81,6 @@ unload_space_info(struct vea_space_info *vsi)
 	if (daos_handle_is_valid(vsi->vsi_md_free_btr)) {
 		dbtree_close(vsi->vsi_md_free_btr);
 		vsi->vsi_md_free_btr = DAOS_HDL_INVAL;
-	}
-
-	if (daos_handle_is_valid(vsi->vsi_md_vec_btr)) {
-		dbtree_close(vsi->vsi_md_vec_btr);
-		vsi->vsi_md_vec_btr = DAOS_HDL_INVAL;
 	}
 
 	if (daos_handle_is_valid(vsi->vsi_md_bitmap_btr)) {
@@ -120,32 +117,12 @@ load_free_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	return 0;
 }
 
-/*
-static int
-load_vec_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
-{
-	struct vea_ext_vector *vec;
-	struct vea_space_info *vsi;
-	uint64_t *off;
-	int rc;
-
-	vsi = (struct vea_space_info *)arg;
-	off = (uint64_t *)key->iov_buf;
-	vec = (struct vea_ext_vector *)val->iov_buf;
-
-	rc = verify_vec_entry(off, vec);
-	if (rc != 0)
-		return rc;
-
-	return compound_vec_alloc(vsi, vec);
-}
-*/
-
 static int
 load_bitmap_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 {
 	struct vea_free_bitmap *vfb;
 	struct vea_space_info *vsi;
+	struct vea_bitmap_entry *bitmap_entry;
 	uint64_t *off;
 	int rc;
 
@@ -159,7 +136,8 @@ load_bitmap_entry(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	if (rc != 0)
 		return rc;
 
-	rc = bitmap_entry_insert(vsi, vfb, false, NULL, 0);
+	rc = bitmap_entry_insert(vsi, vfb, VEA_BITMAP_STATE_PUBLISHED, &bitmap_entry, 0);
+	bitmap_entry->vbe_md_bitmap = vfb;
 
 	return rc;
 }
@@ -170,9 +148,8 @@ load_space_info(struct vea_space_info *vsi)
 	struct umem_attr uma = {0};
 	int rc;
 	struct vea_hint_df *df;
-	struct vea_hint_df dummy;
 	uint64_t offset;
-	d_iov_t key, val, val_out;
+	d_iov_t key, val;
 
 	D_ASSERT(vsi->vsi_umem != NULL);
 	D_ASSERT(vsi->vsi_md != NULL);
@@ -187,14 +164,6 @@ load_space_info(struct vea_space_info *vsi)
 	if (rc != 0)
 		goto error;
 
-	/* Open SCM extent vector tree */
-	/*
-	D_ASSERT(daos_handle_is_inval(vsi->vsi_md_vec_btr));
-	rc = dbtree_open_inplace(&vsi->vsi_md->vsd_vec_tree, &uma,
-				 &vsi->vsi_md_vec_btr);
-	if (rc != 0)
-		goto error;
-	*/
 	/* Open SCM bitmap tree */
 	rc = dbtree_open_inplace(&vsi->vsi_md->vsd_bitmap_tree, &uma,
 				 &vsi->vsi_md_bitmap_btr);
@@ -207,13 +176,6 @@ load_space_info(struct vea_space_info *vsi)
 	if (rc != 0)
 		goto error;
 
-	/* Build up in-memory extent vector tree */
-	/*
-	rc = dbtree_iterate(vsi->vsi_md_vec_btr, DAOS_INTENT_DEFAULT, false,
-			    load_vec_entry, (void *)vsi);
-	if (rc != 0)
-		goto error;
-	*/
 	/* Build up in-memory bitmap tree */
 	rc = dbtree_iterate(vsi->vsi_md_bitmap_btr, DAOS_INTENT_DEFAULT, false,
 			    load_bitmap_entry, (void *)vsi);
@@ -223,33 +185,18 @@ load_space_info(struct vea_space_info *vsi)
 	if (!is_bitmap_feature_enabled(vsi))
 		return 0;
 
-	/* Insert bitmap chunk hint */
 	offset = VEA_BITMAP_CHUNK_HINT_KEY;
 	d_iov_set(&key, &offset, sizeof(offset));
 	d_iov_set(&val, NULL, 0);
 	rc = dbtree_fetch(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
 			  &key, NULL, &val);
-	if (rc && rc != -DER_NONEXIST) {
+	if (rc)
 		goto error;
-	} if (rc == -DER_NONEXIST) {
-		memset(&dummy, 0, sizeof(dummy));
-		d_iov_set(&val, &dummy, sizeof(dummy));
-		d_iov_set(&val_out, NULL, 0);
-		rc = dbtree_upsert(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ,
-				   DAOS_INTENT_UPDATE, &key, &val, &val_out);
-		if (rc)
-			return rc;
 
-		df = (struct vea_hint_df *)val_out.iov_buf;
-	} else {
-		df = (struct vea_hint_df *)val.iov_buf;
-	}
-
-	if (df) {
-		rc = vea_hint_load(df, &vsi->vsi_bitmap_hint_context);
-		if (rc)
-			goto error;
-	}
+	df = (struct vea_hint_df *)val.iov_buf;
+	rc = vea_hint_load(df, &vsi->vsi_bitmap_hint_context);
+	if (rc)
+		goto error;
 
 	return 0;
 error:

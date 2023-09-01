@@ -20,41 +20,6 @@
 #include <daos/mem.h>
 #include <daos/btree.h>
 
-/* Common free extent structure for both SCM & in-memory index */
-struct vea_free_extent {
-	uint64_t	vfe_blk_off;	/* Block offset of the extent */
-	uint32_t	vfe_blk_cnt;	/* Total blocks of the extent */
-	uint32_t	vfe_age;	/* Monotonic timestamp */
-};
-
-/* Bitmap chunk size */
-#define VEA_BITMAP_MIN_CHUNK_BLKS	256	/* 1MiB */
-#define VEA_BITMAP_MAX_CHUNK_BLKS	16384	/* 64 MiB */
-
-/* Min bitmap allocation class */
-#define VEA_MIN_BITMAP_CLASS	1
-/* Max bitmap allocation class */
-#define VEA_MAX_BITMAP_CLASS	64
-
-/* Common free bitmap structure for both SCM & in-memory index */
-struct vea_free_bitmap {
-	uint64_t	vfb_blk_off;				/* Block offset of the bitmap */
-	uint32_t	vfb_blk_cnt;				/* Block count of the bitmap */
-	uint16_t	vfb_class;				/* Allocation class of bitmap */
-	uint16_t	vfb_bitmap_sz;				/* Bitmap size*/
-	uint64_t	vfb_bitmaps[0];				/* Bitmaps of this chunk */
-};
-
-/* Maximum extents a non-contiguous allocation can have */
-#define VEA_EXT_VECTOR_MAX	9
-
-/* Allocated extent vector */
-struct vea_ext_vector {
-	uint64_t	vev_blk_off[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_blk_cnt[VEA_EXT_VECTOR_MAX];
-	uint32_t	vev_size;	/* Size of the extent vector */
-};
-
 /* Reserved extent(s) */
 struct vea_resrvd_ext {
 	/* Link to a list for a series of vea_reserve() calls */
@@ -121,8 +86,6 @@ struct vea_space_df {
 	struct btr_root	vsd_free_tree;
 	/* Free bitmap tree, sorted by offset */
 	struct btr_root vsd_bitmap_tree;
-	/* Allocated extent vector tree, for non-contiguous allocation */
-	//struct btr_root	vsd_vec_tree;
 };
 
 /* VEA attributes */
@@ -179,6 +142,7 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 /**
  * Upgrade VEA to support latest disk format
  *
+ * \param vsi	   [IN]	In-memory compound free extent index
  * \param umem     [IN]	An instance of SCM
  * \param md       [IN]	The allocation metadata on SCM
  * \param version  [IN] Version which we try to upgrade
@@ -187,7 +151,8 @@ int vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
  *				index returned by @vsi; Appropriated negative
  *				value on error
  */
-int vea_upgrade(struct umem_instance *umem, struct vea_space_df *md, uint32_t version);
+int vea_upgrade(struct vea_space_info *vsi, struct umem_instance *umem,
+		struct vea_space_df *md, uint32_t version);
 
 /**
  * Load space tracking information from SCM to initialize the in-memory compound

@@ -10,13 +10,6 @@
 #include <daos/dtx.h>
 #include "vea_internal.h"
 
-int
-compound_vec_alloc(struct vea_space_info *vsi, struct vea_ext_vector *vec)
-{
-	/* TODO Add in in-memory extent vector tree */
-	return 0;
-}
-
 static int
 compound_alloc_extent(struct vea_space_info *vsi, struct vea_free_extent *vfe,
 		      struct vea_extent_entry *entry)
@@ -130,13 +123,6 @@ reserve_extent(struct vea_space_info *vsi, uint32_t blk_cnt,
 	 * largest free extent.
 	 */
 	if (entry->vee_ext.vfe_blk_cnt <= (max(blk_cnt, vfc->vfc_large_thresh) * 2)) {
-		/* Try small extents first */
-		if (!is_bitmap_feature_enabled(vsi)) {
-			rc = reserve_size_tree(vsi, blk_cnt, resrvd);
-			if (rc != 0 || resrvd->vre_blk_cnt != 0)
-				return rc;
-		}
-
 		vfe.vfe_blk_off = entry->vee_ext.vfe_blk_off;
 		vfe.vfe_blk_cnt = blk_cnt;
 
@@ -266,6 +252,7 @@ extent:
 done:
 	D_ASSERT(resrvd->vre_blk_off != VEA_HINT_OFF_INVAL);
 	D_ASSERT(resrvd->vre_blk_cnt == blk_cnt);
+	dec_stats(vsi, STAT_FREE_EXTENT_BLKS, blk_cnt);
 
 	/* Update hint offset */
 	hint_update(vsi->vsi_bitmap_hint_context, resrvd->vre_blk_off + blk_cnt,
@@ -273,20 +260,30 @@ done:
 	return rc;
 }
 
+#define LARGE_EXT_FREE_BLKS	8388608
+
 static inline uint32_t
-get_bitmap_chunk_blks(uint32_t blk_cnt)
+get_bitmap_chunk_blks(struct vea_space_info *vsi, uint32_t blk_cnt)
 {
 	uint32_t chunk_blks = VEA_BITMAP_MIN_CHUNK_BLKS;
 
 	D_ASSERT(blk_cnt <= VEA_MAX_BITMAP_CLASS);
-	/**
-	 * Todo: it could be larger if free space is enough
-	 * or could be smaller if free space is under pressure.
-	 */
 	chunk_blks *= blk_cnt;
 
-	if (chunk_blks > VEA_BITMAP_MAX_CHUNK_BLKS)
-		chunk_blks = VEA_BITMAP_MAX_CHUNK_BLKS;
+	D_ASSERT(chunk_blks <= VEA_BITMAP_MAX_CHUNK_BLKS);
+	/*
+	 * Always try to allocate large bitmap chunk if there
+	 * is enough free extent blocks.
+	 */
+	if (vsi->vsi_stat[STAT_FREE_EXTENT_BLKS] >= LARGE_EXT_FREE_BLKS) {
+		int times = VEA_BITMAP_MAX_CHUNK_BLKS / chunk_blks;
+
+		if (times > 1)
+			chunk_blks *= times;
+	}
+
+	/* should be aligned with 64 bits */
+	D_ASSERT(chunk_blks % (blk_cnt * 64) == 0);
 
 	return chunk_blks;
 }
@@ -296,7 +293,10 @@ get_bitmap_sz(uint32_t chunk_blks, uint16_t class)
 {
 	int bits = chunk_blks / class;
 
-	return (bits + 63) / 64;
+	D_ASSERT(chunk_blks % class == 0);
+	D_ASSERT(bits % 64 == 0);
+
+	return bits / 64;
 }
 
 static int
@@ -310,6 +310,7 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 	int			 bits = 1;
 	uint32_t		 chunk_blks;
 	int			 bitmap_sz;
+	d_list_t		*list_head;
 
 	if (!is_bitmap_feature_enabled(vsi))
 		return 0;
@@ -318,17 +319,35 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 		return 0;
 
 	D_ASSERT(blk_cnt > 0);
+	/* try empty list firstly */
+	list_head = &vsi->vsi_class.vfc_bitmap_empty[blk_cnt - 1];
+	if (!d_list_empty(list_head)) {
+		bitmap_entry = d_list_entry(list_head->next, struct vea_bitmap_entry,
+					    vbe_link);
+		vfb = &bitmap_entry->vbe_bitmap;
+		D_ASSERT(vfb->vfb_class == blk_cnt);
+		resrvd->vre_blk_off = vfb->vfb_blk_off;
+		resrvd->vre_blk_cnt = blk_cnt;
+		resrvd->vre_private = (void *)bitmap_entry;
+		setbits64(vfb->vfb_bitmaps, 0, 1);
+		inc_stats(vsi, STAT_RESRV_BITMAP, 1);
+		d_list_move_tail(&bitmap_entry->vbe_link,
+				 &vsi->vsi_class.vfc_bitmap_lru[blk_cnt - 1]);
+		return 0;
+	}
+
 	/* reserve from bitmap */
 	d_list_for_each_entry_safe(bitmap_entry, tmp_entry,
 				   &vsi->vsi_class.vfc_bitmap_lru[blk_cnt - 1], vbe_link) {
 		vfb = &bitmap_entry->vbe_bitmap;
 		D_ASSERT(vfb->vfb_class == blk_cnt);
 		rc = daos_find_bits(vfb->vfb_bitmaps, NULL, vfb->vfb_bitmap_sz, 1, &bits);
-		if (rc < 0 || (rc * blk_cnt + blk_cnt > vfb->vfb_blk_cnt)) {
+		if (rc < 0) {
 			d_list_del_init(&bitmap_entry->vbe_link);
 			continue;
 		}
 
+		D_ASSERT(rc * blk_cnt + blk_cnt <= vfb->vfb_blk_cnt);
 		resrvd->vre_blk_off = vfb->vfb_blk_off + (rc * blk_cnt);
 		resrvd->vre_blk_cnt = blk_cnt;
 		resrvd->vre_private = (void *)bitmap_entry;
@@ -338,7 +357,7 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 		return 0;
 	}
 
-	chunk_blks = get_bitmap_chunk_blks(blk_cnt);
+	chunk_blks = get_bitmap_chunk_blks(vsi, blk_cnt);
 	bitmap_sz = get_bitmap_sz(chunk_blks, blk_cnt);
 	rc = reserve_bitmap_chunk(vsi, chunk_blks, resrvd);
 	if (resrvd->vre_blk_cnt <= 0)
@@ -355,7 +374,8 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 	vfb->vfb_bitmap_sz = bitmap_sz;
 
 	setbits64(vfb->vfb_bitmaps, 0, 1);
-	rc = bitmap_entry_insert(vsi, vfb, true, &entry, VEA_FL_NO_ACCOUNTING);
+	rc = bitmap_entry_insert(vsi, vfb, VEA_BITMAP_STATE_NEW,
+				 &entry, VEA_FL_NO_ACCOUNTING);
 	D_FREE(vfb);
 	if (rc)
 		return rc;
@@ -364,6 +384,7 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 	resrvd->vre_private = (void *)entry;
 
 	D_DEBUG(DB_IO, "["DF_U64", %u]\n", resrvd->vre_blk_off, resrvd->vre_blk_cnt);
+	inc_stats(vsi, STAT_FREE_BITMAP_BLKS, chunk_blks);
 	inc_stats(vsi, STAT_RESRV_BITMAP, 1);
 
 	return rc;
@@ -393,25 +414,17 @@ reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 	struct vea_free_class	*vfc = &vsi->vsi_class;
 	int			 rc;
 
-	/* No free extent available */
+	/* No large free extent available */
 	if (d_binheap_is_empty(&vfc->vfc_heap))
 		return reserve_small(vsi, blk_cnt, resrvd);
 
-	if (is_bitmap_feature_enabled(vsi) && blk_cnt < vsi->vsi_class.vfc_large_thresh) {
+	if (blk_cnt < vsi->vsi_class.vfc_large_thresh) {
 		rc = reserve_small(vsi, blk_cnt, resrvd);
 		if (rc || resrvd->vre_blk_cnt > 0)
 			return rc;
 	}
 
 	return reserve_extent(vsi, blk_cnt, resrvd);
-}
-
-int
-reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
-	       struct vea_resrvd_ext *resrvd)
-{
-	/* TODO reserve extent vector for non-contiguous allocation */
-	return -DER_NOSPACE;
 }
 
 static int
@@ -551,47 +564,18 @@ bitmap_set_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitmap,
 	return 0;
 }
 
-static int
-persistent_alloc_bitmap(struct vea_space_info *vsi, struct vea_free_extent *vfe)
+static void
+new_chunk_commit_cb(void *data, bool noop)
 {
-	struct vea_free_bitmap	*found;
-	daos_handle_t		 btr_hdl;
-	d_iov_t			 key_in, val;
-	int			 rc, opc = BTR_PROBE_LE;
+	struct vea_bitmap_entry	*bitmap_entry = (struct vea_bitmap_entry *)data;
 
-	D_ASSERT(umem_tx_inprogress(vsi->vsi_umem) ||
-		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
-	D_ASSERT(vfe->vfe_blk_off != VEA_HINT_OFF_INVAL);
-	D_ASSERT(vfe->vfe_blk_cnt > 0);
-
-	btr_hdl = vsi->vsi_md_bitmap_btr;
-	D_ASSERT(daos_handle_is_valid(btr_hdl));
-
-	D_DEBUG(DB_IO, "Persistent alloc ["DF_U64", %u]\n",
-		vfe->vfe_blk_off, vfe->vfe_blk_cnt);
-
-	/* Fetch & operate on the in-tree record */
-	d_iov_set(&key_in, &vfe->vfe_blk_off, sizeof(vfe->vfe_blk_off));
-	d_iov_set(&val, NULL, sizeof(*found));
-
-	rc = dbtree_fetch(btr_hdl, opc, DAOS_INTENT_DEFAULT, &key_in, NULL,
-			  &val);
-	if (rc) {
-		D_ERROR("failed to find extent ["DF_U64", %u]\n",
-			vfe->vfe_blk_off, vfe->vfe_blk_cnt);
-		return rc;
+	/* Transaction aborted, only need to clear is new*/
+	if (noop) {
+		bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_NEW;
+		return;
 	}
 
-	found = (struct vea_free_bitmap *)val.iov_buf;
-	rc = verify_bitmap_entry(found);
-	if (rc) {
-		D_ERROR("bitmap corrupted ["DF_U64", %u]\n",
-			found->vfb_blk_off, found->vfb_class);
-		return rc;
-	}
-
-	return bitmap_set_range(vsi->vsi_umem, found,
-				vfe->vfe_blk_off, vfe->vfe_blk_cnt);
+	bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHED;
 }
 
 int
@@ -599,17 +583,26 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *p
 {
 	struct vea_bitmap_entry	*bitmap_entry = (struct vea_bitmap_entry *)private;
 
-	if (vfe->vfe_type == VEA_FREE_ENTRY_EXTENT)
+	if (vfe->vfe_bitmap == NULL)
 		return persistent_alloc_extent(vsi, &vfe->vfe_ext);
 
 	D_ASSERT(bitmap_entry != NULL);
 	/* if this bitmap is new */
-	if (bitmap_entry->vbe_is_new) {
-		d_iov_t			 key, val;
+	if (bitmap_entry->vbe_published_state == VEA_BITMAP_STATE_NEW) {
+		d_iov_t			 key, val, val_out;
 		struct vea_free_bitmap	*bitmap;
 		int			 rc;
 		struct vea_free_extent   extent;
 		daos_handle_t		 btr_hdl = vsi->vsi_md_bitmap_btr;
+
+		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
+					  new_chunk_commit_cb, bitmap_entry);
+		if (rc) {
+			D_ERROR("add chunk commit callback faile. "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+
+		bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHING;
 
 		extent = vfe->vfe_ext;
 		extent.vfe_blk_off = bitmap_entry->vbe_bitmap.vfb_blk_off;
@@ -624,7 +617,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *p
 
 		D_ASSERT(vfe->vfe_ext.vfe_blk_cnt != 0);
 		bitmap->vfb_blk_off = extent.vfe_blk_off;
-		bitmap->vfb_class = vfe->vfe_ext.vfe_blk_cnt;
+		bitmap->vfb_class = bitmap_entry->vbe_bitmap.vfb_class;
 		bitmap->vfb_blk_cnt = bitmap_entry->vbe_bitmap.vfb_blk_cnt;
 		bitmap->vfb_bitmap_sz = bitmap_entry->vbe_bitmap.vfb_bitmap_sz;
 		rc = bitmap_set_range(NULL, bitmap, vfe->vfe_ext.vfe_blk_off,
@@ -637,16 +630,19 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *p
 		D_ASSERT(daos_handle_is_valid(btr_hdl));
 		d_iov_set(&key, &bitmap->vfb_blk_off, sizeof(bitmap->vfb_blk_off));
 		d_iov_set(&val, bitmap, alloc_free_bitmap_size(bitmap->vfb_bitmap_sz));
+		d_iov_set(&val_out, NULL, 0);
 
-		rc = dbtree_update(btr_hdl, &key, &val);
+		rc = dbtree_upsert(btr_hdl, BTR_PROBE_EQ, DAOS_INTENT_UPDATE, &key,
+				   &val, &val_out);
 		D_FREE(bitmap);
 		if (rc)
 			D_ERROR("Insert persistent bitmap failed. "DF_RC"\n", DP_RC(rc));
 		else
-			bitmap_entry->vbe_is_new = false;
+			bitmap_entry->vbe_md_bitmap = (struct vea_free_bitmap *)val_out.iov_buf;
 
 		return rc;
 	}
 
-	return persistent_alloc_bitmap(vsi, &vfe->vfe_ext);
+	return bitmap_set_range(vsi->vsi_umem, vfe->vfe_bitmap->vbe_md_bitmap,
+				vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt);
 }

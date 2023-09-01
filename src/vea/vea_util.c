@@ -35,41 +35,6 @@ verify_free_entry(uint64_t *off, struct vea_free_extent *vfe)
 }
 
 int
-verify_vec_entry(uint64_t *off, struct vea_ext_vector *vec)
-{
-	int i;
-	uint64_t prev_off = 0;
-
-	D_ASSERT(vec != NULL);
-	if (vec->vev_size == 0 || vec->vev_size > VEA_EXT_VECTOR_MAX) {
-		D_CRIT("corrupted vector entry, sz: %u\n", vec->vev_size);
-		return -DER_INVAL;
-	}
-
-	if (off != NULL && *off != vec->vev_blk_off[0]) {
-		D_CRIT("corrupted vector entry, off: "DF_U64" != "DF_U64"\n",
-		       *off, vec->vev_blk_off[0]);
-		return -DER_INVAL;
-	}
-
-	for (i = 0; i < vec->vev_size; i++) {
-		if (vec->vev_blk_off[i] <= prev_off) {
-			D_CRIT("corrupted vector entry[%d],"
-			       " "DF_U64" <= "DF_U64"\n",
-			       i, vec->vev_blk_off[i], prev_off);
-			return -DER_INVAL;
-		}
-		if (vec->vev_blk_cnt[i] == 0) {
-			D_CRIT("corrupted vector entry[%d], %u\n",
-			       i, vec->vev_blk_cnt[i]);
-			return -DER_INVAL;
-		}
-	}
-
-	return 0;
-}
-
-int
 verify_bitmap_entry(struct vea_free_bitmap *vfb)
 {
 	D_ASSERT(vfb != NULL);
@@ -140,10 +105,6 @@ verify_resrvd_ext(struct vea_resrvd_ext *resrvd)
 	} else if (resrvd->vre_blk_cnt == 0) {
 		D_CRIT("invalid blk_cnt %u\n", resrvd->vre_blk_cnt);
 		return -DER_INVAL;
-	} else if (resrvd->vre_vector != NULL) {
-		/* Vector allocation isn't supported yet. */
-		D_CRIT("vector isn't NULL?\n");
-		return -DER_NOSYS;
 	}
 
 	return 0;
@@ -570,7 +531,8 @@ update_stats(struct vea_space_info *vsi, unsigned int type, uint64_t nr, bool de
 		if (metrics && metrics->vm_frags[frag_idx])
 			d_tm_set_gauge(metrics->vm_frags[frag_idx], vsi->vsi_stat[type]);
 		break;
-	case STAT_FREE_BLKS:
+	case STAT_FREE_EXTENT_BLKS:
+	case STAT_FREE_BITMAP_BLKS:
 		if (dec) {
 			D_ASSERTF(vsi->vsi_stat[type] >= nr, "free:"DF_U64" < rsrvd:"DF_U64"\n",
 				  vsi->vsi_stat[type], nr);
