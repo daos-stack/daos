@@ -11,14 +11,17 @@ from demo_utils import list_pool, pool_get_prop, create_container, system_stop,\
       system_query, storage_query_usage, cont_get_prop, pool_query
 
 
+# Run this script on Aurora node as user after running run_demo_aurora.py. e.g.,
+# python3 show_fixed_aurora.py -l aurora-daos-[0001-0100]
+
 test_cmd = f"sudo date"
 test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
 
-# Need to use at least "scm_size: 15" for server config to create 8 1GB-pools.
 POOL_LABEL = "tank"
 CONT_LABEL = "bucket"
+TARGET_PER_RANK = 16
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument(
@@ -42,9 +45,9 @@ for member in generated_yaml["response"]["members"]:
     if member["state"] == "joined":
         joined_count += 1
 # Print the number of ranks and joined ranks as a reference.
-print(f"\n#### {rank_count} ranks; {joined_count} joined ####")
+print(f"\n{rank_count} ranks; {joined_count} joined")
+total_target = rank_count * TARGET_PER_RANK
 
-# Add input here to make sure all ranks are joined before starting the script.
 POOL_LABEL_1 = POOL_LABEL + "_F1"
 POOL_LABEL_2 = POOL_LABEL + "_F2"
 POOL_LABEL_3 = POOL_LABEL + "_F3"
@@ -91,7 +94,9 @@ clush_ls_cmd = ["clush", "-w", hostlist[1], LS_CMD]
 print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
-print(f"\n10-F6. {POOL_LABEL_6} has one less target (64 -> 63).")
+expected_target = total_target - 1
+print(
+    f"\n10-F6. {POOL_LABEL_6} has one less target ({total_target} -> {expected_target}).")
 pool_query(pool_label=POOL_LABEL_6)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
@@ -102,14 +107,11 @@ cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8, properties="labe
 
 # F7: Stop server. Call the same ddb command to verify that the container is removed from
 # shard.
-print(f"\n10-F7. Use ddb to verify that the container in {POOL_LABEL_8} is removed "
+print(f"\n10-F7. Use ddb to verify that the container in {POOL_LABEL_7} is removed "
       f"from shards.")
-system_stop()
+system_stop(force=True)
 pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
-# ddb_cmd = f"sudo ddb -R \"ls\" /mnt/daos0/{pool_uuid_7}/vos-0"
 ddb_cmd = f"sudo ddb /mnt/daos0/{pool_uuid_7}/vos-0 ls"
-# clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
-# print(f"Command: {clush_ddb_cmd}")
 ddb_cmd_list = ddb_cmd.split(" ")
 print(f"Command: {ddb_cmd}")
 subprocess.run(ddb_cmd_list, check=False)

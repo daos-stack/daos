@@ -247,9 +247,15 @@ def check_repair(sequence_num, action):
     run_command(command=check_repair_cmd)
 
 # System-related methods
-def system_stop():
-    """Stop servers."""
+def system_stop(force=False):
+    """Stop servers.
+    
+    Args:
+        force (bool): Whether to use --force. Defaults to None.
+    """
     system_stop_cmd = ["dmg", "system", "stop"]
+    if force:
+        system_stop_cmd.append("--force")
     run_command(command=system_stop_cmd)
 
 def system_start():

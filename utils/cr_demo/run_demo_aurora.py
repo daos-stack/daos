@@ -25,11 +25,12 @@ test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
 
-POOL_SIZE = "2T"
+POOL_SIZE = "5T"
 POOL_SIZE_F5 = "3T"
 POOL_LABEL = "tank"
 CONT_LABEL = "bucket"
-FORMAT_SLEEP_SEC = 25
+# Number of seconds to wait for engines to start for 1 group setup.
+FORMAT_SLEEP_SEC = 35
 
 print("\nF1: Dangling pool")
 print("F2: Lost the majority of pool service replicas")
@@ -41,7 +42,8 @@ print("F7: Orphan container")
 print("F8: Inconsistent container label between CS and container property")
 
 PARSER = argparse.ArgumentParser()
-PARSER.add_argument("-l", "--hostlist", required=True, help="List of hosts to format")
+PARSER.add_argument(
+    "-l", "--hostlist", required=True, help="List of hosts to run the demo")
 ARGS = vars(PARSER.parse_args())
 
 HOSTLIST = ARGS["hostlist"]
@@ -68,14 +70,13 @@ for member in generated_yaml["response"]["members"]:
 # Print the number of ranks and joined ranks as a reference.
 node_set = NodeSet(HOSTLIST)
 hostlist = list(node_set)
-print(f"\n#### {len(hostlist)} nodes; {rank_count} ranks; {joined_count} joined ####")
+print(f"\n{len(hostlist)} nodes; {rank_count} ranks; {joined_count} joined")
 
-# Create rank to mount point map and host to ranks map for F1, F2, and F5.
+# Create rank to mount point map and host to ranks map for F2 and F5.
 # 1. scp daos_control.log from all nodes to here, where this script runs. scp the local
 # file as well. Add hostname to the end of the file name. The log contains rank and PID.
 # Number of nodes used for F2.
 node_count = 2
-print(f"## Use first {node_count} nodes in {hostlist}")
 for i in range(node_count):
     scp_cmd_list = ["scp", f"{hostlist[i]}:/var/tmp/daos_testing/daos_control.log",
                     f"/var/tmp/daos_testing/daos_control_{hostlist[i]}.log"]
@@ -99,8 +100,6 @@ for i in range(node_count):
                 rank = int(match[0][1])
                 rank_to_pid[rank] = pid
                 host_to_ranks[hostlist[i]].append(rank)
-print(f"## rank_to_pid = {rank_to_pid}")
-print(f"## host_to_ranks = {host_to_ranks}")
 
 # 3. Determine the PID to mount point mapping by calling ps ax and search for daos_engine.
 # Sample line:
@@ -119,42 +118,25 @@ for i in range(node_count):
             print(result)
             if mount_0 in result:
                 pid = re.split(r"\s+", result)[1]
-                print(f"## pid for {mount_0} = {pid}")
                 pid = int(pid)
                 pid_to_mount[pid] = mount_0
             elif mount_1 in result:
                 pid = re.split(r"\s+", result)[1]
-                print(f"## pid for {mount_1} = {pid}")
                 pid = int(pid)
                 pid_to_mount[pid] = mount_1
-print(f"## pid_to_mount = {pid_to_mount}")
 
-# 4. Determine the two ranks in hostlist[0] to create F1 pool.
-f1_ranks = []
-f1_ranks.extend(host_to_ranks[hostlist[0]])
-# Ranks in the map are int, so convert them to string and separate them with comma.
-f1_ranks_str = convert_list_to_str(original_list=f1_ranks, separator=",")
-print(f"## f1_ranks_str = {f1_ranks_str}")
-
-# 5. Determine the four ranks in hostlist[0] and hostlist[1] to create F2 pool.
+# 4. Determine the four ranks in hostlist[0] and hostlist[1] to create F2 pool.
 f2_ranks = []
 f2_ranks.extend(host_to_ranks[hostlist[0]])
 f2_ranks.extend(host_to_ranks[hostlist[1]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
 f2_ranks_str = convert_list_to_str(original_list=f2_ranks, separator=",")
-print(f"## f2_ranks_str = {f2_ranks_str}")
 
-# 6. Determine the two ranks in hostlist[0] to create F5 pool.
+# 5. Determine the two ranks in hostlist[0] to create F5 pool.
 f5_ranks = []
 f5_ranks.extend(host_to_ranks[hostlist[0]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
 f5_ranks_str = convert_list_to_str(original_list=f5_ranks, separator=",")
-print(f"## f5_ranks_str = {f5_ranks_str}")
-
-# Set up variables to copy pool directory locally. This will crash the node.
-# f5_pool_rank = host_to_ranks[hostlist[0]][0]
-# f5_no_pool_rank = host_to_ranks[hostlist[0]][1]
-# print(f"## f5_pool_rank = {f5_pool_rank}; f5_no_pool_rank = {f5_no_pool_rank}")
 
 # Add input here to make sure all ranks are joined before starting the script.
 input("\n2. Create 8 pools and containers. Hit enter...")
@@ -170,7 +152,7 @@ CONT_LABEL_7 = CONT_LABEL + "_F7"
 CONT_LABEL_8 = CONT_LABEL + "_F8"
 
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
-create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1, ranks=f1_ranks_str)
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1)
 # F2. CIC_POOL_LESS_SVC_WITHOUT_QUORUM
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2, ranks=f2_ranks_str, nsvc="3")
 # F3. CIC_POOL_NONEXIST_ON_MS - orphan pool
@@ -209,7 +191,6 @@ print(f"\n3-F5. Print storage usage to show original usage of {POOL_LABEL_5}. "
 f5_host_list = f"{hostlist[0]},{hostlist[1]}"
 storage_query_usage(host_list=f5_host_list)
 
-####################################################################
 print("\n4. Inject fault with dmg for F1, F3, F4, F7, F8.")
 # F1
 inject_fault_pool(pool_label=POOL_LABEL_1, fault_type="CIC_POOL_NONEXIST_ON_ENGINE")
@@ -229,9 +210,8 @@ inject_fault_daos(
     pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8,
     fault_type="DAOS_CHK_CONT_BAD_LABEL")
 
-####################################################################
 input("\n5-1. Stop servers to manipulate for F2, F5, F6, F7. Hit enter...")
-system_stop()
+system_stop(force=True)
 
 # F2: Destroy tank_2 rdb-pool on two of the three service replicas. Call them rank a and
 # b. Select the first two service replicas.
@@ -245,7 +225,7 @@ rm_rank_a = f"sudo rm {rank_a_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
 rm_rank_b = f"sudo rm {rank_b_mount}/{label_to_uuid[POOL_LABEL_2]}/rdb-pool"
 clush_rm_rank_a = ["clush", "-w", rank_a_ip, rm_rank_a]
 clush_rm_rank_b = ["clush", "-w", rank_b_ip, rm_rank_b]
-print("(F2: Destroy tank_2 rdb-pool on rank a and b.)")
+print("(F2: Destroy tank_F2 rdb-pool on rank a and b.)")
 print(f"Command for rank a: {clush_rm_rank_a}\n")
 print(f"Command for rank b: {clush_rm_rank_b}\n")
 subprocess.run(clush_rm_rank_a, check=False)
@@ -324,25 +304,6 @@ clush_chown_cmd = ["clush", "-w", hostlist[1], chown_cmd]
 print(f"Command: {clush_chown_cmd}\n")
 subprocess.run(clush_chown_cmd, check=False)
 
-
-# Copy pool directory from one mount point to another locally. This will crash the node.
-# f5_pool_mount = pid_to_mount[rank_to_pid[f5_pool_rank]]
-# f5_no_pool_mount = pid_to_mount[rank_to_pid[f5_no_pool_rank]]
-# print(
-#     f"(F5: Copy F5 pool dir from {f5_pool_mount} to {f5_no_pool_mount} on {hostlist[0]})")
-# pool_uuid_5 = label_to_uuid[POOL_LABEL_5]
-# cp_cmd = (f"sudo cp -rp {f5_pool_mount}/{pool_uuid_5} {f5_no_pool_mount}/{pool_uuid_5}")
-# clush_cp_cmd = ["clush", "-w", hostlist[0], cp_cmd]
-# print(f"Command: {clush_cp_cmd}\n")
-# subprocess.run(clush_cp_cmd, check=False)
-
-# print(f"(F5: Set owner for the copied dir and files to daos_server:daos_server.)")
-# chown_cmd = f"sudo chown -R daos_server:daos_server {f5_no_pool_mount}/{pool_uuid_5}"
-# clush_chown_cmd = ["clush", "-w", hostlist[0], chown_cmd]
-# print(f"Command: {clush_chown_cmd}\n")
-# subprocess.run(clush_chown_cmd, check=False)
-
-
 print("(F6: Remove vos-0 from one of the nodes.)")
 pool_uuid_6 = label_to_uuid[POOL_LABEL_6]
 rm_cmd = f"sudo rm -rf /mnt/daos0/{pool_uuid_6}/vos-0"
@@ -359,11 +320,9 @@ pool_uuid_7 = label_to_uuid[POOL_LABEL_7]
 ddb_cmd = f"sudo ddb /mnt/daos0/{pool_uuid_7}/vos-0 ls"
 # ddb with clush causes some authentication error. tank_F7 is created across all ranks, so
 # just run ddb locally as a workaround.
-# clush_ddb_cmd = ["clush", "-w", rank_to_ip[0], ddb_cmd]
-# System will not start if we run ddb. DAOS-12843
 ddb_cmd_list = ddb_cmd.split(" ")
-# print(f"Command: {ddb_cmd}")
-# subprocess.run(ddb_cmd_list, check=False)
+print(f"Command: {ddb_cmd}")
+subprocess.run(ddb_cmd_list, check=False)
 
 # (optional) F3: Show pool directory at mount point to verify that the pool exists on
 # engine.
@@ -371,7 +330,6 @@ ddb_cmd_list = ddb_cmd.split(" ")
 print("\n5-2. Restart servers.")
 system_start()
 
-####################################################################
 input("\n6. Show the faults injected for each pool/container for F1, F3, F4, F5, F8. "
       "Hit enter...")
 print(f"6-F1. Show dangling pool entry for {POOL_LABEL_1}.")
@@ -398,11 +356,11 @@ print("\n6-F8. Show container label inconsistency.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label=CONT_LABEL_8)
 print(f"Error because container ({CONT_LABEL_8}) doesn't exist on container service.\n")
 
-print(f"Container ({CONT_LABEL_8}) exists on pool service.")
+print(f"Container ({CONT_LABEL_8}) exists on property.")
 cont_get_prop(pool_label=POOL_LABEL_8, cont_label="new-label", properties="label")
 
-####################################################################
 input("\n7. Enable checker. Hit enter...")
+system_stop(force=True)
 check_enable()
 
 input("\n8. Start checker with interactive mode. Hit enter...")
@@ -412,7 +370,6 @@ check_start()
 print()
 repeat_check_query()
 
-####################################################################
 input("\n8-1. Select repair options for F1 to F4. Hit enter...")
 print("(Create UUID to sequence number.)")
 uuid_to_seqnum = create_uuid_to_seqnum()
@@ -453,7 +410,8 @@ print(f"\n{POOL_LABEL_5} - 1: Discard the orphan pool shard to release space "
 check_repair(sequence_num=SEQ_NUM_5, action="1")
 
 # F6: 1: Change pool map for the dangling map entry [suggested].
-print(f"\n{POOL_LABEL_6} - 1: Change pool map for the dangling map entry [suggested].")
+print(f"\n{POOL_LABEL_6} - 1: Change pool map for the dangling map entry as down "
+      f"[suggested].")
 check_repair(sequence_num=SEQ_NUM_6, action="1")
 
 # F7: 1: Destroy the orphan container to release space [suggested].
@@ -470,5 +428,6 @@ repeat_check_query()
 
 print("\n9. Disable the checker.")
 check_disable()
+system_start()
 
-print("\nRun show_fixed.py to show the issues fixed...")
+print("\nRun show_fixed_aurora.py to show the issues fixed...")
