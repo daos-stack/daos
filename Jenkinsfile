@@ -169,11 +169,12 @@ String hw_label(String name) {
             //     pragma: 'Test-label-hw-medium',
             //     def_val: 'ci_nvme5')
             // //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL)
-        // case 'Functional Hardware Medium MD on SSD':
-        //     return cachedCommitPragma(
-        //         pragma: 'Test-label-hw-medium-md-on-ssd',
-        //         def_val: 'ci_nvme5')
-        //     //     def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL)
+        case 'Functional Hardware Medium MD on SSD':
+            return 'ci_nvme5'
+            // return cachedCommitPragma(
+            //     pragma: 'Test-label-hw-medium-md-on-ssd',
+            //     def_val: 'ci_nvme5')
+            // //    def_val: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL)
         case 'Functional Hardware Medium Verbs Provider':
             return 'ci_nvme5'
             // return cachedCommitPragma(
@@ -211,13 +212,15 @@ def functionalHwStageMap = [
 def generateFunctionalTestStage(String name, String tags, String nvme, String provider) {
     String label = hw_label(name)
     return {
-        node(label) {
-            try {
-                stage("${name}") {
-                    println("Start of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+        if (!skipStage()) {
+            node(label) {
+                try {
+                    stage("${name}") {
+                        println("Start of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
+                    }
+                } finally {
+                    println("End of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
                 }
-            } finally {
-                println("End of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
             }
         }
     }
@@ -241,21 +244,6 @@ def generateFunctionalTestStage(String name, String tags, String nvme, String pr
     //         }
     //     }
     // }
-}
-
-def functional_hw_stages = ['Functional Hardware Medium', 'Functional Hardware Medium Verbs Provider', 'Functional Hardware Medium UCX Provider', 'Functional Hardware Large']
-def functionalHwStageMapDebug = functional_hw_stages.collectEntries {
-    ["${it}" : generateFunctionalTestStageDebug(it)]
-}
-def generateFunctionalTestStageDebug(String name) {
-    return {
-        node {
-            stage("${name}") {
-                println("This is the ${name} stage.")
-            }
-        }
-    }
-}
 
 pipeline {
     agent { label 'lightweight' }
