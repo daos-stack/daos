@@ -643,6 +643,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			if (rc)
 				D_GOTO(out, rc);
 		}
+		entry->iv_valid = false;
 	} else {
 		struct cont_iv_entry *iv_entry;
 

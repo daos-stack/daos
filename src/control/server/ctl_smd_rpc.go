@@ -31,7 +31,7 @@ import (
 var (
 	baseDevReplaceBackoff      = 250 * time.Millisecond
 	maxDevReplaceBackoffFactor = 7 // 8s
-	maxDevReplaceRetries       = 5
+	maxDevReplaceRetries       = 20
 )
 
 func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {

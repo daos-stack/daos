@@ -1110,9 +1110,6 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	struct dtx_handle		*dth;
 	struct vos_container		*cont;
 	struct vos_dtx_act_ent		*dae = NULL;
-	d_iov_t				 kiov;
-	d_iov_t				 riov;
-	int				 rc;
 	bool				 found;
 
 	cont = vos_hdl2cont(coh);
@@ -1164,19 +1161,13 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 	}
 
 	if (intent == DAOS_INTENT_PURGE) {
-		d_iov_set(&kiov, &DAE_XID(dae), sizeof(DAE_XID(dae)));
-		d_iov_set(&riov, NULL, 0);
-
-		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
-		D_ASSERTF(rc == 0, "DTX "DF_DTI" (%u) should be in active table: %d\n",
-			  DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae), rc);
-
 		/*
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
 		 */
-		D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) aggregated\n",
-		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
+		if (d_hlc_age2sec(DAE_XID(dae).dti_hlc) >= DAOS_AGG_THRESHOLD)
+			D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) "
+			       "aggregated\n", DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
 
 		return ALB_AVAILABLE_DIRTY;
 	}

@@ -488,9 +488,7 @@ void crt_self_test_msg_send_reply(crt_rpc_t *rpc_req,
 	 * Decrement the reference counter. This is where cleanup for the RPC
 	 * always happens.
 	 */
-	ret = crt_req_decref(rpc_req);
-	if (ret != 0)
-		D_ERROR("crt_req_decref failed; ret=%d\n", ret);
+	crt_req_decref(rpc_req);
 }
 
 int crt_self_test_msg_bulk_put_cb(const struct crt_bulk_cb_info *cb_info)
@@ -581,8 +579,7 @@ crt_self_test_msg_handler(crt_rpc_t *rpc_req)
 	 * Increment the reference counter for this RPC
 	 * It is decremented by crt_self_test_msg_send_reply
 	 */
-	ret = crt_req_addref(rpc_req);
-	D_ASSERT(ret == 0);
+	crt_req_addref(rpc_req);
 
 	/*
 	 * For messages that do not use bulk and have no reply data, skip

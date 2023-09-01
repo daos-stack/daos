@@ -1409,7 +1409,6 @@ host1
 									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									NvmeState: storage.NvmeDevState(99),
 									LedState:  storage.LedStateUnknown,
 									HasSysXS:  true,
 									Roles:     storage.BdevRoles{storage.BdevRoleWAL},

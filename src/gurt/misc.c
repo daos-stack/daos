@@ -17,6 +17,8 @@
 #include <dlfcn.h>
 #include <pthread.h>
 
+#include <malloc.h>
+
 #include <gurt/common.h>
 #include <gurt/atomic.h>
 
@@ -38,11 +40,49 @@ d_rand()
 	return result;
 }
 
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+#ifdef DAOS_BUILD_RELEASE
 void
 d_free(void *ptr)
 {
 	free(ptr);
 }
+
+#else
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_dynamic_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
+void
+d_free(void *ptr)
+{
+	size_t msize = _f_get_alloc_size(ptr);
+
+	memset(ptr, 0x42, msize);
+	free(ptr);
+}
+
+#endif
 
 void *
 d_calloc(size_t count, size_t eltsize)

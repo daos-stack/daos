@@ -928,11 +928,9 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	struct ds_pool		*pool;
 	int			rc;
 
-	if (!entry->iv_valid)
-		return 0;
-
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
+			entry->iv_valid = false;
 			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
 			if (rc) {
 				if (rc == -DER_NONEXIST)

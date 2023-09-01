@@ -93,7 +93,7 @@ soak_harassers:
       # - vmd-identify-check-offline
     test_soak_online_harassers:
       - exclude_reintegrate
-      - server-stop_server
+      - server-stop_server-start
       - server-stop_server-reintegrate
       - extend-pool
       # - vmd-identify-check

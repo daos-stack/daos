@@ -55,10 +55,11 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* EC aggregation needs to be parsed during rebuilding to avoid the race
-	 * between EC rebuild and EC aggregation.
+	/*
+	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
+	 * to avoid the race between EC rebuild and EC aggregation.
 	 **/
-	if (pool->sp_rebuilding && cont->sc_ec_agg_active)
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
@@ -191,14 +192,11 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_rebuilding) {
-		if (vos_agg)
-			cont->sc_vos_agg_active = 0;
-		else
-			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during rebuild %d.\n",
+	if (pool->sp_rebuilding && !vos_agg) {
+		cont->sc_ec_agg_active = 0;
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_rebuilding);
+			pool->sp_rebuilding);
 		return false;
 	}
 
