@@ -212,8 +212,8 @@ def functionalHwStageMap = [
 def generateFunctionalTestStage(String name, String tags, String nvme, String provider) {
     String label = hw_label(name)
     return {
-        if (!skipStage()) {
-            node(label) {
+        node(label) {
+            if (!skipStage()) {
                 try {
                     stage("${name}") {
                         println("Start of the ${name} stage: label=${label}, tags=${tags}, nvme=${nvme}, provider=${provider}")
