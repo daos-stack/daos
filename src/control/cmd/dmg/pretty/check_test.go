@@ -253,6 +253,7 @@ DAOS System Checker Info
   Checked 4 pools
 
 Inconsistency Reports:
+- Resolved:
 ID  Class                        Pool   Resolution 
 --  -----                        ----   ---------- 
 0x1 POOL_BAD_SVCL                pool-1 IGNORE     
@@ -309,6 +310,7 @@ DAOS System Checker Info
   Checked 2 pools
 
 Inconsistency Reports:
+- Resolved:
 ID  Class               Pool   Cont   Resolution 
 --  -----               ----   ----   ---------- 
 0x1 CONT_NONEXIST_ON_PS pool-1 cont-1 IGNORE     
@@ -316,13 +318,19 @@ ID  Class               Pool   Cont   Resolution
 
 `,
 		},
-		"non-verbose interactive": {
+		"non-verbose with resolved and interactive": {
 			resp: &control.SystemCheckQueryResp{
 				Status:    control.SystemCheckStatusCompleted,
 				ScanPhase: control.SystemCheckScanPhaseDone,
 				Pools: map[string]*control.SystemCheckPoolInfo{
 					"pool-1": {
 						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
 						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
 						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
 						StartTime: checkTime,
@@ -344,18 +352,125 @@ ID  Class               Pool   Cont   Resolution
 							ActMsgs:    []string{"trust MS", "trust PS"},
 						},
 					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      2,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							Msg:      "message 2",
+							PoolUuid: "pool-2",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 3",
+							PoolUuid: "pool-2",
+							ContUuid: "cont-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_IGNORE,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							},
+							ActDetails: []string{"ignore details", "trust PS details", "trust MS details"},
+							ActMsgs:    []string{"ignore", "trust PS", "trust MS"},
+						},
+					},
 				},
 			},
 			expOut: `
 DAOS System Checker Info
   Current status: COMPLETED
   Current phase: DONE (Check completed)
-  Checked 1 pool
+  Checked 2 pools
 
 Inconsistency Reports:
-ID  Class          Pool   Resolution      Suggested Repair    
---  -----          ----   ----------      ----------------    
-0x1 POOL_BAD_LABEL pool-1 Action required 0: trust MS details 
+- Resolved:
+ID  Class          Pool   Resolution 
+--  -----          ----   ---------- 
+0x2 POOL_BAD_LABEL pool-2 TRUST_MS   
+
+- Action Required:
+ID  Class               Pool   Cont   Repair Options      
+--  -----               ----   ----   --------------      
+0x1 POOL_BAD_LABEL      pool-1 None   0: trust MS details 
+                                      1: trust PS details 
+0x3 CONT_NONEXIST_ON_PS pool-2 cont-1 0: ignore details   
+                                      1: trust PS details 
+                                      2: trust MS details 
+
+`,
+		},
+		"non-verbose with interactive only": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							},
+							ActDetails: []string{"trust MS details", "trust PS details"},
+							ActMsgs:    []string{"trust MS", "trust PS"},
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 3",
+							PoolUuid: "pool-2",
+							ContUuid: "cont-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_IGNORE,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							},
+							ActDetails: []string{"ignore details", "trust PS details", "trust MS details"},
+							ActMsgs:    []string{"ignore", "trust PS", "trust MS"},
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 2 pools
+
+Inconsistency Reports:
+- Action Required:
+ID  Class               Pool   Cont   Repair Options      
+--  -----               ----   ----   --------------      
+0x1 POOL_BAD_LABEL      pool-1 None   0: trust MS details 
+                                      1: trust PS details 
+0x3 CONT_NONEXIST_ON_PS pool-2 cont-1 0: ignore details   
+                                      1: trust PS details 
+                                      2: trust MS details 
 
 `,
 		},
