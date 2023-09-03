@@ -1659,7 +1659,7 @@ placement_handles_multiple_states(void **state)
 	 */
 	ctx.ver = ver_after_fail;
 	jtc_scan(&ctx);
-	assert_int_equal(ctx.rebuild.out_nr, 1);
+	assert_int_equal(ctx.rebuild.out_nr, 2);
 
 	/* Complete the rebuild */
 	ctx.ver = ver_after_reint_complete; /* Restore the version first */
