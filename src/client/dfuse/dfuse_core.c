@@ -350,21 +350,29 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 	return oldref == 1;
 }
 
-#define STAT_COUNT(name, ...) tstats += dfc->dfc_stats.values[DS_##name];
+#define STAT_COUNT(name, ...)                                                                      \
+	tstats += atomic_fetch_add_relaxed(&dfc->dfc_stats.values[DS_##name], 0);
 
 #define SHOW_STAT(name, ...)                                                                       \
 	{                                                                                          \
-		uint64_t value = dfc->dfc_stats.values[DS_##name];                                 \
+		uint64_t value = atomic_fetch_add_relaxed(&dfc->dfc_stats.values[DS_##name], 0);   \
 		if (value != 0)                                                                    \
-			DFUSE_TRA_INFO(dfc, #name " : %#lx %.1f%%", value,                         \
-				       (double)value / tstats * 100);                              \
+			DFUSE_TRA_INFO(dfc, "%5.1f%% " #name " (%#lx)",                            \
+				       (double)value / tstats * 100, value);                       \
 	}
 
 static void
-dfuse_container_detach(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
+container_stats_log(struct dfuse_cont *dfc)
 {
 	uint64_t tstats = 0;
 
+	D_FOREACH_DFUSE_STATX(STAT_COUNT);
+	D_FOREACH_DFUSE_STATX(SHOW_STAT);
+}
+
+static void
+_ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
+{
 	if (daos_handle_is_valid(dfc->dfs_coh)) {
 		int rc;
 
@@ -382,9 +390,7 @@ dfuse_container_detach(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
 	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfc->dfs_dfp->dfp_entry);
 
-	D_FOREACH_DFUSE_STATX(STAT_COUNT);
-
-	D_FOREACH_DFUSE_STATX(SHOW_STAT);
+	container_stats_log(dfc);
 
 	D_FREE(dfc);
 }
@@ -392,7 +398,7 @@ dfuse_container_detach(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 static void
 ch_free(struct d_hash_table *htable, d_list_t *link)
 {
-	dfuse_container_detach(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
+	_ch_free(htable->ht_priv, container_of(link, struct dfuse_cont, dfs_entry));
 }
 
 d_hash_table_ops_t cont_hops = {
@@ -899,7 +905,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 	if (rlink != &dfc->dfs_entry) {
 		DFUSE_TRA_DEBUG(dfp, "Found existing container, reusing");
 
-		dfuse_container_detach(dfuse_info, dfc);
+		_ch_free(dfuse_info, dfc);
 
 		dfc = container_of(rlink, struct dfuse_cont, dfs_entry);
 	}
