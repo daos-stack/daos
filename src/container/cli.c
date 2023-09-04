@@ -721,6 +721,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	time_t			 otime_sec, mtime_sec;
 	char			 otime_str[32];
 	char			 mtime_str[32];
+	char                    *out_str;
 	uint32_t		 cli_pm_ver;
 	bool			 put_cont = true;
 	int			 rc = task->dt_result;
@@ -816,15 +817,17 @@ cont_open_complete(tse_task_t *task, void *data)
 		arg->coa_info->ci_md_mtime = out->coo_md_mtime;
 	}
 
-	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
 	rc = daos_hlc2timestamp(arg->coa_info->ci_md_otime, &otime_sec);
 	if (rc)
 		goto out;
 	rc = daos_hlc2timestamp(arg->coa_info->ci_md_mtime, &mtime_sec);
 	if (rc)
 		goto out;
-	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
-	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	out_str = ctime_r((const time_t *)&otime_sec, otime_str);
+	D_ASSERT(out_str == NULL);
+	out_str = ctime_r((const time_t *)&mtime_sec, mtime_str);
+	D_ASSERT(out_str == NULL);
+
 	D_DEBUG(DB_MD, DF_CONT":%s: metadata open   time: HLC 0x"DF_X64", %s",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label  ? : "",
 			arg->coa_info->ci_md_otime, otime_str);
@@ -1186,14 +1189,15 @@ struct cont_query_args {
 static int
 cont_query_complete(tse_task_t *task, void *data)
 {
-	struct cont_query_args		*arg = (struct cont_query_args *)data;
-	struct cont_query_v7_out	*out = crt_reply_get(arg->rpc);
-	struct dc_pool			*pool = arg->cqa_pool;
-	struct dc_cont			*cont = arg->cqa_cont;
-	time_t				 otime_sec, mtime_sec;
-	char				 otime_str[32];
-	char				 mtime_str[32];
-	int				 rc   = task->dt_result;
+	struct cont_query_args   *arg  = (struct cont_query_args *)data;
+	struct cont_query_v7_out *out  = crt_reply_get(arg->rpc);
+	struct dc_pool           *pool = arg->cqa_pool;
+	struct dc_cont           *cont = arg->cqa_cont;
+	time_t                    otime_sec, mtime_sec;
+	char                      otime_str[32];
+	char                      mtime_str[32];
+	char                     *out_str;
+	int                       rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
 					   &out->cqo_op, task);
@@ -1232,15 +1236,16 @@ cont_query_complete(tse_task_t *task, void *data)
 	arg->cqa_info->ci_md_otime = out->cqo_md_otime;
 	arg->cqa_info->ci_md_mtime = out->cqo_md_mtime;
 
-	/* log metadata times. NB: ctime_r inserts \n so don't add it in the D_DEBUG format */
 	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_otime, &otime_sec);
 	if (rc)
 		goto out;
 	rc = daos_hlc2timestamp(arg->cqa_info->ci_md_mtime, &mtime_sec);
 	if (rc)
 		goto out;
-	D_ASSERT(otime_str == ctime_r((const time_t *)&otime_sec, otime_str));
-	D_ASSERT(mtime_str == ctime_r((const time_t *)&mtime_sec, mtime_str));
+	out_str = ctime_r((const time_t *)&otime_sec, otime_str);
+	D_ASSERT(out_str == NULL);
+	out_str = ctime_r((const time_t *)&mtime_sec, mtime_str);
+	D_ASSERT(out_str == NULL);
 	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_otime, otime_str);
 	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
