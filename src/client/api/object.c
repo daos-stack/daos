@@ -1012,3 +1012,10 @@ daos_oit_list_unmarked(daos_handle_t oh, daos_obj_id_t *oids, uint32_t *oids_nr,
 {
 	return daos_oit_list_filter(oh, oids, oids_nr, anchor, oit_filter_unmarked, ev);
 }
+
+int
+daos_obj_set_ro(daos_handle_t oh, daos_handle_t th, daos_event_t *ev)
+{
+	D_ERROR("Unsupported API\n");
+	return -DER_NOSYS;
+}

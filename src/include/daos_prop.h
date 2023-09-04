@@ -481,23 +481,31 @@ enum {
 /** container status flag */
 enum {
 	/* in healthy status, data protection work as expected */
-	DAOS_PROP_CO_HEALTHY,
+	DAOS_PROP_CO_HEALTHY	= 0x0,
 	/* in unclean status, data protection possibly cannot work.
 	 * typical scenario - cascading failed targets exceed the container
 	 * redundancy factor, that possibly cause lost data cannot be detected
 	 * or rebuilt.
 	 */
-	DAOS_PROP_CO_UNCLEAN,
+	DAOS_PROP_CO_UNCLEAN	= 0x1,
+	/* in read-only status, for WORM (Write-Once-Read-Many) container user can set this status
+	 * to indicate the container become immutable and DAOS backend service can flatten all
+	 * objects in the container.
+	 */
+	DAOS_PROP_CO_READONLY	= 0x2,
 };
 
-/** clear the UNCLEAN status */
-#define DAOS_PROP_CO_CLEAR	(0x1)
+/**
+ * Container status internal flag, used for client API to indicate setting which status.
+ */
+#define DAOS_PROP_CSF_HEALTHY	(0x1)	/* set HEALTHY/UNCLEAN status */
+#define DAOS_PROP_CSF_READONLY	(0x2)	/* set READONLY status */
 
 /** daos container status */
 struct daos_co_status {
 	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
-	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	/** flags for DAOS internal usage, DAOS_PROP_CSF_XXX */
 	uint16_t	dcs_flags;
 	/** pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;

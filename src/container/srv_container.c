@@ -960,7 +960,6 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 			}
 			break;
 		case DAOS_PROP_CO_STATUS:
-			/* DAOS_PROP_CO_CLEAR only used for iv_prop_update */
 			daos_prop_val_2_co_status(entry->dpe_val, &stat);
 			stat.dcs_flags = 0;
 			entry->dpe_val = daos_prop_co_status_2_val(&stat);
