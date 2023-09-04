@@ -860,6 +860,7 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct pool_create_in  *in;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
+	int			n_attempts = 0;
 	int			rc;
 
 	/* Check for default label supplied via property. */
@@ -927,9 +928,16 @@ rechoose:
 	in->pri_ndomains = ndomains;
 	in->pri_domains.ca_count = ndomains;
 	in->pri_domains.ca_arrays = (uint32_t *)domains;
+	if (n_attempts == 0)
+		/*
+		 * This is our first attempt. Use a non-null pi_hdl to ask the
+		 * chosen PS replica to campaign.
+		 */
+		uuid_generate(in->pri_op.pi_hdl);
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
+	n_attempts++;
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 	rc = rsvc_client_complete_rpc(&client, &ep, rc,
@@ -2602,6 +2610,16 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
 		D_GOTO(out_mutex, rc = -DER_CANCELED);
+	}
+
+	if (!uuid_is_null(in->pri_op.pi_hdl)) {
+		/*
+		 * Try starting a campaign without waiting for the election
+		 * timeout. Since this is a performance optimization, ignore
+		 * errors.
+		 */
+		rc = rdb_campaign(svc->ps_rsvc.s_db);
+		D_DEBUG(DB_MD, DF_UUID": campaign: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);
