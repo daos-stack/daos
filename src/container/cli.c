@@ -824,9 +824,9 @@ cont_open_complete(tse_task_t *task, void *data)
 	if (rc)
 		goto out;
 	out_str = ctime_r((const time_t *)&otime_sec, otime_str);
-	D_ASSERT(out_str == NULL);
+	D_ASSERT(out_str == otime_str);
 	out_str = ctime_r((const time_t *)&mtime_sec, mtime_str);
-	D_ASSERT(out_str == NULL);
+	D_ASSERT(out_str == mtime_str);
 
 	D_DEBUG(DB_MD, DF_CONT":%s: metadata open   time: HLC 0x"DF_X64", %s",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->coa_label  ? : "",
@@ -1243,9 +1243,9 @@ cont_query_complete(tse_task_t *task, void *data)
 	if (rc)
 		goto out;
 	out_str = ctime_r((const time_t *)&otime_sec, otime_str);
-	D_ASSERT(out_str == NULL);
+	D_ASSERT(out_str == otime_str);
 	out_str = ctime_r((const time_t *)&mtime_sec, mtime_str);
-	D_ASSERT(out_str == NULL);
+	D_ASSERT(out_str == mtime_str);
 	D_DEBUG(DB_MD, DF_CONT": metadata open   time: HLC 0x"DF_X64", %s",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), arg->cqa_info->ci_md_otime, otime_str);
 	D_DEBUG(DB_MD, DF_CONT": metadata modify time: HLC 0x"DF_X64", %s",
