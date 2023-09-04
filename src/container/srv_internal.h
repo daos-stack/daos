@@ -151,7 +151,7 @@ struct cont_iv_prop {
 	uint32_t	cip_obj_version;
 	uint64_t	cip_valid_bits;
 	struct daos_prop_co_roots	cip_roots;
-	struct daos_co_status		cip_co_status;
+	struct daos_co_status_srv	cip_co_status;
 	/* MUST be the last member */
 	struct daos_acl			cip_acl;
 };
@@ -218,6 +218,7 @@ int ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		      struct cont *cont, struct container_hdl *hdl,
 		      crt_rpc_t *rpc);
+int ds_cont_read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *count);
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);

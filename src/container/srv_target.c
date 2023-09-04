@@ -2487,20 +2487,28 @@ cont_child_prop_update(void *data)
 
 	iv_entry = daos_prop_entry_get(arg->cpa_prop, DAOS_PROP_CO_STATUS);
 	if (iv_entry != NULL) {
-		struct daos_co_status co_stat = { 0 };
+		struct daos_co_status_srv *co_stat;
 
-		daos_prop_val_2_co_status(iv_entry->dpe_val, &co_stat);
-		if (co_stat.dcs_pm_ver < child->sc_status_pm_ver)
+		co_stat = iv_entry->dpe_val_ptr;
+		if (co_stat->dcs_epoch > child->sc_flat_epoch ||
+		    (co_stat->dcs_epoch == 0 && child->sc_flat_epoch != 0)) {
+			child->sc_flat_epoch = co_stat->dcs_epoch;
+			D_DEBUG(DB_MD, DF_CONT" child->sc_flat_epoch set as "DF_X64"\n",
+				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
+				child->sc_flat_epoch);
+			/* TODO: start flatten service */
+		}
+		if (co_stat->dcs_pm_ver < child->sc_status_pm_ver)
 			goto out;
 		if (dss_get_module_info()->dmi_tgt_id == 0)
 			D_DEBUG(DB_MD, DF_CONT" statu_pm_ver %d -> %d status %u\n",
 				DP_CONT(arg->cpa_pool_uuid, arg->cpa_cont_uuid),
-				child->sc_status_pm_ver, co_stat.dcs_pm_ver,
-				co_stat.dcs_status);
-		child->sc_status_pm_ver = co_stat.dcs_pm_ver;
-		if (co_stat.dcs_status == DAOS_PROP_CO_UNCLEAN)
+				child->sc_status_pm_ver, co_stat->dcs_pm_ver,
+				co_stat->dcs_status);
+		child->sc_status_pm_ver = co_stat->dcs_pm_ver;
+		if (co_stat->dcs_status == DAOS_PROP_CO_UNCLEAN)
 			child->sc_rw_disabled = 1;
-		else if (co_stat.dcs_status == DAOS_PROP_CO_HEALTHY)
+		else if (co_stat->dcs_status == DAOS_PROP_CO_HEALTHY)
 			child->sc_rw_disabled = 0;
 	}
 
