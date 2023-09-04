@@ -6775,7 +6775,10 @@ obj_coll_punch_prep(struct dc_object *obj, uint32_t map_ver, struct dtx_membersh
 		(*length)++;
 	}
 
-	D_ASSERT(*length > 0);
+	/* If all shards are NONEXIST, then need not send punch RPC. */
+	if (unlikely(*length == 0))
+		D_GOTO(out, rc = 1);
+
 	D_ASSERT(count > 0);
 
 	/*
@@ -6845,7 +6848,7 @@ out:
 	if (shard != NULL)
 		obj_shard_close(shard);
 
-	if (rc < 0) {
+	if (rc != 0) {
 		if (octs != NULL)
 			obj_coll_punch_cleanup(mbs, octs, node_nr + 1);
 		*length = 0;
@@ -6889,8 +6892,8 @@ obj_coll_punch_cb(tse_task_t *task, void *data)
 }
 
 static int
-dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch, uint32_t map_ver,
-		  daos_obj_punch_t *args, struct obj_auxi_args *auxi)
+dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
+		  uint32_t map_ver, daos_obj_punch_t *args, struct obj_auxi_args *auxi)
 {
 	struct dc_pool			*pool = obj->cob_pool;
 	struct obj_coll_target		*octs = NULL;
@@ -6904,7 +6907,7 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	int				 i;
 
 	rc = obj_coll_punch_prep(obj, map_ver, &mbs, &octs, &length);
-	if (rc < 0)
+	if (rc != 0)
 		goto out;
 
 	tgt_ep.ep_grp = pool->dp_sys->sy_group;
@@ -6972,10 +6975,13 @@ dc_obj_coll_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epo
 	return daos_rpc_send(req, task);
 
 out:
-	D_ERROR("DAOS_OBJ_RPC_COLL_PUNCH for "DF_OID" map_ver %u, task %p got failure: "DF_RC"\n",
-		DP_OID(obj->cob_md.omd_id), map_ver, task, DP_RC(rc));
+	DL_CDEBUG(rc > 0, DB_IO, DLOG_ERR, rc,
+		  "DAOS_OBJ_RPC_COLL_PUNCH for "DF_OID" map_ver %u, task %p",
+		  DP_OID(obj->cob_md.omd_id), map_ver, task);
 
 	obj_coll_punch_cleanup(mbs, octs, length);
+	if (unlikely(rc > 0))
+		rc = 0;
 	obj_task_complete(task, rc);
 
 	return rc;
