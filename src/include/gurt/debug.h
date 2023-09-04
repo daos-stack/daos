@@ -359,6 +359,8 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 #define D_ABORT(reason, ...)                                                                       \
 	do {                                                                                       \
 		D_FATAL("Fatal error, unable to continue: " reason, ##__VA_ARGS__);                \
+		if (d_alt_assert != NULL)                                                          \
+			d_alt_assert(0, "fatal", __FILE__, __LINE__);                              \
 		assert(0);                                                                         \
 	} while (0)
 
