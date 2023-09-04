@@ -6,21 +6,21 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from apricot import TestWithServers
 
 
-class HarnessSetupTest(TestWithServers):
+class HarnessSetupVmTest(TestWithServers):
     """Harness setup test cases.
 
     :avocado: recursive
     """
 
-    def test_setup(self):
+    def test_setup_vm(self):
         """Verify the TestWithServers.setUp() method.
 
         Useful for setting up the /etc/daos/daos_server.yml files on multiple hosts.
 
         :avocado: tags=all
-        :avocado: tags=hw,medium,large
+        :avocado: tags=vm
         :avocado: tags=harness
-        :avocado: tags=HarnessSetupTest,test_setup
+        :avocado: tags=HarnessSetupVmTest,test_setup_vm
         """
         prepare_timeout = self.params.get('storage_prepare_timeout')
         format_timeout = self.params.get('storage_format_timeout')

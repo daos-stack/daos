@@ -63,7 +63,7 @@ class DaosBuild(DfuseTestBase):
         :avocado: tags=daosio,dfuse
         :avocado: tags=DaosBuild,test_dfuse_daos_build_wt_il
         """
-        self.run_build_test("writethrough", True, dfuse_namespace="/run/dfuse_vm/*")
+        self.run_build_test("writethrough", True, run_on_vms=True)
 
     def test_dfuse_daos_build_metadata(self):
         """This test builds DAOS on a dfuse filesystem.
@@ -113,7 +113,7 @@ class DaosBuild(DfuseTestBase):
         """
         self.run_build_test("nocache")
 
-    def run_build_test(self, cache_mode, intercept=False, dfuse_namespace=None):
+    def run_build_test(self, cache_mode, intercept=False, run_on_vms=False):
         """Run an actual test from above."""
         # Create a pool, container and start dfuse.
         self.add_pool(connect=False)
@@ -126,6 +126,22 @@ class DaosBuild(DfuseTestBase):
         # Timeout in minutes.  This is per command so up to double this or more as there are two
         # scons commands which can both take a long time.
         build_time = 60
+
+        dfuse_namespace = None
+
+        # Run the deps build in parallel for speed/coverage however the daos build itself does
+        # not yet work under the interception library so run this part in serial.
+        build_jobs = 6 * 5
+
+        # Note that run_on_vms does not tell ftest where to run, this should be set according to
+        # the test tags so the test can run with appropriate settings.
+        if run_on_vms:
+            dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
+            build_jobs = 6 * 2
+
+        intercept_jobs = build_jobs
+        if intercept:
+            intercept_jobs = 1
 
         self.load_dfuse(self.hostlist_clients, dfuse_namespace)
 
@@ -188,13 +204,6 @@ class DaosBuild(DfuseTestBase):
         envs = ['export {}={}'.format(env, value) for env, value in remote_env.items()]
 
         preload_cmd = ';'.join(envs)
-
-        # Run the deps build in parallel for speed/coverage however the daos build itself does
-        # not yet work under the interception library so run this part in serial.
-        build_jobs = 6 * 5
-        intercept_jobs = build_jobs
-        if intercept:
-            intercept_jobs = 1
 
         cmds = ['python3 -m venv {}/venv'.format(mount_dir),
                 'git clone https://github.com/daos-stack/daos.git {}'.format(build_dir),

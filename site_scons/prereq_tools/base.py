@@ -1338,7 +1338,9 @@ class _Component():
         rpath = ["$$ORIGIN"]
         norigin = []
         comp_path = self.component_prefix
-        if not comp_path or comp_path.startswith("/usr"):
+        if not comp_path:
+            return
+        if comp_path.startswith('/usr') and '/prereq/' not in comp_path:
             return
         if not os.path.exists(comp_path):
             return
