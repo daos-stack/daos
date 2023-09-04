@@ -139,7 +139,7 @@ The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
 DAOS Version 2.4 has been primarily validated
-on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
+on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8_6/)
 and [openSUSE Leap 15.4](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.4 supports on DAOS servers.

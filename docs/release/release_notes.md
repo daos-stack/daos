@@ -135,7 +135,7 @@ For a complete list of supported hardware and software, refer to the
   DAOS Version 2.4 includes a Technology Preview of a new interception
   library `libpil4dfs.so` which can also intercept POSIX metadata calls.
   Refer to
-  [this section](https://docs.daos.io/staging/v2.4/user/filesystem/#interception-library-libpil4dfs)
+  [this section](https://docs.daos.io/v2.4/user/filesystem/#interception-library-libpil4dfs)
   in the User Guide for more information on `libpil4dfs.so`,
   including the current limitations of this Technology Preview.
 
