@@ -8,7 +8,7 @@
 We are pleased to announce the release of DAOS version 2.4.
 
 
-## DAOS Version 2.4.0 (2023-xx-xx)
+## DAOS Version 2.4.0 (2023-09-xx)
 
 ### General Support
 
@@ -25,7 +25,7 @@ Operating System Support:
 * EL8 (RHEL, Rocky Linux, Alma Linux):
 
   - EL8.6 (EUS)
-  - Validation of EL8.8 is in progress
+  - Validation of EL8.8 is in progress.
 
 Fabric and Network Provider Support:
 
@@ -35,7 +35,6 @@ Fabric and Network Provider Support:
   - `ofi+tcp;ofi_rxm` on all fabrics (with RXM)
   - `ofi+verbs` on InfiniBand fabrics and RoCE (with RXM)
   - `ofi+cxi` on Slingshot fabrics (with HPE-provided libfabric)
-  - `ofi+opx` on Omni-Path fabrics (Technology Preview)
 
 * [UCX](https://docs.daos.io/v2.4/admin/ucx/) support on InfiniBand fabrics:
 
@@ -73,12 +72,12 @@ For a complete list of supported hardware and software, refer to the
 * The following prerequisite software packages that are included
   in the DAOS RPM builds have been updated:
 
-  - Argobots has been updated to 1.1-2
-  - DPDK has been updated to 21.11.2-1
-  - Libfabric has been updated to 1.18.0-2 (TB8), going to 1.18.1rc1
-  - Mercury has been updated to 2.3.0-1
-  - Raft has been updated to 0.9.2-1.403
-  - SPDK has been update to 22.01.2-3
+  - Argobots has been updated to 1.1-3
+  - DPDK has been updated to 21.11.2-2
+  - Libfabric has been updated to 1.18.1-1
+  - Mercury has been updated to 2.3.1~rc1-1
+  - Raft has been updated to 0.10.1-1.408
+  - SPDK has been update to 22.01.2-4
 
 #### New Network Providers
 
@@ -86,12 +85,7 @@ For a complete list of supported hardware and software, refer to the
   (it was a Technology Preview in DAOS 2.2).
   Refer to [UCX](https://docs.daos.io/v2.4/admin/ucx/) for details.
 
-* Slingshot fabrics are now supported with the `ofa+cxi`provider.
-
-* Omni-Path Express is supported as a Technology Preview,
-  using the `ofi+opx` provider.
-  For production usage on Omni-Path fabrics,
-  please continue to use the `ofi+tcp`provider.
+* Slingshot fabrics are now supported with the `ofa+cxi` provider.
 
 #### New Features and Usability Improvements
 
@@ -159,7 +153,7 @@ For a complete list of supported hardware and software, refer to the
 
 #### Other notable changes
 
-When deleting a pool that still has containers configured in it,
+To delete a pool that still has containers configured in it,
 the `dmg pool destroy` command now needs the `--recursive` option.
 
 In `dmg pool create` the `-p $POOL_LABEL` option is now obsolete.
@@ -172,12 +166,6 @@ positional argument instead (without `-l`).
 
 ### Known Issues and limitations
 
-Known issues from DAOS 2.2, need to be validated before DAOS 2.4 GA:
-
-- [DAOS-11685](https://daosio.atlassian.net/browse/DAOS-11685):
-  Under certain workloads with `rf=2`, a server may crash.
-  There is not workaround; a fix is targeted for daos-2.2.1.
-
 - [DAOS-11317](https://daosio.atlassian.net/browse/DAOS-11317):
   Running the Mellanox-provided `mlnxofedinstall` script to install a new version of MLNX\_OFED,
   while the `mercury-ucx` RPM is already installed, will un-install `mercury-ucx`
@@ -186,30 +174,16 @@ Known issues from DAOS 2.2, need to be validated before DAOS 2.4 GA:
   Workaround: Run `{yum|dnf|zypper} install mercury-ucx [mercury-ucx-debuginfo]`
   after the MLNX\_OFED update and before starting DAOS again.
 
-- [DAOS-8848](https://daosio.atlassian.net/browse/DAOS-8848) and
-  [SPDK-2587](https://github.com/spdk/spdk/issues/2587):
-  Binding and unbinding NVMe SSDs between the kernel and SPDK (using the
-  `daos_server storage prepare -n [--reset]` command) can sporadically cause
-  the NVMe SSDs to become inaccessible.
-  Workaround: This situation can be corrected by
-  running `rmmod vfio_pci; modprobe vfio_pci` and `rmmod nvme; modprobe nvme`.
-
-- [DAOS-10215](https://daosio.atlassian.net/browse/DAOS-10215):
-  For Replication and Erasure Coding (EC), in DAOS 2.2 the redundancy level (`rf_lvl`)
-  is set to `1 (rank=engine)`. On servers with more than one engine per server,
-  setting the redundancy level to `2 (server)` would be more appropriate,
-  but the `daos cont create` command currently does not support this.
-  No workaround is available at this point.
-
-- No OPA/PSM2 support.
+- No OPA/PSM2 support. For Omni-Path fabrics, please use the `ofi+tcp`provider.
   Please refer to the "Fabric Support" section of the
   [Support Matrix](https://docs.daos.io/v2.4/release/support_matrix/) for details.
   No workaround is available at this point.
 
-- [DAOS-8943](https://daosio.atlassian.net/browse/DAOS-8943):
-  Premature ENOSPC error / Reclaiming free NVMe space under heavy I/O load can cause early
-  out-of-space errors to be reported to applications.
-  No workaround is available at this point.
+- The `daos-client-tests` and `daos-server-tests` RPM packages have `golang`
+  prerequisites that are newer than the version provided in EL8.
+  To install those RPMs on EL8 systems, it is necessary to run
+  `dnf module enable go-toolset:rhel8` to satisfy the golang requirements.
+
 
 ### Bug fixes
 
