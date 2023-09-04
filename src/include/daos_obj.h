@@ -287,23 +287,6 @@ enum {
 	DAOS_COND_MASK = ((1 << IO_FLAGS_COND_BITS) - 1),
 };
 
-/** DAOS I/O flag bits, first 8 bits reserved for conditional checks */
-#define DAOS_IOF_COND_PUNCH		(DAOS_COND_PUNCH)
-#define DAOS_IOF_COND_DKEY_INSERT	(DAOS_COND_DKEY_INSERT)
-#define DAOS_IOF_COND_DKEY_UPDATE	(DAOS_COND_DKEY_UPDATE)
-#define DAOS_IOF_COND_DKEY_FETCH	(DAOS_COND_DKEY_FETCH)
-#define DAOS_IOF_COND_AKEY_INSERT	(DAOS_COND_AKEY_INSERT)
-#define DAOS_IOF_COND_AKEY_UPDATE	(DAOS_COND_AKEY_UPDATE)
-#define DAOS_IOF_COND_AKEY_FETCH	(DAOS_COND_AKEY_FETCH)
-#define DAOS_IOF_COND_PER_AKEY		(DAOS_COND_AKEY_FETCH)
-
-/**
- * Object flattening flag, this flag carried daos_obj_update() means this update is the last update
- * request, the object will be immutable after this update's finish. DAOS can start flattening
- * this object.
- */
-#define DAOS_IOF_FLATTEN		(1ULL << 63)
-
 /**
  * Object attributes (metadata).
  * \a oa_class and \a oa_oa are mutually exclusive.
@@ -798,7 +781,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	th	Optional transaction handle to update with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Update flags (conditional ops or DAOS_IOF_FLATTEN).
+ * \param[in]	flags	Update flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *
@@ -844,7 +827,8 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 		d_sg_list_t *sgls, daos_event_t *ev);
 
 /**
- * Flatten object, after it finishes the object become immutable.
+ * Set the object be read-only, after it finishes the object become immutable.
+ * Server-side can start flattening the read-only object.
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to update with.
@@ -856,10 +840,9 @@ daos_obj_update(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  *			0		Success
  *			-DER_NO_HDL	Invalid object open handle
  *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
  */
 int
-daos_obj_flatten(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
+daos_obj_set_ro(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
 
 /**
  * Distribution key enumeration.
