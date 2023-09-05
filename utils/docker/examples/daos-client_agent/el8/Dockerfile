@@ -5,24 +5,27 @@
 #
 # This Dockerfile accept the following input build arguments:
 # - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "rocky8.6")
-# - DAOS_CLIENT_UNAME        User name of the client (mandatory)
-# - DAOS_CLIENT_GNAME        Group name of the client (mandatory)
+# - DAOS_VERSION             Version of DAOS to use (default "2.4.0-2.el8")
+# - DAOS_CLIENT_UNAME        User name of the client (default "root")
+# - DAOS_CLIENT_GNAME        Group name of the client (default "root")
 
 # Pull base image
 ARG	DAOS_DOCKER_IMAGE_TAG=rocky8.6
 FROM	daos-agent:$DAOS_DOCKER_IMAGE_TAG
 LABEL	maintainer="daos@daos.groups.io"
 
+# Install base DAOS package
+ARG	DAOS_VERSION="2.4.0-2.el8"
+RUN	echo "[INFO] Installing DAOS" ;                                                            \
+	dnf install                                                                                \
+		daos-client-tests-${DAOS_VERSION} &&                                               \
+	dnf clean all
+
 # Install DAOS Bash launcher
-ARG	DAOS_CLIENT_UNAME=""
-ARG	DAOS_CLIENT_GNAME=""
+ARG	DAOS_CLIENT_UNAME="root"
+ARG	DAOS_CLIENT_GNAME="root"
 COPY	daos-bash.in /tmp/daos-bash.in
-RUN	for it in DAOS_CLIENT_UNAME DAOS_CLIENT_GNAME ; do                                         \
-		if eval "[[ -z \$$it ]]" ; then                                                    \
-			echo "[ERROR] Docker build argument $it is not defined" ;                  \
-			exit 1 ;                                                                   \
-		fi ;                                                                               \
-	done ;                                                                                     \
+RUN	echo "[INSTALL] Installing DAOS Agent entry point" ;                                       \
 	sed --regexp-extended                                                                      \
 		--expression "s/@DAOS_CLIENT_UNAME@/${DAOS_CLIENT_UNAME}/"                         \
 		--expression "s/@DAOS_CLIENT_GNAME@/${DAOS_CLIENT_GNAME}/"                         \

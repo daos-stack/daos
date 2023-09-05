@@ -1,14 +1,13 @@
 # Copyright 2021-2023 Intel Corporation
 # All rights reserved.
 #
-# Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
+# Docker Compose file allowing to deploy a DAOS client service with Docker stack
 
 version: "3.8"
 
 services:
-
-  daos_client_agent:
-    image: "daos-client_agent:${DAOS_DOCKER_IMAGE_TAG}"
+  daos_client:
+    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
     tty: true
     networks:
       - docker_host
@@ -19,11 +18,9 @@ services:
         gid: '0'
         mode: 0600
 
-
 secrets:
   daos_agent-certs:
     external: true
-
 
 networks:
   docker_host:

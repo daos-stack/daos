@@ -9,4 +9,4 @@ set -a
 source "$CWD/.env"
 set +a
 
-docker stack up -c "$1" daos_stack
+docker stack deploy -c "$1" daos_stack

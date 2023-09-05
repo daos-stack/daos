@@ -5,13 +5,22 @@
 #
 # This Dockerfile accept the following input build arguments:
 # - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "rocky8.6")
+# - DAOS_VERSION             Version of DAOS to use (default "2.4.0-2.el8")
 
 # Pull base image
 ARG	DAOS_DOCKER_IMAGE_TAG=rocky8.6
 FROM	daos-base:$DAOS_DOCKER_IMAGE_TAG
 LABEL	maintainer="daos@daos.groups.io"
 
-# Install DAOS agent configuration file
+# Install base DAOS package
+ARG	DAOS_VERSION="2.4.0-2.el8"
+RUN	echo "[INFO] Installing DAOS" ;                                                            \
+	dnf install                                                                                \
+		daos-client-${DAOS_VERSION}                                                        \
+		daos-client-tests-${DAOS_VERSION} &&                                               \
+	dnf clean all
+
+# Install minimal DAOS agent configuration file
 COPY	daos_agent.yml /etc/daos/daos_agent.yml
 
 # Define entrypoint and cmd:

@@ -9,16 +9,16 @@
 # - BUST_CACHE               Manage docker building cache (default undefined).  To invalidate the
 #                            cache, a random value such as the date of day shall be given.
 # - DAOS_REPOS               Space separated list of repos needed to install DAOS (default
-#                            "https://packages.daos.io/v2.2/EL8/packages/x86_64/")
+#                            "https://packages.daos.io/v2.4/EL8/packages/x86_64/")
 # - DAOS_GPG_KEYS            Space separated list of GPG keys associated with DAOS repos (default
 #                            "https://packages.daos.io/RPM-GPG-KEY")
 # - DAOS_REPOS_NOAUTH        Space separated list of repos to use without GPG authentication
 #                            (optional)
-# - DAOS_VERSION             Version of DAOS to use (default "2.2.0-4.el8")
-# - DAOS_CLIENT_UNAME        User name of the client (mandatory)
-# - DAOS_CLIENT_UID          User id of the client (mandatory)
-# - DAOS_CLIENT_GNAME        Group name of the client (mandatory)
-# - DAOS_CLIENT_GID          Group id of the client (mandatory)
+# - DAOS_VERSION             Version of DAOS to use (default "2.4.0-2.el8")
+# - DAOS_CLIENT_UNAME        User name of the client (default "root")
+# - DAOS_CLIENT_UID          User id of the client (default "0")
+# - DAOS_CLIENT_GNAME        Group name of the client (default "root")
+# - DAOS_CLIENT_GID          Group id of the client (default "0")
 
 # Pull base image
 ARG	RHEL_BASE_IMAGE_NAME=rockylinux/rockylinux
@@ -37,15 +37,15 @@ RUN	dnf clean all &&                                                            
 	dnf update &&                                                                              \
 	dnf clean all
 
-# Install DAOS package
+# Install base DAOS package
 # XXX NOTE XXX Variable allowing to build the image without using global --no-cache option and thus
 # XXX NOTE XXX to not update all rpms.  To work properly a random value such as the date of the day
 # XXX NOTE XXX should be given.
 ARG	BUST_CACHE=""
-ARG	DAOS_REPOS="https://packages.daos.io/v2.2/EL8/packages/x86_64/"
+ARG	DAOS_REPOS="https://packages.daos.io/v2.4/EL8/packages/x86_64/"
 ARG	DAOS_GPG_KEYS="https://packages.daos.io/RPM-GPG-KEY"
 ARG	DAOS_REPOS_NOAUTH=""
-ARG	DAOS_VERSION="2.2.0-4.el8"
+ARG	DAOS_VERSION="2.4.0-2.el8"
 RUN	if [ -n "$BUST_CACHE" ] ; then                                                             \
 		echo "[INFO] Busting cache" ;                                                      \
 		dnf update ;                                                                       \
@@ -64,25 +64,23 @@ RUN	if [ -n "$BUST_CACHE" ] ; then                                              
 	done &&                                                                                    \
 	echo "[INFO] Installing DAOS" ;                                                            \
 	dnf install                                                                                \
-		daos-${DAOS_VERSION}                                                               \
-		daos-client-${DAOS_VERSION}                                                        \
-		daos-client-tests-${DAOS_VERSION} &&                                               \
+		sudo                                                                               \
+		daos-${DAOS_VERSION} &&                                                            \
 	dnf clean all
 
 # Install DAOS client user and group information
-ARG	DAOS_CLIENT_UNAME=""
-ARG	DAOS_CLIENT_UID=""
-ARG	DAOS_CLIENT_GNAME=""
-ARG	DAOS_CLIENT_GID=""
-RUN	for it in DAOS_CLIENT_UNAME DAOS_CLIENT_UID DAOS_CLIENT_GNAME DAOS_CLIENT_GID ; do         \
-		if eval "[[ -z \$$it ]]" ; then                                                    \
-			echo "[ERROR] Docker build argument $it is not defined" ;                  \
-			exit 1 ;                                                                   \
-		fi ;                                                                               \
-	done ;                                                                                     \
-	echo "[INFO] Adding DAOS client user ${DAOS_CLIENT_UNAME}" ;                               \
-	groupadd -g ${DAOS_CLIENT_GID} ${DAOS_CLIENT_GNAME} &&                                     \
-	useradd -g ${DAOS_CLIENT_GID} -u ${DAOS_CLIENT_UID} ${DAOS_CLIENT_UNAME}
+ARG	DAOS_CLIENT_UNAME="root"
+ARG	DAOS_CLIENT_UID="0"
+ARG	DAOS_CLIENT_GNAME="root"
+ARG	DAOS_CLIENT_GID="0"
+RUN	if ! getent group ${DAOS_CLIENT_GNAME} > /dev/null 2>&1; then                              \
+		echo "[INFO] Adding DAOS client group ${DAOS_CLIENT_GNAME}" ;                      \
+		groupadd -g ${DAOS_CLIENT_GID} ${DAOS_CLIENT_GNAME} ;                              \
+	fi &&                                                                                      \
+	if ! getent passwd ${DAOS_CLIENT_UNAME} > /dev/null 2>&1; then                             \
+		echo "[INFO] Adding DAOS client user ${DAOS_CLIENT_UNAME}" ;                       \
+		useradd -g ${DAOS_CLIENT_GID} -u ${DAOS_CLIENT_UID} ${DAOS_CLIENT_UNAME} ;         \
+	fi
 
 # Define entrypoint and cmd:
 # - ENTRYPOINT for the command to run
