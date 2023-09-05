@@ -485,8 +485,9 @@ class LogTest():
                     if desc in active_rpcs:
                         del active_rpcs[desc]
                     else:
-                        show_line(line, 'NORMAL', 'invalid rpc remove')
-                        err_count += 1
+                        if not self.ftest_mode:
+                            show_line(line, 'NORMAL', 'invalid rpc remove')
+                            err_count += 1
                 else:
                     if have_debug and desc not in active_desc and desc not in active_rpcs:
                         show_line(line, 'NORMAL', 'inactive desc')
@@ -771,7 +772,9 @@ def run():
         if in_file.endswith('.bz2'):
             in_file = args.file[:-4]
         out_fd = open(f'{in_file}.cart_logtest', 'w')  # pylint: disable=consider-using-with
+        real_stdout = sys.stdout
         sys.stdout = out_fd
+        print(f'Logging to {in_file}.cart_logtest', file=real_stdout)
 
     test_iter = LogTest(log_iter)
     if args.ftest_mode:
