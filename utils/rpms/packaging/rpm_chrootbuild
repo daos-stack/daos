@@ -127,7 +127,7 @@ RC=$?
 if [ ${RC} -ne 0 ]
 then
     # Debug information for filing bugs on mock
-    rpm -q mock
-    mock --debug-config
+    rpm -q mock >> build.log
+    mock --debug-config >> build.log
 fi
 exit ${RC}
