@@ -341,11 +341,6 @@ class LogTest():
         warnings_mode = False
         server_shutdown = False
 
-        regions = OrderedDict()
-        memsize = HwmCounter()
-
-        old_regions = {}
-
         error_files = set()
 
         have_debug = False
@@ -362,6 +357,12 @@ class LogTest():
             cb_list.append((rpc_r, ('hg', 'rpc')))
         for tracer in self._tracers:
             cb_list.append((tracer[0], tracer[1]))
+
+        if not self.ftest_mode:
+            mem_r = MemReporting()
+            mem_r.wf = leak_wf
+            mem_r.show_memleaks = show_memleaks
+            cb_list.append((mem_r, None))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
             for (cbe, facs) in cb_list:
@@ -462,8 +463,8 @@ class LogTest():
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
-                        if line.parent in regions:
-                            show_line(regions[line.parent], 'NORMAL',
+                        if line.parent in mem_r.regions:
+                            show_line(mem_r.regions[line.parent], 'NORMAL',
                                       'used as parent without registering')
                         err_count += 1
                     active_desc[desc] = line
@@ -491,75 +492,30 @@ class LogTest():
                 else:
                     if have_debug and desc not in active_desc and desc not in active_rpcs:
                         show_line(line, 'NORMAL', 'inactive desc')
-                        if line.descriptor in regions:
-                            show_line(regions[line.descriptor], 'NORMAL',
+                        if line.descriptor in mem_r.regions:
+                            show_line(mem_r.regions[line.descriptor], 'NORMAL',
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
                         err_count += 1
-            elif not self.ftest_mode and len(line._fields) > 2:
-                # is_calloc() doesn't work on truncated output so only test if
-                # there are more than two fields to work with.
+            else:
                 non_trace_lines += 1
-                if line.is_calloc():
-                    pointer = line.calloc_pointer()
-                    if pointer in regions:
-                        # Report both the old and new allocation points here.
-                        show_line(regions[pointer], 'NORMAL',
-                                  'new allocation seen for same pointer (old)')
-                        show_line(line, 'NORMAL',
-                                  'new allocation seen for same pointer (new)')
-                        err_count += 1
-                    regions[pointer] = line
-                    memsize.add(line.calloc_size())
-                elif line.is_free():
-                    pointer = line.free_pointer()
-                    # If a pointer is freed then automatically remove the
-                    # descriptor
-                    if pointer in active_desc:
-                        del active_desc[pointer]
-                    if pointer in regions:
-                        memsize.subtract(regions[pointer].calloc_size())
-                        old_regions[pointer] = [regions[pointer], line]
-                        del regions[pointer]
-                    elif pointer != '(nil)':
-                        # Logs no longer contain free(NULL) however old logs might so continue
-                        # to handle this case.
-                        if pointer in old_regions:
-                            if show_line(old_regions[pointer][0], 'ERROR',
-                                         'double-free allocation point'):
-                                print(f'Memory address is {pointer}')
+                if len(line._fields) > 2:
+                    if line.is_free():
+                        pointer = line.free_pointer()
+                        # If a pointer is freed then automatically remove the descriptor
+                        if pointer in active_desc:
+                            del active_desc[pointer]
 
-                            show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
-                            show_line(line, 'ERROR', '2nd double-free location')
-                        else:
-                            show_line(line, 'HIGH', 'free of unknown memory')
-                        err_count += 1
-                elif line.is_realloc():
-                    (new_pointer, old_pointer) = line.realloc_pointers()
-                    (new_size, old_size) = line.realloc_sizes()
-                    if new_pointer != '(nil)' and old_pointer != '(nil)':
-                        if old_pointer not in regions:
-                            show_line(line, 'HIGH', 'realloc of unknown memory')
-                        else:
-                            # Use calloc_size() here as the memory might not
-                            # come from a realloc() call.
-                            exp_sz = regions[old_pointer].calloc_size()
-                            if old_size not in (0, exp_sz, new_size):
-                                show_line(line, 'HIGH', 'realloc used invalid old size')
-                            memsize.subtract(exp_sz)
-                    regions[new_pointer] = line
-                    memsize.add(new_size)
-                    if old_pointer not in (new_pointer, '(nil)'):
-                        if old_pointer in regions:
-                            old_regions[old_pointer] = [regions[old_pointer], line]
-                            del regions[old_pointer]
-                        else:
-                            show_line(line, 'NORMAL', 'realloc of unknown memory')
-                            err_count += 1
+        if not self.ftest_mode:
+            mem_r.active_desc = active_desc
 
         del active_desc['root']
         for (cbe, _) in cb_list:
             cbe.report()
+
+        if not self.ftest_mode:
+            active_desc = mem_r.active_desc
+            err_count += mem_r.err_count
 
         # This isn't currently used anyway.
         # if not have_debug:
@@ -571,29 +527,9 @@ class LogTest():
         if not self.quiet:
             print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
                 pid, total_lines, trace_lines, p_trace))
-            if fi_count and memsize.count:
+            if fi_count and mem_r.memsize.count:
                 print("Number of faults injected {} {:.2f}%".format(
-                    fi_count, (fi_count / memsize.count) * 100))
-
-        if memsize.has_data():
-            print("Memsize: {}".format(memsize))
-
-        lost_memory = False
-        if show_memleaks:
-            for (_, line) in list(regions.items()):
-                if line.is_calloc():
-                    pointer = line.calloc_pointer()
-                else:
-                    assert line.is_realloc()
-                    (pointer, _) = line.realloc_pointers()
-                if pointer in active_desc:
-                    if show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf):
-                        print(f'Memory address is {pointer}')
-                    del active_desc[pointer]
-                else:
-                    if show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf):
-                        print(f'Memory address is {pointer}')
-                lost_memory = True
+                    fi_count, (fi_count / mem_r.memsize.count) * 100))
 
         if active_desc:
             for (_, line) in list(active_desc.items()):
@@ -605,12 +541,104 @@ class LogTest():
                 show_line(line, 'NORMAL', 'rpc not deregistered')
         if error_files or err_count:
             raise LogError()
-        if lost_memory:
+        if not self.ftest_mode and mem_r.lost_memory:
             raise NotAllFreed()
         if warnings_strict:
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
+
+
+class MemReporting():
+    """Class for checking memory allocations"""
+
+    def __init__(self):
+        self.memsize = HwmCounter()
+        self.regions = {}
+        self._old_regions = {}
+        self.err_count = 0
+        self.wf = None
+        self.lost_memory = False
+        self.show_memleaks = True
+        self.active_desc = None
+
+    def add_line(self, line):
+        """Parse an output line"""
+        err_count = 0
+        if line.is_calloc():
+            pointer = line.calloc_pointer()
+            if pointer in self.regions:
+                # Report both the old and new allocation points here.
+                show_line(self.regions[pointer], 'NORMAL',
+                          'new allocation seen for same pointer (old)')
+                show_line(line, 'NORMAL',
+                          'new allocation seen for same pointer (new)')
+                err_count += 1
+            self.regions[pointer] = line
+            self.memsize.add(line.calloc_size())
+        elif line.is_free():
+            pointer = line.free_pointer()
+            if pointer in self.regions:
+                self.memsize.subtract(self.regions[pointer].calloc_size())
+                self._old_regions[pointer] = [self.regions[pointer], line]
+                del self.regions[pointer]
+            elif pointer != '(nil)':
+                # Logs no longer contain free(NULL) however old logs might so continue
+                # to handle this case.
+                if pointer in self._old_regions:
+                    if show_line(self._old_regions[pointer][0], 'ERROR',
+                                 'double-free allocation point'):
+                        print(f'Memory address is {pointer}')
+
+                    show_line(self._old_regions[pointer][1], 'ERROR', '1st double-free location')
+                    show_line(line, 'ERROR', '2nd double-free location')
+                else:
+                    show_line(line, 'HIGH', 'free of unknown memory')
+                err_count += 1
+        elif line.is_realloc():
+            (new_pointer, old_pointer) = line.realloc_pointers()
+            (new_size, old_size) = line.realloc_sizes()
+            if new_pointer != '(nil)' and old_pointer != '(nil)':
+                if old_pointer not in self.regions:
+                    show_line(line, 'HIGH', 'realloc of unknown memory')
+                else:
+                    # Use calloc_size() here as the memory might not
+                    # come from a realloc() call.
+                    exp_sz = self.regions[old_pointer].calloc_size()
+                    if old_size not in (0, exp_sz, new_size):
+                        show_line(line, 'HIGH', 'realloc used invalid old size')
+                    self.memsize.subtract(exp_sz)
+            self.regions[new_pointer] = line
+            self.memsize.add(new_size)
+            if old_pointer not in (new_pointer, '(nil)'):
+                if old_pointer in self.regions:
+                    self._old_regions[old_pointer] = [self.regions[old_pointer], line]
+                    del self.regions[old_pointer]
+                else:
+                    show_line(line, 'NORMAL', 'realloc of unknown memory')
+                    err_count += 1
+        self.err_count += err_count
+
+    def report(self):
+        """Report the results"""
+        if self.memsize.has_data():
+            print("Memsize: {}".format(self.memsize))
+
+        if self.show_memleaks:
+            for (_, line) in list(self.regions.items()):
+                if line.is_calloc():
+                    pointer = line.calloc_pointer()
+                else:
+                    assert line.is_realloc()
+                    (pointer, _) = line.realloc_pointers()
+                if pointer in self.active_desc:
+                    if show_line(line, 'NORMAL', 'descriptor not freed', custom=self.wf):
+                        print(f'Memory address is {pointer}')
+                    del self.active_desc[pointer]
+                else:
+                    if show_line(line, 'NORMAL', 'memory not freed', custom=self.wf):
+                        print(f'Memory address is {pointer}')
+                self.lost_memory = True
 
 
 class RpcReporting():
