@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -103,6 +103,47 @@ host1:1,host2:2 whoops
 
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_UpdateErrorSummary(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp      *control.CollectLogResp
+		cmd       string
+		expStdout string
+	}{
+		"empty response": {
+			resp:      new(control.CollectLogResp),
+			cmd:       "empty",
+			expStdout: ``,
+		},
+		"one host error": {
+			cmd: "hostname",
+			resp: &control.CollectLogResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "command not found",
+					}),
+			},
+			expStdout: `
+Hosts Command  Error             
+----- -------  -----             
+host1 hostname command not found 
+`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+
+			if err := UpdateErrorSummary(tc.resp, tc.cmd, &out); err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expStdout, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

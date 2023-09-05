@@ -20,8 +20,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/support"
 )
 
-var bld strings.Builder
-
 // supportCmd is the struct representing the top-level support subcommand.
 type supportCmd struct {
 	CollectLog collectLogCmd `command:"collect-log" description:"Collect logs from servers"`
@@ -35,6 +33,7 @@ type collectLogCmd struct {
 	hostListCmd
 	cmdutil.JSONOutputCmd
 	support.CollectLogSubCmd
+	bld strings.Builder
 }
 
 // gRPC call to initiate the rsync and copy the logs to Admin (central location).
@@ -55,7 +54,7 @@ func (cmd *collectLogCmd) rsyncLog() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		if err := pretty.UpdateErrorSummary(resp, "rsync", &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "rsync", &cmd.bld); err != nil {
 			return err
 		}
 		return resp.Errors()
@@ -82,7 +81,7 @@ func (cmd *collectLogCmd) archLogsOnServer() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		if err := pretty.UpdateErrorSummary(resp, "archive", &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "archive", &cmd.bld); err != nil {
 			return err
 		}
 		return resp.Errors()
@@ -167,7 +166,7 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				return err
 			}
 			if len(resp.GetHostErrors()) > 0 {
-				if err := pretty.UpdateErrorSummary(resp, logCmd, &bld); err != nil {
+				if err := pretty.UpdateErrorSummary(resp, logCmd, &cmd.bld); err != nil {
 					return err
 				}
 
@@ -235,11 +234,11 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	}
 
 	// Print the support command summary.
-	if len(bld.String()) == 0 {
+	if len(cmd.bld.String()) == 0 {
 		fmt.Println("Summary : All Commands Successfully Executed")
 	} else {
 		fmt.Println("Summary :")
-		cmd.Info(bld.String())
+		cmd.Info(cmd.bld.String())
 	}
 
 	return nil
