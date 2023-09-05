@@ -1958,12 +1958,12 @@ static const ProtobufCFieldDescriptor mgmt__check_get_policy_req__field_descript
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "latest",
+    "last_used",
     3,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__CheckGetPolicyReq, latest),
+    offsetof(Mgmt__CheckGetPolicyReq, last_used),
     NULL,
     NULL,
     0,             /* flags */
@@ -1972,7 +1972,7 @@ static const ProtobufCFieldDescriptor mgmt__check_get_policy_req__field_descript
 };
 static const unsigned mgmt__check_get_policy_req__field_indices_by_name[] = {
   1,   /* field[1] = classes */
-  2,   /* field[2] = latest */
+  2,   /* field[2] = last_used */
   0,   /* field[0] = sys */
 };
 static const ProtobufCIntRange mgmt__check_get_policy_req__number_ranges[1 + 1] =

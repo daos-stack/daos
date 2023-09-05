@@ -287,11 +287,7 @@ func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPo
 	for _, pol := range policies {
 		pm[pol.InconsistCas] = pol
 	}
-	result := make([]*mgmtpb.CheckInconsistPolicy, 0, len(pm))
-	for _, pol := range pm {
-		result = append(result, pol)
-	}
-	return result, nil
+	return pm.ToSlice(), nil
 }
 
 func (svc *mgmtSvc) setLastPoliciesUsed(polList []*mgmtpb.CheckInconsistPolicy) error {
@@ -455,7 +451,7 @@ func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckG
 
 	var pm policyMap
 	var err error
-	if req.Latest {
+	if req.LastUsed {
 		pm, err = svc.getLastPoliciesUsed()
 		if errors.Is(err, errNoSavedPolicies) {
 			pm, err = svc.getCheckerPolicyMap()

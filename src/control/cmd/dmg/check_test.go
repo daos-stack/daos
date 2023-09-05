@@ -56,11 +56,11 @@ func TestCheckGetPolicyCommand(t *testing.T) {
 		},
 		{
 			"Get policy latest used",
-			"check get-policy --latest",
+			"check get-policy --last",
 			printRequest(t, &control.SystemCheckGetPolicyReq{
 				CheckGetPolicyReq: mgmtpb.CheckGetPolicyReq{
-					Sys:    "daos_server-unset",
-					Latest: true,
+					Sys:      "daos_server-unset",
+					LastUsed: true,
 				},
 			}),
 			nil,

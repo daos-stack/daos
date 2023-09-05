@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -304,8 +304,8 @@ func (f *getRepPolFlag) Complete(match string) []flags.Completion {
 type checkGetPolicyCmd struct {
 	checkCmdBase
 
-	Latest bool `short:"d" long:"latest" description:"Fetch the last policy used by the checker."`
-	Args   struct {
+	LastUsed bool `short:"L" long:"last" description:"Fetch the last policy used by the checker."`
+	Args     struct {
 		Classes getRepPolFlag `description:"Inconsistency class names"`
 	} `positional-args:"yes"`
 }
@@ -314,7 +314,7 @@ func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
 	req := new(control.SystemCheckGetPolicyReq)
-	req.Latest = cmd.Latest
+	req.LastUsed = cmd.LastUsed
 	req.SetClasses(cmd.Args.Classes.ReqClasses)
 	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
 	if cmd.JSONOutputEnabled() {

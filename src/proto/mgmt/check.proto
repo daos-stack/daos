@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -170,7 +170,7 @@ message CheckPropResp {
 message CheckGetPolicyReq {
 	string sys = 1; // DAOS system identifier.
 	repeated chk.CheckInconsistClass classes = 2;
-	bool latest = 3;
+	bool last_used = 3;
 }
 
 // CheckGetPolicyResp returns the result of check prop and the properties when start check.

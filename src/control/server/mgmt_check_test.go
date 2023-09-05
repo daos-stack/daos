@@ -457,8 +457,8 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 				return svc
 			},
 			req: &mgmtpb.CheckGetPolicyReq{
-				Sys:    "daos_server",
-				Latest: true,
+				Sys:      "daos_server",
+				LastUsed: true,
 			},
 			expResp: &mgmtpb.CheckGetPolicyResp{
 				Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_TRUST_MS),
@@ -466,8 +466,8 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 		},
 		"no latest policy saved": {
 			req: &mgmtpb.CheckGetPolicyReq{
-				Sys:    "daos_server",
-				Latest: true,
+				Sys:      "daos_server",
+				LastUsed: true,
 			},
 			expResp: &mgmtpb.CheckGetPolicyResp{
 				Policies: testPoliciesWithAction(chkpb.CheckInconsistAction_CIA_DEFAULT),
@@ -488,7 +488,7 @@ func TestServer_mgmtSvc_SystemCheckGetPolicy(t *testing.T) {
 					chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
 					chkpb.CheckInconsistClass_CIC_CONT_BAD_LABEL,
 				},
-				Latest: true,
+				LastUsed: true,
 			},
 			expResp: &mgmtpb.CheckGetPolicyResp{
 				Policies: []*mgmtpb.CheckInconsistPolicy{
