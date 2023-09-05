@@ -1,0 +1,5 @@
+# Ignore everything except Dockerfile configuration file
+*
+!daos_agent.yml.in
+!daos-bash.in
+!run-daos_agent

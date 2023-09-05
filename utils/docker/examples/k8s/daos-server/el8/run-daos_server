@@ -1,0 +1,17 @@
+#!/bin/bash
+
+# set -x
+set -e -o pipefail
+
+if [[ "$(id -u)" != "0" ]] ; then
+	echo "[ERROR] run-daos_server can only be run as root"
+fi
+
+CWD="$(realpath "$(dirname $0)")"
+
+mkdir -p /var/run/daos_server/
+chmod 755 /var/run/daos_server/
+chown root:root /var/run/daos_server/
+
+cd /var/run/daos_server/
+exec sudo --user=root --group=root /usr/bin/daos_server "$@"

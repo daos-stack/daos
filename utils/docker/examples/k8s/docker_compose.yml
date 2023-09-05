@@ -1,0 +1,95 @@
+# Copyright 2021-2023 Intel Corporation
+# All rights reserved.
+#
+# Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
+
+version: "3.8"
+
+services:
+
+  daos_client:
+    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+    build:
+      context: "daos-client/el8"
+      args:
+        - "RHEL_BASE_IMAGE_NAME=${RHEL_BASE_IMAGE_NAME}"
+        - "RHEL_BASE_IMAGE_TAG=${RHEL_BASE_IMAGE_TAG}"
+        - "BUST_CACHE=${BUST_CACHE}"
+        - "DAOS_REPOS=${DAOS_REPOS}"
+        - "DAOS_GPG_KEYS=${DAOS_GPG_KEYS}"
+        - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
+        - "DAOS_ACCESS_POINTS=${DAOS_ACCESS_POINTS}"
+        - "DAOS_CLIENT_UNAME=${DAOS_CLIENT_UNAME}"
+        - "DAOS_CLIENT_UID=${DAOS_CLIENT_UID}"
+        - "DAOS_CLIENT_GNAME=${DAOS_CLIENT_GNAME}"
+        - "DAOS_CLIENT_GID=${DAOS_CLIENT_GID}"
+        - "DAOS_IFACE_CFG=${DAOS_IFACE_CFG}"
+        - "DAOS_IFACE_NUMA_NODE=${DAOS_IFACE_NUMA_NODE}"
+        - "DAOS_AGENT_IFACE_NAME=${DAOS_AGENT_IFACE_NAME}"
+        - "DAOS_IFACE_DOMAIN_NAME=${DAOS_IFACE_DOMAIN_NAME}"
+    tty: true
+    network_mode: host
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - "/dev/fuse:/dev/fuse"
+
+  daos_server:
+    image: "daos-server:${DAOS_DOCKER_IMAGE_TAG}"
+    build:
+      context: "daos-server/el8"
+      args:
+        - "RHEL_BASE_IMAGE_NAME=${RHEL_BASE_IMAGE_NAME}"
+        - "RHEL_BASE_IMAGE_TAG=${RHEL_BASE_IMAGE_TAG}"
+        - "BUST_CACHE=${BUST_CACHE}"
+        - "DAOS_REPOS=${DAOS_REPOS}"
+        - "DAOS_GPG_KEYS=${DAOS_GPG_KEYS}"
+        - "DAOS_REPOS_NOAUTH=${DAOS_REPOS_NOAUTH}"
+        - "DAOS_VERSION=${DAOS_VERSION}"
+        - "DAOS_SERVER_HOSTLIST=${DAOS_SERVER_HOSTLIST}"
+        - "DAOS_ACCESS_POINTS=${DAOS_ACCESS_POINTS}"
+        - "DAOS_HUGEPAGES_NBR=${DAOS_HUGEPAGES_NBR}"
+        - "DAOS_CTRL_METADATA=${DAOS_CTRL_METADATA}"
+        - "DAOS_TARGETS=${DAOS_TARGETS}"
+        - "DAOS_HELPERS=${DAOS_HELPERS}"
+        - "DAOS_ENGINE_IFACE_NAME=${DAOS_ENGINE_IFACE_NAME}"
+        - "DAOS_SCM_SIZE=${DAOS_SCM_SIZE}"
+        - "DAOS_DATA_BDEVS=${DAOS_DATA_BDEVS}"
+        - "DAOS_METADATA_BDEVS=${DAOS_METADATA_BDEVS}"
+    privileged: true
+    cap_add:
+      - ALL
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile: 1048576
+    network_mode: host
+    volumes:
+      - type: bind
+        read_only: true
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: bind
+        read_only: false
+        source: /dev/hugepages
+        target: /dev/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/kernel/mm/hugepages
+        target: /sys/kernel/mm/hugepages
+      - type: bind
+        read_only: false
+        source: /lib/modules
+        target: /lib/modules
+      - type: bind
+        read_only: false
+        source: /sys/devices/system/node
+        target: /sys/devices/system/node
+      - type: bind
+        read_only: false
+        source: /dev/uio0
+        target: /dev/uio0
+      - type: tmpfs
+        target: /run

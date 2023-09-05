@@ -1,0 +1,7 @@
+# Ignore everything except Dockerfile configuration file
+*
+!daos_control.yml.in
+!daos_server.yml.in
+!daos-bash.in
+!run-daos_server
+!50_daos_limits.conf

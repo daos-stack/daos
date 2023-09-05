@@ -1,0 +1,40 @@
+# DAOS Server configuration file
+
+name: daos_server
+access_points: @DAOS_ACCESS_POINTS@
+port: 1001
+
+provider: ofi+tcp;ofi_rxm
+socket_dir: /var/run/daos_server
+nr_hugepages: @DAOS_HUGEPAGES_NBR@
+disable_vfio: true
+
+transport_config:
+  allow_insecure: true
+
+helper_log_file: /tmp/daos_server_helper.log
+control_log_file: /tmp/daos_server.log
+control_log_mask: INFO
+control_metadata:
+  path: @DAOS_CTRL_METADATA@
+
+engines:
+  - targets: @DAOS_TARGETS@
+    nr_xs_helpers: @DAOS_HELPERS@
+    fabric_iface: @DAOS_ENGINE_IFACE_NAME@
+    fabric_iface_port: 31416
+    log_file: /tmp/daos_engine.log
+    log_mask: INFO
+    storage:
+      - class: ram
+        scm_mount: /mnt/daos
+        scm_size: @DAOS_SCM_SIZE@
+      - class: nvme
+        bdev_list: @DAOS_DATA_BDEVS@
+        bdev_roles:
+          - data
+      - class: nvme
+        bdev_list: @DAOS_METADATA_BDEVS@
+        bdev_roles:
+          - meta
+          - wal

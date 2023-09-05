@@ -1,0 +1,8 @@
+# DAOS Administration configuration file
+
+name: daos_server
+hostlist: @DAOS_SERVER_HOSTLIST@
+port: 1001
+
+transport_config:
+  allow_insecure: true
