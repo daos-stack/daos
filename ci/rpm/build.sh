@@ -7,7 +7,6 @@
 # For manual testing, you can set the environment variables CHROOT_NAME
 # and TARGET can be set.
 #
-# Default is to build for CentOS 7.
 # Fault injection will be enabled by default in CI unless a pragma has
 # has disabled fault injection or this is a Release build
 set -uex
