@@ -463,7 +463,7 @@ class LogTest():
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
-                        if line.parent in mem_r.regions:
+                        if self.ftest_mode and line.parent in mem_r.regions:
                             show_line(mem_r.regions[line.parent], 'NORMAL',
                                       'used as parent without registering')
                         err_count += 1
@@ -492,7 +492,7 @@ class LogTest():
                 else:
                     if have_debug and desc not in active_desc and desc not in active_rpcs:
                         show_line(line, 'NORMAL', 'inactive desc')
-                        if line.descriptor in mem_r.regions:
+                        if self.ftest_mode and line.descriptor in mem_r.regions:
                             show_line(mem_r.regions[line.descriptor], 'NORMAL',
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
@@ -571,8 +571,7 @@ class MemReporting():
                 # Report both the old and new allocation points here.
                 show_line(self.regions[pointer], 'NORMAL',
                           'new allocation seen for same pointer (old)')
-                show_line(line, 'NORMAL',
-                          'new allocation seen for same pointer (new)')
+                show_line(line, 'NORMAL', 'new allocation seen for same pointer (new)')
                 err_count += 1
             self.regions[pointer] = line
             self.memsize.add(line.calloc_size())
@@ -583,8 +582,8 @@ class MemReporting():
                 self._old_regions[pointer] = [self.regions[pointer], line]
                 del self.regions[pointer]
             elif pointer != '(nil)':
-                # Logs no longer contain free(NULL) however old logs might so continue
-                # to handle this case.
+                # Logs no longer contain free(NULL) however old logs might so continue to handle
+                # this case.
                 if pointer in self._old_regions:
                     if show_line(self._old_regions[pointer][0], 'ERROR',
                                  'double-free allocation point'):
@@ -602,8 +601,7 @@ class MemReporting():
                 if old_pointer not in self.regions:
                     show_line(line, 'HIGH', 'realloc of unknown memory')
                 else:
-                    # Use calloc_size() here as the memory might not
-                    # come from a realloc() call.
+                    # Use calloc_size() here as the memory might not come from a realloc() call.
                     exp_sz = self.regions[old_pointer].calloc_size()
                     if old_size not in (0, exp_sz, new_size):
                         show_line(line, 'HIGH', 'realloc used invalid old size')
