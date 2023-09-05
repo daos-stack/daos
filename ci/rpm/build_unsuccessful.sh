@@ -25,6 +25,9 @@ if [ -d /var/cache/pbuilder/ ]; then
     exit 0
 fi
 
+rpm -q mock
+mock --debug-config
+
 mockroot="/var/lib/mock/$CHROOT_NAME"
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
