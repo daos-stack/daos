@@ -6,7 +6,7 @@
 # https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml
 
 name: daos_server
-access_points: ['wolf-196']
+access_points: ['localhost']
 port: 10001
 runtime_dir: /var/run/daos_agent
 control_log_mask: debug
