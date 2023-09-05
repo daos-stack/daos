@@ -3,7 +3,8 @@
 set -eux
 
 distro="$1"
-quick_build="${2:-false}"
+# No longer used but provided by pipeline-lib
+# quick_build="${2:-false}"
 
 if [[ "$distro" = *7 ]]; then
     OPENMPI_VER="3"
