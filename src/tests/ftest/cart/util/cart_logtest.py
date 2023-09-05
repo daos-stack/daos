@@ -226,6 +226,7 @@ class LogTest():
         self.fi_location = None
         self.skip_suffixes = []
         self._tracers = []
+        self.ftest_mode = False
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
@@ -354,7 +355,11 @@ class LogTest():
         cb_list = []
 
         if not self.quiet:
-            cb_list.append((RpcReporting(), ('hg', 'rpc')))
+            rpc_r = RpcReporting()
+            if self.ftest_mode:
+                rpc_r.dynamic_level = True
+
+            cb_list.append((rpc_r, ('hg', 'rpc')))
         for tracer in self._tracers:
             cb_list.append((tracer[0], tracer[1]))
 
@@ -490,7 +495,7 @@ class LogTest():
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
                         err_count += 1
-            elif len(line._fields) > 2:
+            elif not self.ftest_mode and len(line._fields) > 2:
                 # is_calloc() doesn't work on truncated output so only test if
                 # there are more than two fields to work with.
                 non_trace_lines += 1
@@ -625,6 +630,7 @@ class RpcReporting():
         self._c_states = {}
         self._c_state_names = set()
         self._current_opcodes = {}
+        self.dynamic_level = False
 
     def add_line(self, line):
         """Parse a output line"""
@@ -666,9 +672,18 @@ class RpcReporting():
         if rpc_state == 'ALLOCATED':
             self._current_opcodes[rpc] = opcode
         else:
-            opcode = self._current_opcodes[rpc]
+            try:
+                opcode = self._current_opcodes[rpc]
+            except KeyError:
+                if not self.dynamic_level:
+                    raise
+                opcode = 'unknown'
         if rpc_state == 'DEALLOCATED':
-            del self._current_opcodes[rpc]
+            try:
+                del self._current_opcodes[rpc]
+            except KeyError:
+                if not self.dynamic_level:
+                    raise
 
         if opcode not in self._op_state_counters:
             self._op_state_counters[opcode] = {'ALLOCATED': 0,
@@ -733,6 +748,7 @@ def run():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dfuse', help='Summarise dfuse I/O', action='store_true')
     parser.add_argument('--warnings', action='store_true')
+    parser.add_argument('--ftest-mode', action='store_true')
     parser.add_argument('file', help='input file')
     args = parser.parse_args()
     try:
@@ -747,7 +763,19 @@ def run():
         # the encoding on, in which case this second attempt would fail with
         # an out-of-memory error.
         log_iter = cart_logparse.LogIter(args.file, check_encoding=True)
+
+    # ftest mode is called from launch.py for logs after functional testing.
+    # It logs everything to a output file, and does not perform memory leak or double-free checks.
+    if args.ftest_mode:
+        in_file = args.file
+        if in_file.endswith('.bz2'):
+            in_file = args.file[:-4]
+        out_fd = open(f'{in_file}.cart_logtest', 'w')  # pylint: disable=consider-using-with
+        sys.stdout = out_fd
+
     test_iter = LogTest(log_iter)
+    if args.ftest_mode:
+        test_iter.ftest_mode = True
     if args.dfuse:
         test_iter.check_dfuse_io()
     else:
