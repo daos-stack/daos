@@ -29,7 +29,7 @@ const (
 type NvmeDevState int32
 
 const (
-	NvmeDevState_UNKNOWN   NvmeDevState = 0 // Device state is unknown, zer6o value
+	NvmeDevState_UNKNOWN   NvmeDevState = 0 // Device state is unknown, zero value
 	NvmeDevState_NORMAL    NvmeDevState = 1 // Device is in a normal operational state
 	NvmeDevState_NEW       NvmeDevState = 2 // Device is new and is not yet in-use
 	NvmeDevState_EVICTED   NvmeDevState = 3 // Device is faulty and has been evicted

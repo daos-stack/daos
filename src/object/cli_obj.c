@@ -1057,9 +1057,9 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 
 	rc = obj_shard_open(obj, shard, map_ver, &obj_shard);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-			 DF_OID " obj_shard_open %u opc %u, rc " DF_RC "\n",
-			 DP_OID(obj->cob_md.omd_id), obj_auxi->opc, shard, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_STALE || rc == -DER_NONEXIST, DB_IO, DLOG_ERR, rc,
+			  DF_OID " obj_shard_open %u opc %u", DP_OID(obj->cob_md.omd_id),
+			  obj_auxi->opc, shard);
 		D_GOTO(out, rc);
 	}
 
@@ -1266,9 +1266,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				 * the operation, so let's skip such shard here.  Note: these
 				 * non-exist shards will never happen for the leader.
 				 */
-				D_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR,
-					 DF_OID", shard open:" DF_RC"\n",
-					 DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+				DL_CDEBUG(rc == -DER_NONEXIST, DB_IO, DLOG_ERR, rc,
+					  DF_OID ", shard open", DP_OID(obj->cob_md.omd_id));
 				if (rc != -DER_NONEXIST)
 					D_GOTO(out, rc);
 				rc = 0;
@@ -1319,8 +1318,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		D_ASSERT(tgt == req_tgts->ort_shard_tgts + shard_cnt);
 
 out:
-	D_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE,
-		 DLOG_ERR, DF_OID", forward:" DF_RC"\n", DP_OID(obj->cob_md.omd_id), DP_RC(rc));
+	DL_CDEBUG(rc == 0 || rc == -DER_NEED_TX || rc == -DER_TGT_RETRY, DB_TRACE, DLOG_ERR, rc,
+		  DF_OID ", forward", DP_OID(obj->cob_md.omd_id));
 	return rc;
 }
 
@@ -5139,11 +5138,11 @@ static inline bool
 shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
 {
 	struct obj_auxi_tgt_list *failed_list;
-	uint32_t tgt_id;
+	uint32_t                  tgt_id;
 
 	if (obj_auxi->force_degraded) {
-		D_DEBUG(DB_IO, DF_OID" fail idx %u\n",
-			DP_OID(obj_auxi->obj->cob_md.omd_id), shard_idx);
+		D_DEBUG(DB_IO, DF_OID " fail idx %u\n", DP_OID(obj_auxi->obj->cob_md.omd_id),
+			shard_idx);
 		obj_auxi->force_degraded = 0;
 		return true;
 	}
@@ -5152,7 +5151,7 @@ shard_was_fail(struct obj_auxi_args *obj_auxi, uint32_t shard_idx)
 		return false;
 
 	failed_list = obj_auxi->failed_tgt_list;
-	tgt_id = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
+	tgt_id      = obj_auxi->obj->cob_shards->do_shards[shard_idx].do_target_id;
 
 	if (tgt_in_failed_tgts_list(tgt_id, failed_list))
 		return true;
@@ -5166,16 +5165,15 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 {
 	struct dc_object	*obj = obj_auxi->obj;
 	uint32_t		grp_start = grp_idx * obj_get_grp_size(obj);
-	uint32_t		shard_idx = grp_start + *tgt_idx;
+	uint32_t                 shard_idx = grp_start + *tgt_idx;
 	int			rc = 0;
 
 	while (shard_was_fail(obj_auxi, shard_idx) ||
 	       obj_shard_is_invalid(obj, shard_idx, DAOS_OBJ_RPC_FETCH)) {
-		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d on "DF_OID"\n", shard_idx, *tgt_idx,
+		D_DEBUG(DB_IO, "tried shard %d/%u %d/%d/%d on " DF_OID "\n", shard_idx, *tgt_idx,
 			obj->cob_shards->do_shards[shard_idx].do_rebuilding,
 			obj->cob_shards->do_shards[shard_idx].do_target_id,
-			obj->cob_shards->do_shards[shard_idx].do_shard,
-			DP_OID(obj->cob_md.omd_id));
+			obj->cob_shards->do_shards[shard_idx].do_shard, DP_OID(obj->cob_md.omd_id));
 		rc = obj_ec_fail_info_insert(&obj_auxi->reasb_req, (uint16_t)*tgt_idx);
 		if (rc)
 			break;
@@ -5191,7 +5189,7 @@ obj_ec_valid_shard_get(struct obj_auxi_args *obj_auxi, uint8_t *tgt_bitmap,
 		/* Can not find any valid shards anymore, so no need retry, and also to check
 		 * if it needs to restore the original failure. */
 		obj_auxi->no_retry = 1;
-		rc = retry_errcode(obj_auxi, rc);
+		rc                 = retry_errcode(obj_auxi, rc);
 		D_ERROR(DF_OID" can not get parity shard: "DF_RC"\n",
 			DP_OID(obj->cob_md.omd_id), DP_RC(rc));
 	}

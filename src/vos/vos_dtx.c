@@ -743,9 +743,9 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 		rc = umem_free(umm, dbd_off);
 
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Release DTX active blob %p ("UMOFF_PF") for cont "DF_UUID": "DF_RC"\n",
-			 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+			  "Release DTX active blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+			  UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 	}
 
 	return rc;
@@ -863,8 +863,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 
 out:
 	if (rc != -DER_ALREADY && rc != -DER_NONEXIST)
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Commit the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Commit the DTX " DF_DTI, DP_DTI(dti));
 
 	if (rc != 0)
 		D_FREE(dce);
@@ -2218,6 +2217,7 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	}
 
 	rc = dtx_rec_release(cont, dae, true);
+	dae->dae_preparing = 0;
 	if (rc == 0) {
 		dae->dae_aborting = 1;
 		rc = umem_tx_commit(umm);
@@ -2313,8 +2313,7 @@ out:
 	if (rc == -DER_ALREADY)
 		rc = 0;
 	else if (rc != -DER_NONEXIST)
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Abort the DTX "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Abort the DTX " DF_DTI, DP_DTI(dti));
 
 	return rc;
 }
@@ -2367,9 +2366,8 @@ vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t f
 	}
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
-		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
-		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN, rc, "Mark the DTX entry " DF_DTI " as %s",
+		  DP_DTI(dti), vos_dtx_flags2name(flags));
 
 	if ((rc == -DER_NO_PERM || rc == -DER_NONEXIST) && flags == DTE_PARTIAL_COMMITTED)
 		rc = 0;
@@ -2535,9 +2533,9 @@ out:
 	if (rc == 0 && cont->vc_cmt_dtx_reindex_pos == dbd_off)
 		cont->vc_cmt_dtx_reindex_pos = next;
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-		 "Release DTX committed blob %p ("UMOFF_PF") for cont "DF_UUID": "DF_RC"\n",
-		 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id), DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Release DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+		  UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 
 	return rc;
 }
@@ -3059,9 +3057,8 @@ out:
 			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
 				dae->dae_preparing = 0;
 				rc = vos_dtx_abort_internal(cont, dae, true);
-				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-					 "Delay abort DTX "DF_DTI" (2): rc = %d\n",
-					 DP_DTI(&dth->dth_xid), rc);
+				DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+					  "Delay abort DTX " DF_DTI " (2)", DP_DTI(&dth->dth_xid));
 
 				/* Aborted by race, return -DER_INPROGRESS for client retry. */
 				return -DER_INPROGRESS;

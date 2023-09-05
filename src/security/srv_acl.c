@@ -474,27 +474,27 @@ ds_sec_pool_get_capabilities(uint64_t flags, d_iov_t *cred,
 	}
 
 	if (!is_ownership_valid(ownership)) {
-		D_ERROR("Invalid ownership\n");
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid ownership");
+		return rc;
 	}
 
 	/* Pool flags are mutually exclusive */
-	if ((flags != DAOS_PC_RO) && (flags != DAOS_PC_RW) &&
-	    (flags != DAOS_PC_EX)) {
-		D_ERROR("Invalid flags\n");
-		return -DER_INVAL;
+	if ((flags != DAOS_PC_RO) && (flags != DAOS_PC_RW) && (flags != DAOS_PC_EX)) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Invalid flags");
+		return rc;
 	}
 
 	rc = daos_acl_validate(acl);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Invalid ACL: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "Invalid ACL");
 		return rc;
 	}
 
 	rc = ds_sec_validate_credentials(cred, &token);
 	if (rc != 0) {
-		D_ERROR("Failed to validate credentials, rc="DF_RC"\n",
-			DP_RC(rc));
+		DL_ERROR(rc, "Failed to validate credentials");
 		return rc;
 	}
 
@@ -557,35 +557,41 @@ filter_cont_capas_based_on_flags(uint64_t flags, uint64_t *capas)
 		*capas &= ~(uint64_t)CONT_CAPA_EVICT_ALL;
 }
 
-static Auth__Token *
-unpack_token_from_cred(d_iov_t *cred)
+static int
+unpack_token_from_cred(d_iov_t *cred, Auth__Token **_token)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Auth__Credential	*unpacked;
-	Auth__Token		*token = NULL;
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Auth__Credential *unpacked;
+	Auth__Token      *token = NULL;
 
-	unpacked = auth__credential__unpack(&alloc.alloc, cred->iov_buf_len,
-					    cred->iov_buf);
-	if (alloc.oom || unpacked == NULL) {
-		D_ERROR("Couldn't unpack credential\n");
-		return NULL;
+	unpacked = auth__credential__unpack(&alloc.alloc, cred->iov_buf_len, cred->iov_buf);
+	if (alloc.oom)
+		return -DER_NOMEM;
+
+	if (unpacked == NULL) {
+		DL_ERROR(-DER_INVAL, "Couldn't unpack credential");
+		return -DER_INVAL;
 	}
 
-	if (unpacked->token != NULL)
+	if (unpacked->token != NULL) {
 		token = auth_token_dup(unpacked->token);
+		if (token == NULL)
+			return -DER_NOMEM;
+	}
 
 	auth__credential__free_unpacked(unpacked, &alloc.alloc);
-	return token;
+	*_token = token;
+	return 0;
 }
 
 int
 ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *ownership,
 			     struct daos_acl *acl, uint64_t *capas)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Auth__Token	*token;
-	int		rc;
-	uint64_t	owner_min_perms = CONT_OWNER_MIN_PERMS;
+	struct drpc_alloc alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Auth__Token      *token;
+	int               rc;
+	uint64_t          owner_min_perms = CONT_OWNER_MIN_PERMS;
 
 	if (cred == NULL || ownership == NULL || acl == NULL || capas == NULL) {
 		D_ERROR("NULL input\n");
@@ -602,9 +608,10 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *
 		return -DER_INVAL;
 	}
 
-	if (daos_acl_validate(acl) != 0) {
-		D_ERROR("Invalid ACL\n");
-		return -DER_INVAL;
+	rc = daos_acl_validate(acl);
+	if (rc != -DER_SUCCESS) {
+		DL_ERROR(rc, "Invalid ACL");
+		return rc;
 	}
 
 	if (cred->iov_buf == NULL) {
@@ -612,10 +619,11 @@ ds_sec_cont_get_capabilities(uint64_t flags, d_iov_t *cred, struct d_ownership *
 		return -DER_INVAL;
 	}
 
-	/*
-	 * The credential has already been validated at pool connect.
-	 */
-	token = unpack_token_from_cred(cred);
+	rc = unpack_token_from_cred(cred, &token);
+	if (rc != -DER_SUCCESS)
+		return rc;
+
+	/* The credential has already been validated at pool connect. */
 	if (token == NULL)
 		return -DER_INVAL;
 
@@ -783,17 +791,13 @@ ds_sec_creds_are_same_user(d_iov_t *cred_x, d_iov_t *cred_y)
 		goto out;
 	}
 
-	token_x = unpack_token_from_cred(cred_x);
-	if (token_x == NULL) {
-		rc = -DER_INVAL;
+	rc = unpack_token_from_cred(cred_x, &token_x);
+	if (rc != -DER_SUCCESS)
 		goto out;
-	}
 
-	token_y = unpack_token_from_cred(cred_y);
-	if (token_y == NULL) {
-		rc = -DER_INVAL;
+	rc = unpack_token_from_cred(cred_y, &token_y);
+	if (rc != -DER_SUCCESS)
 		goto out_token_x;
-	}
 
 	rc = get_auth_sys_payload(token_x, &authsys_x);
 	if (rc != 0)
