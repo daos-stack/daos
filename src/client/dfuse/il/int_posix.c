@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -33,6 +33,8 @@
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
+__thread daos_handle_t ioil_eqh = {.cookie = 0};
+
 struct ioil_pool {
 	daos_handle_t	iop_poh;
 	uuid_t		iop_uuid;
@@ -49,7 +51,6 @@ struct ioil_global {
 	bool		iog_daos_init;
 
 	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
-
 	unsigned	iog_report_count;	/**< Number of operations that should be logged */
 
 	ATOMIC uint64_t iog_file_count;  /**< Number of file opens intercepted */
@@ -377,8 +378,10 @@ ioil_fini(void)
 			ioil_shrink_pool(pool);
 	}
 
-	if (ioil_iog.iog_daos_init)
+	if (ioil_iog.iog_daos_init) {
+		daos_eq_destroy(ioil_eqh, 0);
 		daos_fini();
+	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
 }
@@ -729,6 +732,17 @@ out:
 	return rcb;
 }
 
+static void
+child_hdlr(void)
+{
+	int rc;
+
+	ioil_eqh.cookie = 0;
+	rc = daos_eq_create(&ioil_eqh);
+	if (rc)
+		DFUSE_LOG_WARNING("daos_eq_create() failed: %d (%s)", rc, strerror(rc));
+}
+
 /* Returns true on success */
 static bool
 check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
@@ -764,9 +778,20 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	D_ASSERT(rc == 0);
 
-	if (!ioil_iog.iog_daos_init)
+	if (!ioil_iog.iog_daos_init) {
 		if (!call_daos_init(fd))
 			goto err;
+
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc) {
+			DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err, rc = daos_der2errno(rc));
+		}
+
+		/** register a child fork handler to create a new EQ */
+		rc = pthread_atfork(NULL, NULL, &child_hdlr);
+		D_ASSERT(rc == 0);
+	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {
 		if (uuid_compare(pool->iop_uuid, il_reply.fir_pool) != 0)

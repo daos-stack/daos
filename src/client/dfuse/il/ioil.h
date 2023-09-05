@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,9 @@
 #include <unistd.h>
 
 #include "daos_fs.h"
+
+/** Global EQ for now */
+extern __thread daos_handle_t ioil_eqh;
 
 struct ioil_cont {
 	/* Container open handle */

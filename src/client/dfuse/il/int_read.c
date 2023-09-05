@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,20 +15,52 @@
 static ssize_t
 read_bulk(char *buff, size_t len, off_t position, struct fd_entry *entry, int *errcode)
 {
-	daos_size_t read_size = 0;
-	d_iov_t     iov       = {};
-	d_sg_list_t sgl       = {};
-	int         rc;
+	daos_size_t	read_size = 0;
+	d_iov_t		iov       = {};
+	d_sg_list_t	sgl       = {};
+	daos_event_t	ev;
+	bool		flag = false;
+	int		rc;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
 
 	sgl.sg_nr = 1;
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
-	rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &read_size, NULL);
+
+	if (daos_handle_is_inval(ioil_eqh))
+		daos_eq_create(&ioil_eqh);
+
+	rc = daos_event_init(&ev, ioil_eqh, NULL);
+	if (rc) {
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_init() failed: %d (%s)",
+				rc, strerror(rc));
+		*errcode = daos_der2errno(rc);
+		return -1;
+	}
+
+	rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &read_size, &ev);
 	if (rc) {
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_read() failed: %d (%s)", rc, strerror(rc));
 		*errcode = rc;
+		return -1;
+	}
+
+	while (1) {
+		rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+		if (rc) {
+			DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_test failed: "DF_RC"\n",
+					DP_RC(rc));
+			*errcode = daos_der2errno(rc);
+			return -1;
+		}
+		if (flag)
+			break;
+		sched_yield();
+	}
+	rc = ev.ev_error;
+	if (rc) {
+		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_read() failed: %d (%s)", rc, strerror(rc));
 		return -1;
 	}
 	return read_size;
