@@ -36,7 +36,7 @@ tests: !mux
     test_clients_arg:
       - "--name client_group --attach_to tg_srv_grp_swim_test --init_only --holdtime 20"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=alive' --skip_shutdown --skip_check_in"
-      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 20"
+      - "--name client_group --attach_to tg_srv_grp_swim_test --rank 2   --shut_only --holdtime 30"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank2=dead'  --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank1=alive' --skip_shutdown --skip_check_in"
       - "--name client_group --attach_to tg_srv_grp_swim_test --rank 0,1 --verify_swim_status 'rank0=alive' --skip_shutdown --skip_check_in"
