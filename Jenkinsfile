@@ -1174,28 +1174,28 @@ pipeline {
             steps {
                 script {
                     parallel [
-                        'Functional Hardware Medium': getFunctionalTestStage(
+                        functional_hardware_medium: getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
                             'Functional Hardware Medium', 'pr', 'auto', 'ofi+verbs;ofi_rxm'),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                        functional_hardware_medium_md_on_ssd: getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-medium-md-on-ssd',
                                 params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL),
                             'Functional Hardware Medium MD on SSD', 'pr', 'auto_md_on_ssd',
                             'ofi+verbs;ofi_rxm'),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                        functional_hardware_medium_verbs_provider: getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-medium-verbs-provider',
                                 params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
                             'Functional Hardware Medium Verbs Provider', 'pr', 'auto',
                             'ofi+verbs;ofi_rxm'),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                        functional_hardware_medium_ucx_provider: getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-medium-ucx-provider',
                                 params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
                             'Functional Hardware Medium UCX Provider', 'pr', 'auto',  'ucx+dc_x'),
-                        'Functional Hardware Large': getFunctionalTestStage(
+                        functional_hardware_large: getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-large', params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
                             'Functional Hardware Large', 'pr', 'auto', 'ofi+verbs;ofi_rxm')
