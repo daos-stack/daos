@@ -60,47 +60,47 @@ dfuse_show_flags(void *handle, unsigned int in)
 static void
 dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 {
-	struct dfuse_info *fs_handle = arg;
+	struct dfuse_info *dfuse_info = arg;
 
-	DFUSE_TRA_INFO(fs_handle, "Fuse configuration");
+	DFUSE_TRA_INFO(dfuse_info, "Fuse configuration");
 
-	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major, conn->proto_minor);
+	DFUSE_TRA_INFO(dfuse_info, "Proto %d %d", conn->proto_major, conn->proto_minor);
 
 	/* These are requests dfuse makes to the kernel, but are then capped by the kernel itself,
 	 * for max_read zero means "as large as possible" which is what we want, but then dfuse
 	 * does not know how large to pre-allocate any buffers.
 	 */
-	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
-	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
-	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
+	DFUSE_TRA_INFO(dfuse_info, "max read %#x", conn->max_read);
+	DFUSE_TRA_INFO(dfuse_info, "max write %#x", conn->max_write);
+	DFUSE_TRA_INFO(dfuse_info, "readahead %#x", conn->max_readahead);
 
 #if HAVE_CACHE_READDIR
-	DFUSE_TRA_INFO(fs_handle, "kernel readdir cache support compiled in");
+	DFUSE_TRA_INFO(dfuse_info, "kernel readdir cache support compiled in");
 #else
-	DFUSE_TRA_INFO(fs_handle, "no support for kernel readdir cache available");
+	DFUSE_TRA_INFO(dfuse_info, "no support for kernel readdir cache available");
 #endif
 
-	DFUSE_TRA_INFO(fs_handle, "Capability supported by kernel %#x", conn->capable);
+	DFUSE_TRA_INFO(dfuse_info, "Capability supported by kernel %#x", conn->capable);
 
-	dfuse_show_flags(fs_handle, conn->capable);
+	dfuse_show_flags(dfuse_info, conn->capable);
 
-	DFUSE_TRA_INFO(fs_handle, "Capability requested %#x", conn->want);
+	DFUSE_TRA_INFO(dfuse_info, "Capability requested %#x", conn->want);
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
 
 	conn->time_gran = 1;
 
-	if (fs_handle->di_wb_cache)
+	if (dfuse_info->di_wb_cache)
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
-	dfuse_show_flags(fs_handle, conn->want);
+	dfuse_show_flags(dfuse_info, conn->want);
 
 	conn->max_background       = 16;
 	conn->congestion_threshold = 8;
 
-	DFUSE_TRA_INFO(fs_handle, "max_background %d", conn->max_background);
-	DFUSE_TRA_INFO(fs_handle, "congestion_threshold %d", conn->congestion_threshold);
+	DFUSE_TRA_INFO(dfuse_info, "max_background %d", conn->max_background);
+	DFUSE_TRA_INFO(dfuse_info, "congestion_threshold %d", conn->congestion_threshold);
 }
 
 void
