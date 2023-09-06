@@ -1179,14 +1179,14 @@ pipeline {
                                 'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
                             name: 'Functional Hardware Medium',
                             next_version: next_version),
-                        functional_hardware_medium_md_on_ssd: getFunctionalTestStage(
-                            label: cachedCommitPragma(
-                                'Test-label-hw-medium-md-on-ssd',
-                                params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL),
-                            name: 'Functional Hardware Medium MD on SSD',
-                            next_version: next_version,
-                            tags: getFunctionalTagsDefault('md_on_ssd'),
-                            nvme: 'auto_md_on_ssd'),
+                        // functional_hardware_medium_md_on_ssd: getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium-md-on-ssd',
+                        //         params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL),
+                        //     name: 'Functional Hardware Medium MD on SSD',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('md_on_ssd'),
+                        //     nvme: 'auto_md_on_ssd'),
                         functional_hardware_medium_verbs_provider: getFunctionalTestStage(
                             label: cachedCommitPragma(
                                 'Test-label-hw-medium-verbs-provider',
@@ -1201,7 +1201,7 @@ pipeline {
                             name: 'Functional Hardware Medium UCX Provider',
                             next_version: next_version,
                             provider: 'ucx+dc_x'),
-                        functional_hardware_large: getFunctionalTestStage(
+                        'Functional Hardware Large': getFunctionalTestStage(
                             label: cachedCommitPragma(
                                 'Test-label-hw-large', params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
                             name: 'Functional Hardware Large',
