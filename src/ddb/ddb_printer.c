@@ -1,10 +1,11 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "ddb_printer.h"
+#include <daos_srv/vos_types.h>
 
 #define DF_IDX "[%d]"
 #define DP_IDX(idx) idx

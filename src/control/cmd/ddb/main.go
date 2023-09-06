@@ -38,6 +38,7 @@ type cliOptions struct {
 	WriteMode bool   `long:"write_mode" short:"w" description:"Open the vos file in write mode."`
 	CmdFile   string `long:"cmd_file" short:"f" description:"Path to a file containing a sequence of ddb commands to execute."`
 	Version   bool   `short:"v" long:"version" description:"Show version"`
+	JSON      bool   `short:"j" long:"json" description:"JSON output for not interactive mode"`
 	Args      struct {
 		VosPath    vosPathStr `positional-arg-name:"vos_file_path"`
 		RunCmd     ddbCmdStr  `positional-arg-name:"ddb_command"`
@@ -68,8 +69,8 @@ func (cmdStr ddbCmdStr) Complete(match string) (comps []flags.Completion) {
 		return
 	}
 	defer cleanup()
-
-	app := createGrumbleApp(ctx)
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: false, jsonOutputHandled: false}
+	app := createGrumbleApp(&cmdCtx)
 	for _, cmd := range app.Commands().All() {
 		if match == "" || strings.HasPrefix(cmd.Name, match) {
 			comps = append(comps, flags.Completion{Item: cmd.Name})
@@ -143,11 +144,14 @@ the first positional parameter will be opened before commands are executed.`
 	}
 
 	ctx, cleanup, err := InitDdb()
+
+	cmdCtx := CommandContext{ddbContext: ctx, jsonOutput: opts.JSON, jsonOutputHandled: false}
+
 	if err != nil {
 		return errors.Wrap(err, "Error initializing the DDB Context")
 	}
 	defer cleanup()
-	app := createGrumbleApp(ctx)
+	app := createGrumbleApp(&cmdCtx)
 
 	if opts.Args.VosPath != "" {
 		log.Debugf("Connect to path: %s\n", opts.Args.VosPath)
@@ -180,10 +184,18 @@ the first positional parameter will be opened before commands are executed.`
 				log.Error("Error closing pool\n")
 			}
 		}
+
+		if cmdCtx.jsonOutput && !cmdCtx.jsonOutputHandled {
+			log.Notice("Command does not support json output")
+		}
+
 		return err
 	}
 
 	// Interactive mode
+	if opts.JSON {
+		log.Notice("Interactive mode does not support json output")
+	}
 	// Print the version upon entry
 	log.Infof("ddb version %s", build.DaosVersion)
 	// app.Run() uses the os.Args so need to clear them before running
@@ -212,7 +224,7 @@ func main() {
 	}
 }
 
-func createGrumbleApp(ctx *DdbContext) *grumble.App {
+func createGrumbleApp(ctx *CommandContext) *grumble.App {
 	homedir, err := os.UserHomeDir()
 	if err != nil {
 		homedir = "/tmp"

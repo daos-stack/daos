@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -790,6 +790,35 @@ dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args)
 
 
 	cb(cb_args, &sb);
+
+	return 0;
+}
+
+int
+dv_superblock2(daos_handle_t poh, struct ddb_superblock *sb)
+{
+	struct vos_pool    *pool;
+	struct vos_pool_df *pool_df;
+
+	pool = vos_hdl2pool(poh);
+
+	if (pool == NULL)
+		return -DER_INVAL;
+
+	pool_df = pool->vp_pool_df;
+
+	if (pool_df == NULL || pool_df->pd_magic != POOL_DF_MAGIC)
+		return -DER_DF_INVAL;
+
+	uuid_copy(sb->dsb_id, pool_df->pd_id);
+	sb->dsb_durable_format_version = pool_df->pd_version;
+	sb->dsb_cont_nr                = pool_df->pd_cont_nr;
+	sb->dsb_nvme_sz                = pool_df->pd_nvme_sz;
+	sb->dsb_scm_sz                 = pool_df->pd_scm_sz;
+
+	sb->dsb_blk_sz   = pool_df->pd_vea_df.vsd_blk_sz;
+	sb->dsb_hdr_blks = pool_df->pd_vea_df.vsd_hdr_blks;
+	sb->dsb_tot_blks = pool_df->pd_vea_df.vsd_tot_blks;
 
 	return 0;
 }
@@ -1671,10 +1700,14 @@ struct vea_cb_args {
 static int
 vea_free_extent_cb(void *cb_arg, struct vea_free_extent *vfe)
 {
-	struct vea_cb_args	*args = cb_arg;
+	struct vea_cb_args       *args = cb_arg;
+
+	struct dv_vea_free_extent dvfe = {.dvfe_block_count  = vfe->vfe_blk_cnt,
+					  .dvfe_block_offset = vfe->vfe_blk_off,
+					  .dvfe_age          = vfe->vfe_age};
 
 	if (args->vca_cb)
-		return args->vca_cb(args->vca_cb_args, vfe);
+		return args->vca_cb(args->vca_cb_args, &dvfe);
 
 	return 0;
 }

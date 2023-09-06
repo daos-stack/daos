@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,7 +8,6 @@
 #define DAOS_DDB_VOS_H
 
 #include <daos_prop.h>
-#include <daos_srv/vos_types.h>
 #include "ddb_common.h"
 
 struct ddb_cont {
@@ -27,7 +26,7 @@ struct ddb_obj {
 struct ddb_key {
 	daos_key_t	ddbk_key;
 	uint32_t	ddbk_idx;
-	vos_iter_type_t ddbk_child_type;
+	int             ddbk_child_type;
 };
 
 struct ddb_sv {
@@ -111,6 +110,8 @@ struct ddb_superblock {
 typedef int (*dv_dump_superblock_cb)(void *cb_arg, struct ddb_superblock *sb);
 
 int dv_superblock(daos_handle_t poh, dv_dump_superblock_cb cb, void *cb_args);
+int
+dv_superblock2(daos_handle_t poh, struct ddb_superblock *sb);
 
 typedef int (*dv_dump_value_cb)(void *cb_arg, d_iov_t *value);
 int dv_dump_value(daos_handle_t poh, struct dv_tree_path *path, dv_dump_value_cb dump_cb,
@@ -162,6 +163,12 @@ struct dv_dtx_active_entry {
 	daos_unit_oid_t ddtx_oid;
 };
 
+struct dv_vea_free_extent {
+	uint64_t dvfe_block_offset;
+	uint32_t dvfe_block_count;
+	uint32_t dvfe_age;
+};
+
 typedef int (*dv_dtx_cmt_handler)(struct dv_dtx_committed_entry *entry, void *cb_arg);
 int dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *handler_arg);
 typedef int (*dv_dtx_act_handler)(struct dv_dtx_active_entry *entry, void *cb_arg);
@@ -176,7 +183,7 @@ typedef int (*dv_smd_sync_complete)(void *cb_args, uuid_t pool_id, uint32_t vos_
 int dv_sync_smd(const char *nvme_conf, const char *db_path, dv_smd_sync_complete complete_cb,
 		void *cb_args);
 
-typedef int (*dv_vea_extent_handler)(void *cb_arg, struct vea_free_extent *free_extent);
+typedef int (*dv_vea_extent_handler)(void *cb_arg, struct dv_vea_free_extent *free_extent);
 int dv_enumerate_vea(daos_handle_t poh, dv_vea_extent_handler cb, void *cb_arg);
 int dv_vea_free_region(daos_handle_t poh, uint32_t offset, uint32_t blk_cnt);
 int dv_delete(daos_handle_t poh, struct dv_tree_path *vtp);
