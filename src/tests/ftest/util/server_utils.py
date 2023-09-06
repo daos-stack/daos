@@ -342,7 +342,7 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Failed to remove superblocks for {} on {}".format(mount, result.failed_hosts))
 
-            if index:
+            if index is not None:
                 # Remove the shared memory segment associated with this io server
                 self.log.debug("Removing the shared memory segment")
                 command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
