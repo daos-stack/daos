@@ -50,6 +50,7 @@ ddb_pool_is_open(struct ddb_ctx *ctx)
 int
 ddb_run_open(struct ddb_ctx *ctx, struct open_options *opt)
 {
+	D_INFO("Open Path: %s, Write Mode: " DF_BOOL "\n", opt->path, DP_BOOL(opt->write_mode));
 	if (ddb_pool_is_open(ctx)) {
 		ddb_error(ctx, "Must close pool before can open another\n");
 		return -DER_EXIST;
@@ -181,6 +182,7 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 	struct dv_tree_path_builder vtp = {0};
 	struct ls_ctx lsctx = {0};
 
+	D_INFO("List path: %s, recursive: " DF_BOOL "\n", opt->path, DP_BOOL(opt->recursive));
 	if (daos_handle_is_inval(ctx->dc_poh)) {
 		ddb_error(ctx, "Not connected to a pool. Use 'open' to connect to a pool.\n");
 		return -DER_NONEXIST;
@@ -195,7 +197,11 @@ ddb_run_ls(struct ddb_ctx *ctx, struct ls_options *opt)
 
 	vtp_print(ctx, &vtp.vtp_path, true);
 	lsctx.ctx = ctx;
+	D_INFO("Before iterating path: %s, recursive: " DF_BOOL "\n", opt->path,
+	       DP_BOOL(opt->recursive));
 	rc = dv_iterate(ctx->dc_poh, &vtp.vtp_path, opt->recursive, &handlers, &lsctx);
+	D_INFO("After iterating path: %s, recursive: " DF_BOOL "\n", opt->path,
+	       DP_BOOL(opt->recursive));
 
 	ddb_vtp_fini(&vtp);
 

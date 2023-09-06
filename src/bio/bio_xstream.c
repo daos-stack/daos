@@ -150,8 +150,9 @@ bio_spdk_env_init(void)
 #endif
 		nvme_glb.bd_enable_rpc_srv = enable_rpc_srv;
 	}
-
+	D_INFO("BEFORE: spdk_env_init\n");
 	rc = spdk_env_init(&opts);
+	D_INFO("AFTER: spdk_env_init\n");
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
@@ -308,8 +309,9 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 			goto free_cond;
 		}
 	}
-
+	D_INFO("BEFORE: bio_spdk_env_init \n");
 	rc = bio_spdk_env_init();
+	D_INFO("AFTER: bio_spdk_env_init \n");
 	if (rc) {
 		D_ERROR("Failed to init SPDK environment\n");
 		D_FREE(nvme_glb.bd_nvme_conf);
