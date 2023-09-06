@@ -1173,7 +1173,7 @@ pipeline {
             }
             steps {
                 script {
-                    parallel
+                    parallel [
                         'Functional Hardware Medium': getFunctionalTestStage(
                             cachedCommitPragma(
                                 'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
@@ -1199,6 +1199,7 @@ pipeline {
                             cachedCommitPragma(
                                 'Test-label-hw-large', params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
                             'Functional Hardware Large', 'pr', 'auto', 'ofi+verbs;ofi_rxm')
+                    ]
                 }
             }
         } // stage('Test Hardware')
