@@ -419,16 +419,6 @@ func PoolProperties() PoolPropertyMap {
 				"no_data_sync": PoolReintModeNoDataSync,
 			},
 		},
-		"small_pool": {
-			Property: PoolProperty{
-				Number:      PoolPropertySmallPool,
-				Description: "Is small pool (for system space reservation)",
-			},
-			values: map[string]uint64{
-				"yes": PoolIsSmallPool,
-				"no":  PoolIsNotSmallPool,
-			},
-		},
 	}
 }
 

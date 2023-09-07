@@ -4,7 +4,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import random
 
 from avocado.core.exceptions import TestFail
 
@@ -45,14 +44,18 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.delta_bytes = human_to_bytes(delta)
         self.log.info("==> Set pool delta to %s (%i bytes)", delta, self.delta_bytes)
 
-        self.rand_seed = self.params.get("rand_seed", "/run/*", None)
-        if self.rand_seed is None:
-            self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
-        self.log.info("==> Set random seed to %i", self.rand_seed)
-        random.seed(a=int.to_bytes(self.rand_seed, 8, byteorder='little'), version=2)
-
     def check_server_logs(self):
-        """Check if GC engine errors have occurred during the test"""
+        """Check if GC engine errors have occurred during the test
+
+        This method parse the engine log to find silent errors regarding the GC engine operations.
+        When the SCM storage is completly full, it is not possible to perform some operations on
+        metadata such as destroying a pool.  Indeed, such operations require some temporary SCM
+        storage to reogarnize the B-trees used for recording the data layout of the pools.  When
+        such error occurs, some storage leakage could eventually happen.  At this time, the only
+        reliable way to detect these errors is to check if errors regarding B-tree management have
+        occured.  With this test, this can be done with looking for error messages generated with
+        the call of the function btr_rec_free().
+        """
         self.log.info("==>Checking server logs of hosts %s", self.hostlist_servers)
 
         err_regex = r"'^.+ tree ERR .+ btr_rec_free.+ Failed to free rec:.+$'"
@@ -89,7 +92,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
         base_data_size = container.data_size.value
         data_written = 0
         while True:
-            new_data_size = random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
+            new_data_size = self.random.randint(base_data_size * 0.5, base_data_size * 1.5)  # nosec
             container.data_size.update(new_data_size, "data_size")
 
             try:
@@ -134,6 +137,10 @@ class BoundaryPoolContainerSpace(TestWithServers):
             "loop={}, init={} ({} bytes), end={} ({} bytes)".format(
                 test_loop, bytes_to_human(free_space_init), free_space_init,
                 bytes_to_human(free_space_after_destroy), free_space_after_destroy))
+        self.log.debug(
+            "Storage space leaked %s (%i bytes)",
+            bytes_to_human(abs(free_space_init - free_space_after_destroy)),
+            free_space_init - free_space_after_destroy)
 
     def test_fill_destroy_cont_loop(self):
         """JIRA ID: DAOS-8465
@@ -150,7 +157,7 @@ class BoundaryPoolContainerSpace(TestWithServers):
               (1) Create Container.
               (2) Fill the pool with random block data size, verify return code is as expected
                   when no more data can be written to the container.
-              (3) Pool free space before writing data to container
+              (3) Measure free space before writing data to container
               (4) Check for DER_NOSPACE -1007.
               (5) Display bytes written when pool is full before container delete.
               (6) Display free space before container delete.
@@ -164,10 +171,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
         """
         # create pool
         self.add_pool()
-        # Check pool property
-        self.assertEqual(
-            "yes", self.pool.get_property("small_pool"),
-            "Created pool was not properly created")
 
         for test_loop in range(1, self.test_loop + 1):
             self.log.info("==>Starting test loop: %i ...", test_loop)

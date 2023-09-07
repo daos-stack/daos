@@ -383,9 +383,6 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		case DAOS_PROP_PO_OBJ_VERSION:
 			D_ERROR("pool property %u could be not set\n", entry->dpe_type);
 			return -DER_INVAL;
-		case DAOS_PROP_PO_SMALL_POOL:
-			entry_def->dpe_val = entry->dpe_val;
-			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
 			break;
@@ -648,14 +645,8 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 		case DAOS_PROP_PO_REINT_MODE:
 			val32 = entry->dpe_val;
 			d_iov_set(&value, &val32, sizeof(val32));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reint_mode, &value);
-			if (rc)
-				return rc;
-			break;
-		case DAOS_PROP_PO_SMALL_POOL:
-			val32 = entry->dpe_val;
-			d_iov_set(&value, &val32, sizeof(val32));
-			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_small_pool, &value);
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reint_mode,
+					   &value);
 			if (rc)
 				return rc;
 			break;
@@ -2590,22 +2581,6 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
-	if (bits & DAOS_PO_QUERY_PROP_SMALL_POOL) {
-		d_iov_set(&value, &val32, sizeof(val32));
-		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_small_pool, &value);
-		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
-			rc    = 0;
-			val32 = DAOS_PROP_PO_SMALL_POOL_DEFAULT;
-			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
-		} else if (rc != 0) {
-			D_GOTO(out_prop, rc);
-		}
-		D_ASSERT(idx < nr);
-		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SMALL_POOL;
-		prop->dpp_entries[idx].dpe_val  = val32;
-		idx++;
-	}
-
 	*prop_out = prop;
 	return 0;
 
@@ -3878,7 +3853,6 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 			case DAOS_PROP_PO_SVC_REDUN_FAC:
 			case DAOS_PROP_PO_OBJ_VERSION:
 			case DAOS_PROP_PO_PERF_DOMAIN:
-			case DAOS_PROP_PO_SMALL_POOL:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
@@ -4779,12 +4753,6 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	rc = pool_upgrade_one_prop_int32(tx, svc, pool_uuid, &need_commit, "checkpoint thresh",
 					 &ds_pool_prop_checkpoint_thresh,
 					 DAOS_PROP_PO_CHECKPOINT_THRESH_DEFAULT);
-	if (rc != 0)
-		D_GOTO(out_free, rc);
-
-	/* Upgrade to have small pool property */
-	rc = pool_upgrade_one_prop_int32(tx, svc, pool_uuid, &need_commit, "small pool",
-					 &ds_pool_prop_small_pool, DAOS_PROP_PO_SMALL_POOL_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out_free, rc);
 

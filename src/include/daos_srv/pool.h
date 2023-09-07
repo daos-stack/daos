@@ -190,8 +190,6 @@ int ds_pool_tgt_map_update(struct ds_pool *pool, struct pool_buf *buf,
 			   unsigned int map_version);
 
 int ds_pool_start(uuid_t uuid);
-int
-ds_pool_start_ex(uuid_t uuid, uint32_t flags);
 void ds_pool_stop(uuid_t uuid);
 int ds_pool_extend(uuid_t pool_uuid, int ntargets, const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);

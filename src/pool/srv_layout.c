@@ -48,7 +48,6 @@ RDB_STRING_KEY(ds_pool_prop_, checkpoint_mode);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_freq);
 RDB_STRING_KEY(ds_pool_prop_, checkpoint_thresh);
 RDB_STRING_KEY(ds_pool_prop_, reint_mode);
-RDB_STRING_KEY(ds_pool_prop_, small_pool);
 
 /** default properties, should cover all optional pool properties */
 struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
@@ -150,10 +149,6 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
     {
 	.dpe_type = DAOS_PROP_PO_REINT_MODE,
 	.dpe_val  = DAOS_PROP_PO_REINT_MODE_DEFAULT,
-    },
-    {
-	.dpe_type = DAOS_PROP_PO_SMALL_POOL,
-	.dpe_val  = DAOS_PROP_PO_SMALL_POOL_DEFAULT,
     },
 };
 

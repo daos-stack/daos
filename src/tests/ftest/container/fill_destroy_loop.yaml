@@ -2,8 +2,6 @@ hosts:
   test_servers: 1
 
 timeout: 900
-# NOTE: The rand_seed key could be used to reproduce a given run
-# rand_seed: 666
 
 server_config:
   name: daos_server
@@ -21,7 +19,6 @@ pool:
   size: 430M
   test_loop: 40
   delta: 1MiB
-  properties: small_pool:yes
   reclaim_props:
     - "disabled"
     - "time"

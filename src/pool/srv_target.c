@@ -273,9 +273,8 @@ start_flush_ult(struct ds_pool_child *child)
 
 struct pool_child_lookup_arg {
 	struct ds_pool *pla_pool;
-	void           *pla_uuid;
-	uint32_t        pla_map_version;
-	uint32_t        pla_flags;
+	void	       *pla_uuid;
+	uint32_t	pla_map_version;
 };
 
 /*
@@ -290,10 +289,7 @@ pool_child_add_one(void *varg)
 	struct ds_pool_child	       *child;
 	struct dss_module_info	       *info = dss_get_module_info();
 	char			       *path;
-	unsigned int                    flags = VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH;
 	int				rc;
-
-	flags |= arg->pla_flags;
 
 	child = ds_pool_child_lookup(arg->pla_uuid);
 	if (child != NULL) {
@@ -322,8 +318,8 @@ pool_child_add_one(void *varg)
 		goto out_metrics;
 
 	D_ASSERT(child->spc_metrics[DAOS_VOS_MODULE] != NULL);
-	rc = vos_pool_open_metrics(path, arg->pla_uuid, flags, child->spc_metrics[DAOS_VOS_MODULE],
-				   &child->spc_hdl);
+	rc = vos_pool_open_metrics(path, arg->pla_uuid, VOS_POF_EXCL | VOS_POF_EXTERNAL_FLUSH,
+				   child->spc_metrics[DAOS_VOS_MODULE], &child->spc_hdl);
 
 	D_FREE(path);
 
@@ -439,8 +435,7 @@ pool_obj(struct daos_llink *llink)
 }
 
 struct ds_pool_create_arg {
-	uint32_t pca_map_version;
-	uint32_t pca_flags;
+	uint32_t	pca_map_version;
 };
 
 static int
@@ -519,7 +514,6 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	collective_arg.pla_pool = pool;
 	collective_arg.pla_uuid = key;
 	collective_arg.pla_map_version = arg->pca_map_version;
-	collective_arg.pla_flags       = arg->pca_flags;
 	rc = dss_thread_collective(pool_child_add_one, &collective_arg, DSS_ULT_DEEP_STACK);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to add ES pool caches: "DF_RC"\n",
@@ -775,12 +769,12 @@ pool_fetch_hdls_ult_abort(struct ds_pool *pool)
  * till ds_pool_stop. Only for mgmt and pool modules.
  */
 int
-ds_pool_start_ex(uuid_t uuid, uint32_t flags)
+ds_pool_start(uuid_t uuid)
 {
-	struct ds_pool           *pool;
-	struct daos_llink        *llink;
-	struct ds_pool_create_arg arg = {.pca_flags = flags};
-	int                       rc;
+	struct ds_pool			*pool;
+	struct daos_llink		*llink;
+	struct ds_pool_create_arg	arg = {};
+	int				rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
@@ -844,12 +838,6 @@ failure_ult:
 failure_pool:
 	ds_pool_put(pool);
 	return rc;
-}
-
-int
-ds_pool_start(uuid_t uuid)
-{
-	return ds_pool_start_ex(uuid, 0);
 }
 
 /*
