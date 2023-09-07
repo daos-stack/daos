@@ -4493,7 +4493,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 
 	D_ALLOC_PTR(params);
 	if (params == NULL)
-		D_GOTO(err_task, rc = ENOMEM);
+		D_GOTO(err_task, rc = -DER_NOMEM);
 
 	params->read_size = read_size;
 
@@ -4517,10 +4517,12 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 	daos_task_set_priv(task, params);
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, read_cb, NULL, 0);
 	if (rc)
-		D_GOTO(err_params, rc = daos_der2errno(rc));
+		D_GOTO(err_params, rc);
 
 	rc = dc_task_schedule(task, true);
-	return daos_der2errno(rc);
+	if (rc)
+		D_GOTO(err_task, rc);
+	return 0;
 
 err_params:
 	D_FREE(params);
