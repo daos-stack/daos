@@ -13,8 +13,7 @@
 
 #include "daos_fs.h"
 
-/** Global EQ for now */
-extern __thread daos_handle_t ioil_eqh;
+extern bool use_eq;
 
 struct ioil_cont {
 	/* Container open handle */
@@ -56,5 +55,7 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 ssize_t
 ioil_do_pwritev(const struct iovec *iov, int count, off_t position, struct fd_entry *entry,
 		int *errcode);
+int
+ioil_get_eqh(daos_handle_t *eqh);
 
 #endif /* __IOIL_H__ */

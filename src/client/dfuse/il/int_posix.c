@@ -33,7 +33,11 @@
 
 FOREACH_INTERCEPT(IOIL_FORWARD_DECL)
 
-__thread daos_handle_t ioil_eqh = {.cookie = 0};
+static __thread daos_handle_t ioil_eqh;
+
+#define IOIL_MAX_EQ 64
+
+bool use_eq = true;
 
 struct ioil_pool {
 	daos_handle_t	iop_poh;
@@ -45,6 +49,9 @@ struct ioil_pool {
 struct ioil_global {
 	pthread_mutex_t	iog_lock;
 	d_list_t	iog_pools_head;
+	daos_handle_t	iog_main_eqh;
+	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
+	uint16_t	iog_eq_count;
 	pid_t           iog_init_tid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
@@ -346,6 +353,7 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
+	__real_fprintf(stderr, "[IOIL] Calling fini on tid: %d\n", tid);
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
@@ -379,11 +387,47 @@ ioil_fini(void)
 	}
 
 	if (ioil_iog.iog_daos_init) {
-		daos_eq_destroy(ioil_eqh, 0);
+		int i;
+
+		/** destroy EQs created by threads */
+		for (i = 0; i < ioil_iog.iog_eq_count; i++)
+			daos_eq_destroy(ioil_iog.iog_eqs[i], 0);
+		/** destroy main thread eq */
+		daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
 		daos_fini();
 	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
+}
+
+int
+ioil_get_eqh(daos_handle_t *eqh)
+{
+	int rc;
+
+	if (daos_handle_is_valid(ioil_eqh)) {
+		*eqh = ioil_eqh;
+		return 0;
+	}
+
+	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
+
+	if (ioil_iog.iog_eq_count >= IOIL_MAX_EQ) {
+		pthread_mutex_unlock(&ioil_iog.iog_lock);
+		return -1;
+	}
+
+	rc = daos_eq_create(&ioil_eqh);
+	if (rc) {
+		pthread_mutex_unlock(&ioil_iog.iog_lock); 
+		return -1;
+	}
+
+	*eqh = ioil_eqh;
+	ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
+	ioil_iog.iog_eq_count ++;
+	pthread_mutex_unlock(&ioil_iog.iog_lock);
+	return 0;
 }
 
 /* Get the object handle for the file itself */
@@ -738,11 +782,12 @@ child_hdlr(void)
 	int rc;
 
 	daos_dti_reset();
-
-	ioil_eqh.cookie = 0;
+	ioil_eqh = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
-		DFUSE_LOG_WARNING("daos_eq_create() failed: %d (%s)", rc, strerror(rc));
+		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
+	else
+		ioil_iog.iog_main_eqh = ioil_eqh;
 }
 
 /* Returns true on success */
@@ -786,9 +831,10 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 
 		rc = daos_eq_create(&ioil_eqh);
 		if (rc) {
-			DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC"\n", DP_RC(rc));
+			DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
+		ioil_iog.iog_main_eqh = ioil_eqh;
 
 		/** register a child fork handler to create a new EQ */
 		rc = pthread_atfork(NULL, NULL, &child_hdlr);

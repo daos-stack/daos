@@ -18,7 +18,8 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	d_iov_t		iov = {};
 	d_sg_list_t	sgl = {};
 	daos_event_t	ev;
-	bool		flag = false;
+	bool		eq_setup = false;
+	daos_handle_t	eqh;
 	int		rc;
 
 	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "%#zx-%#zx", position, position + len - 1);
@@ -27,37 +28,47 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	if (daos_handle_is_inval(ioil_eqh))
-		daos_eq_create(&ioil_eqh);
-
-	rc = daos_event_init(&ev, ioil_eqh, NULL);
-	if (rc) {
-		DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_init() failed: %d (%s)",
-				rc, strerror(rc));
-		*errcode = daos_der2errno(rc);
-		return -1;
+	if (use_eq) {
+		rc = ioil_get_eqh(&eqh);
+		if (rc == 0)
+			eq_setup = true;
 	}
 
-	rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &ev);
-	if (rc) {
-		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)", rc, strerror(rc));
-		*errcode = rc;
-		return -1;
-	}
+	if (use_eq && eq_setup) {
+		bool	flag = false;
 
-	while (1) {
-		rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+		rc = daos_event_init(&ev, eqh, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_test failed: "DF_RC"\n",
+			DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_init() failed: "DF_RC,
 					DP_RC(rc));
 			*errcode = daos_der2errno(rc);
 			return -1;
 		}
-		if (flag)
-			break;
-		sched_yield();
+
+		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &ev);
+		if (rc) {
+			DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)",
+					rc, strerror(rc));
+			*errcode = rc;
+			return -1;
+		}
+
+		while (1) {
+			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
+			if (rc) {
+				DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_test() failed: "DF_RC,
+						DP_RC(rc));
+				*errcode = daos_der2errno(rc);
+				return -1;
+			}
+			if (flag)
+				break;
+			sched_yield();
+		}
+		rc = ev.ev_error;
+	} else {
+		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, NULL);
 	}
-	rc = ev.ev_error;
 	if (rc) {
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)", rc, strerror(rc));
 		return -1;
