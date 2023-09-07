@@ -463,7 +463,7 @@ class LogTest():
                         err_count += 1
                     if line.parent not in active_desc:
                         show_line(line, 'error', 'add with bad parent')
-                        if self.ftest_mode and line.parent in mem_r.regions:
+                        if not self.ftest_mode and line.parent in mem_r.regions:
                             show_line(mem_r.regions[line.parent], 'NORMAL',
                                       'used as parent without registering')
                         err_count += 1
@@ -492,7 +492,7 @@ class LogTest():
                 else:
                     if have_debug and desc not in active_desc and desc not in active_rpcs:
                         show_line(line, 'NORMAL', 'inactive desc')
-                        if self.ftest_mode and line.descriptor in mem_r.regions:
+                        if not self.ftest_mode and line.descriptor in mem_r.regions:
                             show_line(mem_r.regions[line.descriptor], 'NORMAL',
                                       'Used as descriptor without registering')
                         error_files.add(line.filename)
