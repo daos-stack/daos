@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -369,10 +369,10 @@ test_drpc_progress_listener_accept_failed(void **state)
 
 	init_drpc_progress_context(&ctx, new_drpc_with_fd(15));
 	poll_revents_return[0] = POLLIN;
-	accept_return = -1;
+	accept_return          = -EIO;
 
 	/* No clear reason why accept would fail if we got data on it */
-	assert_rc_equal(drpc_progress(&ctx, 100), -DER_MISC);
+	assert_rc_equal(drpc_progress(&ctx, 100), -DER_IO);
 
 	cleanup_drpc_progress_context(&ctx);
 }

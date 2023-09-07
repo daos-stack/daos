@@ -31,7 +31,7 @@ import (
 var (
 	baseDevReplaceBackoff      = 250 * time.Millisecond
 	maxDevReplaceBackoffFactor = 7 // 8s
-	maxDevReplaceRetries       = 5
+	maxDevReplaceRetries       = 20
 )
 
 func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
@@ -398,12 +398,12 @@ func addManageRespIDOnFail(log logging.Logger, res *ctlpb.SmdManageResp_Result, 
 // Retry dev-replace requests as state propagation may take some time after set-faulty call has
 // been made to manually trigger a faulty device state.
 func replaceDevRetryBusy(ctx context.Context, log logging.Logger, e Engine, req proto.Message) (res *ctlpb.SmdManageResp_Result, err error) {
-	for try := uint(0); try < uint(maxDevReplaceRetries); try++ {
+	for try := 0; try < maxDevReplaceRetries; try++ {
 		res, err = sendManageReq(ctx, e, drpc.MethodReplaceStorage, req)
 		if err != nil {
 			return
 		}
-		if daos.Status(res.Status) != daos.Busy {
+		if daos.Status(res.Status) != daos.Busy || try == maxDevReplaceRetries-1 {
 			break
 		}
 
