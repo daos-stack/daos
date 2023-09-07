@@ -4525,6 +4525,7 @@ dfs_read_int(dfs_t *dfs, dfs_obj_t *obj, daos_off_t off, dfs_iod_t *iod,
 err_params:
 	D_FREE(params);
 err_task:
+	daos_event_launch(ev);
 	tse_task_complete(task, rc);
 	/** the event is completed with the proper rc */
 	return 0;

@@ -354,7 +354,6 @@ ioil_fini(void)
 	int               rc;
 	pid_t             tid = syscall(SYS_gettid);
 
-	__real_fprintf(stderr, "[IOIL] Calling fini on tid: %d\n", tid);
 	if (tid != ioil_iog.iog_init_tid) {
 		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
 		return;
@@ -394,7 +393,8 @@ ioil_fini(void)
 		for (i = 0; i < ioil_iog.iog_eq_count; i++)
 			daos_eq_destroy(ioil_iog.iog_eqs[i], 0);
 		/** destroy main thread eq */
-		daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
+		if (daos_handle_is_valid(ioil_iog.iog_main_eqh))
+			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
 		daos_fini();
 	}
 	ioil_iog.iog_daos_init = false;

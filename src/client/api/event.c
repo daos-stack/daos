@@ -830,7 +830,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 
 	eqx = daos_eq_lookup(eqh);
 	if (eqx == NULL) {
-		D_ERROR("eqh nonexist.\n");
+		D_ERROR("daos_eq_lookup() failed: "DF_RC"\n", DP_RC(-DER_NONEXIST));
 		return -DER_NONEXIST;
 	}
 
@@ -862,8 +862,7 @@ daos_eq_destroy(daos_handle_t eqh, int flags)
 	if (eqx->eqx_ctx != NULL) {
 		rc = crt_context_flush(eqx->eqx_ctx, 0);
 		if (rc != 0) {
-			D_ERROR("failed to flush client context: "DF_RC"\n",
-				DP_RC(rc));
+			D_ERROR("failed to flush client context: "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
