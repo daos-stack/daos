@@ -360,6 +360,35 @@ out:
 		ds_cont_child_put(cont);
 }
 
+static void
+dtx_coll_handler(crt_rpc_t *rpc)
+{
+	struct dtx_coll_in		*dci = crt_req_get(rpc);
+	struct dtx_coll_out		*dco = crt_reply_get(rpc);
+	struct dtx_coll_local_args	 dcla = { 0 };
+	struct dss_coll_ops		 coll_ops = { 0 };
+	struct dss_coll_args		 coll_args = { 0 };
+	int				 rc;
+
+	dcla.dcla_dci = dci;
+	dcla.dcla_opc = opc_get(rpc->cr_opc);
+
+	coll_ops.co_func = dtx_coll_local_exec;
+	coll_args.ca_func_args = &dcla;
+	coll_args.ca_tgt_sz = dci->dci_tgt_bitmap.ca_count;
+	coll_args.ca_tgt_bitmap = dci->dci_tgt_bitmap.ca_arrays;
+
+	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, 0);
+	D_CDEBUG(rc < 0, DLOG_ERR, DB_TRACE,
+		 "Handled collective DTX PRC %u for "DF_DTI": "DF_RC"\n",
+		 opc_get(rpc->cr_opc), DP_DTI(&dci->dci_xid), DP_RC(rc));
+
+	dco->dco_status = rc;
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR("Failed to send collective RPC %p reply: "DF_RC"\n", rpc, DP_RC(rc));
+}
+
 static int
 dtx_init(void)
 {

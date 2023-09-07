@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -122,14 +122,13 @@ ds_obj_remote_update(struct dtx_leader_handle *dlh, void *data, int idx,
 	orw_parent = crt_req_get(parent_req);
 	orw = crt_req_get(req);
 	*orw = *orw_parent;
+
 	orw->orw_oid.id_shard = shard_tgt->st_shard_id;
-	uuid_copy(orw->orw_co_hdl, orw_parent->orw_co_hdl);
-	uuid_copy(orw->orw_co_uuid, orw_parent->orw_co_uuid);
 	orw->orw_flags |= ORF_BULK_BIND | obj_exec_arg->flags;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		orw->orw_api_flags &= ~DAOS_COND_MASK;
-	orw->orw_dti_cos.ca_count	= dth->dth_dti_cos_count;
-	orw->orw_dti_cos.ca_arrays	= dth->dth_dti_cos;
+	orw->orw_dti_cos.ca_count = dth->dth_dti_cos_count;
+	orw->orw_dti_cos.ca_arrays = dth->dth_dti_cos;
 
 	D_DEBUG(DB_TRACE, DF_UOID" forwarding to rank:%d tag:%d.\n",
 		DP_UOID(orw->orw_oid), tgt_ep.ep_rank, tgt_ep.ep_tag);
@@ -234,11 +233,8 @@ ds_obj_remote_punch(struct dtx_leader_handle *dlh, void *data, int idx,
 	opi_parent = crt_req_get(parent_req);
 	opi = crt_req_get(req);
 	*opi = *opi_parent;
+
 	opi->opi_oid.id_shard = shard_tgt->st_shard_id;
-	uuid_copy(opi->opi_co_hdl, opi_parent->opi_co_hdl);
-	uuid_copy(opi->opi_co_uuid, opi_parent->opi_co_uuid);
-	opi->opi_shard_tgts.ca_count = opi_parent->opi_shard_tgts.ca_count;
-	opi->opi_shard_tgts.ca_arrays = opi_parent->opi_shard_tgts.ca_arrays;
 	opi->opi_flags |= obj_exec_arg->flags;
 	if (shard_tgt->st_flags & DTF_DELAY_FORWARD && dlh->dlh_drop_cond)
 		opi->opi_api_flags &= ~DAOS_COND_PUNCH;
@@ -361,7 +357,7 @@ ds_obj_cpd_dispatch(struct dtx_leader_handle *dlh, void *arg, int idx,
 	uuid_copy(oci->oci_co_hdl, oci_parent->oci_co_hdl);
 	uuid_copy(oci->oci_co_uuid, oci_parent->oci_co_uuid);
 	oci->oci_map_ver = oci_parent->oci_map_ver;
-	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) & ~ORF_CPD_LEADER;
+	oci->oci_flags = (oci_parent->oci_flags | exec_arg->flags) & ~ORF_LEADER;
 
 	oci->oci_disp_tgts.ca_arrays = NULL;
 	oci->oci_disp_tgts.ca_count = 0;
@@ -445,6 +441,81 @@ out:
 	D_FREE(head_dcs);
 	D_FREE(dcsr_dcs);
 	D_FREE(dcde_dcs);
+
+	return rc;
+}
+
+int
+ds_obj_coll_punch_remote(struct dtx_leader_handle *dlh, void *data, int idx,
+			 dtx_sub_comp_cb_t comp_cb)
+{
+	struct ds_obj_exec_arg		*exec_arg = data;
+	struct daos_shard_tgt		*shard_tgt;
+	struct obj_remote_cb_arg	*remote_arg;
+	struct dtx_sub_status		*sub;
+	crt_endpoint_t			 tgt_ep;
+	crt_rpc_t			*parent_req = exec_arg->rpc;
+	crt_rpc_t			*req;
+	struct obj_coll_punch_in	*ocpi;
+	struct obj_coll_punch_in	*ocpi_parent;
+	int				rc = 0;
+
+	D_ASSERT(idx < dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt);
+
+	sub = &dlh->dlh_subs[idx];
+	shard_tgt = &sub->dss_tgt;
+	D_ALLOC_PTR(remote_arg);
+	if (remote_arg == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	tgt_ep.ep_grp = NULL;
+	tgt_ep.ep_rank = shard_tgt->st_rank;
+	/* Collective punch will be forwarded to system XS on remote. */
+	tgt_ep.ep_tag = 0;
+
+	crt_req_addref(parent_req);
+	remote_arg->parent_req = parent_req;
+	remote_arg->dlh = dlh;
+	remote_arg->comp_cb = comp_cb;
+	remote_arg->idx = idx;
+
+	rc = obj_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, DAOS_OBJ_RPC_COLL_PUNCH, &req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create failed for coll punch remote: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	ocpi_parent = crt_req_get(parent_req);
+	ocpi = crt_req_get(req);
+	*ocpi = *ocpi_parent;
+
+	/* dlh->dlh_coll_tgts[0] is for the leader. */
+	D_ASSERT(dlh->dlh_coll_tgt_nr > idx + 1);
+
+	ocpi->ocpi_tgts.ca_arrays = &dlh->dlh_coll_tgts[idx + 1];
+	ocpi->ocpi_tgts.ca_count = 1;
+	ocpi->ocpi_flags = (exec_arg->flags | ocpi_parent->ocpi_flags) & ~ORF_LEADER;
+
+	D_DEBUG(DB_IO, DF_UOID" forwarding coll punch RPC to rank:%d flags %x/"DF_X64"\n",
+		DP_UOID(ocpi->ocpi_oid), tgt_ep.ep_rank, ocpi->ocpi_flags, ocpi->ocpi_api_flags);
+
+	rc = crt_req_send(req, shard_punch_req_cb, remote_arg);
+	if (rc != 0) {
+		D_ASSERT(sub->dss_comp == 1);
+		D_ERROR("crt_req_send failed for coll punch remote: "DF_RC"\n", DP_RC(rc));
+	}
+
+	return rc;
+
+out:
+	if (rc != 0) {
+		sub->dss_result = rc;
+		comp_cb(dlh, idx, rc);
+		if (remote_arg != NULL) {
+			crt_req_decref(parent_req);
+			D_FREE(remote_arg);
+		}
+	}
 
 	return rc;
 }

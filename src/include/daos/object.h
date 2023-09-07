@@ -199,6 +199,22 @@ struct daos_shard_tgt {
 	uint8_t			st_flags;	/* see daos_tgt_flags */
 };
 
+struct obj_coll_target {
+	uint32_t	 oct_rank;
+	/*
+	 * The size (in byte) of oct_bitmap. It may be smaller than dss_tgt_nr if only some VOS
+	 * targets are involved. It also may be larger than dss_tgt_nr if dss_tgt_nr is not 2^n
+	 * aligned.
+	 */
+	uint16_t	 oct_bitmap_sz;
+	/* How many valid shards in oct_shards, it may be smaller than the sparse array length. */
+	uint16_t	 oct_shard_nr;
+	/* The bitmap for the vos targets (on the rank) that are involved in the operation. */
+	uint8_t		*oct_bitmap;
+	/* Sparse array for the object shards' identifiers, sorted with vos targets index. */
+	uint32_t	*oct_shards;
+};
+
 static inline bool
 daos_oid_is_null(daos_obj_id_t oid)
 {

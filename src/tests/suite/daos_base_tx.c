@@ -881,6 +881,108 @@ dtx_21(void **state)
 	ioreq_fini(&req);
 }
 
+#define DTS_DKEY_CNT	8
+#define DTS_DKEY_SIZE	16
+
+static void
+dtx_coll_punch(test_arg_t *arg, daos_oclass_id_t oclass)
+{
+	char		 buf[dts_dtx_iosize];
+	char		 dkeys[DTS_DKEY_CNT][DTS_DKEY_SIZE];
+	const char	*akey = dts_dtx_akey;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	int		 i;
+
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (i = 0; i < DTS_DKEY_CNT; i++) {
+		dts_buf_render(dkeys[i], DTS_DKEY_SIZE);
+		dts_buf_render(buf, dts_dtx_iosize);
+		insert_single(dkeys[i], akey, 0, buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+	}
+
+	print_message("Collective punch object\n");
+	punch_obj(DAOS_TX_NONE, &req);
+
+	print_message("Fetch after punch\n");
+	arg->expect_result = -DER_NONEXIST;
+	for (i = 0; i < DTS_DKEY_CNT; i++)
+		lookup_empty_single(dkeys[i], akey, 0, buf, dts_dtx_iosize, DAOS_TX_NONE, &req);
+
+	ioreq_fini(&req);
+}
+
+static bool
+dtx_coll_punch_runable(test_arg_t *arg, uint32_t required)
+{
+	int	tgts_per_node;
+	int	disable_nodes;
+	int	runable = 1;
+
+	if (arg->myrank != 0)
+		goto out;
+
+	tgts_per_node = arg->srv_ntgts / arg->srv_nnodes;
+	if (tgts_per_node < 2) {
+		runable = 0;
+		goto out;
+	}
+
+	disable_nodes = (arg->srv_disabled_ntgts + tgts_per_node - 1) / tgts_per_node;
+	if (arg->srv_nnodes - disable_nodes < required) {
+		print_message("Not enough engines (need %d), skipping (%d/%d)\n",
+			      required, arg->srv_ntgts, arg->srv_disabled_ntgts);
+		runable = 0;
+	}
+
+out:
+	par_bcast(PAR_COMM_WORLD, &runable, 1, PAR_INT, 0);
+	par_barrier(PAR_COMM_WORLD);
+
+	return runable == 1;
+}
+
+static void
+dtx_22(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_SX\n");
+
+	if (!dtx_coll_punch_runable(arg, 2))
+		return;
+
+	dtx_coll_punch(arg, OC_SX);
+}
+
+static void
+dtx_23(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_EC_2P1G2\n");
+
+	if (!dtx_coll_punch_runable(arg, 3))
+		return;
+
+	dtx_coll_punch(arg, OC_EC_2P1G2);
+}
+
+static void
+dtx_24(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	print_message("Collective punch object - OC_EC_4P1GX\n");
+
+	if (!dtx_coll_punch_runable(arg, 5))
+		return;
+
+	dtx_coll_punch(arg, OC_EC_4P1GX);
+}
+
 static int
 dtx_base_rf0_setup(void **state)
 {
@@ -944,6 +1046,12 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_20, dtx_base_rf1_setup, test_case_teardown},
 	{"DTX21: do not abort partially committed DTX",
 	 dtx_21, dtx_base_rf0_setup, test_case_teardown},
+	{"DTX22: collective punch object - OC_SX",
+	 dtx_22, NULL, test_case_teardown},
+	{"DTX23: collective punch object - OC_EC_2P1G2",
+	 dtx_23, NULL, test_case_teardown},
+	{"DTX24: collective punch object - OC_EC_4P1GX",
+	 dtx_24, NULL, test_case_teardown},
 };
 
 static int

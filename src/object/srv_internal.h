@@ -251,6 +251,9 @@ ds_obj_remote_punch(struct dtx_leader_handle *dth, void *arg, int idx,
 int
 ds_obj_cpd_dispatch(struct dtx_leader_handle *dth, void *arg, int idx,
 		    dtx_sub_comp_cb_t comp_cb);
+int
+ds_obj_coll_punch_remote(struct dtx_leader_handle *dth, void *arg, int idx,
+			 dtx_sub_comp_cb_t comp_cb);
 
 /* srv_obj.c */
 void ds_obj_rw_handler(crt_rpc_t *rpc);
@@ -265,6 +268,7 @@ void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);
 void ds_obj_ec_rep_handler(crt_rpc_t *rpc);
 void ds_obj_cpd_handler(crt_rpc_t *rpc);
+void ds_obj_coll_punch_handler(crt_rpc_t *rpc);
 typedef int (*ds_iofw_cb_t)(crt_rpc_t *req, void *arg);
 
 struct daos_cpd_args {
