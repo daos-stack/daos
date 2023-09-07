@@ -91,7 +91,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	daos_handle_t free_btr, bitmap_btr;
 	struct vea_hint_df dummy;
 	d_iov_t key, val;
-	daos_handle_t md_bitmap_btr;
+	daos_handle_t md_bitmap_btr = DAOS_HDL_INVAL;
 	int rc;
 
 	D_ASSERT(umem != NULL);

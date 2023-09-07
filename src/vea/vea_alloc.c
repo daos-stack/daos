@@ -598,7 +598,7 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *p
 		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
 					  new_chunk_commit_cb, bitmap_entry);
 		if (rc) {
-			D_ERROR("add chunk commit callback faile. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("add chunk commit callback failed. "DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 
