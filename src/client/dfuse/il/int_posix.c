@@ -327,6 +327,7 @@ ioil_init(void)
 	if (rc)
 		return;
 
+	d_getenv_bool("D_IL_USE_EQ", &use_eq);
 	ioil_iog.iog_initialized = true;
 }
 
