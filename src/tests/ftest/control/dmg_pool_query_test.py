@@ -59,6 +59,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # but this yields an empty dictionary (the default), so it needs to be defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
+            'state': self.params.get("pool_state", path="/run/exp_vals/*"),
             "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get("total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get("active_targets", path="/run/exp_vals/*"),

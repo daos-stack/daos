@@ -343,6 +343,11 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_sym1, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_dir1, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_dir1));
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -353,6 +358,10 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, NULL, filename_dir1, create_mode | S_IFDIR,
 		      create_flags, 0, 0, NULL, &dir);
 	assert_int_equal(rc, 0);
+
+	rc = dfs_ostatx(dfs_mt, dir, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISDIR(stbuf.st_mode));
 
 	/** try chmod to a symlink, should fail (since chmod resolves link) */
 	rc = dfs_chmod(dfs_mt, NULL, filename_sym1, S_IFLNK);
@@ -395,6 +404,10 @@ dfs_test_lookup(void **state)
 	rc = dfs_open(dfs_mt, dir, filename_sym2, create_mode | S_IFLNK,
 		      create_flags, 0, 0, filename_file2, &obj);
 	assert_int_equal(rc, 0);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
+	assert_int_equal(rc, 0);
+	assert_true(S_ISLNK(stbuf.st_mode));
+	assert_int_equal(stbuf.st_size, strlen(filename_file2));
 	rc = dfs_release(obj);
 	assert_int_equal(rc, 0);
 
@@ -1034,34 +1047,92 @@ dfs_test_rename(void **state)
 	rc = dfs_write(dfs_mt, obj2, &sgl, 64, NULL);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_release(obj2);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, NULL);
 	assert_int_equal(rc, 0);
-	rc = dfs_release(obj1);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
-	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 0);
 	prev_ts.tv_sec = stbuf.st_ctim.tv_sec;
 	prev_ts.tv_nsec = stbuf.st_ctim.tv_nsec;
-	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
+	memset(&stbuf, 0, sizeof(stbuf));
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
 	assert_int_equal(rc, 0);
+	assert_true(stbuf.st_size == 128);
 
 	rc = dfs_chmod(dfs_mt, NULL, f1, S_IFREG | S_IRUSR | S_IWUSR);
 	assert_int_equal(rc, 0);
 	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
 	assert_int_equal(rc, 0);
 
-	rc = dfs_stat(dfs_mt, NULL, f1, &stbuf);
+	daos_event_t ev, *evp;
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, &ev);
 	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
 	/** check ctime updated */
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 0);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_size = 1234;
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, 0);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+	/** check ctime updated */
+	assert_true(check_ts(prev_ts, stbuf.st_ctim));
+	assert_true(stbuf.st_size == 128);
+
+	memset(&stbuf, 0, sizeof(stbuf));
 	rc = dfs_stat(dfs_mt, NULL, f2, &stbuf);
 	assert_int_equal(rc, 0);
 
 	rc = dfs_move(dfs_mt, NULL, f2, NULL, f1, NULL);
 	assert_int_equal(rc, 0);
 
+	/** try to stat obj1 corresponding to f1 which was removed, should fail. */
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, NULL);
+	assert_int_equal(rc, ENOENT);
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj1, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, ENOENT);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
 	rc = dfs_remove(dfs_mt, NULL, f1, 0, NULL);
+	assert_int_equal(rc, 0);
+
+	/** try to stat obj2 corresponding to f2 which was renamed, should fail. */
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, NULL);
+	assert_int_equal(rc, ENOENT);
+	rc = daos_event_init(&ev, arg->eq, NULL);
+	rc = dfs_ostatx(dfs_mt, obj2, &stbuf, &ev);
+	assert_int_equal(rc, 0);
+	rc = daos_eq_poll(arg->eq, 0, DAOS_EQ_WAIT, 1, &evp);
+	assert_rc_equal(rc, 1);
+	assert_ptr_equal(evp, &ev);
+	assert_int_equal(evp->ev_error, ENOENT);
+	rc = daos_event_fini(&ev);
+	assert_rc_equal(rc, 0);
+
+	rc = dfs_release(obj2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(obj1);
 	assert_int_equal(rc, 0);
 }
 
@@ -1480,7 +1551,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 
 	/** verify mtime is now the same as the one we just set */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(first_ts.tv_sec, stbuf.st_mtim.tv_sec);
 	assert_int_equal(first_ts.tv_nsec, stbuf.st_mtim.tv_nsec);
@@ -1495,7 +1566,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		assert_int_equal(rc, 0);
 	}
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	assert_true(check_ts(prev_ts, stbuf.st_ctim));
@@ -1579,7 +1650,7 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 	assert_int_equal(rc, 0);
 	/* verify */
 	memset(&stbuf, 0, sizeof(stbuf));
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
+	rc = dfs_ostatx(dfs_mt, obj, &stbuf, NULL);
 	assert_int_equal(rc, 0);
 	assert_int_equal(ts, stbuf.st_mtim.tv_sec);
 	timeptr = localtime(&stbuf.st_mtim.tv_sec);

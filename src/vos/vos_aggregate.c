@@ -76,7 +76,7 @@ struct agg_rmv_ent {
 	uint32_t                re_aggregate : 1, /* Aggregate of one or more records */
 	    re_child                         : 1; /* Contained in aggregate record */
 	/** Refcount of physical records that reference this removal */
-	int			re_phy_count;
+	unsigned int		re_phy_count;
 };
 
 /* EV tree logical entry */
@@ -1195,8 +1195,8 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	rc = reserve_segment(obj, io, seg_size, &ent_in->ei_addr);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
-			"Reserve "DF_U64" segment error: "DF_RC"\n", seg_size, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR, rc,
+			  "Reserve " DF_U64 " segment error", seg_size);
 		goto out;
 	}
 	D_ASSERT(!bio_addr_is_hole(&ent_in->ei_addr));
@@ -1273,10 +1273,10 @@ fill_segments(daos_handle_t ih, struct vos_agg_param *agg_param, unsigned int *a
 
 		rc = fill_one_segment(ih, mw, lgc_seg, acts);
 		if (rc) {
-			D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
-				"Fill seg %u-%u %p "DF_RECT" error: "DF_RC"\n",
-				lgc_seg->ls_idx_start, lgc_seg->ls_idx_end, lgc_seg->ls_phy_ent,
-				DP_RECT(&lgc_seg->ls_ent_in.ei_rect), DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR, rc,
+				  "Fill seg %u-%u %p " DF_RECT " error", lgc_seg->ls_idx_start,
+				  lgc_seg->ls_idx_end, lgc_seg->ls_phy_ent,
+				  DP_RECT(&lgc_seg->ls_ent_in.ei_rect));
 			break;
 		}
 	}
@@ -1345,8 +1345,14 @@ unmark_removals(struct agg_merge_window *mw, const struct agg_phy_ent *phy_ent)
 		if (rmv_ent->re_rect.rc_ex.ex_lo > phy_ent->pe_rect.rc_ex.ex_hi)
 			continue;
 
-		D_ASSERT(rmv_ent->re_phy_count > 0);
-		rmv_ent->re_phy_count--;
+		/*
+		 * Aggregation could abort before processing the invisible record
+		 * which being covered by a removal record, in such case, the removal
+		 * record & physical record are both enqueued but the removal record
+		 * isn't referenced yet.
+		 */
+		if (rmv_ent->re_phy_count > 0)
+			rmv_ent->re_phy_count--;
 	}
 }
 
@@ -1761,9 +1767,8 @@ flush_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 	/* Transfer data from old logical records to reserved new segments */
 	rc = fill_segments(ih, agg_param, acts);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
-			"Fill segments "DF_EXT" error: "DF_RC"\n",
-			DP_EXT(&mw->mw_ext), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR, rc,
+			  "Fill segments " DF_EXT " error", DP_EXT(&mw->mw_ext));
 		goto out;
 	}
 
@@ -2087,9 +2092,8 @@ join_merge_window(daos_handle_t ih, struct vos_agg_param *agg_param,
 		mw->mw_ext.ex_hi = lgc_ext.ex_lo - 1;
 		rc = flush_merge_window(ih, agg_param, false, acts);
 		if (rc) {
-			D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
-				"Flush window "DF_EXT" error: "DF_RC"\n",
-				DP_EXT(&mw->mw_ext), DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR, rc,
+				  "Flush window " DF_EXT " error", DP_EXT(&mw->mw_ext));
 			return rc;
 		}
 		D_AGG_ASSERT(mw, merge_window_status(mw) == MW_FLUSHED);
@@ -2142,9 +2146,8 @@ out:
 	if (last) {
 		rc = flush_merge_window(ih, agg_param, true, acts);
 		if (rc)
-			D_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR,
-				"Flush window "DF_EXT" error: "DF_RC"\n",
-				DP_EXT(&mw->mw_ext), DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NOSPACE, DB_EPC, DLOG_ERR, rc,
+				  "Flush window " DF_EXT " error", DP_EXT(&mw->mw_ext));
 
 		close_merge_window(mw, rc);
 	}
@@ -2268,9 +2271,9 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	rc = join_merge_window(ih, agg_param, entry, acts);
 	if (rc)
-		D_CDEBUG(rc == -DER_TX_RESTART || rc == -DER_TX_BUSY || rc == -DER_NOSPACE,
-			DB_TRACE, DLOG_ERR, "Join window "DF_EXT"/"DF_EXT" error: "DF_RC"\n",
-			DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_TX_RESTART || rc == -DER_TX_BUSY || rc == -DER_NOSPACE,
+			  DB_TRACE, DLOG_ERR, rc, "Join window " DF_EXT "/" DF_EXT " error",
+			  DP_EXT(&mw->mw_ext), DP_EXT(&phy_ext));
 out:
 	if (rc)
 		close_merge_window(mw, rc);
