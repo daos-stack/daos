@@ -764,6 +764,20 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	return 0;
 }
 
+int
+crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p)
+{
+	hg_return_t ret = HG_Get_na_protocol_info(info_string, na_protocol_info_p);
+
+	return crt_hgret_2_der(ret);
+}
+
+void
+crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
+{
+	HG_Free_na_protocol_info(na_protocol_info);
+}
+
 /* to be called only in crt_init */
 int
 crt_hg_init(void)
@@ -1117,8 +1131,7 @@ crt_rpc_handler_common(hg_handle_t hg_hdl)
 			rpc_pub->cr_ep.ep_grp = NULL;
 			/* TODO lookup by rpc_priv->crp_req_hdr.cch_grp_id */
 		} else {
-			D_ERROR("_unpack_body failed, rc: %d, opc: %#x.\n",
-				rc, rpc_pub->cr_opc);
+			DHL_ERROR(rpc_priv, rc, "_unpack_body failed, opc: %#x", rpc_pub->cr_opc);
 			crt_hg_reply_error_send(rpc_priv, -DER_MISC);
 			D_GOTO(decref, hg_ret = HG_SUCCESS);
 		}

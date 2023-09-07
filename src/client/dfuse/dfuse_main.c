@@ -202,8 +202,7 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -584,8 +583,7 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
-			       strerror(rc));
+		DHS_INFO(dfuse_info, rc, "duns_resolve_path() on path");
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));

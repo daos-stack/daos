@@ -1516,9 +1516,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
 						bio_spdk_subsys_timeout);
-			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
-				 "SPDK subsystems finalized. "DF_RC"\n",
-				 DP_RC(rc));
+			DL_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR, rc, "SPDK subsystems finalized");
 
 			nvme_glb.bd_init_thread = NULL;
 
@@ -1875,9 +1873,9 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
 					    (unsigned int)CTL__LED_ACTION__RESET, NULL, 0);
 			if (rc != 0)
 				/* DER_NOSYS indicates that VMD-LED control is not enabled */
-				D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
-					 "Reset LED on device:" DF_UUID " failed, " DF_RC "\n",
-					 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
+				DL_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR, rc,
+					  "Reset LED on device:" DF_UUID " failed",
+					  DP_UUID(d_bdev->bb_uuid));
 		}
 	}
 }
