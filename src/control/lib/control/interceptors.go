@@ -12,8 +12,10 @@ import (
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/security"
 )
@@ -59,8 +61,8 @@ func streamErrorInterceptor() grpc.DialOption {
 }
 
 // unaryErrorInterceptor calls the specified unary RPC and returns any unwrapped errors.
-func unaryErrorInterceptor() grpc.DialOption {
-	return grpc.WithUnaryInterceptor(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+func unaryErrorInterceptor() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err != nil {
 			st := status.Convert(err)
@@ -71,5 +73,21 @@ func unaryErrorInterceptor() grpc.DialOption {
 			return connErrToFault(st, cc.Target())
 		}
 		return nil
-	})
+	}
+}
+
+// unaryVersionedComponentInterceptor appends the component name and version to the
+// outgoing request headers.
+func unaryVersionedComponentInterceptor() grpc.UnaryClientInterceptor {
+	return func(parent context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		comp, err := security.MethodToComponent(method)
+		if err != nil {
+			return errors.Wrap(err, "unable to determine component from method")
+		}
+		ctx := metadata.AppendToOutgoingContext(parent,
+			proto.DaosComponentHeader, comp.String(),
+			proto.DaosVersionHeader, build.DaosVersion,
+		)
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
 }

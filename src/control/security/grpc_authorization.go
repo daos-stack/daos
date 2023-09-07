@@ -6,6 +6,12 @@
 
 package security
 
+import (
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+)
+
 // Component represents the DAOS component being granted authorization.
 type Component int
 
@@ -75,6 +81,16 @@ var methodAuthorizations = map[string][]Component{
 	"/RaftTransport/RequestVote":           {ComponentServer},
 	"/RaftTransport/TimeoutNow":            {ComponentServer},
 	"/RaftTransport/InstallSnapshot":       {ComponentServer},
+}
+
+// MethodToComponent resolves a gRPC method string to a build.Component.
+func MethodToComponent(method string) (build.Component, error) {
+	comps, found := methodAuthorizations[method]
+	if !found || len(comps) == 0 {
+		return build.ComponentAny, errors.Errorf("method %s does not map to a known authorized component", method)
+	}
+
+	return build.Component(comps[0].String()), nil
 }
 
 // HasAccess check if the given component has access to method given in FullMethod

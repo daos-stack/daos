@@ -196,7 +196,10 @@ func (c *Client) Debugf(fmtStr string, args ...interface{}) {
 func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 	opts := []grpc.DialOption{
 		streamErrorInterceptor(),
-		unaryErrorInterceptor(),
+		grpc.WithChainUnaryInterceptor(
+			unaryErrorInterceptor(),
+			unaryVersionedComponentInterceptor(),
+		),
 		grpc.FailOnNonTempDialError(true),
 	}
 
