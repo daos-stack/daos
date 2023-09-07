@@ -30,6 +30,10 @@ if [[ $CHROOT_NAME == *epel-7-x86_64 ]]; then
     MOCK_OPTIONS="--dnf --no-bootstrap-chroot${MOCK_OPTIONS:+ }$MOCK_OPTIONS"
 fi
 
+# disable bootstrap_image
+# https://github.com/rpm-software-management/mock/issues/1184
+MOCK_OPTIONS="--no-bootstrap-image${MOCK_OPTIONS:+ }$MOCK_OPTIONS"
+
 # Allow BR: foo-devel < 1.2 to work when foo-devel-1.3 is actually available
 cat <<EOF >> "$cfg_file"
 config_opts['dnf.conf'] += """
@@ -114,6 +118,10 @@ if [ -n "$DISTRO_VERSION" ]; then
     releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
 fi
 # shellcheck disable=SC2086
-eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
-     ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug*           \
-     "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"
+if ! eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
+          ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug*           \
+          "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"; then
+    # Debug information for filing bugs on mock
+    rpm -q mock
+    mock --debug-config
+fi

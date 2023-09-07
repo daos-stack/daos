@@ -138,7 +138,7 @@ class NLTConf():
         """
         # pylint: disable=consider-using-with
         self._compress_procs[:] = (proc for proc in self._compress_procs if proc.poll())
-        self._compress_procs.append(subprocess.Popen(['bzip2', '--best', filename]))
+        self._compress_procs.append(subprocess.Popen(['nice', '-19', 'bzip2', '--best', filename]))
 
     def flush_bz2(self):
         """Wait for all bzip2 subprocess to finish"""
@@ -5267,6 +5267,7 @@ class AllocFailTest():
         self.check_stderr = True
         self.expected_stdout = None
         self.ignore_busy = False
+        self.single_process = False
         self.use_il = False
         self._use_pil4dfs = None
         self.wf = conf.wf
@@ -5310,6 +5311,9 @@ class AllocFailTest():
             max_child = 1
         else:
             max_child = int(num_cores / 4 * 3)
+
+        if self.single_process:
+            max_child = 1
 
         print(f'Maximum number of spawned tests will be {max_child}')
 
@@ -5395,12 +5399,14 @@ class AllocFailTest():
         if callable(self.cmd):
             cmd = self.cmd(loc)
         else:
-            cmd = self.cmd
+            # Take a copy of cmd as it might be modified and we only want that to happen once.
+            cmd = list(self.cmd)
 
         # Disable logging to stderr from the daos tool, the two streams are both checked already
         # but have different formats.
-        if os.path.basename(cmd[0]) == 'daos':
+        if cmd[0] == 'daos':
             cmd_env['DD_STDERR'] = 'CRIT'
+            cmd[0] = join(self.conf['PREFIX'], 'bin', 'daos')
 
         aftf = AllocFailTestRun(self, cmd, cmd_env, loc, cwd)
         if valgrind:
@@ -5457,7 +5463,7 @@ def test_alloc_fail_copy(server, conf, wf):
     """
 
     def get_cmd(cont_id):
-        return [join(conf['PREFIX'], 'bin', 'daos'),
+        return ['daos',
                 'filesystem',
                 'copy',
                 '--src',
@@ -5504,7 +5510,7 @@ def test_alloc_fail_copy_trunc(server, conf, wf):
     files_needed = 4000
 
     def get_cmd(_):
-        cmd = [join(conf['PREFIX'], 'bin', 'daos'), 'filesystem', 'copy', '--src', src_file.name,
+        cmd = ['daos', 'filesystem', 'copy', '--src', src_file.name,
                '--dst', f'daos://{pool.id()}/aftc/new_dir/file.{get_cmd.idx}']
         get_cmd.idx += 1
         assert get_cmd.idx <= files_needed
@@ -5582,7 +5588,7 @@ def test_alloc_cont_create(server, conf, wf):
     pool = server.get_test_pool_obj()
 
     def get_cmd(cont_id):
-        return [join(conf['PREFIX'], 'bin', 'daos'),
+        return ['daos',
                 'container',
                 'create',
                 pool.id(),
@@ -5606,7 +5612,7 @@ def test_alloc_fail_cont_create(server, conf):
     dfuse.start()
 
     def get_cmd(cont_id):
-        return [join(conf['PREFIX'], 'bin', 'daos'),
+        return ['daos',
                 'container',
                 'create',
                 '--type',
@@ -5697,7 +5703,7 @@ def test_fi_list_attr(server, conf, wf):
     container.set_attrs({'my-test-attr-1': 'some-value',
                         'my-test-attr-2': 'some-other-value'})
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'container',
            'list-attrs',
            pool.id(),
@@ -5717,7 +5723,7 @@ def test_fi_get_prop(server, conf, wf):
 
     container = create_cont(conf, pool, ctype='POSIX')
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'container',
            'get-prop',
            pool.id(),
@@ -5742,7 +5748,7 @@ def test_fi_get_attr(server, conf, wf):
 
     container.set_attrs({attr_name: 'value'})
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'container',
            'get-attr',
            pool.id(),
@@ -5766,7 +5772,7 @@ def test_fi_cont_query(server, conf, wf):
 
     container = create_cont(conf, pool, ctype='POSIX')
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'container',
            'query',
            pool.id(),
@@ -5789,7 +5795,7 @@ def test_fi_cont_check(server, conf, wf):
 
     container = create_cont(conf, pool)
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'container',
            'check',
            pool.id(),
@@ -5810,7 +5816,7 @@ def test_alloc_fail(server, conf):
     """Run 'daos' client binary with fault injection"""
     pool = server.get_test_pool_obj()
 
-    cmd = [join(conf['PREFIX'], 'bin', 'daos'),
+    cmd = ['daos',
            'cont',
            'list',
            pool.id()]
@@ -5823,6 +5829,43 @@ def test_alloc_fail(server, conf):
     rc = test_cmd.launch()
     container.destroy()
     return rc
+
+
+def test_dfs_check(server, conf, wf):
+    """Run filesystem check.
+
+    Create a pool and populate a subdir with a number of entries, files, symlink (broken and not)
+    and another subdir.  Run 'daos filesystem check' on this to see the output.
+    """
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(conf, pool, ctype='POSIX', label='fsck')
+
+    with tempfile.TemporaryDirectory(prefix='fsck_src_',) as src_dir:
+        sub_dir = join(src_dir, 'new_dir')
+        os.mkdir(sub_dir)
+
+        for idx in range(5):
+            with open(join(sub_dir, f'file.{idx}'), 'w') as ofd:
+                ofd.write('hello')
+
+        os.mkdir(join(sub_dir, 'new_dir'))
+        # os.symlink('broken', join(sub_dir, 'broken_s'))
+        os.symlink('file.0', join(sub_dir, 'link'))
+
+        rc = run_daos_cmd(conf, ['filesystem', 'copy', '--src', f'{src_dir}/new_dir',
+                                 '--dst', f'daos://{pool.id()}/{container.id()}'])
+        print(rc)
+        assert rc.returncode == 0, rc
+
+    test_cmd = AllocFailTest(
+        conf, 'fs-check', ['daos', 'filesystem', 'check', pool.id(), container.id()])
+    test_cmd.wf = wf
+    test_cmd.single_process = True
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+
+    return test_cmd.launch()
 
 
 def server_fi(args):
@@ -5941,8 +5984,7 @@ def run(wf, args):
     if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
-        # Turn back on logging for this.
-        # args.dfuse_debug = 'WARN'
+        args.dfuse_debug = 'WARN'
         with DaosServer(conf, test_class='no-debug', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
             if fi_test:
@@ -5977,6 +6019,10 @@ def run(wf, args):
 
                 # Disabled for now because of errors
                 # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
+
+                # This test is disabled by default, it takes ~4 hours to run and can fill Jenkins
+                # available space, no not enable in CI.
+                # fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
 
                 wf_client.close()
 

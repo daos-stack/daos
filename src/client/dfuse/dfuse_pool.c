@@ -40,7 +40,7 @@ dfuse_pool_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 	if (uuid_parse(name, pool) < 0) {
 		struct fuse_entry_param entry = {.entry_timeout = 60};
 
-		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid '%s'", name);
+		DFUSE_TRA_DEBUG(parent, "Invalid pool uuid");
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 		return;
 	}

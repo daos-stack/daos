@@ -56,8 +56,8 @@ filler_cb(dfs_t *dfs, dfs_obj_t *dir, const char name[], void *arg)
 
 	dre = &idata->id_hdl->drh_dre[idata->id_index];
 
-	DFUSE_TRA_DEBUG(idata->id_hdl, "Adding at index %d offset %#lx '%s'", idata->id_index,
-			idata->id_base_offset + idata->id_index, name);
+	DFUSE_TRA_DEBUG(idata->id_hdl, "Adding at index %d offset %#lx " DF_DE, idata->id_index,
+			idata->id_base_offset + idata->id_index, DP_DE(name));
 
 	strncpy(dre->dre_name, name, NAME_MAX);
 	dre->dre_offset      = idata->id_base_offset + idata->id_index;
@@ -412,8 +412,9 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 		while (nextp != (void *)&hdl->drh_cache_list) {
 			drc = container_of(nextp, struct dfuse_readdir_c, drc_list);
 
-			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx '%s'", drc,
-					drc->drc_offset, drc->drc_next_offset, drc->drc_name);
+			DFUSE_TRA_DEBUG(oh, "%p adding offset %#lx next %#lx " DF_DE, drc,
+					drc->drc_offset, drc->drc_next_offset,
+					DP_DE(drc->drc_name));
 
 			if (plus) {
 				struct fuse_entry_param   entry = {0};
@@ -635,8 +636,9 @@ dfuse_do_readdir(struct dfuse_info *dfuse_info, fuse_req_t req, struct dfuse_obj
 
 			hdl->drh_dre_index += 1;
 
-			DFUSE_TRA_DEBUG(hdl, "Checking offset %#lx next %#lx '%s'", dre->dre_offset,
-					dre->dre_next_offset, dre->dre_name);
+			DFUSE_TRA_DEBUG(hdl, "Checking offset %#lx next %#lx " DF_DE,
+					dre->dre_offset, dre->dre_next_offset,
+					DP_DE(dre->dre_name));
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_ie->ie_obj, dre->dre_name,

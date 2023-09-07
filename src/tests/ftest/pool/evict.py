@@ -10,7 +10,7 @@ from pydaos.raw import DaosApiError, c_uuid_to_str
 from apricot import TestWithServers
 
 
-class EvictTests(TestWithServers):
+class PoolEvictTest(TestWithServers):
     """
     Tests DAOS client eviction from a pool that the client is using.
 
@@ -18,7 +18,7 @@ class EvictTests(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize an EvictTests object."""
+        """Initialize an PoolEvictTest object."""
         super().__init__(*args, **kwargs)
         self.start_agents_once = False
         self.start_servers_once = False
@@ -85,7 +85,7 @@ class EvictTests(TestWithServers):
         if pool.dmg.result.exit_status != 0:
             self.fail("Pool evict failed!")
 
-    def test_evict(self):
+    def test_pool_evict(self):
         """
         Test Steps:
         1. Create 2 pools on all server ranks.
@@ -108,7 +108,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,pool_evict
-        :avocado: tags=pool_evict_basic,test_evict
+        :avocado: tags=PoolEvictTest,test_pool_evict
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
         pools = []

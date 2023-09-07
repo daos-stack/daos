@@ -5,7 +5,7 @@
 #
 
 # Pull base image
-ARG FVERSION=38
+ARG FVERSION=38    # this should be changed to 'latest' and some point soon
 FROM fedora:$FVERSION
 # Needed for later use of FVERSION
 ARG FVERSION
