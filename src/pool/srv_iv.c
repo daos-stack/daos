@@ -220,6 +220,9 @@ pool_iv_prop_l2g(daos_prop_t *prop, struct pool_iv_prop *iv_prop)
 		case DAOS_PROP_PO_REINT_MODE:
 			iv_prop->pip_reint_mode = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_PO_SMALL_POOL:
+			iv_prop->pip_small_pool = prop_entry->dpe_val;
+			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);
 			break;
@@ -359,6 +362,9 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_REINT_MODE:
 			prop_entry->dpe_val = iv_prop->pip_reint_mode;
+			break;
+		case DAOS_PROP_PO_SMALL_POOL:
+			prop_entry->dpe_val = iv_prop->pip_small_pool;
 			break;
 		default:
 			D_ASSERTF(0, "bad dpe_type %d\n", prop_entry->dpe_type);

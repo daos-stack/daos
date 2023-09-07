@@ -135,6 +135,8 @@ enum daos_pool_props {
 	DAOS_PROP_PO_CHECKPOINT_THRESH,
 	/** Reintegration mode for pool, data_sync|no_data_sync default is data_sync*/
 	DAOS_PROP_PO_REINT_MODE,
+	/** System space reservation for small pool */
+	DAOS_PROP_PO_SMALL_POOL,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -254,6 +256,14 @@ enum {
 /** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
+
+/** DAOS pool storage size property */
+enum {
+	DAOS_IS_NOT_SMALL_POOL,
+	DAOS_IS_SMALL_POOL,
+};
+
+#define DAOS_PROP_PO_SMALL_POOL_DEFAULT DAOS_IS_NOT_SMALL_POOL
 
 /**
  * DAOS container property types

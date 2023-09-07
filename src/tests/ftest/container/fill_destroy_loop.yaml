@@ -1,25 +1,37 @@
 hosts:
   test_servers: 1
+
+timeout: 900
+# NOTE: The rand_seed key could be used to reproduce a given run
+# rand_seed: 666
+
 server_config:
   name: daos_server
   engines_per_host: 1
   engines:
     0:
+      targets: 8
       storage:
         0:
           class: ram
           scm_mount: /mnt/daos
-timeout: 900
+
 pool:
   control_method: dmg
-  size: 300M
-  testloop: 100
+  size: 430M
+  test_loop: 40
+  delta: 1MiB
+  properties: small_pool:yes
+  reclaim_props:
+    - "disabled"
+    - "time"
+
 container:
   control_method: daos
   oclass: SX
   type: POSIX
   object_qty: 1
   record_qty: 1
-  data_size: 1024000
+  data_size: 1048576
   akey_size: 5
   dkey_size: 5

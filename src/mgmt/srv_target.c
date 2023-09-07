@@ -624,9 +624,10 @@ ds_mgmt_tgt_file(const uuid_t pool_uuid, const char *fname, int *idx,
 }
 
 struct vos_pool_arg {
-	uuid_t		vpa_uuid;
-	daos_size_t	vpa_scm_size;
-	daos_size_t	vpa_nvme_size;
+	uuid_t      vpa_uuid;
+	daos_size_t vpa_scm_size;
+	daos_size_t vpa_nvme_size;
+	uint32_t    vpa_flags;
 };
 
 static int
@@ -642,8 +643,8 @@ tgt_vos_create_one(void *varg)
 	if (rc)
 		return rc;
 
-	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid,
-			     vpa->vpa_scm_size, vpa->vpa_nvme_size, 0, NULL);
+	rc = vos_pool_create(path, (unsigned char *)vpa->vpa_uuid, vpa->vpa_scm_size,
+			     vpa->vpa_nvme_size, vpa->vpa_flags, NULL);
 	if (rc)
 		D_ERROR(DF_UUID": failed to init vos pool %s: %d\n",
 			DP_UUID(vpa->vpa_uuid), path, rc);
@@ -1080,6 +1081,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		/* A zero size accommodates the existing file */
 		vpa.vpa_scm_size = 0;
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
+		vpa.vpa_flags     = tc_in->tc_flags;
 		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
 		if (rc) {
 			D_ERROR(DF_UUID": thread collective tgt_vos_create_one failed, "DF_RC"\n",
@@ -1112,7 +1114,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 	tc_out->tc_ranks.ca_arrays = rank;
 	tc_out->tc_ranks.ca_count  = 1;
 
-	rc = ds_pool_start(tc_in->tc_pool_uuid);
+	rc = ds_pool_start_ex(tc_in->tc_pool_uuid, tc_in->tc_flags);
 	if (rc) {
 		D_ERROR(DF_UUID": failed to start pool: "DF_RC"\n",
 			DP_UUID(tc_in->tc_pool_uuid), DP_RC(rc));

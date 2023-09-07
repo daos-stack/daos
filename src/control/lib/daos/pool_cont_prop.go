@@ -123,10 +123,12 @@ const (
 	PoolPropertyCheckpointFreq = C.DAOS_PROP_PO_CHECKPOINT_FREQ
 	// PoolPropertyCheckpointThresh defines the size threshold to trigger WAL checkpoints
 	PoolPropertyCheckpointThresh = C.DAOS_PROP_PO_CHECKPOINT_THRESH
-	//PoolPropertyPerfDomain is pool performance domain
+	// PoolPropertyPerfDomain is pool performance domain
 	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
-	//PoolPropertyReintMode is pool reintegration mode
+	// PoolPropertyReintMode is pool reintegration mode
 	PoolPropertyReintMode = C.DAOS_PROP_PO_REINT_MODE
+	// PoolPropertySmallPool defines the storage size of the pool
+	PoolPropertySmallPool = C.DAOS_PROP_PO_SMALL_POOL
 )
 
 const (
@@ -275,4 +277,9 @@ const (
 const (
 	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
 	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
+)
+
+const (
+	PoolIsNotSmallPool = C.DAOS_IS_NOT_SMALL_POOL
+	PoolIsSmallPool    = C.DAOS_IS_SMALL_POOL
 )

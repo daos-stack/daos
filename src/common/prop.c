@@ -539,6 +539,13 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 				return false;
 			}
 			break;
+		case DAOS_PROP_PO_SMALL_POOL:
+			val = prop->dpp_entries[i].dpe_val;
+			if (val != DAOS_IS_NOT_SMALL_POOL && val != DAOS_IS_SMALL_POOL) {
+				D_ERROR("invalid small pool parameter " DF_U64 ".\n", val);
+				return false;
+			}
+			break;
 		case DAOS_PROP_PO_CHECKPOINT_FREQ:
 		case DAOS_PROP_PO_CHECKPOINT_THRESH:
 		case DAOS_PROP_CO_SNAPSHOT_MAX:

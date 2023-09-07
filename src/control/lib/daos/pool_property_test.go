@@ -240,6 +240,17 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "bad mode",
 			expErr: errors.New(`invalid value "bad mode" for reintegration (valid: data_sync,no_data_sync)`),
 		},
+		"small_pool-valid": {
+			name:    "small_pool",
+			value:   "yes",
+			expStr:  "small_pool:yes",
+			expJson: []byte(`{"name":"small_pool","description":"Is small pool (for system space reservation)","value":"yes"}`),
+		},
+		"small_pool-invalid": {
+			name:   "small_pool",
+			value:  "bad type",
+			expErr: errors.New(`invalid value "bad type" for small_pool (valid: no,yes)`),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			prop, err := daos.PoolProperties().GetProperty(tc.name)

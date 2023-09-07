@@ -786,6 +786,12 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("can't set RP performance domain affinity on existing pool"),
 		},
 		{
+			"Set pool small_pool property is not allowed",
+			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb small_pool:yes",
+			"",
+			errors.New("can't set small pool property on existing pool."),
+		},
+		{
 			"Get pool property",
 			"pool get-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label",
 			strings.Join([]string{

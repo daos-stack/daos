@@ -8,6 +8,7 @@ daos_base_deps:
     - bash
     - gdb
     - glibc
+    - mercury
     - platform-python
     - python36
     - tree

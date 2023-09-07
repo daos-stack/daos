@@ -735,6 +735,9 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 		if prop.Name == "rp_pda" {
 			return errors.New("can't set RP performance domain affinity on existing pool.")
 		}
+		if prop.Name == "small_pool" {
+			return errors.New("can't set small pool property on existing pool.")
+		}
 	}
 
 	req := &control.PoolSetPropReq{

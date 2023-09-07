@@ -78,6 +78,7 @@ extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uint32_t */
 extern d_iov_t ds_pool_prop_reint_mode;		/* uint32_t */
+extern d_iov_t ds_pool_prop_small_pool;         /* uint32_t */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
