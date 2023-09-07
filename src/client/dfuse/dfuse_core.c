@@ -1114,6 +1114,7 @@ dfuse_open_handle_init(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh,
 void
 dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
+	D_RWLOCK_INIT(&ie->ie_wlock, 0);
 	atomic_init(&ie->ie_ref, 1);
 	atomic_init(&ie->ie_open_count, 0);
 	atomic_init(&ie->ie_open_write_count, 0);
@@ -1127,6 +1128,10 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
 	int      rc;
 	uint32_t ref;
+
+	DFUSE_IE_WFLUSH(ie);
+
+	D_RWLOCK_DESTROY(&ie->ie_wlock);
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",

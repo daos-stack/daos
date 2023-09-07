@@ -788,7 +788,20 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
+
+	/* Lock for writes */
+	pthread_rwlock_t          ie_wlock;
 };
+
+/* Flush write-back cache writes to a inode.  It does this by waiting for and then releasing an
+ * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
+ * writes are complete.
+ */
+#define DFUSE_IE_WFLUSH(_ie)                                                                       \
+	do {                                                                                       \
+		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
+		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
+	} while (0)
 
 static inline struct dfuse_inode_entry *
 dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)

@@ -108,6 +108,8 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	DFUSE_TRA_DEBUG(oh, "Closing %d", oh->doh_caching);
 
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+
 	/* If the file was read from then set the data cache time for future use, however if the
 	 * file was written to then evict the metadata cache.
 	 * The problem here is that if the file was written to then the contents will be in the

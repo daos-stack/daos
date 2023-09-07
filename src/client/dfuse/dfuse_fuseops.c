@@ -168,6 +168,8 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		}
 	}
 
+	DFUSE_IE_WFLUSH(inode);
+
 	if (inode->ie_dfs->dfc_attr_timeout &&
 	    (atomic_load_relaxed(&inode->ie_open_write_count) == 0) &&
 	    (atomic_load_relaxed(&inode->ie_il_count) == 0)) {
