@@ -789,7 +789,9 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 
-	/* Lock for writes */
+	/* Lock for writes, shared locks are held during write-back reads, exclusive lock is
+	 * acquired and released to flush outstanding writes for getattr, close and forget.
+	 */
 	pthread_rwlock_t          ie_wlock;
 };
 
@@ -797,11 +799,25 @@ struct dfuse_inode_entry {
  * exclusive lock on the inode.  Writes take a shared lock so this will block until all pending
  * writes are complete.
  */
+
+#if 0
+/* Debug version, log on use.
+#define DFUSE_IE_WFLUSH(_ie)                                                                       \
+	do {                                                                                       \
+		int _lrc = D_RWLOCK_TRYWRLOCK(&(_ie)->ie_wlock);                                   \
+		if (_lrc == -DER_BUSY) {                                                           \
+			DHL_WARN(_ie, _lrc, "Waiting for lock");                                   \
+			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
+		}                                                                                  \
+		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
+	} while (0)
+#else
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
 		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
 		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
 	} while (0)
+#endif
 
 static inline struct dfuse_inode_entry *
 dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)

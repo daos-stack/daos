@@ -218,6 +218,8 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 		}
 	}
 
+	DFUSE_IE_WFLUSH(inode);
+
 	if (inode->ie_dfs->dfs_ops->setattr)
 		inode->ie_dfs->dfs_ops->setattr(req, inode, attr, to_set);
 	else
@@ -609,6 +611,27 @@ err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
 
+static void
+dfuse_cb_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
+
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+	DFUSE_REPLY_ZERO(oh, req);
+}
+
+static void
+dfuse_cb_fdatasync(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
+{
+	struct dfuse_obj_hdl *oh;
+
+	D_ASSERT(fi != NULL);
+	oh = (struct dfuse_obj_hdl *)fi->fh;
+
+	DFUSE_IE_WFLUSH(oh->doh_ie);
+	DFUSE_REPLY_ZERO(oh, req);
+}
+
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
     .lookup      = dfuse_cb_lookup,
@@ -662,6 +685,8 @@ struct fuse_lowlevel_ops dfuse_ops = {
 
     /* Ops that do not need to support per-inode indirection */
     .init         = dfuse_fuse_init,
+    .flush        = dfuse_cb_flush,
+    .fsync        = dfuse_cb_fdatasync,
     .forget       = dfuse_cb_forget,
     .forget_multi = dfuse_cb_forget_multi,
 
