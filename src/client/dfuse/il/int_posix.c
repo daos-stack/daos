@@ -737,6 +737,8 @@ child_hdlr(void)
 {
 	int rc;
 
+	daos_dti_reset();
+
 	ioil_eqh.cookie = 0;
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
