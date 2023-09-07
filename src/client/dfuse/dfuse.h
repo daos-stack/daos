@@ -801,7 +801,7 @@ struct dfuse_inode_entry {
  */
 
 #if 0
-/* Debug version, log on use.
+/* Debug version, log on use. */
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
 		int _lrc = D_RWLOCK_TRYWRLOCK(&(_ie)->ie_wlock);                                   \
