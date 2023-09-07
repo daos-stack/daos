@@ -2518,8 +2518,8 @@ put:
 	return rc;
 }
 
-#define KDS_NUM		96
-#define ITER_BUF_SIZE	2048
+#define KDS_NUM		256
+#define ITER_BUF_SIZE	4096
 
 /**
  * Iterate akeys/dkeys of the object
