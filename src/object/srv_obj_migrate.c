@@ -951,6 +951,7 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 	char		*data;
 	daos_size_t	 size;
 	unsigned int	 p = obj_ec_parity_tgt_nr(&mrone->mo_oca);
+	daos_size_t	stride_nr = obj_ec_stripe_rec_nr(&mrone->mo_oca);
 	unsigned char	*p_bufs[OBJ_EC_MAX_P] = { 0 };
 	struct daos_csummer	*csummer = NULL;
 	unsigned char	*ptr;
@@ -996,7 +997,9 @@ __migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 		for (j = 1; j < iods[i].iod_nr; j++) {
 			daos_recx_t	*recx = &iods[i].iod_recxs[j];
 
-			if (offset + size == recx->rx_idx) {
+			/* Merge the recx if there are in the same stripe */
+			if (offset + size == recx->rx_idx &&
+			    offset / stride_nr == recx->rx_idx / stride_nr) {
 				size += recx->rx_nr;
 				parity_eph = max(ephs[i][j], parity_eph);
 				continue;
