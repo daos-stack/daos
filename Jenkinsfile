@@ -21,57 +21,6 @@
 /* groovylint-disable-next-line CompileStatic */
 job_status_internal = [:]
 
-void job_status_write() {
-    if (!env.DAOS_STACK_JOB_STATUS_DIR) {
-        return
-    }
-    String jobName = env.JOB_NAME.replace('/', '_')
-    jobName += '_' + env.BUILD_NUMBER
-    String dirName = env.DAOS_STACK_JOB_STATUS_DIR + '/' + jobName + '/'
-
-    String job_status_text = writeYaml data: job_status_internal,
-                                       returnText: true
-
-    // Need to use shell script for creating files that are not
-    // in the workspace.
-    sh label: "Write jenkins_job_status ${dirName}jenkins_result",
-       script: """mkdir -p ${dirName}
-                  echo "${job_status_text}" >> ${dirName}jenkins_result"""
-}
-
-// groovylint-disable-next-line MethodParameterTypeRequired
-void job_status_update(String name=env.STAGE_NAME,
-                       // groovylint-disable-next-line NoDef
-                       def value=currentBuild.currentResult) {
-    String key = name.replace(' ', '_')
-    key = key.replaceAll('[ .]', '_')
-    if (job_status_internal.containsKey(key)) {
-        // groovylint-disable-next-line VariableTypeRequired, NoDef
-        def myStage = job_status_internal[key]
-        if (myStage in Map) {
-            if (value in Map) {
-                value.each { resultKey, data -> myStage[resultKey] = data }
-                return
-            }
-            // Update result with single value
-            myStage['result'] = value
-            return
-        }
-    }
-    // pass through value
-    job_status_internal[key] = value
-}
-
-// groovylint-disable-next-line MethodParameterTypeRequired, NoDef
-void job_step_update(def value) {
-    // Wrapper around a pipeline step to obtain a status.
-    if (value == null) {
-        // groovylint-disable-next-line ParameterReassignment
-        value = currentBuild.currentResult
-    }
-    job_status_update(env.STAGE_NAME, value)
-}
-
 Map nlt_test() {
     // groovylint-disable-next-line NoJavaUtilDate
     Date startDate = new Date()
@@ -468,7 +417,7 @@ pipeline {
                     }
                     post {
                         always {
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                             /* when JENKINS-39203 is resolved, can probably use stepResult
                                here and remove the remaining post conditions
                                stepResult name: env.STAGE_NAME,
@@ -511,7 +460,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(pythonBanditCheck())
+                        job_status_internal << jobStatusUpdate(pythonBanditCheck())
                     }
                     post {
                         always {
@@ -519,7 +468,7 @@ pipeline {
                             // find any issues.
                             junit testResults: 'bandit.xml',
                                   allowEmptyResults: true
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Python Bandit check')
@@ -551,7 +500,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(buildRpm())
+                        job_status_internal << jobStatusUpdate(buildRpm())
                     }
                     post {
                         success {
@@ -569,7 +518,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -588,7 +537,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(buildRpm())
+                        job_status_internal << jobStatusUpdate(buildRpm())
                     }
                     post {
                         success {
@@ -606,7 +555,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -625,7 +574,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(buildRpm())
+                        job_status_internal << jobStatusUpdate(buildRpm())
                     }
                     post {
                         success {
@@ -643,7 +592,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -662,7 +611,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(buildRpm())
+                        job_status_internal << jobStatusUpdate(buildRpm())
                     }
                     post {
                         success {
@@ -679,7 +628,7 @@ pipeline {
                         }
                         cleanup {
                             buildRpmPost condition: 'cleanup'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -703,7 +652,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
                                        build_deps: 'no',
@@ -720,7 +669,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -745,7 +694,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             sconsBuild(parallel_build: true,
                                        stash_files: 'ci/test_files_to_stash.txt',
                                        build_deps: 'yes',
@@ -763,7 +712,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -784,7 +733,7 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             sconsBuild(parallel_build: true,
                                        scons_args: sconsFaultsArgs() +
                                                    ' PREFIX=/opt/daos TARGET_TYPE=release',
@@ -799,7 +748,7 @@ pipeline {
                                              allowEmptyArchive: true
                         }
                         cleanup {
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -820,7 +769,7 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: prRepos(),
@@ -829,7 +778,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_logs/']
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -842,7 +791,7 @@ pipeline {
                         label params.CI_UNIT_VM1_NVME_LABEL
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      inst_repos: prRepos(),
@@ -851,7 +800,7 @@ pipeline {
                     post {
                         always {
                             unitTestPost artifacts: ['unit_test_bdev_logs/']
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -864,7 +813,7 @@ pipeline {
                         label params.CI_NLT_1_LABEL
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      inst_repos: prRepos(),
                                      test_script: 'ci/unit/test_nlt.sh',
@@ -891,7 +840,7 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 }
@@ -904,7 +853,7 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      ignore_failure: true,
@@ -919,7 +868,7 @@ pipeline {
                             // added.
                             unitTestPost ignore_failure: true,
                                          artifacts: ['covc_test_logs/', 'covc_vm_test/**']
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Unit test Bullseye on EL 8')
@@ -932,7 +881,7 @@ pipeline {
                         label cachedCommitPragma(pragma: 'VM1-label', def_val: params.CI_UNIT_VM1_LABEL)
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      ignore_failure: true,
@@ -944,7 +893,7 @@ pipeline {
                             unitTestPost artifacts: ['unit_test_memcheck_logs.tar.gz',
                                                      'unit_test_memcheck_logs/**/*.log'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Unit Test with memcheck on EL 8')
@@ -957,7 +906,7 @@ pipeline {
                         label params.CI_UNIT_VM1_NVME_LABEL
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             unitTest(timeout_time: 60,
                                      unstash_opt: true,
                                      ignore_failure: true,
@@ -969,7 +918,7 @@ pipeline {
                             unitTestPost artifacts: ['unit_test_memcheck_bdev_logs.tar.gz',
                                                      'unit_test_memcheck_bdev_logs/**/*.log'],
                                          valgrind_stash: 'el8-gcc-unit-memcheck-bdev'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Unit Test bdev with memcheck on EL 8')
@@ -990,7 +939,7 @@ pipeline {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
@@ -999,7 +948,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Functional on EL 8 with Valgrind')
@@ -1012,7 +961,7 @@ pipeline {
                         label vm9_label('EL8')
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             functionalTest(
                                 inst_repos: daosRepos(),
                                     inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
@@ -1021,7 +970,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Functional on EL 8')
@@ -1034,7 +983,7 @@ pipeline {
                         label vm9_label('EL9')
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             functionalTest(
                                 inst_repos: daosRepos(),
                                     inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
@@ -1043,7 +992,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Functional on EL 9')
@@ -1056,7 +1005,7 @@ pipeline {
                         label vm9_label('Leap15')
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
@@ -1065,7 +1014,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     } // post
                 } // stage('Functional on Leap 15.4')
@@ -1078,7 +1027,7 @@ pipeline {
                         label vm9_label('Ubuntu')
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             functionalTest(
                                 inst_repos: daosRepos(),
                                 inst_rpms: functionalPackages(1, next_version, 'tests-internal'),
@@ -1087,7 +1036,7 @@ pipeline {
                     post {
                         always {
                             functionalTestPostV2()
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     } // post
                 } // stage('Functional on Ubuntu 20.04')
@@ -1107,12 +1056,12 @@ pipeline {
                         }
                     }
                     steps {
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
                         unstash('nltr')
-                        job_step_update(nlt_test())
+                        job_status_internal << jobStatusUpdate(nlt_test())
                         recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
                                        skipPublishingChecks: true,
                                        id: 'fir', name: 'Fault Injection Report')
@@ -1140,7 +1089,7 @@ pipeline {
                                   includes: '*.memcheck.xml',
                                   allowEmpty: true
                             archiveArtifacts artifacts: 'nlt_logs/el8.fault-injection/'
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Fault inection testing')
@@ -1155,14 +1104,14 @@ pipeline {
                 label params.CI_STORAGE_PREP_LABEL
             }
             steps {
-                job_step_update(
+                job_status_internal << jobStatusUpdate(
                     storagePrepTest(
                         inst_repos: daosRepos(),
                         inst_rpms: functionalPackages(1, next_version, 'tests-internal')))
             }
             post {
                 cleanup {
-                    job_status_update()
+                    job_status_internal << jobStatusUpdate()
                 }
             }
         } // stage('Test Storage Prep')
@@ -1244,7 +1193,7 @@ pipeline {
                     steps {
                         // The coverage_healthy is primarily set here
                         // while the code coverage feature is being implemented.
-                        job_step_update(
+                        job_status_internal << jobStatusUpdate(
                             cloverReportPublish(
                                 coverage_stashes: ['el8-covc-unit-cov',
                                                    'func-vm-cov',
@@ -1257,7 +1206,7 @@ pipeline {
                     }
                     post {
                         cleanup {
-                            job_status_update()
+                            job_status_internal << jobStatusUpdate()
                         }
                     }
                 } // stage('Bullseye Report on EL 8')
@@ -1269,8 +1218,8 @@ pipeline {
             valgrindReportPublish valgrind_stashes: ['el8-gcc-nlt-memcheck',
                                                      'el8-gcc-unit-memcheck',
                                                      'fault-inject-valgrind']
-            job_status_update('final_status')
-            job_status_write()
+            job_status_internal << jobStatusUpdate('final_status')
+            jobStatusWrite(job_status_internal)
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
