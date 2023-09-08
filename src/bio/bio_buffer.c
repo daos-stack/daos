@@ -551,7 +551,18 @@ iterate_biov(struct bio_desc *biod,
 				struct bio_copy_args *arg = data;
 
 				D_ASSERT(i < arg->ca_sgl_cnt);
-				/* Test for compiler warning */
+				/* re-check to avoid compiler warning
+				 * This function is weird in that it takes a callback and a void *
+				 * but then modifies the void * based on which callback is provided,
+				 * the compiler knows about what is behind the pointer in
+				 * different cases and the writes here would be a buffer overflow
+				 * for different cb functions.  The compiler does not like this and
+				 * only allows the code to compile based on the presence of the
+				 * assert() - and D_ASSERT() may be disabled so add an additional
+				 * call to assert() itself.  Overall the logic of modifying data
+				 * should be in the cb itself as it's not really a void * depsite
+				 * what it's declared as.
+				 */
 				assert(i < arg->ca_sgl_cnt);
 				arg->ca_sgl_idx = i;
 				arg->ca_iov_idx = 0;

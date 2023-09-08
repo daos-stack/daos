@@ -459,7 +459,7 @@ class PreReqComponent():
                               ['gcc', 'covc', 'clang', 'icc'], ignorecase=2))
         opts.Add(EnumVariable('WARNING_LEVEL', "Set default warning level", 'error',
                               ['warning', 'warn', 'error'], ignorecase=2))
-        opts.Add(BoolVariable('ASSERT_ENABLED', 'D_ASSERT macro enabled', False))
+        opts.Add(BoolVariable('ASSERT_ENABLED', 'D_ASSERT macro enabled', True))
         opts.Update(self.__env)
 
         self._setup_compiler()
