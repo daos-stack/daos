@@ -457,31 +457,29 @@ def launch_extend(self, pool, name, results, args):
     status = False
     params = {}
     ranks = None
-    selected_host = None
 
-    # pool was created with self.hostlist_servers[:-1]
-    selected_host = self.hostlist_servers[-1]
-    ranklist = self.server_managers[0].get_host_ranks(selected_host)
+    if self.selected_host:
+        ranklist = self.server_managers[0].get_host_ranks(self.selected_host)
 
-    # init the status dictionary
-    params = {"name": name,
-              "status": status,
-              "vars": {"host": selected_host, "ranks": ranks}}
-    self.log.info(
-        "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
-    ranks = ",".join(str(rank) for rank in ranklist)
-    try:
-        pool.extend(ranks)
-        status = True
-    except TestFail as error:
-        self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
-        status = False
-    if status:
-        status = wait_for_pool_rebuild(self, pool, name)
+        # init the status dictionary
+        params = {"name": name,
+                  "status": status,
+                  "vars": {"host": self.selected_host, "ranks": ranks}}
+        self.log.info(
+            "<<<PASS %s: %s started on ranks %s at %s >>>\n", self.loop, name, ranks, time.ctime())
+        ranks = ",".join(str(rank) for rank in ranklist)
+        try:
+            pool.extend(ranks)
+            status = True
+        except TestFail as error:
+            self.log.error("<<<FAILED:dmg pool extend failed", exc_info=error)
+            status = False
+        if status:
+            status = wait_for_pool_rebuild(self, pool, name)
 
     params = {"name": name,
               "status": status,
-              "vars": {"host": selected_host, "ranks": ranks}}
+              "vars": {"host": self.selected_host, "ranks": ranks}}
     if not status:
         self.log.error("<<< %s failed - check logs for failure data>>>", name)
     self.harasser_job_done(params)
@@ -702,7 +700,9 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
-    mount_dir = dfuse.mount_dir.value
+    unique = get_random_string(5, self.used)
+    self.used.append(unique)
+    mount_dir = dfuse.mount_dir.value + unique
     dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
     dfuselog = os.path.join(
         self.soak_log_dir,

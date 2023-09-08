@@ -388,6 +388,10 @@ So `dmg pool upgrade` will return within seconds, but it might take hours to see
 change from 'in progress' to 'completed'. The pool will stay offline and deny any pool connection until
 pool upgrade status becomes 'completed'.
 
+NB: once upgrade status is "completed", then the container/pool can do normal I/O,
+but rebuild status might not finish due to reclaim. pool reintegrate/drain/extend can
+only proceed once rebuild status is "done".
+
 !!! warning
     Once upgrade was done, upgraded pools will become unavailable if downgrading software.
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -404,6 +404,13 @@ tse_task_depend_list(tse_task_t *task, d_list_t *head);
  */
 int
 tse_task_list_traverse(d_list_t *head, tse_task_cb_t cb, void *arg);
+
+/**
+ * Advanced tse_task_list_traverse, the task's dtp_task_list or head list possibly
+ * be changed/zeroed after \a cb executed.
+ */
+int
+tse_task_list_traverse_adv(d_list_t *head, tse_task_cb_t cb, void *arg);
 
 /**
  * Set the task don't propagate err-code from dependent tasks.
