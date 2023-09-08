@@ -3,26 +3,26 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import re
+from collections import defaultdict
 import argparse
 import time
 import subprocess
 import yaml
-import re
-from collections import defaultdict
 from ClusterShell.NodeSet import NodeSet
-from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable,\
-    check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum,\
-    pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos,\
-    system_stop, system_query, storage_query_usage, cont_get_prop, system_start,\
+from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable, \
+    check_start, check_disable, repeat_check_query, check_repair, create_uuid_to_seqnum, \
+    pool_get_prop, create_pool, inject_fault_pool, create_container, inject_fault_daos, \
+    system_stop, system_query, storage_query_usage, cont_get_prop, system_start, \
     check_set_policy, convert_list_to_str
 
 
 # Run this script on Aurora node as user. e.g.,
 # python3 run_demo_aurora.py -l aurora-daos-[0001-0100]
 
-test_cmd = "sudo date"
-test_cmd_list = test_cmd.split(" ")
-print(f"Check sudo works by calling: {test_cmd}")
+TEST_CMD = "sudo date"
+test_cmd_list = TEST_CMD.split(" ")
+print(f"Check sudo works by calling: {TEST_CMD}")
 subprocess.run(test_cmd_list, check=False)
 
 POOL_SIZE = "5T"
@@ -91,7 +91,7 @@ SEARCH_STR = r"DAOS I/O Engine.*process (\d+) started on rank (\d+)"
 for i in range(NODE_COUNT):
     with open(
         f"/var/tmp/daos_testing/daos_control_{hostlist[i]}.log", "r",
-        encoding="utf-8") as file:
+            encoding="utf-8") as file:
         for line in file:
             match = re.findall(SEARCH_STR, line)
             if match:
@@ -252,8 +252,8 @@ print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 
 print("(F5: Update mode of the destination mount point.)")
-chmod_cmd = "sudo chmod 777 /mnt/daos0"
-clush_chmod_cmd = ["clush", "-w", hostlist[1], chmod_cmd]
+CHMOD_CMD = "sudo chmod 777 /mnt/daos0"
+clush_chmod_cmd = ["clush", "-w", hostlist[1], CHMOD_CMD]
 print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 

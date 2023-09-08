@@ -4,17 +4,17 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import subprocess
-import yaml
 import argparse
+import yaml
 from ClusterShell.NodeSet import NodeSet
-from demo_utils import list_pool, pool_get_prop, create_container, system_stop,\
-      system_query, storage_query_usage, cont_get_prop, pool_query
+from demo_utils import list_pool, pool_get_prop, create_container, system_stop, \
+    system_query, storage_query_usage, cont_get_prop, pool_query
 
 
 # Run this script on Aurora node as user after running run_demo_aurora.py. e.g.,
 # python3 show_fixed_aurora.py -l aurora-daos-[0001-0100]
 
-test_cmd = f"sudo date"
+test_cmd = "sudo date"
 test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
@@ -25,7 +25,7 @@ TARGET_PER_RANK = 16
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument(
-      "-l", "--hostlist", required=True, help="List of hosts used for run_demo.py")
+    "-l", "--hostlist", required=True, help="List of hosts used for run_demo.py")
 ARGS = vars(PARSER.parse_args())
 HOSTLIST = ARGS["hostlist"]
 node_set = NodeSet(HOSTLIST)
@@ -37,16 +37,16 @@ stdout = system_query(json=True)
 # Printing system query output helps, but the output will be long if there are many ranks.
 # print(f"dmg system query stdout = {stdout}")
 generated_yaml = yaml.safe_load(stdout)
-rank_count = 0
-joined_count = 0
+RANK_COUNT = 0
+JOINED_COUNT = 0
 for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
-    rank_count += 1
+    RANK_COUNT += 1
     if member["state"] == "joined":
-        joined_count += 1
+        JOINED_COUNT += 1
 # Print the number of ranks and joined ranks as a reference.
-print(f"\n{rank_count} ranks; {joined_count} joined")
-total_target = rank_count * TARGET_PER_RANK
+print(f"\n{RANK_COUNT} ranks; {JOINED_COUNT} joined")
+TOTAL_TARGET = RANK_COUNT * TARGET_PER_RANK
 
 POOL_LABEL_1 = POOL_LABEL + "_F1"
 POOL_LABEL_2 = POOL_LABEL + "_F2"
@@ -94,9 +94,9 @@ clush_ls_cmd = ["clush", "-w", hostlist[1], LS_CMD]
 print(f"Command: {clush_ls_cmd}\n")
 subprocess.run(clush_ls_cmd, check=False)
 
-expected_target = total_target - 1
+EXPECTED_TARGET = TOTAL_TARGET - 1
 print(
-    f"\n10-F6. {POOL_LABEL_6} has one less target ({total_target} -> {expected_target}).")
+    f"\n10-F6. {POOL_LABEL_6} has one less target ({TOTAL_TARGET} -> {EXPECTED_TARGET}).")
 pool_query(pool_label=POOL_LABEL_6)
 # (optional) Reintegrate rank 1 on pool 6. Wait for rebuild to finish. Then verify the
 # target count.
