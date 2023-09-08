@@ -14,9 +14,9 @@ from demo_utils import list_pool, pool_get_prop, create_container, system_stop, 
 # Run this script on Aurora node as user after running run_demo_aurora.py. e.g.,
 # python3 show_fixed_aurora.py -l aurora-daos-[0001-0100]
 
-test_cmd = "sudo date"
-test_cmd_list = test_cmd.split(" ")
-print(f"Check sudo works by calling: {test_cmd}")
+TEST_CMD = "sudo date"
+test_cmd_list = TEST_CMD.split(" ")
+print(f"Check sudo works by calling: {TEST_CMD}")
 subprocess.run(test_cmd_list, check=False)
 
 POOL_LABEL = "tank"
