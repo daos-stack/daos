@@ -780,15 +780,8 @@ out:
 static void
 child_hdlr(void)
 {
-	int rc;
-
 	daos_dti_reset();
 	ioil_eqh = DAOS_HDL_INVAL;
-	rc = daos_eq_create(&ioil_eqh);
-	if (rc)
-		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
-	else
-		ioil_iog.iog_main_eqh = ioil_eqh;
 }
 
 /* Returns true on success */
@@ -837,7 +830,6 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 		}
 		ioil_iog.iog_main_eqh = ioil_eqh;
 
-		/** register a child fork handler to create a new EQ */
 		rc = pthread_atfork(NULL, NULL, &child_hdlr);
 		D_ASSERT(rc == 0);
 	}
