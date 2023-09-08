@@ -119,6 +119,7 @@ enum ddb_cmd {
 /* option and argument structures for commands that need them */
 struct ls_options {
 	bool recursive;
+	bool details;
 	char *path;
 };
 

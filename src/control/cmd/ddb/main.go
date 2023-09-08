@@ -122,7 +122,33 @@ a file in the VOS format. It offers both a command line and interactive
 shell mode. If neither a single command or '-f' option is provided, then
 the tool will run in interactive mode. In order to modify the VOS file,
 the '-w' option must be included. If supplied, the VOS file supplied in
-the first positional parameter will be opened before commands are executed.`
+the first positional parameter will be opened before commands are executed.
+
+Many of the commands take a vos tree path. The format for this path
+is [cont]/[obj]/[dkey]/[akey]/[extent].
+- cont - the full container uuid.
+- obj - the object id.
+- keys (akey, dkey) - there are multiple types of keys
+   -- string keys are simply the string value. If the size of the
+      key is greater than strlen(key), then the size is included at
+      the end of the string value. Example: 'akey{5}' is the key: akey
+      with a null terminator at the end.
+   -- number keys are formatted as '{[type]: NNN}' where type is
+      'uint8, uint16, uint32, or uint64'. NNN can be a decimal or
+      hex number. Example: '{uint32: 123456}'
+   -- binary keys are formatted as '{bin: 0xHHH}' where HHH is the hex
+      representation of the binary key. Example: '{bin: 0x1a2b}'
+- extent for array values - in the format {lo-hi}.
+
+To make it easier to navigate the tree, indexes can be
+used instead of the path part. The index is in the format [i]. Indexes
+and actual path values can be used together
+
+Example Paths:
+/3550f5df-e6b1-4415-947e-82e15cf769af/939000573846355970.0.13.1/dkey/akey/[0-1023]
+[0]/[1]/[2]/[1]/[9]
+/[0]/939000573846355970.0.13.1/[2]/akey{5}/[0-1023]
+`
 
 	// Set the traceback level such that a crash results in
 	// a coredump (when ulimit -c is set appropriately).
