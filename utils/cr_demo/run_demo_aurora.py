@@ -20,7 +20,7 @@ from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enabl
 # Run this script on Aurora node as user. e.g.,
 # python3 run_demo_aurora.py -l aurora-daos-[0001-0100]
 
-test_cmd = f"sudo date"
+test_cmd = "sudo date"
 test_cmd_list = test_cmd.split(" ")
 print(f"Check sudo works by calling: {test_cmd}")
 subprocess.run(test_cmd_list, check=False)
@@ -60,24 +60,24 @@ stdout = system_query(json=True)
 # Printing system query output helps, but the output will be long if there are many ranks.
 # print(f"dmg system query stdout = {stdout}")
 generated_yaml = yaml.safe_load(stdout)
-rank_count = 0
-joined_count = 0
+RANK_COUNT = 0
+JOINED_COUNT = 0
 for member in generated_yaml["response"]["members"]:
     rank_to_ip[member["rank"]] = member["addr"].split(":")[0]
-    rank_count += 1
+    RANK_COUNT += 1
     if member["state"] == "joined":
-        joined_count += 1
+        JOINED_COUNT += 1
 # Print the number of ranks and joined ranks as a reference.
 node_set = NodeSet(HOSTLIST)
 hostlist = list(node_set)
-print(f"\n{len(hostlist)} nodes; {rank_count} ranks; {joined_count} joined")
+print(f"\n{len(hostlist)} nodes; {RANK_COUNT} ranks; {JOINED_COUNT} joined")
 
 # Create rank to mount point map and host to ranks map for F2 and F5.
 # 1. scp daos_control.log from all nodes to here, where this script runs. scp the local
 # file as well. Add hostname to the end of the file name. The log contains rank and PID.
 # Number of nodes used for F2.
-node_count = 2
-for i in range(node_count):
+NODE_COUNT = 2
+for i in range(NODE_COUNT):
     scp_cmd_list = ["scp", f"{hostlist[i]}:/var/tmp/daos_testing/daos_control.log",
                     f"/var/tmp/daos_testing/daos_control_{hostlist[i]}.log"]
     subprocess.run(scp_cmd_list, check=False)
@@ -88,7 +88,7 @@ for i in range(node_count):
 rank_to_pid = {}
 host_to_ranks = defaultdict(list)
 SEARCH_STR = r"DAOS I/O Engine.*process (\d+) started on rank (\d+)"
-for i in range(node_count):
+for i in range(NODE_COUNT):
     with open(
         f"/var/tmp/daos_testing/daos_control_{hostlist[i]}.log", "r",
         encoding="utf-8") as file:
@@ -107,36 +107,36 @@ for i in range(node_count):
 # /var/run/daos_server -T 2 -n /mnt/daos1/daos_nvme.conf -p 1 -I 1 -r 8192 -H 2 -s
 # /mnt/daos1
 pid_to_mount = {}
-mount_0 = "/mnt/daos0"
-mount_1 = "/mnt/daos1"
-for i in range(node_count):
+MOUNT_0 = "/mnt/daos0"
+MOUNT_1 = "/mnt/daos1"
+for i in range(NODE_COUNT):
     clush_ps_ax = ["clush", "-w", hostlist[i], "ps ax"]
     result = subprocess.check_output(clush_ps_ax)
     result_list = result.decode("utf-8").split("\n")
     for result in result_list:
         if "daos_engine" in result:
             print(result)
-            if mount_0 in result:
+            if MOUNT_0 in result:
                 pid = re.split(r"\s+", result)[1]
                 pid = int(pid)
-                pid_to_mount[pid] = mount_0
-            elif mount_1 in result:
+                pid_to_mount[pid] = MOUNT_0
+            elif MOUNT_1 in result:
                 pid = re.split(r"\s+", result)[1]
                 pid = int(pid)
-                pid_to_mount[pid] = mount_1
+                pid_to_mount[pid] = MOUNT_1
 
 # 4. Determine the four ranks in hostlist[0] and hostlist[1] to create F2 pool.
 f2_ranks = []
 f2_ranks.extend(host_to_ranks[hostlist[0]])
 f2_ranks.extend(host_to_ranks[hostlist[1]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
-f2_ranks_str = convert_list_to_str(original_list=f2_ranks, separator=",")
+F2_RANKS_STR = convert_list_to_str(original_list=f2_ranks, separator=",")
 
 # 5. Determine the two ranks in hostlist[0] to create F5 pool.
 f5_ranks = []
 f5_ranks.extend(host_to_ranks[hostlist[0]])
 # Ranks in the map are int, so convert them to string and separate them with comma.
-f5_ranks_str = convert_list_to_str(original_list=f5_ranks, separator=",")
+F5_RANKS_STR = convert_list_to_str(original_list=f5_ranks, separator=",")
 
 # Add input here to make sure all ranks are joined before starting the script.
 input("\n2. Create 8 pools and containers. Hit enter...")
@@ -154,13 +154,13 @@ CONT_LABEL_8 = CONT_LABEL + "_F8"
 # F1. CIC_POOL_NONEXIST_ON_ENGINE - dangling pool
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_1)
 # F2. CIC_POOL_LESS_SVC_WITHOUT_QUORUM
-create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2, ranks=f2_ranks_str, nsvc="3")
+create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_2, ranks=F2_RANKS_STR, nsvc="3")
 # F3. CIC_POOL_NONEXIST_ON_MS - orphan pool
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_3)
 # F4. CIC_POOL_BAD_LABEL - inconsistent pool label between MS and PS
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_4)
 # F5. CIC_ENGINE_NONEXIST_IN_MAP - orphan pool shard
-create_pool(pool_size=POOL_SIZE_F5, pool_label=POOL_LABEL_5, ranks=f5_ranks_str)
+create_pool(pool_size=POOL_SIZE_F5, pool_label=POOL_LABEL_5, ranks=F5_RANKS_STR)
 # F6. CIC_ENGINE_HAS_NO_STORAGE - dangling pool map
 create_pool(pool_size=POOL_SIZE, pool_label=POOL_LABEL_6)
 # F7. CIC_CONT_NONEXIST_ON_PS - orphan container
@@ -252,12 +252,12 @@ print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 
 print("(F5: Update mode of the destination mount point.)")
-chmod_cmd = f"sudo chmod 777 /mnt/daos0"
+chmod_cmd = "sudo chmod 777 /mnt/daos0"
 clush_chmod_cmd = ["clush", "-w", hostlist[1], chmod_cmd]
 print(f"Command: {clush_chmod_cmd}\n")
 subprocess.run(clush_chmod_cmd, check=False)
 
-# Since we're seding each file (vos-0 to 15 + rdb-pool) one at a time rather than the
+# Since we're sending each file (vos-0 to 15 + rdb-pool) one at a time rather than the
 # whole pool directory, we need to create the destination fake pool directory first.
 print("(F5: Create a fake pool directory at the destination mount point.)")
 mkdir_cmd = f"sudo mkdir /mnt/daos0/{pool_uuid_5}"

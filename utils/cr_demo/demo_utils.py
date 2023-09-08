@@ -17,6 +17,7 @@ def format_storage(host_list):
     format_cmd = ["dmg", "storage", "format", "--host-list=" + host_list]
     run_command(command=format_cmd)
 
+
 def storage_query_usage(host_list):
     """Call dmg storage query usage.
 
@@ -25,6 +26,7 @@ def storage_query_usage(host_list):
     """
     storage_query_cmd = ["dmg", "storage", "query", "usage", "--host-list=" + host_list]
     run_command(command=storage_query_cmd)
+
 
 # Pool-related methods
 def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
@@ -42,6 +44,7 @@ def create_pool(pool_size, pool_label, ranks=None, nsvc=None):
     if nsvc:
         create_pool_cmd.append("--nsvc=" + nsvc)
     run_command(command=create_pool_cmd)
+
 
 def list_pool(verbose=False, json=False, no_query=False):
     """Call dmg pool list.
@@ -75,6 +78,7 @@ def list_pool(verbose=False, json=False, no_query=False):
     subprocess.run(list_pool_cmd, check=False)
     return None
 
+
 def pool_get_prop(pool_label, properties):
     """Call dmg pool get-prop <pool_label> <properties>
 
@@ -86,6 +90,7 @@ def pool_get_prop(pool_label, properties):
     get_prop_cmd = ["dmg", "pool", "get-prop", pool_label, properties]
     run_command(command=get_prop_cmd)
 
+
 def pool_query(pool_label):
     """Call dmg pool query
 
@@ -95,6 +100,7 @@ def pool_query(pool_label):
     pool_query_cmd = ["dmg", "pool", "query", pool_label]
     run_command(command=pool_query_cmd)
 
+
 def list_containers(pool_label):
     """Call daos pool list-containers <pool_label>
 
@@ -103,6 +109,7 @@ def list_containers(pool_label):
     """
     list_containers_cmd = ["daos", "pool", "label", pool_label]
     run_command(command=list_containers_cmd)
+
 
 # Container-related methods
 def create_container(pool_label, cont_label):
@@ -114,6 +121,7 @@ def create_container(pool_label, cont_label):
     """
     cont_create_cmd = ["daos", "container", "create", pool_label, cont_label]
     run_command(command=cont_create_cmd)
+
 
 def cont_get_prop(pool_label, cont_label, properties=None):
     """Call daos container get-prop <pool_label> <cont_label> <properties>
@@ -129,6 +137,7 @@ def cont_get_prop(pool_label, cont_label, properties=None):
         get_prop_cmd.append("--properties=" + properties)
     run_command(command=get_prop_cmd)
 
+
 # Fault-related methods
 def inject_fault_mgmt(pool_label, fault_type):
     """Call dmg faults mgmt-svc to inject fault.
@@ -140,6 +149,7 @@ def inject_fault_mgmt(pool_label, fault_type):
     inject_fault_cmd = ["dmg", "faults", "mgmt-svc", "pool", pool_label, fault_type]
     run_command(command=inject_fault_cmd)
 
+
 def inject_fault_pool(pool_label, fault_type):
     """Call dmg faults pool-svc to inject fault.
 
@@ -149,6 +159,7 @@ def inject_fault_pool(pool_label, fault_type):
     """
     inject_fault_cmd = ["dmg", "faults", "pool-svc", pool_label, fault_type]
     run_command(command=inject_fault_cmd)
+
 
 def inject_fault_daos(pool_label, cont_label, fault_type):
     """Call daos faults to inject fault.
@@ -162,11 +173,13 @@ def inject_fault_daos(pool_label, cont_label, fault_type):
     inject_fault_cmd = ["daos", "faults", "container", pool_label, cont_label, location]
     run_command(command=inject_fault_cmd)
 
+
 # Check-related methods
 def check_enable():
     """Call dmg check enable"""
     check_enable_cmd = ["dmg", "check", "enable"]
     run_command(command=check_enable_cmd)
+
 
 def check_set_policy(reset_defaults=False, all_interactive=False):
     """Call dmg check set-policy with --reset-defaults or --all-interactive.
@@ -184,6 +197,7 @@ def check_set_policy(reset_defaults=False, all_interactive=False):
             check_set_policy_cmd.append("--all-interactive")
         run_command(command=check_set_policy_cmd)
 
+
 def check_start(policies=None):
     """Call dmg check start
 
@@ -194,6 +208,7 @@ def check_start(policies=None):
     if policies:
         check_start_cmd.extend(["-p", policies])
     run_command(command=check_start_cmd)
+
 
 def check_query(json=False):
     """Call dmg check query
@@ -220,10 +235,12 @@ def check_query(json=False):
     subprocess.run(check_query_cmd, check=False)
     return None
 
+
 def check_disable():
     """Call dmg check disable"""
     check_disable_cmd = ["dmg", "check", "disable"]
     run_command(command=check_disable_cmd)
+
 
 def repeat_check_query():
     """Allow user to repeatedly call dmg check query."""
@@ -236,6 +253,7 @@ def repeat_check_query():
         else:
             print("Please enter y or n.")
 
+
 def check_repair(sequence_num, action):
     """Call dmg check repair
 
@@ -246,10 +264,11 @@ def check_repair(sequence_num, action):
     check_repair_cmd = ["dmg", "check", "repair", sequence_num, action]
     run_command(command=check_repair_cmd)
 
+
 # System-related methods
 def system_stop(force=False):
     """Stop servers.
-    
+
     Args:
         force (bool): Whether to use --force. Defaults to None.
     """
@@ -258,10 +277,12 @@ def system_stop(force=False):
         system_stop_cmd.append("--force")
     run_command(command=system_stop_cmd)
 
+
 def system_start():
     """Start servers."""
     system_start_cmd = ["dmg", "system", "start"]
     run_command(command=system_start_cmd)
+
 
 def system_query(json=False, verbose=False):
     """Call dmg system query
@@ -292,6 +313,7 @@ def system_query(json=False, verbose=False):
     subprocess.run(system_query_cmd, check=False)
     return None
 
+
 # Utility methods
 def create_uuid_to_seqnum():
     """Create pool UUID to sequence number mapping.
@@ -309,6 +331,7 @@ def create_uuid_to_seqnum():
 
     return uuid_to_seqnum
 
+
 def create_label_to_uuid():
     """Create label to UUID mapping.
 
@@ -324,6 +347,7 @@ def create_label_to_uuid():
 
     return label_to_uuid
 
+
 def get_current_labels():
     """Get current pool labels from MS.
 
@@ -338,6 +362,7 @@ def get_current_labels():
         pool_labels.append(pool["label"])
 
     return pool_labels
+
 
 def convert_list_to_str(original_list, separator):
     """Convert given list to a string with each item separated by separator.
@@ -358,6 +383,7 @@ def convert_list_to_str(original_list, separator):
             str_list += separator + str(item)
 
     return str_list
+
 
 def run_command(command):
     """Print given command and run.
