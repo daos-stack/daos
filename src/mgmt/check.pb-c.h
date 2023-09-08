@@ -462,10 +462,11 @@ struct  _Mgmt__CheckGetPolicyReq
   char *sys;
   size_t n_classes;
   Chk__CheckInconsistClass *classes;
+  protobuf_c_boolean last_used;
 };
 #define MGMT__CHECK_GET_POLICY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_get_policy_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0 }
 
 
 /*

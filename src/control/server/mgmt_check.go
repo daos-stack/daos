@@ -9,6 +9,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -25,9 +26,12 @@ import (
 )
 
 const (
-	checkerEnabledKey  = "checker_enabled"
-	checkerPoliciesKey = "checker_policies"
+	checkerEnabledKey      = "checker_enabled"
+	checkerPoliciesKey     = "checker_policies"
+	checkerLatestPolicyKey = "checker_latest_policy"
 )
+
+var errNoSavedPolicies = errors.New("no previous policies have been saved")
 
 func (svc *mgmtSvc) enableChecker() error {
 	if err := system.SetMgmtProperty(svc.sysdb, checkerEnabledKey, "true"); err != nil {
@@ -84,18 +88,27 @@ func (svc *mgmtSvc) makeCheckerCall(ctx context.Context, method drpc.Method, req
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
+
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	return svc.harness.CallDrpc(ctx, method, req)
+}
+
+func (svc *mgmtSvc) verifyCheckerReady() error {
 	if !svc.checkerIsEnabled() {
-		return nil, checker.FaultCheckerNotEnabled
+		return checker.FaultCheckerNotEnabled
 	}
 
 	if err := svc.checkMemberStates(
 		system.MemberStateAdminExcluded,
 		system.MemberStateCheckerStarted,
 	); err != nil {
-		return nil, err
+		return err
 	}
 
-	return svc.harness.CallDrpc(ctx, method, req)
+	return nil
 }
 
 type poolCheckerReq interface {
@@ -159,6 +172,7 @@ func (svc *mgmtSvc) startSystemRanks(ctx context.Context, sys string) error {
 	return nil
 }
 
+// SystemCheckEnable puts the system in checker mode.
 func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnableReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -186,6 +200,7 @@ func (svc *mgmtSvc) SystemCheckEnable(ctx context.Context, req *mgmtpb.CheckEnab
 	return &mgmtpb.DaosResp{}, nil
 }
 
+// SystemCheckDisable turns off checker mode for the system.
 func (svc *mgmtSvc) SystemCheckDisable(ctx context.Context, req *mgmtpb.CheckDisableReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -223,18 +238,14 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 		return nil, err
 	}
 
-	pm, err := svc.getCheckerPolicyMap()
+	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
 	if err != nil {
 		return nil, err
 	}
+	req.Policies = policies
 
-	// Allow the request to override any policies stored in the policy map.
-	for _, pol := range req.Policies {
-		pm[pol.InconsistCas] = pol
-	}
-	req.Policies = make([]*mgmtpb.CheckInconsistPolicy, 0, len(pm))
-	for _, pol := range pm {
-		req.Policies = append(req.Policies, pol)
+	if err := svc.setLastPoliciesUsed(req.Policies); err != nil {
+		svc.log.Errorf("failed to save the policies used: %s", err.Error())
 	}
 
 	dResp, err := svc.makePoolCheckerCall(ctx, drpc.MethodCheckerStart, req)
@@ -266,6 +277,29 @@ func (svc *mgmtSvc) SystemCheckStart(ctx context.Context, req *mgmtpb.CheckStart
 	return resp, nil
 }
 
+func (svc *mgmtSvc) mergePoliciesWithCurrent(policies []*mgmtpb.CheckInconsistPolicy) ([]*mgmtpb.CheckInconsistPolicy, error) {
+	pm, err := svc.getCheckerPolicyMap()
+	if err != nil {
+		return nil, err
+	}
+
+	// Allow the requested policies to override any policies stored in the policy map.
+	for _, pol := range policies {
+		pm[pol.InconsistCas] = pol
+	}
+	return pm.ToSlice(), nil
+}
+
+func (svc *mgmtSvc) setLastPoliciesUsed(polList []*mgmtpb.CheckInconsistPolicy) error {
+	polStr, err := json.Marshal(polList)
+	if err != nil {
+		return errors.Wrap(err, "failed to marshal latest checker policies")
+	}
+
+	return system.SetMgmtProperty(svc.sysdb, checkerLatestPolicyKey, string(polStr))
+}
+
+// SystemCheckStop stops a running system check.
 func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopReq) (*mgmtpb.CheckStopResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -284,6 +318,8 @@ func (svc *mgmtSvc) SystemCheckStop(ctx context.Context, req *mgmtpb.CheckStopRe
 	return resp, nil
 }
 
+// SystemCheckQuery queries the state of the checker. This will indicate all known findings, as
+// well as the running state.
 func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQueryReq) (*mgmtpb.CheckQueryResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
@@ -319,20 +355,57 @@ func (svc *mgmtSvc) SystemCheckQuery(ctx context.Context, req *mgmtpb.CheckQuery
 
 type policyMap map[chkpb.CheckInconsistClass]*mgmtpb.CheckInconsistPolicy
 
-func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
-	pm := make(policyMap)
-	polStr, err := system.GetMgmtProperty(svc.sysdb, checkerPoliciesKey)
-	if err != nil {
-		if !system.IsErrSystemAttrNotFound(err) {
-			return nil, errors.Wrap(err, "failed to get checker policies map")
+// ToSlice returns a sorted slice of policies from the map.
+func (pm policyMap) ToSlice(classes ...chkpb.CheckInconsistClass) []*mgmtpb.CheckInconsistPolicy {
+	policies := []*mgmtpb.CheckInconsistPolicy{}
+
+	if len(classes) > 0 {
+		for _, cls := range classes {
+			if pol, found := pm[cls]; found {
+				policies = append(policies, pol)
+			}
 		}
-		return pm, nil
+	} else {
+		for _, pol := range pm {
+			policies = append(policies, pol)
+		}
 	}
 
+	sort.Slice(policies, func(i, j int) bool {
+		return policies[i].InconsistCas < policies[j].InconsistCas
+	})
+
+	return policies
+}
+
+func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
+	if pm, err := svc.getCheckerPolicyMapWithKey(checkerPoliciesKey); err == nil {
+		return pm, nil
+	} else if !system.IsErrSystemAttrNotFound(err) {
+		return nil, errors.Wrap(err, "failed to get checker policies map")
+	}
+
+	// No policies have been set
+	pm := svc.defaultPolicyMap()
+
+	if err := svc.setCheckerPolicyMap(pm.ToSlice()); err != nil {
+		svc.log.Errorf("failed to set default policies: %s", err.Error())
+	}
+	return pm, nil
+}
+
+func (svc *mgmtSvc) getCheckerPolicyMapWithKey(key string) (policyMap, error) {
 	var polList []*mgmtpb.CheckInconsistPolicy
+	polStr, err := system.GetMgmtProperty(svc.sysdb, key)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := json.Unmarshal([]byte(polStr), &polList); err != nil {
 		return nil, errors.Wrap(err, "failed to unmarshal checker policies map")
 	}
+
+	pm := make(policyMap)
 
 	for _, pol := range polList {
 		pm[pol.InconsistCas] = pol
@@ -341,62 +414,56 @@ func (svc *mgmtSvc) getCheckerPolicyMap() (policyMap, error) {
 	return pm, nil
 }
 
+func (svc *mgmtSvc) defaultPolicyMap() policyMap {
+	pm := make(policyMap)
+	for cicEnum := range chkpb.CheckInconsistClass_name {
+		cic := chkpb.CheckInconsistClass(cicEnum)
+		if cic == chkpb.CheckInconsistClass_CIC_NONE || cic == chkpb.CheckInconsistClass_CIC_UNKNOWN {
+			continue
+		}
+		pm[cic] = &mgmtpb.CheckInconsistPolicy{
+			InconsistCas: cic,
+			InconsistAct: chkpb.CheckInconsistAction_CIA_DEFAULT,
+		}
+	}
+	return pm
+}
+
+func (svc *mgmtSvc) getLastPoliciesUsed() (policyMap, error) {
+	pm, err := svc.getCheckerPolicyMapWithKey(checkerLatestPolicyKey)
+	if system.IsErrSystemAttrNotFound(err) {
+		return nil, errNoSavedPolicies
+	}
+	return pm, nil
+}
+
+// SystemCheckGetPolicy fetches the policies for the system checker.
 func (svc *mgmtSvc) SystemCheckGetPolicy(ctx context.Context, req *mgmtpb.CheckGetPolicyReq) (*mgmtpb.CheckGetPolicyResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
-	dReq := &mgmtpb.CheckPropReq{Sys: req.Sys}
-	dResp, err := svc.makeCheckerCall(ctx, drpc.MethodCheckerProp, dReq)
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	resp := new(mgmtpb.CheckGetPolicyResp)
+
+	var pm policyMap
+	var err error
+	if req.LastUsed {
+		pm, err = svc.getLastPoliciesUsed()
+		if errors.Is(err, errNoSavedPolicies) {
+			pm, err = svc.getCheckerPolicyMap()
+		}
+	} else {
+		pm, err = svc.getCheckerPolicyMap()
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	getPropResp := new(mgmtpb.CheckPropResp)
-	if err = proto.Unmarshal(dResp.Body, getPropResp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal CheckProp response")
-	}
-
-	reqClasses := make(map[chkpb.CheckInconsistClass]struct{})
-	for _, c := range req.Classes {
-		reqClasses[c] = struct{}{}
-	}
-
-	pm, err := svc.getCheckerPolicyMap()
-	if err != nil {
-		return nil, err
-	}
-
-	for i, enginePol := range getPropResp.Policies {
-		if savedPol, found := pm[enginePol.InconsistCas]; found {
-			getPropResp.Policies[i] = savedPol
-		}
-	}
-
-	resp := &mgmtpb.CheckGetPolicyResp{
-		Status: getPropResp.Status,
-		Flags:  getPropResp.Flags,
-	}
-	for _, p := range getPropResp.Policies {
-		if p.InconsistCas == chkpb.CheckInconsistClass_CIC_NONE {
-			continue
-		}
-
-		// If the request specified a list of classes, only return policies
-		// for those classes.
-		if len(reqClasses) > 0 {
-			if _, ok := reqClasses[p.InconsistCas]; ok {
-				resp.Policies = append(resp.Policies, p)
-			}
-			continue
-		}
-
-		// The engine side sends back a full policy array, so filter out array
-		// elements with policies for undefined classes.
-		if _, ok := chkpb.CheckInconsistClass_name[int32(p.InconsistCas)]; ok {
-			resp.Policies = append(resp.Policies, p)
-		}
-	}
+	resp.Policies = pm.ToSlice(req.Classes...)
 
 	return resp, nil
 }
@@ -410,18 +477,29 @@ func (svc *mgmtSvc) setCheckerPolicyMap(polList []*mgmtpb.CheckInconsistPolicy) 
 	return system.SetMgmtProperty(svc.sysdb, checkerPoliciesKey, string(polStr))
 }
 
+// SystemCheckSetPolicy sets checker policies in the policy map.
 func (svc *mgmtSvc) SystemCheckSetPolicy(ctx context.Context, req *mgmtpb.CheckSetPolicyReq) (*mgmtpb.DaosResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
 	}
 
-	if err := svc.setCheckerPolicyMap(req.Policies); err != nil {
+	if err := svc.verifyCheckerReady(); err != nil {
+		return nil, err
+	}
+
+	policies, err := svc.mergePoliciesWithCurrent(req.Policies)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := svc.setCheckerPolicyMap(policies); err != nil {
 		return nil, err
 	}
 
 	return &mgmtpb.DaosResp{}, nil
 }
 
+// SystemCheckRepair repairs a previous checker finding.
 func (svc *mgmtSvc) SystemCheckRepair(ctx context.Context, req *mgmtpb.CheckActReq) (*mgmtpb.CheckActResp, error) {
 	if err := svc.checkLeaderRequest(wrapCheckerReq(req)); err != nil {
 		return nil, err
