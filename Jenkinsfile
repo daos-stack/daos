@@ -23,12 +23,13 @@ job_status_internal = [:]
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_status_update(String name=env.STAGE_NAME, def value=currentBuild.currentResult) {
-    job_status_internal << jobStatusUpdate(jobStatusKey(name), value)
+    jobStatusUpdate(job_status_internal, name, value)
 }
 
 // groovylint-disable-next-line MethodParameterTypeRequired, NoDef
 void job_step_update(def value=currentBuild.currentResult) {
-    job_status_internal << jobStatusUpdate(value)
+    // job_status_update(env.STAGE_NAME, value)
+    jobStatusUpdate(job_status_internal, env.STAGE_NAME, value)
 }
 
 Map nlt_test() {
