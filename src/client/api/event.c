@@ -484,8 +484,13 @@ daos_event_complete(struct daos_event *ev, int rc)
 	}
 
 	if (evx->evx_status == DAOS_EVS_READY || evx->evx_status == DAOS_EVS_COMPLETED ||
-	    evx->evx_status == DAOS_EVS_ABORTED)
+	    evx->evx_status == DAOS_EVS_ABORTED) {
+		if (evx->is_errno)
+			ev->ev_error = daos_der2errno(rc);
+		else
+			ev->ev_error = rc;
 		goto out;
+	}
 
 	D_ASSERT(evx->evx_status == DAOS_EVS_RUNNING);
 
