@@ -37,8 +37,6 @@ static __thread daos_handle_t ioil_eqh;
 
 #define IOIL_MAX_EQ 64
 
-bool use_eq = true;
-
 struct ioil_pool {
 	daos_handle_t	iop_poh;
 	uuid_t		iop_uuid;
@@ -51,6 +49,7 @@ struct ioil_global {
 	d_list_t	iog_pools_head;
 	daos_handle_t	iog_main_eqh;
 	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
+	uint16_t	iog_eq_count_max;
 	uint16_t	iog_eq_count;
 	uint16_t	iog_eq_idx;
 	pid_t           iog_init_tid;
@@ -286,6 +285,7 @@ ioil_init(void)
 	struct rlimit rlimit;
 	int rc;
 	uint64_t report_count = 0;
+	uint64_t eq_count = 0;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -328,7 +328,18 @@ ioil_init(void)
 	if (rc)
 		return;
 
-	d_getenv_bool("D_IL_USE_EQ", &use_eq);
+	rc = d_getenv_uint64_t("D_IL_MAX_EQ", &eq_count);
+	if (rc != -DER_NONEXIST) {
+		if (eq_count > IOIL_MAX_EQ) {
+			DFUSE_LOG_WARNING("Max EQ count (%"PRIu64") should not exceed: %d",
+					  eq_count, IOIL_MAX_EQ);
+			eq_count = IOIL_MAX_EQ;
+		}
+		ioil_iog.iog_eq_count_max = (uint16_t)eq_count;
+	} else {
+		ioil_iog.iog_eq_count_max = IOIL_MAX_EQ;
+	}
+
 	ioil_iog.iog_initialized = true;
 }
 
@@ -412,11 +423,15 @@ ioil_get_eqh(daos_handle_t *eqh)
 		return 0;
 	}
 
+	/** No EQ support requested */
+	if (ioil_iog.iog_eq_count_max == 0)
+		return -1;
+
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
 	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
-	if (ioil_iog.iog_eq_count >= IOIL_MAX_EQ) {
-		*eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx ++];
-		if (ioil_iog.iog_eq_idx == IOIL_MAX_EQ)
+	if (ioil_iog.iog_eq_count >= ioil_iog.iog_eq_count_max) {
+		ioil_eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx ++];
+		if (ioil_iog.iog_eq_idx == ioil_iog.iog_eq_count_max)
 			ioil_iog.iog_eq_idx = 0;
 	} else {
 		rc = daos_eq_create(&ioil_eqh);
@@ -424,12 +439,11 @@ ioil_get_eqh(daos_handle_t *eqh)
 			pthread_mutex_unlock(&ioil_iog.iog_lock); 
 			return -1;
 		}
-
-		*eqh = ioil_eqh;
 		ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
 		ioil_iog.iog_eq_count ++;
 	}
 	pthread_mutex_unlock(&ioil_iog.iog_lock);
+	*eqh = ioil_eqh;
 	return 0;
 }
 
@@ -782,8 +796,15 @@ out:
 static void
 child_hdlr(void)
 {
+	int rc;
+
 	daos_dti_reset();
 	ioil_eqh = DAOS_HDL_INVAL;
+	rc = daos_eq_create(&ioil_eqh);
+	if (rc)
+		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
+	else
+		ioil_iog.iog_main_eqh = ioil_eqh;
 }
 
 /* Returns true on success */
@@ -825,15 +846,17 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags)
 		if (!call_daos_init(fd))
 			goto err;
 
-		rc = daos_eq_create(&ioil_eqh);
-		if (rc) {
-			DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
-			D_GOTO(err, rc = daos_der2errno(rc));
-		}
-		ioil_iog.iog_main_eqh = ioil_eqh;
+		if (ioil_iog.iog_eq_count_max) {
+			rc = daos_eq_create(&ioil_eqh);
+			if (rc) {
+				DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));
+				D_GOTO(err, rc = daos_der2errno(rc));
+			}
+			ioil_iog.iog_main_eqh = ioil_eqh;
 
-		rc = pthread_atfork(NULL, NULL, &child_hdlr);
-		D_ASSERT(rc == 0);
+			rc = pthread_atfork(NULL, NULL, &child_hdlr);
+			D_ASSERT(rc == 0);
+		}
 	}
 
 	d_list_for_each_entry(pool, &ioil_iog.iog_pools_head, iop_pools) {

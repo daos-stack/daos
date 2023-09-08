@@ -13,8 +13,6 @@
 
 #include "daos_fs.h"
 
-extern bool use_eq;
-
 struct ioil_cont {
 	/* Container open handle */
 	daos_handle_t     ioc_coh;

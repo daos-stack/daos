@@ -18,7 +18,6 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	d_iov_t		iov = {};
 	d_sg_list_t	sgl = {};
 	daos_event_t	ev;
-	bool		eq_setup = false;
 	daos_handle_t	eqh;
 	int		rc;
 
@@ -28,13 +27,8 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	d_iov_set(&iov, (void *)buff, len);
 	sgl.sg_iovs = &iov;
 
-	if (use_eq) {
-		rc = ioil_get_eqh(&eqh);
-		if (rc == 0)
-			eq_setup = true;
-	}
-
-	if (use_eq && eq_setup) {
+	rc = ioil_get_eqh(&eqh);
+	if (rc == 0) {
 		bool	flag = false;
 
 		rc = daos_event_init(&ev, eqh, NULL);
