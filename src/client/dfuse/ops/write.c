@@ -68,22 +68,6 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	ev->de_len         = len;
 	ev->de_complete_cb = dfuse_cb_write_complete;
 
-	/* Check for potentially using readahead on this file, ie_truncated
-	 * will only be set if caching is enabled so only check for the one
-	 * flag rather than two here
-	 */
-	if (oh->doh_ie->ie_truncated) {
-		if (oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) {
-			oh->doh_ie->ie_start_off = position;
-			oh->doh_ie->ie_end_off   = position + len;
-		} else {
-			if (oh->doh_ie->ie_start_off > position)
-				oh->doh_ie->ie_start_off = position;
-			if (oh->doh_ie->ie_end_off < position + len)
-				oh->doh_ie->ie_end_off = position + len;
-		}
-	}
-
 	if (len + position > oh->doh_ie->ie_stat.st_size)
 		oh->doh_ie->ie_stat.st_size = len + position;
 

@@ -759,10 +759,6 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec           ie_dcache_last_update;
 
-	/** written region for truncated files (i.e. ie_truncated set) */
-	size_t                    ie_start_off;
-	size_t                    ie_end_off;
-
 	/** Reference counting for the inode Used by the hash table callbacks */
 	ATOMIC uint32_t           ie_ref;
 
@@ -779,9 +775,6 @@ struct dfuse_inode_entry {
 
 	/** Number of active readdir operations */
 	ATOMIC uint32_t           ie_readdir_number;
-
-	/** file was truncated from 0 to a certain size */
-	bool                      ie_truncated;
 
 	/** file is the root of a container */
 	bool                      ie_root;

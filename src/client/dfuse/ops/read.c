@@ -56,7 +56,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 {
 	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
 	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
-	bool                  mock_read  = false;
 	struct dfuse_eq      *eqt;
 	int                   rc;
 	struct dfuse_event   *ev;
@@ -78,13 +77,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	if (ev == NULL)
 		D_GOTO(err, rc = ENOMEM);
 
-	if (oh->doh_ie->ie_truncated && position + len < oh->doh_ie->ie_stat.st_size &&
-	    ((oh->doh_ie->ie_start_off == 0 && oh->doh_ie->ie_end_off == 0) ||
-	     position >= oh->doh_ie->ie_end_off || position + len <= oh->doh_ie->ie_start_off)) {
-		DFUSE_TRA_DEBUG(oh, "Returning zeros");
-		mock_read = true;
-	}
-
 	/* DFuse requests a buffer size of "0" which translates to 1024*1024 at the time of writing
 	 * however this may change over time.  If the kernel ever starts requesting larger reads
 	 * then dfuse will need to be updated to pre-allocate larger buffers.  Add a warning here,
@@ -102,12 +94,6 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position, struct
 	ev->de_oh           = oh;
 	ev->de_req_len      = len;
 	ev->de_req_position = position;
-
-	if (mock_read) {
-		ev->de_len = len;
-		dfuse_cb_read_complete(ev);
-		return;
-	}
 
 	ev->de_complete_cb = dfuse_cb_read_complete;
 
