@@ -7519,19 +7519,19 @@ struct dfs_pipeline {
 int
 dfs_pipeline_create(dfs_t *dfs, dfs_predicate_t pred, uint64_t flags, dfs_pipeline_t **_dpipe)
 {
-	daos_size_t	bin_flen = strlen(BINARY_F);
-	daos_size_t	dkey_flen = strlen(DKEY_F);
-	daos_size_t	akey_flen = strlen(AKEY_F);
-	daos_size_t	const_flen = strlen(CONST_F);
-	daos_size_t	int8_flen = strlen(INT8_F);
-	daos_size_t	int4_flen = strlen(INT4_F);
-	daos_size_t	like_flen = strlen(LIKE_F);
-	daos_size_t	gt_flen = strlen(GT_F);
-	daos_size_t	eq_flen = strlen(EQ_F);
-	daos_size_t	ba_flen = strlen(BA_F);
-	daos_size_t	and_flen = strlen(AND_F);
-	daos_size_t	or_flen = strlen(OR_F);
-	daos_size_t	cond_flen = strlen(COND_F);
+	daos_size_t	bin_flen = sizeof(BINARY_F) - 1;
+	daos_size_t	dkey_flen = sizeof(DKEY_F) - 1;
+	daos_size_t	akey_flen = sizeof(AKEY_F) - 1;
+	daos_size_t	const_flen = sizeof(CONST_F) - 1;
+	daos_size_t	int8_flen = sizeof(INT8_F) - 1;
+	daos_size_t	int4_flen = sizeof(INT4_F) - 1;
+	daos_size_t	like_flen = sizeof(LIKE_F) - 1;
+	daos_size_t	gt_flen = sizeof(GT_F) - 1;
+	daos_size_t	eq_flen = sizeof(EQ_F) - 1;
+	daos_size_t	ba_flen = sizeof(BA_F) - 1;
+	daos_size_t	and_flen = sizeof(AND_F) - 1;
+	daos_size_t	or_flen	= sizeof(OR_F) - 1;
+	daos_size_t	cond_flen = sizeof(COND_F) - 1;
 	dfs_pipeline_t	*dpipe;
 	int		rc;
 
@@ -7733,16 +7733,16 @@ dfs_readdir_with_filter(dfs_t *dfs, dfs_obj_t *obj, dfs_pipeline_t *dpipe, daos_
 	record_len = recxs[0].rx_nr + recxs[1].rx_nr;
 
 	if (oids) {
+		recxs[iod.iod_nr].rx_idx = OID_IDX;
+		recxs[iod.iod_nr].rx_nr	= sizeof(daos_obj_id_t);
+		record_len += recxs[iod.iod_nr].rx_nr;
 		iod.iod_nr ++;
-		recxs[2].rx_idx	= OID_IDX;
-		recxs[2].rx_nr	= sizeof(daos_obj_id_t);
-		record_len += recxs[2].rx_nr;
 	}
 	if (csize) {
+		recxs[iod.iod_nr].rx_idx = CSIZE_IDX;
+		recxs[iod.iod_nr].rx_nr	= sizeof(daos_size_t);
+		record_len += recxs[iod.iod_nr].rx_nr;
 		iod.iod_nr ++;
-		recxs[3].rx_idx	= CSIZE_IDX;
-		recxs[3].rx_nr	= sizeof(daos_size_t);
-		record_len += recxs[3].rx_nr;
 	}
 
 	nr_kds = *nr;
