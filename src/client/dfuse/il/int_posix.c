@@ -52,6 +52,7 @@ struct ioil_global {
 	daos_handle_t	iog_main_eqh;
 	daos_handle_t	iog_eqs[IOIL_MAX_EQ];
 	uint16_t	iog_eq_count;
+	uint16_t	iog_eq_idx;
 	pid_t           iog_init_tid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
@@ -412,21 +413,22 @@ ioil_get_eqh(daos_handle_t *eqh)
 	}
 
 	rc = pthread_mutex_lock(&ioil_iog.iog_lock);
-
+	/** create a new EQ if the EQ pool is not full; otherwise round robin EQ use from pool */
 	if (ioil_iog.iog_eq_count >= IOIL_MAX_EQ) {
-		pthread_mutex_unlock(&ioil_iog.iog_lock);
-		return -1;
-	}
+		*eqh = ioil_iog.iog_eqs[ioil_iog.iog_eq_idx ++];
+		if (ioil_iog.iog_eq_idx == IOIL_MAX_EQ)
+			ioil_iog.iog_eq_idx = 0;
+	} else {
+		rc = daos_eq_create(&ioil_eqh);
+		if (rc) {
+			pthread_mutex_unlock(&ioil_iog.iog_lock); 
+			return -1;
+		}
 
-	rc = daos_eq_create(&ioil_eqh);
-	if (rc) {
-		pthread_mutex_unlock(&ioil_iog.iog_lock); 
-		return -1;
+		*eqh = ioil_eqh;
+		ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
+		ioil_iog.iog_eq_count ++;
 	}
-
-	*eqh = ioil_eqh;
-	ioil_iog.iog_eqs[ioil_iog.iog_eq_count] = ioil_eqh;
-	ioil_iog.iog_eq_count ++;
 	pthread_mutex_unlock(&ioil_iog.iog_lock);
 	return 0;
 }
