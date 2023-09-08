@@ -782,14 +782,6 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			expErr: storage.FaultRamdiskLowMem("Available", 10*humanize.GiByte,
 				9*humanize.GiByte, 8*humanize.GiByte),
 		},
-		"tmpfs already mounted; less than 90% of calculated": {
-			srvCfgExtra: func(sc *config.Server) *config.Server {
-				return sc.WithEngines(ramEngine(0, 10))
-			},
-			tmpfsMounted: true,
-			tmpfsSize:    8,
-			expErr:       errors.New("ramdisk size"),
-		},
 		"tmpfs already mounted; more than calculated": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10))
@@ -798,7 +790,7 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			tmpfsSize:    11,
 			expErr:       errors.New("ramdisk size"),
 		},
-		"tmpfs already mounted; within 90% of calculated": {
+		"tmpfs already mounted; less than calculated": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
 				return sc.WithEngines(ramEngine(0, 10))
 			},
