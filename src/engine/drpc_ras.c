@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -458,6 +458,9 @@ ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svc
 	uint8_t			*reqb = NULL;
 	size_t			 size;
 	int			 rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_FAIL_REGPOOL))
+		return -DER_IO;
 
 	req.seq = seq;
 	D_ASPRINTF(req.uuid, DF_UUIDF, DP_UUID(uuid));

@@ -5690,7 +5690,8 @@ ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop)
 	if (rc != 0)
 		D_GOTO(out_cont, rc = (rc == -DER_NONEXIST ? 0 : rc));
 
-	if (strncmp(DAOS_PROP_NO_CO_LABEL, tmp->dpp_entries[0].dpe_str,
+	if (tmp->dpp_entries[0].dpe_str == NULL ||
+	    strncmp(DAOS_PROP_NO_CO_LABEL, tmp->dpp_entries[0].dpe_str,
 		    DAOS_PROP_LABEL_MAX_LEN) == 0)
 		daos_prop_free(tmp);
 	else
