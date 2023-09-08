@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,27 @@ extern "C" {
 /** @addtogroup CART
  * @{
  */
+
+/**
+ * Get information on protocols that are supported by underlying mercury plugins. If
+ * \info_string is NULL, a list of all supported protocols by all plugins will
+ * be returned. The returned list must be freed using crt_protocol_info_free().
+ * 
+ * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
+ * \param[out] protocol_info_p linked-list of protocol infos
+ * 
+ * \return                     DER_SUCCESS on success, negative value if error
+*/
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p);
+
+/**
+ * Free protocol_info from crt_protocol_info_get().
+ * 
+ * \param[in,out] protocol_info linked-list of protocol infos
+*/
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info);
 
 /**
  * Initialize CRT transport layer. Must be called on both the server side and
