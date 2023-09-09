@@ -288,6 +288,9 @@ int reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 int reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 		   struct vea_resrvd_ext *resrvd);
 int persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *private);
+int
+bitmap_tx_add_ptr(struct umem_instance *vsi_umem, uint64_t *bitmap,
+		  uint32_t bit_at, uint32_t bits_nr);
 
 /* vea_free.c */
 void extent_free_class_remove(struct vea_space_info *vsi, struct vea_extent_entry *entry);

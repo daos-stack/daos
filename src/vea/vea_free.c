@@ -654,9 +654,7 @@ bitmap_clear_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitma
 	}
 
 	if (vsi_umem) {
-		/* TODO: optimize range */
-		rc = umem_tx_add_ptr(vsi_umem, bitmap->vfb_bitmaps,
-				     bitmap->vfb_bitmap_sz << 3);
+		rc = bitmap_tx_add_ptr(vsi_umem, bitmap->vfb_bitmaps, bit_at, bits_nr);
 		if (rc)
 			return rc;
 	}

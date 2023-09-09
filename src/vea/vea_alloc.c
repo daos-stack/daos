@@ -516,6 +516,22 @@ persistent_alloc_extent(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 	return 0;
 }
 
+int
+bitmap_tx_add_ptr(struct umem_instance *vsi_umem, uint64_t *bitmap,
+		  uint32_t bit_at, uint32_t bits_nr)
+{
+       uint32_t bitmap_off = bit_at / 8;
+       uint32_t bitmap_sz = 0;
+
+       if (bit_at % 8)
+	       bitmap_sz = 1;
+
+       if (bits_nr > (bit_at % 8))
+	       bitmap_sz += (bits_nr - (bit_at % 8) + 7) / 8;
+
+	return umem_tx_add_ptr(vsi_umem, (char *)bitmap + bitmap_off, bitmap_sz);
+}
+
 static int
 bitmap_set_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitmap,
 		 uint64_t blk_off, uint32_t blk_cnt)
@@ -551,9 +567,7 @@ bitmap_set_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitmap,
 	}
 
 	if (vsi_umem) {
-		/* Todo this could be optimized */
-		rc = umem_tx_add_ptr(vsi_umem, bitmap->vfb_bitmaps,
-				     bitmap->vfb_bitmap_sz << 3);
+		rc = bitmap_tx_add_ptr(vsi_umem, bitmap->vfb_bitmaps, bit_at, bits_nr);
 		if (rc)
 			return rc;
 	}
