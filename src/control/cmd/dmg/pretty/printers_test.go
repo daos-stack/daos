@@ -120,7 +120,7 @@ func TestControl_UpdateErrorSummary(t *testing.T) {
 			resp:      nil,
 			cmd:       "empty",
 			expStdout: ``,
-			expErr:    errors.New("nil <nil>"),
+			expErr:    errors.New("nil *control.CollectLogResp"),
 		},
 		"empty response": {
 			resp:      new(control.CollectLogResp),
@@ -188,13 +188,8 @@ host2 hostname command not available
 	} {
 		t.Run(name, func(t *testing.T) {
 			var out strings.Builder
-			var err error
 
-			if tc.resp == nil {
-				err = UpdateErrorSummary(nil, tc.cmd, &out)
-			} else {
-				err = UpdateErrorSummary(tc.resp, tc.cmd, &out)
-			}
+			err := UpdateErrorSummary(tc.resp, tc.cmd, &out)
 
 			test.CmpErr(t, tc.expErr, err)
 			if tc.expErr != nil {

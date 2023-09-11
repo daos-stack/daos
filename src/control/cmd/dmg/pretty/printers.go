@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
@@ -159,7 +160,7 @@ func PrintResponseErrors(resp hostErrorsGetter, out io.Writer, opts ...PrintConf
 // PrintErrorsSummary generates a human-readable representation of the supplied
 // HostErrorsMap summary struct and writes it to the supplied io.Writer.
 func UpdateErrorSummary(resp hostErrorsGetter, cmd string, out io.Writer, opts ...PrintConfigOption) error {
-	if resp == nil {
+	if common.InterfaceIsNil(resp) {
 		return errors.Errorf("nil %T", resp)
 	}
 
