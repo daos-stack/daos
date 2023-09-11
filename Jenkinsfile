@@ -1139,6 +1139,13 @@ pipeline {
                                 'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
                             name: 'Functional Hardware Medium',
                             next_version: next_version,
+                        ),
+                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                            label: cachedCommitPragma(
+                                'Test-label-hw-medium-verbs-provider',
+                                params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+                            name: 'Functional Hardware Medium Verbs Provider',
+                            next_version: next_version,
                         )
                         // 'Functional Hardware Medium': getFunctionalTestStage(
                         //     label: cachedCommitPragma(
