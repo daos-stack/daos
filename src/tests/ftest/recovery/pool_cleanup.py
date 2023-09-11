@@ -126,7 +126,7 @@ class PoolCleanupTest(TestWithServers):
         self.log_step("Query the checker until the fault is repaired.")
         repair_report = self.wait_for_check_complete()[0]
 
-        # Verify that the repair report has expected message.
+        # Verify that the repair report has expected message "Update the MS label".
         action_message = repair_report["act_msgs"][0]
         exp_msg = "Update the MS label"
         errors = []
