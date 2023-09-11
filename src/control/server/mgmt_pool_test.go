@@ -393,6 +393,20 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				TgtRanks:  []uint32{0, 1},
 			},
 		},
+		"successful creation with meta size": {
+			targetCount: 8,
+			req: &mgmtpb.PoolCreateReq{
+				Uuid:         test.MockUUID(1),
+				Tierbytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobSize: 2 * humanize.GiByte,
+				Properties:   testPoolLabelProp(),
+			},
+			expResp: &mgmtpb.PoolCreateResp{
+				//TierBytes: []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				//MetaBlobSize: 2 * humanize.GiByte,
+				//TgtRanks: []uint32{0, 1},
+			},
+		},
 		"successful creation minimum size": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
@@ -536,6 +550,8 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 				return
 			}
 
+			t.Logf("%+v", tc.expResp)
+			t.Logf("%+v", gotResp)
 			if diff := cmp.Diff(tc.expResp, gotResp, test.DefaultCmpOpts()...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
 			}
