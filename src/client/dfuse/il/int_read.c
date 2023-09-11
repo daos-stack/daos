@@ -36,26 +36,20 @@ read_bulk(char *buff, size_t len, off_t position, struct fd_entry *entry, int *e
 		if (rc) {
 			DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_init() failed: "DF_RC,
 					DP_RC(rc));
-			*errcode = daos_der2errno(rc);
-			return -1;
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
 		rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position,
 			      &read_size, &ev);
-		if (rc) {
-			DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_read() failed: %d (%s)",
-					rc, strerror(rc));
-			*errcode = rc;
-			return -1;
-		}
+		if (rc)
+			D_GOTO(out, rc);
 
 		while (1) {
 			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
 			if (rc) {
 				DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_test() failed: "DF_RC,
 						DP_RC(rc));
-				*errcode = daos_der2errno(rc);
-				return -1;
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			if (flag)
 				break;
@@ -66,8 +60,10 @@ read_bulk(char *buff, size_t len, off_t position, struct fd_entry *entry, int *e
 		rc = dfs_read(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &read_size,
 			      NULL);
 	}
+out:
 	if (rc) {
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_read() failed: %d (%s)", rc, strerror(rc));
+		*errcode = rc;
 		return -1;
 	}
 	return read_size;

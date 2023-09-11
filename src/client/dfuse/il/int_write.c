@@ -35,25 +35,19 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 		if (rc) {
 			DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_init() failed: "DF_RC,
 					DP_RC(rc));
-			*errcode = daos_der2errno(rc);
-			return -1;
+			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
 		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, &ev);
-		if (rc) {
-			DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)",
-					rc, strerror(rc));
-			*errcode = rc;
-			return -1;
-		}
+		if (rc)
+			D_GOTO(out, rc);
 
 		while (1) {
 			rc = daos_event_test(&ev, DAOS_EQ_NOWAIT, &flag);
 			if (rc) {
 				DFUSE_TRA_ERROR(entry->fd_dfsoh, "daos_event_test() failed: "DF_RC,
 						DP_RC(rc));
-				*errcode = daos_der2errno(rc);
-				return -1;
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 			if (flag)
 				break;
@@ -63,8 +57,10 @@ ioil_do_writex(const char *buff, size_t len, off_t position, struct fd_entry *en
 	} else {
 		rc = dfs_write(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, &sgl, position, NULL);
 	}
+out:
 	if (rc) {
 		DFUSE_TRA_ERROR(entry->fd_dfsoh, "dfs_write() failed: %d (%s)", rc, strerror(rc));
+		*errcode = rc;
 		return -1;
 	}
 	return len;
