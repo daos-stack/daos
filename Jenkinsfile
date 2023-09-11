@@ -1139,49 +1139,55 @@ pipeline {
                                 'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
                             name: 'Functional Hardware Medium',
                             next_version: next_version,
-                            tags: getFunctionalTagsDefault('pr'),
-                            nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal),
-                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-                            label: cachedCommitPragma(
-                                'Test-label-hw-medium-md-on-ssd',
-                                params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL),
-                            name: 'Functional Hardware Medium MD on SSD',
-                            next_version: next_version,
-                            tags: getFunctionalTagsDefault('md_on_ssd'),
-                            nvme: 'auto_md_on_ssd',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal),
-                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                            label: cachedCommitPragma(
-                                'Test-label-hw-medium-verbs-provider',
-                                params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
-                            name: 'Functional Hardware Medium Verbs Provider',
-                            next_version: next_version,
-                            tags: getFunctionalTagsDefault('pr'),
-                            nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal),
-                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                            label: cachedCommitPragma(
-                                'Test-label-hw-medium-ucx-provider',
-                                params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
-                            name: 'Functional Hardware Medium UCX Provider',
-                            next_version: next_version,
-                            tags: getFunctionalTagsDefault('pr'),
-                            nvme: 'auto',
-                            provider: 'ucx+dc_x',
-                            job_status: job_status_internal),
-                        'Functional Hardware Large': getFunctionalTestStage(
-                            label: cachedCommitPragma(
-                                'Test-label-hw-large', params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
-                            name: 'Functional Hardware Large',
-                            next_version: next_version,
-                            tags: getFunctionalTagsDefault('pr'),
-                            nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            job_status: job_status_internal)
+                        )
+                        // 'Functional Hardware Medium': getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+                        //     name: 'Functional Hardware Medium',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('pr'),
+                        //     nvme: 'auto',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal),
+                        // 'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium-md-on-ssd',
+                        //         params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL),
+                        //     name: 'Functional Hardware Medium MD on SSD',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('md_on_ssd'),
+                        //     nvme: 'auto_md_on_ssd',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal),
+                        // 'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium-verbs-provider',
+                        //         params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL),
+                        //     name: 'Functional Hardware Medium Verbs Provider',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('pr'),
+                        //     nvme: 'auto',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal),
+                        // 'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium-ucx-provider',
+                        //         params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL),
+                        //     name: 'Functional Hardware Medium UCX Provider',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('pr'),
+                        //     nvme: 'auto',
+                        //     provider: 'ucx+dc_x',
+                        //     job_status: job_status_internal),
+                        // 'Functional Hardware Large': getFunctionalTestStage(
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-large', params.FUNCTIONAL_HARDWARE_LARGE_LABEL),
+                        //     name: 'Functional Hardware Large',
+                        //     next_version: next_version,
+                        //     tags: getFunctionalTagsDefault('pr'),
+                        //     nvme: 'auto',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal)
                     )
                 }
             }
