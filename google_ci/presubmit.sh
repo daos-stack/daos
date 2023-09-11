@@ -19,6 +19,9 @@ function main() {
 
   echo "Building daos..."
   scons BUILD_TYPE=dev TARGET_TYPE=release --jobs="$(nproc --all)" --build-deps=yes install PREFIX=/opt/daos
+
+  echo "Running unit tests..."
+  ./utils/run_utest.py
 }
 
 main "$@"
