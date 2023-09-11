@@ -753,9 +753,11 @@ func TestServer_prepBdevStorage(t *testing.T) {
 
 func TestServer_checkEngineTmpfsMem(t *testing.T) {
 	for name, tc := range map[string]struct {
-		srvCfgExtra func(*config.Server) *config.Server
-		memAvailGiB int
-		expErr      error
+		srvCfgExtra  func(*config.Server) *config.Server
+		memAvailGiB  int
+		tmpfsMounted bool
+		tmpfsSize    uint64
+		expErr       error
 	}{
 		"pmem tier; skip check": {
 			srvCfgExtra: func(sc *config.Server) *config.Server {
@@ -780,6 +782,21 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 			expErr: storage.FaultRamdiskLowMem("Available", 10*humanize.GiByte,
 				9*humanize.GiByte, 8*humanize.GiByte),
 		},
+		"tmpfs already mounted; more than calculated": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10))
+			},
+			tmpfsMounted: true,
+			tmpfsSize:    11,
+			expErr:       errors.New("ramdisk size"),
+		},
+		"tmpfs already mounted; less than calculated": {
+			srvCfgExtra: func(sc *config.Server) *config.Server {
+				return sc.WithEngines(ramEngine(0, 10))
+			},
+			tmpfsMounted: true,
+			tmpfsSize:    9,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -799,7 +816,19 @@ func TestServer_checkEngineTmpfsMem(t *testing.T) {
 
 			ec := cfg.Engines[0]
 			runner := engine.NewRunner(log, ec)
-			provider := storage.MockProvider(log, 0, &ec.Storage, nil, nil, nil, nil)
+			sysMockCfg := &sysprov.MockSysConfig{
+				IsMountedBool: tc.tmpfsMounted,
+			}
+			if tc.tmpfsMounted {
+				sysMockCfg.GetfsUsageResps = []sysprov.GetfsUsageRetval{
+					{
+						Total: tc.tmpfsSize * humanize.GiByte,
+					},
+				}
+			}
+			sysMock := sysprov.NewMockSysProvider(log, sysMockCfg)
+			scmMock := &storage.MockScmProvider{}
+			provider := storage.MockProvider(log, 0, &ec.Storage, sysMock, scmMock, nil, nil)
 			instance := NewEngineInstance(log, provider, nil, runner)
 
 			srv, err := newServer(log, cfg, &system.FaultDomain{})

@@ -562,6 +562,20 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 }
 
 int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p)
+{
+	static_assert(sizeof(struct crt_protocol_info) == sizeof(struct na_protocol_info),
+		      "protocol info structs do not match");
+	return crt_hg_get_protocol_info(info_string, (struct na_protocol_info **)protocol_info_p);
+}
+
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info)
+{
+	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
+}
+
+int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	char		*provider_env;

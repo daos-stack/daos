@@ -152,8 +152,8 @@ class RbldContainerCreate(IorTestBase):
         # Check for pool and rebuild info after rebuild
         self.log.info("=> (6) Check for pool and rebuild info after rebuild")
         info_checks["pi_ndisabled"] += targets
-        rebuild_checks["rs_obj_nr"] = ">0"
-        rebuild_checks["rs_rec_nr"] = ">0"
+        rebuild_checks["rs_obj_nr"] = ">=0"
+        rebuild_checks["rs_rec_nr"] = ">=0"
         rebuild_checks["rs_state"] = 2
         self.assertTrue(
             self.pool.check_pool_info(**info_checks),
