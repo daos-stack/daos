@@ -1149,7 +1149,11 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	else
 		fprintf(stderr, "No useful backtrace available");
 
-	/* re-register old handler */
+	/* re-register old handler
+	 *
+	 * XXX we may choose to forget about old handler and simply register
+	 * signal again as SIG_DFL and raise it for corefile creation
+	 */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
 	if (rc != 0) {
 		D_ERROR("sigaction() failure registering new and reading old "
@@ -1160,18 +1164,16 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		exit(EXIT_FAILURE);
 	}
 
-	/* XXX we may choose to forget about old handler and simply register
-	 * signal again as SIG_DFL and raise it for corefile creation
-	 */
 	if (old_handlers[signo].sa_sigaction != NULL ||
 	    old_handlers[signo].sa_handler != SIG_IGN) {
-		/* XXX will old handler get accurate siginfo_t/ucontext_t ?
-		 * we may prefer to call it with the same params we got ?
+		/* XXX will old handler get accurate/original siginfo_t/ucontext_t ?
+		 * should we instead call it with the same params we got ?
 		 */
 		raise(signo);
 	}
 
-	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
+	/* if old handler(s) also returns re-register myself for signo */
+	daos_register_sighand(signo, print_backtrace);
 }
 
 int
@@ -1286,6 +1288,8 @@ main(int argc, char **argv)
 		if (sig == SIGUSR1) {
 			D_INFO("got SIGUSR1, dumping Argobots infos and ULTs stacks\n");
 			dss_dump_ABT_state(abt_infos);
+			/* re-add SIGUSR1 to set */
+			sigaddset(&set, SIGUSR1);
 			continue;
 		}
 
@@ -1297,6 +1301,8 @@ main(int argc, char **argv)
 			ABT_info_trigger_print_all_thread_stacks(abt_infos,
 								 10.0, NULL,
 								 NULL);
+			/* re-add SIGUSR2 to set */
+			sigaddset(&set, SIGUSR2);
 			continue;
 		}
 
