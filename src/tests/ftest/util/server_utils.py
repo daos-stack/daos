@@ -331,7 +331,7 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("Checking for the existence of the %s mount point", mount)
         command = "test -d {}".format(mount)
         result = run_remote(self.log, hosts, command, verbose)
-        if result.passed:
+        if result.passed_hosts:
             mounted_hosts = result.passed_hosts
 
             # Remove the superblocks
