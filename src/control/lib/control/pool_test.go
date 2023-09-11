@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/security/auth"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
@@ -349,6 +350,7 @@ func TestControl_PoolEvict(t *testing.T) {
 }
 
 func TestControl_PoolCreate(t *testing.T) {
+	mockExt := auth.NewMockExtWithUser("poolTest", 0, 0)
 	strVal := func(s string) daos.PoolPropertyValue {
 		v := daos.PoolPropertyValue{}
 		v.SetString(s)
@@ -493,6 +495,9 @@ func TestControl_PoolCreate(t *testing.T) {
 			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
+			if tc.req.userExt == nil {
+				tc.req.userExt = mockExt
+			}
 			gotResp, gotErr := PoolCreate(ctx, mi, tc.req)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -501,6 +506,67 @@ func TestControl_PoolCreate(t *testing.T) {
 
 			cmpOpt := cmpopts.IgnoreFields(PoolCreateResp{}, "UUID")
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpt); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_UpdateState(t *testing.T) {
+	for name, tc := range map[string]struct {
+		pqr      *PoolQueryResp
+		expState string
+	}{
+		"Pool state as Ready": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					DisabledTargets: 0,
+				},
+			},
+			expState: system.PoolServiceStateReady.String(),
+		},
+		"Pool state as Degraded": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
+				PoolInfo: PoolInfo{
+					TotalTargets:    1,
+					DisabledTargets: 4,
+				},
+			},
+			expState: system.PoolServiceStateDegraded.String(),
+		},
+		"Pool state as Unknown": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
+				PoolInfo: PoolInfo{
+					TotalTargets: 0,
+				},
+			},
+			expState: system.PoolServiceStateUnknown.String(),
+		},
+		"Pool state as Default": {
+			pqr: &PoolQueryResp{
+				Status: 0,
+				UUID:   "foo",
+				State:  system.PoolServiceStateUnknown,
+				PoolInfo: PoolInfo{
+					TotalTargets: 1,
+				},
+			},
+			expState: system.PoolServiceStateReady.String(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.pqr.UpdateState()
+
+			if diff := cmp.Diff(tc.expState, tc.pqr.State.String()); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -519,6 +585,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -530,12 +597,13 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":null,"disabled_ranks":null,"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 		"valid rankset": {
 			pqr: &PoolQueryResp{
 				Status: 0,
 				UUID:   "foo",
+				State:  system.PoolServiceStateReady,
 				PoolInfo: PoolInfo{
 					TotalTargets:     1,
 					ActiveTargets:    2,
@@ -549,7 +617,7 @@ func TestControl_PoolQueryResp_MarshallJSON(t *testing.T) {
 					UpgradeLayoutVer: 8,
 				},
 			},
-			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
+			exp: `{"enabled_ranks":[0,1,2,3,5],"disabled_ranks":[],"status":0,"state":"Ready","uuid":"foo","total_targets":1,"active_targets":2,"total_engines":3,"disabled_targets":4,"version":5,"leader":6,"rebuild":null,"tier_stats":null,"pool_layout_ver":7,"upgrade_layout_ver":8}`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -660,6 +728,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -687,7 +756,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -730,6 +800,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -758,7 +829,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -802,6 +874,7 @@ func TestControl_PoolQuery(t *testing.T) {
 						DisabledTargets:  17,
 						PoolLayoutVer:    1,
 						UpgradeLayoutVer: 2,
+						State:            mgmtpb.PoolServiceState_Degraded,
 						Rebuild: &mgmtpb.PoolRebuildStatus{
 							State:   mgmtpb.PoolRebuildStatus_BUSY,
 							Objects: 1,
@@ -830,7 +903,8 @@ func TestControl_PoolQuery(t *testing.T) {
 				),
 			},
 			expResp: &PoolQueryResp{
-				UUID: test.MockUUID(),
+				UUID:  test.MockUUID(),
+				State: system.PoolServiceStateDegraded,
 				PoolInfo: PoolInfo{
 					TotalTargets:     42,
 					ActiveTargets:    16,
@@ -907,7 +981,7 @@ func propWithVal(key, val string) *daos.PoolProperty {
 	return prop
 }
 
-func TestPoolSetProp(t *testing.T) {
+func TestControl_PoolSetProp(t *testing.T) {
 	defaultReq := &PoolSetPropReq{
 		ID:         test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", "foo")},
@@ -993,12 +1067,106 @@ func TestPoolSetProp(t *testing.T) {
 	}
 }
 
-func TestPoolGetProp(t *testing.T) {
+func propWithNoVal(s string) *daos.PoolProperty {
+	p := propWithVal(s, "")
+	p.Value = daos.PoolPropertyValue{}
+	return p
+}
+
+func TestControl_PoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
 		ID: test.MockUUID(),
 		Properties: []*daos.PoolProperty{propWithVal("label", ""),
 			propWithVal("policy", "type=io_size")},
 	}
+	props2_2 := []*mgmtpb.PoolProperty{
+		{
+			Number: propWithVal("label", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+		},
+		{
+			Number: propWithVal("space_rb", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{42},
+		},
+		{
+			Number: propWithVal("upgrade_status", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("reclaim", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
+		},
+		{
+			Number: propWithVal("self_heal", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSelfHealingAutoExclude},
+		},
+		{
+			Number: propWithVal("ec_cell_sz", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{4096},
+		},
+		{
+			Number: propWithVal("rd_fac", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("ec_pda", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("global_version", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1},
+		},
+		{
+			Number: propWithVal("rp_pda", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{2},
+		},
+		{
+			Number: propWithVal("policy", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
+		},
+		{
+			Number: propWithVal("perf_domain", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{255},
+		},
+		{
+			Number: propWithVal("svc_list", "").Number,
+			Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
+		},
+	}
+	props2_4 := append(props2_2, []*mgmtpb.PoolProperty{
+		{
+			Number: propWithVal("scrub", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
+		},
+		{
+			Number: propWithVal("scrub-freq", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{1024},
+		},
+		{
+			Number: propWithVal("scrub-thresh", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{0},
+		},
+		{
+			Number: propWithVal("svc_rf", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{3},
+		},
+		{
+			Number: propWithVal("checkpoint", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
+		},
+		{
+			Number: propWithVal("checkpoint_freq", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{10000},
+		},
+		{
+			Number: propWithVal("checkpoint_thresh", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{20},
+		},
+		{
+			Number: propWithVal("reintegration", "").Number,
+			Value:  &mgmtpb.PoolProperty_Numval{daos.PoolReintModeNoDataSync},
+		},
+	}...)
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -1071,88 +1239,7 @@ func TestPoolGetProp(t *testing.T) {
 		"all props requested": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
-					Properties: []*mgmtpb.PoolProperty{
-						{
-							Number: propWithVal("label", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
-						},
-						{
-							Number: propWithVal("space_rb", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{42},
-						},
-						{
-							Number: propWithVal("upgrade_status", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("reclaim", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSpaceReclaimDisabled},
-						},
-						{
-							Number: propWithVal("self_heal", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolSelfHealingAutoExclude},
-						},
-						{
-							Number: propWithVal("ec_cell_sz", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{4096},
-						},
-						{
-							Number: propWithVal("rd_fac", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("ec_pda", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("global_version", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1},
-						},
-						{
-							Number: propWithVal("rp_pda", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{2},
-						},
-						{
-							Number: propWithVal("policy", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
-						},
-						{
-							Number: propWithVal("perf_domain", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{255},
-						},
-						{
-							Number: propWithVal("scrub", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolScrubModeTimed},
-						},
-						{
-							Number: propWithVal("scrub-freq", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{1024},
-						},
-						{
-							Number: propWithVal("scrub-thresh", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{0},
-						},
-						{
-							Number: propWithVal("svc_rf", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{3},
-						},
-						{
-							Number: propWithVal("svc_list", "").Number,
-							Value:  &mgmtpb.PoolProperty_Strval{"[0-3]"},
-						},
-						{
-							Number: propWithVal("checkpoint", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{daos.PoolCheckpointTimed},
-						},
-						{
-							Number: propWithVal("checkpoint_freq", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{10000},
-						},
-						{
-							Number: propWithVal("checkpoint_thresh", "").Number,
-							Value:  &mgmtpb.PoolProperty_Numval{20},
-						},
-					},
+					Properties: props2_4,
 				}),
 			},
 			req: &PoolGetPropReq{
@@ -1170,6 +1257,7 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("policy", "type=io_size"),
 				propWithVal("rd_fac", "1"),
 				propWithVal("reclaim", "disabled"),
+				propWithVal("reintegration", "no_data_sync"),
 				propWithVal("rp_pda", "2"),
 				propWithVal("scrub", "timed"),
 				propWithVal("scrub-freq", "1024"),
@@ -1212,6 +1300,35 @@ func TestPoolGetProp(t *testing.T) {
 				propWithVal("space_rb", "42"),
 			},
 		},
+		"missing props in response; compatibility with old pool": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: props2_2,
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: test.MockUUID(),
+			},
+			expResp: []*daos.PoolProperty{
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
+				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
+				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("rp_pda", "2"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
+				propWithVal("upgrade_status", "in progress"),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1243,6 +1360,94 @@ func TestPoolGetProp(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+
+			// Verify response can be marshalled without error.
+			_, err := json.Marshal(gotResp)
+			if err != nil {
+				t.Fatalf("Unexpected error: %s\n", err.Error())
+			}
+		})
+	}
+}
+
+func TestControl_PoolGetPropResp_MarshalJSON(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp    []*daos.PoolProperty
+		expData string
+		expErr  error
+	}{
+		"nil": {
+			expData: "null",
+		},
+		"all props": {
+			resp: []*daos.PoolProperty{
+				propWithVal("checkpoint", "timed"),
+				propWithVal("checkpoint_freq", "10000"),
+				propWithVal("checkpoint_thresh", "20"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
+				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
+				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("rp_pda", "2"),
+				propWithVal("scrub", "timed"),
+				propWithVal("scrub-freq", "1024"),
+				propWithVal("scrub-thresh", "0"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
+				propWithVal("svc_rf", "3"),
+				propWithVal("upgrade_status", "in progress"),
+			},
+			expData: `[{"name":"checkpoint","description":"WAL Checkpointing behavior","value":"timed"},{"name":"checkpoint_freq","description":"WAL Checkpointing frequency, in seconds","value":10000},{"name":"checkpoint_thresh","description":"Usage of WAL before checkpoint is triggered, as a percentage","value":20},{"name":"ec_cell_sz","description":"EC cell size","value":4096},{"name":"ec_pda","description":"Performance domain affinity level of EC","value":1},{"name":"global_version","description":"Global Version","value":1},{"name":"label","description":"Pool label","value":"foo"},{"name":"perf_domain","description":"Pool performance domain","value":"root"},{"name":"policy","description":"Tier placement policy","value":"type=io_size"},{"name":"rd_fac","description":"Pool redundancy factor","value":1},{"name":"reclaim","description":"Reclaim strategy","value":"disabled"},{"name":"rp_pda","description":"Performance domain affinity level of RP","value":2},{"name":"scrub","description":"Checksum scrubbing mode","value":"timed"},{"name":"scrub-freq","description":"Checksum scrubbing frequency","value":1024},{"name":"scrub-thresh","description":"Checksum scrubbing threshold","value":0},{"name":"self_heal","description":"Self-healing policy","value":"exclude"},{"name":"space_rb","description":"Rebuild space ratio","value":42},{"name":"svc_list","description":"Pool service replica list","value":[0,1,2,3]},{"name":"svc_rf","description":"Pool service redundancy factor","value":3},{"name":"upgrade_status","description":"Upgrade Status","value":"in progress"}]`,
+		},
+		"missing props; v2_2 pool": {
+			resp: []*daos.PoolProperty{
+				propWithNoVal("checkpoint"),
+				propWithNoVal("checkpoint_freq"),
+				propWithNoVal("checkpoint_thresh"),
+				propWithVal("ec_cell_sz", "4096"),
+				propWithVal("ec_pda", "1"),
+				propWithVal("global_version", "1"),
+				propWithVal("label", "foo"),
+				propWithVal("perf_domain", "root"),
+				propWithVal("policy", "type=io_size"),
+				propWithVal("rd_fac", "1"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("rp_pda", "2"),
+				propWithNoVal("scrub"),
+				propWithNoVal("scrub-freq"),
+				propWithNoVal("scrub-thresh"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+				func() *daos.PoolProperty {
+					p := propWithVal("svc_list", "")
+					p.Value.SetString("[0-3]")
+					return p
+				}(),
+				propWithNoVal("svc_rf"),
+				propWithVal("upgrade_status", "in progress"),
+			},
+			expErr: errors.New("value not set"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotData, gotErr := json.Marshal(tc.resp)
+			test.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expData, string(gotData)); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
@@ -1435,7 +1640,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1486,7 +1692,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1494,7 +1701,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1505,14 +1713,16 @@ func TestControl_ListPools(t *testing.T) {
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    test.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(1),
+								SvcReps:      []uint32{1, 3, 5, 8},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1527,6 +1737,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryErrorMsg:   "remote failed",
 						State:           system.PoolServiceStateReady.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1534,7 +1745,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1545,14 +1757,16 @@ func TestControl_ListPools(t *testing.T) {
 					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    test.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(1),
+								SvcReps:      []uint32{1, 3, 5, 8},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateReady.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateReady.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1569,6 +1783,7 @@ func TestControl_ListPools(t *testing.T) {
 						ServiceReplicas: []ranklist.Rank{1, 3, 5, 8},
 						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
 						State:           system.PoolServiceStateReady.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
@@ -1576,7 +1791,8 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1592,9 +1808,10 @@ func TestControl_ListPools(t *testing.T) {
 								State:   system.PoolServiceStateReady.String(),
 							},
 							{
-								Uuid:    test.MockUUID(2),
-								SvcReps: []uint32{1, 2, 3},
-								State:   system.PoolServiceStateDestroying.String(),
+								Uuid:         test.MockUUID(2),
+								SvcReps:      []uint32{1, 2, 3},
+								State:        system.PoolServiceStateDestroying.String(),
+								RebuildState: "busy",
 							},
 						},
 					}),
@@ -1610,12 +1827,14 @@ func TestControl_ListPools(t *testing.T) {
 						TargetsTotal:    42,
 						TargetsDisabled: 17,
 						Usage:           expUsage,
-						State:           system.PoolServiceStateReady.String(),
+						State:           system.PoolServiceStateDegraded.String(),
+						RebuildState:    "busy",
 					},
 					{
 						UUID:            test.MockUUID(2),
 						ServiceReplicas: []ranklist.Rank{1, 2, 3},
 						State:           system.PoolServiceStateDestroying.String(),
+						RebuildState:    "busy",
 					},
 				},
 			},
@@ -1685,6 +1904,83 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 								TotalBytes:  uint64(1) * uint64(humanize.TByte),
 								AvailBytes:  uint64(1) * uint64(humanize.TByte),
 								UsableBytes: uint64(1) * uint64(humanize.TByte),
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"single MD-on-SSD server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleData),
+								},
+							},
+							Rank: 0,
+						},
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(2) * uint64(humanize.TByte),
+								AvailBytes:  uint64(2) * uint64(humanize.TByte),
+								UsableBytes: uint64(2) * uint64(humanize.TByte),
+								NvmeRole: &storage.BdevRoles{
+									storage.OptionBits(storage.BdevRoleWAL | storage.BdevRoleMeta),
+								},
+							},
+							Rank: 0,
+						},
+					},
+				},
+			},
+			ExpectedOutput: ExpectedOutput{
+				ScmBytes:  uint64(100) * uint64(humanize.GByte),
+				NvmeBytes: uint64(1) * uint64(humanize.TByte),
+			},
+		},
+		"single Ephemeral server": {
+			HostsConfigArray: []MockHostStorageConfig{
+				{
+					HostName: "foo",
+					ScmConfig: []MockScmConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(100) * uint64(humanize.GByte),
+								AvailBytes:  uint64(100) * uint64(humanize.GByte),
+								UsableBytes: uint64(100) * uint64(humanize.GByte),
+							},
+							Rank: 0,
+						},
+					},
+					NvmeConfig: []MockNvmeConfig{
+						{
+							MockStorageConfig: MockStorageConfig{
+								TotalBytes:  uint64(1) * uint64(humanize.TByte),
+								AvailBytes:  uint64(1) * uint64(humanize.TByte),
+								UsableBytes: uint64(1) * uint64(humanize.TByte),
+								NvmeRole:    &storage.BdevRoles{storage.OptionBits(0)},
 							},
 							Rank: 0,
 						},

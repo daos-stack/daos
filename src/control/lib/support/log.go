@@ -48,7 +48,6 @@ type CollectLogSubCmd struct {
 	TargetFolder string `short:"t" long:"target-folder" description:"Target Folder location where log will be copied"`
 	Archive      bool   `short:"z" long:"archive" description:"Archive the log/config files"`
 	ExtraLogsDir string `short:"c" long:"extra-logs-dir" description:"Collect the Logs from given directory"`
-	TargetHost   string `short:"m" long:"target-host" description:"Rsync all the logs to central system"`
 }
 
 // Folder names to copy logs and configs
@@ -120,7 +119,7 @@ type CollectLogsParams struct {
 	Config       string
 	Hostlist     string
 	TargetFolder string
-	TargetHost   string
+	AdminNode    string
 	ExtraLogsDir string
 	JsonOutput   bool
 	LogFunction  int32
@@ -341,7 +340,7 @@ func getSysNameFromQuery(configPath string, log logging.Logger) ([]string, error
 	return hostNames, nil
 }
 
-// R sync logs from individual servers to Admin/TargetHost node
+// R sync logs from individual servers to Admin node
 func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 	targetLocation, err := createHostFolder(opts[0].TargetFolder, log)
 	if err != nil {
@@ -353,7 +352,7 @@ func rsyncLog(log logging.Logger, opts ...CollectLogsParams) error {
 		"-av",
 		"--blocking-io",
 		targetLocation,
-		opts[0].TargetHost + ":" + opts[0].TargetFolder},
+		opts[0].AdminNode + ":" + opts[0].TargetFolder},
 		" ")
 
 	out, err := exec.Command("sh", "-c", cmd).Output()
@@ -650,7 +649,7 @@ func collectDaosMetrics(daosNodeLocation string, log logging.Logger, opts ...Col
 
 			_, err := cpOutputToFile(daosNodeLocation, log, daos)
 			if err != nil {
-				return err
+				log.Errorf("Failed to run %s: %v", daos.cmd, err)
 			}
 		}
 	} else {

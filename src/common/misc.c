@@ -131,7 +131,7 @@ out:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -383,7 +383,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl");
+		D_INFO("Requested more bytes than what's available in sgl\n");
 
 	return rc;
 }

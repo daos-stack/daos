@@ -926,7 +926,7 @@ ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts, unsigned i
 {
 	unsigned int status;
 
-	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
 	return ds_pool_get_tgt_idx_by_state(pool_uuid, status, failed_tgts, failed_tgts_cnt);
 }
 

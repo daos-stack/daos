@@ -75,7 +75,7 @@ class GetContainerACLTest(ContSecurityTestBase):
             self.fail("container get-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
 
-    def test_no_user_permissions(self):
+    def test_cont_get_acl_no_perm(self):
         """
         JIRA ID: DAOS-3705
 
@@ -85,7 +85,7 @@ class GetContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=GetContainerACLTest,test_no_user_permissions
+        :avocado: tags=GetContainerACLTest,test_cont_get_acl_no_perm
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

@@ -75,16 +75,35 @@ extern "C" {
 void d_srand(long int);
 long int d_rand(void);
 
+/* Instruct the compiler these are allocation functions that return a pointer, and if possible
+ * which function needs to be used to free them.
+ */
+#if HAVE_DEALLOC
+#define _dalloc_ __attribute__((malloc, malloc(d_free)))
+#else
+#define _dalloc_ __attribute__((malloc))
+#endif
+
 /* memory allocating macros */
-void  d_free(void *);
-void *d_calloc(size_t, size_t);
-void *d_malloc(size_t);
-void *d_realloc(void *, size_t);
-char *d_strndup(const char *s, size_t n);
-int d_asprintf(char **strp, const char *fmt, ...);
-void       *
-d_aligned_alloc(size_t alignment, size_t size, bool zero);
-char *d_realpath(const char *path, char *resolved_path);
+void
+d_free(void *ptr);
+void *
+d_calloc(size_t nmemb, size_t size) _dalloc_ __attribute__((alloc_size(1, 2)));
+void *
+d_malloc(size_t size) _dalloc_ __attribute__((alloc_size(1)));
+void *
+d_realloc(void *, size_t) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_strndup(const char *s, size_t n) _dalloc_;
+int
+d_asprintf(char **strp, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+/* Use a non-standard asprintf interface to enable compiler checks. */
+char *
+d_asprintf2(int *rc, const char *fmt, ...) _dalloc_ __attribute__((format(printf, 2, 3)));
+void *
+d_aligned_alloc(size_t alignment, size_t size, bool zero) _dalloc_ __attribute__((alloc_size(2)));
+char *
+d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
@@ -117,11 +136,10 @@ char *d_realpath(const char *path, char *resolved_path);
 				(int)(size));				\
 	} while (0)
 
-#define D_ALLOC_CORE(ptr, size, count)					\
-	do {								\
-		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
-		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
-			      count, #count, 0);			\
+#define D_ALLOC_CORE(ptr, size, count)                                                             \
+	do {                                                                                       \
+		(ptr) = (__typeof__(ptr))d_calloc((count), (size));                                \
+		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size, count, #count, 0);                    \
 	} while (0)
 
 #define D_ALLOC_CORE_NZ(ptr, size, count)				\
@@ -155,13 +173,11 @@ char *d_realpath(const char *path, char *resolved_path);
 			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
-#define D_ASPRINTF(ptr, ...)						\
-	do {								\
-		int _rc;						\
-		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
-		D_CHECK_ALLOC(asprintf, _rc != -1,			\
-			      ptr, #ptr, _rc + 1, 0, #ptr,		\
-			      (ptr) = NULL);				\
+#define D_ASPRINTF(ptr, ...)                                                                       \
+	do {                                                                                       \
+		int _rc;                                                                           \
+		(ptr) = d_asprintf2(&_rc, __VA_ARGS__);                                            \
+		D_CHECK_ALLOC(asprintf, (ptr) != NULL, ptr, #ptr, _rc + 1, 0, #ptr, (ptr) = NULL); \
 	} while (0)
 
 /* d_realpath() can fail with genuine errors, in which case we want to keep the errno from
@@ -429,6 +445,26 @@ d_rank_range_list_t *d_rank_range_list_create_from_ranks(d_rank_list_t *rank_lis
 char *d_rank_range_list_str(d_rank_range_list_t *list, bool *truncated);
 void d_rank_range_list_free(d_rank_range_list_t *range_list);
 
+#ifdef FAULT_INJECTION
+
+/* Define as a macro to improve failure logging */
+
+#define d_sgl_init(_SGL, _NR)                                                                      \
+	({                                                                                         \
+		int _rc           = -DER_SUCCESS;                                                  \
+		(_SGL)->sg_nr_out = 0;                                                             \
+		(_SGL)->sg_nr     = (_NR);                                                         \
+		if (unlikely((_NR) == 0)) {                                                        \
+			(_SGL)->sg_iovs = NULL;                                                    \
+		} else {                                                                           \
+			D_ALLOC_ARRAY((_SGL)->sg_iovs, (_NR));                                     \
+			if ((_SGL)->sg_iovs == NULL)                                               \
+				_rc = -DER_NOMEM;                                                  \
+		}                                                                                  \
+		_rc;                                                                               \
+	})
+
+#else
 static inline int
 d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 {
@@ -444,6 +480,7 @@ d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
 
 	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
 }
+#endif
 
 static inline void
 d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
@@ -888,6 +925,16 @@ d_hlc_epsilon_get(void);
  */
 uint64_t
 d_hlc_epsilon_get_bound(uint64_t hlc);
+
+/**
+ * Get the age of the hlc in second.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The age of the hlc in second
+ */
+uint64_t
+d_hlc_age2sec(uint64_t hlc);
 
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);

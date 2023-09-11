@@ -287,11 +287,8 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] iv_value		iv_value buffers to return
  * \param[in] arg		private user data
  *
- * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				  d_sg_list_t *iv_value,
-				  void *arg);
+typedef void (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *arg);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either

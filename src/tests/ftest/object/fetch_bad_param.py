@@ -56,7 +56,7 @@ class ObjFetchBadParam(TestWithServers):
             self.log.info(traceback.format_exc())
             self.fail("Test failed during the initial setup.\n")
 
-    def test_bad_handle(self):
+    def test_obj_fetch_bad_handle(self):
         """JIRA ID: DAOS-1377
 
         Test Description: Pass a bogus object handle, should return bad handle.
@@ -64,7 +64,7 @@ class ObjFetchBadParam(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=ObjFetchBadParam,test_bad_handle
+        :avocado: tags=ObjFetchBadParam,test_obj_fetch_bad_handle
         """
         try:
             # trash the handle and read again

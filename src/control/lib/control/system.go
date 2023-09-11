@@ -185,7 +185,23 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      system.MemberState // Bitmask of desired states
+}
+
+func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+	switch {
+	case req.NotOK:
+		return system.AllMemberFilter &^ system.MemberStateJoined, nil
+	case req.WantedStates == 0:
+		return system.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
+		return req.WantedStates, nil
+	default:
+		return system.MemberStateUnknown, errors.Errorf("invalid member states bitmask %x",
+			int(req.WantedStates))
+	}
 }
 
 // SystemQueryResp contains the request response.
@@ -235,6 +251,12 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq.Hosts = req.Hosts.String()
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem(rpcClient)
+
+	mask, err := req.getStateMask()
+	if err != nil {
+		return nil, errors.Wrap(err, "calculating member state bitmask")
+	}
+	pbReq.StateMask = uint32(mask)
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
@@ -818,27 +840,6 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 	})
 
 	rpcClient.Debugf("DAOS system start-ranks request: %s", pbUtil.Debug(pbReq))
-	return invokeRPCFanout(ctx, rpcClient, req)
-}
-
-// PingRanks concurrently performs ping on ranks across all hosts
-// supplied in the request's hostlist.
-//
-// This is called from SystemQuery in server/ctl_system.go with a
-// populated host list in the request parameter and blocks until all results
-// (successful or otherwise) are received after invoking fan-out.
-// Returns a single response structure containing results generated with
-// request responses from each selected rank.
-func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(ctlpb.RanksReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
-	}
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).PingRanks(ctx, pbReq)
-	})
-
-	rpcClient.Debugf("DAOS system ping-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 

@@ -899,7 +899,7 @@ dss_start_xs_id(int tag, int xs_id)
 	if (numa_obj) {
 		idx = hwloc_bitmap_first(core_allocation_bitmap);
 		if (idx == -1) {
-			D_ERROR("No core available for XS: %d", xs_id);
+			D_ERROR("No core available for XS: %d\n", xs_id);
 			return -DER_INVAL;
 		}
 		D_DEBUG(DB_TRACE,

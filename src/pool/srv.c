@@ -113,16 +113,16 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_opc       = a,	\
 	.dr_hdlr      = d,	\
 	.dr_corpc_ops = e,	\
-}
+},
 
 static struct daos_rpc_handler pool_handlers_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(4)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 static struct daos_rpc_handler pool_handlers_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(5)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 #undef X

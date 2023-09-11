@@ -21,6 +21,11 @@ if ! command -v flake8 > /dev/null 2>&1; then
     exit 0
 fi
 
+if [ ! -f .flake8 ]; then
+    echo "  No .flake8, skipping flake checks"
+    exit 0
+fi
+
 echo "  Checking uncommitted code with flake."
 git diff -u | flake8 --diff
 

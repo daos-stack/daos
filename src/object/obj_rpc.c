@@ -1103,7 +1103,15 @@ static struct crt_proto_rpc_format obj_proto_rpc_fmt[] = {
 
 #undef X
 
-struct crt_proto_format obj_proto_fmt = {
+struct crt_proto_format obj_proto_fmt_0 = {
+	.cpf_name  = "daos-object",
+	.cpf_ver   = DAOS_OBJ_VERSION - 1,
+	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),
+	.cpf_prf   = obj_proto_rpc_fmt,
+	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_OBJ_MODULE, 0)
+};
+
+struct crt_proto_format obj_proto_fmt_1 = {
 	.cpf_name  = "daos-object",
 	.cpf_ver   = DAOS_OBJ_VERSION,
 	.cpf_count = ARRAY_SIZE(obj_proto_rpc_fmt),

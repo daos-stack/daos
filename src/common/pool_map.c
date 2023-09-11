@@ -137,6 +137,11 @@ static struct pool_comp_type_dict comp_type_dict[] = {
 		.td_name	= "node",
 	},
 	{
+		.td_type	= PO_COMP_TP_GRP,
+		.td_abbr	= 'g',
+		.td_name	= "group",
+	},
+	{
 		.td_type	= PO_COMP_TP_ROOT,
 		.td_abbr	= 'o',
 		.td_name	= "root",
@@ -451,21 +456,27 @@ pool_buf_unpack(struct pool_buf *buf)
 static int
 pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 {
-	struct pool_domain *tree;
-	struct pool_domain *domain;
-	struct pool_domain *parent;
-	struct pool_target *targets;
-	pool_comp_type_t    type;
-	int		    size;
-	int		    i;
-	int		    rc = 0;
+	struct pool_domain	*tree;
+	struct pool_domain	*domain;
+	struct pool_domain	*parent;
+	struct pool_target	*targets;
+	struct pool_component	*comp;
+	pool_comp_type_t	 type;
+	int			 size;
+	int			 i, nr;
+	int			 rc = 0;
 
 	if (buf->pb_target_nr == 0 || buf->pb_node_nr == 0 ||
-	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr !=
-								buf->pb_nr) {
+	    buf->pb_domain_nr + buf->pb_node_nr + buf->pb_target_nr != buf->pb_nr) {
 		D_DEBUG(DB_MGMT, "Invalid number of components: %d/%d/%d/%d\n",
 			buf->pb_nr, buf->pb_domain_nr, buf->pb_node_nr,
 			buf->pb_target_nr);
+		return -DER_INVAL;
+	}
+	if (buf->pb_domain_nr != 0 && buf->pb_comps[0].co_type != PO_COMP_TP_GRP &&
+	    buf->pb_comps[0].co_type != PO_COMP_TP_NODE) {
+		D_DEBUG(DB_MGMT, "Invalid co_type %s[%d] for first domain.\n",
+			pool_comp_type2str(buf->pb_comps[0].co_type), buf->pb_comps[0].co_type);
 		return -DER_INVAL;
 	}
 
@@ -492,10 +503,24 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	parent->do_comp.co_status = PO_COMP_ST_UPIN;
 	if (buf->pb_domain_nr == 0) {
 		/* nodes are directly attached under the root */
-		parent->do_target_nr = buf->pb_node_nr;
+		parent->do_target_nr = buf->pb_target_nr;
 		parent->do_child_nr = buf->pb_node_nr;
 	} else {
-		parent->do_child_nr = buf->pb_domain_nr;
+		comp = &buf->pb_comps[0];
+		if (comp->co_type == PO_COMP_TP_GRP) {
+			nr = 0;
+			do {
+				nr++;
+				comp++;
+			} while (comp->co_type == PO_COMP_TP_GRP);
+			parent->do_child_nr = nr;
+			D_DEBUG(DB_TRACE, "root do_child_nr %d, with performance domain\n",
+				parent->do_child_nr);
+		} else if (comp->co_type == PO_COMP_TP_NODE) {
+			parent->do_child_nr = buf->pb_domain_nr;
+			D_DEBUG(DB_TRACE, "root do_child_nr %d, without performance domain\n",
+				parent->do_child_nr);
+		}
 	}
 	parent->do_children = &tree[1];
 
@@ -503,9 +528,8 @@ pool_buf_parse(struct pool_buf *buf, struct pool_domain **tree_pp)
 	type = buf->pb_comps[0].co_type;
 
 	for (i = 1;; i++) {
-		struct pool_component *comp = &tree[i].do_comp;
-		int		       nr = 0;
-
+		nr = 0;
+		comp = &tree[i].do_comp;
 		*comp = buf->pb_comps[i - 1];
 		if (comp->co_type >= PO_COMP_TP_ROOT) {
 			D_ERROR("Invalid type %d/%d\n", type, comp->co_type);
@@ -1323,14 +1347,17 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 			/* new buffer may have changes for this domain */
 			if (sdom->do_children != NULL) {
 				struct pool_domain *child = addr;
+				struct pool_comp_cntr	s_cntr;
 
-				D_DEBUG(DB_TRACE, "Scan children of %s[%d]\n",
+				pool_tree_count(sdom, &s_cntr);
+				D_DEBUG(DB_TRACE, "Scan children of %s[%d] tgt_nr %u\n",
 					pool_domain_name(ddom),
-					ddom->do_comp.co_id);
+					ddom->do_comp.co_id, s_cntr.cc_targets);
 
 				if (ddom->do_children == NULL)
 					ddom->do_children = child;
 
+				ddom->do_target_nr += s_cntr.cc_targets;
 				/* copy new child domains to dest buffer */
 				for (j = 0; j < sdom->do_child_nr; j++) {
 					struct pool_component *dc;
@@ -1412,11 +1439,10 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 }
 
 static void
-fill_domain_comp(struct pool_map *map, struct d_fd_node *domain, int idx, int map_version,
-		 uint8_t new_status, struct pool_component *map_comp)
+fill_domain_comp(struct pool_map *map, uint8_t type, struct d_fd_node *domain, int idx,
+		 int map_version, uint8_t new_status, struct pool_component *map_comp)
 {
-	/* TODO DAOS-6353: Use the layer number as type */
-	map_comp->co_type = PO_COMP_TP_NODE;
+	map_comp->co_type = type;
 	map_comp->co_status = new_status;
 	map_comp->co_index = idx;
 	map_comp->co_id = domain->fdn_val.dom->fd_id;
@@ -1450,8 +1476,11 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 {
 	int			rc;
 	uint32_t		num_dom_comps;
+	uint32_t		num_grp_comps;
 	uint32_t		num_rank_comps;
+	uint32_t		num_comps;
 	uint8_t			new_status;
+	uint8_t			dom_type;
 	struct d_fd_tree	tree = {0};
 	struct d_fd_node	node = {0};
 	bool			updated = false;
@@ -1462,11 +1491,14 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		new_status = PO_COMP_ST_NEW;
 		num_dom_comps = pool_map_find_domain(map, PO_COMP_TP_NODE,
 						     PO_COMP_ID_ALL, NULL);
+		num_grp_comps = pool_map_find_domain(map, PO_COMP_TP_GRP,
+						     PO_COMP_ID_ALL, NULL);
 		num_rank_comps = pool_map_find_domain(map, PO_COMP_TP_RANK,
 						      PO_COMP_ID_ALL, NULL);
 	} else {
 		new_status = PO_COMP_ST_UPIN;
 		num_dom_comps = 0;
+		num_grp_comps = 0;
 		num_rank_comps = 0;
 	}
 
@@ -1489,22 +1521,34 @@ add_domain_tree_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 
 		switch (node.fdn_type) {
 		case D_FD_NODE_TYPE_DOMAIN:
-			fill_domain_comp(map, &node, num_dom_comps, map_version, new_status,
-					 &map_comp);
+			/* TODO DAOS-6353: Use the layer number as type */
+			if (d_fd_node_is_group(&node)) {
+				dom_type = PO_COMP_TP_GRP;
+				num_comps = num_grp_comps;
+			} else {
+				dom_type = PO_COMP_TP_NODE;
+				num_comps = num_dom_comps;
+			}
+			fill_domain_comp(map, dom_type, &node, num_comps, map_version,
+					 new_status, &map_comp);
 			if (map != NULL) {
 				struct pool_domain	*current;
 				int			already_in_map;
 
-				already_in_map = pool_map_find_domain(map, PO_COMP_TP_NODE,
+				already_in_map = pool_map_find_domain(map, dom_type,
 								      map_comp.co_id, &current);
 				if (already_in_map > 0) {
 					D_DEBUG(DB_TRACE, "domain %d/%u already in map\n",
 						map_comp.co_id, current->do_comp.co_status);
 					map_comp.co_status = current->do_comp.co_status;
 					map_comp.co_index = current->do_comp.co_index;
+				} else if (dom_type == PO_COMP_TP_GRP) {
+					num_grp_comps++;
 				} else {
 					num_dom_comps++;
 				}
+			} else if (dom_type == PO_COMP_TP_GRP) {
+				num_grp_comps++;
 			} else {
 				num_dom_comps++;
 			}

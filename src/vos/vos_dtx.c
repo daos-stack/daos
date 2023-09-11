@@ -743,9 +743,9 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 		rc = umem_free(umm, dbd_off);
 
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Release DTX active blob %p ("UMOFF_PF") for cont "DF_UUID": "DF_RC"\n",
-			 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+			  "Release DTX active blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+			  UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 	}
 
 	return rc;
@@ -863,8 +863,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 
 out:
 	if (rc != -DER_ALREADY && rc != -DER_NONEXIST)
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Commit the DTX "DF_DTI": rc = "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Commit the DTX " DF_DTI, DP_DTI(dti));
 
 	if (rc != 0)
 		D_FREE(dce);
@@ -1165,8 +1164,9 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		 * The DTX entry still references related data record,
 		 * then we cannot (vos) aggregate related data record.
 		 */
-		D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) aggregated\n",
-		       DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
+		if (d_hlc_age2sec(DAE_XID(dae).dti_hlc) >= DAOS_AGG_THRESHOLD)
+			D_WARN("DTX "DF_DTI" (%u) still references the data, cannot be (VOS) "
+			       "aggregated\n", DP_DTI(&DAE_XID(dae)), vos_dtx_status(dae));
 
 		return ALB_AVAILABLE_DIRTY;
 	}
@@ -2137,11 +2137,9 @@ vos_dtx_post_handle(struct vos_container *cont,
 			D_WARN("Cannot remove DTX "DF_DTI" from active table: "
 			       DF_RC"\n", DP_DTI(&DAE_XID(daes[i])), DP_RC(rc));
 
+			D_ASSERT(daes[i]->dae_preparing == 0);
+
 			daes[i]->dae_prepared = 0;
-			/* The 'dae_preparing' is set by the its owner who is not current ULT.
-			 * Since the 'dae' may be detached from the DTX handle, let's reset it.
-			 */
-			daes[i]->dae_preparing = 0;
 			if (abort) {
 				daes[i]->dae_aborted = 1;
 				daes[i]->dae_aborting = 0;
@@ -2199,10 +2197,62 @@ out:
 }
 
 int
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force)
+{
+	struct dtx_handle	*dth = dae->dae_dth;
+	struct umem_instance	*umm;
+	int			 rc;
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0)
+		goto out;
+
+	if (dth != NULL) {
+		D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
+		/* Not allow dtx_abort against solo DTX. */
+		D_ASSERT(!dth->dth_solo);
+		/* Set dth->dth_need_validation to notify the dth owner. */
+		dth->dth_need_validation = 1;
+	}
+
+	rc = dtx_rec_release(cont, dae, true);
+	dae->dae_preparing = 0;
+	if (rc == 0) {
+		dae->dae_aborting = 1;
+		rc = umem_tx_commit(umm);
+		D_ASSERTF(rc == 0, "local TX commit failure %d\n", rc);
+	} else {
+		rc = umem_tx_abort(umm, rc);
+	}
+
+	if (rc == 0 && dth != NULL) {
+		dae->dae_dth = NULL;
+		dth->dth_aborted = 1;
+		dth->dth_ent = NULL;
+		dth->dth_pinned = 0;
+		/*
+		 * dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
+		 * when remove the DTX entry from active DTX table.
+		 */
+	}
+
+	/*
+	 * NOTE: Do not reset dth_need_validation for "else" case,
+	 *	 because it may be also co-set (shared) by others.
+	 */
+
+out:
+	if (rc == 0 || force)
+		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+
+	return rc;
+}
+
+int
 vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 {
 	struct vos_container	*cont;
-	struct umem_instance	*umm;
 	struct vos_dtx_act_ent	*dae = NULL;
 	d_iov_t			 riov;
 	d_iov_t			 kiov;
@@ -2232,71 +2282,38 @@ vos_dtx_abort(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t epoch)
 		D_GOTO(out, rc = -DER_NO_PERM);
 	}
 
-	if (vos_dae_is_abort(dae))
+	if (vos_dae_is_abort(dae)) {
+		/*
+		 * The DTX has been aborted before, but failed to be removed from the active
+		 * table at that time, then need to be removed again via vos_dtx_post_handle.
+		 */
+		if (dae->dae_aborted)
+			vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
+
 		D_GOTO(out, rc = -DER_ALREADY);
+	}
 
 	if (epoch != DAOS_EPOCH_MAX && epoch != DAE_EPOCH(dae))
 		D_GOTO(out, rc = -DER_NONEXIST);
 
-	/* NOTE: Abort in-preparing DTX entry. It may because the non-leader is some slow,
-	 *	 as to leader got timeout and then abort the DTX by race. Under such case,
-	 *	 the owner of 'preparing' need to handle the race case.
-	 */
-	if (unlikely(dae->dae_preparing))
-		D_WARN("Trying to abort in preparing DTX "DF_DTI" by race\n", DP_DTI(dti));
-
-	umm = vos_cont2umm(cont);
-	rc = umem_tx_begin(umm, NULL);
-	if (rc == 0) {
-		struct dtx_handle	*dth = dae->dae_dth;
-
-		if (dth != NULL) {
-			D_ASSERT(dth->dth_ent == dae || dth->dth_ent == NULL);
-			/* Not allow dtx_abort against solo DTX. */
-			D_ASSERT(!dth->dth_solo);
-			/* Set dth->dth_need_validation to notify the dth owner. */
-			dth->dth_need_validation = 1;
-		}
-
-		rc = dtx_rec_release(cont, dae, true);
-		if (rc == 0) {
-			dae->dae_aborting = 1;
-			rc = umem_tx_commit(umm);
-			D_ASSERTF(rc == 0, "local TX commit failure %d\n", rc);
-		} else {
-			rc = umem_tx_abort(umm, rc);
-		}
-
-		if (rc == 0 && dth != NULL) {
-			dae->dae_dth = NULL;
-			dth->dth_aborted = 1;
-			dth->dth_ent = NULL;
-			dth->dth_pinned = 0;
-			/* dtx_act_ent_cleanup() will be triggered via vos_dtx_post_handle()
-			 * when remove the DTX entry from active DTX table.
-			 */
-		}
-
-		/* NOTE: do not reset dth_need_validation for "else" case,
-		 *	 because it may be also co-set (shared) by others.
+	if (unlikely(dae->dae_preparing)) {
+		/*
+		 * NOTE: Abort in-preparing DTX entry. It may because the non-leader is some slow,
+		 *	 as to leader got timeout and then abort the DTX by race. Under such case,
+		 *	 directly set dae->dae_aborting to notify the prepare sponsor that the DTX
+		 *	 should be aborted after its prepare done.
 		 */
+		D_WARN("Trying to abort in preparing DTX "DF_DTI" by race\n", DP_DTI(dti));
+		dae->dae_aborting = 1;
+	} else {
+		rc = vos_dtx_abort_internal(cont, dae, false);
 	}
 
 out:
-	if (rc != -DER_ALREADY && rc != -DER_NONEXIST)
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-			 "Abort the DTX "DF_DTI": "DF_RC"\n", DP_DTI(dti), DP_RC(rc));
-
-	/* Aborting: The DTX is being aborted. The local transaction for abort itself is yield.
-	 *
-	 * Aborted: The DTX has been aborted before, but failed to be removed from the active
-	 *	    table at that time, then need to be removed again via vos_dtx_post_handle.
-	 */
-	if (dae != NULL && (rc == 0 || (rc == -DER_ALREADY && dae->dae_aborted)))
-		vos_dtx_post_handle(cont, &dae, NULL, 1, true, false);
-
 	if (rc == -DER_ALREADY)
 		rc = 0;
+	else if (rc != -DER_NONEXIST)
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc, "Abort the DTX " DF_DTI, DP_DTI(dti));
 
 	return rc;
 }
@@ -2349,9 +2366,8 @@ vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti, uint32_t f
 	}
 
 out:
-	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
-		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
-		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN, rc, "Mark the DTX entry " DF_DTI " as %s",
+		  DP_DTI(dti), vos_dtx_flags2name(flags));
 
 	if ((rc == -DER_NO_PERM || rc == -DER_NONEXIST) && flags == DTE_PARTIAL_COMMITTED)
 		rc = 0;
@@ -2517,9 +2533,9 @@ out:
 	if (rc == 0 && cont->vc_cmt_dtx_reindex_pos == dbd_off)
 		cont->vc_cmt_dtx_reindex_pos = next;
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-		 "Release DTX committed blob %p ("UMOFF_PF") for cont "DF_UUID": "DF_RC"\n",
-		 dbd, UMOFF_P(dbd_off), DP_UUID(cont->vc_id), DP_RC(rc));
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Release DTX committed blob %p (" UMOFF_PF ") for cont " DF_UUID, dbd,
+		  UMOFF_P(dbd_off), DP_UUID(cont->vc_id));
 
 	return rc;
 }
@@ -3038,6 +3054,16 @@ out:
 
 		dae = dth->dth_ent;
 		if (dae != NULL) {
+			if (unlikely(dae->dae_preparing && dae->dae_aborting)) {
+				dae->dae_preparing = 0;
+				rc = vos_dtx_abort_internal(cont, dae, true);
+				DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+					  "Delay abort DTX " DF_DTI " (2)", DP_DTI(&dth->dth_xid));
+
+				/* Aborted by race, return -DER_INPROGRESS for client retry. */
+				return -DER_INPROGRESS;
+			}
+
 			dae->dae_preparing = 0;
 			if (dth->dth_solo)
 				vos_dtx_post_handle(cont, &dae, &dce, 1, false, rc != 0);

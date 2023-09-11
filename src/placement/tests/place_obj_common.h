@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,12 +12,29 @@
 #include <daos/placement.h>
 #include <daos.h>
 
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <daos/tests_lib.h>
+#define STR_HELPER(x) #x
+#define STR(x) STR_HELPER(x)
+
+extern bool g_verbose;
+
+#define skip_msg(msg) do { print_message(__FILE__":" STR(__LINE__) \
+			" Skipping > "msg"\n"); skip(); } \
+			while (0)
+#define is_true assert_true
+#define is_false assert_false
+
 #define PLT_LAYOUT_VERSION	1
+extern bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout);
 
 int
-plt_obj_place(daos_obj_id_t oid, struct pl_obj_layout **layout,
+plt_obj_place(daos_obj_id_t oid, uint32_t pda, struct pl_obj_layout **layout,
 		struct pl_map *pl_map, bool print_layout);
 
 void
@@ -95,8 +112,8 @@ plt_spare_tgts_get(uuid_t pl_uuid, daos_obj_id_t oid, uint32_t *failed_tgts,
 		   struct pool_map *po_map, struct pl_map *pl_map);
 
 void
-gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
-			   int vos_per_target, pl_map_type_t pl_type,
+gen_pool_and_placement_map(int num_pds, int fdoms_per_pd, int nodes_per_domain,
+			   int vos_per_target, pl_map_type_t pl_type, int fdom_lvl,
 			   struct pool_map **po_map_out,
 			   struct pl_map **pl_map_out);
 
@@ -129,4 +146,93 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes,
 
 bool
 is_max_class_obj(daos_oclass_id_t cid);
+
+int
+placement_tests_run(bool verbose);
+int
+pda_tests_run(bool verbose);
+int
+pda_layout_run(bool verbose);
+int
+dist_tests_run(bool verbose, uint32_t num_obj, int obj_class);
+
+static inline void
+verbose_msg(char *msg, ...)
+{
+	if (g_verbose) {
+		va_list vargs;
+
+		va_start(vargs, msg);
+		vprint_message(msg, vargs);
+		va_end(vargs);
+	}
+}
+
+static inline void
+gen_maps(int num_pds, int fdoms_per_pd, int nodes_per_domain, int vos_per_target,
+	 struct pool_map **po_map, struct pl_map **pl_map)
+{
+	*po_map = NULL;
+	*pl_map = NULL;
+	gen_pool_and_placement_map(num_pds, fdoms_per_pd, nodes_per_domain, vos_per_target,
+				   PL_TYPE_JUMP_MAP, PO_COMP_TP_RANK, po_map, pl_map);
+	assert_non_null(*po_map);
+	assert_non_null(*pl_map);
+}
+
+static inline void
+gen_maps_adv(int num_pds, int fdoms_per_pd, int nodes_per_domain, int vos_per_target, int fdom_lvl,
+	     struct pool_map **po_map, struct pl_map **pl_map)
+{
+	*po_map = NULL;
+	*pl_map = NULL;
+	gen_pool_and_placement_map(num_pds, fdoms_per_pd, nodes_per_domain, vos_per_target,
+				   PL_TYPE_JUMP_MAP, fdom_lvl, po_map, pl_map);
+	assert_non_null(*po_map);
+	assert_non_null(*pl_map);
+}
+
+static inline void
+gen_oid(daos_obj_id_t *oid, uint64_t lo, uint64_t hi, daos_oclass_id_t cid)
+{
+	int rc;
+
+	oid->lo = lo;
+	/* make sure top 32 bits are unset (DAOS only) */
+	oid->hi = hi & 0xFFFFFFFF;
+	rc = daos_obj_set_oid_by_class(oid, 0, cid, 0);
+	assert_rc_equal(rc, cid == OC_UNKNOWN ? -DER_INVAL : 0);
+}
+
+#define assert_placement_success_print(pl_map, cid, pda)			\
+	do {									\
+		daos_obj_id_t __oid;						\
+		struct pl_obj_layout *__layout = NULL;				\
+		gen_oid(&__oid, 1, UINT64_MAX, cid);				\
+		assert_success(plt_obj_place(__oid, pda, &__layout, pl_map,	\
+				true));						\
+		pl_obj_layout_free(__layout);					\
+	} while (0)
+
+#define assert_placement_success(pl_map, cid, pda)				\
+	do {									\
+		daos_obj_id_t __oid;						\
+		struct pl_obj_layout *__layout = NULL;				\
+		gen_oid(&__oid, 1, UINT64_MAX, cid);				\
+		assert_success(plt_obj_place(__oid, pda, &__layout, pl_map,	\
+				false));					\
+		pl_obj_layout_free(__layout);					\
+	} while (0)
+
+#define assert_invalid_param(pl_map, cid, pda)					\
+	do {									\
+		daos_obj_id_t __oid;						\
+		struct pl_obj_layout *__layout = NULL;				\
+		int rc;								\
+		gen_oid(&__oid, 1, UINT64_MAX, cid);				\
+		rc = plt_obj_place(__oid, pda, &__layout,			\
+				   pl_map, false);				\
+		assert_rc_equal(rc, -DER_INVAL);				\
+	} while (0)
+
 #endif /*   PL_MAP_COMMON_H   */

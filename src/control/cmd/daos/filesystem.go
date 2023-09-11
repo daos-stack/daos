@@ -38,6 +38,7 @@ type fsCmd struct {
 	ResetChunkSize fsResetChunkSizeCmd `command:"reset-chunk-size" description:"reset fs chunk size"`
 	ResetObjClass  fsResetOclassCmd    `command:"reset-oclass" description:"reset fs obj class"`
 	DfuseQuery     fsDfuseQueryCmd     `command:"query" description:"Query dfuse for memory usage"`
+	DfuseEvict     fsDfuseEvictCmd     `command:"evict" description:"Evict object from dfuse"`
 }
 
 type fsCopyCmd struct {
@@ -101,7 +102,6 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		fsType = "POSIX"
 	}
 	// Compat with old-style output
-	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 	cmd.Infof("Successfully copied to %s: %s", fsType, cmd.Dest)
 	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
 	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
@@ -433,6 +433,8 @@ func (cmd *fsFixRootCmd) Execute(_ []string) error {
 type fsDfuseQueryCmd struct {
 	daosCmd
 
+	Ino uint64 `long:"inode" description:"inode number to query"`
+
 	Args struct {
 		Path string `positional-arg-name:"path" description:"DFuse path to query" required:"1"`
 	} `positional-args:"yes"`
@@ -448,9 +450,84 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 	defer freeString(ap.path)
 	defer deallocCmdArgs()
 
+	if cmd.Ino != 0 {
+		ap.dfuse_mem.ino = C.ulong(cmd.Ino)
+	}
+
 	rc := C.dfuse_count_query(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to query %s", cmd.Args.Path)
+	}
+
+	if cmd.JSONOutputEnabled() {
+		if cmd.Ino == 0 {
+			jsonAttrs := &struct {
+				NumInodes      uint64 `json:"inodes"`
+				NumFileHandles uint64 `json:"open_files"`
+				NumPools       uint64 `json:"pools"`
+				NumContainers  uint64 `json:"containers"`
+			}{
+				NumInodes:      uint64(ap.dfuse_mem.inode_count),
+				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+				NumPools:       uint64(ap.dfuse_mem.pool_count),
+				NumContainers:  uint64(ap.dfuse_mem.container_count),
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
+		} else {
+			jsonAttrs := &struct {
+				NumInodes      uint64 `json:"inodes"`
+				NumFileHandles uint64 `json:"open_files"`
+				NumPools       uint64 `json:"pools"`
+				NumContainers  uint64 `json:"containers"`
+				Found          bool   `json:"resident"`
+			}{
+				NumInodes:      uint64(ap.dfuse_mem.inode_count),
+				NumFileHandles: uint64(ap.dfuse_mem.fh_count),
+				NumPools:       uint64(ap.dfuse_mem.pool_count),
+				NumContainers:  uint64(ap.dfuse_mem.container_count),
+				Found:          bool(ap.dfuse_mem.found),
+			}
+			return cmd.OutputJSON(jsonAttrs, nil)
+		}
+	}
+
+	cmd.Infof("DFuse descriptor usage.")
+	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
+	if cmd.Ino != 0 {
+		if ap.dfuse_mem.found {
+			cmd.Infof(" Inode %d resident", cmd.Ino)
+		} else {
+			cmd.Infof(" Inode %d not resident", cmd.Ino)
+		}
+	}
+
+	return nil
+}
+
+type fsDfuseEvictCmd struct {
+	daosCmd
+
+	Args struct {
+		Path string `positional-arg-name:"path" description:"Path to evict from dfuse" required:"1"`
+	} `positional-args:"yes"`
+}
+
+func (cmd *fsDfuseEvictCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+
+	ap.path = C.CString(cmd.Args.Path)
+	defer freeString(ap.path)
+	defer deallocCmdArgs()
+
+	rc := C.dfuse_evict(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err, "failed to evict %s", cmd.Args.Path)
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -459,20 +536,23 @@ func (cmd *fsDfuseQueryCmd) Execute(_ []string) error {
 			NumFileHandles uint64 `json:"open_files"`
 			NumPools       uint64 `json:"pools"`
 			NumContainers  uint64 `json:"containers"`
+			Inode          uint64 `json:"inode,omitempty"`
 		}{
 			NumInodes:      uint64(ap.dfuse_mem.inode_count),
 			NumFileHandles: uint64(ap.dfuse_mem.fh_count),
 			NumPools:       uint64(ap.dfuse_mem.pool_count),
 			NumContainers:  uint64(ap.dfuse_mem.container_count),
+			Inode:          uint64(ap.dfuse_mem.ino),
 		}
 		return cmd.OutputJSON(jsonAttrs, nil)
 	}
 
 	cmd.Infof("DFuse descriptor usage.")
-	cmd.Infof("      Pools: %d", ap.dfuse_mem.pool_count)
-	cmd.Infof(" Containers: %d", ap.dfuse_mem.container_count)
-	cmd.Infof("     Inodes: %d", ap.dfuse_mem.inode_count)
-	cmd.Infof(" Open files: %d", ap.dfuse_mem.fh_count)
+	cmd.Infof(" Evicted inode: %d", ap.dfuse_mem.ino)
+	cmd.Infof("         Pools: %d", ap.dfuse_mem.pool_count)
+	cmd.Infof("    Containers: %d", ap.dfuse_mem.container_count)
+	cmd.Infof("        Inodes: %d", ap.dfuse_mem.inode_count)
+	cmd.Infof("    Open files: %d", ap.dfuse_mem.fh_count)
 
 	return nil
 }

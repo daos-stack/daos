@@ -2348,6 +2348,170 @@ ec_dkey_enum_fail(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+ec_single_stripe_nvme_io(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recx;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(stripe_size);
+	assert_true(verify_data != NULL);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = stripe_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', stripe_size);
+	memset(verify_data, 'a', stripe_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	for (i = 0; i < 3; i++) {
+		uint32_t rank;
+
+		rank = get_rank_by_oid_shard(arg, oid, i);
+		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+
+		lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+
+		assert_memory_equal(data, verify_data, stripe_size);
+
+		daos_debug_set_params(arg->group, rank, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	}
+	ioreq_fini(&req);
+}
+
+static void
+ec_two_stripes_nvme_io(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recx;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(stripe_size);
+	assert_true(verify_data != NULL);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = stripe_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', stripe_size);
+	memset(verify_data, 'a', stripe_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	for (i = 0; i < ec_tgt_nr_get(oid); i++) {
+		uint32_t rank1;
+		uint32_t rank2;
+
+		rank1 = get_rank_by_oid_shard(arg, oid, i);
+		rank2 = get_rank_by_oid_shard(arg, oid, (i + 1) % ec_tgt_nr_get(oid));
+		daos_debug_set_params(arg->group, rank1, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, rank2, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+
+		lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+
+		assert_memory_equal(data, verify_data, stripe_size);
+
+		daos_debug_set_params(arg->group, rank1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, rank2, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	}
+	ioreq_fini(&req);
+}
+
+static void
+ec_three_stripes_nvme_io(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_size_t	stripe_size;
+	char		*data;
+	char		*verify_data;
+	daos_recx_t	recx;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
+	data = (char *)malloc(stripe_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(stripe_size);
+	assert_true(verify_data != NULL);
+
+	req.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_nr = stripe_size;
+	recx.rx_idx = 0;
+	memset(data, 'a', stripe_size);
+	memset(verify_data, 'a', stripe_size);
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+		     data, stripe_size, &req);
+
+	for (i = 0; i < ec_tgt_nr_get(oid); i++) {
+		uint32_t rank1;
+		uint32_t rank2;
+		uint32_t rank3;
+
+		rank1 = get_rank_by_oid_shard(arg, oid, i);
+		rank2 = get_rank_by_oid_shard(arg, oid, (i + 1) % ec_tgt_nr_get(oid));
+		rank3 = get_rank_by_oid_shard(arg, oid, (i + 2) % ec_tgt_nr_get(oid));
+		daos_debug_set_params(arg->group, rank1, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, rank2, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+		daos_debug_set_params(arg->group, rank3, DMG_KEY_FAIL_LOC,
+				      DAOS_OBJ_FAIL_NVME_IO | DAOS_FAIL_ALWAYS, 0, NULL);
+
+		arg->expect_result = -DER_NVME_IO;
+		lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, stripe_size, &req);
+
+		daos_debug_set_params(arg->group, rank1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, rank2, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+		daos_debug_set_params(arg->group, rank3, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	}
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest ec_tests[] = {
 	{"EC0: ec dkey list and punch test",
@@ -2399,6 +2563,12 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC24: ec multi-array update", ec_multi_array, async_disable,
 	test_case_teardown},
 	{"EC25: ec dkey enumerate with failure shard", ec_dkey_enum_fail, async_disable,
+	test_case_teardown},
+	{"EC26: ec single nvme io failed", ec_single_stripe_nvme_io, async_disable,
+	test_case_teardown},
+	{"EC27: ec double nvme io failed", ec_two_stripes_nvme_io, async_disable,
+	test_case_teardown},
+	{"EC28: ec three nvme io failed", ec_three_stripes_nvme_io, async_disable,
 	test_case_teardown},
 };
 

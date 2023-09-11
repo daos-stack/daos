@@ -149,13 +149,9 @@ ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool, bool force)
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
-	int              rc;
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
-	rc = dfs_release(entry->fd_dfsoh);
-	if (rc == ENOMEM)
-		dfs_release(entry->fd_dfsoh);
-
+	dfs_release(entry->fd_dfsoh);
 	entry->fd_cont->ioc_open_count -= 1;
 
 	/* Do not close container/pool handles at this point

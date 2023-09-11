@@ -64,7 +64,7 @@ dump_envariables(void)
 	int	i;
 	char	*val;
 	char	*envars[] = {"D_PROVIDER", "D_INTERFACE", "D_DOMAIN", "D_PORT",
-		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG",
+		"CRT_PHY_ADDR_STR", "D_LOG_STDERR_IN_LOG", "D_LOG_SIZE",
 		"D_LOG_FILE", "D_LOG_FILE_APPEND_PID", "D_LOG_MASK", "DD_MASK",
 		"DD_STDERR", "DD_SUBSYS", "CRT_TIMEOUT", "CRT_ATTACH_INFO_PATH",
 		"OFI_PORT", "OFI_INTERFACE", "OFI_DOMAIN", "CRT_CREDIT_EP_CTX",
@@ -117,24 +117,21 @@ mem_pin_workaround(void)
 	/* Disable fastbins; this option is not available on all systems */
 	rc = mallopt(M_MXFAST, 0);
 	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n", errno, strerror(errno));
+		DS_WARN(errno, "Failed to disable malloc fastbins");
 
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
-		D_WARN("getrlimit() failed; errno=%d (%s)\n",
-		       errno, strerror(errno));
+		DS_WARN(errno, "getrlimit() failed");
 		goto exit;
 	}
 
-	if (rlim.rlim_cur == RLIM_INFINITY &&
-	    rlim.rlim_max == RLIM_INFINITY) {
+	if (rlim.rlim_cur == RLIM_INFINITY && rlim.rlim_max == RLIM_INFINITY) {
 		D_INFO("Infinite rlimit detected; performing mlockall()\n");
 
 		/* Lock all pages */
 		rc = mlockall(MCL_CURRENT | MCL_FUTURE);
 		if (rc)
-			D_WARN("Failed to mlockall(); errno=%d (%s)\n",
-			       errno, strerror(errno));
+			DS_WARN(errno, "mlockall() failed");
 
 	} else {
 		D_INFO("mlockall() skipped\n");
@@ -558,6 +555,20 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
 
 	g_prov_settings_applied[prov] = true;
+}
+
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p)
+{
+	static_assert(sizeof(struct crt_protocol_info) == sizeof(struct na_protocol_info),
+		      "protocol info structs do not match");
+	return crt_hg_get_protocol_info(info_string, (struct na_protocol_info **)protocol_info_p);
+}
+
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info)
+{
+	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
 }
 
 int
@@ -1068,7 +1079,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 
 	rc = getifaddrs(&if_addrs);
 	if (rc != 0) {
-		D_ERROR("cannot getifaddrs, errno: %d(%s).\n", errno, strerror(errno));
+		DS_ERROR(errno, "getifaddrs() failed");
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
@@ -1085,7 +1096,7 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 			tmp_ptr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
 			ip_str = inet_ntop(AF_INET, tmp_ptr, na_cfg->noc_ip_str, INET_ADDRSTRLEN);
 			if (ip_str == NULL) {
-				D_ERROR("inet_ntop errno: %d(%s).\n", errno, strerror(errno));
+				DS_ERROR(errno, "inet_ntop() failed");
 				freeifaddrs(if_addrs);
 				D_GOTO(out, rc = -DER_PROTO);
 			}

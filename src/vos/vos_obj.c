@@ -570,7 +570,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	cont = vos_hdl2cont(coh);
 	if (cont == NULL) {
-		D_ERROR("Container is not open");
+		D_ERROR("Container is not open\n");
 		return -DER_INVAL;
 	}
 	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
@@ -2062,8 +2062,8 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR,
-			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR, rc,
+			  "Failed to delete iter entry");
 	return rc;
 }
 

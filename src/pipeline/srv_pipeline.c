@@ -100,23 +100,22 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 	/** fetching record */
 	rc = vos_fetch_begin(vos_coh, oid, epr.epr_hi, d_key, nr_iods, iods, 0, NULL, &ioh, NULL);
 	if (rc) {
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST || rc == -DER_TX_RESTART,
-			 DB_IO, DLOG_ERR, "Fetch begin for " DF_UOID " failed: " DF_RC "\n",
-			 DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST || rc == -DER_TX_RESTART,
+			  DB_IO, DLOG_ERR, rc, "Fetch begin for " DF_UOID " failed", DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 	biod = vos_ioh2desc(ioh);
 	rc   = bio_iod_prep(biod, BIO_CHK_TYPE_IO, NULL, CRT_BULK_RW);
 	if (rc) {
-		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC ".\n", DP_UOID(oid), DP_RC(rc));
+		D_ERROR(DF_UOID " bio_iod_prep failed: " DF_RC "\n", DP_UOID(oid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = bio_iod_copy(biod, sgl_recx, nr_iods);
 	if (rc) {
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
-		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
-			 DF_UOID " data transfer failed, rc " DF_RC "", DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR, rc,
+			  DF_UOID " data transfer failed", DP_UOID(oid));
 		/** D_GOTO(post, rc); */
 	}
 	/**post:*/
@@ -124,10 +123,9 @@ pipeline_fetch_record(daos_handle_t vos_coh, daos_unit_oid_t oid, struct vos_ite
 out:
 	rc1 = vos_fetch_end(ioh, &io_size, rc);
 	if (rc1 != 0) {
-		D_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS || rc1 == -DER_TX_RESTART ||
-			 rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
-			 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n", DP_UOID(oid),
-			 "Fetch", DP_RC(rc1));
+		DL_CDEBUG(rc1 == -DER_REC2BIG || rc1 == -DER_INPROGRESS || rc1 == -DER_TX_RESTART ||
+			      rc1 == -DER_EXIST || rc1 == -DER_NONEXIST || rc1 == -DER_ALREADY,
+			  DLOG_DBG, DLOG_ERR, rc, DF_UOID " Fetch end failed", DP_UOID(oid));
 		if (rc == 0)
 			rc = rc1;
 	}
@@ -618,7 +616,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 
 		rc = crt_bulk_create(rpc->cr_ctx, &sgl_sent, CRT_BULK_RO, &local_bulk);
 		if (rc != 0) {
-			D_ERROR("crt_bulk_create %d error "DF_RC".\n", sgl_idx, DP_RC(rc));
+			D_ERROR("crt_bulk_create %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
 			break;
 		}
 		D_ASSERT(local_bulk != NULL);
@@ -645,7 +643,7 @@ do_bulk_transfer_sgl(crt_rpc_t *rpc, crt_bulk_t bulk, d_sg_list_t *sgl, int sgl_
 		arg->bulks_inflight++;
 		rc = crt_bulk_transfer(&bulk_desc, pipeline_bulk_comp_cb, arg, &bulk_opid);
 		if (rc < 0) {
-			D_ERROR("crt_bulk_transfer %d error "DF_RC".\n", sgl_idx, DP_RC(rc));
+			D_ERROR("crt_bulk_transfer %d error: " DF_RC "\n", sgl_idx, DP_RC(rc));
 			arg->bulks_inflight--;
 			crt_bulk_free(local_bulk);
 			crt_req_decref(rpc);

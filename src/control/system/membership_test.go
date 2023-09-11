@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -254,7 +254,7 @@ func TestSystem_Membership_Add(t *testing.T) {
 	}
 }
 
-func TestSystem_Membership_HostRanks(t *testing.T) {
+func TestSystem_Membership_RankList_Members(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
@@ -263,12 +263,13 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		members      Members
-		ranks        string
-		expRanks     []Rank
-		expHostRanks map[string][]Rank
-		expHosts     []string
-		expMembers   Members
+		members       Members
+		ranks         string
+		desiredStates []MemberState
+		expRanks      []Rank
+		expHostRanks  map[string][]Rank
+		expHosts      []string
+		expMembers    Members
 	}{
 		"no rank list": {
 			members:  members,
@@ -314,6 +315,52 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			expHosts:   []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
 			expMembers: members,
 		},
+		"distinct desired states": {
+			members:       members,
+			desiredStates: []MemberState{MemberStateJoined, MemberStateExcluded},
+			expRanks:      []Rank{1, 2, 3, 4},
+			expHostRanks: map[string][]Rank{
+				"127.0.0.1:10001": {Rank(1), Rank(4)},
+				"127.0.0.2:10001": {Rank(2)},
+				"127.0.0.3:10001": {Rank(3)},
+			},
+			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
+			expMembers: Members{
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 3, MemberStateExcluded),
+			},
+		},
+		"combined desired states": {
+			members:       members,
+			desiredStates: []MemberState{MemberStateJoined | MemberStateExcluded},
+			expRanks:      []Rank{1, 2, 3, 4},
+			expHostRanks: map[string][]Rank{
+				"127.0.0.1:10001": {Rank(1), Rank(4)},
+				"127.0.0.2:10001": {Rank(2)},
+				"127.0.0.3:10001": {Rank(3)},
+			},
+			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
+			expMembers: Members{
+				MockMember(t, 1, MemberStateJoined),
+				MockMember(t, 3, MemberStateExcluded),
+			},
+		},
+		"desired states; not joined": {
+			members:       members,
+			desiredStates: []MemberState{AllMemberFilter &^ MemberStateJoined},
+			expRanks:      []Rank{1, 2, 3, 4},
+			expHostRanks: map[string][]Rank{
+				"127.0.0.1:10001": {Rank(1), Rank(4)},
+				"127.0.0.2:10001": {Rank(2)},
+				"127.0.0.3:10001": {Rank(3)},
+			},
+			expHosts: []string{"127.0.0.1:10001", "127.0.0.2:10001", "127.0.0.3:10001"},
+			expMembers: Members{
+				MockMember(t, 2, MemberStateStopped),
+				MockMember(t, 3, MemberStateExcluded),
+				mockStoppedRankOnHost1(t, 4),
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -334,7 +381,13 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 			AssertEqual(t, tc.expRanks, rankList, "ranks")
 			AssertEqual(t, tc.expHostRanks, ms.HostRanks(rankSet), "host ranks")
 			AssertEqual(t, tc.expHosts, ms.HostList(rankSet), "hosts")
-			if diff := cmp.Diff(tc.expMembers, ms.Members(rankSet), memberCmpOpts...); diff != "" {
+
+			members, err := ms.Members(rankSet, tc.desiredStates...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
 				t.Fatalf("unexpected members (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -561,7 +614,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 		results    MemberResults
 		expMembers Members
 		expResults MemberResults
-		expErrMsg  string
+		expErr     error
 	}{
 		"update result address from member": {
 			members: Members{
@@ -641,9 +694,14 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
 				NewMemberResult(2, errors.New("can't stop"), MemberStateErrored),
-				NewMemberResult(3, errors.New("can't stop"), MemberStateJoined),
+				func() *MemberResult {
+					mr := NewMemberResult(3, errors.New("can't stop"),
+						MemberStateJoined)
+					mr.State = MemberStateJoined
+					return mr
+				}(),
 			},
-			expErrMsg: "errored result for rank 3 has conflicting state 'Joined'",
+			expErr: errors.New("rank 3 has conflicting state 'Joined'"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -653,16 +711,21 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			ms := populateMembership(t, log, tc.members...)
 
 			// members should be updated with result state
-			err := ms.UpdateMemberStates(tc.results, !tc.ignoreErrs)
-			ExpectError(t, err, tc.expErrMsg, name)
-			if err != nil {
+			CmpErr(t, tc.expErr, ms.UpdateMemberStates(tc.results, !tc.ignoreErrs))
+			if tc.expErr != nil {
 				return
 			}
 
 			cmpOpts := append(memberCmpOpts,
 				cmpopts.IgnoreUnexported(MemberResult{}),
 			)
-			for i, m := range ms.Members(nil) {
+
+			members, err := ms.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for i, m := range members {
 				if diff := cmp.Diff(tc.expMembers[i], m, cmpOpts...); diff != "" {
 					t.Fatalf("unexpected member (-want, +got)\n%s\n", diff)
 				}
@@ -911,7 +974,13 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 			ps.Publish(tc.event)
 
 			<-ctx.Done()
-			if diff := cmp.Diff(tc.expMembers, ms.Members(nil), memberCmpOpts...); diff != "" {
+
+			members, err := ms.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if diff := cmp.Diff(tc.expMembers, members, memberCmpOpts...); diff != "" {
 				t.Errorf("unexpected membership (-want, +got):\n%s\n", diff)
 			}
 		})

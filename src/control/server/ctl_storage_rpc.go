@@ -309,15 +309,15 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -327,15 +327,15 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetRdbSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB clusters the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB clusters (cluster size: %d) the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetRdbWalSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -355,6 +355,15 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 		for idx, dev := range ctlr.GetSmdDevices() {
 			rank := dev.GetRank()
 
+			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
+				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
+					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
+				dev.TotalBytes = 0
+				dev.AvailBytes = 0
+				dev.UsableBytes = 0
+				continue
+			}
+
 			if dev.GetDevState() != ctlpb.NvmeDevState_NORMAL {
 				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not usable: device state %q",
 					dev.GetUuid(), rank, ctlr.GetPciAddr(), ctlpb.NvmeDevState_name[int32(dev.DevState)])
@@ -366,14 +375,6 @@ func (c *ControlService) adjustNvmeSize(resp *ctlpb.ScanNvmeResp) {
 			if dev.GetClusterSize() == 0 || len(dev.GetTgtIds()) == 0 {
 				c.log.Noticef("SMD device %s (rank %d,  ctlr %s) not usable: missing storage info",
 					dev.GetUuid(), rank, ctlr.GetPciAddr())
-				dev.AvailBytes = 0
-				dev.UsableBytes = 0
-				continue
-			}
-
-			if dev.GetRoleBits() != 0 && (dev.GetRoleBits()&storage.BdevRoleData) == 0 {
-				c.log.Debugf("SMD device %s (rank %d, ctlr %s) not used to store data (Role bits 0x%X)",
-					dev.GetUuid(), rank, ctlr.GetPciAddr(), dev.GetRoleBits())
 				dev.AvailBytes = 0
 				dev.UsableBytes = 0
 				continue
@@ -622,6 +623,7 @@ type formatScmReq struct {
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
 	needFormat := make(map[int]bool)
+	emptyTmpfs := make(map[int]bool)
 	scmCfgs := make(map[int]*storage.TierConfig)
 	allNeedFormat := true
 
@@ -640,6 +642,15 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			return nil, nil, errors.Wrap(err, "retrieving SCM config")
 		}
 		scmCfgs[idx] = scmCfg
+
+		// If the tmpfs was already mounted but empty, record that fact for later usage.
+		if scmCfg.Class == storage.ClassRam && !needs {
+			info, err := ei.GetStorage().GetScmUsage()
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "failed to check SCM usage for instance %d", idx)
+			}
+			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
+		}
 	}
 
 	if allNeedFormat {
@@ -672,7 +683,15 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			},
 		})
 
-		skipped[idx] = true
+		// In the normal case, where SCM wasn't already mounted, we want
+		// to trigger NVMe format. In the case where SCM was mounted and
+		// wasn't empty, we want to skip NVMe format, as we're using
+		// mountedness as a proxy for already-formatted. In the special
+		// case where tmpfs was already mounted but empty, we will treat it
+		// as an indication that the NVMe format needs to occur.
+		if !emptyTmpfs[idx] {
+			skipped[idx] = true
+		}
 	}
 
 	for formatting > 0 {
@@ -707,7 +726,7 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]
 		if hasError || (skipped && !req.mdFormatted) {
-			// if scm errored or was already formatted, indicate skipping bdev format
+			// if scm failed to format or was already formatted, indicate skipping bdev format
 			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)

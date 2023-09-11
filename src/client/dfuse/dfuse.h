@@ -43,6 +43,9 @@ struct dfuse_info {
 	 */
 	pthread_spinlock_t   di_lock;
 
+	/* RW lock used for force filesystem query ioctl to block for pending forget calls. */
+	pthread_rwlock_t     di_forget_lock;
+
 	/** Hash table of open inodes, this matches kernel ref counts */
 	struct d_hash_table  dpi_iet;
 	/** Hash table of open pools */
@@ -62,9 +65,6 @@ struct dfuse_info {
 	ATOMIC uint64_t      di_pool_count;
 	ATOMIC uint64_t      di_container_count;
 };
-
-/* legacy, allow the old name for easier migration */
-#define dfuse_projection_info dfuse_info
 
 struct dfuse_eq {
 	struct dfuse_info  *de_handle;
@@ -140,6 +140,8 @@ struct dfuse_obj_hdl {
 	bool                      doh_kreaddir_started;
 	/* Set to true if readdir calls reach EOF made on this handle */
 	bool                      doh_kreaddir_finished;
+
+	bool                      doh_evict_on_close;
 };
 
 /* Readdir support.
@@ -276,7 +278,7 @@ struct dfuse_readdir_hdl {
  * a reference only.
  */
 void
-dfuse_dre_drop(struct dfuse_projection_info *fs_handle, struct dfuse_obj_hdl *oh);
+dfuse_dre_drop(struct dfuse_info *dfuse_info, struct dfuse_obj_hdl *oh);
 
 /*
  * Set required initial state in dfuse_obj_hdl.
@@ -362,11 +364,10 @@ struct dfuse_pool {
 
 /** Container information
  *
- * This represents a container that DFUSE is accessing.  All containers
- * will have a valid dfs_handle.
+ * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
+ * handle.
  *
- * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's
- * members.
+ * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
  *
  * uuid may be NULL for pool inodes.
  */
@@ -707,8 +708,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL(desc, req, arg)			\
-	DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
+#define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))
 
 /**
  * Inode handle.
@@ -789,6 +789,24 @@ struct dfuse_inode_entry {
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
 };
+
+static inline struct dfuse_inode_entry *
+dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	d_list_t *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	if (!rlink)
+		return NULL;
+
+	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
+}
+
+static inline void
+dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
+{
+	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
+}
 
 extern char *duns_xattr_name;
 
