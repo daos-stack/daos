@@ -70,7 +70,7 @@ class PoolCleanupTest(TestWithServers):
         dmg_command = self.get_dmg_command()
         dmg_command.faults_mgmt_svc_pool(
             pool=pool.identifier, checker_report_class="CIC_POOL_BAD_LABEL")
-    
+
         # 3. Check that the label in MS is corrupted with -fault added.
         self.log_step("Check that the label in MS is corrupted with -fault added")
         pool_labels = dmg_command.get_pool_list_labels()
