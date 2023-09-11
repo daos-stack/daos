@@ -239,10 +239,18 @@ static int
 global_setup(void **state)
 {
 	struct test_arg	*arg;
+	int rc;
+
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		print_message("Failed to init debug\n");
+		return 1;
+	}
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {
 		print_message("Failed to allocate test struct\n");
+		daos_debug_fini();
 		return 1;
 	}
 
@@ -259,6 +267,7 @@ global_teardown(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	D_FREE(arg);
+	daos_debug_fini();
 
 	return 0;
 }
@@ -419,16 +428,14 @@ test_page_cache(void **state)
 	arg->ta_store.stor_ops  = &stor_ops;
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, 3);
-	assert_int_equal(cache->ca_max_mapped, 3);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), 3);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, 3);
+	assert_int_equal(cache->ca_mem_pages, 3);
 
 	reset_arg(arg);
 	/** touch multiple chunks */
@@ -486,16 +493,14 @@ test_many_pages(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
-	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_mem_pages, LARGE_NUM_PAGES);
 
 	/** Touch all pages, more than can fit in a single set */
 	reset_arg(arg);
@@ -532,16 +537,14 @@ test_many_writes(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
-	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_mem_pages, LARGE_NUM_PAGES);
 
 	/** Touch all pages, more than can fit in a single set */
 	reset_arg(arg);
