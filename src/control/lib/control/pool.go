@@ -625,7 +625,7 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	return pqr, err
 }
 
-// Update the pool state
+// UpdateState update the pool state.
 func (pqr *PoolQueryResp) UpdateState() error {
 	// Update the state as Ready if DAOS return code is 0.
 	if pqr.Status == 0 {

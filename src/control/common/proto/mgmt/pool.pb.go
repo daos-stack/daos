@@ -78,7 +78,7 @@ const (
 	PoolServiceState_Creating   PoolServiceState = 0 // pool service is being created
 	PoolServiceState_Ready      PoolServiceState = 1 // pool service is ready to be used
 	PoolServiceState_Destroying PoolServiceState = 2 // pool service is being destroyed
-	PoolServiceState_Degraded   PoolServiceState = 3 // pool service is being Degraded
+	PoolServiceState_Degraded   PoolServiceState = 3 // pool service is degraded
 	PoolServiceState_Unknown    PoolServiceState = 4 // pool service is Unknown state
 )
 

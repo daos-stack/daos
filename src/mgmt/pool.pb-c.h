@@ -127,7 +127,7 @@ typedef enum _Mgmt__PoolServiceState {
    */
   MGMT__POOL_SERVICE_STATE__Destroying = 2,
   /*
-   * pool service is being Degraded
+   * pool service is degraded
    */
   MGMT__POOL_SERVICE_STATE__Degraded = 3,
   /*

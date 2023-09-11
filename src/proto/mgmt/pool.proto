@@ -210,7 +210,7 @@ enum PoolServiceState {
 	Creating = 0;   // pool service is being created
 	Ready = 1;      // pool service is ready to be used
 	Destroying = 2; // pool service is being destroyed
-	Degraded = 3 ;  // pool service is being Degraded
+	Degraded = 3 ;  // pool service is degraded
 	Unknown = 4 ;   // pool service is Unknown state
 }
 
