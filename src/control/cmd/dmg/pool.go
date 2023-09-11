@@ -199,7 +199,7 @@ type PoolCreateCmd struct {
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	MDSize     sizeFlag            `long:"md-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
+	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -213,11 +213,11 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
 			return errIncompatFlags("size", "scm-size", "nvme-size")
 		}
-		if cmd.MDSize.IsSet() {
-			// NOTE DAOS-14223: --md-size value is currently is not taken into account
+		if cmd.MetaSize.IsSet() {
+			// NOTE DAOS-14223: --meta-size value is currently is not taken into account
 			//                  when storage tier sizes are auto-calculated so only
 			//                  support in manual mode.
-			return errors.New("--md-size can only be set if --scm-size is set")
+			return errors.New("--meta-size can only be set if --scm-size is set")
 		}
 	} else if !cmd.ScmSize.IsSet() {
 		return errors.New("either --size or --scm-size must be set")
@@ -307,15 +307,20 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmBytes := cmd.ScmSize.bytes
 		nvmeBytes := cmd.NVMeSize.bytes
-		mdBytes := cmd.MDSize.bytes
+		metaBytes := cmd.MetaSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
-		req.MDBytes = mdBytes
+
+		if metaBytes > 0 && metaBytes < scmBytes {
+			return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
+				humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
+		}
+		req.MetaBytes = metaBytes
 
 		msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
 			" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
 			humanize.Bytes(nvmeBytes), scmRatio*100)
-		if mdBytes > 0 {
-			msg += fmt.Sprintf(" with %s md-blob-size", humanize.Bytes(mdBytes))
+		if metaBytes > 0 {
+			msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
 		}
 		cmd.Info(msg)
 	}

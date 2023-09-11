@@ -366,7 +366,7 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 		NumRanks:   3,
 		Ranks:      []ranklist.Rank{1, 2, 3},
 		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
-		MDBytes:    2 * humanize.GiByte,
+		MetaBytes:  2 * humanize.GiByte,
 		Properties: []*daos.PoolProperty{
 			{
 				Name:   "label",

@@ -277,8 +277,8 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with incompatible arguments (auto with md-blob)",
-			fmt.Sprintf("pool create label --size %s --md-size 32G", testSizeStr),
+			"Create pool with incompatible arguments (auto with meta-blob)",
+			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
 			"",
 			errors.New("can only be set"),
 		},
@@ -381,8 +381,8 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with manual md blob size",
-			fmt.Sprintf("pool create label --scm-size %s --md-size 1024G",
+			"Create pool with manual meta blob size",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
 				testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
@@ -390,13 +390,19 @@ func TestPoolCommands(t *testing.T) {
 					UserGroup: eGrp.Name + "@",
 					Ranks:     []ranklist.Rank{},
 					TierBytes: []uint64{uint64(testSize), 0},
-					MDBytes:   humanize.GByte * 1024,
+					MetaBytes: humanize.GByte * 1024,
 					Properties: []*daos.PoolProperty{
 						propWithVal("label", "label"),
 					},
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with manual meta blob size smaller than scm",
+			"pool create label --scm-size 1026G --meta-size 1024G",
+			"",
+			errors.New("can not be smaller than"),
 		},
 		{
 			"Create pool with manual ranks",

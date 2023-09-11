@@ -248,7 +248,7 @@ type (
 		// manual params
 		Ranks     []ranklist.Rank
 		TierBytes []uint64
-		MDBytes   uint64 `json:"meta_blob_size"`
+		MetaBytes uint64 `json:"meta_blob_size"`
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
