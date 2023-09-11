@@ -128,10 +128,10 @@ class PoolCleanupTest(TestWithServers):
 
         # Verify that the repair report has expected message.
         action_message = repair_report["act_msgs"][0]
-        EXP_MSG = "Update the MS label"
+        exp_msg = "Update the MS label"
         errors = []
-        if EXP_MSG not in action_message:
-            errors.append(f"{EXP_MSG} not in {action_message}!")
+        if exp_msg not in action_message:
+            errors.append(f"{exp_msg} not in {action_message}!")
 
         # 10. Call dmg check disable and restart the servers.
         self.log_step("Call dmg check disable and restart the servers.")
