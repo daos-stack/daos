@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -128,8 +128,8 @@ message CheckQueryResp {
 	int32 req_status = 1; // DAOS error code.
 	// The whole check instance status depends on the each engine status:
 	// As long as one target is in CIS_RUNNING, then the instance is CIS_RUNNING.
-	// Otherwise, in turn with the status of CIS_FAILED, CIS_CRASHED, CIS_PAUSED,
-	// CIS_STOPPED, CIS_COMPLETED.
+	// Otherwise, in turn with the status of CIS_FAILED, CIS_STOPPED, CIS_IMPLICATED,
+	// CIS_COMPLETED, CIS_PAUSED, CIS_INIT.
 	chk.CheckInstStatus ins_status = 2;
 	// Scan phase - see CheckScanPhase. Before moving to CSP_POOL_MBS, the check
 	// instance status is maintained on the check leader. And then multiple pools
@@ -170,6 +170,7 @@ message CheckPropResp {
 message CheckGetPolicyReq {
 	string sys = 1; // DAOS system identifier.
 	repeated chk.CheckInconsistClass classes = 2;
+	bool last_used = 3;
 }
 
 // CheckGetPolicyResp returns the result of check prop and the properties when start check.

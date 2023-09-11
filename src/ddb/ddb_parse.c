@@ -138,169 +138,6 @@ ddb_parse_program_args(struct ddb_ctx *ctx, uint32_t argc, char **argv, struct p
 	return 0;
 }
 
-/* parse the string to a bracketed index "[123]" */
-static bool
-is_idx(char *str, uint32_t *idx)
-{
-	uint32_t str_len;
-
-	D_ASSERT(idx && str);
-	str_len = strlen(str);
-
-	if (str_len < 3) /* must be at least 3 chars */
-		return false;
-
-	if (str[0] == '[' && str[str_len - 1] == ']') {
-		*idx = atol(str + 1);
-		return true;
-	}
-	return false;
-}
-
-static int
-process_key(const char *tok, uint8_t **key_buf, daos_key_t *key)
-{
-	uint32_t key_buf_len;
-
-	key_buf_len = strlen(tok) + 1; /* + 1 for '\0' */
-
-	D_ALLOC(*key_buf, key_buf_len);
-	if (*key_buf == NULL)
-		return -DER_NOMEM;
-	memcpy(*key_buf, tok, key_buf_len);
-	(*key_buf)[key_buf_len - 1] = '\0';
-	d_iov_set(key, *key_buf, key_buf_len);
-	key->iov_len = key_buf_len - 1;
-
-	return 0;
-}
-
-int
-ddb_vtp_init(daos_handle_t poh, const char *path, struct dv_tree_path_builder *vt_path)
-{
-	char		*path_copy;
-	char		*path_idx;
-	char		*oid_str = NULL;
-	char		*recx_str = NULL;
-	char		*tok;
-	char		*hi;
-	char		*lo;
-	uint32_t	 path_len;
-	int		 rc;
-	uint32_t	 recx_str_len;
-
-	/* Setup vt_path */
-	D_ASSERT(vt_path);
-	memset(vt_path, 0, sizeof(*vt_path));
-	vt_path->vtp_poh = poh;
-	ddb_vos_tree_path_setup(vt_path);
-
-	/* If there is no path, leave it empty */
-	if (path == NULL)
-		return 0;
-
-	path_len = strlen(path) + 1; /* +1 for '\0' */
-	if (path_len == 0)
-		return 0;
-
-	D_ALLOC(path_copy, path_len);
-	if (path_copy == NULL)
-		return -DER_NOMEM;
-
-	strcpy(path_copy, path);
-	path_idx = path_copy;
-
-	/* Look for container */
-	tok = strtok(path_idx, "/");
-	if (tok == NULL) {
-		D_FREE(path_copy);
-		return 0;
-	}
-
-	if (!is_idx(tok, &vt_path->vtp_cont_idx)) {
-		rc = uuid_parse(tok, vt_path->vtp_path.vtp_cont);
-		if (rc != 0) {
-			D_FREE(path_copy);
-			return -DER_INVAL;
-		}
-	}
-
-	/* look for oid */
-	tok = strtok(NULL, "/");
-
-	if (tok != NULL)
-		oid_str = tok;
-
-	/* look for dkey */
-	tok = strtok(NULL, "/");
-	if (tok != NULL && !is_idx(tok, &vt_path->vtp_dkey_idx)) {
-		rc = process_key(tok, &vt_path->vtp_dkey_buf, &vt_path->vtp_path.vtp_dkey);
-		if (!SUCCESS(rc))
-			D_GOTO(error, rc);
-	}
-
-	/* look for akey */
-	tok = strtok(NULL, "/");
-	if (tok != NULL && !is_idx(tok, &vt_path->vtp_akey_idx)) {
-		rc = process_key(tok, &vt_path->vtp_akey_buf, &vt_path->vtp_path.vtp_akey);
-		if (!SUCCESS(rc))
-			D_GOTO(error, rc);
-	}
-
-	/* look for recx */
-	tok = strtok(NULL, "/");
-	if (tok != NULL)
-		recx_str = tok;
-
-	/* parse oid */
-	if (oid_str != NULL && strlen(oid_str) > 0 && !is_idx(oid_str, &vt_path->vtp_oid_idx)) {
-		hi = strtok(oid_str, ".");
-		lo = strtok(NULL, ".");
-		if (hi == NULL || lo == NULL)
-			D_GOTO(error, rc = -DER_INVAL);
-		vt_path->vtp_path.vtp_oid.id_pub.hi = atoll(hi);
-		vt_path->vtp_path.vtp_oid.id_pub.lo = atoll(lo);
-	}
-
-	if (recx_str != NULL && strlen(recx_str) > 0 && !is_idx(tok, &vt_path->vtp_recx_idx)) {
-		recx_str_len = strlen(recx_str);
-
-		if (recx_str[0] == '{' && recx_str[recx_str_len - 1] == '}') {
-			recx_str++;
-		} else {
-			D_FREE(path_copy);
-			return -DER_INVAL;
-		}
-
-		lo = strtok(recx_str, "-");
-		hi = strtok(NULL, "-");
-
-		if (hi == NULL || lo == NULL) {
-			D_FREE(path_copy);
-			return -DER_INVAL;
-		}
-
-		vt_path->vtp_path.vtp_recx.rx_idx = atoll(lo);
-		vt_path->vtp_path.vtp_recx.rx_nr = atoll(hi) -
-						   vt_path->vtp_path.vtp_recx.rx_idx + 1;
-	}
-
-	D_FREE(path_copy);
-	return 0;
-
-error:
-	D_FREE(path_copy);
-	ddb_vtp_fini(vt_path);
-	return rc;
-}
-
-void
-ddb_vtp_fini(struct dv_tree_path_builder *vt_path)
-{
-	D_FREE(vt_path->vtp_dkey_buf);
-	D_FREE(vt_path->vtp_akey_buf);
-}
-
 int
 ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
 {
@@ -328,4 +165,305 @@ ddb_parse_dtx_id(const char *dtx_id_str, struct dtx_id *dtx_id)
 		return -DER_INVAL;
 
 	return DER_SUCCESS;
+}
+
+/*
+ * A key can be a string, integer, or arbitrary binary data in hex format. The following functions
+ * parse a string input (usually provided in a VOS path) into the appropriate daos_key_t. In order
+ * for a string to match when doing a fetch, it must be exactly the same, including the iov_len of
+ * the key. The DDB help output explains the expected format of the string.
+ *
+ * When a string is parsed into a key, the key buffer will be allocated to the appropriate size.
+ *
+ */
+
+/* These types are for integer or binary types */
+enum key_value_type {
+	KEY_VALUE_TYPE_UNKNOWN,
+	KEY_VALUE_TYPE_UINT8,
+	KEY_VALUE_TYPE_UINT16,
+	KEY_VALUE_TYPE_UINT32,
+	KEY_VALUE_TYPE_UINT64,
+	KEY_VALUE_TYPE_BIN,
+};
+
+/* Helper function for allocating the memory for a key */
+static int
+key_alloc(daos_key_t *key, void *value, uint32_t value_len)
+{
+	int rc;
+
+	rc = daos_iov_alloc(key, value_len, true);
+	if (!SUCCESS(rc))
+		return rc;
+
+	memcpy(key->iov_buf, value, value_len);
+	return 0;
+}
+
+/* Helper for setting the type if the input matches the provided type (i.e. uint32) */
+#define if_type_is_set(input, type, type_str, type_value) do { \
+	if (strncmp(input, type_str, strlen(type_str)) == 0) { \
+		type = type_value; \
+		input += strlen(type_str); \
+	} \
+} while (0)
+
+/* Helper for parsing the string into a key  if the input matches the provided type (i.e. uint32) */
+#define if_type_is_parse(t, t_enum, type, key_str, key, rc) do { \
+	if (t == t_enum) { \
+		type value = strtoul(key_str, NULL, 0); \
+		rc = key_alloc(key, &value, sizeof(value)); \
+	} \
+} while (0)
+
+/*
+ * The format of the size portion of the key is a number surrounded by the open and close
+ * characters, generally '()' or '{}'.
+ *
+ * For example, a string key can have a size provided to specify the length of the key. This is
+ * needed if strlen(key_str) != iov_len. For example if a null terminator is included as part
+ * of the key.
+ *
+ * Return number of chars consumed, or error
+ */
+static int
+key_parse_size(const char *input, size_t *size, char open, char close)
+{
+	const char	*value_str;
+	int		 len = 0;
+
+	if (input[0] != open)
+		return -DER_INVAL;
+
+	input++;
+
+	value_str = input;
+
+	while (isdigit(input[len]))
+		len++;
+	input += len;
+
+	if (input[0] != close)
+		return -DER_INVAL;
+	*size = strtoul(value_str, NULL, 10);
+	if (*size == 0)
+		return -DER_INVAL;
+
+	return len + 2; /* +2 for '{', '}' */
+}
+
+/* Tests if the string input looks like it could be a hex number (starts with '0x' */
+static inline bool
+is_hex(const char *input)
+{
+	if (strlen(input) <= 2)
+		return false;
+	return (input[0] == '0' && (input[1] == 'x' || input[1] == 'X'));
+}
+
+/* Parse a key that is arbitrary binary data represented as hex. */
+static int
+key_parse_bin(const char *input, daos_key_t *key)
+{
+	uint8_t	*buf;
+	size_t	 len = 0;
+	size_t	 data_len;
+	int	 i;
+
+	if (!is_hex(input)) {
+		D_ERROR("binary data should be represented as hex\n");
+		return -DER_INVAL;
+	}
+	input += 2;
+	while (isxdigit(input[len]))
+		len++;
+
+	if (len % 2 != 0) {
+		D_ERROR("incomplete bytes not supported. Please prepend leading 0\n");
+		return -DER_INVAL;
+	}
+
+	data_len = len / 2;
+	D_ALLOC(buf, data_len);
+	if (buf == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < len; i += 2) {
+		char	tmp[3] = {0};
+		uint8_t byte;
+
+		tmp[0] = input[i];
+		tmp[1] = input[i + 1];
+		byte = strtoul(tmp, NULL, 16);
+		buf[i/2] = byte;
+	}
+
+	d_iov_set(key, buf, data_len);
+	return 0;
+}
+
+/* Parse a key that is an int.  */
+static int
+key_parse_int(enum key_value_type type, const char *input, daos_key_t *key)
+{
+	int rc = -DER_INVAL;
+
+	if_type_is_parse(type, KEY_VALUE_TYPE_UINT8, uint8_t, input, key, rc);
+	if_type_is_parse(type, KEY_VALUE_TYPE_UINT16, uint16_t, input, key, rc);
+	if_type_is_parse(type, KEY_VALUE_TYPE_UINT32, uint32_t, input, key, rc);
+	if_type_is_parse(type, KEY_VALUE_TYPE_UINT64, uint64_t, input, key, rc);
+
+	return rc;
+}
+
+/*
+ * Parse a non-string key (integer or binary).
+ *
+ * Both integers and binary keys have similar format: "{type: value}", where type is the last part
+ * of the key_value_type enum (as lowercase). Binary can also include a size: "{bin(size): 0x1234}"
+ *
+ * Return number of chars consumed, or error
+ */
+static int
+key_parse_typed(const char *key_str, daos_key_t *key)
+{
+	enum key_value_type	 type = KEY_VALUE_TYPE_UNKNOWN;
+	const char		*value_str;
+	size_t			 size = 0;
+	int			 rc;
+	const char		*key_str_idx;
+
+	key_str_idx = key_str;
+	if (key_str_idx[0] != '{')
+		return -DER_INVAL;
+
+	key_str_idx++;
+
+	/* get the specific type */
+	if_type_is_set(key_str_idx, type, "uint8", KEY_VALUE_TYPE_UINT8);
+	if_type_is_set(key_str_idx, type, "uint16", KEY_VALUE_TYPE_UINT16);
+	if_type_is_set(key_str_idx, type, "uint32", KEY_VALUE_TYPE_UINT32);
+	if_type_is_set(key_str_idx, type, "uint64", KEY_VALUE_TYPE_UINT64);
+	if_type_is_set(key_str_idx, type, "bin", KEY_VALUE_TYPE_BIN);
+	if (type == KEY_VALUE_TYPE_UNKNOWN)
+		return -DER_INVAL;
+
+	/* is there a size */
+	if (key_str_idx[0] == '(') {
+		rc = key_parse_size(key_str_idx, &size, '(', ')');
+		if (rc < 0)
+			return rc;
+		key_str_idx += rc;
+	}
+
+	if (key_str_idx[0] != ':') /* ':' should separate the type and value */
+		return -DER_INVAL;
+
+	key_str_idx++;
+
+	value_str = key_str_idx;
+
+	/* have key value ... just verifying the rest is valid number */
+	if (is_hex(key_str_idx)) {
+		key_str_idx += 2;
+		while (isxdigit(key_str_idx[0]))
+			key_str_idx++;
+	} else {
+		while (isdigit(key_str_idx[0]))
+			key_str_idx++;
+	}
+
+	if (key_str_idx[0] != '}')
+		return -DER_INVAL;
+	key_str_idx++;
+
+	if (type == KEY_VALUE_TYPE_BIN)
+		rc = key_parse_bin(value_str, key);
+	else
+		rc = key_parse_int(type, value_str, key);
+
+	if (!SUCCESS(rc))
+		return rc;
+	return key_str_idx - key_str;
+}
+
+/*
+ * Parse a string key.
+ * String keys need to be able to support specifying size of the key and to escape special
+ * characters ('{', '}', '/').
+ *
+ * Return number of chars consumed, or error
+ */
+static int
+key_parse_str(const char *input, daos_key_t *key)
+{
+	size_t		 key_len = 0;
+	size_t		 size = 0;
+	uint32_t	 escaped_chars = 0;
+	int		 i, j;
+	int		 rc;
+	const char	*ptr;
+
+	/* size_open char can't be curly brace */
+	if (input[0] == '{' || input[0] == '}')
+		return -DER_INVAL;
+
+	ptr = input;
+	while (ptr[0] != '\0' && ptr[0] != '/') {
+		if (ptr[0] == '\\') {
+			ptr += 1; /* move past escape character */
+			if (ptr[0] == '\0') /* escape character can't be last */
+				return -DER_INVAL;
+			/* don't really care what escaping as long as not the end */
+			ptr += 1;
+			escaped_chars++;
+			key_len++;
+
+		} else  if (ptr[0] == '}') {
+			return -DER_INVAL; /* should never see this here */
+		} else  if (ptr[0] == '{') {
+			rc = key_parse_size(ptr, &size, '{', '}');
+			if (rc < 0)
+				return rc;
+			ptr += rc;
+			if (ptr[0] != '\0' && ptr[0] != '/') /* size should be last thing */
+				return -DER_INVAL;
+		} else {
+			ptr++;
+			key_len++;
+		}
+	}
+	if (size == 0)
+		size = key_len;
+	if (size < key_len)
+		return -DER_INVAL;
+
+	rc = daos_iov_alloc(key, size, true);
+	if (!SUCCESS(rc))
+		return -DER_NOMEM;
+
+	for (i = 0, j = 0; i < key_len + escaped_chars; ++i) {
+		if (input[i] != '\\')
+			((char *)key->iov_buf)[j++] = input[i];
+	}
+
+	return (int)(ptr - input);
+}
+
+/*
+ * Parse string input into a daos_key_t. The buffer for the key will be allocated. The caller
+ * is expected to call daos_iov_free() to free the memory.
+ *
+ * Return number of chars consumed, or error
+ */
+int
+ddb_parse_key(const char *input, daos_key_t *key)
+{
+	if (input == NULL || strlen(input) == 0)
+		return -DER_INVAL;
+
+	return input[0] == '{' ?
+	       key_parse_typed(input, key) :
+	       key_parse_str(input, key);
 }

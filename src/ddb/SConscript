@@ -27,6 +27,7 @@ def scons():
            'ddb_commands.c',
            'ddb_main.c',
            'ddb_parse.c',
+           'ddb_tree_path.c',
            'ddb_printer.c',
            'ddb_vos.c',
            'ddb_spdk.c']

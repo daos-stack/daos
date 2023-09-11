@@ -23,6 +23,10 @@ class DdbTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize a DdbTest object."""
         super().__init__(*args, **kwargs)
+        # how many objects and keys to insert/expect
+        self.object_count = 5
+        self.dkey_count = 2
+        self.akey_count = 1
         # Generate random keys and data to insert into the object.
         self.random_dkey = get_random_string(10)
         self.random_akey = get_random_string(10)
@@ -64,9 +68,8 @@ class DdbTest(TestWithServers):
         the size.
         4. Verify there is one akey for every dkey. Also verify the key string and the
         size.
-        5. Verify data length in every akey.
-        6. Restart the server for the cleanup.
-        7. Reset the container and the pool to prepare for the cleanup.
+        5. Restart the server for the cleanup.
+        6. Reset the container and the pool to prepare for the cleanup.
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
@@ -86,10 +89,10 @@ class DdbTest(TestWithServers):
 
         errors = []
 
+        object_count = self.object_count
+        dkey_count = self.dkey_count
+        akey_count = self.akey_count
         # Insert objects with API.
-        object_count = 5
-        dkey_count = 2
-        akey_count = 1
         insert_objects(
             context=self.context, container=self.container, object_count=object_count,
             dkey_count=dkey_count, akey_count=akey_count, base_dkey=self.random_dkey,
@@ -101,11 +104,16 @@ class DdbTest(TestWithServers):
         # 1. Verify container UUID.
         cmd_result = ddb_command.list_component()
         # Sample output.
-        # [0] d4e0c836-17bd-4df3-b255-929732486bab
+        #   Listing contents of '/'
+        #   CONT: (/[0]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f
         # stdout is a list which contains each line as separate element. Concatenate them
         # to single string so that we can apply regex.
         ls_out = "\n".join(cmd_result[0]["stdout"])
-        match = re.search(r"\[\d+\]\s+([a-f0-9\-]+)", ls_out)
+        # Matches the container uuid
+        uuid_regex = r"([0-f]{8}-[0-f]{4}-[0-f]{4}-[0-f]{4}-[0-f]{12})"
+        match = re.search(uuid_regex, ls_out)
+        if match is None:
+            self.fail("Unexpected output from ddb command, unable to parse.")
         self.log.info("Container UUID from ddb ls = %s", match.group(1))
 
         actual_uuid = match.group(1).lower()
@@ -118,14 +126,14 @@ class DdbTest(TestWithServers):
         # 2. Verify object count in the container.
         cmd_result = ddb_command.list_component(component_path="[0]")
         # Sample output.
-        # /d4e0c836-17bd-4df3-b255-929732486bab/
-        # [0] '281479271677953.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
-        # [1] '281479271677954.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
-        # [2] '281479271677955.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
-        # [3] '281479271677956.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
-        # [4] '281479271677957.0' (type: DAOS_OT_MULTI_HASHED, groups: 1)
+        #   Listing contents of 'CONT: (/[0]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f'
+        #   OBJ: (/[0]/[0]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643008.1.0.1
+        #   OBJ: (/[0]/[1]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643009.1.0.1
+        #   OBJ: (/[0]/[2]) /3082b7d3-32f9-41ea-bcbf-5d6450c1b34f/937030214649643016.1.0.1
         ls_out = "\n".join(cmd_result[0]["stdout"])
-        match = re.findall(r"(\[\d+\])\s+\'(\d+\.\d+)\'", ls_out)
+        # Matches an object id. (4 digits separated by a period '.')
+        object_id_regex = r"\d+\.\d+\.\d+\.\d+"
+        match = re.findall(object_id_regex, ls_out)
         self.log.info("List objects match = %s", match)
 
         actual_object_count = len(match)
@@ -136,7 +144,7 @@ class DdbTest(TestWithServers):
 
         # 3. Verify there are two dkeys for every object. Also verify the dkey string and
         # the size.
-        dkey_akey_regex = r"(\[\d+\])\s+\'(.+)\'\s+\((\d+)\)"
+        dkey_regex = f"/{uuid_regex}/{object_id_regex}/(.*)"
         actual_dkey_count = 0
         for obj_index in range(object_count):
             component_path = "[0]/[{}]".format(obj_index)
@@ -146,28 +154,16 @@ class DdbTest(TestWithServers):
             # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677953.0.0/
             # [0] 'Sample dkey 0 0' (15)
             # [1] 'Sample dkey 0 1' (15)
-            match = re.findall(dkey_akey_regex, ls_out)
+            match = re.findall(dkey_regex, ls_out)
 
             actual_dkey_count += len(match)
 
             # Verify dkey string.
-            actual_dkey_1 = " ".join(match[0][1].split())
-            actual_dkey_2 = " ".join(match[1][1].split())
-            # We're not testing the numbers in the string because it's not deterministic.
-            if self.random_dkey not in actual_dkey_1:
-                msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
-                       "Actual = {}").format(obj_index, self.random_dkey, actual_dkey_1)
-            if self.random_dkey not in actual_dkey_2:
-                msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
-                       "Actual = {}").format(obj_index, self.random_dkey, actual_dkey_2)
-
-            # Verify the dkey size field.
-            for dkey in match:
-                dkey_string = dkey[1]
-                # int(dkey[2]) is the dkey size; avoid pylint error.
-                if len(dkey_string) != int(dkey[2]):
-                    msg = ("Wrong dkey size! obj_index = {}. String = {}; "
-                           "Size = {}").format(obj_index, dkey_string, int(dkey[2]))
+            for idx in range(self.dkey_count):
+                actual_dkey = match[idx][1]
+                if self.random_dkey not in actual_dkey:
+                    msg = ("Unexpected dkey! obj_i = {}. Expected = {}; "
+                           "Actual = {}").format(obj_index, self.random_dkey, actual_dkey)
                     errors.append(msg)
 
         # Verify there are two dkeys for every object.
@@ -192,25 +188,16 @@ class DdbTest(TestWithServers):
                 # /d4e0c836-17bd-4df3-b255-929732486bab/281479271677954.0.0/'
                 # Sample dkey 1 0'/
                 # [0] 'Sample akey 1 0 0' (17)
-                match = re.findall(dkey_akey_regex, ls_out)
+                match = re.findall(f"{dkey_regex}/(.*)", ls_out)
 
                 akey_count += len(match)
 
                 # Verify akey string. As in dkey, ignore the numbers at the end.
-                actual_akey = " ".join(match[0][1].split())
+                actual_akey = match[0][2]
                 if self.random_akey not in actual_akey:
                     msg = ("Unexpected akey! obj_index = {}; dkey_index = {}; "
                            "Expected = {}; Actual = {}").format(
                         obj_index, dkey_index, self.random_akey, actual_akey)
-                    errors.append(msg)
-
-                # Verify akey size.
-                akey_string = match[0][1]
-                akey_size = int(match[0][2])
-                if len(akey_string) != akey_size:
-                    msg = ("Wrong akey size! obj_index = {}; dkey_index = {}; "
-                           "akey = {}; akey size = {}").format(
-                        obj_index, dkey_index, akey_string, akey_size)
                     errors.append(msg)
 
         # Verify there is one akey for every dkey.
@@ -219,29 +206,10 @@ class DdbTest(TestWithServers):
                 expected_dkey_count, akey_count)
             errors.append(msg)
 
-        # 5. Verify data length in every akey.
-        for obj_index in range(object_count):
-            for dkey_index in range(dkey_count):
-                component_path = "[0]/[{}]/[{}]/[0]".format(obj_index, dkey_index)
-                cmd_result = ddb_command.list_component(component_path=component_path)
-                ls_out = "\n".join(cmd_result[0]["stdout"])
-                path_stat = ("akey data obj_index = {}, dkey_index = {}, "
-                             "stdout = {}").format(obj_index, dkey_index, ls_out)
-                self.log.info(path_stat)
-                # Sample output.
-                # [0] Single Value (Length: 17 bytes)
-                match = re.findall(r"Length:\s+(\d+)\s+bytes", ls_out)
-                data_length = int(match[0])
-                expected_data_length = len(self.random_data) + 6
-                if data_length != expected_data_length:
-                    msg = "Wrong data length! {}; Expected = {}; Actual = {}".format(
-                        path_stat, expected_data_length, data_length)
-                    errors.append(msg)
-
-        # 6. Restart the server for the cleanup.
+        # 5. Restart the server for the cleanup.
         self.get_dmg_command().system_start()
 
-        # 7. Reset the container and the pool to prepare for the cleanup.
+        # 6. Reset the container and the pool to prepare for the cleanup.
         self.container.close()
         self.pool.disconnect()
         self.pool.connect()

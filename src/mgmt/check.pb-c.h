@@ -348,8 +348,8 @@ struct  _Mgmt__CheckQueryResp
   /*
    * The whole check instance status depends on the each engine status:
    * As long as one target is in CIS_RUNNING, then the instance is CIS_RUNNING.
-   * Otherwise, in turn with the status of CIS_FAILED, CIS_CRASHED, CIS_PAUSED,
-   * CIS_STOPPED, CIS_COMPLETED.
+   * Otherwise, in turn with the status of CIS_FAILED, CIS_STOPPED, CIS_IMPLICATED,
+   * CIS_COMPLETED, CIS_PAUSED, CIS_INIT.
    */
   Chk__CheckInstStatus ins_status;
   /*
@@ -462,10 +462,11 @@ struct  _Mgmt__CheckGetPolicyReq
   char *sys;
   size_t n_classes;
   Chk__CheckInconsistClass *classes;
+  protobuf_c_boolean last_used;
 };
 #define MGMT__CHECK_GET_POLICY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_get_policy_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0 }
 
 
 /*

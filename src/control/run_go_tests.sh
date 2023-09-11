@@ -111,6 +111,7 @@ function setup_environment()
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
 	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
+	CGO_CFLAGS+="${SL_ARGOBOTS_PREFIX+ -I${SL_ARGOBOTS_PREFIX}/include}"
 
 	src_include="$(dirname "$build_source")/src/include"
 	if [ -d "$src_include" ]; then
