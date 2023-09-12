@@ -442,6 +442,28 @@ error:
 }
 
 static int
+process_free_entry(struct vea_space_info *vsi, struct vea_free_entry *vfe, bool publish)
+{
+	uint32_t expected_type = vfe->vfe_bitmap ? VEA_FREE_ENTRY_BITMAP : VEA_FREE_ENTRY_EXTENT;
+
+	if (!publish) {
+		int type = free_type(vsi, vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt, NULL);
+
+		if (type < 0)
+			return type;
+
+		if (type != expected_type) {
+			D_ERROR("mismatch free entry type expected: %d, but got: %d\n",
+				expected_type, type);
+			return -DER_INVAL;
+		}
+		return compound_free(vsi, vfe, 0);
+	}
+
+	return persistent_alloc(vsi, vfe);
+}
+
+static int
 process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		    d_list_t *resrvd_list, bool publish)
 {
@@ -511,8 +533,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 		}
 
 		if (vfe.vfe_ext.vfe_blk_cnt != 0) {
-			rc = publish ? persistent_alloc(vsi, &vfe, private) :
-				       compound_free(vsi, &vfe, 0);
+			rc = process_free_entry(vsi, &vfe, publish);
 			if (rc)
 				goto error;
 		}
@@ -524,8 +545,7 @@ process_resrvd_list(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	}
 
 	if (vfe.vfe_ext.vfe_blk_cnt != 0) {
-		rc = publish ? persistent_alloc(vsi, &vfe, private) :
-			       compound_free(vsi, &vfe, 0);
+		rc = process_free_entry(vsi, &vfe, publish);
 		if (rc)
 			goto error;
 	}
@@ -584,40 +604,6 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 	 * a hint cancel API on transaction abort.
 	 */
 	return process_resrvd_list(vsi, hint, resrvd_list, true);
-}
-
-struct free_commit_cb_arg {
-	struct vea_space_info	*fca_vsi;
-	struct vea_free_entry	 fca_vfe;
-};
-
-static void
-free_commit_cb(void *data, bool noop)
-{
-	struct free_commit_cb_arg *fca = data;
-	int rc;
-
-	/* Transaction aborted, only need to free callback arg */
-	if (noop)
-		goto free;
-
-	/*
-	 * Aggregated free will be executed on outermost transaction
-	 * commit.
-	 *
-	 * If it fails, the freed space on persistent free tree won't
-	 * be added in in-memory free tree, hence the space won't be
-	 * visible for allocation until the tree sync up on next server
-	 * restart. Such temporary space leak is tolerable, what we must
-	 * avoid is the contrary case: in-memory tree update succeeds
-	 * but persistent tree update fails, which risks data corruption.
-	 */
-	rc = aggregated_free(fca->fca_vsi, &fca->fca_vfe);
-
-	D_CDEBUG(rc, DLOG_ERR, DB_IO, "Aggregated free on vsi:%p rc %d\n",
-		 fca->fca_vsi, rc);
-free:
-	D_FREE(fca);
 }
 
 /*

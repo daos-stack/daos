@@ -17,12 +17,12 @@ enum vea_free_type {
 };
 
 int
-free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt, bool transient,
+free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt,
 	  struct vea_bitmap_entry **bitmap_entry)
 {
 	int			 type = VEA_FREE_ENTRY_BITMAP;
 	struct vea_free_bitmap	*found;
-	daos_handle_t		 btr_hdl;
+	daos_handle_t		 btr_hdl = vsi->vsi_bitmap_btr;
 	d_iov_t			 key_in, key_out, val;
 	uint64_t		 found_end, vfe_end;
 	int			 rc, opc = BTR_PROBE_LE;
@@ -33,12 +33,7 @@ free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt, bool t
 		goto out;
 	}
 
-	if (transient)
-		btr_hdl = vsi->vsi_bitmap_btr;
-	else
-		btr_hdl = vsi->vsi_md_bitmap_btr;
 	D_ASSERT(daos_handle_is_valid(btr_hdl));
-
 	/* Fetch the in-tree record */
 	d_iov_set(&key_in, &blk_off, sizeof(blk_off));
 	d_iov_set(&key_out, NULL, sizeof(blk_off));
@@ -54,13 +49,8 @@ free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt, bool t
 		return rc;
 	}
 
-	if (transient) {
-		entry = (struct vea_bitmap_entry *)val.iov_buf;
-		found = &entry->vbe_bitmap;
-	} else {
-		found = (struct vea_free_bitmap *)val.iov_buf;
-	}
-
+	entry = (struct vea_bitmap_entry *)val.iov_buf;
+	found = &entry->vbe_bitmap;
 	rc = verify_bitmap_entry(found);
 	if (rc) {
 		D_ERROR("verify bitmap failed in free_type\n");
@@ -69,7 +59,8 @@ free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt, bool t
 
 	found_end = found->vfb_blk_off + found->vfb_blk_cnt - 1;
 	vfe_end = blk_off + blk_cnt - 1;
-	if (blk_off >= found->vfb_blk_off && blk_off <= found_end) {
+	D_ASSERT(blk_off >= found->vfb_blk_off);
+	if (blk_off <= found_end) {
 		if (vfe_end <= found_end) {
 			if (bitmap_entry)
 				*bitmap_entry = entry;
@@ -501,8 +492,10 @@ bitmap_entry_insert(struct vea_space_info *vsi, struct vea_free_bitmap *vfb,
 	memset(dummy, 0, sizeof(*dummy));
 	dummy->vbe_bitmap = *vfb;
 	dummy->vbe_agg_btr = DAOS_HDL_INVAL;
-	memcpy(dummy->vbe_bitmap.vfb_bitmaps, vfb->vfb_bitmaps, vfb->vfb_bitmap_sz << 3);
-	D_INIT_LIST_HEAD(&dummy->vbe_link);
+	if (state == VEA_BITMAP_STATE_NEW)
+		setbits64(dummy->vbe_bitmap.vfb_bitmaps, 0, 1);
+	else
+		memcpy(dummy->vbe_bitmap.vfb_bitmaps, vfb->vfb_bitmaps, vfb->vfb_bitmap_sz << 3);
 	dummy->vbe_published_state = state;
 
 	/* Add to in-memory bitmap tree */
@@ -620,77 +613,19 @@ accounting:
 	return rc;
 }
 
-static int
-bitmap_clear_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitmap,
-		   uint64_t blk_off, uint32_t blk_cnt)
-{
-	uint32_t	bit_at, bits_nr;
-	int		rc;
-
-	if (blk_off < bitmap->vfb_blk_off ||
-	    blk_off + blk_cnt > bitmap->vfb_blk_off + bitmap->vfb_blk_cnt) {
-		D_ERROR("range ["DF_U64", %u] is not within bitmap ["DF_U64", %u]\n",
-			blk_off, blk_cnt, bitmap->vfb_blk_off, bitmap->vfb_blk_cnt);
-		return -DER_INVAL;
-	}
-
-	bit_at = blk_off - bitmap->vfb_blk_off;
-	if (bit_at % bitmap->vfb_class != 0) {
-		D_ERROR("invalid block offset: "DF_U64" which is not times of %u\n",
-			blk_off, bitmap->vfb_class);
-		return -DER_INVAL;
-	}
-	if (blk_cnt % bitmap->vfb_class != 0) {
-		D_ERROR("invalid block count: %u which is not times of %u\n",
-			blk_cnt, bitmap->vfb_class);
-		return -DER_INVAL;
-	}
-	bit_at /= bitmap->vfb_class;
-	bits_nr = blk_cnt / bitmap->vfb_class;
-	if (!isset_range((uint8_t *)bitmap->vfb_bitmaps,
-			 bit_at, bit_at + bits_nr - 1)) {
-		D_ERROR("bitmap already cleared in the range.\n");
-		return -DER_INVAL;
-	}
-
-	if (vsi_umem) {
-		rc = bitmap_tx_add_ptr(vsi_umem, bitmap->vfb_bitmaps, bit_at, bits_nr);
-		if (rc)
-			return rc;
-	}
-
-	D_ASSERT(bit_at + bits_nr <= bitmap->vfb_bitmap_sz * 64);
-	clrbits64(bitmap->vfb_bitmaps, bit_at, bits_nr);
-
-	return 0;
-}
-
 /* Free entry to in-memory compound index */
 int
 compound_free(struct vea_space_info *vsi, struct vea_free_entry *vfe,
 	      unsigned int flags)
 {
-	int			 expected_type = vfe->vfe_bitmap ? VEA_FREE_ENTRY_BITMAP :
-								   VEA_FREE_ENTRY_EXTENT;
-	int			 type = free_type(vsi, vfe->vfe_ext.vfe_blk_off,
-						  vfe->vfe_ext.vfe_blk_cnt, true, NULL);
 	int			 rc;
 	struct vea_bitmap_entry	*found = vfe->vfe_bitmap;
 
-	if (type < 0)
-		return type;
-
-	if (type != expected_type) {
-		D_ERROR("mismatch free entry type expected: %d, but got: %d\n",
-			expected_type, type);
-		return -DER_INVAL;
-	}
-
-	if (expected_type == VEA_FREE_ENTRY_EXTENT)
+	if (found == NULL)
 		return compound_free_extent(vsi, &vfe->vfe_ext, flags);
 
-	rc = bitmap_clear_range(NULL, &found->vbe_bitmap,
-				vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt);
+	rc = bitmap_set_range(NULL, &found->vbe_bitmap,
+			      vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt, true);
 	if (rc)
 		return rc;
 
@@ -771,7 +706,7 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 		 vsi->vsi_umem->umm_id == UMEM_CLASS_VMEM);
 	D_ASSERT(vfe->vfe_ext.vfe_blk_off != VEA_HINT_OFF_INVAL);
 	type = free_type(vsi, vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt,
-			 true, &vfe->vfe_bitmap);
+			 &vfe->vfe_bitmap);
 	if (type < 0)
 		return type;
 
@@ -782,8 +717,8 @@ persistent_free(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 
 	D_ASSERT(vfe->vfe_ext.vfe_blk_cnt > 0 &&
 		 vfe->vfe_ext.vfe_blk_cnt < vsi->vsi_class.vfc_large_thresh);
-	return bitmap_clear_range(vsi->vsi_umem, vfe->vfe_bitmap->vbe_md_bitmap,
-				  vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt);
+	return bitmap_set_range(vsi->vsi_umem, vfe->vfe_bitmap->vbe_md_bitmap,
+				vfe->vfe_ext.vfe_blk_off, vfe->vfe_ext.vfe_blk_cnt, true);
 }
 
 /* Free extent to the aggregate free tree */
@@ -941,16 +876,11 @@ need_aging_flush(struct vea_space_info *vsi, uint32_t cur_time, bool force)
 	return true;
 }
 
-struct reclaim_commit_cb_arg {
-	struct vea_space_info	*rca_vsi;
-	struct vea_free_entry	 rca_vfe;
-};
-
-static void
-reclaim_commit_cb(void *data, bool noop)
+void
+free_commit_cb(void *data, bool noop)
 {
-	struct reclaim_commit_cb_arg	*rca = data;
-	int				 rc;
+	struct free_commit_cb_arg *fca = data;
+	int rc;
 
 	/* Transaction aborted, only need to free callback arg */
 	if (noop)
@@ -967,12 +897,12 @@ reclaim_commit_cb(void *data, bool noop)
 	 * avoid is the contrary case: in-memory tree update succeeds
 	 * but persistent tree update fails, which risks data corruption.
 	 */
-	rc = aggregated_free(rca->rca_vsi, &rca->rca_vfe);
+	rc = aggregated_free(fca->fca_vsi, &fca->fca_vfe);
 
 	D_CDEBUG(rc, DLOG_ERR, DB_IO, "Aggregated free on vsi:%p rc %d\n",
-		 rca->rca_vsi, rc);
+		 fca->fca_vsi, rc);
 free:
-	D_FREE(rca);
+	D_FREE(fca);
 }
 
 static int
@@ -983,7 +913,7 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 	struct vea_free_bitmap		*vfb;
 	d_iov_t				 key;
 	int				 rc = 0;
-	struct reclaim_commit_cb_arg	*rca;
+	struct free_commit_cb_arg	*fca;
 	struct umem_instance		*umem = vsi->vsi_umem;
 	int				 nr = 0;
 	uint64_t			 blk_off;
@@ -994,23 +924,22 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 				&vsi->vsi_class.vfc_bitmap_empty[i], vbe_link) {
 			vfb = &bitmap_entry->vbe_bitmap;
 			D_ASSERT(vfb->vfb_class == i + 1);
-			if (!is_bitmap_empty(vfb->vfb_bitmaps, vfb->vfb_bitmap_sz))
-				continue;
+			D_ASSERT(is_bitmap_empty(vfb->vfb_bitmaps, vfb->vfb_bitmap_sz));
 			d_list_del_init(&bitmap_entry->vbe_link);
-			D_ALLOC_PTR(rca);
-			if (!rca)
+			D_ALLOC_PTR(fca);
+			if (!fca)
 				return -DER_NOMEM;
 
 			blk_off = vfb->vfb_blk_off;
 			blk_cnt = vfb->vfb_blk_cnt;
-			rca->rca_vsi = vsi;
-			rca->rca_vfe.vfe_ext.vfe_blk_off = blk_off;
-			rca->rca_vfe.vfe_ext.vfe_blk_cnt = blk_cnt;
-			rca->rca_vfe.vfe_ext.vfe_age = 0; /* not used */
+			fca->fca_vsi = vsi;
+			fca->fca_vfe.vfe_ext.vfe_blk_off = blk_off;
+			fca->fca_vfe.vfe_ext.vfe_blk_cnt = blk_cnt;
+			fca->fca_vfe.vfe_ext.vfe_age = 0; /* not used */
 
 			rc = umem_tx_begin(umem, vsi->vsi_txd);
 			if (rc != 0) {
-				D_FREE(rca);
+				D_FREE(fca);
 				return rc;
 			}
 
@@ -1018,18 +947,18 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 			 * Even in-memory bitmap failed to remove from tree, it is ok
 			 * because this bitmap chunk has been removed from allocation LRU list.
 			 */
-			d_iov_set(&key, &rca->rca_vfe.vfe_ext.vfe_blk_off,
-				  sizeof(rca->rca_vfe.vfe_ext.vfe_blk_off));
+			d_iov_set(&key, &fca->fca_vfe.vfe_ext.vfe_blk_off,
+				  sizeof(fca->fca_vfe.vfe_ext.vfe_blk_off));
 			dbtree_destroy(bitmap_entry->vbe_agg_btr, NULL);
-			rc = dbtree_delete(rca->rca_vsi->vsi_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
+			rc = dbtree_delete(fca->fca_vsi->vsi_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
 			if (rc) {
 				D_ERROR("Remove ["DF_U64", %u] from bitmap tree "
-					"error: "DF_RC"\n", rca->rca_vfe.vfe_ext.vfe_blk_off,
-					rca->rca_vfe.vfe_ext.vfe_blk_cnt, DP_RC(rc));
+					"error: "DF_RC"\n", fca->fca_vfe.vfe_ext.vfe_blk_off,
+					fca->fca_vfe.vfe_ext.vfe_blk_cnt, DP_RC(rc));
 				goto abort;
 			}
-			dec_stats(rca->rca_vsi, STAT_FRAGS_BITMAP, 1);
-			dec_stats(rca->rca_vsi, STAT_FREE_BITMAP_BLKS, blk_cnt);
+			dec_stats(fca->fca_vsi, STAT_FRAGS_BITMAP, 1);
+			dec_stats(fca->fca_vsi, STAT_FREE_BITMAP_BLKS, blk_cnt);
 
 			d_iov_set(&key, &blk_off, sizeof(blk_off));
 			rc = dbtree_delete(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
@@ -1039,7 +968,7 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 				goto abort;
 			}
 			/* call persistent_free_extent instead */
-			rc = persistent_free(vsi, &rca->rca_vfe);
+			rc = persistent_free(vsi, &fca->fca_vfe);
 			if (rc) {
 				D_ERROR("Remove ["DF_U64", %u] from persistent "
 					"extent tree error: "DF_RC"\n", blk_off,
@@ -1047,11 +976,11 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 				goto abort;
 			}
 			rc = umem_tx_add_callback(umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
-						  reclaim_commit_cb, rca);
+						  free_commit_cb, fca);
 			if (rc == 0)
-				rca = NULL;
+				fca = NULL;
 abort:
-			D_FREE(rca);
+			D_FREE(fca);
 			/* Commit/Abort transaction on success/error */
 			rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
 			if (rc)
@@ -1067,7 +996,6 @@ out:
 		*nr_reclaimed = nr;
 	return rc;
 }
-
 
 int
 trigger_aging_flush(struct vea_space_info *vsi, bool force, uint32_t nr_flush,

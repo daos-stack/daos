@@ -211,6 +211,11 @@ struct vea_space_info {
 	bool				 vsi_flush_scheduled;
 };
 
+struct free_commit_cb_arg {
+	struct vea_space_info	*fca_vsi;
+	struct vea_free_entry	 fca_vfe;
+};
+
 static inline uint32_t
 get_current_age(void)
 {
@@ -287,10 +292,13 @@ int reserve_hint(struct vea_space_info *vsi, uint32_t blk_cnt,
 		 struct vea_resrvd_ext *resrvd);
 int reserve_single(struct vea_space_info *vsi, uint32_t blk_cnt,
 		   struct vea_resrvd_ext *resrvd);
-int persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe, void *private);
+int persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe);
 int
 bitmap_tx_add_ptr(struct umem_instance *vsi_umem, uint64_t *bitmap,
 		  uint32_t bit_at, uint32_t bits_nr);
+int
+bitmap_set_range(struct umem_instance *vsi_umem, struct vea_free_bitmap *bitmap,
+		 uint64_t blk_off, uint32_t blk_cnt, bool clear);
 
 /* vea_free.c */
 void extent_free_class_remove(struct vea_space_info *vsi, struct vea_extent_entry *entry);
@@ -306,7 +314,9 @@ int schedule_aging_flush(struct vea_space_info *vsi);
 int bitmap_entry_insert(struct vea_space_info *vsi, struct vea_free_bitmap *vfb,
 			int state, struct vea_bitmap_entry **ret_entry, unsigned int flags);
 int free_type(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt,
-	      bool transient, struct vea_bitmap_entry **bitmap_entry);
+	      struct vea_bitmap_entry **bitmap_entry);
+void
+free_commit_cb(void *data, bool noop);
 
 /* vea_hint.c */
 void hint_get(struct vea_hint_context *hint, uint64_t *off);
