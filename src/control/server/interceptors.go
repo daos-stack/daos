@@ -29,6 +29,10 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+var (
+	errNoReqMetadata = errors.New("no component/version metadata found in request")
+)
+
 func componentFromContext(ctx context.Context) (comp *security.Component, err error) {
 	clientPeer, ok := peer.FromContext(ctx)
 	if !ok {
@@ -117,29 +121,22 @@ var selfServerComponent = func() *build.VersionedComponent {
 	return self
 }()
 
-func compVersionFromHeaders(ctx context.Context) *build.VersionedComponent {
+func compVersionFromHeaders(ctx context.Context) (*build.VersionedComponent, error) {
 	md, hasMD := metadata.FromIncomingContext(ctx)
 	if !hasMD {
-		return nil
+		return nil, errNoReqMetadata
 	}
 	compName, hasName := md[proto.DaosComponentHeader]
 	if !hasName {
-		return nil
+		return nil, errNoReqMetadata
 	}
 	comp := build.Component(compName[0])
 	compVersion, hasVersion := md[proto.DaosVersionHeader]
 	if !hasVersion {
-		return nil
-	}
-	ver, err := build.NewVersion(compVersion[0])
-	if err != nil {
-		return nil
+		return nil, errNoReqMetadata
 	}
 
-	return &build.VersionedComponent{
-		Component: comp,
-		Version:   ver,
-	}
+	return build.NewVersionedComponent(comp, compVersion[0])
 }
 
 func checkVersion(ctx context.Context, log logging.Logger, self *build.VersionedComponent, req interface{}) error {
@@ -161,16 +158,21 @@ func checkVersion(ctx context.Context, log logging.Logger, self *build.Versioned
 	}
 	isInsecure := status.Code(err) == codes.Unauthenticated
 
+	fromHeaders, err := compVersionFromHeaders(ctx)
+	if err != nil && err != errNoReqMetadata {
+		return errors.Wrap(err, "failed to extract peer component/version from headers")
+	}
+
 	// Prefer the new header-based component/version mechanism.
 	// If we are in secure mode, verify that the component presented
 	// in the header matches the certificate's component.
-	fromHeaders := compVersionFromHeaders(ctx)
 	if fromHeaders != nil {
 		otherVersion = fromHeaders.Version
 		if isInsecure {
 			otherComponent = fromHeaders.Component
 		} else if otherComponent != fromHeaders.Component {
-			return status.Errorf(codes.PermissionDenied, "invalid component %q for request", fromHeaders.Component)
+			return status.Errorf(codes.PermissionDenied,
+				"component mismatch (req: %q != cert: %q)", fromHeaders.Component, otherComponent)
 		}
 	} else {
 		// If we did not receive a version via request header, then we need to fall back

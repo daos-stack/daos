@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -78,11 +78,15 @@ func unaryErrorInterceptor() grpc.UnaryClientInterceptor {
 
 // unaryVersionedComponentInterceptor appends the component name and version to the
 // outgoing request headers.
-func unaryVersionedComponentInterceptor() grpc.UnaryClientInterceptor {
+func unaryVersionedComponentInterceptor(comp build.Component) grpc.UnaryClientInterceptor {
 	return func(parent context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-		comp, err := security.MethodToComponent(method)
-		if err != nil {
-			return errors.Wrap(err, "unable to determine component from method")
+		// NB: The caller should specify its component, but as a fallback, we
+		// can make a decent guess about the calling component based on the method.
+		if comp == build.ComponentAny {
+			var err error
+			if comp, err = security.MethodToComponent(method); err != nil {
+				return errors.Wrap(err, "unable to determine component from method")
+			}
 		}
 		ctx := metadata.AppendToOutgoingContext(parent,
 			proto.DaosComponentHeader, comp.String(),

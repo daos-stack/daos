@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -173,6 +173,14 @@ func TestServer_checkVersion(t *testing.T) {
 			)),
 			nonSysMsg: true,
 		},
+		"insecure 2.6.0 agent with 2.4.1 server": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, build.ComponentAgent.String(),
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+		},
 		"insecure 2.4.1 dmg with 2.4.0 server": {
 			selfVersion: "2.4.0",
 			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
@@ -207,6 +215,15 @@ func TestServer_checkVersion(t *testing.T) {
 			nonSysMsg: true,
 			expErr:    errors.New("not compatible"),
 		},
+		"invalid component": {
+			selfVersion: "2.4.1",
+			ctx: metadata.NewIncomingContext(test.Context(t), metadata.Pairs(
+				proto.DaosComponentHeader, "banana",
+				proto.DaosVersionHeader, "2.6.0",
+			)),
+			nonSysMsg: true,
+			expErr:    errors.New("invalid component"),
+		},
 		"header/certificate component mismatch": {
 			selfVersion: "2.4.0",
 			ctx: newTestAuthCtx(
@@ -215,7 +232,7 @@ func TestServer_checkVersion(t *testing.T) {
 					proto.DaosVersionHeader, "2.6.0"),
 				), "agent"),
 			nonSysMsg: true,
-			expErr:    errors.New("invalid component"),
+			expErr:    errors.New("component mismatch"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

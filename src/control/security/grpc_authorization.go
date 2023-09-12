@@ -87,7 +87,7 @@ var methodAuthorizations = map[string][]Component{
 func MethodToComponent(method string) (build.Component, error) {
 	comps, found := methodAuthorizations[method]
 	if !found || len(comps) == 0 {
-		return build.ComponentAny, errors.Errorf("method %s does not map to a known authorized component", method)
+		return build.ComponentAny, errors.Errorf("method %q does not map to a known authorized component", method)
 	}
 
 	return build.Component(comps[0].String()), nil
