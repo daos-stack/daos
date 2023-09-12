@@ -935,12 +935,6 @@ vos_irec2data(struct vos_irec_df *irec)
 }
 
 static inline bool
-vos_obj_is_empty(struct vos_object *obj)
-{
-	return !obj->obj_df || obj->obj_df->vo_tree.tr_class == 0;
-}
-
-static inline bool
 vos_subtree_is_empty(daos_handle_t toh)
 {
 	return dbtree_is_empty(toh) == 1;

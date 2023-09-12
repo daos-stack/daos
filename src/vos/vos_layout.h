@@ -363,7 +363,7 @@ struct vos_irec_df {
  */
 struct vos_obj_df {
 	daos_unit_oid_t			vo_id;
-	/** The latest sync epoch */
+	/** The latest sync epoch, is DAOS_EPOCH_MAX for flattened object */
 	daos_epoch_t			vo_sync;
 	/** Offset of known existing dkey */
 	umem_off_t			vo_known_dkey;
@@ -371,8 +371,12 @@ struct vos_obj_df {
 	daos_epoch_t			vo_max_write;
 	/** Incarnation log for the object */
 	struct ilog_df			vo_ilog;
-	/** VOS dkey btree root */
-	struct btr_root			vo_tree;
+	union {
+		/** VOS dkey btree root for hierarchical object */
+		struct btr_root		vo_tree;
+		/** external address for flattened object */
+		bio_addr_t		vo_addr;
+	};
 };
 
 #endif
