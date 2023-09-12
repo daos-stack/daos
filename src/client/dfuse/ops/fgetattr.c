@@ -52,15 +52,17 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 
 	rc = daos_event_init(&ev->de_ev, eqt->de_eq, NULL);
 	if (rc != -DER_SUCCESS)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(ev, rc = daos_der2errno(rc));
 
 	rc = dfs_ostatx(ie->ie_dfs->dfs_ns, ie->ie_obj, &ev->de_attr, &ev->de_ev);
 	if (rc != 0)
-		D_GOTO(err, rc);
+		D_GOTO(ev, rc);
 
 	sem_post(&eqt->de_sem);
 
 	return;
+ev:
+	D_FREE(ev);
 err:
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
