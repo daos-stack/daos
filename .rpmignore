@@ -3,9 +3,6 @@
 # but should not be included in the current release
 #
 
-centos7/daos-*.rpm
-centos7/ucx*.rpm
-
 el8/daos-*tests*.rpm
 el8/daos-firmware*.rpm
 el8/daos-mofed*.rpm
