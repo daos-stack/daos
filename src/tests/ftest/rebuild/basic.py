@@ -97,7 +97,7 @@ class RbldBasic(TestWithServers):
                 pi_ndisabled=target_count
             )
             status &= pool.check_rebuild_status(
-                rs_state=2, rs_obj_nr=rs_obj_nr[index], rs_rec_nr=rs_rec_nr[index], rs_errno=0)
+                rs_state=2, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild
