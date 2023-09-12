@@ -20,7 +20,7 @@ class TestWithScrubberFault(TestWithScrubber):
             whether scrubber finds them.
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
-        :avocado: tags=scrubber
+        :avocado: tags=scrubber,faults
         :avocado: tags=TestWithScrubberFault,test_scrubber_csum_fault
 
         """
