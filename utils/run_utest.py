@@ -19,6 +19,7 @@ import traceback
 
 import yaml
 from junit_xml import TestCase, TestSuite
+import getpass
 
 
 def check_version():
@@ -175,7 +176,7 @@ def change_ownership(fname, _arg):
     if not os.path.isfile(fname):
         print(f"{fname} not a file")
         return
-    uname = os.getlogin()
+    uname = getpass.getuser()
     print(f"chown {fname}")
     run_cmd(["sudo", "-E", "chgrp", uname, fname])
     run_cmd(["sudo", "-E", "chown", uname, fname])
