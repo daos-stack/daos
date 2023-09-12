@@ -697,16 +697,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 		D_GOTO(out, rc);
 	}
 
-	struct timeval tv1, tv2;
-	unsigned long usec_delta;
-	gettimeofday(&tv1, 0);
 	hg_rc = HG_Context_unpost(ctx->cc_hg_ctx.chc_hgctx);
-	gettimeofday(&tv2, 0);
-
-	usec_delta = (tv2.tv_sec  - tv1.tv_sec) * 1000000 +
-		     (tv2.tv_usec - tv1.tv_usec);
-
-	D_WARN("HG_Context_unpost(ctx=%d) took %ld usec\n", ctx_idx, usec_delta);
 	if (hg_rc != 0) {
 		D_ERROR("HG_Context_unpost() failed (ctx=%d); hg_rc: " DF_HG_RC "\n",
 			ctx_idx, DP_HG_RC(hg_rc));
