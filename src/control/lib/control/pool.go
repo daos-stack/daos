@@ -151,37 +151,6 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// request, filling in any missing fields with reasonable defaults.
-func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
-	if in.userExt == nil {
-		in.userExt = &auth.External{}
-	}
-	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
-	if err != nil {
-		return
-	}
-
-	if len(in.TierBytes) > 0 {
-		if in.TotalBytes > 0 {
-			return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
-		}
-		if in.TotalBytes == 0 && in.TierBytes[0] == 0 {
-			return nil, errors.New("can't create pool with 0 SCM")
-		}
-	} else if in.TotalBytes == 0 {
-		return nil, errors.New("can't create pool with size of 0")
-	}
-
-	out = new(mgmtpb.PoolCreateReq)
-	if err = convert.Types(in, out); err != nil {
-		return
-	}
-
-	out.Uuid = uuid.New().String()
-	return
-}
-
 type (
 	// poolRequest is an embeddable struct containing methods common
 	// to all pool requests.
@@ -261,15 +230,64 @@ type (
 	}
 )
 
+func poolCreateReqChkSizes(ctx context.Context, rpcClient UnaryInvoker, in *PoolCreateReq) error {
+	switch {
+	// Storage size for each tier present in request.
+	case len(in.TierBytes) == 2 && len(in.TierRatio) == 0 && in.TotalBytes == 0:
+		if in.TierBytes[0] == 0 {
+			return errors.New("can't create pool with 0 SCM")
+		}
+		rpcClient.Debugf("storage sizes have been written to TierBytes in request: %+v", in)
+
+	// Storage tier size ratio and total pool-size specified, distribution of space across
+	// ranks to be calculated on the server side.
+	case len(in.TierBytes) == 0 && len(in.TierRatio) == 2 && in.TotalBytes > 0:
+		if in.TierRatio[0] == 0 {
+			return errors.New("can't create pool with 0.0 SCM ratio")
+		}
+		rpcClient.Debugf("storage sizes are to be calculated server-side based on total "+
+			"size and tier size ratio: %+v", in)
+
+	default:
+		return errors.Errorf("unexpected parameters in pool create request: %+v", in)
+	}
+
+	return nil
+}
+
+func poolCreateGenPBReq(ctx context.Context, rpcClient UnaryInvoker, in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
+	// ensure pool ownership is set up correctly
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
+	if err != nil {
+		return
+	}
+
+	if err = poolCreateReqChkSizes(ctx, rpcClient, in); err != nil {
+		return
+	}
+
+	out = new(mgmtpb.PoolCreateReq)
+	if err = convert.Types(in, out); err != nil {
+		return
+	}
+
+	out.Uuid = uuid.New().String()
+	return
+}
+
 // PoolCreate performs a pool create operation on a DAOS Management Server instance.
 // Default values for missing request parameters (e.g. owner/group) are generated when
 // appropriate.
 func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq) (*PoolCreateResp, error) {
-	pbReq, err := genPoolCreateRequest(req)
+	pbReq, err := poolCreateGenPBReq(ctx, rpcClient, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to generate PoolCreate request")
 	}
 	pbReq.Sys = req.getSystem(rpcClient)
+
 	// TODO: Set this timeout based on the SCM size, when we have a
 	// better understanding of the relationship.
 	req.SetTimeout(PoolCreateTimeout)

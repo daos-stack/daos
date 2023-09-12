@@ -402,6 +402,14 @@ func TestControl_PoolCreateReq_Convert(t *testing.T) {
 
 func TestControl_PoolCreate(t *testing.T) {
 	mockExt := auth.NewMockExtWithUser("poolTest", 0, 0)
+	mockTierRatios := []float64{0.06, 0.94}
+	mockTierBytes := []uint64{humanize.GiByte * 6, humanize.GiByte * 94}
+	validReq := &PoolCreateReq{
+		TierBytes: []uint64{
+			humanize.GiByte * 6,
+			humanize.GiByte * 10,
+		},
+	}
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
@@ -410,21 +418,21 @@ func TestControl_PoolCreate(t *testing.T) {
 		expErr  error
 	}{
 		"local failure": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
 		"non-retryable failure": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.IOError, nil),
@@ -434,11 +442,51 @@ func TestControl_PoolCreate(t *testing.T) {
 		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
-			expErr: errors.New("size of 0"),
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; missing total bytes": {
+			req: &PoolCreateReq{
+				TierRatio: mockTierRatios,
+			},
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; missing tier ratio": {
+			req: &PoolCreateReq{
+				TotalBytes: humanize.GiByte * 20,
+			},
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; incorrect length tier ratio": {
+			req: &PoolCreateReq{
+				TierRatio:  []float64{0.06},
+				TotalBytes: humanize.GiByte * 20,
+			},
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; unexpected total bytes": {
+			req: &PoolCreateReq{
+				TierBytes:  mockTierBytes,
+				TotalBytes: humanize.GiByte * 20,
+			},
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; unexpected tier ratio": {
+			req: &PoolCreateReq{
+				TierBytes: mockTierBytes,
+				TierRatio: mockTierRatios,
+			},
+			expErr: errors.New("unexpected parameters"),
+		},
+		"bad storage params; incorrect length tier bytes": {
+			req: &PoolCreateReq{
+				TierBytes: []uint64{humanize.GiByte * 20},
+			},
+			expErr: errors.New("unexpected parameters"),
 		},
 		"bad label": {
 			req: &PoolCreateReq{
-				TotalBytes: 10,
+				TierRatio:  mockTierRatios,
+				TotalBytes: humanize.GiByte * 20,
 				Properties: []*daos.PoolProperty{
 					{
 						Name:   "label",
@@ -450,7 +498,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expErr: errors.New("invalid label"),
 		},
 		"create -DER_TIMEDOUT is retried": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TimedOut, nil),
@@ -460,7 +508,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"create -DER_GRPVER is retried": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.GroupVersionMismatch, nil),
@@ -470,7 +518,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"create -DER_AGAIN is retried": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", daos.TryAgain, nil),
@@ -480,7 +528,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"create DataPlaneNotStarted error is retried": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", &fault.Fault{Code: code.ServerDataPlaneNotStarted}, nil),
@@ -491,7 +539,8 @@ func TestControl_PoolCreate(t *testing.T) {
 		},
 		"success": {
 			req: &PoolCreateReq{
-				TotalBytes: 10,
+				TierRatio:  mockTierRatios,
+				TotalBytes: humanize.GiByte * 20,
 				Properties: []*daos.PoolProperty{
 					{
 						Name:   "label",
@@ -514,7 +563,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 		},
 		"success no props": {
-			req: &PoolCreateReq{TotalBytes: 10},
+			req: validReq,
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
