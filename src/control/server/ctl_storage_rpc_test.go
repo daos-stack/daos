@@ -1777,6 +1777,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
+		tmpfsEmpty       bool // if false, an already-mounted ramdisk is not empty
 		superblockExists bool
 		instancesStarted bool // engine already started
 		sMounts          []string
@@ -1982,6 +1983,44 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		"ram already mounted but empty": {
+			scmMounted: true,
+			tmpfsEmpty: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassRam,
+			sSize:      6,
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
 					},
 				},
 				Mrets: []*ctlpb.ScmMountResult{
@@ -2247,6 +2286,19 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
 			}
+			if tc.sClass == storage.ClassRam {
+				total := uint64(1234)
+				avail := total
+				if !tc.tmpfsEmpty {
+					avail--
+				}
+				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+					{
+						Total: total,
+						Avail: avail,
+					},
+				}
+			}
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
@@ -2301,7 +2353,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
-					if err := ei.createSuperblock(false); err != nil {
+					if err := ei.createSuperblock(); err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -2332,7 +2384,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				go func(ctx context.Context, e *EngineInstance) {
 					select {
 					case <-ctx.Done():
-					case awaitCh <- e.awaitStorageReady(ctx, false):
+					case awaitCh <- e.awaitStorageReady(ctx):
 					}
 				}(ctx, ei.(*EngineInstance))
 			}

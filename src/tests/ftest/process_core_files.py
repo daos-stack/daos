@@ -222,8 +222,16 @@ class CoreFileProcessing():
         self.log.info("Installing debuginfo packages for stacktrace creation")
         install_pkgs = [{'name': 'gdb'}]
         if self.is_el():
-            install_pkgs.append({'name': 'python3-debuginfo'})
-
+            if self.distro_info.name.lower() == "almalinux":
+                # pylint: disable=consider-using-f-string
+                install_pkgs.append({'name': 'python%s.%s-debuginfo' % (sys.version_info.major,
+                                                                        sys.version_info.minor)})
+            elif self.distro_info.name.lower() == "rocky":
+                # https://bugs.rockylinux.org/view.php?id=3499
+                pass
+            else:
+                # pylint: disable=consider-using-f-string
+                install_pkgs.append({'name': 'python%s-debuginfo' % sys.version_info.major})
         cmds = []
 
         # -debuginfo packages that don't get installed with debuginfo-install
@@ -250,9 +258,9 @@ class CoreFileProcessing():
                     dnf_args.extend(
                         ["--enablerepo=*-debuginfo", "--exclude", "nvml-debuginfo", "libpmemobj",
                          "python36", "openmpi3", "gcc"])
-                elif self.is_el() and self.distro_info.version == "8":
+                elif self.is_el() and int(self.distro_info.version) >= 8:
                     dnf_args.extend(
-                        ["--enablerepo=*-debuginfo", "libpmemobj", "python3", "openmpi", "gcc"])
+                        ["libpmemobj", "python3", "openmpi", "gcc"])
                 else:
                     raise RunException(f"Unsupported distro: {self.distro_info}")
                 cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)

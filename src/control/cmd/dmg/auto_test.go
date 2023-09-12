@@ -187,6 +187,7 @@ func TestAuto_confGen(t *testing.T) {
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
 		expErr           error
+		expOutPrefix     string
 	}{
 		"no host responses": {
 			expErr: errors.New("no host responses"),
@@ -289,6 +290,20 @@ func TestAuto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
+		"successful tmpfs scm; no logging to stdout": {
+			tmpfsSCM:        true,
+			extMetadataPath: metadataMountPath,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostRespHighMem},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
+				WithNrHugepages(17 * 2 * 512).
+				WithControlLogFile("/tmp/daos_server.log").
+				WithControlMetadata(controlMetadata),
+			expOutPrefix: "port: 10001",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -309,6 +324,7 @@ func TestAuto_confGen(t *testing.T) {
 				UseTmpfsSCM:     tc.tmpfsSCM,
 				ExtMetadataPath: tc.extMetadataPath,
 			}
+			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
 
@@ -322,6 +338,22 @@ func TestAuto_confGen(t *testing.T) {
 			}
 			mic.UnaryError = tc.uErr
 			cmd.ctlInvoker = control.NewMockInvoker(log, &mic)
+
+			if tc.expOutPrefix != "" {
+				gotErr := cmd.confGenPrint(test.Context(t))
+				if gotErr != nil {
+					t.Fatal(gotErr)
+				}
+				if len(buf.String()) == 0 {
+					t.Fatal("no output from config generate print function")
+				}
+				outFirstLine := strings.Split(buf.String(), "\n")[0]
+				test.AssertTrue(t, strings.Contains(outFirstLine, tc.expOutPrefix),
+					fmt.Sprintf("test: %s, expected %q to be included in the "+
+						"first line of output: %q", name, tc.expOutPrefix,
+						outFirstLine))
+				return
+			}
 
 			gotCfg, gotErr := cmd.confGen(test.Context(t))
 			test.CmpErr(t, tc.expErr, gotErr)

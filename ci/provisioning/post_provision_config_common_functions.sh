@@ -55,6 +55,13 @@ send_mail() {
     local subject="$1"
     local message="${2:-}"
 
+    local recipients
+    if mail --help | grep s-nail; then
+        recipients="${OPERATIONS_EMAIL//, }"
+    else
+        recipients="${OPERATIONS_EMAIL}"
+    fi
+
     set +x
     {
         echo "Build: $BUILD_URL"
@@ -62,7 +69,7 @@ send_mail() {
         echo "Host:  $HOSTNAME"
         echo ""
         echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$recipients"
     set -x
 }
 
@@ -146,7 +153,8 @@ timeout_cmd() {
 fetch_repo_config() {
     local repo_server="$1"
 
-    local repo_file="daos_ci-${DISTRO_NAME}-$repo_server"
+    . /etc/os-release
+    local repo_file="daos_ci-${ID}${VERSION_ID%%.*}-$repo_server"
     local repopath="${REPOS_DIR}/$repo_file"
     if ! curl -f -o "$repopath" "$REPO_FILE_URL$repo_file.repo"; then
         return 1
@@ -182,25 +190,22 @@ rpm_test_version() {
 set_local_repo() {
     local repo_server="$1"
 
-    rm -f "$REPOS_DIR"/daos_ci-"$DISTRO_NAME".repo
-    ln "$REPOS_DIR"/daos_ci-"$DISTRO_NAME"{-"$repo_server",.repo}
+    . /etc/os-release
 
-    local version
-    version="$(lsb_release -sr)"
-    version=${version%%.*}
-    if [ "$repo_server" = "artifactory" ] &&
-       { [[ $(pr_repos) = *daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
-       [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
-        # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
-        # used for daos packages
-        dnf -y config-manager \
-            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"$version"-x86_64-stable-local-artifactory
-    fi
+    rm -f "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}".repo
+    ln "$REPOS_DIR/daos_ci-${ID}${VERSION_ID%%.*}"{-"$repo_server",.repo}
 
     if [ "$repo_server" = "artifactory" ]; then
+        if { [[ \ $(pr_repos) = *\ daos@PR-* ]] || [ -z "$(rpm_test_version)" ]; } &&
+           [[ ! ${CHANGE_TARGET:-$BRANCH_NAME} =~ ^[-.0-9A-Za-z]+-testing ]]; then
+            # Disable the daos repo so that the Jenkins job repo or a PR-repos*: repo is
+            # used for daos packages
+            dnf -y config-manager \
+                --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+        fi
         # Disable module filtering for our deps repo
-	deps_repo="daos-stack-deps-${DISTRO_GENERIC}-$version-x86_64-stable-local-artifactory"
-	dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
+        deps_repo="daos-stack-deps-${DISTRO_GENERIC}-${VERSION_ID%%.*}-x86_64-stable-local-artifactory"
+        dnf config-manager --save --setopt "$deps_repo.module_hotfixes=true" "$deps_repo"
     fi
 
     dnf repolist
@@ -254,6 +259,11 @@ post_provision_config_nodes() {
     # Reserve port ranges 31416-31516 for DAOS and CART servers
     echo 31416-31516 > /proc/sys/net/ipv4/ip_local_reserved_ports
 
+    # Remove DAOS dependencies to prevent masking packaging bugs
+    if rpm -qa | grep fuse3; then
+        dnf -y erase fuse3\*
+    fi
+
     if $CONFIG_POWER_ONLY; then
         rm -f "$REPOS_DIR"/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
         time dnf -y erase fio fuse ior-hpc mpich-autoload               \
@@ -264,7 +274,7 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    lsb_release -a
+    cat /etc/os-release
 
     # start with everything fully up-to-date
     # all subsequent package installs beyond this will install the newest packages
@@ -275,7 +285,7 @@ post_provision_config_nodes() {
     else
         cmd+=(upgrade)
     fi
-    if ! "${cmd[@]}"; then
+    if ! "${cmd[@]}" --exclude golang-*.daos.*; then
         dump_repos
         return 1
     fi
@@ -285,47 +295,47 @@ post_provision_config_nodes() {
         install_mofed
     fi
 
-    if [ -n "$INST_REPOS" ]; then
-        local repo
-        for repo in $INST_REPOS; do
-            branch="master"
-            build_number="lastSuccessfulBuild"
-            if [[ $repo = *@* ]]; then
-                branch="${repo#*@}"
-                repo="${repo%@*}"
-                if [[ $branch = *:* ]]; then
-                    build_number="${branch#*:}"
-                    branch="${branch%:*}"
-                fi
+    local repos_added=()
+    local repo
+    local inst_repos=()
+    # shellcheck disable=SC2153
+    read -ra inst_repos <<< "$INST_REPOS"
+    for repo in "${inst_repos[@]+"${inst_repos[@]}"}"; do
+        branch="master"
+        build_number="lastSuccessfulBuild"
+        if [[ $repo = *@* ]]; then
+            branch="${repo#*@}"
+            repo="${repo%@*}"
+            if [[ \ ${repos_added[*]+${repos_added[*]}}\  = *\ ${repo}\ * ]]; then
+                # don't add duplicates, first found wins
+                continue
             fi
-            local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
-            dnf -y config-manager --add-repo="${repo_url}"
-            disable_gpg_check "$repo_url"
-        done
-    fi
-    inst_rpms=()
+            repos_added+=("$repo")
+            if [[ $branch = *:* ]]; then
+                build_number="${branch#*:}"
+                branch="${branch%:*}"
+            fi
+        fi
+        local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
+        dnf -y config-manager --add-repo="${repo_url}"
+        disable_gpg_check "$repo_url"
+    done
+    local inst_rpms=()
+    # shellcheck disable=SC2153
     if [ -n "$INST_RPMS" ]; then
+        # use eval here, rather than say, read -ra to take advantage of bash globbing
         eval "inst_rpms=($INST_RPMS)"
-        time dnf -y erase "${inst_rpms[@]}"
+        time dnf -y erase "${inst_rpms[@]}" libfabric
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    if [ -n "${LSB_RELEASE:-}" ]; then
-        if ! rpm -q "$LSB_RELEASE"; then
-            retry_dnf 360 install "$LSB_RELEASE"
-        fi
-    fi
 
     # shellcheck disable=SC2001
-    if ! rpm -q "$(echo "$INST_RPMS" |
-                   sed -e 's/--exclude [^ ]*//'                 \
-                       -e 's/[^ ]*-daos-[0-9][0-9]*//g')"; then
-        if [ -n "$INST_RPMS" ]; then
-            if ! retry_dnf 360 install "${inst_rpms[@]}"; then
-                rc=${PIPESTATUS[0]}
-                dump_repos
-                return "$rc"
-            fi
+    if [ ${#inst_rpms[@]} -gt 0 ]; then
+        if ! retry_dnf 360 install "${inst_rpms[@]}"; then
+            rc=${PIPESTATUS[0]}
+            dump_repos
+            return "$rc"
         fi
     fi
 
@@ -359,12 +369,11 @@ EOF
 
     distro_custom
 
-    lsb_release -a
+    cat /etc/os-release
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
     fi
-    cat /etc/os-release
 
     return 0
 }

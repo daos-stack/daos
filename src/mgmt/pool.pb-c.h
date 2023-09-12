@@ -113,6 +113,29 @@ typedef enum _Mgmt__StorageMediaType {
   MGMT__STORAGE_MEDIA_TYPE__NVME = 1
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__STORAGE_MEDIA_TYPE)
 } Mgmt__StorageMediaType;
+typedef enum _Mgmt__PoolServiceState {
+  /*
+   * pool service is being created
+   */
+  MGMT__POOL_SERVICE_STATE__Creating = 0,
+  /*
+   * pool service is ready to be used
+   */
+  MGMT__POOL_SERVICE_STATE__Ready = 1,
+  /*
+   * pool service is being destroyed
+   */
+  MGMT__POOL_SERVICE_STATE__Destroying = 2,
+  /*
+   * pool service is being Degraded
+   */
+  MGMT__POOL_SERVICE_STATE__Degraded = 3,
+  /*
+   * pool service is Unknown state
+   */
+  MGMT__POOL_SERVICE_STATE__Unknown = 4
+    PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(MGMT__POOL_SERVICE_STATE)
+} Mgmt__PoolServiceState;
 
 /* --- messages --- */
 
@@ -590,10 +613,14 @@ struct  _Mgmt__ListPoolsResp__Pool
    * pool state
    */
   char *state;
+  /*
+   * pool rebuild state
+   */
+  char *rebuild_state;
 };
 #define MGMT__LIST_POOLS_RESP__POOL__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__list_pools_resp__pool__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
@@ -813,10 +840,14 @@ struct  _Mgmt__PoolQueryResp
    * latest pool global version to upgrade
    */
   uint32_t upgrade_layout_ver;
+  /*
+   * pool state
+   */
+  Mgmt__PoolServiceState state;
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, MGMT__POOL_SERVICE_STATE__Creating }
 
 
 typedef enum {
@@ -1832,6 +1863,7 @@ typedef void (*Mgmt__PoolQueryTargetResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCEnumDescriptor    mgmt__storage_media_type__descriptor;
+extern const ProtobufCEnumDescriptor    mgmt__pool_service_state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_create_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__pool_destroy_req__descriptor;

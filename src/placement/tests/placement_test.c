@@ -15,7 +15,7 @@
 #include <daos/tests_lib.h>
 
 
-const char *s_opts = "he:f:vpdn:l:o";
+const char *s_opts = "he:f:vpmdn:l:o";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
@@ -24,6 +24,7 @@ static struct option l_opts[] = {
 	{"help",    no_argument,       NULL, 'h'},
 	{"verbose", no_argument,       NULL, 'v'},
 	{"pda",     no_argument,       NULL, 'p'},
+	{"pda_layout", no_argument,      NULL, 'm'},
 	{"distribute", no_argument,    NULL, 'd'},
 	{"num_objs", required_argument, NULL, 'n'},
 	{"obj_class", required_argument, NULL, 'l'},
@@ -59,6 +60,7 @@ print_usage(char *name)
 	print_message("%s -e|--exclude <TESTS>\n", name);
 	print_message("%s -f|--filter <TESTS>\n", name);
 	print_message("%s -p|--pda <TESTS>\n", name);
+	print_message("%s -m|--pda_layout <TESTS>\n", name);
 	print_message("%s -d|--distribut [-n num_objs] [-l obj_class] <TESTS>\n", name);
 	print_message("%s -o|--nlvl failure domain as node, engine by default\n", name);
 	print_message("%s -h|--help\n", name);
@@ -70,6 +72,7 @@ int main(int argc, char *argv[])
 	int		opt;
 	char		filter[1024];
 	bool		pda_test = false;
+	bool		pda_layout = false;
 	bool		dist_test = false;
 	bool		verbose = false;
 	uint32_t	num_objs = 0;
@@ -114,6 +117,9 @@ int main(int argc, char *argv[])
 		case 'p':
 			pda_test = true;
 			break;
+		case 'm':
+			pda_layout = true;
+			break;
 		case 'd':
 			dist_test = true;
 			break;
@@ -134,7 +140,9 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	if (pda_test)
+	if (pda_layout)
+		pda_layout_run(verbose);
+	else if (pda_test)
 		pda_tests_run(verbose);
 	else if (dist_test)
 		dist_tests_run(verbose, num_objs, obj_class);

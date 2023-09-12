@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
 
@@ -63,6 +65,15 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 		return nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
 	}
 
+	// check cli then config for hostlist, default to localhost
+	hl := cmd.getHostList()
+	if len(hl) == 0 && cmd.config != nil {
+		hl = cmd.config.HostList
+	}
+	if len(hl) == 0 {
+		hl = []string{"localhost"}
+	}
+
 	req := control.ConfGenerateRemoteReq{
 		ConfGenerateReq: control.ConfGenerateReq{
 			Log:             cmd.Logger,
@@ -74,27 +85,25 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 			UseTmpfsSCM:     cmd.UseTmpfsSCM,
 			ExtMetadataPath: cmd.ExtMetadataPath,
 		},
-		Client: cmd.ctlInvoker,
+		Client:   cmd.ctlInvoker,
+		HostList: hl,
 	}
-
-	// check cli then config for hostlist, default to localhost
-	hl := cmd.getHostList()
-	if len(hl) == 0 && cmd.config != nil {
-		hl = cmd.config.HostList
-	}
-	if len(hl) == 0 {
-		hl = []string{"localhost"}
-	}
-	req.HostList = hl
-
-	// TODO: decide whether we want meaningful JSON output
-	if cmd.JSONOutputEnabled() {
-		return nil, cmd.OutputJSON(nil, errors.New("JSON output not supported"))
-	}
-
 	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
 
+	// Use a modified commandline logger to send all log messages to stderr during the
+	// generation of server config file parameters so stdout can be reserved for config file
+	// output only.
+	logStderr := logging.NewCommandLineLogger()
+	logStderr.ClearLevel(logging.LogLevelInfo)
+	logStderr.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
+	req.Log = logStderr
+
 	resp, err := control.ConfGenerateRemote(ctx, req)
+
+	if cmd.JSONOutputEnabled() {
+		return nil, cmd.OutputJSON(resp, err)
+	}
+
 	if err != nil {
 		cge, ok := errors.Cause(err).(*control.ConfGenerateError)
 		if !ok {
@@ -115,16 +124,9 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	return &resp.Server, nil
 }
 
-// Execute is run when configGenCmd activates.
-//
-// Attempt to auto generate a server config file with populated storage and network hardware
-// parameters suitable to be used across all hosts in provided host list. Use the control API to
-// generate config from remote scan results.
-func (cmd *configGenCmd) Execute(_ []string) error {
-	ctx := context.Background()
-
+func (cmd *configGenCmd) confGenPrint(ctx context.Context) error {
 	cfg, err := cmd.confGen(ctx)
-	if err != nil {
+	if cmd.JSONOutputEnabled() || err != nil {
 		return err
 	}
 
@@ -133,7 +135,16 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	// output recommended server config yaml file
+	// Print generated config yaml file contents to stdout.
 	cmd.Info(string(bytes))
 	return nil
+}
+
+// Execute is run when configGenCmd activates.
+//
+// Attempt to auto generate a server config file with populated storage and network hardware
+// parameters suitable to be used across all hosts in provided host list. Use the control API to
+// generate config from remote scan results.
+func (cmd *configGenCmd) Execute(_ []string) error {
+	return cmd.confGenPrint(context.Background())
 }

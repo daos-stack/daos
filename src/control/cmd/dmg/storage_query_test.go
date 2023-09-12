@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -32,8 +32,12 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"per-server metadata device health query (missing uuid)",
 			"storage query device-health",
-			printRequest(t, &control.SmdQueryReq{}),
-			errors.New("required flag"),
+			printRequest(t, &control.SmdQueryReq{
+				Rank:             ranklist.NilRank,
+				OmitPools:        true,
+				IncludeBioHealth: true,
+			}),
+			nil,
 		},
 		{
 			"per-server metadata query pools",
@@ -191,8 +195,10 @@ func TestStorageQueryCommands(t *testing.T) {
 		{
 			"Identify device without device UUID or PCI address specified",
 			"storage led identify",
-			"",
-			errors.New("neither a pci address or a uuid has been supplied"),
+			printRequest(t, &control.SmdManageReq{
+				Operation: control.LedBlinkOp,
+			}),
+			nil,
 		},
 		{
 			"Identify a device",
@@ -252,6 +258,14 @@ func TestStorageQueryCommands(t *testing.T) {
 			printRequest(t, &control.SmdManageReq{
 				Operation: control.LedCheckOp,
 				IDs:       "842c739b-86b5-462f-a7ba-b4a91b674f3d,d50505:01:00.0",
+			}),
+			nil,
+		},
+		{
+			"check LED state without device UUID or PCI address specified",
+			"storage led check",
+			printRequest(t, &control.SmdManageReq{
+				Operation: control.LedCheckOp,
 			}),
 			nil,
 		},
