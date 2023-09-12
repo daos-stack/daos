@@ -214,7 +214,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errIncompatFlags("size", "scm-size", "nvme-size")
 		}
 		if cmd.MetaSize.IsSet() {
-			// NOTE DAOS-14223: --meta-size value is currently is not taken into account
+			// NOTE DAOS-14223: --meta-size value is currently not taken into account
 			//                  when storage tier sizes are auto-calculated so only
 			//                  support in manual mode.
 			return errors.New("--meta-size can only be set if --scm-size is set")

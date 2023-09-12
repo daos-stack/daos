@@ -213,7 +213,7 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, nsps []*ctl.Scm
 			}
 
 			// NOTE DAOS-14223: This metadata size calculation won't necessarily match
-			//                  the meta blob size on SSD if --md-size is specified in
+			//                  the meta blob size on SSD if --meta-size is specified in
 			//                  pool create command.
 			md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
 
