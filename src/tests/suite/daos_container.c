@@ -3571,7 +3571,8 @@ static void
 update_after_flat(void **state)
 {
 #define STACK_BUF_LEN	(128)
-	test_arg_t		*arg = *state;
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
 	daos_obj_id_t		 oid;
 	daos_handle_t		 oh;
 	d_iov_t			 dkey;
@@ -3581,6 +3582,10 @@ update_after_flat(void **state)
 	daos_recx_t		 recx;
 	char			 stack_buf[STACK_BUF_LEN];
 	int			 rc;
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, &arg0->pool);
+	assert_success(rc);
 
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
@@ -3621,6 +3626,213 @@ update_after_flat(void **state)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+	test_teardown((void **)&arg);
+}
+
+static void
+cont_flatten(void **state)
+{
+	test_arg_t		*arg0 = *state;
+	test_arg_t		*arg = NULL;
+	daos_obj_id_t		 oid;
+	daos_handle_t		 oh;
+	d_iov_t			 dkey;
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
+	void			*buf = NULL;
+	int			 buf_len;
+	int			 dkey_nr = 3;
+	int			 array_per_dkey = 7;
+	int			 singv_per_dkey = 3;
+	daos_epoch_t		 snap_epoch;
+	char			 dkey_str[32];
+	char			 akey_str[32];
+	int			 i, j, rc;
+
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, &arg0->pool);
+	assert_success(rc);
+
+	/* test 1: write an large object that cannot be flattened */
+	buf_len = 4 << 20;
+	D_ALLOC(buf, buf_len);
+	assert_true(buf != NULL);
+	dts_buf_render(buf, buf_len);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	print_message("write large object "DF_OID"\n", DP_OID(oid));
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	d_iov_set(&dkey, "dkey_large", strlen("dkey_large"));
+	d_iov_set(&sg_iov, buf, buf_len);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey_large", strlen("akey_large"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = buf_len;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&iod.iod_name, "akey_short", strlen("akey_short"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = 333;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+
+	/* test 2: write an small obj cross snapshot */
+	buf_len = 512;
+	D_ALLOC(buf, buf_len);
+	assert_true(buf != NULL);
+	dts_buf_render(buf, buf_len);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	print_message("write a small object "DF_OID" cross snapshot\n", DP_OID(oid));
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	d_iov_set(&dkey, "dkey_cross", strlen("dkey_cross"));
+	d_iov_set(&sg_iov, buf, buf_len);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, "akey_1", strlen("akey_1"));
+	recx.rx_idx = 0;
+	recx.rx_nr  = buf_len;
+	iod.iod_size	= 1;
+	iod.iod_nr	= 1;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created snapshot "DF_X64"\n", snap_epoch);
+
+	d_iov_set(&iod.iod_name, "akey_2", strlen("akey_3"));
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	d_iov_set(&iod.iod_name, "akey_3", strlen("akey_3"));
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+	D_FREE(buf);
+
+	/* test 3: write an small object that can be flattened */
+	buf_len = 128;
+	D_ALLOC(buf, buf_len * 512);
+	assert_true(buf != NULL);
+	dts_buf_render(buf, buf_len);
+	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("write small object, "DF_OID", dkey_nr %d, array_per_dkey %d, "
+		      "singv_per_dkey %d\n", DP_OID(oid), dkey_nr, array_per_dkey, singv_per_dkey);
+
+	d_iov_set(&sg_iov, buf, buf_len * 512);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 1;
+	sgl.sg_iovs	= &sg_iov;
+
+	for (i = 0; i < dkey_nr; i++) {
+		memset(dkey_str, 0, 32);
+		sprintf(dkey_str, "dkey_small_%d", dkey_nr - i);
+		d_iov_set(&dkey, dkey_str, strlen(dkey_str));
+
+		iod.iod_size	= buf_len;
+		iod.iod_nr	= 1;
+		iod.iod_recxs	= NULL;
+		iod.iod_type	= DAOS_IOD_SINGLE;
+		for (j = 0; j < singv_per_dkey; j++) {
+			memset(akey_str, 0, 32);
+			sprintf(akey_str, "akey_singv_%d", singv_per_dkey - j);
+			d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+			memset(buf, 30 + i * 10 + singv_per_dkey - j, buf_len);
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+			assert_rc_equal(rc, 0);
+		}
+
+		iod.iod_size	= 1;
+		iod.iod_nr	= 1;
+		iod.iod_recxs	= &recx;
+		iod.iod_type	= DAOS_IOD_ARRAY;
+		for (j = 0; j < array_per_dkey; j++) {
+			if (j == array_per_dkey - 1) {
+				recx.rx_idx = 4 << 20;
+				recx.rx_nr = 32 * 1024;
+			} else {
+				recx.rx_idx = 2 * buf_len + rand() % 1024;
+				recx.rx_nr  = buf_len + rand() % buf_len;
+			}
+			memset(akey_str, 0, 32);
+			if (j < 3)
+				sprintf(akey_str, "a_%d", array_per_dkey - j);
+			else
+				sprintf(akey_str, "akey_array_%d", array_per_dkey - j);
+			d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+			memset(buf, 30 + i * 10 + array_per_dkey - j, buf_len);
+
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+			assert_rc_equal(rc, 0);
+		}
+
+		for (j = 0; j < array_per_dkey; j++) {
+			recx.rx_idx = 0;
+			if (j == array_per_dkey - 1)
+				recx.rx_nr = 32 * 1024;
+			else
+				recx.rx_nr  = buf_len + rand() % buf_len;
+			memset(akey_str, 0, 32);
+			if (j < 3)
+				sprintf(akey_str, "a_%d", array_per_dkey - j);
+			else
+				sprintf(akey_str, "akey_array_%d", array_per_dkey - j);
+			d_iov_set(&iod.iod_name, akey_str, strlen(akey_str));
+			memset(buf, 30 + i * 10 + array_per_dkey - j, buf_len);
+
+			if (j == 0) {
+				rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey, 1,
+							  &iod.iod_name, NULL);
+				assert_rc_equal(rc, 0);
+			}
+			rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+			assert_rc_equal(rc, 0);
+
+			if (j == 1) {
+				rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey, 1,
+							  &iod.iod_name, NULL);
+				assert_rc_equal(rc, 0);
+			}
+		}
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("flatten the container\n");
+	rc = daos_cont_set_ro(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("sleep 30 S ...\n");
+	sleep(30);
+	print_message("sleep 30 S done\n");
+	test_teardown((void **)&arg);
 }
 
 static int
@@ -3695,6 +3907,7 @@ static const struct CMUnitTest co_tests[] = {
     {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
     {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
     {"CONT35: update after flatten", update_after_flat, co_setup_sync, test_case_teardown},
+    {"CONT36: container flatten", cont_flatten, co_setup_sync, test_case_teardown},
 };
 
 int

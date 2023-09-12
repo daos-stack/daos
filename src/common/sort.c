@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -15,7 +15,7 @@
 #include <daos/common.h>
 
 /**
- * Combsort for an array.
+ * Sort an array (can be partial array if \a start is non-zero)
  *
  * It always returns zero if \a unique is false, which means array can
  * have multiple elements with the same key.
@@ -23,8 +23,8 @@
  * elements have the same key.
  */
 int
-daos_array_sort(void *array, unsigned int len, bool unique,
-		daos_sort_ops_t *ops)
+daos_array_sort_adv(void *array, unsigned int start, unsigned int len, bool unique,
+		    daos_sort_ops_t *ops)
 {
 	bool	swapped;
 	int	gap;
@@ -42,7 +42,7 @@ daos_array_sort(void *array, unsigned int len, bool unique,
 			gap = 1;
 
 		swapped = false;
-		for (i = 0, j = gap; j < len; i++, j++) {
+		for (i = start, j = start + gap; j < start + len; i++, j++) {
 			rc = ops->so_cmp(array, i, j);
 			if (rc == 0 && unique)
 				return -DER_INVAL;
@@ -54,6 +54,13 @@ daos_array_sort(void *array, unsigned int len, bool unique,
 		}
 	}
 	return 0;
+}
+
+int
+daos_array_sort(void *array, unsigned int len, bool unique,
+		daos_sort_ops_t *ops)
+{
+	return daos_array_sort_adv(array, 0, len, unique, ops);
 }
 
 enum {

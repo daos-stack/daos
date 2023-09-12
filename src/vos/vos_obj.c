@@ -24,6 +24,10 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+/** Ensure struct vos_obj_df::vo_addr does not exceed vo_tree's size */
+struct vos_obj_df vod_dummy;
+D_CASSERT(sizeof(vod_dummy.vo_flat) <= sizeof(vod_dummy.vo_tree));
+
 static inline bool
 is_fake_iter(struct vos_obj_iter *oiter)
 {

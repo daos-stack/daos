@@ -78,6 +78,10 @@ struct ds_cont_child {
 
 	/* Tracks the schedule request for EC aggregation ULT */
 	struct sched_request	*sc_ec_agg_req;
+
+	/* Tracks the schedule request for container flatten ULT */
+	struct sched_request	*sc_flat_req;
+
 	/*
 	 * Snapshot delete HLC (0 means no change), which is used
 	 * to compare with the aggregation HLC, so it knows whether the
