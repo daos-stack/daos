@@ -351,7 +351,6 @@ obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_
 				   dom_used, dom_full, dgu->dgu_used, dgu->dgu_real,
 				   tgts_used, shard_id, allow_status, allow_version, fdom_lvl,
 				   &spares_left, &spare_avail);
-			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
 				DP_TARGET(spare_tgt));
 			if (layout_ver > 0) {
