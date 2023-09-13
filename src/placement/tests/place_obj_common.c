@@ -17,6 +17,7 @@
 #include <cmocka.h>
 #include <daos/tests_lib.h>
 
+bool fail_domain_node;
 void
 print_layout(struct pl_obj_layout *layout)
 {
@@ -605,8 +606,10 @@ gen_pool_and_placement_map(int num_domains, int nodes_per_domain,
 
 	mia.ia_type         = pl_type;
 	mia.ia_ring.ring_nr = 1;
-	mia.ia_ring.domain  = PO_COMP_TP_RANK;
-
+	if (fail_domain_node)
+		mia.ia_ring.domain  = PO_COMP_TP_NODE;
+	else
+		mia.ia_ring.domain = PO_COMP_TP_RANK;
 	rc = pl_map_create(*po_map_out, &mia, pl_map_out);
 	assert_success(rc);
 }

@@ -15,11 +15,12 @@
 #include <daos/tests_lib.h>
 
 
-const char *s_opts = "he:f:v";
+const char *s_opts = "he:f:vo";
 static int idx;
 static struct option l_opts[] = {
 	{"exclude", required_argument, NULL, 'e'},
 	{"filter",  required_argument, NULL, 'f'},
+	{"nlvl",    no_argument,	NULL, 'o'},
 	{"help",    no_argument,       NULL, 'h'},
 	{"verbose", no_argument,       NULL, 'v'},
 };
@@ -53,6 +54,7 @@ print_usage(char *name)
 		"\n\nCOMMON TESTS\n==========================\n");
 	print_message("%s -e|--exclude <TESTS>\n", name);
 	print_message("%s -f|--filter <TESTS>\n", name);
+	print_message("%s -o|--nlvl failure domain as node, engine by default\n", name);
 	print_message("%s -h|--help\n", name);
 	print_message("%s -v|--verbose\n", name);
 }
@@ -72,6 +74,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+	fail_domain_node = false;
 	while ((opt = getopt_long(argc, argv, s_opts, l_opts, &idx)) != -1) {
 		switch (opt) {
 		case 'h':
@@ -99,6 +102,10 @@ int main(int argc, char *argv[])
 			sprintf(filter, "*%s*", optarg);
 			D_PRINT("filter not enabled. %s not applied", filter);
 #endif
+			break;
+		case 'o':
+			fail_domain_node = true;
+			D_PRINT("run test as node failure domain");
 			break;
 		default:
 			break;
