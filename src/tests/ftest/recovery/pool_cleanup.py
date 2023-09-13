@@ -143,7 +143,7 @@ class PoolCleanupTest(TestWithServers):
         failed_ranks = self.server_managers[0].check_rank_state(
             ranks=rank_list, valid_states="joined", max_checks=10)
         if failed_ranks:
-            self.fail(
+            errors.append(
                 f"Following ranks didn't become joined after restart! {failed_ranks}")
 
         # 12. Verify that the corrupted label in MS is fixed.
