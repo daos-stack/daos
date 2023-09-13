@@ -59,10 +59,9 @@ def list_pool(verbose=False, json=False, no_query=False):
         str: If --json is used, return stdout. Otherwise None.
 
     """
+    list_pool_cmd = ["dmg", "pool", "list"]
     if json:
-        list_pool_cmd = ["dmg", "--json", "pool", "list"]
-    else:
-        list_pool_cmd = ["dmg", "pool", "list"]
+        list_pool_cmd.append("--json")
     if verbose:
         list_pool_cmd.append("--verbose")
     if no_query:
@@ -99,16 +98,6 @@ def pool_query(pool_label):
     """
     pool_query_cmd = ["dmg", "pool", "query", pool_label]
     run_command(command=pool_query_cmd)
-
-
-def list_containers(pool_label):
-    """Call daos pool list-containers <pool_label>
-
-    Args:
-        pool_label (str): Pool label.
-    """
-    list_containers_cmd = ["daos", "pool", "label", pool_label]
-    run_command(command=list_containers_cmd)
 
 
 # Container-related methods
@@ -375,14 +364,7 @@ def convert_list_to_str(original_list, separator):
         str: String list.
 
     """
-    str_list = ""
-    for item in original_list:
-        if str_list == "":
-            str_list = str(item)
-        else:
-            str_list += separator + str(item)
-
-    return str_list
+    return separator.join(map(str, original_list))
 
 
 def run_command(command):
