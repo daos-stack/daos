@@ -1411,7 +1411,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 					 task->dst_new_layout_version, &task->dst_tgts,
 					 retry_opc, 5);
 	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND ||
-		   task->dst_rebuild_op == RB_OP_UPGRADE) {
+		   task->dst_rebuild_op == RB_OP_UPGRADE || task->dst_rebuild_op == RB_OP_EXCLUDE ||
+		   task->dst_rebuild_op == RB_OP_DRAIN) {
 		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
