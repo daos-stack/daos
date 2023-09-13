@@ -366,7 +366,9 @@ daos_cont_set_healthy(daos_handle_t coh, daos_event_t *ev);
  * Set container DAOS_PROP_CO_READONLY status for WORM (Write-Once-Read-Many) container
  * (with same purpose as "daos cont set-prop --properties=status:ro --pool= --cont= ")
  * to indicate the container become immutable and DAOS backend service can flatten all
- * objects in the container.
+ * objects in the container. As cannot support container snapshot anymore after object
+ * flattening, it is required to destroy existed snapshot ahead to call this API, or
+ * -DER_NO_PERM is expected.
  *
  * \param[in]	coh	Container handle
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -377,6 +379,7 @@ daos_cont_set_healthy(daos_handle_t coh, daos_event_t *ev);
  *			0		Success
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NO_PERM    Permission denied
  */
 int
 daos_cont_set_ro(daos_handle_t coh, daos_event_t *ev);
