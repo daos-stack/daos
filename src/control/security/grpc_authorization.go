@@ -83,14 +83,22 @@ var methodAuthorizations = map[string][]Component{
 	"/RaftTransport/InstallSnapshot":       {ComponentServer},
 }
 
-// MethodToComponent resolves a gRPC method string to a build.Component.
-func MethodToComponent(method string) (build.Component, error) {
+func methodToComponent(method string, methodAuthorizations map[string][]Component) (build.Component, error) {
 	comps, found := methodAuthorizations[method]
 	if !found || len(comps) == 0 {
 		return build.ComponentAny, errors.Errorf("method %q does not map to a known authorized component", method)
+	} else if len(comps) > 1 {
+		// In this case, the caller must explicitly set the component and cannot
+		// rely on this helper to resolve it.
+		return build.ComponentAny, errors.Errorf("method %q maps to multiple authorized components", method)
 	}
 
 	return build.Component(comps[0].String()), nil
+}
+
+// MethodToComponent resolves a gRPC method string to a build.Component.
+func MethodToComponent(method string) (build.Component, error) {
+	return methodToComponent(method, methodAuthorizations)
 }
 
 // HasAccess check if the given component has access to method given in FullMethod
