@@ -1177,8 +1177,6 @@ ut_interleaved_ops(void **state)
 		      NULL, &args.vua_vsi);
 	assert_int_equal(rc, 0);
 
-	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
-	assert_int_equal(rc, 0);
 
 	/*
 	 * Do the following interleaved operations:
@@ -1206,9 +1204,13 @@ ut_interleaved_ops(void **state)
 	block_count += 2;
 	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
 	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
 	/* Case 2 */
@@ -1218,9 +1220,13 @@ ut_interleaved_ops(void **state)
 	block_count += 2;
 	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
 	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
 	/* Case 3 */
@@ -1232,7 +1238,11 @@ ut_interleaved_ops(void **state)
 	assert_rc_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
 	assert_int_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
 	/* Case 4 */
@@ -1242,7 +1252,11 @@ ut_interleaved_ops(void **state)
 	block_count += 2;
 	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_b);
 	assert_int_equal(rc, 0);
@@ -1256,7 +1270,11 @@ ut_interleaved_ops(void **state)
 	assert_rc_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
 	assert_int_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 
 	/* Case 6 */
@@ -1266,7 +1284,11 @@ ut_interleaved_ops(void **state)
 	block_count += 2;
 	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_int_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
 	assert_int_equal(rc, 0);
@@ -1306,12 +1328,16 @@ ut_interleaved_ops(void **state)
 	/* Reserve C */
 	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	/* Publish B */
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
 	assert_rc_equal(rc, 0);
 	/* Publish A & C */
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_commit(&args.vua_umm);
+	assert_int_equal(rc, 0);
 
 	/* Case 10 */
 	block_count = 256;
@@ -1337,6 +1363,8 @@ ut_interleaved_ops(void **state)
 	/* cancel A & C */
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
 	assert_rc_equal(rc, 0);
+	rc = umem_tx_begin(&args.vua_umm, &args.vua_txd);
+	assert_int_equal(rc, 0);
 	/* Publish B */
 	rc = vea_tx_publish(args.vua_vsi, h_ctxt, &tmp_list);
 	assert_rc_equal(rc, 0);

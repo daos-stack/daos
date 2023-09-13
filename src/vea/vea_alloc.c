@@ -325,6 +325,7 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 				   &vsi->vsi_class.vfc_bitmap_lru[blk_cnt - 1], vbe_link) {
 		vfb = &bitmap_entry->vbe_bitmap;
 		D_ASSERT(vfb->vfb_class == blk_cnt);
+		D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
 		rc = daos_find_bits(vfb->vfb_bitmaps, NULL, vfb->vfb_bitmap_sz, 1, &bits);
 		if (rc < 0) {
 			d_list_del_init(&bitmap_entry->vbe_link);
@@ -345,6 +346,7 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 	if (!d_list_empty(list_head)) {
 		bitmap_entry = d_list_entry(list_head->next, struct vea_bitmap_entry,
 					    vbe_link);
+		D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
 		vfb = &bitmap_entry->vbe_bitmap;
 		D_ASSERT(vfb->vfb_class == blk_cnt);
 		resrvd->vre_blk_off = vfb->vfb_blk_off;
@@ -597,6 +599,14 @@ new_chunk_commit_cb(void *data, bool noop)
 	bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHED;
 }
 
+static void
+new_chunk_abort_cb(void *data, bool noop)
+{
+	struct vea_bitmap_entry	*bitmap_entry = (struct vea_bitmap_entry *)data;
+
+	bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_NEW;
+}
+
 int
 persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 {
@@ -626,6 +636,13 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 		}
 
 		bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHING;
+
+		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONABORT,
+					  new_chunk_abort_cb, bitmap_entry);
+		if (rc) {
+			D_ERROR("add chunk abort callback failed. "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
 
 		extent = vfe->vfe_ext;
 		extent.vfe_blk_off = bitmap_entry->vbe_bitmap.vfb_blk_off;
