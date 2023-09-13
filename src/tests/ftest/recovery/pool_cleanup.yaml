@@ -8,8 +8,13 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      nr_xs_helpers: 1
-      storage: auto
+      targets: 4
+      nr_xs_helpers: 0
+      storage:
+        0:
+          class: ram
+          scm_mount: /mnt/daos
+  system_ram_reserved: 1
 
 pool:
   size: 5G
