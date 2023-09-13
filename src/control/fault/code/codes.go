@@ -79,6 +79,7 @@ const (
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
+	ScmRamdiskBadSize
 	ScmConfigTierMissing
 )
 
