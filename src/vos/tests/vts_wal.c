@@ -450,8 +450,6 @@ static void
 wal_kv_large(void **state)
 {
 	struct io_test_args	*arg = *state;
-	struct vos_test_ctx	*tcx = &arg->ctx;
-	struct umem_instance	*umm;
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
 	char			 akey_sv[4][UPDATE_AKEY_SIZE] = { 0 };
@@ -462,7 +460,7 @@ wal_kv_large(void **state)
 	char			*buf_v;
 	unsigned int		 sizes[4] = { 1024, 2048, 4096, 8192 };
 	unsigned int		 large_sz = 8192;
-	int			 i, j, rc;
+	int			 i, j;
 
 	dts_key_gen(dkey, UPDATE_DKEY_SIZE, UPDATE_DKEY);
 
@@ -478,11 +476,6 @@ wal_kv_large(void **state)
 	D_ALLOC(buf_v, large_sz);
 	assert_non_null(buf_v);
 
-	/* Update small EV/SV, large EV/SV (located on data blob) */
-	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get(true));
-	assert_rc_equal(rc, 0);
-
 	epoch = epc_lo;
 	oid = arg->oid;
 	for (i = 0; i < 4; i++) {
@@ -492,16 +485,8 @@ wal_kv_large(void **state)
 			     sizes[i], &recx, bufs[i][1]);
 	}
 
-	rc = umem_tx_end(umm, 0);
-	assert_rc_equal(rc, 0);
-
 	/* Re-open pool and repaly WAL */
 	wal_pool_refill(&arg->ctx);
-
-	/* Verify all values */
-	umm = &vos_hdl2cont(tcx->tc_co_hdl)->vc_pool->vp_umm;
-	rc = umem_tx_begin(umm, vos_txd_get(true));
-	assert_rc_equal(rc, 0);
 
 	epoch = epc_lo;
 	for (i = 0; i < 4; i++) {
@@ -513,9 +498,6 @@ wal_kv_large(void **state)
 			    sizes[i], &recx, buf_v);
 		assert_memory_equal(buf_v, bufs[i][1], sizes[i]);
 	}
-
-	rc = umem_tx_end(umm, 0);
-	assert_rc_equal(rc, 0);
 
 	for (i = 0; i < 4; i++)
 		for (j = 0; j < 2; j++)
