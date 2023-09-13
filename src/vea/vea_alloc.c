@@ -325,7 +325,9 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 				   &vsi->vsi_class.vfc_bitmap_lru[blk_cnt - 1], vbe_link) {
 		vfb = &bitmap_entry->vbe_bitmap;
 		D_ASSERT(vfb->vfb_class == blk_cnt);
-		D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
+		/* Only assert in server mode */
+		if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+			D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
 		rc = daos_find_bits(vfb->vfb_bitmaps, NULL, vfb->vfb_bitmap_sz, 1, &bits);
 		if (rc < 0) {
 			d_list_del_init(&bitmap_entry->vbe_link);
@@ -346,7 +348,8 @@ reserve_bitmap(struct vea_space_info *vsi, uint32_t blk_cnt,
 	if (!d_list_empty(list_head)) {
 		bitmap_entry = d_list_entry(list_head->next, struct vea_bitmap_entry,
 					    vbe_link);
-		D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
+		if (vsi->vsi_unmap_ctxt.vnc_ext_flush)
+			D_ASSERT(bitmap_entry->vbe_published_state != VEA_BITMAP_STATE_PUBLISHING);
 		vfb = &bitmap_entry->vbe_bitmap;
 		D_ASSERT(vfb->vfb_class == blk_cnt);
 		resrvd->vre_blk_off = vfb->vfb_blk_off;
