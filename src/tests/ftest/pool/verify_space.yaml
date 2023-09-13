@@ -1,0 +1,34 @@
+hosts:
+  test_servers: 3
+  test_clients: 1
+timeout: 90
+server_config:
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
+  system_ram_reserved: 1
+pool_1:
+  size: 1G
+  target_list: 0
+  description: 'single pool on a single server (rank 0)'
+pool_2:
+  size: 2G
+  target_list: 1
+  description: 'multiple pools on a single server (rank 1)'
+pool_3:
+  size: 3G
+  target_list: 1
+  description: 'multiple pools on a single server (rank 1)'
+pool_4:
+  size: 4G
+  target_list: 1
+pool_5:
+  size: 5G
+  target_list: [1, 2]
+pool_6:
+  size: 1G
+  target_list: [0, 1, 2]
+pool_7:
+  size: 1G
+  target_list: [0, 1, 2]
