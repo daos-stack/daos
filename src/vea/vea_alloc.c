@@ -260,7 +260,7 @@ done:
 	return rc;
 }
 
-#define LARGE_EXT_FREE_BLKS	8388608
+#define LARGE_EXT_FREE_BLKS	((32UL << 30) / VEA_BLK_SZ)
 
 static inline uint32_t
 get_bitmap_chunk_blks(struct vea_space_info *vsi, uint32_t blk_cnt)
@@ -590,11 +590,8 @@ new_chunk_commit_cb(void *data, bool noop)
 {
 	struct vea_bitmap_entry	*bitmap_entry = (struct vea_bitmap_entry *)data;
 
-	/* Transaction aborted, only need to clear is new*/
-	if (noop) {
-		bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_NEW;
+	if (noop)
 		return;
-	}
 
 	bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHED;
 }
@@ -603,6 +600,9 @@ static void
 new_chunk_abort_cb(void *data, bool noop)
 {
 	struct vea_bitmap_entry	*bitmap_entry = (struct vea_bitmap_entry *)data;
+
+	if (noop)
+		return;
 
 	bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_NEW;
 }
@@ -628,19 +628,19 @@ persistent_alloc(struct vea_space_info *vsi, struct vea_free_entry *vfe)
 		if (rc != 0)
 			return rc;
 
-		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
-					  new_chunk_commit_cb, bitmap_entry);
+		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONABORT,
+					  new_chunk_abort_cb, bitmap_entry);
 		if (rc) {
-			D_ERROR("add chunk commit callback failed. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("add chunk abort callback failed. "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
 		bitmap_entry->vbe_published_state = VEA_BITMAP_STATE_PUBLISHING;
 
-		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONABORT,
-					  new_chunk_abort_cb, bitmap_entry);
+		rc = umem_tx_add_callback(vsi->vsi_umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
+					  new_chunk_commit_cb, bitmap_entry);
 		if (rc) {
-			D_ERROR("add chunk abort callback failed. "DF_RC"\n", DP_RC(rc));
+			D_ERROR("add chunk commit callback failed. "DF_RC"\n", DP_RC(rc));
 			goto out;
 		}
 
