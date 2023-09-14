@@ -1656,8 +1656,12 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 				MemTotalKiB:     tc.memTotal,
 			}
 
-			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.extMetadataPath,
-				tc.ecs, mi, tc.threadCounts)
+			req := ConfGenerateReq{
+				Log:             log,
+				AccessPoints:    tc.accessPoints,
+				ExtMetadataPath: tc.extMetadataPath,
+			}
+			getCfg, gotErr := genServerConfig(req, tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

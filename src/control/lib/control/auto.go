@@ -140,7 +140,7 @@ func ConfGenerate(req ConfGenerateReq, newEngineCfg newEngineCfgFn, hf *HostFabr
 	}
 
 	// populate server config using engine configs
-	sc, err := genServerConfig(req.Log, req.AccessPoints, req.ExtMetadataPath, ecs, sd.MemInfo, tc)
+	sc, err := genServerConfig(req, ecs, sd.MemInfo, tc)
 	if err != nil {
 		return nil, err
 	}
@@ -1130,18 +1130,18 @@ func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
-func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath string, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
+func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemInfo, tc *threadCounts) (*config.Server, error) {
 	if len(ecs) == 0 {
 		return nil, errors.New("expected non-zero number of engine configs")
 	}
 
-	log.Debugf("setting %d targets and %d helper threads per engine", tc.nrTgts, tc.nrHlprs)
+	req.Log.Debugf("setting %d targets and %d helper threads per engine", tc.nrTgts, tc.nrHlprs)
 	for _, ec := range ecs {
 		ec.WithTargetCount(tc.nrTgts).WithHelperStreamCount(tc.nrHlprs)
 	}
 
 	cfg := config.DefaultServer().
-		WithAccessPoints(accessPoints...).
+		WithAccessPoints(req.AccessPoints...).
 		WithFabricProvider(ecs[0].Fabric.Provider).
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
@@ -1156,16 +1156,16 @@ func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath 
 		}
 		// Add default control_metadata path if roles have been assigned.
 		if idx == 0 && tiers.HasBdevRoleMeta() {
-			if extMetadataPath == "" {
+			if req.ExtMetadataPath == "" {
 				return nil, errors.New("no external metadata path specified in request")
 			}
 			cfg.Metadata = storage.ControlMetadata{
-				Path: extMetadataPath,
+				Path: req.ExtMetadataPath,
 			}
 		}
 	}
 
-	portNum, err := checkAccessPointPorts(log, accessPoints)
+	portNum, err := checkAccessPointPorts(req.Log, cfg.AccessPoints)
 	if err != nil {
 		return nil, err
 	}
@@ -1174,15 +1174,15 @@ func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath 
 		cfg.WithControlPort(portNum)
 	}
 
-	if err := cfg.Validate(log); err != nil {
+	if err := cfg.Validate(req.Log); err != nil {
 		return nil, errors.Wrap(err, "validating engine config")
 	}
 
-	if err := cfg.SetNrHugepages(log, mi); err != nil {
+	if err := cfg.SetNrHugepages(req.Log, mi); err != nil {
 		return nil, err
 	}
 
-	if err := cfg.SetRamdiskSize(log, mi); err != nil {
+	if err := cfg.SetRamdiskSize(req.Log, mi); err != nil {
 		return nil, err
 	}
 
