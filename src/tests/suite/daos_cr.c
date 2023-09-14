@@ -33,7 +33,7 @@ struct test_cont {
 	char	label[DAOS_PROP_LABEL_MAX_LEN];
 };
 
-/* Instatnce Status */
+/* Instance Status */
 
 static inline bool
 cr_ins_status_init(const char *status)
@@ -177,8 +177,8 @@ cr_fault_inject(uuid_t uuid, bool mgmt, const char *fault)
 	print_message("CR: injecting fault %s for pool " DF_UUID "\n", fault, DP_UUID(uuid));
 	rc = dmg_fault_inject(dmg_config_file, uuid, mgmt, fault);
 	if (rc != 0)
-		print_message("CR: pool " DF_UUID " inject fault %s failed: %d\n",
-			       DP_UUID(uuid), fault, rc);
+		print_message("CR: pool " DF_UUID " inject fault %s failed: "DF_RC"\n",
+			       DP_UUID(uuid), fault, DP_RC(rc));
 
 	return rc;
 }
@@ -343,8 +343,6 @@ cr_cleanup(test_arg_t *arg, struct test_pool *pools, uint32_t nr)
 	int	rc;
 	int	i;
 
-	cr_check_set_policy(TCPF_RESET, NULL);
-
 	for (i = 0; i < nr; i++) {
 		d_rank_list_free(pools[i].svc);
 		d_rank_list_free(pools[i].alive_svc);
@@ -365,7 +363,7 @@ cr_cleanup(test_arg_t *arg, struct test_pool *pools, uint32_t nr)
 
 		rc = dmg_pool_destroy(dmg_config_file, pools[i].pool_uuid, arg->group, 1);
 		if (rc != 0 && rc != -DER_NONEXIST && rc != -DER_MISC)
-			print_message("CR: dmg_pool_destroy failed: %d\n", rc);
+			print_message("CR: dmg_pool_destroy failed: "DF_RC"\n", DP_RC(rc));
 	}
 }
 
@@ -683,15 +681,15 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 	print_message("CR: creating pool ...\n");
 	rc = test_setup_pool_create(state, NULL, pool, NULL);
 	if (rc != 0) {
-		print_message("CR: pool creation failed: %d\n", rc);
+		print_message("CR: pool creation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	print_message("CR: getting label for pool " DF_UUID "\n", DP_UUID(pool->pool_uuid));
 	rc = dmg_pool_get_prop(dmg_config_file, NULL, pool->pool_uuid, "label", &pool->label);
 	if (rc != 0) {
-		print_message("CR: pool " DF_UUID " get label failed: %d\n",
-			      DP_UUID(pool->pool_uuid), rc);
+		print_message("CR: pool " DF_UUID " get label failed: "DF_RC"\n",
+			      DP_UUID(pool->pool_uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -700,8 +698,8 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 		rc = daos_pool_connect(pool->pool_str, arg->group, DAOS_PC_RW, &pool->poh, NULL,
 				       NULL);
 		if (rc != 0) {
-			print_message("CR: pool " DF_UUID " connect failed: %d\n",
-				      DP_UUID(pool->pool_uuid), rc);
+			print_message("CR: pool " DF_UUID " connect failed: "DF_RC"\n",
+				      DP_UUID(pool->pool_uuid), DP_RC(rc));
 			return rc;
 		}
 
@@ -710,8 +708,8 @@ cr_pool_create(void **state, struct test_pool *pool, bool connect, uint32_t faul
 
 			rc = daos_pool_query(pool->poh, NULL, &info, NULL, NULL);
 			if (rc != 0) {
-				print_message("CR: pool " DF_UUID " query failed: %d\n",
-					      DP_UUID(pool->pool_uuid), rc);
+				print_message("CR: pool " DF_UUID " query failed: "DF_RC"\n",
+					      DP_UUID(pool->pool_uuid), DP_RC(rc));
 				return rc;
 			}
 
@@ -785,7 +783,7 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 	else
 		rc = daos_cont_create(pool->poh, &cont->uuid, NULL, NULL);
 	if (rc != 0) {
-		print_message("CR: cont creation failed: %d\n", rc);
+		print_message("CR: cont creation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -798,8 +796,8 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 			rc = daos_cont_open(pool->poh, cont->label, DAOS_COO_RW, &coh, NULL, NULL);
 		}
 		if (rc != 0) {
-			print_message("CR: cont " DF_UUID " open failed: %d\n",
-				      DP_UUID(cont->uuid), rc);
+			print_message("CR: cont " DF_UUID " open failed: "DF_RC"\n",
+				      DP_UUID(cont->uuid), DP_RC(rc));
 			return rc;
 		}
 
@@ -819,8 +817,8 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 		print_message("CR: set label for container " DF_UUID "\n", DP_UUID(cont->uuid));
 		rc = daos_cont_set_prop(coh, prop, NULL);
 		if (rc != 0)
-			print_message("CR: cont " DF_UUID " set label failed: %d\n",
-				      DP_UUID(cont->uuid), rc);
+			print_message("CR: cont " DF_UUID " set label failed: "DF_RC"\n",
+				      DP_UUID(cont->uuid), DP_RC(rc));
 
 		daos_prop_free(prop);
 
@@ -830,8 +828,8 @@ cr_cont_create(void **state, struct test_pool *pool, struct test_cont *cont, int
 		print_message("CR: closing container " DF_UUID " ...\n", DP_UUID(cont->uuid));
 		rc1 = daos_cont_close(coh, NULL);
 		if (rc1 != 0) {
-			print_message("CR: cont " DF_UUID " close failed: %d\n",
-				      DP_UUID(cont->uuid), rc1);
+			print_message("CR: cont " DF_UUID " close failed: "DF_RC"\n",
+				      DP_UUID(cont->uuid), DP_RC(rc1));
 			if (rc == 0)
 				rc = rc1;
 		}
@@ -856,8 +854,8 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 		rc = daos_pool_connect(pool->pool_str, arg->group, DAOS_PC_RW, &pool->poh, NULL,
 				       NULL);
 		if (rc != 0) {
-			print_message("CR: pool " DF_UUID " connect failed: %d\n",
-				      DP_UUID(pool->pool_uuid), rc);
+			print_message("CR: pool " DF_UUID " connect failed: "DF_RC"\n",
+				      DP_UUID(pool->pool_uuid), DP_RC(rc));
 			return rc;
 		}
 	}
@@ -866,8 +864,8 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 	uuid_unparse_lower(cont->uuid, uuid_str);
 	rc = daos_cont_open(pool->poh, uuid_str, DAOS_COO_RW, &coh, NULL, NULL);
 	if (rc != 0) {
-		print_message("CR: cont " DF_UUID " open failed: %d\n",
-			      DP_UUID(cont->uuid), rc);
+		print_message("CR: cont " DF_UUID " open failed: "DF_RC"\n",
+			      DP_UUID(cont->uuid), DP_RC(rc));
 		return rc;
 	}
 
@@ -879,8 +877,8 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc != 0)
-		print_message("CR: cont " DF_UUID " set label failed: %d\n",
-			      DP_UUID(cont->uuid), rc);
+		print_message("CR: cont " DF_UUID " set label failed: "DF_RC"\n",
+			      DP_UUID(cont->uuid), DP_RC(rc));
 	else
 		D_STRNDUP(*label, prop->dpp_entries[0].dpe_str,
 			  strlen(prop->dpp_entries[0].dpe_str));
@@ -890,8 +888,8 @@ cr_cont_get_label(void **state, struct test_pool *pool, struct test_cont *cont, 
 	print_message("CR: closing container " DF_UUID " ...\n", DP_UUID(cont->uuid));
 	rc1 = daos_cont_close(coh, NULL);
 	if (rc1 != 0) {
-		print_message("CR: cont " DF_UUID " close failed: %d\n",
-			      DP_UUID(cont->uuid), rc1);
+		print_message("CR: cont " DF_UUID " close failed: "DF_RC"\n",
+			      DP_UUID(cont->uuid), DP_RC(rc1));
 		if (rc == 0)
 			rc = rc1;
 	}
@@ -2300,8 +2298,8 @@ cr_failout(void **state)
  * 1. Create pool and cont.
  * 2. Fault injection to generate empty label for the container property.
  * 3. Start checker with option "--auto=on -p CONT_BAD_LABEL:CIA_TRUST_TARGET".
- * 4. For bad container label, if the trust label is empty, then need interaction by default, but
- *    under auto mode, it will be ignored.
+ * 4. For bad container label, if the trusted label is empty, then need interaction by default,
+ *    but under auto mode, it will be ignored.
  * 5. Query checker, should be completed, inconsistent container label should be "ignored".
  * 6. Restart checker with option "--reset --auto=off" and "-p CONT_BAD_LABEL:CIA_TRUST_TARGET".
  * 7. Query checker, it will show the interaction for the inconsistent container label.
@@ -3210,14 +3208,12 @@ cr_fail_sync_orphan(void **state)
 /*
  * 1. Create pool1 and pool2.
  * 2. Fault injection to make inconsistent label for both of them.
- * 3. Start checker on pool1 with POOL_BAD_LABEL:CIA_INTERACT
- * 4. Query checker, should show pool1's interaction.
- * 5. Check repair pool1's label with trust PS (trust MS is the default) and "for-all" option.
- * 6. Query checker, should be completed.
- * 7. Start checker on pool2 without any option. It should inherit former "for-all" policy.
- * 8. Query checker, the pool2's label should be fixed with trust PS.
- * 9. Switch to normal mode and verify pools' labels.
- * 10. Cleanup.
+ * 3. Start checker on pool1 and pool2 with POOL_BAD_LABEL:CIA_INTERACT
+ * 4. Query checker, should show interaction for both pool1 and pool2.
+ * 5. Check repair pool2's label with trust PS (trust MS is the default) and "for-all" option.
+ * 6. Query checker, both pool1's and pool2's label should be fixed with trust PS.
+ * 7. Switch to normal mode and verify pools' labels.
+ * 8. Cleanup.
  */
 static void
 cr_inherit_policy(void **state)
@@ -3236,10 +3232,6 @@ cr_inherit_policy(void **state)
 
 	print_message("CR25: inherit check policy from former check repair\n");
 
-	/* Disable the test temporarily before we well define the inherit behavior, DAOS-13975. */
-
-	skip();
-
 	for (i = 0; i < 2; i++) {
 		rc = cr_pool_create(state, &pools[i], false, class);
 		assert_rc_equal(rc, 0);
@@ -3251,19 +3243,22 @@ cr_inherit_policy(void **state)
 	rc = cr_mode_switch(true);
 	assert_rc_equal(rc, 0);
 
-	rc = cr_check_start(TCSF_RESET, 1, &pools[0].pool_uuid, "POOL_BAD_LABEL:CIA_INTERACT");
+	rc = cr_check_start(TCSF_RESET, 0, NULL, "POOL_BAD_LABEL:CIA_INTERACT");
 	assert_rc_equal(rc, 0);
 
-	cr_pool_wait(1, &pools[0].pool_uuid, &dci);
+	for (i = 0; i < 2; i++) {
+		cr_pool_wait(1, &pools[i].pool_uuid, &dci);
 
-	rc = cr_ins_verify(&dci, TCIS_RUNNING);
-	assert_rc_equal(rc, 0);
+		rc = cr_ins_verify(&dci, TCIS_RUNNING);
+		assert_rc_equal(rc, 0);
 
-	action = TCA_INTERACT;
-	rc = cr_pool_verify(&dci, pools[0].pool_uuid, TCPS_PENDING, 1, &class, &action, NULL);
-	assert_rc_equal(rc, 0);
+		action = TCA_INTERACT;
+		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_PENDING, 1, &class, &action,
+				    NULL);
+		assert_rc_equal(rc, 0);
+	}
 
-	dcri = cr_locate_dcri(&dci, NULL, pools[0].pool_uuid);
+	dcri = cr_locate_dcri(&dci, NULL, pools[1].pool_uuid);
 	action = TCA_TRUST_PS;
 	rc = -DER_MISC;
 
@@ -3275,24 +3270,16 @@ cr_inherit_policy(void **state)
 	}
 	assert_rc_equal(rc, 0);
 
-	cr_ins_wait(1, &pools[0].pool_uuid, &dci);
+	for (i = 0; i < 2; i++) {
+		cr_ins_wait(1, &pools[i].pool_uuid, &dci);
 
-	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
-	assert_rc_equal(rc, 0);
+		rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+		assert_rc_equal(rc, 0);
 
-	rc = cr_pool_verify(&dci, pools[0].pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
-	assert_rc_equal(rc, 0);
-
-	rc = cr_check_start(TCSF_NONE, 1, &pools[1].pool_uuid, NULL);
-	assert_rc_equal(rc, 0);
-
-	cr_ins_wait(1, &pools[1].pool_uuid, &dci);
-
-	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
-	assert_rc_equal(rc, 0);
-
-	rc = cr_pool_verify(&dci, pools[1].pool_uuid, TCPS_CHECKED, 1, &class, &action, NULL);
-	assert_rc_equal(rc, 0);
+		rc = cr_pool_verify(&dci, pools[i].pool_uuid, TCPS_CHECKED, 1, &class, &action,
+				    NULL);
+		assert_rc_equal(rc, 0);
+	}
 
 	rc = cr_mode_switch(false);
 	assert_rc_equal(rc, 0);
@@ -3322,6 +3309,145 @@ cr_inherit_policy(void **state)
 
 	cr_dci_fini(&dci);
 	cr_cleanup(arg, pools, 2);
+}
+
+/*
+ * 1. Create pool without inconsistency.
+ * 2. Set fail_loc to simulate some engine failed to report pool shard when start checker.
+ * 3. Start checker without options.
+ * 4. Query checker, it should be completed, but the check for the pool should be failed.
+ * 5. Switch to normal mode and cleanup.
+ */
+static void
+cr_handle_fail_pool1(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct test_pool	 pool = { 0 };
+	struct daos_check_info	 dci = { 0 };
+	int			 rc;
+
+	print_message("CR26: skip the pool if some engine failed to report some pool shard\n");
+
+	rc = cr_pool_create(state, &pool, false, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, DAOS_CHK_FAIL_REPORT_POOL1 | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_FAILED, 0, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	cr_cleanup(arg, &pool, 1);
+}
+
+/*
+ * 1. Create pool without inconsistency.
+ * 2. Set fail_loc to simulate some engine failed to report pool shard when start checker.
+ * 3. Start checker without options.
+ * 4. Query checker, it should be completed, but the check for the pool maybe failed,
+ *    depends on PS replicas count.
+ * 5. Switch to normal mode and cleanup.
+ */
+static void
+cr_handle_fail_pool2(void **state)
+{
+	test_arg_t		*arg = *state;
+	struct test_pool	 pool = { 0 };
+	struct daos_check_info	 dci = { 0 };
+	daos_mgmt_pool_info_t	 mgmt_pool = { 0 };
+	daos_size_t		 pool_nr = 1;
+	uint32_t		 class;
+	uint32_t		 action;
+	uint32_t		 count;
+	int			 rc;
+
+	print_message("CR27: handle the pool if some engine failed to report some pool service\n");
+
+	rc = cr_pool_create(state, &pool, false, TCC_NONE);
+	assert_rc_equal(rc, 0);
+
+	rc = dmg_pool_list(dmg_config_file, arg->group, &pool_nr, &mgmt_pool);
+	assert_rc_equal(rc, 0);
+
+	assert_rc_equal(pool_nr, 1);
+
+	if (mgmt_pool.mgpi_svc->rl_nr == 1) {
+		count = 1;
+		class = TCC_POOL_LESS_SVC_WITHOUT_QUORUM;
+		action = TCA_DISCARD;
+	} else if (mgmt_pool.mgpi_svc->rl_nr == 2) {
+		count = 1;
+		class = TCC_POOL_LESS_SVC_WITHOUT_QUORUM;
+		action = TCA_TRUST_PS;
+	} else {
+		count = 0;
+		class = TCC_NONE;
+		action = TCA_DEFAULT;
+	}
+
+	rc = cr_system_stop(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(true);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, DAOS_CHK_FAIL_REPORT_POOL2 | DAOS_FAIL_ALWAYS);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE,
+				   mgmt_pool.mgpi_svc->rl_ranks[0], 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_check_start(TCSF_RESET, 0, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	cr_ins_wait(1, &pool.pool_uuid, &dci);
+
+	rc = cr_ins_verify(&dci, TCIS_COMPLETED);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_pool_verify(&dci, pool.pool_uuid, TCPS_CHECKED, count, &class, &action, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_VALUE, 0, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_debug_set_params(arg, 0);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_mode_switch(false);
+	assert_rc_equal(rc, 0);
+
+	rc = cr_system_start();
+	assert_rc_equal(rc, 0);
+
+	cr_dci_fini(&dci);
+	clean_pool_info(1, &mgmt_pool);
+	cr_cleanup(arg, &pool, 1);
 }
 
 static const struct CMUnitTest cr_tests[] = {
@@ -3375,6 +3501,10 @@ static const struct CMUnitTest cr_tests[] = {
 	  cr_fail_sync_orphan, async_disable, test_case_teardown},
 	{ "CR25: inherit check policy from former check repair",
 	  cr_inherit_policy, async_disable, test_case_teardown},
+	{ "CR26: skip the pool if some engine failed to report some pool shard",
+	  cr_handle_fail_pool1, async_disable, test_case_teardown},
+	{ "CR27: handle the pool if some engine failed to report some pool service",
+	  cr_handle_fail_pool2, async_disable, test_case_teardown},
 };
 
 static int
