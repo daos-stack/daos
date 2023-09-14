@@ -42,6 +42,10 @@ func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
 		"empty": {
 			expErr: errors.New("no tier ratio specified"),
 		},
+		"invalid": {
+			input:  "ABCD",
+			expErr: errors.New("invalid tier ratio \"ABCD\""),
+		},
 		"less than 100%": {
 			input:  "10,80",
 			expErr: errors.New("must add up to"),
