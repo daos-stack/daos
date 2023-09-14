@@ -446,13 +446,20 @@ struct bio_copy_args {
 };
 
 static int
-copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
+copy_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *data)
 {
 	struct bio_copy_args	*arg = data;
 	d_sg_list_t		*sgl;
 	void			*addr = bio_iov2req_buf(biov);
 	ssize_t			 size = bio_iov2req_len(biov);
 	uint16_t		 media = bio_iov2media(biov);
+
+	D_ASSERT(idx < arg->ca_sgl_cnt);
+	arg->ca_sgl_idx = idx;
+	arg->ca_iov_idx = 0;
+	arg->ca_iov_off = 0;
+	if (biod->bd_type == BIO_IOD_TYPE_FETCH)
+		arg->ca_sgls[idx].sg_nr_out = 0;
 
 	if (bio_iov2req_len(biov) == 0)
 		return 0;
@@ -538,30 +545,12 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 
 static int
 iterate_biov(struct bio_desc *biod,
-	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, void *data),
-	     void *data)
+	     int (*cb_fn)(struct bio_desc *, struct bio_iov *, int idx, void *data), void *data)
 {
 	int i, j, rc = 0;
 
 	for (i = 0; i < biod->bd_sgl_cnt; i++) {
 		struct bio_sglist *bsgl = &biod->bd_sgls[i];
-
-		if (data != NULL) {
-			if (cb_fn == copy_one) {
-				struct bio_copy_args *arg = data;
-
-				D_ASSERT(i < arg->ca_sgl_cnt);
-				arg->ca_sgl_idx = i;
-				arg->ca_iov_idx = 0;
-				arg->ca_iov_off = 0;
-				if (biod->bd_type == BIO_IOD_TYPE_FETCH)
-					arg->ca_sgls[i].sg_nr_out = 0;
-			} else if (cb_fn == bulk_map_one) {
-				struct bio_bulk_args *arg = data;
-
-				arg->ba_sgl_idx = i;
-			}
-		}
 
 		if (bsgl->bs_nr_out == 0)
 			continue;
@@ -569,7 +558,7 @@ iterate_biov(struct bio_desc *biod,
 		for (j = 0; j < bsgl->bs_nr_out; j++) {
 			struct bio_iov *biov = &bsgl->bs_iovs[j];
 
-			rc = cb_fn(biod, biov, data);
+			rc = cb_fn(biod, biov, i, data);
 			if (rc)
 				break;
 		}
@@ -831,7 +820,7 @@ iod_pad_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg, unsigned 
 
 /* Convert offset of @biov into memory pointer */
 int
-dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
+dma_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *arg)
 {
 	struct bio_rsrvd_region *last_rg;
 	struct bio_dma_buffer *bdb;
@@ -1568,7 +1557,7 @@ bio_iod_copy(struct bio_desc *biod, d_sg_list_t *sgls, unsigned int nr_sgl)
 }
 
 static int
-flush_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
+flush_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *arg)
 {
 	struct umem_instance *umem = biod->bd_umem;
 

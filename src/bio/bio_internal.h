@@ -575,7 +575,8 @@ void dma_buffer_destroy(struct bio_dma_buffer *buf);
 struct bio_dma_buffer *dma_buffer_create(unsigned int init_cnt, int tgt_id);
 void bio_memcpy(struct bio_desc *biod, uint16_t media, void *media_addr,
 		void *addr, ssize_t n);
-int dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg);
+int
+dma_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *arg);
 int iod_add_region(struct bio_desc *biod, struct bio_dma_chunk *chk,
 		   unsigned int chk_pg_idx, unsigned int chk_off, uint64_t off,
 		   uint64_t end, uint8_t media);
@@ -620,7 +621,8 @@ ioc2d_bdev(struct bio_io_context *ioc)
 }
 
 /* bio_bulk.c */
-int bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data);
+int
+bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *data);
 void bulk_iod_release(struct bio_desc *biod);
 int bulk_cache_create(struct bio_dma_buffer *bdb);
 void bulk_cache_destroy(struct bio_dma_buffer *bdb);
