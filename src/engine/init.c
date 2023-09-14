@@ -1153,6 +1153,9 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	 *
 	 * XXX we may choose to forget about old handler and simply register
 	 * signal again as SIG_DFL and raise it for corefile creation
+	 *
+	 * XXX will old handler get accurate/original siginfo_t/ucontext_t ?
+	 * should we instead call it with the same params we got ?
 	 */
 	rc = sigaction(signo, &old_handlers[signo], NULL);
 	if (rc != 0) {
@@ -1164,16 +1167,8 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 		exit(EXIT_FAILURE);
 	}
 
-	if (old_handlers[signo].sa_sigaction != NULL ||
-	    old_handlers[signo].sa_handler != SIG_IGN) {
-		/* XXX will old handler get accurate/original siginfo_t/ucontext_t ?
-		 * should we instead call it with the same params we got ?
-		 */
-		raise(signo);
-	}
-
-	/* if old handler(s) also returns re-register myself for signo */
-	daos_register_sighand(signo, print_backtrace);
+	/* raise signal again for either old handler or system default action */
+	raise(signo);
 }
 
 int
@@ -1194,6 +1189,7 @@ main(int argc, char **argv)
 	sigdelset(&set, SIGFPE);
 	sigdelset(&set, SIGBUS);
 	sigdelset(&set, SIGSEGV);
+	sigdelset(&set, SIGTRAP);
 	/** also allow abort()/assert() to trigger */
 	sigdelset(&set, SIGABRT);
 
@@ -1210,6 +1206,7 @@ main(int argc, char **argv)
 	daos_register_sighand(SIGBUS, print_backtrace);
 	daos_register_sighand(SIGSEGV, print_backtrace);
 	daos_register_sighand(SIGABRT, print_backtrace);
+	daos_register_sighand(SIGTRAP, print_backtrace);
 
 	/** server initialization */
 	rc = server_init(argc, argv);
