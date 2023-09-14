@@ -172,13 +172,19 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
-	// Use a modified commandline logger to send all log messages to stderr during the
-	// generation of server config file parameters so stdout can be reserved for config file
-	// output only.
-	logStderr := logging.NewCommandLineLogger()
-	logStderr.ClearLevel(logging.LogLevelInfo)
-	logStderr.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
-	req.Log = logStderr
+	// Use a modified commandline logger to send all log messages to stderr in debug mode
+	// during the generation of server config file parameters so stdout can be reserved for
+	// config file output only. If not in debug mode, only log >=error to stderr.
+	logger := logging.NewCommandLineLogger()
+	if cmd.Logger.EnabledFor(logging.LogLevelTrace) {
+		cmd.Debug("debug mode detected, writing all logs to stderr")
+		logger.ClearLevel(logging.LogLevelInfo)
+		logger.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
+	} else {
+		// Suppress info logging.
+		logger.SetLevel(logging.LogLevelError)
+	}
+	req.Log = logger
 
 	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {

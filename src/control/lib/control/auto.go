@@ -1103,6 +1103,30 @@ func getThreadCounts(log logging.Logger, ec *engine.Config, coresPerEngine int) 
 	return &tc, nil
 }
 
+// check that all access points either have no port specified or have the same port number.
+func checkAccessPointPorts(log logging.Logger, aps []string) (int, error) {
+	if len(aps) == 0 {
+		return 0, errors.New("no access points")
+	}
+
+	port := -1
+	for _, ap := range aps {
+		apPort, err := config.GetAccessPointPort(log, ap)
+		if err != nil {
+			return 0, errors.Wrapf(err, "access point %q", ap)
+		}
+		if port == -1 {
+			port = apPort
+			continue
+		}
+		if apPort != port {
+			return 0, errors.New("access point port numbers do not match")
+		}
+	}
+
+	return port, nil
+}
+
 // Generate a server config file from the constituent hardware components. Enforce consistent
 // target and helper count across engine configs necessary for optimum performance and populate
 // config parameters. Set NUMA affinity on the generated config and then run through validation.
@@ -1139,6 +1163,15 @@ func genServerConfig(log logging.Logger, accessPoints []string, extMetadataPath 
 				Path: extMetadataPath,
 			}
 		}
+	}
+
+	portNum, err := checkAccessPointPorts(log, accessPoints)
+	if err != nil {
+		return nil, err
+	}
+	if portNum != 0 {
+		// Custom access point port number specified so set server port to the same.
+		cfg.WithControlPort(portNum)
 	}
 
 	if err := cfg.Validate(log); err != nil {

@@ -1450,7 +1450,7 @@ func TestControl_AutoConfig_getThreadCounts(t *testing.T) {
 	}
 }
 
-func TestControl_AutoConfig_genConfig(t *testing.T) {
+func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 	defHpSizeKb := 2048
 	exmplEngineCfg0 := MockEngineCfg(0, 0, 1, 2)
 	exmplEngineCfg1 := MockEngineCfg(1, 3, 4, 5)
@@ -1486,7 +1486,29 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			hpSize: defHpSizeKb,
 			expErr: errors.New("provider not specified"),
 		},
-		"single engine config": {
+		"no access points": {
+			accessPoints: []string{},
+			threadCounts: &threadCounts{16, 0},
+			ecs:          []*engine.Config{exmplEngineCfg0},
+			hpSize:       defHpSizeKb,
+			expErr:       errors.New("no access points"),
+		},
+		"access points without the same port": {
+			accessPoints: []string{"bob:1", "joe:2"},
+			threadCounts: &threadCounts{16, 0},
+			ecs:          []*engine.Config{exmplEngineCfg0},
+			hpSize:       defHpSizeKb,
+			expErr:       errors.New("numbers do not match"),
+		},
+		"access points some with port specified": {
+			accessPoints: []string{"bob:1", "joe"},
+			threadCounts: &threadCounts{16, 0},
+			ecs:          []*engine.Config{exmplEngineCfg0},
+			hpSize:       defHpSizeKb,
+			expErr:       errors.New("numbers do not match"),
+		},
+		"single engine config; default port number": {
+			accessPoints: []string{"hostX"},
 			threadCounts: &threadCounts{16, 0},
 			ecs:          []*engine.Config{exmplEngineCfg0},
 			hpSize:       defHpSizeKb,
@@ -1496,9 +1518,23 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				}).
 				// 16 targets * 1 engine * 512 pages
 				WithNrHugepages(16 * 512).
-				WithAccessPoints("hostX:10002"),
+				WithAccessPoints("hostX:10001"), // Default applied.
 		},
-		"dual engine config": {
+		"single engine config; default port number specified": {
+			accessPoints: []string{"hostX:10001"},
+			threadCounts: &threadCounts{16, 0},
+			ecs:          []*engine.Config{exmplEngineCfg0},
+			hpSize:       defHpSizeKb,
+			expCfg: MockServerCfg(exmplEngineCfg0.Fabric.Provider,
+				[]*engine.Config{
+					exmplEngineCfg0.WithHelperStreamCount(0),
+				}).
+				// 16 targets * 1 engine * 512 pages
+				WithNrHugepages(16 * 512).
+				WithAccessPoints("hostX:10001"), // ControlPort remains at 10001.
+		},
+		"dual engine config; custom access point port number": {
+			accessPoints: []string{"hostX:10002"},
 			threadCounts: &threadCounts{16, 0},
 			ecs: []*engine.Config{
 				exmplEngineCfg0,
@@ -1512,7 +1548,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				}).
 				// 16 targets * 2 engines * 512 pages
 				WithNrHugepages(16 * 2 * 512).
-				WithAccessPoints("hostX:10002"),
+				WithAccessPoints("hostX:10002").
+				WithControlPort(10002), // ControlPort updated to AP port.
 		},
 		"bad accesspoint port": {
 			accessPoints: []string{"hostX:-10001"},
@@ -1566,6 +1603,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			expErr:   errors.New("insufficient ram"),
 		},
 		"dual engine tmpfs; high mem": {
+			accessPoints:    []string{"hostX:10002", "hostY:10002", "hostZ:10002"},
 			extMetadataPath: metadataMountPath,
 			threadCounts:    &threadCounts{16, 0},
 			ecs: []*engine.Config{
@@ -1596,8 +1634,9 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 						),
 				}).
 				// 16+1 (MD-on-SSD) targets * 2 engines * 512 pages
-				WithNrHugepages(17 * 2 * 512).
-				WithAccessPoints("hostX:10002").
+				WithNrHugepages(17*2*512).
+				WithAccessPoints("hostX:10002", "hostY:10002", "hostZ:10002").
+				WithControlPort(10002). // ControlPort updated to AP port.
 				WithControlMetadata(controlMetadata),
 		},
 	} {
@@ -1606,7 +1645,7 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			if tc.accessPoints == nil {
-				tc.accessPoints = []string{"hostX:10002"}
+				tc.accessPoints = []string{"localhost"} // Matches default in mock config.
 			}
 			if tc.threadCounts == nil {
 				tc.threadCounts = &threadCounts{}
@@ -1617,7 +1656,8 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 				MemTotalKiB:     tc.memTotal,
 			}
 
-			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.extMetadataPath, tc.ecs, mi, tc.threadCounts)
+			getCfg, gotErr := genServerConfig(log, tc.accessPoints, tc.extMetadataPath,
+				tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
