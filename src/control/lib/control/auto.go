@@ -50,13 +50,14 @@ var errNoNuma = errors.New("zero numa nodes reported on hosts")
 type (
 	// ConGenerateReq contains the inputs for the request.
 	ConfGenerateReq struct {
-		NrEngines       int
-		NetClass        hardware.NetDevClass
-		NetProvider     string
-		SCMOnly         bool // generate a config without nvme
-		UseTmpfsSCM     bool
-		AccessPoints    []string
-		ExtMetadataPath string
+		NrEngines       int                  // Number of engines to include in generated config.
+		NetClass        hardware.NetDevClass // Force use of a specific network device class for fabric comms.
+		NetProvider     string               // Force use of a specific fabric provider.
+		SCMOnly         bool                 // Generate a config without NVMe.
+		AccessPoints    []string             // Hosts to run the management service.
+		FabricPorts     []int                // Ports to use for fabric comms (one needed per engine).
+		UseTmpfsSCM     bool                 // Generate MD-on-SSD config with a tmpfs RAM-disk SCM.
+		ExtMetadataPath string               // Location to persist control-plane metadata.
 		Log             logging.Logger
 	}
 

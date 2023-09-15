@@ -34,16 +34,11 @@ type configCmd struct {
 }
 
 type configGenCmd struct {
-	cmdutil.LogCmd  `json:"-"`
-	helperLogCmd    `json:"-"`
-	AccessPoints    string `default:"localhost" short:"a" long:"access-points" description:"Comma separated list of access point addresses <ipv4addr/hostname>"`
-	NrEngines       int    `short:"e" long:"num-engines" description:"Set the number of DAOS Engine sections to be populated in the config file output. If unset then the value will be set to the number of NUMA nodes on storage hosts in the DAOS system."`
-	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
-	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network class to be used" choice:"ethernet" choice:"infiniband"`
-	NetProvider     string `short:"p" long:"net-provider" description:"Set the network provider to be used"`
-	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
-	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
-	SkipPrep        bool   `long:"skip-prep" description:"Skip preparation of devices during scan."`
+	helperLogCmd
+	cmdutil.LogCmd
+	cmdutil.ConfGenCmd
+
+	SkipPrep bool `long:"skip-prep" description:"Skip preparation of devices during scan."`
 }
 
 type getFabricFn func(context.Context, logging.Logger, string) (*control.HostFabric, error)
@@ -125,11 +120,12 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	}, nil
 }
 
-func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
+// Note: Duplicated with dmg/auto.go.
+func (cmd *configGenCmd) getParams() ([]string, *hardware.NetDevClass, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
-		return nil, ErrTmpfsNoExtMDPath
+		return nil, nil, ErrTmpfsNoExtMDPath
 	}
 
 	accessPoints := strings.Split(cmd.AccessPoints, ",")
@@ -141,7 +137,17 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	case "infiniband":
 		ndc = hardware.Infiniband
 	default:
-		return nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
+		return nil, nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
+	}
+
+	return accessPoints, &ndc, nil
+}
+
+func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
+	// Get ConfGenerateReq from cmd params.
+	accessPoints, ndc, err := cmd.getParams()
+	if err != nil {
+		return err
 	}
 
 	prov := cmd.NetProvider

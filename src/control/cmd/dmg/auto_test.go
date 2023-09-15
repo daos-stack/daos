@@ -119,7 +119,7 @@ func TestAuto_ConfigCommands(t *testing.T) {
 	})
 }
 
-// The Control API calls made in configGenCmd.confGen() are already well tested so just do some
+// The Control API calls made in ConfigGenCmd.confGen() are already well tested so just do some
 // sanity checking here to prevent regressions.
 func TestAuto_confGen(t *testing.T) {
 	ib0 := &ctlpb.FabricInterface{
@@ -316,14 +316,13 @@ func TestAuto_confGen(t *testing.T) {
 			if tc.accessPoints == "" {
 				tc.accessPoints = "localhost"
 			}
-			cmd := &configGenCmd{
-				AccessPoints:    tc.accessPoints,
-				NrEngines:       tc.nrEngines,
-				SCMOnly:         tc.scmOnly,
-				NetClass:        tc.netClass,
-				UseTmpfsSCM:     tc.tmpfsSCM,
-				ExtMetadataPath: tc.extMetadataPath,
-			}
+			cmd := &configGenCmd{}
+			cmd.AccessPoints = tc.accessPoints
+			cmd.NrEngines = tc.nrEngines
+			cmd.SCMOnly = tc.scmOnly
+			cmd.NetClass = tc.netClass
+			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.ExtMetadataPath = tc.extMetadataPath
 			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
