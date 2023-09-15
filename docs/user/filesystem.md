@@ -799,6 +799,15 @@ $ LD_PRELOAD=/usr/lib64/libioil.so dd if=/dev/zero of=./bar bs=1G count=20
 Alternatively, it's possible to simply link the interception library into the application
 at compile time with the `-lioil` flag.
 
+By default, daos is only initialized in the interception library if the application calls
+open. Alternatively, a user can set the following to force initialization to happen in
+the constructor.  This can be used to workaround some races between getenv and setenv, the
+latter of which may be used inside of `daos_init`.
+
+```bash
+export D_IL_INIT_EARLY=1
+```
+
 ### Monitoring Activity
 
 The interception library is intended to be transparent to the user, and no other
