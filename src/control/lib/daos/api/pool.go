@@ -2,19 +2,70 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"unsafe"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
 
 /*
+#include <gurt/common.h>
 #include <daos.h>
 #include <daos_pool.h>
+
+static inline uint32_t
+get_rebuild_state(struct daos_rebuild_status *drs)
+{
+	if (drs == NULL)
+		return 0;
+
+	return drs->rs_state;
+}
 */
 import "C"
+
+func newPoolSpaceInfo(dps *C.struct_daos_pool_space, mt C.uint) *daos.StorageUsageStats {
+	if dps == nil {
+		return nil
+	}
+
+	return &daos.StorageUsageStats{
+		Total:     uint64(dps.ps_space.s_total[mt]),
+		Free:      uint64(dps.ps_space.s_free[mt]),
+		Min:       uint64(dps.ps_free_min[mt]),
+		Max:       uint64(dps.ps_free_max[mt]),
+		Mean:      uint64(dps.ps_free_mean[mt]),
+		MediaType: daos.StorageMediaType(mt),
+	}
+}
+
+func newPoolRebuildStatus(drs *C.struct_daos_rebuild_status) *daos.PoolRebuildStatus {
+	if drs == nil {
+		return nil
+	}
+
+	compatRebuildState := func() daos.PoolRebuildState {
+		switch {
+		case drs.rs_version == 0:
+			return daos.PoolRebuildStateIdle
+		case C.get_rebuild_state(drs) == C.DRS_COMPLETED:
+			return daos.PoolRebuildStateDone
+		default:
+			return daos.PoolRebuildStateBusy
+		}
+	}
+
+	return &daos.PoolRebuildStatus{
+		Status:  int32(drs.rs_errno),
+		Objects: uint64(drs.rs_obj_nr),
+		Records: uint64(drs.rs_rec_nr),
+		State:   compatRebuildState(),
+	}
+}
 
 func newPoolInfo(cpi *C.daos_pool_info_t) *daos.PoolInfo {
 	return &daos.PoolInfo{
@@ -25,6 +76,11 @@ func newPoolInfo(cpi *C.daos_pool_info_t) *daos.PoolInfo {
 		DisabledTargets: uint32(cpi.pi_ndisabled),
 		Version:         uint32(cpi.pi_map_ver),
 		Leader:          uint32(cpi.pi_leader),
+		Rebuild:         newPoolRebuildStatus(&cpi.pi_rebuild_st),
+		TierStats: []*daos.StorageUsageStats{
+			newPoolSpaceInfo(&cpi.pi_space, C.DAOS_MEDIA_SCM),
+			newPoolSpaceInfo(&cpi.pi_space, C.DAOS_MEDIA_NVME),
+		},
 	}
 }
 
@@ -53,8 +109,8 @@ func (ph *PoolHandle) OpenContainer(ctx context.Context, contID string, flags da
 	return ContainerOpen(ctx, ph, contID, flags)
 }
 
-func (ph *PoolHandle) Query(ctx context.Context) (*daos.PoolInfo, error) {
-	return PoolQuery(ctx, ph)
+func (ph *PoolHandle) Query(ctx context.Context, req PoolQueryReq) (*daos.PoolInfo, error) {
+	return PoolQuery(ctx, ph, req)
 }
 
 func (ph *PoolHandle) Disconnect(ctx context.Context) error {
@@ -127,19 +183,89 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 	}, nil
 }
 
-func PoolQuery(ctx context.Context, poolConn *PoolHandle) (*daos.PoolInfo, error) {
-	log.Debugf("PoolQuery(%s)", poolConn)
-
-	if err := ctx.Err(); err != nil {
-		return nil, ctxErr(err)
+func generateRankSet(ranklist *C.d_rank_list_t) string {
+	if ranklist.rl_nr == 0 {
+		return ""
 	}
+	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
+	const size = unsafe.Sizeof(uint32(0))
+	rankset := "["
+	for i := 0; i < int(ranklist.rl_nr); i++ {
+		if i > 0 {
+			rankset += ","
+		}
+		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
+	}
+	rankset += "]"
+	return rankset
+}
 
-	var cpi C.daos_pool_info_t
-	if err := daosError(C.daos_pool_query(poolConn.daosHandle, nil, &cpi, nil, nil)); err != nil {
+func (b *daosClientBinding) daos_pool_query(poolHdl C.daos_handle_t, rankList **C.d_rank_list_t, poolInfo *C.daos_pool_info_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int {
+	return C.daos_pool_query(poolHdl, rankList, poolInfo, props, ev)
+}
+
+func (m *mockApiClient) daos_pool_query(poolHdl C.daos_handle_t, rankList **C.d_rank_list_t, poolInfo *C.daos_pool_info_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int {
+	return m.getRc("daos_pool_query", 0)
+}
+
+const (
+	dpiQuerySpace   = C.DPI_SPACE
+	dpiQueryRebuild = C.DPI_REBUILD_STATUS
+	dpiQueryAll     = C.uint64_t(^uint64(0)) // DPI_ALL is -1
+)
+
+type (
+	PoolQueryReq struct {
+		IncludeEnabled  bool
+		IncludeDisabled bool
+	}
+)
+
+func PoolQuery(ctx context.Context, poolConn *PoolHandle, req PoolQueryReq) (*daos.PoolInfo, error) {
+	log.Debugf("PoolQuery(%s:%+v)", poolConn, req)
+
+	client, err := getApiClient(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	return newPoolInfo(&cpi), nil
+	var rlPtr **C.d_rank_list_t = nil
+	var rl *C.d_rank_list_t = nil
+	defer C.d_rank_list_free(rl)
+
+	if req.IncludeEnabled || req.IncludeDisabled {
+		rlPtr = &rl
+	}
+
+	cpi := &C.daos_pool_info_t{
+		pi_bits: dpiQueryAll,
+	}
+	if req.IncludeDisabled {
+		cpi.pi_bits &= C.uint64_t(^(uint64(C.DPI_ENGINES_ENABLED)))
+	}
+
+	rc := client.daos_pool_query(poolConn.daosHandle, rlPtr, cpi, nil, nil)
+	if err := daosError(rc); err != nil {
+		return nil, err
+	}
+
+	dpi := newPoolInfo(cpi)
+	if rlPtr != nil {
+		if req.IncludeEnabled {
+			dpi.EnabledRanks, err = ranklist.CreateRankSet(generateRankSet(rl))
+			if err != nil {
+				return nil, err
+			}
+		}
+		if req.IncludeDisabled {
+			dpi.DisabledRanks, err = ranklist.CreateRankSet(generateRankSet(rl))
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return dpi, nil
 }
 
 func (b *daosClientBinding) daos_pool_disconnect(poolHdl C.daos_handle_t) C.int {
@@ -159,11 +285,7 @@ func (b *daosClientBinding) daos_pool_disconnect(poolHdl C.daos_handle_t) C.int 
 }
 
 func (m *mockApiClient) daos_pool_disconnect(poolHdl C.daos_handle_t) C.int {
-	if rc := m.getRc("daos_pool_disconnect", 0); rc != 0 {
-		return rc
-	}
-
-	return 0
+	return m.getRc("daos_pool_disconnect", 0)
 }
 
 func PoolDisconnect(ctx context.Context, poolConn *PoolHandle) error {
