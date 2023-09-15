@@ -58,7 +58,7 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        if not GetOption('help'):
+        if not GetOption('help') and not GetOption('silent'):
             print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
@@ -90,12 +90,14 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
-    print('Checking for libfabric > 1.11...', end=' ')
+    if not GetOption('silent'):
+        print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
     rc = config.TryCompile(code, ".c")
-    print('yes' if rc else 'no')
+    if not GetOption('silent'):
+        print('yes' if rc else 'no')
     return rc
 
 

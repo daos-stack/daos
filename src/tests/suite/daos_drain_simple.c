@@ -1003,6 +1003,8 @@ run_daos_drain_simple_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
+	FAULT_INJECTION_REQUIRED();
+
 	par_barrier(PAR_COMM_WORLD);
 	if (sub_tests_size == 0) {
 		sub_tests_size = ARRAY_SIZE(drain_tests);

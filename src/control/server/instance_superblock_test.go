@@ -56,7 +56,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	for _, e := range h.Instances() {
-		if err := e.(*EngineInstance).createSuperblock(false); err != nil {
+		if err := e.(*EngineInstance).createSuperblock(); err != nil {
 			t.Fatal(err)
 		}
 	}

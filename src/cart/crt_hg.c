@@ -617,8 +617,9 @@ crt_provider_get_ctx_idx(bool primary, int provider)
 		}
 	}
 
-	D_ERROR("ctx_num %d, will exceed CRT_SRV_CONTEXT_NUM (%d) if create more context.\n",
-		prov_data->cpg_ctx_num, CRT_SRV_CONTEXT_NUM);
+	D_DEBUG(DB_ALL, "provider:%d allowed context limit = %d exceeded\n",
+		provider, CRT_SRV_CONTEXT_NUM);
+
 	return -1;
 }
 
@@ -762,6 +763,20 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	va_end(ap);
 
 	return 0;
+}
+
+int
+crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p)
+{
+	hg_return_t ret = HG_Get_na_protocol_info(info_string, na_protocol_info_p);
+
+	return crt_hgret_2_der(ret);
+}
+
+void
+crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info)
+{
+	HG_Free_na_protocol_info(na_protocol_info);
 }
 
 /* to be called only in crt_init */

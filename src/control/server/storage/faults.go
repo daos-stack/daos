@@ -78,6 +78,17 @@ func FaultRamdiskLowMem(memType string, confRamdiskSize, memNeed, memHave uint64
 			"file if reducing the requested amount of RAM is not possible")
 }
 
+// FaultRamdiskBadSize indicates that the already-mounted ramdisk is out
+// of spec with the calculated ramdisk size for the engine.
+func FaultRamdiskBadSize(existingSize, calcSize uint64) *fault.Fault {
+	return storageFault(
+		code.ScmRamdiskBadSize,
+		fmt.Sprintf("already-mounted ramdisk size %s is too far from optimal size of %s",
+			humanize.IBytes(existingSize), humanize.IBytes(calcSize)),
+		fmt.Sprintf("unmount the ramdisk and allow DAOS to manage it, or remount with size %s",
+			humanize.IBytes(calcSize)))
+}
+
 // FaultConfigRamdiskUnderMinMem indicates that the tmpfs size requested in config is less than
 // minimum allowed.
 func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault {
