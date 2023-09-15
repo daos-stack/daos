@@ -164,17 +164,13 @@ struct  _Mgmt__JoinResp
    */
   char *faultdomain;
   /*
-   * Join processed locally.
-   */
-  protobuf_c_boolean localjoin;
-  /*
    * Join processed in this version of the system map.
    */
   uint32_t map_version;
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
-    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0, MGMT__JOIN_RESP__STATE__IN, (char *)protobuf_c_empty_string, 0 }
 
 
 struct  _Mgmt__LeaderQueryReq
