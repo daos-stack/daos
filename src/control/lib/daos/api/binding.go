@@ -3,7 +3,7 @@ package api
 import "context"
 
 /*
-#cgo LDFLAGS: -ldaos -ldfs -lduns
+#cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid
 
 #include <daos.h>
 #include <daos/debug.h>
