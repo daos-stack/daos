@@ -39,11 +39,17 @@ type (
 		Attributes []string
 	}
 
+	PoolInfoResp struct {
+		Err
+		PoolInfo *daos.PoolInfo
+	}
+
 	PoolConnCfg struct {
 		ConnectedPool    uuid.UUID
 		ContConnCfg      *ContConnCfg
 		Connect          Err
 		Disconnect       Err
+		Query            PoolInfoResp
 		CreateContainer  ContainerInfoResp
 		OpenContainer    OpenContainerResp
 		ListContainers   ListContainersResp
@@ -71,8 +77,16 @@ func NewPoolConn(cfg *PoolConnCfg) *PoolConn {
 	}
 }
 
-func (mpc *PoolConn) Connect(_ context.Context, _ daosAPI.PoolConnectReq) error {
+func (mpc *PoolConn) Connect(context.Context, daosAPI.PoolConnectReq) error {
 	return mpc.cfg.Connect.Error
+}
+
+func (mpc *PoolConn) Disconnect(context.Context) error {
+	return mpc.cfg.Disconnect.Error
+}
+
+func (mpc *PoolConn) Query(context.Context, daosAPI.PoolQueryReq) (*daos.PoolInfo, error) {
+	return mpc.cfg.Query.PoolInfo, mpc.cfg.Query.Error
 }
 
 func (mpc *PoolConn) CreateContainer(_ context.Context, req daosAPI.ContainerCreateReq) (*daos.ContainerInfo, error) {
@@ -144,8 +158,4 @@ func (mpc *PoolConn) SetAttributes(context.Context, []*daos.Attribute) error {
 
 func (mpc *PoolConn) DeleteAttribute(context.Context, string) error {
 	return mpc.cfg.DeleteAttribute.Error
-}
-
-func (mpc *PoolConn) Disconnect(context.Context) error {
-	return mpc.cfg.Disconnect.Error
 }

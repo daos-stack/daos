@@ -21,6 +21,7 @@ type (
 		duns_resolve_path(path *C.char, dattr *C.struct_duns_attr_t) C.int
 		daos_pool_connect(poolID *C.char, sys *C.char, flags C.uint, poolHdl *C.daos_handle_t, poolInfo *C.daos_pool_info_t, ev *C.struct_daos_event) C.int
 		daos_pool_disconnect(poolHdl C.daos_handle_t) C.int
+		daos_pool_query(poolHdl C.daos_handle_t, rankList **C.d_rank_list_t, poolInfo *C.daos_pool_info_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int
 		daos_cont_create(poolHdl C.daos_handle_t, cUUID *C.uuid_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int
 		dfs_cont_create(poolHdl C.daos_handle_t, cUUID *C.uuid_t, attr *C.dfs_attr_t, contHdl *C.daos_handle_t, dfs **C.dfs_t) C.int
 		duns_create_path(poolHdl C.daos_handle_t, path *C.char, attr *C.struct_duns_attr_t) C.int
