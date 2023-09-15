@@ -390,7 +390,7 @@ struct dfuse_pool {
 
 #define DFUSE_STAT_DEFINE(name, ...) DS_##name,
 
-enum dfuse_stat {
+enum dfuse_stat_id {
 	/** Return value representing success */
 	D_FOREACH_DFUSE_STATX(DFUSE_STAT_DEFINE) DS_LIMIT,
 };
@@ -743,7 +743,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)                                               \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning ioctl");                                          \
+		DFUSE_TRA_DEBUG(desc, "Returning ioctl size %zi", size);                           \
 		__rc = fuse_reply_ioctl(req, 0, arg, size);                                        \
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_ioctl() returned: %d (%s)", __rc,        \

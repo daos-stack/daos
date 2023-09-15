@@ -2435,6 +2435,9 @@ dfuse_count_query(struct cmd_args_s *ap)
 	struct dfuse_mem_query query = {};
 	int                    rc    = -DER_SUCCESS;
 	int                    fd;
+	struct dfuse_stat     *stat   = NULL;
+	uint64_t               tstats = 0;
+	int                    i;
 
 	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
 	if (fd < 0) {
@@ -2452,7 +2455,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 		if (rc == ENOTTY) {
 			rc = -DER_MISC;
 		} else {
-			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			DH_PERROR_SYS(ap, rc, "query ioctl failed");
 			rc = daos_errno2der(errno);
 		}
 		goto close;
@@ -2464,8 +2467,35 @@ dfuse_count_query(struct cmd_args_s *ap)
 	ap->dfuse_mem.container_count = query.container_count;
 	ap->dfuse_mem.found           = query.found;
 
+	D_ALLOC_ARRAY(stat, query.stat_count);
+	if (stat == NULL)
+		goto close;
+
+	rc = ioctl(fd,
+		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
+			     sizeof(struct dfuse_stat) * query.stat_count),
+		   stat);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "stat ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+	for (i = 0; i < query.stat_count; i++)
+		tstats += stat[i].value;
+
+	for (i = 0; i < query.stat_count; i++)
+		if (stat[i].value != 0)
+			fprintf(ap->outstream, "%16s: %5.1f%% (%ld)\n", stat[i].name,
+				(double)stat[i].value / tstats * 100, stat[i].value);
+
 close:
 	close(fd);
+	D_FREE(stat);
 	return rc;
 }
 
