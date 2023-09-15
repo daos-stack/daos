@@ -2886,5 +2886,12 @@ dfuse_get_bypass_status(int fd)
 	return rc;
 }
 
+DFUSE_PUBLIC void __attribute__ ((__noreturn__))
+dfuse__exit(int rc)
+{
+	ioil_fini();
+	__real__exit(rc);
+}
+
 FOREACH_INTERCEPT(IOIL_DECLARE_ALIAS)
 FOREACH_ALIASED_INTERCEPT(IOIL_DECLARE_ALIAS64)

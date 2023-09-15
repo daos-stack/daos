@@ -476,6 +476,7 @@ static void * (*next_mmap)(void *addr, size_t length, int prot, int flags, int f
 static int (*next_munmap)(void *addr, size_t length);
 
 static void (*next_exit)(int rc);
+static void (*next__exit)(int rc) __attribute__ ((__noreturn__));
 
 /* typedef int (*org_dup3)(int oldfd, int newfd, int flags); */
 /* static org_dup3 real_dup3=NULL; */
@@ -5595,4 +5596,16 @@ finalize_dfs(void)
 				D_ERROR("daos_fini() failed: " DF_RC "\n", DP_RC(rc));
 		}
 	}
+}
+
+void __attribute__ ((__noreturn__))
+_exit(int rc)
+{
+	if (next__exit == NULL) {
+		next__exit = dlsym(RTLD_NEXT, "_exit");
+		D_ASSERT(next__exit != NULL);
+	}
+	print_summary();
+	finalize_myhook();
+	(*next__exit)(rc);
 }

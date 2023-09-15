@@ -36,5 +36,5 @@ DFUSE_PUBLIC FILE *dfuse_fdopen(int, const char *);
 DFUSE_PUBLIC FILE *dfuse_fopen(const char *, const char *);
 DFUSE_PUBLIC FILE *dfuse_freopen(const char *, const char *, FILE *);
 DFUSE_PUBLIC int dfuse_fclose(FILE *);
-
+DFUSE_PUBLIC void dfuse__exit(int) __attribute__ ((__noreturn__));
 #endif /* __IOIL_IO_H__ */
