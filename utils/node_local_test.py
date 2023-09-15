@@ -1439,6 +1439,8 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
+
+        self.run_query()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1519,6 +1521,13 @@ class DFuse():
 
         assert ret.returncode == 0, ret
         return ret
+
+    def run_query(self, use_json=False, quiet=False):
+        """Run filesystem query"""
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
+                          use_json=use_json, log_check=quiet, valgrind=quiet)
+        print(rc)
+        return rc
 
     def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
         """Query and verify the dfuse statistics.
@@ -2732,11 +2741,9 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir])
-        print(rc)
+        rc = self.dfuse.run_query()
         assert rc.returncode == 0
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir], use_json=True)
-        print(rc)
+        rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
     @needs_dfuse
