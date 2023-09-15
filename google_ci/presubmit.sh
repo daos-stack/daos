@@ -9,10 +9,10 @@ UTEST_LOG_DIR="/tmp/daos_utest"
 
 function copy_artifacts() {
   echo "Copying test artifacts to ${ARTIFACTS}"
-  cp config.log "${ARTIFACTS}"
+  cp "config.log" "${ARTIFACTS}"
   cp -r "${UTEST_LOG_DIR}" "${ARTIFACTS}"
-  ls "./test_results"
-  cp -a "./test_results/." "${ARTIFACTS}"
+  cp -r "./test_results" "${ARTIFACTS}"
+  go run ./google_ci/coalesce.go --results-dir="./test_results" --output-file="${ARTIFACTS}/junit_results.xml"
 }
 
 function build_and_run() {
