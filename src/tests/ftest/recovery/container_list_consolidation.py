@@ -75,7 +75,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         daos_command.faults_container(
             pool=pool.identifier, cont=container.identifier,
             location="DAOS_CHK_CONT_ORPHAN")
-        
+
         # 3. Check that the container doesn't appear with daos command.
         self.log_step("Check that the container doesn't appear with daos command.")
         pool_list = daos_command.pool_list_containers(pool=pool.identifier)
@@ -129,7 +129,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
             check_query_out = dmg_command.check_query()
             # Status is INIT before starting the checker.
             if check_query_out["response"]["status"] == "RUNNING" and\
-                check_query_out["response"]["reports"]:
+                    check_query_out["response"]["reports"]:
                 seq_num = check_query_out["response"]["reports"][0]["seq"]
                 break
             time.sleep(5)
