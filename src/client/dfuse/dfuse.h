@@ -56,6 +56,11 @@ struct dfuse_info {
 
 	struct d_slab        di_slab;
 
+	pthread_mutex_t      di_dte_lock;
+	d_list_t             di_dtes;
+	sem_t                di_dte_sem;
+	pthread_t            di_dte_thread;
+
 	/* Array of dfuse_eq */
 	struct dfuse_eq     *di_eqt;
 	ATOMIC uint64_t      di_eqt_idx;
@@ -761,6 +766,9 @@ struct dfuse_inode_entry {
 	/* Time of last kernel cache metadata update */
 	struct timespec           ie_mcache_last_update;
 
+	/* Time of last kernel cache dentry update */
+	struct timespec           ie_dentry_last_update;
+
 	/* Time of last kernel cache data update, also used for kernel readdir caching. */
 	struct timespec           ie_dcache_last_update;
 
@@ -793,6 +801,8 @@ struct dfuse_inode_entry {
 
 	/** File has been unlinked from daos */
 	bool                      ie_unlinked;
+
+	d_list_t                  ie_evict_entry;
 };
 
 static inline struct dfuse_inode_entry *
@@ -834,6 +844,24 @@ dfuse_compute_inode(struct dfuse_cont *dfs,
 
 	*_ino = hi ^ (oid->lo << 32);
 };
+
+/* Cache expiry */
+
+/* Represents one timeout value (time).  Maintains a ordered list of dentries that are using
+ * this timeout
+ */
+struct dfuse_time_entry {
+	d_list_t inode_list;
+	double   time;
+	d_list_t dte_list;
+};
+
+int
+dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
+			double timeout);
+
+int
+dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent);
 
 /* Mark the cache for a directory invalid.  Called when directory contents change on create,
  * unlink or rename

@@ -72,6 +72,185 @@ cont:
 	return NULL;
 }
 
+static void *
+dfuse_evict_thread(void *arg)
+{
+	struct dfuse_info *dfuse_info = arg;
+
+	while (1) {
+		struct timespec ts = {};
+		int             rc;
+
+		if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
+			D_ERROR("Unable to set time");
+		ts.tv_sec += 1;
+
+		rc = sem_timedwait(&dfuse_info->di_dte_sem, &ts);
+		if (rc != 0) {
+			rc = errno;
+
+			if (errno != ETIMEDOUT)
+				DS_ERROR(rc, "sem_wait");
+		}
+
+		while (dfuse_de_run(dfuse_info, 0) != 0)
+			;
+	}
+	return NULL;
+}
+
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout);
+
+int
+dfuse_de_run(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *parent)
+{
+	struct dfuse_time_entry  *dte;
+	struct dfuse_inode_entry *inode, *inodep;
+	int                       evicted = 0;
+
+	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
+
+	/* Walk the list, oldest first */
+	d_list_for_each_entry(dte, &dfuse_info->di_dtes, dte_list) {
+		DFUSE_TRA_INFO(dte, "Iterating for timeout %lf", dte->time);
+
+		d_list_for_each_entry_safe(inode, inodep, &dte->inode_list, ie_evict_entry) {
+			double timeout;
+			int    rc;
+
+			if (dfuse_dentry_get_valid(inode, dte->time, &timeout)) {
+				DFUSE_TRA_INFO(inode, "still valid bucket %lf left %lf " DF_DE,
+					       dte->time, timeout, DP_DE(inode->ie_name));
+				break;
+			}
+
+			if (atomic_load_relaxed(&inode->ie_open_count) != 0) {
+				DFUSE_TRA_DEBUG(inode, "File is open " DF_DE,
+						DP_DE(inode->ie_name));
+				continue;
+			}
+
+			DFUSE_TRA_INFO(inode, "Evicting bucket %lf " DF_DE, dte->time,
+				       DP_DE(inode->ie_name));
+
+			rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session,
+							      inode->ie_parent, inode->ie_name,
+							      strnlen(inode->ie_name, NAME_MAX));
+			if (rc && rc != -ENOENT)
+				DFUSE_TRA_ERROR(inode, "notify_delete() returned: %d (%s)", rc,
+						strerror(-rc));
+
+			d_list_del_init(&inode->ie_evict_entry);
+			evicted++;
+			goto out;
+		}
+	}
+out:
+	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
+
+	return evicted;
+}
+
+int
+dfuse_update_inode_time(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *inode,
+			double timeout)
+{
+	struct dfuse_time_entry *dte;
+	struct timespec          now;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+#if 0
+	rc = D_NMUTEX_TRYWRLOCK(&dfuse_info->di_dte_lock);
+	if (rc != 0) {
+		DFUSE_TRA_INFO(inode, "Unable to get lock, dropping");
+		return 0;
+	}
+#else
+	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
+#endif
+	inode->ie_dentry_last_update = now;
+
+	/* Walk each timeout value
+	 * These go longest to shortest so walk the list until one is found where the value is
+	 * lower than we're looking for.
+	 */
+	d_list_for_each_entry(dte, &dfuse_info->di_dtes, dte_list) {
+		if (dte->time > timeout)
+			continue;
+
+		DFUSE_TRA_INFO(inode, "Moved to tail of %lf list %lf", dte->time, timeout);
+		d_list_move_tail(&inode->ie_evict_entry, &dte->inode_list);
+		break;
+	}
+
+	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
+
+	return 0;
+}
+
+static int
+dfuse_de_add(d_list_t *list, double timeout)
+{
+	struct dfuse_time_entry *dte;
+
+	D_ALLOC_PTR(dte);
+	if (dte == NULL)
+		return -DER_NOMEM;
+
+	dte->time = timeout;
+	D_INIT_LIST_HEAD(&dte->inode_list);
+
+	d_list_add_tail(&dte->dte_list, list);
+	return -DER_SUCCESS;
+}
+
+/* Ensure there's a timeout list for the given value
+ * To do this
+ * */
+static int
+dfuse_de_add_value(struct dfuse_info *dfuse_info, double timeout)
+{
+	struct dfuse_time_entry *dte;
+	double                   lower = -1;
+	int                      rc    = -DER_SUCCESS;
+
+	DFUSE_TRA_INFO(dfuse_info, "Setting up timeout queue for %lf", timeout);
+
+	D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
+
+	/* Walk smallest to largest */
+	d_list_for_each_entry_reverse(dte, &dfuse_info->di_dtes, dte_list)
+	{
+		if (dte->time == timeout)
+			D_GOTO(out, rc = -DER_SUCCESS);
+		if (dte->time < timeout)
+			lower = dte->time;
+		if (dte->time > timeout)
+			break;
+	}
+
+	if (lower == -1) {
+		rc = dfuse_de_add(&dfuse_info->di_dtes, timeout);
+		goto out;
+	}
+
+	d_list_for_each_entry_reverse(dte, &dfuse_info->di_dtes, dte_list)
+	{
+		if (dte->time < lower)
+			continue;
+
+		rc = dfuse_de_add(&dte->dte_list, timeout);
+		break;
+	}
+
+out:
+	D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
+
+	return rc;
+}
+
 /* Parse a string to a time, used for reading container attributes info
  * timeouts.
  */
@@ -731,6 +910,9 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 		} else if (rc != 0) {
 			D_GOTO(err_close, rc);
 		}
+
+		dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_timeout);
+		dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_dir_timeout);
 	} else {
 		DFUSE_TRA_INFO(dfc, "Caching disabled");
 	}
@@ -853,6 +1035,10 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 			} else if (rc != 0) {
 				D_GOTO(err_umount, rc);
 			}
+
+			dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_timeout);
+			dfuse_de_add_value(dfuse_info, dfc->dfc_dentry_dir_timeout);
+
 		} else {
 			DFUSE_TRA_INFO(dfc, "Caching disabled");
 		}
@@ -956,6 +1142,39 @@ dfuse_mcache_get_valid(struct dfuse_inode_entry *ie, double max_age, double *tim
 	return use;
 }
 
+bool
+dfuse_dentry_get_valid(struct dfuse_inode_entry *ie, double max_age, double *timeout)
+{
+	bool            use = false;
+	struct timespec now;
+	struct timespec left;
+	double          time_left;
+
+	D_ASSERT(max_age != -1);
+	D_ASSERT(max_age >= 0);
+
+	if (ie->ie_dentry_last_update.tv_sec == 0)
+		return false;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+
+	left.tv_sec  = now.tv_sec - ie->ie_dentry_last_update.tv_sec;
+	left.tv_nsec = now.tv_nsec - ie->ie_dentry_last_update.tv_nsec;
+	if (left.tv_nsec < 0) {
+		left.tv_sec--;
+		left.tv_nsec += 1000000000;
+	}
+	time_left = max_age - (left.tv_sec + ((double)left.tv_nsec / 1000000000));
+	if (time_left > 0) {
+		use = true;
+
+		if (timeout)
+			*timeout = time_left;
+	}
+
+	return use;
+}
+
 /* Set a timer to mark cache entry as valid */
 void
 dfuse_dcache_set_time(struct dfuse_inode_entry *ie)
@@ -1041,8 +1260,19 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 	atomic_init(&dfuse_info->di_eqt_idx, 0);
 
 	D_SPIN_INIT(&dfuse_info->di_lock, 0);
+	D_MUTEX_INIT(&dfuse_info->di_dte_lock, 0);
+
+	D_INIT_LIST_HEAD(&dfuse_info->di_dtes);
+
+	dfuse_de_add_value(dfuse_info, 0);
+	dfuse_de_add_value(dfuse_info, 50);
+	dfuse_de_add_value(dfuse_info, 70);
 
 	D_RWLOCK_INIT(&dfuse_info->di_forget_lock, 0);
+
+	rc = sem_init(&dfuse_info->di_dte_sem, 0, 0);
+	if (rc != 0)
+		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
 		struct dfuse_eq *eqt = &dfuse_info->di_eqt[i];
@@ -1073,6 +1303,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info)
 
 err_eq:
 	D_SPIN_DESTROY(&dfuse_info->di_lock);
+	D_MUTEX_DESTROY(&dfuse_info->di_dte_lock);
 	D_RWLOCK_DESTROY(&dfuse_info->di_forget_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
@@ -1120,6 +1351,7 @@ dfuse_ie_init(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	atomic_init(&ie->ie_il_count, 0);
 	atomic_init(&ie->ie_readdir_number, 0);
 	atomic_fetch_add_relaxed(&dfuse_info->di_inode_count, 1);
+	D_INIT_LIST_HEAD(&ie->ie_evict_entry);
 }
 
 void
@@ -1127,6 +1359,15 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
 	int      rc;
 	uint32_t ref;
+
+	if (d_list_empty(&ie->ie_evict_entry)) {
+		D_ERROR("List is empty");
+	} else {
+		D_ERROR("List is not empty");
+		D_MUTEX_LOCK(&dfuse_info->di_dte_lock);
+		d_list_del(&ie->ie_evict_entry);
+		D_MUTEX_UNLOCK(&dfuse_info->di_dte_lock);
+	}
 
 	ref = atomic_load_relaxed(&ie->ie_ref);
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
@@ -1327,6 +1568,11 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 		pthread_setname_np(eqt->de_thread, "dfuse_progress");
 	}
 
+	rc = pthread_create(&dfuse_info->di_dte_thread, NULL, dfuse_evict_thread, dfuse_info);
+	if (rc != 0)
+		D_GOTO(err_threads, rc = daos_errno2der(rc));
+	pthread_setname_np(dfuse_info->di_dte_thread, "dfuse_evict");
+
 	rc = dfuse_launch_fuse(dfuse_info, &args);
 	if (rc == -DER_SUCCESS) {
 		fuse_opt_free_args(&args);
@@ -1522,6 +1768,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 	int i;
 
 	D_SPIN_DESTROY(&dfuse_info->di_lock);
+	D_MUTEX_DESTROY(&dfuse_info->di_dte_lock);
 	D_RWLOCK_DESTROY(&dfuse_info->di_forget_lock);
 
 	for (i = 0; i < dfuse_info->di_eq_count; i++) {
