@@ -11,9 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
 )
 
 /*
@@ -114,7 +116,7 @@ func (f *ChunkSizeFlag) String() string {
 
 type ObjClassFlag struct {
 	Set   bool
-	Class daos.ObjectClass
+	Class daosAPI.ObjectClass
 }
 
 func (f *ObjClassFlag) UnmarshalFlag(fv string) error {
@@ -201,7 +203,7 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 
 type ContTypeFlag struct {
 	Set  bool
-	Type daos.ContainerLayout
+	Type daosAPI.ContainerLayout
 }
 
 func (f *ContTypeFlag) String() string {

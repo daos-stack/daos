@@ -45,10 +45,10 @@ type (
 		Pointer() unsafe.Pointer
 		Disconnect(context.Context) error
 		Query(context.Context, daosAPI.PoolQueryReq) (*daos.PoolInfo, error)
-		OpenContainer(context.Context, string, daos.ContainerOpenFlag) (contConnection, error)
-		CreateContainer(context.Context, daosAPI.ContainerCreateReq) (*daos.ContainerInfo, error)
+		OpenContainer(context.Context, string, daosAPI.ContainerOpenFlag) (contConnection, error)
+		CreateContainer(context.Context, daosAPI.ContainerCreateReq) (*daosAPI.ContainerInfo, error)
 		DestroyContainer(context.Context, string, bool) error
-		ListContainers(context.Context, bool) ([]*daos.ContainerInfo, error)
+		ListContainers(context.Context, bool) ([]*daosAPI.ContainerInfo, error)
 		ListAttributes(context.Context) ([]string, error)
 		GetAttributes(context.Context, ...string) ([]*daos.Attribute, error)
 		SetAttributes(context.Context, []*daos.Attribute) error
@@ -60,7 +60,7 @@ func (wph *wrappedPoolHandle) UUID() uuid.UUID {
 	return wph.PoolHandle.UUID
 }
 
-func (wph *wrappedPoolHandle) OpenContainer(ctx context.Context, contID string, flags daos.ContainerOpenFlag) (contConnection, error) {
+func (wph *wrappedPoolHandle) OpenContainer(ctx context.Context, contID string, flags daosAPI.ContainerOpenFlag) (contConnection, error) {
 	ch, err := wph.PoolHandle.OpenContainer(ctx, contID, flags)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (wpm *wrappedPoolMock) Pointer() unsafe.Pointer {
 	return unsafe.Pointer(&C.daos_handle_t{})
 }
 
-func (wpm *wrappedPoolMock) OpenContainer(ctx context.Context, contID string, flags daos.ContainerOpenFlag) (contConnection, error) {
+func (wpm *wrappedPoolMock) OpenContainer(ctx context.Context, contID string, flags daosAPI.ContainerOpenFlag) (contConnection, error) {
 	cm, err := wpm.PoolConn.OpenContainer(ctx, contID, flags)
 	if err != nil {
 		return nil, err

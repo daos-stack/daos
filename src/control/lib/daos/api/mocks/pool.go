@@ -16,12 +16,12 @@ type (
 
 	ContainerInfoResp struct {
 		Err
-		ContainerInfo *daos.ContainerInfo
+		ContainerInfo *daosAPI.ContainerInfo
 	}
 
 	ListContainersResp struct {
 		Err
-		Containers []*daos.ContainerInfo
+		Containers []*daosAPI.ContainerInfo
 	}
 
 	OpenContainerResp struct {
@@ -89,7 +89,7 @@ func (mpc *PoolConn) Query(context.Context, daosAPI.PoolQueryReq) (*daos.PoolInf
 	return mpc.cfg.Query.PoolInfo, mpc.cfg.Query.Error
 }
 
-func (mpc *PoolConn) CreateContainer(_ context.Context, req daosAPI.ContainerCreateReq) (*daos.ContainerInfo, error) {
+func (mpc *PoolConn) CreateContainer(_ context.Context, req daosAPI.ContainerCreateReq) (*daosAPI.ContainerInfo, error) {
 	if mpc.cfg.CreateContainer.ContainerInfo != nil || mpc.cfg.CreateContainer.Error != nil {
 		return mpc.cfg.CreateContainer.ContainerInfo, mpc.cfg.CreateContainer.Error
 	}
@@ -100,7 +100,7 @@ func (mpc *PoolConn) CreateContainer(_ context.Context, req daosAPI.ContainerCre
 			ConnectedContainer: uuid.New(),
 		}
 	}
-	newContInfo := &daos.ContainerInfo{
+	newContInfo := &daosAPI.ContainerInfo{
 		PoolUUID:        mpc.cfg.ConnectedPool,
 		UUID:            mpc.cfg.ContConnCfg.ConnectedContainer,
 		Label:           req.Label,
@@ -117,7 +117,7 @@ func (mpc *PoolConn) CreateContainer(_ context.Context, req daosAPI.ContainerCre
 	return mpc.cfg.CreateContainer.ContainerInfo, mpc.cfg.CreateContainer.Error
 }
 
-func (mpc *PoolConn) OpenContainer(context.Context, string, daos.ContainerOpenFlag) (*ContConn, error) {
+func (mpc *PoolConn) OpenContainer(context.Context, string, daosAPI.ContainerOpenFlag) (*ContConn, error) {
 	conn := mpc.cfg.OpenContainer.Conn
 	if conn == nil && mpc.cfg.OpenContainer.Error == nil {
 		conn = newMockContConn(&ContConnCfg{
@@ -140,7 +140,7 @@ func (mpc *PoolConn) DestroyContainer(context.Context, string, bool) error {
 	return mpc.cfg.DestroyContainer.Error
 }
 
-func (mpc *PoolConn) ListContainers(context.Context, bool) ([]*daos.ContainerInfo, error) {
+func (mpc *PoolConn) ListContainers(context.Context, bool) ([]*daosAPI.ContainerInfo, error) {
 	return mpc.cfg.ListContainers.Containers, mpc.cfg.ListContainers.Error
 }
 

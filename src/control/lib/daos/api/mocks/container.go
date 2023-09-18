@@ -75,7 +75,7 @@ func (mcc *ContConn) SetProperties(context.Context, daosAPI.ContainerPropertySet
 	return mcc.cfg.SetProperties.Error
 }
 
-func (mcc *ContConn) Query(context.Context) (*daos.ContainerInfo, error) {
+func (mcc *ContConn) Query(context.Context) (*daosAPI.ContainerInfo, error) {
 	return mcc.cfg.Query.ContainerInfo, mcc.cfg.Query.Error
 }
 
