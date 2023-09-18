@@ -2464,6 +2464,8 @@ ec_three_stripes_nvme_io(void **state)
 	daos_recx_t	recx;
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 6))
 		return;
 
