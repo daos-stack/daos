@@ -282,8 +282,11 @@ dfs_sys_test_access_chmod(void **state)
 	rc = dfs_sys_access(dfs_sys_mt, sym1, R_OK | W_OK, O_NOFOLLOW);
 	assert_int_equal(rc, 0);
 
-	/** Give file1 perms */
-	rc = dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR);
+	/**
+	 * Give file1 perms
+	 * S_ISVTX | S_ISGID | S_ISUID are unsupported should be ignored
+	 */
+	rc = dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR | S_ISVTX | S_ISGID | S_ISUID, true);
 	assert_int_equal(rc, 0);
 
 	/** file1 should have perms now */

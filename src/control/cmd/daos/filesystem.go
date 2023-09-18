@@ -44,9 +44,10 @@ type fsCmd struct {
 type fsCopyCmd struct {
 	daosCmd
 
-	Source   string `long:"src" short:"s" description:"copy source" required:"1"`
-	Dest     string `long:"dst" short:"d" description:"copy destination" required:"1"`
-	Preserve string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	Source          string `long:"src" short:"s" description:"copy source" required:"1"`
+	Dest            string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Preserve        string `long:"preserve-props" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
+	IgnoreNotsupMod bool   `long:"ignore-notsup-mode-bits" description:"squash unsupported special mode bits when copying to DFS" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
@@ -64,6 +65,7 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		ap.preserve_props = C.CString(cmd.Preserve)
 		defer freeString(ap.preserve_props)
 	}
+	ap.ignore_notsup_mod = C.bool(cmd.IgnoreNotsupMod)
 
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)
@@ -107,6 +109,10 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
 	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)
 	cmd.Infof("    Links:       %d", ap.fs_copy_stats.num_links)
+
+	if ap.fs_copy_stats.num_chmod_enotsup > 0 {
+		return errors.New(fmt.Sprintf("Copy completed successfully, but %d files had unsupported mode bits that could not be applied. Run with --ignore-notsup-mode-bits to suppress this warning.", ap.fs_copy_stats.num_chmod_enotsup))
+	}
 
 	return nil
 }

@@ -523,8 +523,12 @@ file_close(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 }
 
 static int
-file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
-	   mode_t mode)
+file_chmod(struct cmd_args_s *ap,
+	   struct file_dfs *file_dfs,
+	   const char *path,
+	   mode_t mode,
+	   bool ignore_notsup_mod,
+	   uint64_t *num_chmod_enotsup)
 {
 	int rc = 0;
 
@@ -538,7 +542,16 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 			rc = errno;
 		}
 	} else if (file_dfs->type == DAOS) {
-		rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode);
+		rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode, ignore_notsup_mod);
+		if (rc == ENOTSUP && !ignore_notsup_mod) {
+			/* If the file has unsupported mode bits, unset them
+			 * and retry the chmod. We track these errors so they
+			 * can be surfaced to the user at the end of the copy
+			 * operation.
+			 */
+			(*num_chmod_enotsup)++;
+			rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode, true);
+		}
 	} else {
 		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", path, file_dfs->type);
@@ -552,7 +565,9 @@ fs_copy_file(struct cmd_args_s *ap,
 	     struct file_dfs *dst_file_dfs,
 	     struct stat *src_stat,
 	     const char *src_path,
-	     const char *dst_path)
+	     const char *dst_path,
+	     bool ignore_notsup_mod,
+	     uint64_t *num_chmod_enotsup)
 {
 	int src_flags		= O_RDONLY;
 	int dst_flags		= O_CREAT | O_TRUNC | O_WRONLY;
@@ -603,7 +618,7 @@ fs_copy_file(struct cmd_args_s *ap,
 	}
 
 	/* set perms on destination to original source perms */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_notsup_mod, num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating dst file permissions failed");
@@ -710,6 +725,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	    struct stat *src_stat,
 	    const char *src_path,
 	    const char *dst_path,
+	    bool ignore_notsup_mod,
 	    struct fs_copy_stats *num)
 {
 	DIR			*src_dir = NULL;
@@ -785,7 +801,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 		case S_IFREG:
 			rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs,
 					  &next_src_stat, next_src_path,
-					  next_dst_path);
+					  next_dst_path, ignore_notsup_mod,
+					  &num->num_chmod_enotsup);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			num->num_files++;
@@ -800,7 +817,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 			break;
 		case S_IFDIR:
 			rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &next_src_stat,
-					 next_src_path, next_dst_path, num);
+					 next_src_path, next_dst_path, ignore_notsup_mod, num);
 			if ((rc != 0) && (rc != -DER_EXIST))
 				D_GOTO(out, rc);
 			num->num_dirs++;
@@ -815,7 +832,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	}
 
 	/* set original source perms on directories after copying */
-	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
+	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode, ignore_notsup_mod, &num->num_chmod_enotsup);
 	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "updating destination permissions failed on '%s'", dst_path);
@@ -847,6 +864,7 @@ fs_copy(struct cmd_args_s *ap,
 	struct file_dfs *dst_file_dfs,
 	const char *src_path,
 	const char *dst_path,
+	bool ignore_notsup_mod,
 	struct fs_copy_stats *num)
 {
 	int		rc = 0;
@@ -903,13 +921,13 @@ fs_copy(struct cmd_args_s *ap,
 	switch (src_stat.st_mode & S_IFMT) {
 	case S_IFREG:
 		rc = fs_copy_file(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
-				  dst_path);
+				  dst_path, ignore_notsup_mod, &num->num_chmod_enotsup);
 		if (rc == 0)
 			num->num_files++;
 		break;
 	case S_IFDIR:
 		rc = fs_copy_dir(ap, src_file_dfs, dst_file_dfs, &src_stat, src_path,
-				 dst_path, num);
+				 dst_path, ignore_notsup_mod, num);
 		if (rc == 0)
 			num->num_dirs++;
 		break;
@@ -1868,7 +1886,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, num);
+	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, ap->ignore_notsup_mod, num);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed");
 		D_GOTO(out_disconnect, rc);
