@@ -26,8 +26,74 @@ import (
 */
 import "C"
 
-func newContainerInfo(cUUID C.uuid_t, cInfo *C.daos_cont_info_t, props propSlice) *daos.ContainerInfo {
-	contInfo := &daos.ContainerInfo{
+type (
+	ContainerLayout   uint16
+	ContainerOpenFlag uint
+
+	POSIXAttributes struct {
+		ChunkSize       uint64      `json:"chunk_size,omitempty"`
+		ObjectClass     ObjectClass `json:"object_class,omitempty"`
+		DirObjectClass  ObjectClass `json:"dir_object_class,omitempty"`
+		FileObjectClass ObjectClass `json:"file_object_class,omitempty"`
+		ConsistencyMode uint32      `json:"cons_mode,omitempty"`
+		Hints           string      `json:"hints,omitempty"`
+	}
+
+	ContainerInfo struct {
+		PoolUUID         uuid.UUID        `json:"pool_uuid"`
+		UUID             uuid.UUID        `json:"container_uuid"`
+		Label            string           `json:"container_label,omitempty"`
+		LatestSnapshot   uint64           `json:"latest_snapshot"`
+		RedundancyFactor uint32           `json:"redundancy_factor"`
+		NumHandles       uint32           `json:"num_handles"`
+		NumSnapshots     uint32           `json:"num_snapshots"`
+		OpenTime         uint64           `json:"open_time"`
+		CloseModifyTime  uint64           `json:"close_modify_time"`
+		Type             ContainerLayout  `json:"container_type"`
+		POSIXAttributes  *POSIXAttributes `json:"posix_attributes,omitempty"`
+	}
+)
+
+const (
+	ContainerLayoutUnknown  ContainerLayout = C.DAOS_PROP_CO_LAYOUT_UNKNOWN
+	ContainerLayoutPOSIX    ContainerLayout = C.DAOS_PROP_CO_LAYOUT_POSIX
+	ContainerLayoutHDF5     ContainerLayout = C.DAOS_PROP_CO_LAYOUT_HDF5
+	ContainerLayoutPython   ContainerLayout = C.DAOS_PROP_CO_LAYOUT_PYTHON
+	ContainerLayoutSpark    ContainerLayout = C.DAOS_PROP_CO_LAYOUT_SPARK
+	ContainerLayoutDatabase ContainerLayout = C.DAOS_PROP_CO_LAYOUT_DATABASE
+	ContainerLayoutRoot     ContainerLayout = C.DAOS_PROP_CO_LAYOUT_ROOT
+	ContainerLayoutSeismic  ContainerLayout = C.DAOS_PROP_CO_LAYOUT_SEISMIC
+	ContainerLayoutMeteo    ContainerLayout = C.DAOS_PROP_CO_LAYOUT_METEO
+
+	ContainerOpenFlagReadOnly  ContainerOpenFlag = C.DAOS_COO_RO
+	ContainerOpenFlagReadWrite ContainerOpenFlag = C.DAOS_COO_RW
+	ContainerOpenFlagExclusive ContainerOpenFlag = C.DAOS_COO_EX
+	ContainerOpenFlagForce     ContainerOpenFlag = C.DAOS_COO_FORCE
+	ContainerOpenFlagMdStats   ContainerOpenFlag = C.DAOS_COO_RO_MDSTATS
+	ContainerOpenFlagEvict     ContainerOpenFlag = C.DAOS_COO_EVICT
+	ContainerOpenFlagEvictAll  ContainerOpenFlag = C.DAOS_COO_EVICT_ALL
+)
+
+func (l *ContainerLayout) FromString(in string) error {
+	cStr := C.CString(in)
+	defer freeString(cStr)
+	C.daos_parse_ctype(cStr, (*C.uint16_t)(l))
+
+	if *l == ContainerLayoutUnknown {
+		return errors.Errorf("unknown container layout %q", in)
+	}
+
+	return nil
+}
+
+func (l ContainerLayout) String() string {
+	var cType [10]C.char
+	C.daos_unparse_ctype(C.ushort(l), &cType[0])
+	return C.GoString(&cType[0])
+}
+
+func newContainerInfo(cUUID C.uuid_t, cInfo *C.daos_cont_info_t, props propSlice) *ContainerInfo {
+	contInfo := &ContainerInfo{
 		UUID: uuid.Must(uuidFromC(cUUID)),
 	}
 
@@ -42,7 +108,7 @@ func newContainerInfo(cUUID C.uuid_t, cInfo *C.daos_cont_info_t, props propSlice
 	for _, p := range props {
 		switch p.dpe_type {
 		case C.DAOS_PROP_CO_LAYOUT_TYPE:
-			contInfo.Type = daos.ContainerLayout(C.get_dpe_val(&p))
+			contInfo.Type = ContainerLayout(C.get_dpe_val(&p))
 		case C.DAOS_PROP_CO_LABEL:
 			contInfo.Label = C.GoString(C.get_dpe_str(&p))
 		case C.DAOS_PROP_CO_REDUN_FAC:
@@ -73,7 +139,7 @@ func (m *mockApiClient) duns_create_path(_ C.daos_handle_t, _ *C.char, attr *C.s
 	return 0
 }
 
-func dunsContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *daos.ContainerInfo) error {
+func dunsContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *ContainerInfo) error {
 	var attr C.struct_duns_attr_t
 
 	if req.UNSPath == "" {
@@ -82,7 +148,7 @@ func dunsContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCr
 	cPath := C.CString(req.UNSPath)
 	defer freeString(cPath)
 
-	if req.Type == daos.ContainerLayoutUnknown {
+	if req.Type == ContainerLayoutUnknown {
 		return errors.Wrap(daos.InvalidInput, "container type is required for UNS")
 	}
 	attr.da_type = C.ushort(req.Type)
@@ -143,7 +209,7 @@ func (m *mockApiClient) dfs_cont_create(_ C.daos_handle_t, cUUID *C.uuid_t, _ *C
 	return 0
 }
 
-func posixContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *daos.ContainerInfo) error {
+func posixContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *ContainerInfo) error {
 	var attr C.dfs_attr_t
 
 	if req.POSIXAttributes == nil {
@@ -202,7 +268,7 @@ func (m *mockApiClient) daos_cont_create(_ C.daos_handle_t, cUUID *C.uuid_t, _ *
 	return 0
 }
 
-func defaultContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *daos.ContainerInfo) error {
+func defaultContainerCreate(client apiClient, poolConn *PoolHandle, req ContainerCreateReq, cInfo *ContainerInfo) error {
 	props, cleanup, err := req.Properties.cArrPtr()
 	if err != nil {
 		return err
@@ -223,12 +289,12 @@ type ContainerCreateReq struct {
 	Label           string
 	UNSPath         string
 	ACL             *control.AccessControlList
-	Type            daos.ContainerLayout
-	POSIXAttributes *daos.POSIXAttributes
+	Type            ContainerLayout
+	POSIXAttributes *POSIXAttributes
 	Properties      ContainerPropertySet
 }
 
-func ContainerCreate(ctx context.Context, poolConn *PoolHandle, req ContainerCreateReq) (*daos.ContainerInfo, error) {
+func ContainerCreate(ctx context.Context, poolConn *PoolHandle, req ContainerCreateReq) (*ContainerInfo, error) {
 	log.Debugf("ContainerCreate(%+v)", req)
 
 	if poolConn == nil {
@@ -268,20 +334,20 @@ func ContainerCreate(ctx context.Context, poolConn *PoolHandle, req ContainerCre
 		}
 	}
 
-	if req.Type != daos.ContainerLayoutUnknown {
+	if req.Type != ContainerLayoutUnknown {
 		var typeEntry C.struct_daos_prop_entry
 		typeEntry.dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
 		C.set_dpe_val(&typeEntry, C.ulong(req.Type))
 		req.Properties.addEntry("type", &typeEntry)
 	}
 
-	var cInfo daos.ContainerInfo
+	var cInfo ContainerInfo
 	var createErr error
 	if req.UNSPath != "" {
 		createErr = dunsContainerCreate(client, poolConn, req, &cInfo)
 	} else {
 		switch req.Type {
-		case daos.ContainerLayoutPOSIX:
+		case ContainerLayoutPOSIX:
 			createErr = posixContainerCreate(client, poolConn, req, &cInfo)
 		default:
 			createErr = defaultContainerCreate(client, poolConn, req, &cInfo)
@@ -294,7 +360,7 @@ func ContainerCreate(ctx context.Context, poolConn *PoolHandle, req ContainerCre
 	if cInfo.Label == "" {
 		cInfo.Label = req.Label
 	}
-	if cInfo.Type == daos.ContainerLayoutUnknown {
+	if cInfo.Type == ContainerLayoutUnknown {
 		cInfo.Type = req.Type
 	}
 	cInfo.POSIXAttributes = req.POSIXAttributes
@@ -330,7 +396,7 @@ func ContainerDestroy(ctx context.Context, poolConn *PoolHandle, contID string, 
 
 	/*if req.UNSPath != "" {
 		if req.PoolConn != nil || req.ContainerID != "" {
-			return errors.Wrap(daos.InvalidInput, "UNSPath should not be used with PoolConn or ContainerID")
+			return errors.Wrap(InvalidInput, "UNSPath should not be used with PoolConn or ContainerID")
 		}
 
 		var err error
@@ -347,7 +413,7 @@ func ContainerDestroy(ctx context.Context, poolConn *PoolHandle, contID string, 
 
 	/*} else if err == nil {
 		if !req.Force {
-			return errors.Wrap(daos.Busy, "container is open and Force not set")
+			return errors.Wrap(Busy, "container is open and Force not set")
 		}
 		if err := daosError(C.daos_cont_close(contConn.daosHandle, nil)); err != nil {
 			return errors.Wrap(err, "failed to close container before destroy")
@@ -381,7 +447,7 @@ func (m *mockApiClient) daos_cont_open(_ C.daos_handle_t, _ *C.char, _ C.uint, c
 	return 0
 }
 
-func ContainerOpen(ctx context.Context, poolConn *PoolHandle, contID string, flags daos.ContainerOpenFlag) (*ContainerHandle, error) {
+func ContainerOpen(ctx context.Context, poolConn *PoolHandle, contID string, flags ContainerOpenFlag) (*ContainerHandle, error) {
 	log.Debugf("ContainerOpen(%s:%s)", poolConn, contID)
 
 	client, err := getApiClient(ctx)
@@ -453,8 +519,8 @@ func ContainerClose(ctx context.Context, contConn *ContainerHandle) error {
 	return nil
 }
 
-func containerQueryDFSAttrs(ctx context.Context, poolConn *PoolHandle, contConn *ContainerHandle) (*daos.POSIXAttributes, error) {
-	var pa daos.POSIXAttributes
+func containerQueryDFSAttrs(ctx context.Context, poolConn *PoolHandle, contConn *ContainerHandle) (*POSIXAttributes, error) {
+	var pa POSIXAttributes
 	var dfs *C.dfs_t
 	var attr C.dfs_attr_t
 
@@ -467,9 +533,9 @@ func containerQueryDFSAttrs(ctx context.Context, poolConn *PoolHandle, contConn 
 	if err := dfsError(rc); err != nil {
 		return nil, errors.Wrap(err, "failed to query container")
 	}
-	pa.ObjectClass = daos.ObjectClass(attr.da_oclass_id)
-	pa.DirObjectClass = daos.ObjectClass(attr.da_dir_oclass_id)
-	pa.FileObjectClass = daos.ObjectClass(attr.da_file_oclass_id)
+	pa.ObjectClass = ObjectClass(attr.da_oclass_id)
+	pa.DirObjectClass = ObjectClass(attr.da_dir_oclass_id)
+	pa.FileObjectClass = ObjectClass(attr.da_file_oclass_id)
 	pa.Hints = C.GoString(&attr.da_hints[0])
 	pa.ChunkSize = uint64(attr.da_chunk_size)
 
@@ -492,11 +558,11 @@ func (m *mockApiClient) daos_cont_query(contHdl C.daos_handle_t, dci *C.daos_con
 	return 0
 }
 
-func (ch *ContainerHandle) Query(ctx context.Context) (*daos.ContainerInfo, error) {
+func (ch *ContainerHandle) Query(ctx context.Context) (*ContainerInfo, error) {
 	return ContainerQuery(ctx, ch)
 }
 
-func ContainerQuery(ctx context.Context, contConn *ContainerHandle) (*daos.ContainerInfo, error) {
+func ContainerQuery(ctx context.Context, contConn *ContainerHandle) (*ContainerInfo, error) {
 	log.Debugf("ContainerQuery(%s)", contConn)
 
 	client, err := getApiClient(ctx)
@@ -525,7 +591,7 @@ func ContainerQuery(ctx context.Context, contConn *ContainerHandle) (*daos.Conta
 	info := newContainerInfo(dci.ci_uuid, &dci, entries)
 	info.PoolUUID = contConn.PoolHandle.UUID
 
-	if info.Type == daos.ContainerLayoutPOSIX {
+	if info.Type == ContainerLayoutPOSIX {
 		posixAttrs, err := containerQueryDFSAttrs(ctx, contConn.PoolHandle, contConn)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to query DFS attributes")

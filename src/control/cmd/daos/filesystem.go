@@ -14,7 +14,7 @@ import "C"
 import (
 	"fmt"
 
-	"github.com/daos-stack/daos/src/control/lib/daos"
+	daosAPI "github.com/daos-stack/daos/src/control/lib/daos/api"
 	"github.com/pkg/errors"
 )
 
@@ -172,7 +172,7 @@ func fsModifyAttr(cmd *fsAttrCmd, op uint32, updateAP func(*C.struct_cmd_args_s)
 	}
 	defer deallocCmdArgs()
 
-	flags := daos.ContainerOpenFlag(C.DAOS_COO_RW)
+	flags := daosAPI.ContainerOpenFlag(C.DAOS_COO_RW)
 
 	ap.fs_op = op
 	if updateAP != nil {
@@ -246,7 +246,7 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	defer deallocCmdArgs()
 
 	ap.fs_op = C.FS_GET_ATTR
-	flags := daos.ContainerOpenFlag(C.DAOS_COO_RO)
+	flags := daosAPI.ContainerOpenFlag(C.DAOS_COO_RO)
 
 	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
@@ -331,7 +331,7 @@ func (cmd *fsFixEntryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	flags := daos.ContainerOpenFlag(C.DAOS_COO_EX)
+	flags := daosAPI.ContainerOpenFlag(C.DAOS_COO_EX)
 
 	ap.fs_op = C.FS_CHECK
 	cleanup, err := cmd.resolveAndConnect(flags, ap)

@@ -253,10 +253,10 @@ func makeArgs(base []string, in ...string) []string {
 	return append(base, in...)
 }
 
-func objClass(t *testing.T, str string) daos.ObjectClass {
+func objClass(t *testing.T, str string) daosAPI.ObjectClass {
 	t.Helper()
 
-	var cls daos.ObjectClass
+	var cls daosAPI.ObjectClass
 	if err := cls.FromString(str); err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +304,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 		args     []string
 		ctx      context.Context
 		mpcc     *apiMocks.PoolConnCfg
-		expInfo  *daos.ContainerInfo
+		expInfo  *daosAPI.ContainerInfo
 		expProps daosAPI.ContainerPropertySet
 		expErr   error
 	}{
@@ -356,7 +356,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 					},
 				},
 			},
-			expInfo: &daos.ContainerInfo{
+			expInfo: &daosAPI.ContainerInfo{
 				PoolUUID: poolUUID,
 				UUID:     contUUID,
 				Label:    contLabel,
@@ -364,7 +364,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 		},
 		"pooLabel/contLabel (posix)": {
 			args: makeArgs(baseArgs, poolLabel, contLabel,
-				"--type", daos.ContainerLayoutPOSIX.String(),
+				"--type", daosAPI.ContainerLayoutPOSIX.String(),
 				"--oclass", defOClass.String(),
 				"--dir-oclass", dirOClass.String(),
 				"--file-oclass", fileOClass.String(),
@@ -373,12 +373,12 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 				"--hints", contHints,
 				"--properties", testProps.String(),
 			),
-			expInfo: &daos.ContainerInfo{
+			expInfo: &daosAPI.ContainerInfo{
 				PoolUUID: poolUUID,
 				UUID:     contUUID,
 				Label:    contLabel,
-				Type:     daos.ContainerLayoutPOSIX,
-				POSIXAttributes: &daos.POSIXAttributes{
+				Type:     daosAPI.ContainerLayoutPOSIX,
+				POSIXAttributes: &daosAPI.POSIXAttributes{
 					ObjectClass:     defOClass,
 					DirObjectClass:  dirOClass,
 					FileObjectClass: fileOClass,
@@ -415,7 +415,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 			ctx: mockApiCtx(t, &api.MockApiClientConfig{
 				ConnectedPool: poolUUID,
 			}),
-			expInfo: &daos.ContainerInfo{
+			expInfo: &daosAPI.ContainerInfo{
 				PoolUUID: poolUUID,
 				UUID:     contUUID,
 				Label:    contLabel,

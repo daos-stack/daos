@@ -97,7 +97,7 @@ type (
 	}
 )
 
-func (ph *PoolHandle) CreateContainer(ctx context.Context, req ContainerCreateReq) (*daos.ContainerInfo, error) {
+func (ph *PoolHandle) CreateContainer(ctx context.Context, req ContainerCreateReq) (*ContainerInfo, error) {
 	return ContainerCreate(ctx, ph, req)
 }
 
@@ -105,7 +105,7 @@ func (ph *PoolHandle) DestroyContainer(ctx context.Context, contID string, force
 	return ContainerDestroy(ctx, ph, contID, force)
 }
 
-func (ph *PoolHandle) OpenContainer(ctx context.Context, contID string, flags daos.ContainerOpenFlag) (*ContainerHandle, error) {
+func (ph *PoolHandle) OpenContainer(ctx context.Context, contID string, flags ContainerOpenFlag) (*ContainerHandle, error) {
 	return ContainerOpen(ctx, ph, contID, flags)
 }
 
@@ -117,7 +117,7 @@ func (ph *PoolHandle) Disconnect(ctx context.Context) error {
 	return PoolDisconnect(ctx, ph)
 }
 
-func (ph *PoolHandle) ListContainers(ctx context.Context, query bool) ([]*daos.ContainerInfo, error) {
+func (ph *PoolHandle) ListContainers(ctx context.Context, query bool) ([]*ContainerInfo, error) {
 	return PoolListContainers(ctx, ph, query)
 }
 
@@ -304,7 +304,7 @@ func PoolDisconnect(ctx context.Context, poolConn *PoolHandle) error {
 	return nil
 }
 
-func PoolListContainers(ctx context.Context, poolConn *PoolHandle, query bool) ([]*daos.ContainerInfo, error) {
+func PoolListContainers(ctx context.Context, poolConn *PoolHandle, query bool) ([]*ContainerInfo, error) {
 	log.Debugf("PoolListContainers(%s:%t)", poolConn, query)
 
 	if err := ctx.Err(); err != nil {
@@ -345,16 +345,16 @@ func PoolListContainers(ctx context.Context, poolConn *PoolHandle, query bool) (
 	}
 	defer C.free(unsafe.Pointer(cConts))
 
-	out := make([]*daos.ContainerInfo, ncont)
+	out := make([]*ContainerInfo, ncont)
 	for i := range out {
-		out[i] = new(daos.ContainerInfo)
+		out[i] = new(ContainerInfo)
 		out[i].PoolUUID = poolConn.UUID
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
 		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 		contLabel := out[i].Label
 
 		if query {
-			contConn, err := ContainerOpen(ctx, poolConn, contLabel, daos.ContainerOpenFlagReadOnly)
+			contConn, err := ContainerOpen(ctx, poolConn, contLabel, ContainerOpenFlagReadOnly)
 			if err != nil {
 				log.Debugf("unable to open container %q for query: %s", contLabel, err)
 				continue

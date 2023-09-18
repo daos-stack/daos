@@ -1,14 +1,13 @@
-package daos
+package api
 
 import (
 	"strings"
 
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/pkg/errors"
 )
 
 /*
-#cgo LDFLAGS: -ldaos
-
 #include <daos.h>
 #include <daos_obj_class.h>
 */
@@ -24,7 +23,7 @@ func (oc *ObjectClass) FromString(cls string) error {
 
 	*oc = ObjectClass(C.daos_oclass_name2id(cStr))
 	if *oc == C.OC_UNKNOWN {
-		return errors.Wrapf(InvalidInput, "invalid object class %q", cls)
+		return errors.Wrapf(daos.InvalidInput, "invalid object class %q", cls)
 	}
 
 	return nil

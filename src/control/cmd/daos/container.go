@@ -71,7 +71,7 @@ type (
 		PoolUUID() uuid.UUID
 		Pointer() unsafe.Pointer
 		Close(context.Context) error
-		Query(context.Context) (*daos.ContainerInfo, error)
+		Query(context.Context) (*daosAPI.ContainerInfo, error)
 		ListAttributes(context.Context) ([]string, error)
 		GetAttributes(context.Context, ...string) ([]*daos.Attribute, error)
 		SetAttributes(context.Context, []*daos.Attribute) error
@@ -149,7 +149,7 @@ func (cmd *containerBaseCmd) contUUID() uuid.UUID {
 	return cmd.contConn.UUID()
 }
 
-func (cmd *containerBaseCmd) openContainer(contID string, openFlags daos.ContainerOpenFlag) error {
+func (cmd *containerBaseCmd) openContainer(contID string, openFlags daosAPI.ContainerOpenFlag) error {
 	openFlags |= C.DAOS_COO_FORCE
 	if (openFlags & C.DAOS_COO_RO) != 0 {
 		openFlags |= C.DAOS_COO_RO_MDSTATS
@@ -183,7 +183,7 @@ func (cmd *containerBaseCmd) closeContainer() {
 	}
 }
 
-func (cmd *containerBaseCmd) queryContainer() (*daos.ContainerInfo, error) {
+func (cmd *containerBaseCmd) queryContainer() (*daosAPI.ContainerInfo, error) {
 	return cmd.contConn.Query(cmd.daosCtx)
 }
 
@@ -269,7 +269,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 
-	var ci *daos.ContainerInfo
+	var ci *daosAPI.ContainerInfo
 	if err := cmd.openContainer(contID, C.DAOS_COO_RO); err != nil {
 		if errors.Cause(err) != daos.NoPermission {
 			return errors.Wrapf(err, "failed to query new container %s", contID)
@@ -278,7 +278,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		// Special case for creating a container without permission to query it.
 		cmd.Errorf("container %s was created, but query failed", contID)
 
-		ci = new(daos.ContainerInfo)
+		ci = new(daosAPI.ContainerInfo)
 		ci.Type = cmd.Type.Type
 		ci.UUID = cmd.contUUID()
 		ci.Label = cmd.Args.Label
@@ -307,7 +307,7 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	contCreateReq := daosAPI.ContainerCreateReq{
 		Label:      cmd.Args.Label,
 		UNSPath:    cmd.Path,
-		Type:       daos.ContainerLayout(cmd.Type.Type),
+		Type:       daosAPI.ContainerLayout(cmd.Type.Type),
 		Properties: cmd.Properties.props,
 	}
 	if cmd.ACLFile != "" {
@@ -322,8 +322,8 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	}
 	contCreateReq.ACL.OwnerGroup = cmd.Group.String()
 
-	if cmd.Type.Type == daos.ContainerLayoutPOSIX {
-		var posixAttrs daos.POSIXAttributes
+	if cmd.Type.Type == daosAPI.ContainerLayoutPOSIX {
+		var posixAttrs daosAPI.POSIXAttributes
 
 		// POSIX containers have extra attributes
 		if cmd.ObjectClass.Set {
@@ -522,7 +522,7 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 	return nil
 }
 
-func (cmd *existingContainerCmd) resolveAndConnect(contFlags daos.ContainerOpenFlag, ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
+func (cmd *existingContainerCmd) resolveAndConnect(contFlags daosAPI.ContainerOpenFlag, ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
 	if err = cmd.resolveContainer(ap); err != nil {
 		return
 	}
@@ -556,11 +556,11 @@ type containerListCmd struct {
 	poolBaseCmd
 }
 
-func listContainers(ctx context.Context, poolConn poolConnection) ([]*daos.ContainerInfo, error) {
+func listContainers(ctx context.Context, poolConn poolConnection) ([]*daosAPI.ContainerInfo, error) {
 	return poolConn.ListContainers(ctx, false)
 }
 
-func printContainers(out io.Writer, containers []*daos.ContainerInfo) {
+func printContainers(out io.Writer, containers []*daosAPI.ContainerInfo) {
 	if len(containers) == 0 {
 		fmt.Fprintf(out, "No containers.\n")
 		return
@@ -759,7 +759,7 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 	return nil
 }
 
-func printContainerInfo(out io.Writer, ci *daos.ContainerInfo, verbose bool) error {
+func printContainerInfo(out io.Writer, ci *daosAPI.ContainerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.UUID.String()},
 	}
@@ -1389,7 +1389,7 @@ func (cmd *containerEvictCmd) Execute(_ []string) (err error) {
 	}
 	defer deallocCmdArgs()
 
-	var co_flags daos.ContainerOpenFlag
+	var co_flags daosAPI.ContainerOpenFlag
 	if cmd.All {
 		co_flags = C.DAOS_COO_EVICT_ALL | C.DAOS_COO_EX
 	} else {
