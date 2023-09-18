@@ -373,6 +373,7 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	uuid_copy(cont->vc_id, co_uuid);
 	cont->vc_pool	 = pool;
 	cont->vc_cont_df = args.ca_cont_df;
+	cont->vc_cont_df->cd_ver = DAOS_CONT_VERSION;
 	cont->vc_ts_idx = &cont->vc_cont_df->cd_ts_idx;
 	cont->vc_dtx_active_hdl = DAOS_HDL_INVAL;
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
@@ -466,6 +467,60 @@ exit:
 		cont_free_internal(cont);
 
 	return rc;
+}
+
+int
+vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	struct vos_cont_df	*cont_df;
+	int rc = 0;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Can not find vos container\n");
+		return -DER_NO_HDL;
+	}
+
+	cont_df = cont->vc_cont_df;
+	if (cont_df->cd_ver == 0) {
+		D_DEBUG(DB_MD, "skip for lower version container "DF_UUID"\n",
+			DP_UUID(cont->vc_id));
+		return 0;
+	}
+
+	if (epoch <= cont_df->cd_commit_epoch) {
+		D_DEBUG(DB_MD, DF_UUID" epoch "DF_X64" < "DF_X64"\n",
+			DP_UUID(cont->vc_id), epoch, cont_df->cd_commit_epoch);
+		return 0;
+	}
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to TX begin: " DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = umem_tx_add_ptr(umm, &cont_df->cd_commit_epoch,
+			     sizeof(cont_df->cd_commit_epoch));
+	if (rc != 0) {
+		D_ERROR(DF_UUID" Failed to refresh epoch for commit.: "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		D_GOTO(out_tx, rc);
+	}
+
+	D_DEBUG(DB_MD, DF_UUID" epoch "DF_X64" -> "DF_X64"\n",
+		DP_UUID(cont->vc_id), cont_df->cd_commit_epoch, epoch);
+
+	cont_df->cd_commit_epoch = epoch;
+
+out_tx:
+	rc = umem_tx_end(umm, rc);
+
+	return rc;
+
 }
 
 /**

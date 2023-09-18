@@ -57,6 +57,7 @@ struct ds_cont_child {
 	struct ds_pool_child	*sc_pool;
 	d_list_t		 sc_link;	/* link to spc_cont_list */
 	d_list_t		 sc_open_hdls;	/* the list of ds_cont_hdl. */
+	d_list_t		 sc_open_dtx_list; /* link to all open leader dtx. */
 	struct daos_csummer	*sc_csummer;
 	struct cont_props	 sc_props;
 
@@ -111,6 +112,10 @@ struct ds_cont_child {
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
+
+
+	/* local DTX commit eph */
+	uint64_t		*sc_dtx_commit_eph;
 	/**
 	 * Timestamp of last EC update, which is used by aggregation to check
 	 * if it needs to do EC aggregate.
@@ -193,11 +198,17 @@ int ds_cont_csummer_init(struct ds_cont_child *cont);
 int ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 		      uuid_t cont_uuid);
 
+void ds_cont_tgt_track_eph_query_ult(void *data);
+
 void ds_cont_child_put(struct ds_cont_child *cont);
 void ds_cont_child_get(struct ds_cont_child *cont);
 
 int ds_cont_child_open_create(uuid_t pool_uuid, uuid_t cont_uuid,
 			      struct ds_cont_child **cont);
+
+struct dtx_leader_handle;
+void ds_cont_child_insert_dtx(struct ds_cont_child *cont_child,
+			      struct dtx_leader_handle *new_dlh);
 
 typedef int (*cont_iter_cb_t)(uuid_t co_uuid, vos_iter_entry_t *ent, void *arg);
 int ds_cont_iter(daos_handle_t ph, uuid_t co_uuid, cont_iter_cb_t callback,
@@ -245,11 +256,6 @@ int dsc_cont_open(daos_handle_t poh, uuid_t cont_uuid, uuid_t cont_hdl_uuid,
 int dsc_cont_close(daos_handle_t poh, daos_handle_t coh);
 struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
-
-void ds_cont_tgt_ec_eph_query_ult(void *data);
-int ds_cont_ec_eph_insert(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx,
-			  uint64_t **epoch_p);
-int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 

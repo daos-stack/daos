@@ -246,12 +246,15 @@ enum vos_io_stream {
 	VOS_IOS_CNT
 };
 
+#define DAOS_CONT_V1	0x0001
+#define DAOS_CONT_VERSION	DAOS_CONT_V1
 /* VOS Container Value */
 struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	uint32_t			cd_ts_idx;
-	uint32_t			cd_pad;
+	uint16_t			cd_ver;
+	uint16_t			cd_pad;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;
@@ -273,6 +276,12 @@ struct vos_cont_df {
 	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
 	/* The epoch for the most new DTX entry that is aggregated. */
 	uint64_t			cd_newest_aggregated;
+	/*
+	 * The epoch for VOS aggregation and incremental reintegration boundary,
+	 * i.e. the data below this epoch are being regarded as valid, and do
+	 * not need to be rebuild during reintegration.
+	 */
+	uint64_t			cd_commit_epoch;
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */

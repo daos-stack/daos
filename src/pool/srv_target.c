@@ -479,7 +479,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_cond, rc = dss_abterr2der(rc));
 
-	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
+	D_INIT_LIST_HEAD(&pool->sp_track_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
@@ -703,26 +703,23 @@ out:
 }
 
 static void
-tgt_ec_eph_query_ult(void *data)
+tgt_track_eph_query_ult(void *data)
 {
-	ds_cont_tgt_ec_eph_query_ult(data);
+	ds_cont_tgt_track_eph_query_ult(data);
 }
 
 static int
-ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
+ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
 	uuid_t			anonym_uuid;
 
-	if (unlikely(ec_agg_disabled))
-		return 0;
-
-	D_ASSERT(pool->sp_ec_ephs_req == NULL);
+	D_ASSERT(pool->sp_track_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
-						DSS_DEEP_STACK_SZ);
-	if (pool->sp_ec_ephs_req == NULL) {
+	pool->sp_track_ephs_req = sched_create_ult(&attr, tgt_track_eph_query_ult, pool,
+						   DSS_DEEP_STACK_SZ);
+	if (pool->sp_track_ephs_req == NULL) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
 			DP_UUID(pool->sp_uuid));
 		return -DER_NOMEM;
@@ -734,16 +731,16 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 static void
 ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 {
-	if (pool->sp_ec_ephs_req == NULL)
+	if (pool->sp_track_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID": Stopping EPOCH query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
-	sched_req_wait(pool->sp_ec_ephs_req, true);
-	sched_req_put(pool->sp_ec_ephs_req);
-	pool->sp_ec_ephs_req = NULL;
-	D_INFO(DF_UUID": EC query ULT stopped\n", DP_UUID(pool->sp_uuid));
+	sched_req_wait(pool->sp_track_ephs_req, true);
+	sched_req_put(pool->sp_track_ephs_req);
+	pool->sp_track_ephs_req = NULL;
+	D_INFO(DF_UUID": EPOCH query ULT stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -822,7 +819,7 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	pool->sp_fetch_hdls = 1;
-	rc = ds_pool_start_ec_eph_query_ult(pool);
+	rc = ds_pool_start_track_eph_query_ult(pool);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
 			DP_UUID(uuid), rc);
