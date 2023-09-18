@@ -32,7 +32,7 @@ message PoolCreateReq {
 	uint32 numranks = 11; // Number of target ranks to use (auto config)
 	repeated uint32 ranks = 12; // target ranks (manual config)
 	repeated uint64 tierbytes = 13; // Size in bytes of storage tiers (manual config)
-	uint64 meta_blob_size     = 14; // Size in bytes of metadata blob on SSD (manual config)
+	uint64 meta_blob_bytes = 14; // Size in bytes of metadata blob on SSD (manual config)
 }
 
 // PoolCreateResp returns created pool uuid and ranks.
@@ -42,7 +42,7 @@ message PoolCreateResp {
 	repeated uint32 svc_reps = 3; // pool service replica ranks
 	repeated uint32 tgt_ranks = 4; // pool target ranks
 	repeated uint64 tier_bytes = 5; // storage tiers allocated to pool
-	uint64 meta_blob_size     = 6; // Size in bytes of metadata blob on SSD (manual config)
+	uint64 meta_blob_bytes = 6; // Size in bytes of metadata blob on SSD (manual config)
 }
 
 // PoolDestroyReq supplies pool identifier and force flag.
@@ -112,12 +112,14 @@ message PoolExtendReq {
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 	repeated uint64 tierbytes = 5; // Size in bytes of storage tiers
 	repeated uint32 faultDomains = 6; // fault domain tree, minimal format
+	uint64 meta_blob_bytes = 7; // Size in bytes of metadata blob on SSD
 }
 
 // PoolExtendResp returns resultant state of Extend operation.
 message PoolExtendResp {
 	int32 status = 1; // DAOS error code
 	repeated uint64 tier_bytes = 2; // storage tiers allocated to pool
+	uint32 meta_blob_bytes = 3; // Size in bytes of metadata blob on SSD
 }
 
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
@@ -128,6 +130,7 @@ message PoolReintegrateReq {
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
 	repeated uint64 tierbytes = 6; // Size in bytes of storage tiers
+	uint32 meta_blob_bytes = 7; // Size in bytes of metadata blob on SSD
 }
 
 // PoolReintegrateResp returns resultant state of Reintegrate operation.

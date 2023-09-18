@@ -212,7 +212,7 @@ struct  _Mgmt__PoolCreateReq
   /*
    * Size in bytes of metadata blob on SSD (manual config)
    */
-  uint64_t meta_blob_size;
+  uint64_t meta_blob_bytes;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
@@ -251,7 +251,7 @@ struct  _Mgmt__PoolCreateResp
   /*
    * Size in bytes of metadata blob on SSD (manual config)
    */
-  uint64_t meta_blob_size;
+  uint64_t meta_blob_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
@@ -503,10 +503,14 @@ struct  _Mgmt__PoolExtendReq
    */
   size_t n_faultdomains;
   uint32_t *faultdomains;
+  /*
+   * Size in bytes of metadata blob on SSD
+   */
+  uint64_t meta_blob_bytes;
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -524,10 +528,14 @@ struct  _Mgmt__PoolExtendResp
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
+  /*
+   * Size in bytes of metadata blob on SSD
+   */
+  uint32_t meta_blob_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0, 0,NULL }
+    , 0, 0,NULL, 0 }
 
 
 /*
@@ -563,10 +571,14 @@ struct  _Mgmt__PoolReintegrateReq
    */
   size_t n_tierbytes;
   uint64_t *tierbytes;
+  /*
+   * Size in bytes of metadata blob on SSD
+   */
+  uint32_t meta_blob_bytes;
 };
 #define MGMT__POOL_REINTEGRATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_reintegrate_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*

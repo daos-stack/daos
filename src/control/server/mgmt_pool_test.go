@@ -401,20 +401,20 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 		"successful creation with meta size": {
 			targetCount: 8,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:         test.MockUUID(1),
-				Tierbytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				Properties:   testPoolLabelProp(),
+				Uuid:          test.MockUUID(1),
+				Tierbytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				Properties:    testPoolLabelProp(),
 			},
 			drpcRet: &mgmtpb.PoolCreateResp{
-				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				TgtRanks:     []uint32{0, 1},
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				TgtRanks:      []uint32{0, 1},
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				TgtRanks:     []uint32{0, 1},
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				TgtRanks:      []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {

@@ -1078,7 +1078,7 @@ ds_mgmt_hdlr_tgt_create(crt_rpc_t *tc_req)
 		D_ASSERT(dss_tgt_nr > 0);
 		uuid_copy(vpa.vpa_uuid, tc_in->tc_pool_uuid);
 		/* A zero size accommodates the existing file */
-		vpa.vpa_scm_size = 0;
+		vpa.vpa_scm_size = tc_in->tc_meta_size;
 		vpa.vpa_nvme_size = tc_in->tc_nvme_size / dss_tgt_nr;
 		rc = dss_thread_collective(tgt_vos_create_one, &vpa, 0);
 		if (rc) {
