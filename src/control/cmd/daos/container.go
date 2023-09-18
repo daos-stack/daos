@@ -222,32 +222,31 @@ type containerCreateCmd struct {
 	} `positional-args:"yes"`
 }
 
-func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
-	if err != nil {
-		return err
-	}
-	defer deallocCmdArgs()
-
+func (cmd *containerCreateCmd) parseArgs() (*daosAPI.ContainerCreateReq, error) {
 	if cmd.Args.Label != "" {
 		for key := range cmd.Properties.ParsedProps {
 			if key == "label" {
-				return errors.New("can't supply label arg and --properties label:")
+				return nil, errors.New("can't supply label arg and --properties label:")
 			}
 		}
 		if err := cmd.Properties.AddPropVal("label", cmd.Args.Label); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	if cmd.PoolID().Empty() {
-		if cmd.Path == "" {
-			return errors.New("no pool ID or dfs path supplied")
+	if cmd.Path != "" {
+		// If path was specified, then the next positional argument must be a container label.
+		if !cmd.PoolID().Empty() {
+			if cmd.Args.Label != "" {
+				return nil, errors.New("either pool ID or path must be specified, not both")
+			}
+			cmd.Args.Label = cmd.PoolID().String()
+			cmd.poolBaseCmd.Args.Pool.Clear()
 		}
 
 		poolID, err := daosAPI.ResolvePoolPath(cmd.daosCtx, cmd.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to resolve pool id from %q", filepath.Dir(cmd.Path))
+			return nil, errors.Wrapf(err, "failed to resolve pool id from %q", filepath.Dir(cmd.Path))
 		}
 
 		poolUUID, err := uuid.Parse(poolID)
@@ -258,52 +257,10 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 	}
 
-	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
-	if err != nil {
-		return err
-	}
-	defer disconnectPool()
-
-	contID, err := cmd.contCreate()
-	if err != nil {
-		return err
+	if cmd.PoolID().Empty() {
+		return nil, errors.New("no pool ID or dfs path supplied")
 	}
 
-	var ci *daosAPI.ContainerInfo
-	if err := cmd.openContainer(contID, C.DAOS_COO_RO); err != nil {
-		if errors.Cause(err) != daos.NoPermission {
-			return errors.Wrapf(err, "failed to query new container %s", contID)
-		}
-
-		// Special case for creating a container without permission to query it.
-		cmd.Errorf("container %s was created, but query failed", contID)
-
-		ci = new(daosAPI.ContainerInfo)
-		ci.Type = cmd.Type.Type
-		ci.UUID = cmd.contUUID()
-		ci.Label = cmd.Args.Label
-	} else {
-		defer cmd.closeContainer()
-		ci, err = cmd.queryContainer()
-		if err != nil {
-			return err
-		}
-	}
-
-	if cmd.JSONOutputEnabled() {
-		return cmd.OutputJSON(ci, nil)
-	}
-
-	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci, false); err != nil {
-		return err
-	}
-	cmd.Info(bld.String())
-
-	return nil
-}
-
-func (cmd *containerCreateCmd) contCreate() (string, error) {
 	contCreateReq := daosAPI.ContainerCreateReq{
 		Label:      cmd.Args.Label,
 		UNSPath:    cmd.Path,
@@ -313,7 +270,7 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	if cmd.ACLFile != "" {
 		acl, err := control.ReadACLFile(cmd.ACLFile)
 		if err != nil {
-			return "", errors.Wrapf(err, "failed to read ACL file %s", cmd.ACLFile)
+			return nil, errors.Wrapf(err, "failed to read ACL file %s", cmd.ACLFile)
 		}
 		contCreateReq.ACL = acl
 	}
@@ -345,9 +302,31 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 
 		contCreateReq.POSIXAttributes = &posixAttrs
 	}
-	info, err := cmd.poolConn.CreateContainer(cmd.daosCtx, contCreateReq)
+
+	return &contCreateReq, nil
+}
+
+func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
+	createReq, err := cmd.parseArgs()
 	if err != nil {
-		return "", errors.Wrap(err, "container create failed")
+		return err
+	}
+
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.Logger)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
+	if err != nil {
+		return err
+	}
+	defer disconnectPool()
+
+	info, err := cmd.poolConn.CreateContainer(cmd.daosCtx, *createReq)
+	if err != nil {
+		return errors.Wrap(err, "container create failed")
 	}
 
 	contID := info.Label
@@ -356,7 +335,39 @@ func (cmd *containerCreateCmd) contCreate() (string, error) {
 	}
 
 	cmd.Infof("Successfully created container %s", contID)
-	return contID, nil
+
+	var ci *daosAPI.ContainerInfo
+	if err := cmd.openContainer(contID, C.DAOS_COO_RO); err != nil {
+		if errors.Cause(err) != daos.NoPermission {
+			return errors.Wrapf(err, "failed to open new container %s", contID)
+		}
+
+		// Special case for creating a container without permission to query it.
+		cmd.Errorf("container %s was created, but query failed", contID)
+
+		ci = new(daosAPI.ContainerInfo)
+		ci.Type = cmd.Type.Type
+		ci.UUID = cmd.contUUID()
+		ci.Label = cmd.Args.Label
+	} else {
+		defer cmd.closeContainer()
+		ci, err = cmd.queryContainer()
+		if err != nil {
+			return errors.Wrapf(err, "failed to query new container %s", contID)
+		}
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(ci, nil)
+	}
+
+	var bld strings.Builder
+	if err := printContainerInfo(&bld, ci, false); err != nil {
+		return err
+	}
+	cmd.Info(bld.String())
+
+	return nil
 }
 
 type existingContainerCmd struct {
@@ -639,13 +650,6 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 	cmd.Debugf("destroying container %s (force: %t)",
 		cmd.ContainerID(), cmd.Force)
-
-	/*if cmd.Path != "" {
-		req.UNSPath = cmd.Path
-	} else {
-		req.PoolConn = cmd.poolConn
-		req.ContainerID = cmd.ContainerID().String()
-	}*/
 
 	if err := cmd.poolConn.DestroyContainer(cmd.daosCtx, cmd.ContainerID().String(), cmd.Force); err != nil {
 		return errors.Wrapf(err, "failed to destroy container %s",
