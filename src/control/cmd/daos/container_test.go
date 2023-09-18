@@ -282,6 +282,9 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 	}
 	defer flagTestFini()
 
+	tmpDir := t.TempDir()
+	goodACL := test.CreateTestFile(t, tmpDir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
+
 	baseArgs := makeArgs(nil, "container", "create")
 	poolUUID := test.MockPoolUUID(1)
 	poolLabel := "poolLabel"
@@ -322,6 +325,10 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 			args:   makeArgs(baseArgs, poolLabel, strings.Repeat("x", daos.MaxLabelLength+1)),
 			expErr: errors.New("invalid label"),
 		},
+		"bad ACL path": {
+			args:   makeArgs(baseArgs, poolLabel, contLabel, "--acl-file", "/bad/path"),
+			expErr: errors.New("no such file"),
+		},
 		"pool connect fails with -DER_NOPERM": {
 			args: makeArgs(baseArgs, poolLabel, contLabel),
 			mpcc: &apiMocks.PoolConnCfg{
@@ -342,7 +349,23 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 			},
 			expErr: daos.NoPermission,
 		},
-		"create with no query perms": {
+		"create succeeds but open fails": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				ConnectedPool: poolUUID,
+				ContConnCfg: &apiMocks.ContConnCfg{
+					ConnectedPool:      poolUUID,
+					ConnectedContainer: contUUID,
+				},
+				OpenContainer: apiMocks.OpenContainerResp{
+					Err: apiMocks.Err{
+						Error: daos.IOError,
+					},
+				},
+			},
+			expErr: daos.IOError,
+		},
+		"create succeeds but open fails due to lack of permissions": {
 			args: makeArgs(baseArgs, poolLabel, contLabel),
 			mpcc: &apiMocks.PoolConnCfg{
 				ConnectedPool: poolUUID,
@@ -362,6 +385,22 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 				Label:    contLabel,
 			},
 		},
+		"create succeeds but query fails": {
+			args: makeArgs(baseArgs, poolLabel, contLabel),
+			mpcc: &apiMocks.PoolConnCfg{
+				ConnectedPool: poolUUID,
+				ContConnCfg: &apiMocks.ContConnCfg{
+					ConnectedPool:      poolUUID,
+					ConnectedContainer: contUUID,
+					Query: apiMocks.ContainerInfoResp{
+						Err: apiMocks.Err{
+							Error: errors.New("whoops"),
+						},
+					},
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
 		"pooLabel/contLabel (posix)": {
 			args: makeArgs(baseArgs, poolLabel, contLabel,
 				"--type", daosAPI.ContainerLayoutPOSIX.String(),
@@ -372,6 +411,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 				"--mode", consMode.String(),
 				"--hints", contHints,
 				"--properties", testProps.String(),
+				"--acl-file", goodACL,
 			),
 			expInfo: &daosAPI.ContainerInfo{
 				PoolUUID: poolUUID,
@@ -401,7 +441,7 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 				return props
 			}(),
 		},
-		/*"invalid pool path": {
+		"invalid pool path": {
 			args: makeArgs(baseArgs, "--path", "/path", contLabel),
 			ctx: mockApiCtx(t, &api.MockApiClientConfig{
 				ReturnCodeMap: map[string]int{
@@ -420,7 +460,11 @@ func TestDaos_ContainerCreateCmd(t *testing.T) {
 				UUID:     contUUID,
 				Label:    contLabel,
 			},
-		},*/
+		},
+		"valid pool path and pool label": {
+			args:   makeArgs(baseArgs, "--path", "/path", poolLabel, contLabel),
+			expErr: errors.New("pool ID or path"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var opts cliOptions
