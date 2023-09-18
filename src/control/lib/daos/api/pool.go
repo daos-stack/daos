@@ -2,7 +2,8 @@ package api
 
 import (
 	"context"
-	"fmt"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -187,17 +188,13 @@ func generateRankSet(ranklist *C.d_rank_list_t) string {
 	if ranklist.rl_nr == 0 {
 		return ""
 	}
-	ranks := uintptr(unsafe.Pointer(ranklist.rl_ranks))
-	const size = unsafe.Sizeof(uint32(0))
-	rankset := "["
-	for i := 0; i < int(ranklist.rl_nr); i++ {
-		if i > 0 {
-			rankset += ","
-		}
-		rankset += fmt.Sprint(*(*uint32)(unsafe.Pointer(ranks + uintptr(i)*size)))
+
+	rankSlice := unsafe.Slice((*C.d_rank_t)(unsafe.Pointer(ranklist.rl_ranks)), ranklist.rl_nr)
+	ranks := make([]string, len(rankSlice))
+	for i, rank := range rankSlice {
+		ranks[i] = strconv.Itoa(int(rank))
 	}
-	rankset += "]"
-	return rankset
+	return "[" + strings.Join(ranks, ",") + "]"
 }
 
 func (b *daosClientBinding) daos_pool_query(poolHdl C.daos_handle_t, rankList **C.d_rank_list_t, poolInfo *C.daos_pool_info_t, props *C.daos_prop_t, ev *C.struct_daos_event) C.int {
