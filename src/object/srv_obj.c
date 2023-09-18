@@ -2934,7 +2934,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -3791,7 +3791,7 @@ again2:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
+	rc = dtx_leader_begin(ioc.ioc_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
 			      tgts, tgt_cnt, dtx_flags, mbs, &dlh);
 	if (rc != 0) {
@@ -4844,7 +4844,7 @@ again:
 	else
 		dtx_flags &= ~DTX_PREPARED;
 
-	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
+	rc = dtx_leader_begin(dca->dca_ioc->ioc_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
 			      oci->oci_map_ver, &dcsh->dcsh_leader_oid,
 			      NULL, 0, tgts, tgt_cnt - 1, dtx_flags,

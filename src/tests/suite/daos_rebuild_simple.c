@@ -102,6 +102,8 @@ rebuild_dkeys(void **state)
 			     data, DATA_SIZE, &req);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
@@ -157,6 +159,8 @@ rebuild_akeys(void **state)
 
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
@@ -203,6 +207,8 @@ rebuild_indexes(void **state)
 	}
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	/* Rebuild rank 1 */
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -257,6 +263,8 @@ rebuild_snap_update_recs(void **state)
 	}
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < SNAP_CNT; i++) {
@@ -316,6 +324,8 @@ rebuild_snap_punch_recs(void **state)
 	}
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < SNAP_CNT; i++) {
@@ -369,6 +379,8 @@ rebuild_snap_update_keys(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
@@ -470,6 +482,8 @@ rebuild_snap_punch_keys(void **state)
 		punch_akey("dkey", akey, DAOS_TX_NONE, &req);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
@@ -550,6 +564,8 @@ rebuild_snap_punch_empty(void **state)
 
 	punch_obj(DAOS_TX_NONE, &req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	daos_fail_loc_set(DAOS_OBJ_SPECIAL_SHARD);
@@ -634,6 +650,8 @@ rebuild_multiple(void **state)
 					      DAOS_TX_NONE, &req);
 		}
 	}
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -685,6 +703,8 @@ rebuild_large_rec(void **state)
 
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
@@ -717,6 +737,8 @@ rebuild_objects(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < OBJ_NR; i++) {
@@ -779,6 +801,8 @@ rebuild_sx_object_internal(void **state, daos_oclass_id_t oclass,
 		arg->expect_result = 0;
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	get_killing_rank_by_oid(arg, oid, 1, 0, &rank, &rank_nr);
 	/** exclude the target of this obj's replicas */
 	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
@@ -872,6 +896,8 @@ rebuild_large_object(void **state)
 		ioreq_fini(&req);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	/** exclude the target of this obj's replicas */
 	rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
 			      rank, -1);
@@ -974,6 +1000,8 @@ rebuild_large_snap(void **state)
 		insert_single("dkey", akey, 0, "data", 1, DAOS_TX_NONE, &req);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	ioreq_fini(&req);
 	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
@@ -1011,6 +1039,8 @@ rebuild_full_shards(void **state)
 
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	/* rebuild and reintegration to use full shards */
 	rebuild_single_pool_target(arg, 0, -1, false);
 	rebuild_single_pool_target(arg, 3, -1, false);
@@ -1050,6 +1080,8 @@ rebuild_punch_recs(void **state)
 	}
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, ranks_to_kill[0], -1, false);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -1100,6 +1132,8 @@ rebuild_multiple_group(void **state)
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
@@ -1146,6 +1180,8 @@ rebuild_with_large_offset(void **state)
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
@@ -1190,6 +1226,8 @@ rebuild_with_large_key(void **state)
 	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
 	ioreq_fini(&req);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rebuild_single_pool_target(arg, kill_rank, -1, false);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
@@ -1252,6 +1290,8 @@ rebuild_with_dfs_open_create_punch(void **state)
 
 	dfs_obj2id(dir, &oid);
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_single_pool_rank(arg, rank, false);
 	reintegrate_single_pool_rank(arg, rank, false);
@@ -1559,6 +1599,8 @@ rebuild_dfs_write(dfs_t *dfs_mt, dfs_obj_t *dir, daos_off_t offset,
 		assert_int_equal(rc, 0);
 	}
 
+	sleep(12);
+	print_message("sleep 12 seconds to wait for the stable epoch update.\n");
 	free(buf);
 	return 0;
 }

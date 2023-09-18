@@ -273,6 +273,12 @@ struct vos_cont_df {
 	struct vos_gc_bin_df		cd_gc_bins[GC_CONT];
 	/* The epoch for the most new DTX entry that is aggregated. */
 	uint64_t			cd_newest_aggregated;
+	/*
+	 * The epoch for VOS aggregation and incremental reintegration boundary,
+	 * i.e. the data below this epoch are being regarded as valid, and do
+	 * not need to be rebuild during reintegration.
+	 */
+	uint64_t			cd_commit_epoch;
 };
 
 /* Assume cd_dtx_active_tail is just after cd_dtx_active_head. */

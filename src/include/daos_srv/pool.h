@@ -59,9 +59,9 @@ struct ds_pool {
 	ABT_cond		sp_fetch_hdls_done_cond;
 	struct ds_iv_ns		*sp_iv_ns;
 
-	/* structure related to EC aggregate epoch query */
-	d_list_t		sp_ec_ephs_list;
-	struct sched_request	*sp_ec_ephs_req;
+	/* structure related to container epoch query */
+	d_list_t		sp_track_ephs_list;
+	struct sched_request	*sp_track_ephs_req;
 
 	uint32_t		sp_dtx_resync_version;
 	/* Special pool/container handle uuid, which are
@@ -302,8 +302,6 @@ int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 				uint8_t matched_status, struct pool_target **p_tgt);
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
-
-extern bool ec_agg_disabled;
 
 int dsc_pool_open(uuid_t pool_uuid, uuid_t pool_hdl_uuid,
 		       unsigned int flags, const char *grp,

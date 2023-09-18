@@ -1765,51 +1765,6 @@ out_put:
 	return 0;
 }
 
-struct refresh_vos_agg_eph_arg {
-	uuid_t	pool_uuid;
-	uuid_t  cont_uuid;
-	daos_epoch_t min_eph;
-};
-
-int
-cont_refresh_vos_agg_eph_one(void *data)
-{
-	struct refresh_vos_agg_eph_arg *arg = data;
-	struct ds_cont_child	*cont_child;
-	int			rc;
-
-	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
-	if (rc)
-		return rc;
-
-	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
-		DP_CONT(arg->pool_uuid, arg->cont_uuid),
-		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
-		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
-
-	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph)
-		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
-
-	ds_cont_child_put(cont_child);
-	return rc;
-}
-
-int
-ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
-			    daos_epoch_t eph)
-{
-	struct refresh_vos_agg_eph_arg	arg;
-	int				rc;
-
-	uuid_copy(arg.pool_uuid, pool_uuid);
-	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.min_eph = eph;
-
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
-				 DSS_ULT_FL_PERIODIC);
-	return rc;
-}
-
 #define EC_AGG_EPH_INTV	 (10ULL * 1000)	/* seconds interval to check*/
 static void
 cont_agg_eph_leader_ult(void *arg)
@@ -1930,9 +1885,6 @@ cont_svc_ec_agg_leader_start(struct cont_svc *svc)
 	uuid_t			anonym_uuid;
 
 	D_INIT_LIST_HEAD(&svc->cs_ec_agg_list);
-	if (unlikely(ec_agg_disabled))
-		return 0;
-
 	D_ASSERT(svc->cs_ec_leader_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);

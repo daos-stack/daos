@@ -2937,6 +2937,7 @@ migrate_obj_ult(void *data)
 	struct iter_obj_arg	*arg = data;
 	struct migrate_pool_tls	*tls = NULL;
 	daos_epoch_range_t	 epr;
+	daos_epoch_t		stable_epoch = 0;
 	int			 i;
 	int			 rc = 0;
 
@@ -2968,8 +2969,34 @@ migrate_obj_ult(void *data)
 		}
 	}
 
+	if (tls->mpt_opc == RB_OP_REINT) {
+		struct ds_cont_child *cont_child = NULL;
+
+		/* check again to see if the container is being destroyed. */
+		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
+		if (cont_child != NULL && !cont_child->sc_stopping)
+			vos_cont_get_boundary(cont_child->sc_hdl, &stable_epoch);
+
+		if (cont_child)
+			ds_cont_child_put(cont_child);
+	}
+
 	for (i = 0; i < arg->snap_cnt; i++) {
-		epr.epr_lo = i > 0 ? arg->snaps[i - 1] + 1 : 0;
+		daos_epoch_t lower_epoch = 0;
+
+		if (arg->snaps[i] < stable_epoch) {
+			D_DEBUG(DB_REBUILD, DF_CONT" obj "DF_UOID" skip snap "DF_X64
+				" < stable "DF_X64"\n", DP_CONT(arg->pool_uuid, arg->cont_uuid),
+				DP_UOID(arg->oid), arg->snaps[i], stable_epoch);
+			continue;
+		} else {
+			if (i == 0)
+				lower_epoch = max(stable_epoch, 0);
+			else
+				lower_epoch = max(stable_epoch, arg->snaps[i - 1]);
+		}
+
+		epr.epr_lo = lower_epoch;
 		epr.epr_hi = arg->snaps[i];
 		D_DEBUG(DB_REBUILD, "rebuild_snap %d "DF_X64"-"DF_X64"\n",
 			i, epr.epr_lo, epr.epr_hi);
@@ -2978,13 +3005,15 @@ migrate_obj_ult(void *data)
 			D_GOTO(free, rc);
 	}
 
-	if (arg->snap_cnt > 0 && arg->punched_epoch != 0) {
+	if (arg->snap_cnt > 0 && arg->punched_epoch != 0 &&
+	    arg->punched_epoch > stable_epoch) {
 		rc = migrate_obj_punch(arg);
 		if (rc)
 			D_GOTO(free, rc);
 	}
 
 	epr.epr_lo = arg->snaps ? arg->snaps[arg->snap_cnt - 1] + 1 : 0;
+	epr.epr_lo = max(epr.epr_lo, stable_epoch);
 	D_ASSERT(tls->mpt_max_eph != 0);
 	epr.epr_hi = tls->mpt_max_eph;
 	if (arg->epoch > 0) {

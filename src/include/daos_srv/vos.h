@@ -460,6 +460,29 @@ vos_cont_close(daos_handle_t coh);
 int
 vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
 
+/**
+ * Update commit epoch of the VOS container.
+ *
+ * \param coh	[IN]	container handle.
+ * \param epoch [IN]	updated epoch.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch);
+
+/**
+ * get commit epoch of the VOS container.
+ *
+ * \param coh	[IN]	container handle.
+ * \param epoch [OUT]	epoch gotten.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_get_boundary(daos_handle_t coh, uint64_t *epoch);
+
+
 enum {
 	VOS_AGG_FL_FORCE_SCAN	= (1UL << 0),	/* Scan all obj/dkey/akeys */
 	VOS_AGG_FL_FORCE_MERGE	= (1UL << 1),	/* Merge all coalesce-able EV records */

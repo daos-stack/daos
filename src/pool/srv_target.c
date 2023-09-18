@@ -479,7 +479,7 @@ pool_alloc_ref(void *key, unsigned int ksize, void *varg,
 	if (rc != ABT_SUCCESS)
 		D_GOTO(err_cond, rc = dss_abterr2der(rc));
 
-	D_INIT_LIST_HEAD(&pool->sp_ec_ephs_list);
+	D_INIT_LIST_HEAD(&pool->sp_track_ephs_list);
 	uuid_copy(pool->sp_uuid, key);
 	pool->sp_map_version = arg->pca_map_version;
 	pool->sp_reclaim = DAOS_RECLAIM_LAZY; /* default reclaim strategy */
@@ -562,7 +562,7 @@ pool_free_ref(struct daos_llink *llink)
 		D_ERROR(DF_UUID": failed to delete ES pool caches: "DF_RC"\n",
 			DP_UUID(pool->sp_uuid), DP_RC(rc));
 
-	ds_cont_ec_eph_free(pool);
+	ds_cont_track_eph_free(pool);
 
 	pl_map_disconnect(pool->sp_uuid);
 	if (pool->sp_map != NULL)
@@ -713,26 +713,23 @@ out:
 }
 
 static void
-tgt_ec_eph_query_ult(void *data)
+tgt_track_eph_query_ult(void *data)
 {
-	ds_cont_tgt_ec_eph_query_ult(data);
+	ds_cont_tgt_track_eph_query_ult(data);
 }
 
 static int
-ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
+ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
 {
 	struct sched_req_attr	attr;
 	uuid_t			anonym_uuid;
 
-	if (unlikely(ec_agg_disabled))
-		return 0;
-
-	D_ASSERT(pool->sp_ec_ephs_req == NULL);
+	D_ASSERT(pool->sp_track_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	pool->sp_ec_ephs_req = sched_create_ult(&attr, tgt_ec_eph_query_ult, pool,
-						DSS_DEEP_STACK_SZ);
-	if (pool->sp_ec_ephs_req == NULL) {
+	pool->sp_track_ephs_req = sched_create_ult(&attr, tgt_track_eph_query_ult, pool,
+						   DSS_DEEP_STACK_SZ);
+	if (pool->sp_track_ephs_req == NULL) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
 			DP_UUID(pool->sp_uuid));
 		return -DER_NOMEM;
@@ -744,16 +741,16 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 static void
 ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 {
-	if (pool->sp_ec_ephs_req == NULL)
+	if (pool->sp_track_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID": Stopping EC query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID": Stopping EPOCH query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
-	sched_req_wait(pool->sp_ec_ephs_req, true);
-	sched_req_put(pool->sp_ec_ephs_req);
-	pool->sp_ec_ephs_req = NULL;
-	D_INFO(DF_UUID": EC query ULT stopped\n", DP_UUID(pool->sp_uuid));
+	sched_req_wait(pool->sp_track_ephs_req, true);
+	sched_req_put(pool->sp_track_ephs_req);
+	pool->sp_track_ephs_req = NULL;
+	D_INFO(DF_UUID": EPOCH query ULT stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -837,7 +834,7 @@ ds_pool_start(uuid_t uuid)
 	}
 
 	pool->sp_fetch_hdls = 1;
-	rc = ds_pool_start_ec_eph_query_ult(pool);
+	rc = ds_pool_start_track_eph_query_ult(pool);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
 			DP_UUID(uuid), rc);
@@ -1738,6 +1735,7 @@ struct tgt_discard_arg {
 
 struct child_discard_arg {
 	struct tgt_discard_arg	*tgt_discard;
+	uint64_t		stable_epoch;
 	uuid_t			cont_uuid;
 };
 
@@ -1788,7 +1786,7 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
 	epr.epr_hi = arg->tgt_discard->epoch;
-	epr.epr_lo = 0;
+	epr.epr_lo = arg->stable_epoch;
 	do {
 		/* Inform the iterator and delete the object */
 		*acts |= VOS_ITER_CB_DELETE;
@@ -1846,14 +1844,21 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_GOTO(put, rc);
 	}
 
+	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+	rc = vos_cont_get_boundary(cont->sc_hdl, &arg->stable_epoch);
+	if (rc != 0) {
+		D_ERROR("Can not get boundary "DF_UUID": "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		D_GOTO(put, rc);
+	}
+
 	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
 				1 << 10 /* max (ms) */);
 	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
 	param.ip_hdl = coh;
-	param.ip_epr.epr_lo = 0;
+	param.ip_epr.epr_lo = arg->stable_epoch;
 	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
-	uuid_copy(arg->cont_uuid, entry->ie_couuid);
 	do {
 		/* Inform the iterator and delete the object */
 		*acts |= VOS_ITER_CB_DELETE;

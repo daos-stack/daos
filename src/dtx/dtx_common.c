@@ -1088,7 +1088,7 @@ out:
 /**
  * Prepare the leader DTX handle in DRAM.
  *
- * \param coh		[IN]	Container handle.
+ * \param cont		[IN]	Per-thread container cache.
  * \param dti		[IN]	The DTX identifier.
  * \param epoch		[IN]	Epoch for the DTX.
  * \param sub_modification_cnt
@@ -1106,7 +1106,7 @@ out:
  * \return			Zero on success, negative value if error.
  */
 int
-dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
+dtx_leader_begin(struct ds_cont_hdl *cont_hdl, struct dtx_id *dti,
 		 struct dtx_epoch *epoch, uint16_t sub_modification_cnt,
 		 uint32_t pm_ver, daos_unit_oid_t *leader_oid,
 		 struct dtx_id *dti_cos, int dti_cos_cnt,
@@ -1135,8 +1135,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 	}
 
 	dth = &dlh->dlh_handle;
-	rc = dtx_handle_init(dti, coh, epoch, sub_modification_cnt, pm_ver,
-			     leader_oid, dti_cos, dti_cos_cnt, mbs, true,
+	rc = dtx_handle_init(dti, cont_hdl->sch_cont->sc_hdl, epoch, sub_modification_cnt,
+			     pm_ver, leader_oid, dti_cos, dti_cos_cnt, mbs, true,
 			     (flags & DTX_SOLO) ? true : false,
 			     (flags & DTX_SYNC) ? true : false,
 			     (flags & DTX_DIST) ? true : false,
@@ -1155,8 +1155,9 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 	if (rc != 0) {
 		D_FREE(dlh);
 	} else {
-		*p_dlh = dlh;
 		d_tm_inc_gauge(tls->dt_dtx_leader_total, 1);
+		ds_cont_child_insert_dtx(cont_hdl->sch_cont, dlh);
+		*p_dlh = dlh;
 	}
 
 	return rc;
@@ -1433,6 +1434,7 @@ out:
 		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
 		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
 
+	d_list_del(&dlh->dlh_link_list);
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
 	d_tm_dec_gauge(tls->dt_dtx_leader_total, 1);

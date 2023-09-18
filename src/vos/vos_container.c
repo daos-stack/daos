@@ -468,6 +468,95 @@ exit:
 	return rc;
 }
 
+int
+vos_cont_get_boundary(daos_handle_t coh, uint64_t *epoch)
+{
+	struct vos_container	*cont;
+	struct cont_df_args	args;
+	struct d_uuid		ukey;
+	int			rc;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Can not find vos container\n");
+		return -DER_NO_HDL;
+	}
+
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_6) {
+		D_DEBUG(DB_MD, "skip for lower version container "DF_UUID"/%u\n",
+			DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+		*epoch = 0;
+		return 0;
+	}
+
+	uuid_copy(ukey.uuid, cont->vc_id);
+	rc = cont_df_lookup(cont->vc_pool, &ukey, &args);
+	if (rc) {
+		D_DEBUG(DB_TRACE, DF_UUID" container does not exist\n",
+			DP_UUID(cont->vc_id));
+		return rc;
+	}
+
+	D_DEBUG(DB_TRACE, "commit epoch "DF_X64" with container "DF_UUID"\n",
+		args.ca_cont_df->cd_commit_epoch, DP_UUID(cont->vc_id));
+	*epoch = args.ca_cont_df->cd_commit_epoch;
+	return 0;
+}
+
+int
+vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch)
+{
+	struct vos_container	*cont;
+	struct umem_instance	*umm;
+	struct vos_cont_df	*cont_df;
+	int rc = 0;
+
+	cont = vos_hdl2cont(coh);
+	if (cont == NULL) {
+		D_ERROR("Can not find vos container\n");
+		return -DER_NO_HDL;
+	}
+
+	cont_df = cont->vc_cont_df;
+	if (cont->vc_pool->vp_pool_df->pd_version < VOS_POOL_DF_2_6) {
+		D_DEBUG(DB_MD, "skip for lower version container "DF_UUID"/%u\n",
+			DP_UUID(cont->vc_id), cont->vc_pool->vp_pool_df->pd_version);
+		return 0;
+	}
+
+	if (epoch <= cont_df->cd_commit_epoch) {
+		D_DEBUG(DB_MD, DF_UUID" epoch "DF_X64" < "DF_X64"\n",
+			DP_UUID(cont->vc_id), epoch, cont_df->cd_commit_epoch);
+		return 0;
+	}
+
+	umm = vos_cont2umm(cont);
+	rc = umem_tx_begin(umm, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to TX begin: " DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	rc = umem_tx_add_ptr(umm, &cont_df->cd_commit_epoch,
+			     sizeof(cont_df->cd_commit_epoch));
+	if (rc != 0) {
+		D_ERROR(DF_UUID" Failed to refresh epoch for commit.: "DF_RC"\n",
+			DP_UUID(cont->vc_id), DP_RC(rc));
+		D_GOTO(out_tx, rc);
+	}
+
+	D_DEBUG(DB_MD, DF_UUID" epoch "DF_X64" -> "DF_X64"\n",
+		DP_UUID(cont->vc_id), cont_df->cd_commit_epoch, epoch);
+
+	cont_df->cd_commit_epoch = epoch;
+
+out_tx:
+	rc = umem_tx_end(umm, rc);
+
+	return rc;
+
+}
+
 /**
  * Release container open handle
  */
