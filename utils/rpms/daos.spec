@@ -141,7 +141,7 @@ to optimize performance and cost.
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: spdk-tools >= 22.01.2
-Requires: ndctl
+Requires: ndctl >= 63
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
@@ -585,6 +585,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Tue Sep 19 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-10
+- Re-enable NDCTL to enable PMem RAS support in PMDK
+- Upgrade expected NDCTL version to 63 as it is required by PMDK v. 1.12.1
+
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing
