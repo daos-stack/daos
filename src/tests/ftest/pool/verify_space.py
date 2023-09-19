@@ -11,23 +11,37 @@ from apricot import TestWithServers
 from run_utils import run_remote
 
 
+def compare_all_available(rank, pool_size):
+    """Determine if all of the pool size is available.
+
+    Args:
+        rank (int): server rank
+        pool_size (list): list of pool_size dictionaries
+
+    Returns:
+        bool: is all of the pool size is available
+    """
+    return pool_size[-1]['data'][rank]['size'] == pool_size[-1]['data'][rank]['avail']
+
+
+def compare_equal(rank, pool_size):
+    """Determine if the previous value equal the current value.
+
+    Args:
+        rank (int): server rank
+        pool_size (list): list of pool_size dictionaries
+
+    Returns:
+        bool: does the previous value equal the current value
+    """
+    return pool_size[-2]['data'][rank]['avail'] == pool_size[-1]['data'][rank]['avail']
+
+
 class VerifyPoolSpace(TestWithServers):
     """Verify pool space with system commands.
 
     :avocado: recursive
     """
-
-    def _verify_pool_space(self, description, indices):
-        """."""
-        pools = []
-        self.log_step(' '.join(['Create', description]), True)
-        for index in indices:
-            namespace = os.path.join(os.sep, 'run', '_'.join(['pool', str(index)]))
-            pools.append(self.get_pool(namespace=namespace))
-
-        self.log_step(' '.join(['Write data to', description]))
-
-        self.verify_pool_size(description, pools)
 
     def _query_pool_size(self, description, pools):
         """."""
@@ -40,9 +54,9 @@ class VerifyPoolSpace(TestWithServers):
         pools = []
         self.log_step(' '.join(['Create', description]), True)
         for index in indices:
-            namespace = os.path.join(os.sep, 'run', '_'.join(['pool', str(index)]))
+            namespace = os.path.join(os.sep, 'run', '_'.join(['pool', str(index)]), '*')
             pools.append(self.get_pool(namespace=namespace))
-        self._query_pool_size(self, description, pools)
+        self._query_pool_size(description, pools)
 
     def _get_system_pool_size(self, description):
         """Get the pool size information from the df system command.
@@ -68,32 +82,31 @@ class VerifyPoolSpace(TestWithServers):
                             'size': info[1],
                             'used': info[2],
                             'avail': info[3],
-                            'use%': info[4],
+                            r'use%': info[4],
                             'mount': info[5]}
         if len(system_pool_size) != len(self.server_managers[0].hosts):
             self.fail('Error obtaining system pool data for all hosts: {}'.format(system_pool_size))
         return system_pool_size
 
-    def _compare_system_pool_size(self, description, previous_pool_size):
-        """."""
-        current_pool_size = self._get_system_pool_size(description)
-        self.log.info('Verifying all system reported pool size is available')
+    def _compare_system_pool_size(self, pool_size, compare_method):
+        """Compare the pool size information from the system command.
+
+        Args:
+            pool_size (list): the list of pool size information
+            compare_method (method): the compare method to execute
+        """
+        self.log.info('Verifying system reported pool size for %s', pool_size[-1]['label'])
         self.log.debug('  Rank  Size   Avail  Mount       Status')
         self.log.debug('  ----  -----  -----  ----------  ------')
         overall = True
-        for rank in sorted(current_pool_size.keys()):
-            if previous_pool_size is None:
-                status = bool(current_pool_size[rank]['size'] == current_pool_size[rank]['avail'])
-            else:
-                status = True
+        for rank, data in sorted(pool_size[-1]['data'].items()):
+            status = compare_method(rank, pool_size)
             self.log.debug(
                 '  %4s  %5s  %5s  %10s  %s',
-                rank, current_pool_size[rank]['size'], current_pool_size[rank]['avail'],
-                current_pool_size[rank]['mount'], status)
+                rank, data['size'], data['avail'], data['mount'], status)
             overall &= status
         if not overall:
-            self.fail('Error detected in system pools size for {}'.format(description))
-        return current_pool_size
+            self.fail('Error detected in system pools size for {}'.format(pool_size[-1]['label']))
 
     def test_verify_pool_space(self):
         """Test ID: DAOS-3672.
@@ -115,27 +128,15 @@ class VerifyPoolSpace(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=VerifyPoolSpace,test_verify_pool_space
         """
+        pool_size = []
         # Step #1
         # Avail == Size
         # wolf-181: tmpfs                          20G  129M   20G   1% /mnt/daos
         # wolf-183: tmpfs                          20G  129M   20G   1% /mnt/daos
         # wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
         description = 'initial configuration w/o pools'
-        previous_pool_size = self._compare_system_pool_size(description, None)
-        system_initial = self._get_system_pool_size(description)
-        self.log.info('Verifying all system reported pool size is available')
-        self.log.debug('  Rank  Size   Avail  Mount       Status')
-        self.log.debug('  ----  -----  -----  ----------  ------')
-        overall = True
-        for rank in sorted(system_initial.keys()):
-            status = bool(system_initial[rank]['size'] == system_initial[rank]['avail'])
-            self.log.debug(
-                '  %4s  %5s  %5s  %10s  %s',
-                rank, system_initial[rank]['size'], system_initial[rank]['avail'],
-                system_initial[rank]['mount'], status)
-            overall &= status
-        if not overall:
-            self.fail('Error detected in system pools size for {}'.format(description))
+        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        self._compare_system_pool_size(pool_size, compare_all_available)
 
         # Step #2
         # Rank 0 has less available space
@@ -144,9 +145,10 @@ class VerifyPoolSpace(TestWithServers):
         # wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
         description = 'a single pool on a single server'
         self._create_pools(description, [1])
-        previous_pool_size = self._compare_system_pool_size(description, previous_pool_size)
+        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        self._compare_system_pool_size(pool_size, compare_equal)
 
-        # daos cont create --pool=$DAOS_POOL1 --type=POSIX 
+        # daos cont create --pool=$DAOS_POOL1 --type=POSIX
         # Repeat 3x:
         #   a.) Write data
 
@@ -154,9 +156,9 @@ class VerifyPoolSpace(TestWithServers):
         #   wolf-181: tmpfs                          20G  2.1G   18G  11% /mnt/daos
         #   wolf-183: tmpfs                          20G  129M   20G   1% /mnt/daos
         #   wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
-        previous_pool_size = self._compare_system_pool_size(description, previous_pool_size)
+        self._compare_system_pool_size(pool_size, compare_equal)
 
-        #   c.) dmg pool query $DAOS_POOL1 
+        #   c.) dmg pool query $DAOS_POOL1
 
         # Step #3
 
