@@ -950,6 +950,11 @@ int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
 void d_vec_pointers_fini(struct d_vec_pointers *pointers);
 int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
 
+#define D_INVALID_ENVIRONMENT "DAOS_INVALID"
+/** Set count environment variables to invalid to reserve space */
+void
+d_set_env_invalid(int count, ...);
+
 #if defined(__cplusplus)
 }
 #endif

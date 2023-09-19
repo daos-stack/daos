@@ -341,6 +341,8 @@ ioil_init(void)
 	}
 
 	ioil_iog.iog_initialized = true;
+
+	daos_init_environment();
 }
 
 static void

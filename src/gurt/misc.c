@@ -1306,13 +1306,25 @@ static void init_real_symbols(void)
 	bind_libc_symbol((void **)&real_clearenv, "clearenv");
 }
 
+/** Returns true of value is set to known invalid value */
+static char *
+getenv_helper(const char *name)
+{
+	char *p = real_getenv(name);
+
+	if (p == NULL || !strncmp(p, D_INVALID_ENVIRONMENT, sizeof(D_INVALID_ENVIRONMENT)))
+		return NULL;
+
+	return p;
+}
+
 char *getenv(const char *name)
 {
 	char *p;
 
 	pthread_once(&init_real_symbols_flag, init_real_symbols);
 	D_RWLOCK_RDLOCK(&hook_env_lock);
-	p = real_getenv(name);
+	p = getenv_helper(name);
 	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return p;
@@ -1344,11 +1356,14 @@ int setenv(const char *name, const char *value, int overwrite)
 
 int unsetenv(const char *name)
 {
-	int rc;
+	int   rc = 0;
+	char *p;
 
 	pthread_once(&init_real_symbols_flag, init_real_symbols);
 	D_RWLOCK_WRLOCK(&hook_env_lock);
-	rc = real_unsetenv(name);
+	p = getenv_helper(name);
+	if (p != NULL)
+		rc = real_setenv(name, D_INVALID_ENVIRONMENT, 1);
 	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
@@ -1364,4 +1379,23 @@ int clearenv(void)
 	D_RWLOCK_UNLOCK(&hook_env_lock);
 
 	return rc;
+}
+
+void
+d_set_env_invalid(int count, ...)
+{
+	va_list ap;
+	int     i;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+
+	va_start(ap, count);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	for (i = 0; i < count; i++) {
+		char *env = va_arg(ap, char *);
+		if (real_getenv(env) == NULL)
+			real_setenv(env, D_INVALID_ENVIRONMENT, 1);
+	}
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+	va_end(ap);
 }

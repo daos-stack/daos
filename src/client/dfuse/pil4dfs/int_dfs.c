@@ -5389,6 +5389,8 @@ init_myhook(void)
 
 	install_hook();
 	hook_enabled = 1;
+
+	daos_init_environment();
 }
 
 static void

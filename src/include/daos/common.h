@@ -1088,4 +1088,13 @@ explicit_bzero(void *s, size_t count) {
 }
 #endif /* NEED_EXPLICIT_BZERO */
 
+static inline void
+daos_init_environment(void)
+{
+	d_set_env_invalid(11, "CRT_PHY_ADDR_STR", "CRT_CTX_SHARE_ADDR", "CRT_TIMEOUT",
+			  "FI_OFI_RXM_USE_SRX", "OFI_INTERFACE", "OFI_DOMAIN", "FI_UNIVERSE_SIZE",
+			  "UCX_IB_FORK_INIT", "FI_MR_CACHE_MAX_COUNT", "NA_OFI_UNEXPECTED_TAG_MSG",
+			  "FI_OFI_RXM_DEF_TCP_WAIT_OBJ");
+}
+
 #endif /* __DAOS_COMMON_H__ */
