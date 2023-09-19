@@ -33,7 +33,8 @@ import (
 
 // basic engine configs populated enough to complete validation
 func basicEngineCfg(i int) *engine.Config {
-	return engine.MockConfig().WithFabricInterfacePort(20000).
+	return engine.MockConfig().
+		WithFabricInterfacePort(20000 + (i * 1000)).
 		WithFabricInterface(fmt.Sprintf("ib%d", i))
 }
 func pmemTier(i int) *storage.TierConfig {
@@ -590,10 +591,10 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					engine.MockConfig().WithFabricInterfacePort(21000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
 						WithTargetCount(8).WithStorage(pmemTier(1), nvmeTier(1)),
-					engine.MockConfig().WithFabricInterfacePort(20000).
+					engine.MockConfig().WithFabricInterfacePort(22000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
 						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
-					engine.MockConfig().WithFabricInterfacePort(21000).
+					engine.MockConfig().WithFabricInterfacePort(23000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
 						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
 				)
@@ -622,7 +623,7 @@ func TestServer_prepBdevStorage(t *testing.T) {
 					engine.MockConfig().WithFabricInterfacePort(22000).
 						WithPinnedNumaNode(0).WithFabricInterface("ib0").
 						WithTargetCount(8).WithStorage(pmemTier(2), nvmeTier(2)),
-					engine.MockConfig().WithFabricInterfacePort(20000).
+					engine.MockConfig().WithFabricInterfacePort(23000).
 						WithPinnedNumaNode(1).WithFabricInterface("ib1").
 						WithTargetCount(8).WithStorage(pmemTier(3), nvmeTier(3)),
 				)

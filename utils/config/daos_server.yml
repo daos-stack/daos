@@ -348,7 +348,10 @@
 #
 #  # Specify the fabric network interface and interface port that will
 #  # be used by this engine. The fabric_iface_port must be different
-#  # for each engine on a DAOS server.
+#  # for each engine on a DAOS server. A difference of ~1000 is recommended.
+#  # Optionally specify the fabric network interface port that will be used
+#  # by this engine but please only if you have a specific need, this will
+#  # normally be chosen automatically.
 #
 #  fabric_iface: ib0
 #  fabric_iface_port: 20000
@@ -519,14 +522,15 @@
 #
 #  bypass_health_chk: true
 #
-#  # Use specific network interface.
-#  # Specify the fabric network interface that will be used by this engine.
+#  # Specify the fabric network interface and interface port that will
+#  # be used by this engine. The fabric_iface_port must be different
+#  # for each engine on a DAOS server. A difference of ~1000 is recommended.
 #  # Optionally specify the fabric network interface port that will be used
 #  # by this engine but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
 #  fabric_iface: ib1
-#  fabric_iface_port: 20000
+#  fabric_iface_port: 21000
 #
 #  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.

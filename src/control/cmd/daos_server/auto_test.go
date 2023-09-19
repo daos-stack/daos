@@ -19,8 +19,10 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -35,68 +37,82 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		{
 			"Generate with no access point",
 			"config generate",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "localhost",
-				NetClass:     "infiniband",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "localhost"
+				cmd.NetClass = "infiniband"
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with defaults",
 			"config generate -a foo",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				NetClass:     "infiniband",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with no nvme",
 			"config generate -a foo --scm-only",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				SCMOnly:      true,
-				NetClass:     "infiniband",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.SCMOnly = true
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with storage parameters",
 			"config generate -a foo --num-engines 2",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				NrEngines:    2,
-				NetClass:     "infiniband",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.NrEngines = 2
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with short option storage parameters",
 			"config generate -a foo -e 2 -s",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				NrEngines:    2,
-				NetClass:     "infiniband",
-				SCMOnly:      true,
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.NrEngines = 2
+				cmd.SCMOnly = true
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with ethernet network device class",
 			"config generate -a foo --net-class ethernet",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				NetClass:     "ethernet",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "ethernet"
+				return cmd
+			}()),
 			nil,
 		},
 		{
 			"Generate with infiniband network device class",
 			"config generate -a foo --net-class infiniband",
-			printCommand(t, &configGenCmd{
-				AccessPoints: "foo",
-				NetClass:     "infiniband",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				return cmd
+			}()),
 			nil,
 		},
 		{
@@ -114,12 +130,14 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 		{
 			"Generate MD-on-SSD config",
 			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
-			printCommand(t, &configGenCmd{
-				AccessPoints:    "foo",
-				NetClass:        "infiniband",
-				UseTmpfsSCM:     true,
-				ExtMetadataPath: "/opt/daos_md",
-			}),
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.UseTmpfsSCM = true
+				cmd.ExtMetadataPath = "/opt/daos_md"
+				return cmd
+			}()),
 			nil,
 		},
 		{
@@ -129,6 +147,38 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			errors.New("Unknown command"),
 		},
 	})
+}
+
+func TestDaosServer_Auto_confGenCmd_Convert(t *testing.T) {
+	cmd := &configGenCmd{}
+	cmd.NrEngines = 1
+	cmd.NetProvider = "ofi+tcp"
+	cmd.SCMOnly = true
+	cmd.AccessPoints = "foo,bar"
+	cmd.NetClass = "infiniband"
+	cmd.UseTmpfsSCM = true
+	cmd.ExtMetadataPath = "/opt/daos_md"
+	cmd.FabricPorts = "12345,13345"
+
+	req := new(control.ConfGenerateReq)
+	if err := convert.Types(cmd, req); err != nil {
+		t.Fatal(err)
+	}
+
+	expReq := &control.ConfGenerateReq{
+		NrEngines:       1,
+		NetProvider:     "ofi+tcp",
+		SCMOnly:         true,
+		AccessPoints:    []string{"foo", "bar"},
+		NetClass:        hardware.Infiniband,
+		UseTmpfsSCM:     true,
+		ExtMetadataPath: "/opt/daos_md",
+		FabricPorts:     []int{12345, 13345},
+	}
+
+	if diff := cmp.Diff(expReq, req); diff != "" {
+		t.Fatalf("unexpected request converted (-want, +got):\n%s\n", diff)
+	}
 }
 
 // The Control API calls made in configGenCmd.confGen() are already well tested so just do some
@@ -492,14 +542,13 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				tc.accessPoints = "localhost"
 			}
 
-			cmd := &configGenCmd{
-				AccessPoints:    tc.accessPoints,
-				NrEngines:       tc.nrEngines,
-				SCMOnly:         tc.scmOnly,
-				NetClass:        tc.netClass,
-				UseTmpfsSCM:     tc.tmpfsSCM,
-				ExtMetadataPath: tc.extMetadataPath,
-			}
+			cmd := &configGenCmd{}
+			cmd.AccessPoints = tc.accessPoints
+			cmd.NrEngines = tc.nrEngines
+			cmd.SCMOnly = tc.scmOnly
+			cmd.NetClass = tc.netClass
+			cmd.UseTmpfsSCM = tc.tmpfsSCM
+			cmd.ExtMetadataPath = tc.extMetadataPath
 			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 

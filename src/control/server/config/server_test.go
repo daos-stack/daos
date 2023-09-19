@@ -309,7 +309,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib1").
-			WithFabricInterfacePort(20000).
+			WithFabricInterfacePort(21000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).
@@ -1611,7 +1611,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		return engine.MockConfig().
 			WithLogFile("b").
 			WithFabricInterface("ib1").
-			WithFabricInterfacePort(42).
+			WithFabricInterfacePort(43).
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
@@ -1630,11 +1630,10 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 			configA: configA(),
 			configB: configB(),
 		},
-		"duplicate fabric config": {
+		"duplicate fabric port": {
 			configA: configA(),
-			configB: configB().
-				WithFabricInterface(configA().Fabric.Interface),
-			expErr: FaultConfigDuplicateFabric(1, 0),
+			configB: configB().WithFabricInterfacePort(42),
+			expErr:  FaultConfigDuplicateFabricPort(1, 0),
 		},
 		"duplicate log_file": {
 			configA: configA(),

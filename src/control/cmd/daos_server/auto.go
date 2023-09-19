@@ -9,15 +9,14 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
@@ -120,34 +119,11 @@ func getLocalStorage(ctx context.Context, log logging.Logger, skipPrep bool) (*c
 	}, nil
 }
 
-// Note: Duplicated with dmg/auto.go.
-func (cmd *configGenCmd) getParams() ([]string, *hardware.NetDevClass, error) {
+func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
-		return nil, nil, ErrTmpfsNoExtMDPath
-	}
-
-	accessPoints := strings.Split(cmd.AccessPoints, ",")
-
-	var ndc hardware.NetDevClass
-	switch cmd.NetClass {
-	case "ethernet":
-		ndc = hardware.Ether
-	case "infiniband":
-		ndc = hardware.Infiniband
-	default:
-		return nil, nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
-	}
-
-	return accessPoints, &ndc, nil
-}
-
-func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, getStorage getStorageFn) (*config.Server, error) {
-	// Get ConfGenerateReq from cmd params.
-	accessPoints, ndc, err := cmd.getParams()
-	if err != nil {
-		return err
+		return nil, ErrTmpfsNoExtMDPath
 	}
 
 	prov := cmd.NetProvider
@@ -159,6 +135,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	if err != nil {
 		return nil, err
 	}
+
 	cmd.Debugf("fetched host fabric info on localhost: %+v", hf)
 
 	hs, err := getStorage(ctx, cmd.Logger, cmd.SkipPrep)
@@ -167,14 +144,9 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 	}
 	cmd.Debugf("fetched host storage info on localhost: %+v", hs)
 
-	req := control.ConfGenerateReq{
-		NrEngines:       cmd.NrEngines,
-		SCMOnly:         cmd.SCMOnly,
-		NetClass:        ndc,
-		NetProvider:     cmd.NetProvider,
-		AccessPoints:    accessPoints,
-		UseTmpfsSCM:     cmd.UseTmpfsSCM,
-		ExtMetadataPath: cmd.ExtMetadataPath,
+	req := new(control.ConfGenerateReq)
+	if err := convert.Types(cmd, req); err != nil {
+		return nil, err
 	}
 	cmd.Debugf("control API ConfGenerate called with req: %+v", req)
 
@@ -187,12 +159,12 @@ func (cmd *configGenCmd) confGen(ctx context.Context, getFabric getFabricFn, get
 		logger.ClearLevel(logging.LogLevelInfo)
 		logger.WithInfoLogger(logging.NewCommandLineInfoLogger(os.Stderr))
 	} else {
-		// Suppress info logging.
+		// Suppress info logging when not in debug mode.
 		logger.SetLevel(logging.LogLevelError)
 	}
 	req.Log = logger
 
-	resp, err := control.ConfGenerate(req, control.DefaultEngineCfg, hf, hs)
+	resp, err := control.ConfGenerate(*req, control.DefaultEngineCfg, hf, hs)
 	if err != nil {
 		return nil, err
 	}

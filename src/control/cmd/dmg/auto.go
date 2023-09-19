@@ -16,11 +16,17 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 )
+
+type confGenRemoteFn func(ctx context.Context, req control.ConfGenerateRemoteReq) (*control.ConfGenerateRemoteResp, error)
+
+// Package-local function pointer for backend API call. Enables mocking out package-external calls
+// in unit tests.
+var confGenRemoteCall confGenRemoteFn = control.ConfGenerateRemote
 
 var ErrTmpfsNoExtMDPath = errors.New("--use-tmpfs-scm will generate an md-on-ssd config and so " +
 	"--control-metadata-path must also be set")
@@ -39,34 +45,11 @@ type configGenCmd struct {
 	cmdutil.ConfGenCmd
 }
 
-// Note: Duplicated with daos_server/auto.go.
-func (cmd *configGenCmd) getParams() ([]string, *hardware.NetDevClass, error) {
+func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	cmd.Debugf("ConfGen called with command parameters %+v", cmd)
 
 	if cmd.UseTmpfsSCM && cmd.ExtMetadataPath == "" {
-		return nil, nil, ErrTmpfsNoExtMDPath
-	}
-
-	accessPoints := strings.Split(cmd.AccessPoints, ",")
-
-	var ndc hardware.NetDevClass
-	switch cmd.NetClass {
-	case "ethernet":
-		ndc = hardware.Ether
-	case "infiniband":
-		ndc = hardware.Infiniband
-	default:
-		return nil, nil, errors.Errorf("unrecognized net-class value %s", cmd.NetClass)
-	}
-
-	return accessPoints, &ndc, nil
-}
-
-func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
-	// Get ConfGenerateReq from cmd params.
-	accessPoints, ndc, err := cmd.getParams()
-	if err != nil {
-		return nil, err
+		return nil, ErrTmpfsNoExtMDPath
 	}
 
 	// check cli then config for hostlist, default to localhost
@@ -79,18 +62,12 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	}
 
 	req := control.ConfGenerateRemoteReq{
-		ConfGenerateReq: control.ConfGenerateReq{
-			Log:             cmd.Logger,
-			NrEngines:       cmd.NrEngines,
-			SCMOnly:         cmd.SCMOnly,
-			NetClass:        *ndc,
-			NetProvider:     cmd.NetProvider,
-			AccessPoints:    accessPoints,
-			UseTmpfsSCM:     cmd.UseTmpfsSCM,
-			ExtMetadataPath: cmd.ExtMetadataPath,
-		},
-		Client:   cmd.ctlInvoker,
-		HostList: hl,
+		ConfGenerateReq: control.ConfGenerateReq{},
+		Client:          cmd.ctlInvoker,
+		HostList:        hl,
+	}
+	if err := convert.Types(&cmd.ConfGenCmd, &req.ConfGenerateReq); err != nil {
+		return nil, err
 	}
 	cmd.Debugf("control API ConfGenerateRemote called with req: %+v", req)
 
@@ -108,7 +85,7 @@ func (cmd *configGenCmd) confGen(ctx context.Context) (*config.Server, error) {
 	}
 	req.Log = logger
 
-	resp, err := control.ConfGenerateRemote(ctx, req)
+	resp, err := confGenRemoteCall(ctx, req)
 
 	if cmd.JSONOutputEnabled() {
 		return nil, cmd.OutputJSON(resp, err)

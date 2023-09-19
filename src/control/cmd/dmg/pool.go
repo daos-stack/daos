@@ -554,7 +554,8 @@ func (cmd *PoolExtendCmd) Execute(args []string) error {
 	msg := "succeeded"
 
 	req := &control.PoolExtendReq{
-		ID: cmd.PoolID().String(), Ranks: cmd.RankList.Ranks(),
+		ID:    cmd.PoolID().String(),
+		Ranks: cmd.RankList.Ranks(),
 	}
 
 	err := control.PoolExtend(context.Background(), cmd.ctlInvoker, req)
@@ -584,7 +585,11 @@ func (cmd *PoolReintegrateCmd) Execute(args []string) error {
 		return err
 	}
 
-	req := &control.PoolReintegrateReq{ID: cmd.PoolID().String(), Rank: ranklist.Rank(cmd.Rank), Targetidx: idxlist}
+	req := &control.PoolReintegrateReq{
+		ID:        cmd.PoolID().String(),
+		Rank:      ranklist.Rank(cmd.Rank),
+		Targetidx: idxlist,
+	}
 
 	err := control.PoolReintegrate(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {

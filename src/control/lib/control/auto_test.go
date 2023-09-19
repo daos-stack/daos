@@ -125,7 +125,11 @@ func pbIfs2ProvMap(t *testing.T, ifs []*ctlpb.FabricInterface, ndc hardware.NetD
 		t.Fatal(err)
 	}
 
-	nd, err := getNetworkDetails(log, ndc, "", ns.HostFabric)
+	req := ConfGenerateReq{
+		Log:      log,
+		NetClass: ndc,
+	}
+	nd, err := getNetworkDetails(req, ns.HostFabric)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +147,13 @@ func fabricFromHostResp(t *testing.T, log logging.Logger, uErr error, hostRespon
 		},
 	})
 
-	return getNetworkSet(test.Context(t), log, []string{}, mi)
+	req := ConfGenerateRemoteReq{
+		HostList: []string{},
+		Client:   mi,
+	}
+	req.ConfGenerateReq.Log = log
+
+	return getNetworkSet(test.Context(t), req)
 }
 
 func cmpHostErrs(t *testing.T, expErrs []*MockHostError, gotErrs *HostErrorsResp) {
@@ -342,7 +352,12 @@ func TestControl_AutoConfig_getNetworkDetails(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			gotNetDetails, gotErr := getNetworkDetails(log, tc.netDevClass, tc.netProvider, netSet.HostFabric)
+			req := ConfGenerateReq{
+				Log:         log,
+				NetClass:    tc.netDevClass,
+				NetProvider: tc.netProvider,
+			}
+			gotNetDetails, gotErr := getNetworkDetails(req, netSet.HostFabric)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -526,7 +541,13 @@ func TestControl_AutoConfig_getStorageSet(t *testing.T) {
 				},
 			})
 
-			storageSet, err := getStorageSet(test.Context(t), log, []string{}, mi)
+			req := ConfGenerateRemoteReq{
+				HostList: []string{},
+				Client:   mi,
+			}
+			req.ConfGenerateReq.Log = log
+
+			storageSet, err := getStorageSet(test.Context(t), req)
 			test.CmpErr(t, tc.expErr, err)
 
 			// Additionally verify any internal error details.
@@ -632,12 +653,19 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 				},
 			})
 
-			storageSet, err := getStorageSet(test.Context(t), log, []string{}, mi)
+			req := ConfGenerateRemoteReq{
+				HostList: []string{},
+				Client:   mi,
+			}
+			req.ConfGenerateReq.Log = log
+			req.UseTmpfsSCM = tc.useTmpfs
+
+			storageSet, err := getStorageSet(test.Context(t), req)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			gotStorage, gotErr := getStorageDetails(log, tc.useTmpfs, tc.numaCount,
+			gotStorage, gotErr := getStorageDetails(req.ConfGenerateReq, tc.numaCount,
 				storageSet.HostStorage)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
@@ -1013,8 +1041,13 @@ func TestControl_AutoConfig_filterDevicesByAffinity(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			gotNumaSet, gotErr := filterDevicesByAffinity(log, tc.nrEngines,
-				tc.scmOnly, &tc.nd, &tc.sd)
+			req := ConfGenerateReq{
+				Log:       log,
+				NrEngines: tc.nrEngines,
+				SCMOnly:   tc.scmOnly,
+			}
+
+			gotNumaSet, gotErr := filterDevicesByAffinity(req, &tc.nd, &tc.sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1096,15 +1129,16 @@ func testEngineCfg(idx int) *engine.Config {
 
 func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 	for name, tc := range map[string]struct {
-		scmCls     storage.Class
-		scmOnly    bool
-		memTotal   int              // available system memory for ramdisks in units of bytes
-		numaSet    []int            // set of numa nodes (by-ID) to be used for engine configs
-		numaPMems  numaSCMsMap      // numa to pmem mappings
-		numaSSDs   numaSSDsMap      // numa to ssds mappings
-		numaIfaces numaNetIfaceMap  // numa to network interface mappings
-		expCfgs    []*engine.Config // expected generated engine configs
-		expErr     error
+		scmCls      storage.Class
+		scmOnly     bool
+		memTotal    int              // available system memory for ramdisks in units of bytes
+		numaSet     []int            // set of numa nodes (by-ID) to be used for engine configs
+		numaPMems   numaSCMsMap      // numa to pmem mappings
+		numaSSDs    numaSSDsMap      // numa to ssds mappings
+		numaIfaces  numaNetIfaceMap  // numa to network interface mappings
+		fabricPorts []int            // custom fabric port numbers
+		expCfgs     []*engine.Config // expected generated engine configs
+		expErr      error
 	}{
 		"missing scm": {
 			numaSet:    []int{0},
@@ -1274,7 +1308,20 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				MockEngineCfgTmpfs(1, 0, mockBdevTier(1, 6, 7), mockBdevTier(1, 8, 9, 10, 11)),
 			},
 		},
-		"vmd enabled; balanced nr ssds": {
+		"dual tmpfs; insufficient fabric port numbers": {
+			scmCls:     storage.ClassRam,
+			memTotal:   humanize.GiByte * 25,
+			numaSet:    []int{0, 1},
+			numaPMems:  numaSCMsMap{0: []string{""}, 1: []string{""}},
+			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
+			numaSSDs: numaSSDsMap{
+				0: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(0, 1, 2, 3, 4, 5)...),
+				1: hardware.MustNewPCIAddressSet(test.MockPCIAddrs(6, 7, 8, 9, 10, 11)...),
+			},
+			fabricPorts: []int{12345},
+			expErr:      errors.New("insufficient fabric ports"),
+		},
+		"vmd enabled; balanced nr ssds; custom fabric port numbers": {
 			numaSet:    []int{0, 1},
 			numaPMems:  numaSCMsMap{0: []string{"/dev/pmem0"}, 1: []string{"/dev/pmem1"}},
 			numaIfaces: numaNetIfaceMap{0: ib0, 1: ib1},
@@ -1282,11 +1329,12 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				0: hardware.MustNewPCIAddressSet("5d0505:01:00.0", "5d0505:02:00.0"),
 				1: hardware.MustNewPCIAddressSet("d70701:03:00.0", "d70701:05:00.0"),
 			},
+			fabricPorts: []int{12345, 13345},
 			expCfgs: []*engine.Config{
 				DefaultEngineCfg(0).
 					WithPinnedNumaNode(0).
 					WithFabricInterface("ib0").
-					WithFabricInterfacePort(defaultFiPort).
+					WithFabricInterfacePort(12345).
 					WithFabricProvider("ofi+psm2").
 					WithStorage(
 						storage.NewTierConfig().
@@ -1304,8 +1352,7 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				DefaultEngineCfg(1).
 					WithPinnedNumaNode(1).
 					WithFabricInterface("ib1").
-					WithFabricInterfacePort(
-						int(defaultFiPort+defaultFiPortInterval)).
+					WithFabricInterfacePort(13345).
 					WithFabricProvider("ofi+psm2").
 					WithFabricNumaNodeIndex(1).
 					WithStorage(
@@ -1357,7 +1404,12 @@ func TestControl_AutoConfig_genEngineConfigs(t *testing.T) {
 				sd.scmCls = storage.ClassDcpm
 			}
 
-			gotCfgs, gotErr := genEngineConfigs(log, false, testEngineCfg, tc.numaSet, nd, sd)
+			req := ConfGenerateReq{
+				Log:         log,
+				FabricPorts: tc.fabricPorts,
+			}
+
+			gotCfgs, gotErr := genEngineConfigs(req, testEngineCfg, tc.numaSet, nd, sd)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -1661,6 +1713,7 @@ func TestControl_AutoConfig_genServerConfig(t *testing.T) {
 				AccessPoints:    tc.accessPoints,
 				ExtMetadataPath: tc.extMetadataPath,
 			}
+
 			getCfg, gotErr := genServerConfig(req, tc.ecs, mi, tc.threadCounts)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
