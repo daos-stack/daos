@@ -1720,7 +1720,7 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped)
 	num_pages = (store->stor_size + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
 
 	if (max_mapped != 0) {
-		D_ERROR("Setting max_mapped is unsupported at present\n");
+		D_ERROR("Setting max_mapped is unsupported at present.\n");
 		return -DER_NOTSUPPORTED;
 	}
 
