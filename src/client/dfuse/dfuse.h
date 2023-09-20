@@ -553,6 +553,25 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
+/* Decref and reply */
+#define DFUSE_REPLY_ERR(_ie, req, status)                                                          \
+	do {                                                                                       \
+		int __err = status;                                                                \
+		int __rc;                                                                          \
+		if (__err == 0) {                                                                  \
+			DFUSE_TRA_ERROR(_ie, "Invalid call to fuse_reply_err: 0");                 \
+			__err = EIO;                                                               \
+		}                                                                                  \
+		if (__err == EIO || __err == EINVAL)                                               \
+			DHS_ERROR(_ie, __err, "Returning");                                        \
+		else                                                                               \
+			DFUSE_TRA_DEBUG(_ie, "Returning: %d (%s)", __err, strerror(__err));        \
+		dfuse_ie_decref_unsafe(_ie);                                                       \
+		__rc = fuse_reply_err(req, __err);                                                 \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
+	} while (0)
+
 #define DFUSE_REPLY_ZERO(desc, req)                                                                \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -611,6 +630,16 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
+#define DFUSE_REPLY_BUFD(inode, req, buf, size)                                                    \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(inode, "Returning buffer(%p %#zx)", buf, size);                    \
+		dfuse_ie_decref_unsafe(inode);                                                     \
+		__rc = fuse_reply_buf(req, buf, size);                                             \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
+	} while (0)
+
 #define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -618,6 +647,15 @@ struct fuse_lowlevel_ops dfuse_ops;
 		if (__rc != 0)                                                                     \
 			DFUSE_TRA_ERROR(desc, "fuse_reply_buf() returned: %d (%s)", __rc,          \
 					strerror(-__rc));                                          \
+	} while (0)
+
+#define DFUSE_REPLY_XATTR(inode, req, size)                                                        \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		dfuse_ie_decref_unsafe(inode);                                                     \
+		__rc = fuse_reply_xattr(req, size);                                                \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_xattr() error");                               \
 	} while (0)
 
 #define DFUSE_REPLY_WRITE(desc, req, bytes)                                                        \
@@ -697,10 +735,10 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning statfs");                                         \
+		dfuse_ie_decref_unsafe(desc);                                                      \
 		__rc = fuse_reply_statfs(req, stat);                                               \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_statfs() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_statfs() error");                              \
 	} while (0)
 
 #define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)                                               \
@@ -795,6 +833,7 @@ struct dfuse_inode_entry {
 	bool                      ie_unlinked;
 };
 
+/* Lookup an inode and take a ref on it. */
 static inline struct dfuse_inode_entry *
 dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
 {
@@ -807,11 +846,55 @@ dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
 	return container_of(rlink, struct dfuse_inode_entry, ie_htl);
 }
 
+/* Look an inode but do not take a ref on it.
+ * This is for synchronous fuse operations where the kernel holds a reference for the duration
+ * of the operation.
+ */
+static inline struct dfuse_inode_entry *__attribute__((returns_nonnull))
+dfuse_inode_lookup_nf(struct dfuse_info *dfuse_info, fuse_ino_t ino)
+{
+	struct dfuse_inode_entry *ie;
+	d_list_t                 *rlink;
+
+	rlink = d_hash_rec_find(&dfuse_info->dpi_iet, &ino, sizeof(ino));
+	D_ASSERTF(rlink != NULL, "Unable to find hash table entry for %#lx", ino);
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+	atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
+
+	return ie;
+}
+
+/* Drop a reference on an inode.  This may result in ie being freed so needs to go through the hash
+ * table.
+ */
 static inline void
 dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 {
+	uint32_t oldref;
+
+	oldref = atomic_load_relaxed(&ie->ie_ref);
+
+	if (oldref > 1) {
+		uint32_t newref = oldref - 1;
+
+		if (atomic_compare_exchange(&ie->ie_ref, oldref, newref))
+			return;
+	}
+
 	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
 }
+
+/* Drop a reference on an inode.  This */
+#define dfuse_ie_decref_unsafe(_ie)                                                                \
+	do {                                                                                       \
+		uint32_t old_ref;                                                                  \
+		old_ref = atomic_fetch_sub_relaxed(&(_ie)->ie_ref, 1);                             \
+		D_ASSERT(old_ref >= 2);                                                            \
+		(_ie) = NULL;                                                                      \
+	} while (0)
+
+/* Drop a reference on an inode. */
 
 extern char *duns_xattr_name;
 

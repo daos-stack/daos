@@ -16,11 +16,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct fuse_file_info     fi_out = {0};
 	int                       rc;
 
-	ie = dfuse_inode_lookup(dfuse_info, ino);
-	if (!ie) {
-		DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOENT);
-		return;
-	}
+	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	D_ALLOC_PTR(oh);
 	if (!oh)

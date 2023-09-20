@@ -20,6 +20,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	struct dfuse_inode_entry *ie;
 	int                       rc;
 	fuse_ino_t                ino;
+	ino_t                     parent_ino;
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
@@ -33,7 +34,13 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 
 	ie->ie_unlinked = true;
 
+	parent_ino = parent->ie_stat.st_ino;
+
+	/* At this point the request is complete so the kernel is free to drop any refs on parent
+	 *  so it should not be accessed
+	 */
 	DFUSE_REPLY_ZERO(parent, req);
+	parent = NULL;
 
 	/* If caching is enabled then invalidate the data and attribute caches.  As this came a
 	 * unlink/rename call the kernel will have just done a lookup and knows what was likely
@@ -48,8 +55,7 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	 * trigger a forget call.  Checking the test logs shows that we do see the forget anyway
 	 * for cases where the kernel knows which file it deleted.
 	 */
-	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
+	if ((ie->ie_parent != parent_ino) || (strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx " DF_DE, ie->ie_parent,
 				DP_DE(ie->ie_name));
 

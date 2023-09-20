@@ -164,6 +164,7 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
+#if 0
 static int
 ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 {
@@ -192,6 +193,7 @@ ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
 		return 1;
 	return 0;
 }
+#endif
 
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
@@ -205,13 +207,12 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 }
 
 static d_hash_table_ops_t ie_hops = {
-    .hop_key_cmp     = ih_key_cmp,
-    .hop_key_hash    = ih_key_hash,
-    .hop_rec_hash    = ih_rec_hash,
-    .hop_rec_addref  = ih_addref,
-    .hop_rec_decref  = ih_decref,
-    .hop_rec_ndecref = ih_ndecref,
-    .hop_rec_free    = ih_free,
+    .hop_key_cmp    = ih_key_cmp,
+    .hop_key_hash   = ih_key_hash,
+    .hop_rec_hash   = ih_rec_hash,
+    .hop_rec_addref = ih_addref,
+    .hop_rec_decref = ih_decref,
+    .hop_rec_free   = ih_free,
 };
 
 static uint32_t
