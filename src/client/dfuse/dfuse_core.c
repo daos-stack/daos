@@ -1133,10 +1133,13 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	DFUSE_TRA_DEBUG(ie, "closing, inode %#lx ref %u, name " DF_DE ", parent %#lx",
 			ie->ie_stat.st_ino, ref, DP_DE(ie->ie_name), ie->ie_parent);
 
-	D_ASSERT(ref == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_readdir_number) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_il_count) == 0);
-	D_ASSERT(atomic_load_relaxed(&ie->ie_open_count) == 0);
+	D_ASSERTF(ref == 0, "Reference is %d", ref);
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_readdir_number) == 0, "readdir_number is %d",
+		  atomic_load_relaxed(&ie->ie_readdir_number));
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_il_count) == 0, "il_count is %d",
+		  atomic_load_relaxed(&ie->ie_il_count));
+	D_ASSERTF(atomic_load_relaxed(&ie->ie_open_count) == 0, "open_count is %d",
+		  atomic_load_relaxed(&ie->ie_open_count));
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);

@@ -80,12 +80,10 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	dfuse_inode_decref(dfuse_info, ie);
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 
 	return;
 err:
-	dfuse_inode_decref(dfuse_info, ie);
 	dfuse_oh_free(dfuse_info, oh);
 	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }
