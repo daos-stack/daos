@@ -367,6 +367,9 @@ struct dfuse_pool {
 	struct d_hash_table dfp_cont_table;
 };
 
+/* Statistics that dfuse keeps per container.  Logged at umount and can be queried through
+ * 'daos filesystem query`.
+ */
 #define D_FOREACH_DFUSE_STATX(ACTION)                                                              \
 	ACTION(CREATE)                                                                             \
 	ACTION(MKNOD)                                                                              \
@@ -386,6 +389,8 @@ struct dfuse_pool {
 	ACTION(RMXATTR)                                                                            \
 	ACTION(LISTXATTR)                                                                          \
 	ACTION(RENAME)                                                                             \
+	ACTION(READ)                                                                               \
+	ACTION(WRITE)                                                                              \
 	ACTION(STATFS)
 
 #define DFUSE_STAT_DEFINE(name, ...) DS_##name,
@@ -393,10 +398,6 @@ struct dfuse_pool {
 enum dfuse_stat_id {
 	/** Return value representing success */
 	D_FOREACH_DFUSE_STATX(DFUSE_STAT_DEFINE) DS_LIMIT,
-};
-
-struct dfuse_stats {
-	ATOMIC uint64_t values[DS_LIMIT];
 };
 
 /** Container information
@@ -432,7 +433,7 @@ struct dfuse_cont {
 	/** Inode number of the root of this container */
 	ino_t                   dfs_ino;
 
-	struct dfuse_stats      dfc_stats;
+	ATOMIC uint64_t         dfs_stat_value[DS_LIMIT];
 
 	/** Caching information */
 	double                  dfc_attr_timeout;
@@ -444,7 +445,7 @@ struct dfuse_cont {
 };
 
 #define DFUSE_IE_STAT_ADD(_ie, _stat)                                                              \
-	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfc_stats.values[(_stat)], 1)
+	atomic_fetch_add_relaxed(&(_ie)->ie_dfs->dfs_stat_value[(_stat)], 1)
 
 void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);

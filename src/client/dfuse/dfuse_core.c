@@ -351,11 +351,11 @@ ch_decref(struct d_hash_table *htable, d_list_t *link)
 }
 
 #define STAT_COUNT(name, ...)                                                                      \
-	tstats += atomic_fetch_add_relaxed(&dfc->dfc_stats.values[DS_##name], 0);
+	tstats += atomic_fetch_add_relaxed(&dfc->dfs_stat_value[DS_##name], 0);
 
 #define SHOW_STAT(name, ...)                                                                       \
 	{                                                                                          \
-		uint64_t value = atomic_fetch_add_relaxed(&dfc->dfc_stats.values[DS_##name], 0);   \
+		uint64_t value = atomic_fetch_add_relaxed(&dfc->dfs_stat_value[DS_##name], 0);     \
 		if (value != 0)                                                                    \
 			DFUSE_TRA_INFO(dfc, "%5.1f%% " #name " (%#lx)",                            \
 				       (double)value / tstats * 100, value);                       \

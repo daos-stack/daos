@@ -352,8 +352,8 @@ handle_cont_evict_ioctl(fuse_req_t req, struct dfuse_obj_hdl *oh)
 
 #define COPY_STAT(sname, ...)                                                                      \
 	{                                                                                          \
-		stat[i].value = atomic_fetch_add_relaxed(                                          \
-		    &oh->doh_ie->ie_dfs->dfc_stats.values[DS_##sname], 0);                         \
+		stat[i].value =                                                                    \
+		    atomic_fetch_add_relaxed(&oh->doh_ie->ie_dfs->dfs_stat_value[DS_##sname], 0);  \
 		strncpy(stat[i].name, #sname, 15);                                                 \
 		i++;                                                                               \
 	}
