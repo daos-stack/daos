@@ -8,6 +8,9 @@ import re
 
 from apricot import TestWithServers
 
+from exception_utils import CommandFailure
+from ior_utils import run_ior
+from job_manager_utils import get_job_manager
 from run_utils import run_remote
 
 
@@ -37,6 +40,19 @@ def compare_equal(rank, pool_size):
     return pool_size[-2]['data'][rank]['avail'] == pool_size[-1]['data'][rank]['avail']
 
 
+def compare_reduced(rank, pool_size):
+    """Determine if the previous value is greater than the current value.
+
+    Args:
+        rank (int): server rank
+        pool_size (list): list of pool_size dictionaries
+
+    Returns:
+        bool: does the previous value equal the current value
+    """
+    return pool_size[-2]['data'][rank]['avail'] > pool_size[-1]['data'][rank]['avail']
+
+
 class VerifyPoolSpace(TestWithServers):
     """Verify pool space with system commands.
 
@@ -44,25 +60,56 @@ class VerifyPoolSpace(TestWithServers):
     """
 
     def _query_pool_size(self, description, pools):
-        """."""
+        """Query the pool size for the specified pools.
+
+        Args:
+            description (str): pool description
+            pools (list): list of pools to query
+        """
         self.log_step(' '.join(['Query pool information for', description]))
         for pool in pools:
             pool.query()
 
-    def _create_pools(self, description, indices):
-        """."""
+    def _create_pools(self, description, namespaces):
+        """Create the specified number of pools.
+
+        Args:
+            description (str): pool description
+            namespaces (list): pool namespaces
+
+        Returns:
+            list: a list of created pools
+        """
         pools = []
         self.log_step(' '.join(['Create', description]), True)
-        for index in indices:
-            namespace = os.path.join(os.sep, 'run', '_'.join(['pool', str(index)]), '*')
+        for item in namespaces:
+            namespace = os.path.join(os.sep, 'run', '_'.join(['pool_rank_', str(item)]), '*')
             pools.append(self.get_pool(namespace=namespace))
         self._query_pool_size(description, pools)
+        return pools
+
+    def _write_data(self, description, ior_kwargs, container, block_size):
+        """Write data using ior to the specified pool and container.
+
+        Args:
+            description (str): pool description
+            ior_kwargs (dict): arguments to use to run ior
+            container (TestContainer): the container in which to write data
+        """
+        self.log_step('Writing data ({} block size) one of {}'.format(block_size, description))
+        ior_kwargs['pool'] = container.pool
+        ior_kwargs['container'] = container
+        ior_kwargs['ior_params']['block_size'] = block_size
+        try:
+            run_ior(**ior_kwargs)
+        except CommandFailure as error:
+            self.fail("IOR write to {} failed, {}".format(description, error))
 
     def _get_system_pool_size(self, description):
         """Get the pool size information from the df system command.
 
         Args:
-            description (str): _description_
+            description (str): pool description
 
         Returns:
             dict: the df command information per server rank
@@ -88,19 +135,19 @@ class VerifyPoolSpace(TestWithServers):
             self.fail('Error obtaining system pool data for all hosts: {}'.format(system_pool_size))
         return system_pool_size
 
-    def _compare_system_pool_size(self, pool_size, compare_method):
+    def _compare_system_pool_size(self, pool_size, compare_methods):
         """Compare the pool size information from the system command.
 
         Args:
             pool_size (list): the list of pool size information
-            compare_method (method): the compare method to execute
+            compare_methods (list): a list of compare methods to execute per rank
         """
         self.log.info('Verifying system reported pool size for %s', pool_size[-1]['label'])
         self.log.debug('  Rank  Size   Avail  Mount       Status')
         self.log.debug('  ----  -----  -----  ----------  ------')
         overall = True
         for rank, data in sorted(pool_size[-1]['data'].items()):
-            status = compare_method(rank, pool_size)
+            status = compare_methods[rank](rank, pool_size)
             self.log.debug(
                 '  %4s  %5s  %5s  %10s  %s',
                 rank, data['size'], data['avail'], data['mount'], status)
@@ -128,41 +175,117 @@ class VerifyPoolSpace(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=VerifyPoolSpace,test_verify_pool_space
         """
+        dmg = self.get_dmg_command()
+        ior_kwargs = {
+            'test': self,
+            'manager': get_job_manager(self, subprocess=None, timeout=120),
+            'log': None,
+            'hosts': self.hostlist_clients,
+            'path': self.workdir,
+            'slots': None,
+            'group': self.server_group,
+            'processes': None,
+            'ppn': 8,
+            'namespace': '/run/ior/*',
+            'ior_params': {'block_size': None}
+        }
+        pools = []
         pool_size = []
-        # Step #1
-        # Avail == Size
-        # wolf-181: tmpfs                          20G  129M   20G   1% /mnt/daos
-        # wolf-183: tmpfs                          20G  129M   20G   1% /mnt/daos
-        # wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
+
+        # (0) Collect initial system information
+        #  - System available space should equal the free space
         description = 'initial configuration w/o pools'
         pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
-        self._compare_system_pool_size(pool_size, compare_all_available)
+        compare_methods = [compare_all_available, compare_all_available, compare_all_available]
+        self._compare_system_pool_size(pool_size, compare_methods)
 
-        # Step #2
-        # Rank 0 has less available space
-        # wolf-181: tmpfs                          20G  2.1G   18G  11% /mnt/daos
-        # wolf-183: tmpfs                          20G  129M   20G   1% /mnt/daos
-        # wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
-        description = 'a single pool on a single server'
-        self._create_pools(description, [1])
+        # (1) Create a single pool on a rank 0
+        #  - System free space should be less on rank 0 only
+        description = 'a single pool on rank 0'
+        pools.extend(self._create_pools(description, [0]))
         pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
-        self._compare_system_pool_size(pool_size, compare_equal)
+        compare_methods = [compare_reduced, compare_equal, compare_equal]
+        self._compare_system_pool_size(pool_size, compare_methods)
+        self._query_pool_size(description, pools[0:1])
 
-        # daos cont create --pool=$DAOS_POOL1 --type=POSIX
-        # Repeat 3x:
-        #   a.) Write data
+        # (2) Write various amounts of data to the single pool on a single engine
+        #  - System free space should not change
+        container = self.get_container(pools[0])
+        compare_methods = [compare_equal, compare_equal, compare_equal]
+        for block_size in ('500M', '1M', '10M', '100M'):
+            self._write_data(description, ior_kwargs, container, block_size)
+            self._compare_system_pool_size(pool_size, compare_methods)
+            self._query_pool_size(description, pools[0:1])
+        dmg.storage_query_usage()
 
-        #   b.) No change
-        #   wolf-181: tmpfs                          20G  2.1G   18G  11% /mnt/daos
-        #   wolf-183: tmpfs                          20G  129M   20G   1% /mnt/daos
-        #   wolf-182: tmpfs                          20G  129M   20G   1% /mnt/daos
-        self._compare_system_pool_size(pool_size, compare_equal)
+        # (3) Create multiple pools on rank 1
+        #  - System free space should be less on rank 1 only
+        description = 'multiple pools on rank 1'
+        pools.extend(self._create_pools(description, ['1_a', '1_b', '1_c']))
+        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        compare_methods = [compare_equal, compare_reduced, compare_equal]
+        self._compare_system_pool_size(pool_size, compare_methods)
+        self._query_pool_size(description, pools[1:4])
 
-        #   c.) dmg pool query $DAOS_POOL1
+        # (4) Write various amounts of data to the multiple pools on rank 1
+        #  - System free space should not change
+        compare_methods = [compare_equal, compare_equal, compare_equal]
+        for index, block_size in enumerate(('200M', '2G', '7G')):
+            container = self.get_container(pools[1 + index])
+            self._write_data(description, ior_kwargs, container, block_size)
+            self._compare_system_pool_size(pool_size, compare_methods)
+            self._query_pool_size(description, pools[1 + index:2 + index])
+        dmg.storage_query_usage()
 
-        # Step #3
+        # (5) Create a single pool on ranks 1 & 2
+        #  - System free space should be less on rank 1 and 2
+        description = 'a single pool on ranks 1 & 2'
+        pools.extend(self._create_pools(description, ['1_2']))
+        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        compare_methods = [compare_equal, compare_reduced, compare_reduced]
+        self._compare_system_pool_size(pool_size, compare_methods)
+        self._query_pool_size(description, pools[4:5])
 
-        # self._verify_pool_space('a single pool on a single server', [1])
-        # self._verify_pool_space('multiple pools on a single server', [2, 3, 4])
-        # self._verify_pool_space('a single pool that spans many servers', [5])
-        # self._verify_pool_space('multiple pools that span many servers', [6, 7])
+        # (6) Write various amounts of data to the single pool on ranks 1 & 2
+        #  - System free space should not change
+        container = self.get_container(pools[4])
+        compare_methods = [compare_equal, compare_equal, compare_equal]
+        for block_size in ('13G', '3G', '300M'):
+            self._write_data(description, ior_kwargs, container, block_size)
+            self._compare_system_pool_size(pool_size, compare_methods)
+            self._query_pool_size(description, pools[4:5])
+        dmg.storage_query_usage()
+
+        # (7) Create a single pool on all ranks
+        #  - System free space should be less on all ranks
+        description = 'a single pool on all ranks'
+        pools.extend(self._create_pools(description, ['all']))
+        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        compare_methods = [compare_reduced, compare_reduced, compare_reduced]
+        self._compare_system_pool_size(pool_size, compare_methods)
+        self._query_pool_size(description, pools[5:6])
+
+        # (8) Write various amounts of data to the single pool on all ranks
+        #  - System free space should not change
+        container = self.get_container(pools[5])
+        compare_methods = [compare_equal, compare_equal, compare_equal]
+        for block_size in ('5G'):
+            self._write_data(description, ior_kwargs, container, block_size)
+            self._compare_system_pool_size(pool_size, compare_methods)
+            self._query_pool_size(description, pools[5:6])
+        dmg.storage_query_usage()
+
+        # (9) Stop one of the servers for a pool spanning many servers
+        self._query_pool_size(description, pools)
+
+        # Step #9
+        # dmg system stop -r 1
+        # dmg system query -v
+        # dmg pool query $DAOS_POOL1
+        # dmg pool query $DAOS_POOL2
+        #    ERROR: dmg: pool query failed: rpc error: code = Unknown desc =
+        #    unable to find any available service ranks for pool
+        # clush -w wolf-[181-183] df -h | grep daos
+        #    wolf-181: tmpfs                          20G  3.0G   18G  15% /mnt/daos
+        #    wolf-182: tmpfs                          20G   20G  927M  96% /mnt/daos
+        #    wolf-183: tmpfs                          20G  6.8G   14G  34% /mnt/daos

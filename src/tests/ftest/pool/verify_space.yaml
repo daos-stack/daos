@@ -9,27 +9,35 @@ server_config:
     0:
       storage: auto
   system_ram_reserved: 1
-pool_1:
+pool_rank_0:
   size: 1G
-  target_list: 0
+  target_list: [0]
   description: 'single pool on a single server (rank 0)'
-pool_2:
+pool_rank_1_a:
   size: 2G
-  target_list: 1
+  target_list: [1]
   description: 'multiple pools on a single server (rank 1)'
-pool_3:
+pool_rank_1_b:
   size: 3G
-  target_list: 1
+  target_list: [1]
   description: 'multiple pools on a single server (rank 1)'
-pool_4:
+pool_rank_1_c:
   size: 4G
-  target_list: 1
-pool_5:
+  target_list: [1]
+pool_rank_1_2:
   size: 5G
   target_list: [1, 2]
-pool_6:
+pool_rank_all:
   size: 1G
   target_list: [0, 1, 2]
-pool_7:
-  size: 1G
-  target_list: [0, 1, 2]
+container:
+  type: POSIX
+ior:
+  api: DFS
+  dfs_chunk: 1048576
+  dfs_group: daos_server
+  dfs_oclass: SX
+  dfs_dir_oclass: SX
+  transfer_size: 1M
+  flags: '-w -i 1 -k -E'
+  signature: 123
