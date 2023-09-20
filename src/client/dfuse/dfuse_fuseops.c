@@ -343,8 +343,6 @@ df_ll_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	inode->ie_dfs->dfs_ops->releasedir(req, inode, fi);
 
-	DFUSE_IE_STAT_ADD(inode, DS_RELEASEDIR);
-
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
 decref:

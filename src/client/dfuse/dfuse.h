@@ -383,12 +383,12 @@ struct dfuse_pool {
 	ACTION(READDIR)                                                                            \
 	ACTION(SYMLINK)                                                                            \
 	ACTION(OPENDIR)                                                                            \
-	ACTION(RELEASEDIR)                                                                         \
 	ACTION(SETXATTR)                                                                           \
 	ACTION(GETXATTR)                                                                           \
 	ACTION(RMXATTR)                                                                            \
 	ACTION(LISTXATTR)                                                                          \
 	ACTION(RENAME)                                                                             \
+	ACTION(OPEN)                                                                               \
 	ACTION(READ)                                                                               \
 	ACTION(WRITE)                                                                              \
 	ACTION(STATFS)
