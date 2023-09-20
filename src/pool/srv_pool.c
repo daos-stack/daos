@@ -2542,11 +2542,14 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	if (bits & DAOS_PO_QUERY_PROP_REINT_MODE) {
 		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reint_mode, &value);
-		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
+		/* NB: would test global_ver < 2, but on master branch, code added after v3 bump. */
+		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
 			rc  = 0;
 			val32 = DAOS_PROP_PO_REINT_MODE_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
+			D_ERROR(DF_UUID": DAOS_PROP_PO_REINT_MODE missing from the pool\n",
+				DP_UUID(svc->ps_uuid));
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
@@ -2660,7 +2663,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 				in->pri_domains.ca_arrays);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid);
+	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid,
+				   DAOS_POOL_GLOBAL_VERSION);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
 
@@ -5590,6 +5594,7 @@ pool_svc_reconf_ult(void *arg)
 	d_rank_list_t		*to_add;
 	d_rank_list_t		*to_remove;
 	d_rank_list_t		*new;
+	uint64_t		 rdb_nbytes = 0;
 	int			 rc;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
@@ -5609,6 +5614,14 @@ pool_svc_reconf_ult(void *arg)
 		D_ERROR(DF_UUID": failed to get pool service replica ranks: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		goto out;
+	}
+
+	/* If adding replicas, get the correct rdb size (do not trust DAOS_MD_CAP). */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_nbytes);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get rdb size: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_cur;
 	}
 
 	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
@@ -5634,7 +5647,7 @@ pool_svc_reconf_ult(void *arg)
 	 * membership changes to the MS.
 	 */
 	if (to_add->rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes);
 	if (reconf->psc_canceled)
 		goto out_to_add_remove;
 	if (to_add->rl_nr > to_remove->rl_nr)
@@ -7137,7 +7150,12 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	struct pool_membership_out	*out = crt_reply_get(rpc);
 	d_rank_list_t			*ranks;
 	d_iov_t				 id;
+	struct pool_svc			*svc;
 	int				 rc;
+
+	rc = pool_svc_lookup_leader(in->pmi_uuid, &svc, NULL);
+	if (rc != 0)
+		goto out;
 
 	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
 	if (rc != 0)

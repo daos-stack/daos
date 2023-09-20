@@ -26,6 +26,8 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
+RDB_STRING_KEY(ds_pool_prop_, md_rpcs);
+RDB_STRING_KEY(ds_pool_prop_, md_rpcs_enabled);
 
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);

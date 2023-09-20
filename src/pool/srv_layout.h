@@ -16,6 +16,7 @@
  *     Root KVS (GENERIC):
  *       Pool handle KVS (GENERIC)
  *       Pool user attribute KVS (GENERIC)
+ *       Metadata RPCs KVS (GENERIC) - NB used by both pool and container modules
  *
  * The version of the whole layout is stored in ds_pool_prop_global_version.
  */
@@ -39,9 +40,9 @@
  *
  *   extern d_iov_t ds_pool_prop_new_key;	comment_on_value_type
  *
- *   Note 1. The "new_key" name in ds_pool_prop_new_key must not appear in the
- *   root KVS in src/container/srv_layout.h, that is, there must not be a
- *   ds_cont_prop_new_key, because the two root KVSs are the same RDB KVS.
+ *   Note 1. The "new_key" name in ds_pool_prop_new_key must not appear (with very few exceptions)
+ *   in the root KVS in src/container/srv_layout.h, that is, there must not usually be
+ *   a ds_cont_prop_new_key, because the two root KVSs are the same RDB KVS.
  *
  *   Note 2. The comment_on_value_type shall focus on the value type only;
  *   usage shall be described above in this comment following existing
@@ -78,6 +79,8 @@ extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uint32_t */
 extern d_iov_t ds_pool_prop_reint_mode;		/* uint32_t */
+extern d_iov_t ds_pool_prop_md_rpcs;		/* metadata RPCs KVS  - common to pool, container */
+extern d_iov_t ds_pool_prop_md_rpcs_enabled;	/* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
