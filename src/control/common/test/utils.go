@@ -129,6 +129,10 @@ func CmpErrBool(want, got error) bool {
 func CmpErr(t *testing.T, want, got error) {
 	t.Helper()
 
+	if want != nil && want.Error() == "" {
+		t.Fatal("comparison with empty error will always return true, don't do it")
+	}
+
 	if !CmpErrBool(want, got) {
 		t.Fatalf("unexpected error\n(wanted: %v, got: %v)", want, got)
 	}

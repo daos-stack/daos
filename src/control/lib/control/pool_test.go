@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -349,13 +350,58 @@ func TestControl_PoolEvict(t *testing.T) {
 	}
 }
 
+func strVal(s string) daos.PoolPropertyValue {
+	v := daos.PoolPropertyValue{}
+	v.SetString(s)
+	return v
+}
+
+func TestControl_PoolCreateReq_Convert(t *testing.T) {
+	req := &PoolCreateReq{
+		User:       "bob",
+		UserGroup:  "work",
+		NumSvcReps: 2,
+		TotalBytes: 1,
+		TierRatio:  []float64{0.06, 0.94},
+		NumRanks:   3,
+		Ranks:      []ranklist.Rank{1, 2, 3},
+		TierBytes:  []uint64{humanize.GiByte, 10 * humanize.GiByte},
+		MetaBytes:  2 * humanize.GiByte,
+		Properties: []*daos.PoolProperty{
+			{
+				Name:   "label",
+				Number: daos.PoolPropertyLabel,
+				Value:  strVal("foo"),
+			},
+		},
+	}
+	reqPB := new(mgmtpb.PoolCreateReq)
+	if err := convert.Types(req, reqPB); err != nil {
+		t.Fatal(err)
+	}
+	expReqPB := &mgmtpb.PoolCreateReq{
+		User:         "bob",
+		Usergroup:    "work",
+		Numsvcreps:   2,
+		Totalbytes:   1,
+		Tierratio:    []float64{0.06, 0.94},
+		Numranks:     3,
+		Ranks:        []uint32{1, 2, 3},
+		Tierbytes:    []uint64{humanize.GiByte, 10 * humanize.GiByte},
+		MetaBlobSize: 2 * humanize.GiByte,
+		Properties: []*mgmtpb.PoolProperty{
+			{Number: 1, Value: &mgmtpb.PoolProperty_Strval{"foo"}},
+		},
+	}
+
+	cmpOpt := cmpopts.IgnoreUnexported(mgmtpb.PoolCreateReq{}, mgmtpb.PoolProperty{})
+	if diff := cmp.Diff(expReqPB, reqPB, cmpOpt); diff != "" {
+		t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+	}
+}
+
 func TestControl_PoolCreate(t *testing.T) {
 	mockExt := auth.NewMockExtWithUser("poolTest", 0, 0)
-	strVal := func(s string) daos.PoolPropertyValue {
-		v := daos.PoolPropertyValue{}
-		v.SetString(s)
-		return v
-	}
 
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig

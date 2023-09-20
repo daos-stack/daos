@@ -1132,6 +1132,11 @@ class _Component():
 
         return
 
+    def _print(self, msg):
+        if GetOption('silent'):
+            return
+        print(msg)
+
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
@@ -1158,7 +1163,7 @@ class _Component():
             print('help set')
             return True
 
-        print(f"Checking targets for component '{self.name}'")
+        self._print(f"Checking targets for component '{self.name}'")
 
         config = env.Configure()
         config_cb = self.key_words.get("config_cb", None)
