@@ -180,17 +180,17 @@ dfs_sys_access(dfs_sys_t *dfs_sys, const char *path, int mask, int flags);
 /**
  * Change permission access bits. Symlinks are dereferenced.
  *
- * \param[in]	dfs_sys 		Pointer to the mounted file system.
- * \param[in]	path			Link path of object.
- * \param[in]	mode			New permission access modes. For now,
- * 					we don't support the sticky bit, setuid,
- * 					and setgid.
- * \param[in]	ignore_notsup_mod 	Ignore unsupported file mode bits.
+ * \param[in]	dfs_sys 	Pointer to the mounted file system.
+ * \param[in]	path		Link path of object.
+ * \param[in]	mode		New permission access modes. For now,
+ * 				we don't support the sticky bit, setuid,
+ * 				and setgid.
+ * \param[in]	ignore_unsup	Ignore unsupported filesystem features
  *
  * \return				0 on success, errno code on failure.
  */
 int
-dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, bool ignore_notsup_mod);
+dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, bool ignore_unsup);
 
 /**
  * Change owner/group. Symlinks are dereferenced. Since uid and gid are not enforced at the DFS

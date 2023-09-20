@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -286,7 +286,8 @@ dfs_sys_test_access_chmod(void **state)
 	 * Give file1 perms
 	 * S_ISVTX | S_ISGID | S_ISUID are unsupported should be ignored
 	 */
-	rc = dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR | S_ISVTX | S_ISGID | S_ISUID, true);
+	rc =
+	    dfs_sys_chmod(dfs_sys_mt, file1, S_IWUSR | S_IRUSR | S_ISVTX | S_ISGID | S_ISUID, true);
 	assert_int_equal(rc, 0);
 
 	/** file1 should have perms now */
