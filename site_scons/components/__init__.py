@@ -132,6 +132,7 @@ def define_mercury(reqs):
                 libs=['fabric'],
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
+                pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'],
                 build_env={'CFLAGS': "-fstack-usage"})
@@ -183,12 +184,6 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
-
-    mercury_build.extend(check(reqs,
-                               'ofi',
-                               ['-DOFI_INCLUDE_DIR:PATH=$OFI_PREFIX/include',
-                                '-DOFI_LIBRARY:FILEPATH=$OFI_PREFIX/lib/libfabric.so'],
-                               []))
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
