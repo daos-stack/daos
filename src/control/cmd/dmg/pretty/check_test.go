@@ -178,6 +178,353 @@ Inconsistency Reports:
 
 `,
 		},
+		"non-verbose": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-3": {
+						UUID:      "pool-3",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-5": {
+						UUID:   "pool-5",
+						Status: chkpb.CheckPoolStatus_CPS_UNCHECKED.String(),
+						Phase:  chkpb.CheckScanPhase_CSP_PREPARE.String(),
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_SVCL,
+							Action:   chkpb.CheckInconsistAction_CIA_IGNORE,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      2,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							Msg:      "message 2",
+							PoolUuid: "pool-2",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_LESS_SVC_WITHOUT_QUORUM,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							Msg:      "message 3",
+							PoolUuid: "pool-3",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      4,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_NONEXIST_ON_ENGINE,
+							Action:   chkpb.CheckInconsistAction_CIA_DISCARD,
+							Msg:      "message 4",
+							PoolUuid: "pool-4",
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 4 pools
+
+Inconsistency Reports:
+- Resolved:
+ID  Class                        Pool   Resolution 
+--  -----                        ----   ---------- 
+0x1 POOL_BAD_SVCL                pool-1 IGNORE     
+0x2 POOL_BAD_LABEL               pool-2 TRUST_MS   
+0x3 POOL_LESS_SVC_WITHOUT_QUORUM pool-3 TRUST_PS   
+0x4 POOL_NONEXIST_ON_ENGINE      pool-4 DISCARD    
+
+`,
+		},
+		"non-verbose with container": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+							Action:   chkpb.CheckInconsistAction_CIA_IGNORE,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+							ContUuid: "cont-1",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      2,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							Msg:      "message 2",
+							PoolUuid: "pool-2",
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 2 pools
+
+Inconsistency Reports:
+- Resolved:
+ID  Class               Pool   Cont   Resolution 
+--  -----               ----   ----   ---------- 
+0x1 CONT_NONEXIST_ON_PS pool-1 cont-1 IGNORE     
+0x2 POOL_BAD_LABEL      pool-2 None   TRUST_MS   
+
+`,
+		},
+		"non-verbose with resolved and interactive": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							},
+							ActDetails: []string{"trust MS details", "trust PS details"},
+							ActMsgs:    []string{"trust MS", "trust PS"},
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      2,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							Msg:      "message 2",
+							PoolUuid: "pool-2",
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 3",
+							PoolUuid: "pool-2",
+							ContUuid: "cont-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_IGNORE,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							},
+							ActDetails: []string{"ignore details", "trust PS details", "trust MS details"},
+							ActMsgs:    []string{"ignore", "trust PS", "trust MS"},
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 2 pools
+
+Inconsistency Reports:
+- Resolved:
+ID  Class          Pool   Resolution 
+--  -----          ----   ---------- 
+0x2 POOL_BAD_LABEL pool-2 TRUST_MS   
+
+- Action Required:
+ID  Class               Pool   Cont   Repair Options      
+--  -----               ----   ----   --------------      
+0x1 POOL_BAD_LABEL      pool-1 None   0: trust MS details 
+                                      1: trust PS details 
+0x3 CONT_NONEXIST_ON_PS pool-2 cont-1 0: ignore details   
+                                      1: trust PS details 
+                                      2: trust MS details 
+
+`,
+		},
+		"non-verbose with interactive only": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+					"pool-2": {
+						UUID:      "pool-2",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							},
+							ActDetails: []string{"trust MS details", "trust PS details"},
+							ActMsgs:    []string{"trust MS", "trust PS"},
+						},
+					},
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      3,
+							Class:    chkpb.CheckInconsistClass_CIC_CONT_NONEXIST_ON_PS,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 3",
+							PoolUuid: "pool-2",
+							ContUuid: "cont-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_IGNORE,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+							},
+							ActDetails: []string{"ignore details", "trust PS details", "trust MS details"},
+							ActMsgs:    []string{"ignore", "trust PS", "trust MS"},
+						},
+					},
+				},
+			},
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 2 pools
+
+Inconsistency Reports:
+- Action Required:
+ID  Class               Pool   Cont   Repair Options      
+--  -----               ----   ----   --------------      
+0x1 POOL_BAD_LABEL      pool-1 None   0: trust MS details 
+                                      1: trust PS details 
+0x3 CONT_NONEXIST_ON_PS pool-2 cont-1 0: ignore details   
+                                      1: trust PS details 
+                                      2: trust MS details 
+
+`,
+		},
+		"verbose interactive": {
+			resp: &control.SystemCheckQueryResp{
+				Status:    control.SystemCheckStatusCompleted,
+				ScanPhase: control.SystemCheckScanPhaseDone,
+				Pools: map[string]*control.SystemCheckPoolInfo{
+					"pool-1": {
+						UUID:      "pool-1",
+						Status:    chkpb.CheckPoolStatus_CPS_CHECKED.String(),
+						Phase:     chkpb.CheckScanPhase_CSP_DONE.String(),
+						StartTime: checkTime,
+					},
+				},
+				Reports: []*control.SystemCheckReport{
+					{
+						CheckReport: chkpb.CheckReport{
+							Seq:      1,
+							Class:    chkpb.CheckInconsistClass_CIC_POOL_BAD_LABEL,
+							Action:   chkpb.CheckInconsistAction_CIA_INTERACT,
+							Msg:      "message 1",
+							PoolUuid: "pool-1",
+							ActChoices: []chkpb.CheckInconsistAction{
+								chkpb.CheckInconsistAction_CIA_TRUST_MS,
+								chkpb.CheckInconsistAction_CIA_TRUST_PS,
+							},
+							ActDetails: []string{"trust MS details", "trust PS details"},
+							ActMsgs:    []string{"trust MS", "trust PS"},
+						},
+					},
+				},
+			},
+			verbose: true,
+			expOut: `
+DAOS System Checker Info
+  Current status: COMPLETED
+  Current phase: DONE (Check completed)
+  Checked 1 pool
+
+Per-Pool Checker Info:
+  Pool pool-1: 0 ranks, status: CPS_CHECKED, phase: CSP_DONE, started: 2023-03-20T10:07:00.000-05:00
+
+Inconsistency Reports:
+  ID:         0x1
+  Class:      POOL_BAD_LABEL
+  Message:    message 1
+  Pool:       pool-1
+  Potential resolution actions:
+    0: trust MS details
+    1: trust PS details
+
+`,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			var buf bytes.Buffer
