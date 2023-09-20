@@ -141,8 +141,8 @@ var (
 		"CRT", "RPC", "BULK", "CORPC", "GRP", "LM", "HG", // CaRT subsystems
 		"EXTERNAL", "ST", "IV", "CTL",
 	}
-	errLogNameAllWithOther = errors.New("'all' identifier cannot be used with any other")
-	errLogNameAllInMasks   = errors.New("'all' identifier cannot be used in log mask level assignments")
+	errLogNameAllWithOther = errors.New("'all' identifier can not be used with any other log identifier")
+	errLogNameAllInMasks   = errors.New("'all' identifier can not be used in log mask level assignments")
 )
 
 func isLogLevelValid(name string) bool {
