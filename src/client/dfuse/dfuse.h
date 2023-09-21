@@ -537,14 +537,17 @@ struct fuse_lowlevel_ops dfuse_ops;
 
 /* Macros to check type in other macros.  Check for IE, OH, IE or OH or and Dfuse Type */
 
-#define IS_IE(N) _Generic((N), struct dfuse_inode_entry *: 1, default : 0)
-#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl *: 1, default : 0)
+#define IS_IE(N) _Generic((N), struct dfuse_inode_entry *: 1, default: 0)
+#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl *: 1, default: 0)
 #define IS_IEOH(N)                                                                                 \
 	_Generic((N), struct dfuse_inode_entry *: 1, struct dfuse_obj_hdl *: 1, default: 0)
 
 #define IS_DFT(N)                                                                                  \
-	_Generic((N), struct dfuse_inode_entry *: 1, struct dfuse_obj_hdl *: 1,                    \
-		 struct dfuse_info *: 1, default: 0)
+	_Generic((N),                                                                              \
+	    struct dfuse_inode_entry *: 1,                                                         \
+	    struct dfuse_obj_hdl *: 1,                                                             \
+	    struct dfuse_info *: 1,                                                                \
+	    default: 0)
 
 /* Macros to reply to fuse requests.
  * As fuse holds a reference on inode or open handle for the duration of a request then after the
@@ -594,6 +597,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
+/* This macro can use ie->ie_stat as attr so do not set ie to NULL until after the call. */
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
 	do {                                                                                       \
 		int    __rc;                                                                       \
@@ -604,8 +608,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 		}                                                                                  \
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
 				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
-		(ie) = NULL;                                                                       \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
+		(ie) = NULL;                                                                       \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
@@ -616,8 +620,8 @@ struct fuse_lowlevel_ops dfuse_ops;
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
 				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
 				(ie)->ie_stat.st_size, timeout);                                   \
-		(ie) = NULL;                                                                       \
 		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
+		(ie) = NULL;                                                                       \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
