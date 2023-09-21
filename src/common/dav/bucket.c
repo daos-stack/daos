@@ -23,15 +23,13 @@
 
 struct bucket {
 	/* this struct is both the lock guard and the locked state */
-	struct bucket_locked *locked;
-
-	struct alloc_class *aclass;
-
-	struct block_container *container;
+	struct bucket_locked             *locked;
+	struct alloc_class               *aclass;
+	struct block_container           *container;
 	const struct block_container_ops *c_ops;
-
-	struct memory_block_reserved *active_memory_block;
-	int is_active;
+	struct memory_block_reserved     *active_memory_block;
+	struct zone_set                  *zset;
+	int                               is_active;
 };
 
 struct bucket_locked {
@@ -77,7 +75,7 @@ bucket_fini(struct bucket *b)
  * bucket_locked_new -- creates a new locked bucket instance
  */
 struct bucket_locked *
-bucket_locked_new(struct block_container *c, struct alloc_class *aclass)
+bucket_locked_new(struct block_container *c, struct alloc_class *aclass, struct zone_set *zset)
 {
 	ASSERTne(c, NULL);
 
@@ -92,6 +90,7 @@ bucket_locked_new(struct block_container *c, struct alloc_class *aclass)
 
 	util_mutex_init(&b->lock);
 	b->bucket.locked = b;
+	b->bucket.zset = zset;
 
 	return b;
 
@@ -267,4 +266,10 @@ struct memory_block_reserved *
 bucket_active_block(struct bucket *b)
 {
 	return b->is_active ? b->active_memory_block : NULL;
+}
+
+struct zone_set *
+bucket_get_zoneset(struct bucket *b)
+{
+	return b->zset;
 }

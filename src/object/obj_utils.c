@@ -124,7 +124,7 @@ recx_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	if (key_recx == NULL || key->iov_len != sizeof(*key_recx))
 		return -DER_INVAL;
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r), 0);
 	if (UMOFF_IS_NULL(roff))
 		return tins->ti_umm.umm_nospc_rc;
 

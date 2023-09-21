@@ -328,7 +328,7 @@ test_alloc(void **state)
 	if (rc != 0)
 		goto done;
 
-	umoff = umem_zalloc(umm, 4);
+	umoff = umem_zalloc(umm, 4, 0);
 	if (UMOFF_IS_NULL(umoff)) {
 		print_message("umoff unexpectedly NULL\n");
 		rc = 1;

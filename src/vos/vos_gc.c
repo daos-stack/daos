@@ -416,7 +416,7 @@ gc_bin_find_bag(struct umem_instance *umm, struct vos_gc_bin_df *bin)
 
 	/* allocate a new bag */
 	size = offsetof(struct vos_gc_bag_df, bag_items[bin->bin_bag_size]);
-	bag_id = umem_zalloc(umm, size);
+	bag_id = umem_zalloc(umm, size, 0);
 	if (UMOFF_IS_NULL(bag_id))
 		return NULL;
 
@@ -805,7 +805,7 @@ gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd)
 		struct vos_gc_bin_df *bin = &pd->pd_gc_bins[i];
 
 		size = offsetof(struct vos_gc_bag_df, bag_items[gc_bag_size]);
-		bag_id = umem_zalloc(umm, size);
+		bag_id = umem_zalloc(umm, size, 0);
 		if (UMOFF_IS_NULL(bag_id))
 			return -DER_NOMEM;
 

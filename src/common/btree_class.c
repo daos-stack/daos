@@ -248,7 +248,7 @@ nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	rc = tins->ti_umm.umm_nospc_rc;
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len);
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + name_len, 0);
 	if (UMOFF_IS_NULL(roff))
 		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 
@@ -256,7 +256,7 @@ nv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	r->nr_value_size = val->iov_len;
 	r->nr_value_buf_size = r->nr_value_size;
 
-	r->nr_value = umem_alloc(&tins->ti_umm, r->nr_value_buf_size);
+	r->nr_value = umem_alloc(&tins->ti_umm, r->nr_value_buf_size, 0);
 	if (UMOFF_IS_NULL(r->nr_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 
@@ -332,7 +332,7 @@ nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (r->nr_value_buf_size < val->iov_len) {
 		umem_off_t voff;
 
-		voff = umem_alloc(&tins->ti_umm, val->iov_len);
+		voff = umem_alloc(&tins->ti_umm, val->iov_len, 0);
 		if (UMOFF_IS_NULL(voff))
 			return tins->ti_umm.umm_nospc_rc;
 
@@ -588,7 +588,7 @@ uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	    val->iov_len == 0 || val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc);
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r), 0);
 	if (UMOFF_IS_NULL(roff))
 		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 
@@ -596,7 +596,7 @@ uv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	r->ur_value_size = val->iov_len;
 	r->ur_value_buf_size = r->ur_value_size;
 
-	r->ur_value = umem_alloc(&tins->ti_umm, r->ur_value_buf_size);
+	r->ur_value = umem_alloc(&tins->ti_umm, r->ur_value_buf_size, 0);
 	if (UMOFF_IS_NULL(r->ur_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 
@@ -670,7 +670,7 @@ uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (r->ur_value_buf_size < val->iov_len) {
 		umem_off_t voff;
 
-		voff = umem_alloc(&tins->ti_umm, val->iov_len);
+		voff = umem_alloc(&tins->ti_umm, val->iov_len, 0);
 		if (UMOFF_IS_NULL(voff))
 			return tins->ti_umm.umm_nospc_rc;
 
@@ -907,7 +907,7 @@ ec_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	    val->iov_buf_len < val->iov_len)
 		return rc;
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r), 0);
 	if (UMOFF_IS_NULL(roff))
 		return tins->ti_umm.umm_nospc_rc;
 
@@ -1135,14 +1135,14 @@ kv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	    val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + key->iov_len);
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + key->iov_len, 0);
 	if (UMOFF_IS_NULL(roff))
 		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 	r = umem_off2ptr(&tins->ti_umm, roff);
 
 	r->kr_value_len = val->iov_len;
 	r->kr_value_cap = r->kr_value_len;
-	r->kr_value = umem_alloc(&tins->ti_umm, r->kr_value_cap);
+	r->kr_value = umem_alloc(&tins->ti_umm, r->kr_value_cap, 0);
 	if (UMOFF_IS_NULL(r->kr_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 	v = umem_off2ptr(&tins->ti_umm, r->kr_value);
@@ -1210,7 +1210,7 @@ kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (r->kr_value_cap < val->iov_len) {
 		umem_off_t voff;
 
-		voff = umem_alloc(&tins->ti_umm, val->iov_len);
+		voff = umem_alloc(&tins->ti_umm, val->iov_len, 0);
 		if (UMOFF_IS_NULL(voff))
 			return tins->ti_umm.umm_nospc_rc;
 		umem_free(&tins->ti_umm, r->kr_value);
@@ -1330,14 +1330,14 @@ iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 	    key->iov_buf_len < key->iov_len || val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r));
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r), 0);
 	if (UMOFF_IS_NULL(roff))
 		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 	r = umem_off2ptr(&tins->ti_umm, roff);
 
 	r->ir_value_len = val->iov_len;
 	r->ir_value_cap = r->ir_value_len;
-	r->ir_value = umem_alloc(&tins->ti_umm, r->ir_value_cap);
+	r->ir_value = umem_alloc(&tins->ti_umm, r->ir_value_cap, 0);
 	if (UMOFF_IS_NULL(r->ir_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 	v = umem_off2ptr(&tins->ti_umm, r->ir_value);
@@ -1413,7 +1413,7 @@ iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	if (r->ir_value_cap < val->iov_len) {
 		umem_off_t voff;
 
-		voff = umem_alloc(&tins->ti_umm, val->iov_len);
+		voff = umem_alloc(&tins->ti_umm, val->iov_len, 0);
 		if (UMOFF_IS_NULL(voff))
 			return tins->ti_umm.umm_nospc_rc;
 		umem_free(&tins->ti_umm, r->ir_value);
@@ -1520,7 +1520,7 @@ ifv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val, struct btr_
 	    val->iov_buf_len < val->iov_len)
 		D_GOTO(err, rc = -DER_INVAL);
 
-	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + val->iov_len);
+	roff = umem_zalloc(&tins->ti_umm, sizeof(*r) + val->iov_len, 0);
 	if (UMOFF_IS_NULL(roff))
 		D_GOTO(err, rc = tins->ti_umm.umm_nospc_rc);
 	r = umem_off2ptr(&tins->ti_umm, roff);

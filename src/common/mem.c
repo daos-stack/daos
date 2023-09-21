@@ -37,6 +37,18 @@ struct umem_tx_stage_item {
 static int daos_md_backend = DAOS_MD_PMEM;
 #define UMM_SLABS_CNT 16
 
+uint32_t
+umem_get_mb_evictable(struct umem_instance *umm, int flags)
+{
+	dav_obj_t *pop;
+
+	if (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM) {
+		pop = (dav_obj_t *)umm->umm_pool->up_priv;
+		return dav_get_zone_evictable(pop, flags);
+	}
+	return 0;
+}
+
 /** Initializes global settings for the pmem objects.
  *
  *  \param	md_on_ssd[IN]	Boolean indicating if MD-on-SSD is enabled.
@@ -658,7 +670,8 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
+pmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	      unsigned int unused)
 {
 	uint64_t pflags = 0;
 
@@ -866,7 +879,8 @@ pmem_tx_stage(void)
 }
 
 static umem_off_t
-pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
+pmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
+	     unsigned int unused)
 {
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
 
@@ -901,7 +915,7 @@ pmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 
 static umem_off_t
 pmem_atomic_alloc(struct umem_instance *umm, size_t size,
-		  unsigned int type_num)
+		  unsigned int type_num, unsigned int unused)
 {
 	PMEMoid oid;
 	PMEMobjpool *pop = (PMEMobjpool *)umm->umm_pool->up_priv;
@@ -1049,7 +1063,8 @@ bmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
+bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	      unsigned int mbkt_id)
 {
 	uint64_t pflags = 0;
 
@@ -1059,6 +1074,8 @@ bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
+	if (mbkt_id != 0)
+		pflags |= DAV_EZONE_ID(mbkt_id);
 	return dav_tx_xalloc(size, type_num, pflags);
 }
 
@@ -1162,11 +1179,13 @@ bmem_defer_free(struct umem_instance *umm, umem_off_t off, void *act)
 }
 
 static umem_off_t
-bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
+bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
+	     unsigned int mbkt_id)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	uint64_t flags = DAV_EZONE_ID(mbkt_id);
 
-	return dav_reserve(pop, (struct dav_action *)act, size, type_num);
+	return dav_xreserve(pop, (struct dav_action *)act, size, type_num, flags);
 }
 
 static void
@@ -1204,13 +1223,14 @@ bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 
 static umem_off_t
 bmem_atomic_alloc(struct umem_instance *umm, size_t size,
-		  unsigned int type_num)
+		  unsigned int type_num, unsigned int mbkt_id)
 {
 	uint64_t off;
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 	int rc;
+	uint64_t flags = DAV_EZONE_ID(mbkt_id);
 
-	rc = dav_alloc(pop, &off, size, type_num, NULL, NULL);
+	rc = dav_xalloc(pop, &off, size, type_num, flags, NULL, NULL);
 	if (rc)
 		return UMOFF_NULL;
 	return off;
@@ -1285,7 +1305,8 @@ vmem_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 umem_off_t
-vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num)
+vmem_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	   unsigned int unused)
 {
 	return (uint64_t)((flags & UMEM_FLAG_ZERO) ?
 			  calloc(1, size) : malloc(size));
@@ -1604,7 +1625,7 @@ umem_rsrvd_act_free(struct umem_rsrvd_act **rsrvd_act)
 
 umem_off_t
 umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act,
-	     size_t size)
+	     size_t size, unsigned int mbkt_id)
 {
 	if (umm->umm_ops->mo_reserve) {
 		void			*act;
@@ -1616,7 +1637,7 @@ umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act,
 
 		act = rsrvd_act->rs_actv + act_size * rsrvd_act->rs_actv_at;
 		off = umm->umm_ops->mo_reserve(umm, act, size,
-					       UMEM_TYPE_ANY);
+					       UMEM_TYPE_ANY, mbkt_id);
 		if (!UMOFF_IS_NULL(off))
 			rsrvd_act->rs_actv_at++;
 		D_ASSERTF(umem_off2flags(off) == 0,

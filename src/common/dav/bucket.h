@@ -22,7 +22,8 @@ struct bucket_locked;
 struct bucket;
 
 struct bucket_locked *bucket_locked_new(struct block_container *c,
-					struct alloc_class *aclass);
+					struct alloc_class *aclass,
+					struct zone_set *zset);
 
 struct bucket *bucket_acquire(struct bucket_locked *b);
 void bucket_release(struct bucket *b);
@@ -41,5 +42,6 @@ int bucket_detach_run(struct bucket *b,
 struct memory_block_reserved *bucket_active_block(struct bucket *b);
 
 void bucket_locked_delete(struct bucket_locked *b);
+struct zone_set *bucket_get_zoneset(struct bucket *b);
 
 #endif /* __DAOS_COMMON_BUCKET_H */

@@ -137,7 +137,7 @@ utest_vmem_create(size_t root_size, struct utest_context **utx)
 
 	umem_class_init(&ctx->uc_uma, &ctx->uc_umm);
 
-	ctx->uc_root = umem_zalloc(&ctx->uc_umm, sizeof(*root) + root_size);
+	ctx->uc_root = umem_zalloc(&ctx->uc_umm, sizeof(*root) + root_size, 0);
 
 	if (UMOFF_IS_NULL(ctx->uc_root)) {
 		rc = ctx->uc_umm.umm_nospc_rc;
@@ -237,7 +237,7 @@ utest_alloc(struct utest_context *utx, umem_off_t *off, size_t size,
 	if (rc != 0)
 		return rc;
 
-	*off = umem_alloc(&utx->uc_umm, size);
+	*off = umem_alloc(&utx->uc_umm, size, 0);
 	if (UMOFF_IS_NULL(*off)) {
 		rc = utx->uc_umm.umm_nospc_rc;
 		goto end;

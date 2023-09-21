@@ -528,7 +528,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 		return rc;
 	}
 
-	tree_root = umem_zalloc(lctx->ic_umm, ILOG_ARRAY_CHUNK_SIZE);
+	tree_root = umem_zalloc(lctx->ic_umm, ILOG_ARRAY_CHUNK_SIZE, 0);
 
 	if (tree_root == UMOFF_NULL)
 		return lctx->ic_umm->umm_nospc_rc;
@@ -821,7 +821,7 @@ insert:
 		new_len = (cache.ac_nr + 1) * 2 - 1;
 		new_size = sizeof(*cache.ac_array) + sizeof(cache.ac_entries[0]) * new_len;
 		D_ASSERT((new_size & (ILOG_ARRAY_CHUNK_SIZE - 1)) == 0);
-		new_array = umem_zalloc(lctx->ic_umm, new_size);
+		new_array = umem_zalloc(lctx->ic_umm, new_size, 0);
 		if (new_array == UMOFF_NULL)
 			return lctx->ic_umm->umm_nospc_rc;
 

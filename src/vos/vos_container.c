@@ -85,7 +85,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	D_DEBUG(DB_DF, "Allocating container uuid=" DF_UUID "\n",
 		DP_UUID(ukey->uuid));
-	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
+	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df), 0);
 	if (UMOFF_IS_NULL(offset))
 		return -DER_NOSPACE;
 

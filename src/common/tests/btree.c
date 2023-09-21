@@ -96,7 +96,7 @@ ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	struct ik_rec		*irec;
 	char			*vbuf;
 
-	irec_off = umem_zalloc(&tins->ti_umm, sizeof(struct ik_rec));
+	irec_off = umem_zalloc(&tins->ti_umm, sizeof(struct ik_rec), 0);
 	D_ASSERT(!UMOFF_IS_NULL(irec_off)); /* lazy bone... */
 
 	irec = umem_off2ptr(&tins->ti_umm, irec_off);
@@ -104,7 +104,7 @@ ik_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	irec->ir_key = *(int *)key_iov->iov_buf;
 	irec->ir_val_size = irec->ir_val_msize = val_iov->iov_len;
 
-	irec->ir_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len);
+	irec->ir_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len, 0);
 	D_ASSERT(!UMOFF_IS_NULL(irec->ir_val_off));
 
 	vbuf = umem_off2ptr(&tins->ti_umm, irec->ir_val_off);
@@ -216,7 +216,7 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		umem_free(umm, irec->ir_val_off);
 
 		irec->ir_val_msize = val_iov->iov_len;
-		irec->ir_val_off = umem_alloc(umm, val_iov->iov_len);
+		irec->ir_val_off = umem_alloc(umm, val_iov->iov_len, 0);
 		D_ASSERT(!UMOFF_IS_NULL(irec->ir_val_off));
 	}
 	val = umem_off2ptr(umm, irec->ir_val_off);

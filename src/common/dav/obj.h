@@ -45,7 +45,7 @@ typedef uint64_t type_num_t;
 #define CLASS_ID_FROM_FLAG(flag)\
 ((uint16_t)((flag) >> 48))
 
-#define ARENA_ID_FROM_FLAG(flag)\
-((uint16_t)((flag) >> 32))
+#define EZONE_ID_FROM_FLAG(flag)\
+((uint32_t)((flag) >> 16))
 
 #endif /* __DAOS_COMMON_OBJ_H */

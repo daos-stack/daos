@@ -26,7 +26,7 @@ struct recycler_element {
 };
 
 struct recycler *recycler_new(struct palloc_heap *layout,
-	size_t nallocs, size_t *peak_arenas);
+	size_t nallocs, struct zone_set *zset);
 void recycler_delete(struct recycler *r);
 struct recycler_element recycler_element_new(struct palloc_heap *heap,
 	const struct memory_block *m);
@@ -39,5 +39,7 @@ struct empty_runs recycler_recalc(struct recycler *r, int force);
 
 void recycler_inc_unaccounted(struct recycler *r,
 	const struct memory_block *m);
+
+struct zone_set *recycler_get_zoneset(struct recycler *r);
 
 #endif /* __DAOS_COMMON_RECYCLER_H */

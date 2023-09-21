@@ -166,7 +166,7 @@ test_atomic_alloc(void **state)
 
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	snap_persist_activity();
-	off = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY);
+	off = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(off));
 	validate_persist_activity(1, 1);
 
@@ -178,7 +178,7 @@ test_atomic_alloc(void **state)
 
 	/* Negative test: Incorrect size test */
 	snap_persist_activity();
-	off = umem_atomic_alloc(umm, 0, UMEM_TYPE_ANY);
+	off = umem_atomic_alloc(umm, 0, UMEM_TYPE_ANY, 0);
 	assert_true(UMOFF_IS_NULL(off));
 	validate_persist_activity(0, 0);
 
@@ -187,7 +187,7 @@ test_atomic_alloc(void **state)
 	for (i = 1; i < 16; i++) {
 		size = (1ul<<i) - 1;
 		total_size += size;
-		off_arr[i] = umem_atomic_alloc(umm, size, UMEM_TYPE_ANY);
+		off_arr[i] = umem_atomic_alloc(umm, size, UMEM_TYPE_ANY, 0);
 		assert_false(UMOFF_IS_NULL(off_arr[i]));
 	}
 	validate_persist_activity(15, 15);
@@ -215,7 +215,7 @@ test_atomic_copy(void **state)
 	char			 local_buf[2048];
 	char			*dest;
 
-	off = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	off = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(off));
 
 	memset(local_buf, 'a', 2048);
@@ -339,7 +339,7 @@ test_simple_commit_tx(void **state)
 	assert_return_code(rc, 0);
 
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off = umem_alloc(umm, 128);
+	off = umem_alloc(umm, 128, 0);
 	assert_false(UMOFF_IS_NULL(off));
 
 	rc = umem_tx_commit(umm);
@@ -388,7 +388,7 @@ test_simple_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off = umem_zalloc(umm, 128);
+	off = umem_zalloc(umm, 128, 0);
 	assert_false(UMOFF_IS_NULL(off));
 	ptr = umem_off2ptr(umm, off);
 	strcpy(ptr, "0123456789");
@@ -461,7 +461,7 @@ test_nested_commit_tx(void **state)
 	assert_return_code(rc, 0);
 
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off1 = umem_alloc(umm, 128);
+	off1 = umem_alloc(umm, 128, 0);
 	assert_false(UMOFF_IS_NULL(off1));
 
 	/* Inner Tx start */
@@ -469,7 +469,7 @@ test_nested_commit_tx(void **state)
 	assert_return_code(rc, 0);
 
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off2 = umem_alloc(umm, 256);
+	off2 = umem_alloc(umm, 256, 0);
 	assert_false(UMOFF_IS_NULL(off2));
 
 	rc = umem_tx_commit(umm);
@@ -539,11 +539,11 @@ test_nested_outer_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off1 = umem_zalloc(umm, 128);
+	off1 = umem_zalloc(umm, 128, 0);
 	assert_false(UMOFF_IS_NULL(off1));
 	ptr1 = umem_off2ptr(umm, off1);
 	strcpy(ptr1, "0123456789");
-	off2 = umem_zalloc(umm, 256);
+	off2 = umem_zalloc(umm, 256, 0);
 	assert_false(UMOFF_IS_NULL(off2));
 	ptr2 = umem_off2ptr(umm, off2);
 	strcpy(ptr2, "ABCDEFGHIJ");
@@ -648,11 +648,11 @@ test_nested_inner_abort_tx(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_return_code(rc, 0);
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_WORK);
-	off1 = umem_zalloc(umm, 128);
+	off1 = umem_zalloc(umm, 128, 0);
 	assert_false(UMOFF_IS_NULL(off1));
 	ptr1 = umem_off2ptr(umm, off1);
 	strcpy(ptr1, "0123456789");
-	off2 = umem_zalloc(umm, 256);
+	off2 = umem_zalloc(umm, 256, 0);
 	assert_false(UMOFF_IS_NULL(off2));
 	ptr2 = umem_off2ptr(umm, off2);
 	strcpy(ptr2, "ABCDEFGHIJ");
@@ -808,7 +808,7 @@ test_alloc(void **state)
 	if (rc != 0)
 		goto done;
 
-	umoff = umem_zalloc(umm, 4);
+	umoff = umem_zalloc(umm, 4, 0);
 	if (UMOFF_IS_NULL(umoff)) {
 		print_message("umoff unexpectedly NULL\n");
 		rc = 1;
@@ -847,7 +847,7 @@ test_tx_alloc(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
 
-	umoff1 = umem_zalloc(umm, 4);
+	umoff1 = umem_zalloc(umm, 4, 0);
 	assert_false(UMOFF_IS_NULL(umoff1));
 	allotted_size += 4;
 
@@ -866,7 +866,7 @@ test_tx_alloc(void **state)
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
 
-	umoff2 = umem_alloc(umm, 4);
+	umoff2 = umem_alloc(umm, 4, 0);
 	allotted_size += 4;
 	assert_false(UMOFF_IS_NULL(umoff2));
 
@@ -902,15 +902,15 @@ test_tx_alloc(void **state)
 
 	/* Negative Tests */
 	/* Outside of TX */
-	expect_assert_failure(umem_alloc(umm, 100));
-	expect_assert_failure(umem_zalloc(umm, 100));
+	expect_assert_failure(umem_alloc(umm, 100, 0));
+	expect_assert_failure(umem_zalloc(umm, 100, 0));
 
 	/* alloc of size zero */
 	snap_persist_activity();
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_alloc(umm, 0);
+	umoff1 = umem_alloc(umm, 0, 0);
 	assert_true(UMOFF_IS_NULL(umoff1));
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_ONABORT);
 	rc = umem_tx_end(umm, 1);
@@ -923,7 +923,7 @@ test_tx_alloc(void **state)
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_zalloc(umm, 0);
+	umoff1 = umem_zalloc(umm, 0, 0);
 	assert_true(UMOFF_IS_NULL(umoff1));
 	assert_true(umem_tx_stage(umm) == UMEM_STAGE_ONABORT);
 	rc = umem_tx_end(umm, 1);
@@ -935,7 +935,7 @@ test_tx_alloc(void **state)
 	/* free outside of tx */
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_zalloc(umm, 4);
+	umoff1 = umem_zalloc(umm, 4, 0);
 	assert_false(UMOFF_IS_NULL(umoff1));
 	rc = umem_tx_end(umm, 0);
 	assert_int_equal(rc, 0);
@@ -946,9 +946,9 @@ test_tx_alloc(void **state)
 	utest_get_scm_used_space(arg->ta_utx, &initial_mem_used);
 	rc = umem_tx_begin(umm, NULL);
 	assert_int_equal(rc, 0);
-	umoff1 = umem_alloc(umm, 16);
+	umoff1 = umem_alloc(umm, 16, 0);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff1 = umem_zalloc(umm, 32);
+	umoff1 = umem_zalloc(umm, 32, 0);
 	assert_false(UMOFF_IS_NULL(umoff2));
 	rc = umem_tx_abort(umm, 1);
 	assert_false(rc == 0);
@@ -969,7 +969,7 @@ test_tx_add(void **state)
 	char			 local_buf[2048];
 
 	/* Setup */
-	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	start_ptr = umem_off2ptr(umm, umoff);
 	memset(local_buf, 0, 2048);
@@ -1029,7 +1029,7 @@ test_tx_add_ptr(void **state)
 	char			 local_buf[2048];
 
 	/* Setup */
-	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	start_ptr = umem_off2ptr(umm, umoff);
 	memset(local_buf, 0, 2048);
@@ -1089,7 +1089,7 @@ test_tx_xadd_ptr(void **state)
 	char			 local_buf[2048];
 
 	/* Setup */
-	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	umoff = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	start_ptr = umem_off2ptr(umm, umoff);
 	memset(local_buf, 0, 2048);
@@ -1161,7 +1161,7 @@ test_tx_reserve_publish_cancel(void **state)
 	/* Reserve/Publish */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve(umm, rsrvd_act, 980);
+	umoff = umem_reserve(umm, rsrvd_act, 980, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr1, 0, 980);
@@ -1169,7 +1169,7 @@ test_tx_reserve_publish_cancel(void **state)
 	memcpy(rsrv_ptr1+128, data, strlen(data));
 	memcpy(local_buf+128, data, strlen(data));
 
-	umoff = umem_reserve(umm, rsrvd_act, 128);
+	umoff = umem_reserve(umm, rsrvd_act, 128, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr2 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr2, 0, 128);
@@ -1202,13 +1202,13 @@ test_tx_reserve_publish_cancel(void **state)
 	/* Reserve/Cancel */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve(umm, rsrvd_act, 980);
+	umoff = umem_reserve(umm, rsrvd_act, 980, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr1, 1, 980);
 	memset(local_buf, 1, 980);
 
-	umoff = umem_reserve(umm, rsrvd_act, 128);
+	umoff = umem_reserve(umm, rsrvd_act, 128, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr2 = umem_off2ptr(umm, umoff);
 	memset(rsrv_ptr2, 1, 128);
@@ -1232,11 +1232,11 @@ test_tx_reserve_publish_cancel(void **state)
 	validate_persist_activity(1, 0);
 	utest_get_scm_used_space(arg->ta_utx, &cur_mem_used);
 	assert_true(cur_mem_used >= initial_mem_used);
-	umoff = umem_atomic_alloc(umm, 980, UMEM_TYPE_ANY);
+	umoff = umem_atomic_alloc(umm, 980, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr3 = umem_off2ptr(umm, umoff);
 	assert_ptr_equal(rsrv_ptr1, rsrv_ptr3);
-	umoff = umem_atomic_alloc(umm, 128, UMEM_TYPE_ANY);
+	umoff = umem_atomic_alloc(umm, 128, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr4 = umem_off2ptr(umm, umoff);
 	assert_ptr_equal(rsrv_ptr2, rsrv_ptr4);
@@ -1245,7 +1245,7 @@ test_tx_reserve_publish_cancel(void **state)
 	/* reserve - atomic_copy - cancel */
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
 	assert_int_equal(rc, 0);
-	umoff = umem_reserve(umm, rsrvd_act, 980);
+	umoff = umem_reserve(umm, rsrvd_act, 980, 0);
 	assert_false(UMOFF_IS_NULL(umoff));
 	rsrv_ptr1 = umem_off2ptr(umm, umoff);
 	memset(local_buf, 1, 980);
@@ -1286,9 +1286,9 @@ test_tx_dfree_publish_cancel(void **state)
 	uint64_t		 initial_mem_used, cur_mem_used;
 
 	/* Defer Free/Publish */
-	umoff1 = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	umoff1 = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff2 = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY);
+	umoff2 = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff2));
 
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
@@ -1313,9 +1313,9 @@ test_tx_dfree_publish_cancel(void **state)
 
 
 	/* Defer Free/Cancel */
-	umoff1 = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY);
+	umoff1 = umem_atomic_alloc(umm, 2048, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff1));
-	umoff2 = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY);
+	umoff2 = umem_atomic_alloc(umm, 1024, UMEM_TYPE_ANY, 0);
 	assert_false(UMOFF_IS_NULL(umoff2));
 
 	rc = umem_rsrvd_act_alloc(umm, &rsrvd_act, 2);
@@ -1373,13 +1373,13 @@ test_tx_alloc_withslabs(void **state)
 	total_allotted = 0;
 	for (i = 0; i < 5; i++) {
 		size_exact = (1<<(i*2)) + 200 + i*16;
-		ummoff_exact1[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_exact);
+		ummoff_exact1[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_exact, 0);
 		assert_false(UMOFF_IS_NULL(ummoff_exact1[i]));
 		size_less = 200;
-		ummoff_less[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_less);
+		ummoff_less[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_less, 0);
 		assert_false(UMOFF_IS_NULL(ummoff_less[i]));
 		assert_true(ummoff_exact1[i] + size_exact == ummoff_less[i]);
-		ummoff_exact2[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_exact);
+		ummoff_exact2[i] = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_exact, 0);
 		assert_false(UMOFF_IS_NULL(ummoff_exact2[i]));
 		assert_true(ummoff_less[i] + size_exact == ummoff_exact2[i]);
 		total_allotted += size_exact*3;
@@ -1393,7 +1393,7 @@ test_tx_alloc_withslabs(void **state)
 		size_greater = (1<<(i*2)) + 200 + i*16 + 100;
 		rc = umem_tx_begin(umm, NULL);
 		assert_int_equal(rc, 0);
-		ummoff_greater = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_greater);
+		ummoff_greater = umem_alloc_verb(umm, i, UMEM_FLAG_ZERO, size_greater, 0);
 		assert_true(UMOFF_IS_NULL(ummoff_greater));
 		rc = umem_tx_end(umm, 1);
 		assert_int_equal(rc, umem_tx_errno(ENOMEM));

@@ -23,17 +23,17 @@
 #define DAV_FLAG_TX_NO_ABORT		(((uint64_t)1) << 4)
 
 #define DAV_CLASS_ID(id)		(((uint64_t)(id)) << 48)
-#define DAV_ARENA_ID(id)		(((uint64_t)(id)) << 32)
+#define DAV_EZONE_ID(id)		(((uint64_t)(id)) << 16)
 
 #define DAV_XALLOC_CLASS_MASK		((((uint64_t)1 << 16) - 1) << 48)
-#define DAV_XALLOC_ARENA_MASK		((((uint64_t)1 << 16) - 1) << 32)
+#define DAV_XALLOC_EZONE_MASK		((((uint64_t)1 << 32) - 1) << 16)
 #define DAV_XALLOC_ZERO			DAV_FLAG_ZERO
 #define DAV_XALLOC_NO_FLUSH		DAV_FLAG_NO_FLUSH
 #define DAV_XALLOC_NO_ABORT		DAV_FLAG_TX_NO_ABORT
 
 #define DAV_TX_XALLOC_VALID_FLAGS	(DAV_XALLOC_ZERO |\
 					DAV_XALLOC_NO_FLUSH |\
-					DAV_XALLOC_ARENA_MASK |\
+					DAV_XALLOC_EZONE_MASK |\
 					DAV_XALLOC_CLASS_MASK |\
 					DAV_XALLOC_NO_ABORT)
 
@@ -124,6 +124,12 @@ typedef int (*dav_constr)(dav_obj_t *pop, void *ptr, void *arg);
  */
 int dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
 	      uint64_t type_num, dav_constr constructor, void *arg);
+
+/*
+ * Allocates with flags a new object from the pool.
+ */
+int dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num,
+	       uint64_t flags, dav_constr constructor, void *arg);
 
 /**
  * Frees the memory at specified offset within the DAV object pointed to by hdl.
@@ -370,7 +376,14 @@ struct dav_action {
 	};
 };
 
+#define DAV_ACTION_XRESERVE_VALID_FLAGS \
+	(DAV_XALLOC_CLASS_MASK |\
+	 DAV_XALLOC_EZONE_MASK |\
+	 DAV_XALLOC_ZERO)
+
 uint64_t dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num);
+uint64_t dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
+		      uint64_t flags);
 void dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act);
 int dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
 void dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
@@ -517,5 +530,16 @@ uint32_t wal_tx_act_nr(struct umem_wal_tx *tx);
 uint32_t wal_tx_payload_len(struct umem_wal_tx *tx);
 struct umem_action *wal_tx_act_first(struct umem_wal_tx *tx);
 struct umem_action *wal_tx_act_next(struct umem_wal_tx *tx);
+
+/**
+ * Get an evictable zone with sufficient free space within.
+ *
+ * \param[in]		pop		pool handle
+ * \param[in]		flags		zone selection criteria.
+ *
+ * \return id >= 0. Zero indicates non-evictable zone and will be
+ *	returned if no evictable zone can be chosen.
+ */
+uint32_t dav_get_zone_evictable(dav_obj_t *pop, int flags);
 
 #endif /* __DAOS_COMMON_DAV_H */

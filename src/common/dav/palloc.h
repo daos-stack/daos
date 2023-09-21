@@ -35,6 +35,7 @@ struct palloc_heap {
 };
 
 struct memory_block;
+struct zone_set;
 
 typedef int (*palloc_constr)(void *base, void *ptr,
 		size_t usable_size, void *arg);
@@ -42,14 +43,14 @@ typedef int (*palloc_constr)(void *base, void *ptr,
 int palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off,
 	size_t size, palloc_constr constructor, void *arg,
 	uint64_t extra_field, uint16_t object_flags,
-	uint16_t class_id, uint16_t arena_id,
+	uint16_t class_id, uint32_t zset_id,
 	struct operation_context *ctx);
 
 int
 palloc_reserve(struct palloc_heap *heap, size_t size,
 	       palloc_constr constructor, void *arg,
 	       uint64_t extra_field, uint16_t object_flags,
-	       uint16_t class_id, uint16_t arena_id,
+	       uint16_t class_id, uint32_t zset_id,
 	       struct dav_action *act);
 
 int palloc_action_isalloc(struct dav_action *act);
@@ -86,12 +87,10 @@ int palloc_boot(struct palloc_heap *heap, void *heap_start,
 		void *base, struct mo_ops *p_ops,
 		struct stats *stats, struct pool_set *set);
 
-int palloc_buckets_init(struct palloc_heap *heap);
 int palloc_init(void *heap_start, uint64_t heap_size, uint64_t *sizep, struct mo_ops *p_ops);
 void *palloc_heap_end(struct palloc_heap *h);
 int palloc_heap_check(void *heap_start, uint64_t heap_size);
 int palloc_heap_check_remote(void *heap_start, uint64_t heap_size, struct remote_ops *ops);
-void palloc_heap_cleanup(struct palloc_heap *heap);
 size_t palloc_heap(void *heap_start);
 
 /* foreach callback, terminates iteration if return value is non-zero */

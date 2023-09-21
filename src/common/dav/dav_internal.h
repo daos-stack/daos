@@ -28,11 +28,6 @@ enum dav_stats_enabled {
 	DAV_STATS_DISABLED,
 };
 
-enum dav_arenas_assignment_type {
-	DAV_ARENAS_ASSIGNMENT_THREAD_KEY,
-	DAV_ARENAS_ASSIGNMENT_GLOBAL,
-};
-
 #define	DAV_PHDR_SIZE	4096
 
 /* DAV header data that will be persisted */

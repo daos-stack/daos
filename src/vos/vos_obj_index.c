@@ -79,7 +79,7 @@ oi_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	int			 rc;
 
 	/* Allocate a PMEM value of type vos_obj_df */
-	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df));
+	obj_off = umem_zalloc(&tins->ti_umm, sizeof(struct vos_obj_df), 0);
 	if (UMOFF_IS_NULL(obj_off))
 		return -DER_NOSPACE;
 
@@ -191,7 +191,7 @@ oi_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 oi_node_alloc(struct btr_instance *tins, int size)
 {
-	return umem_zalloc(&tins->ti_umm, size);
+	return umem_zalloc(&tins->ti_umm, size, 0);
 }
 
 static btr_ops_t oi_btr_ops = {

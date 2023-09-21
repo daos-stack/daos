@@ -38,7 +38,7 @@ ilog_alloc_root(struct umem_instance *umm)
 		goto done;
 	}
 
-	ilog_off = umem_zalloc(umm, sizeof(struct ilog_df));
+	ilog_off = umem_zalloc(umm, sizeof(struct ilog_df), 0);
 	if (ilog_off == UMOFF_NULL) {
 		print_message("Allocation failed\n");
 		rc = -DER_NOSPACE;
