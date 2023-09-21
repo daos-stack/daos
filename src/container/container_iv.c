@@ -661,9 +661,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
-			 DB_ANY, DLOG_ERR,
-			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  "failed to insert");
 
 	return rc;
 }
@@ -759,9 +758,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR,
-			 DF_UUID" iv fetch failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
+			  DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -792,10 +790,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
-			 DB_ANY, DLOG_ERR,
-			 DF_UUID" iv update failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
+			  DF_UUID " iv update failed", DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -1434,8 +1430,7 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
 		D_GOTO(out, rc);
 	}
 
