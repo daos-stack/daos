@@ -780,7 +780,7 @@ func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig, ldr
 		unaryLoggingInterceptor(log, ldrChk), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
-		unaryVersionInterceptor,
+		unaryVersionInterceptor(log),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,
