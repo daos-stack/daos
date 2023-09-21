@@ -33,13 +33,13 @@ obj_shard_decref(struct dc_obj_shard *shard)
 	bool			 release = false;
 
 	D_ASSERT(shard != NULL);
-	D_ASSERT(shard->do_ref > 0);
 	D_ASSERT(shard->do_obj != NULL);
 
 	obj = shard->do_obj;
 	layout = obj_shard2layout(shard);
 
 	D_SPIN_LOCK(&obj->cob_spin);
+	D_ASSERT(shard->do_ref > 0);
 	if (--(shard->do_ref) == 0) {
 		layout->do_open_count--;
 		if (layout->do_open_count == 0 && layout != obj->cob_shards)
@@ -1708,6 +1708,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		if (daos_anchor_get_flags(args->la_dkey_anchor) &
 		    DIOF_FOR_MIGRATION)
 			oei->oei_flags |= ORF_FOR_MIGRATION;
+		if (daos_anchor_get_flags(args->la_dkey_anchor) & DIOF_RECX_REVERSE)
+			oei->oei_flags |= ORF_DESCENDING_ORDER;
 	}
 	if (args->la_akey_anchor != NULL)
 		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);
@@ -1891,7 +1893,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_LOCK(&cb_args->obj->cob_spin);
 			D_GOTO(set_max_epoch, rc = 0);
 		}
 
@@ -1903,9 +1905,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				cb_args->rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
-	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_LOCK(&cb_args->obj->cob_spin);
+	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	if (flags == 0)
 		goto set_max_epoch;
@@ -1921,7 +1923,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
 			D_ERROR("Invalid Dkey obtained\n");
-			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
@@ -1983,7 +1985,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 set_max_epoch:
 	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
 		*cb_args->max_epoch = okqo->okqo_max_epoch;
-	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
 	crt_req_decref(rpc);
@@ -2051,9 +2053,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_oid			= oid;
 	d_iov_set(&okqi->okqi_dkey, NULL, 0);
 	d_iov_set(&okqi->okqi_akey, NULL, 0);
-	if (dkey != NULL)
+	if (dkey != NULL && !(flags & DAOS_GET_DKEY))
 		okqi->okqi_dkey		= *dkey;
-	if (akey != NULL)
+	if (akey != NULL && !(flags & DAOS_GET_AKEY))
 		okqi->okqi_akey		= *akey;
 	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
 		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;

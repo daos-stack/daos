@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -50,6 +51,7 @@ type (
 	// for a MockInvoker.
 	MockInvokerConfig struct {
 		Sys                 string
+		Component           build.Component
 		UnaryError          error
 		UnaryResponse       *UnaryResponse
 		UnaryResponseSet    []*UnaryResponse
@@ -100,6 +102,10 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 
 func (mi *MockInvoker) GetSystem() string {
 	return mi.cfg.Sys
+}
+
+func (mi *MockInvoker) GetComponent() build.Component {
+	return mi.cfg.Component
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {

@@ -139,15 +139,6 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopping: {
-			MemberStateReady: true,
-		},
-		MemberStateExcluded: {
-			MemberStateReady:    true,
-			MemberStateJoined:   true,
-			MemberStateStopping: true,
-			MemberStateErrored:  true,
-		},
 		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
@@ -346,6 +337,10 @@ func NewMemberResult(rank ranklist.Rank, err error, state MemberState, action ..
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
+		// Any error should result in either an unresponsive or errored state.
+		if state != MemberStateUnresponsive {
+			result.State = MemberStateErrored
+		}
 	}
 	if len(action) > 0 {
 		result.Action = action[0]

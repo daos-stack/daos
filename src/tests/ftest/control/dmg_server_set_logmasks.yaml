@@ -4,6 +4,7 @@ timeout: 120
 server_config:
   name: daos_server
   engines_per_host: 1
+  system_ram_reserved: 6
   engines:
     0:
       targets: 4

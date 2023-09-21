@@ -141,9 +141,10 @@ func TestAuto_confGen(t *testing.T) {
 		Message: control.MockServerScanResp(t, "withSpaceUsage"),
 	}
 	storRespHighMem := control.MockServerScanResp(t, "withSpaceUsage")
-	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd,
+	// Total mem to meet requirements 34GiB hugeMem, 2GiB per engine rsvd, 16GiB sys rsvd,
 	// 5GiB per engine for tmpfs.
-	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 6 + 10)) / humanize.KiByte
+	storRespHighMem.MemInfo.MemTotalKb = (humanize.GiByte * (34 + 4 + 16 + 10)) / humanize.KiByte
+	mockRamdiskSize := 5
 	storHostRespHighMem := &control.HostResponse{
 		Addr:    "host1",
 		Message: storRespHighMem,
@@ -151,7 +152,6 @@ func TestAuto_confGen(t *testing.T) {
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
-	mockRamdiskSize := 5 // RoundDownGiB(16*0.75/2)
 	metadataMountPath := "/mnt/daos_md"
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
@@ -187,6 +187,7 @@ func TestAuto_confGen(t *testing.T) {
 		hostResponsesSet [][]*control.HostResponse
 		expCfg           *config.Server
 		expErr           error
+		expOutPrefix     string
 	}{
 		"no host responses": {
 			expErr: errors.New("no host responses"),
@@ -289,6 +290,20 @@ func TestAuto_confGen(t *testing.T) {
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
+		"successful tmpfs scm; no logging to stdout": {
+			tmpfsSCM:        true,
+			extMetadataPath: metadataMountPath,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostRespHighMem},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
+				WithNrHugepages(17 * 2 * 512).
+				WithControlLogFile("/tmp/daos_server.log").
+				WithControlMetadata(controlMetadata),
+			expOutPrefix: "port: 10001",
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
@@ -309,6 +324,7 @@ func TestAuto_confGen(t *testing.T) {
 				UseTmpfsSCM:     tc.tmpfsSCM,
 				ExtMetadataPath: tc.extMetadataPath,
 			}
+			log.SetLevel(logging.LogLevelInfo)
 			cmd.Logger = log
 			cmd.hostlist = tc.hostlist
 
@@ -322,6 +338,22 @@ func TestAuto_confGen(t *testing.T) {
 			}
 			mic.UnaryError = tc.uErr
 			cmd.ctlInvoker = control.NewMockInvoker(log, &mic)
+
+			if tc.expOutPrefix != "" {
+				gotErr := cmd.confGenPrint(test.Context(t))
+				if gotErr != nil {
+					t.Fatal(gotErr)
+				}
+				if len(buf.String()) == 0 {
+					t.Fatal("no output from config generate print function")
+				}
+				outFirstLine := strings.Split(buf.String(), "\n")[0]
+				test.AssertTrue(t, strings.Contains(outFirstLine, tc.expOutPrefix),
+					fmt.Sprintf("test: %s, expected %q to be included in the "+
+						"first line of output: %q", name, tc.expOutPrefix,
+						outFirstLine))
+				return
+			}
 
 			gotCfg, gotErr := cmd.confGen(test.Context(t))
 			test.CmpErr(t, tc.expErr, gotErr)
@@ -406,7 +438,7 @@ disable_vfio: false
 disable_vmd: false
 enable_hotplug: false
 nr_hugepages: 6144
-system_ram_reserved: 6
+system_ram_reserved: 16
 disable_hugepages: false
 control_log_mask: INFO
 control_log_file: /tmp/daos_server.log

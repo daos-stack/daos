@@ -199,6 +199,7 @@ type PoolCreateCmd struct {
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -208,11 +209,18 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size.IsSet() && (cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet()) {
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	}
-	if !cmd.Size.IsSet() && !cmd.ScmSize.IsSet() {
-		return errors.New("either --size or --scm-size must be supplied")
+	if cmd.Size.IsSet() {
+		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
+			return errIncompatFlags("size", "scm-size", "nvme-size")
+		}
+		if cmd.MetaSize.IsSet() {
+			// NOTE DAOS-14223: --meta-size value is currently not taken into account
+			//                  when storage tier sizes are auto-calculated so only
+			//                  support in manual mode.
+			return errors.New("--meta-size can only be set if --scm-size is set")
+		}
+	} else if !cmd.ScmSize.IsSet() {
+		return errors.New("either --size or --scm-size must be set")
 	}
 
 	if cmd.Args.PoolLabel != "" {
@@ -299,13 +307,22 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmBytes := cmd.ScmSize.bytes
 		nvmeBytes := cmd.NVMeSize.bytes
+		metaBytes := cmd.MetaSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)",
-			humanize.Bytes(scmBytes),
-			humanize.Bytes(nvmeBytes),
-			scmRatio*100)
+		if metaBytes > 0 && metaBytes < scmBytes {
+			return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
+				humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
+		}
+		req.MetaBytes = metaBytes
+
+		msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
+			" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes), scmRatio*100)
+		if metaBytes > 0 {
+			msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
+		}
+		cmd.Info(msg)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
@@ -357,8 +374,9 @@ type PoolListCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	cmdutil.JSONOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	Verbose     bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery     bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -375,9 +393,16 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	initialResp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
+	}
+
+	// If rebuild-only pools requested, list the pools which has been rebuild only
+	// and not in idle state, otherwise list all the pools.
+	resp := new(control.ListPoolsResp)
+	if err := updateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
+		return err
 	}
 
 	if cmd.JSONOutputEnabled() {
@@ -385,7 +410,7 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose, cmd.NoQuery); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
@@ -396,6 +421,17 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	cmd.Infof("%s", out.String())
 
 	return resp.Errors()
+}
+
+// Update the pool list, which has been rebuild and not in idle state.
+func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
+	for _, pool := range resp.Pools {
+		if !rebuildOnly || pool.RebuildState != "idle" {
+			finalResp.Pools = append(finalResp.Pools, pool)
+		}
+	}
+
+	return nil
 }
 
 type PoolID struct {
@@ -687,6 +723,9 @@ type PoolSetPropCmd struct {
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "perf_domain" {
+			return errors.New("can't set perf_domain on existing pool.")
+		}
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
 		}

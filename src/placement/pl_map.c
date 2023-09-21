@@ -413,9 +413,8 @@ pl_hop_rec_decref(struct d_hash_table *htab, d_list_t *link)
 	struct pl_map   *map = pl_link2map(link);
 	bool             zombie;
 
-	D_ASSERT(map->pl_ref > 0);
-
 	D_SPIN_LOCK(&map->pl_lock);
+	D_ASSERT(map->pl_ref > 0);
 	map->pl_ref--;
 	zombie = (map->pl_ref == 0);
 	D_SPIN_UNLOCK(&map->pl_lock);

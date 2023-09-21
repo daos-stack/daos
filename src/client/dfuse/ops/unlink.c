@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,23 +14,20 @@
  * Will always call DFUSE_REPLY_ZERO() after updating local state but before updating kernel.
  */
 void
-dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
+dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t *oid,
 		   struct dfuse_inode_entry *parent, const char *name)
 {
-	struct dfuse_inode_entry	*ie;
-	d_list_t			*rlink;
-	int				rc;
-	fuse_ino_t			ino;
+	struct dfuse_inode_entry *ie;
+	int                       rc;
+	fuse_ino_t                ino;
 
 	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
 
-	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink) {
+	ie = dfuse_inode_lookup(dfuse_info, ino);
+	if (!ie) {
 		DFUSE_REPLY_ZERO(parent, req);
 		return;
 	}
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
 	DFUSE_TRA_DEBUG(ie, "Setting inode as deleted");
 
@@ -43,7 +40,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	 * unlinked so will destroy it anyway, but there is a race here so try and destroy it
 	 * even though most of the time we expect this to fail.
 	 */
-	rc = fuse_lowlevel_notify_inval_inode(fs_handle->di_session, ino, 0, 0);
+	rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, ino, 0, 0);
 	if (rc && rc != -ENOENT)
 		DFUSE_TRA_ERROR(ie, "inval_inode() returned: %d (%s)", rc, strerror(-rc));
 
@@ -53,29 +50,27 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	 */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
 		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
-		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx.'%s'",
-				ie->ie_parent, ie->ie_name);
+		DFUSE_TRA_DEBUG(ie, "Telling kernel to forget %#lx " DF_DE, ie->ie_parent,
+				DP_DE(ie->ie_name));
 
-		rc = fuse_lowlevel_notify_delete(fs_handle->di_session, ie->ie_parent, ino,
+		rc = fuse_lowlevel_notify_delete(dfuse_info->di_session, ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
 		if (rc && rc != -ENOENT)
 			DFUSE_TRA_ERROR(ie, "notify_delete() returned: %d (%s)", rc, strerror(-rc));
 	}
 
 	/* Drop the ref again */
-	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+	dfuse_inode_decref(dfuse_info, ie);
 }
 
 void
 dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
-	struct dfuse_projection_info	*fs_handle;
-	int				rc;
-	daos_obj_id_t			oid = {};
+	struct dfuse_info *dfuse_info = fuse_req_userdata(req);
+	int                rc;
+	daos_obj_id_t      oid = {};
 
-	fs_handle = fuse_req_userdata(req);
-
-	dfuse_cache_evict_dir(fs_handle, parent);
+	dfuse_cache_evict_dir(dfuse_info, parent);
 
 	rc = dfs_remove(parent->ie_dfs->dfs_ns, parent->ie_obj, name, false, &oid);
 	if (rc != 0) {
@@ -85,6 +80,5 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	D_ASSERT(oid.lo || oid.hi);
 
-	/* TODO: Need to do the first part of this and set ie->ie_unlinked before returning */
-	dfuse_oid_unlinked(fs_handle, req, &oid, parent, name);
+	dfuse_oid_unlinked(dfuse_info, req, &oid, parent, name);
 }

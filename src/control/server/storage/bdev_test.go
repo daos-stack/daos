@@ -35,6 +35,9 @@ func Test_NvmeDevState(t *testing.T) {
 		expStr string
 		expErr error
 	}{
+		"zero value": {
+			expStr: "UNKNOWN",
+		},
 		"new state": {
 			state:  NvmeStateNew,
 			expStr: "NEW",

@@ -833,7 +833,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i], NULL, NULL, NULL, NULL, false);
-		assert_rc_equal(rc, DTX_ST_COMMITTED);
+		assert_int_equal(rc, DTX_ST_COMMITTED);
 	}
 
 	sleep(3);

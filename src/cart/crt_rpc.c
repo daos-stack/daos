@@ -684,40 +684,16 @@ crt_req_destroy(struct crt_rpc_priv *rpc_priv)
 	crt_hg_req_destroy(rpc_priv);
 }
 
-int
+void
 crt_req_addref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	RPC_ADDREF(rpc_priv);
-
-out:
-	return rc;
+	RPC_PUB_ADDREF(req);
 }
 
-int
+void
 crt_req_decref(crt_rpc_t *req)
 {
-	struct crt_rpc_priv	*rpc_priv;
-	int			rc = 0;
-
-	if (req == NULL) {
-		D_ERROR("invalid parameter (NULL req).\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-
-	rpc_priv = container_of(req, struct crt_rpc_priv, crp_pub);
-	RPC_DECREF(rpc_priv);
-
-out:
-	return rc;
+	RPC_PUB_DECREF(req);
 }
 
 static inline int
