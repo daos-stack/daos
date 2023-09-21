@@ -39,7 +39,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	DFUSE_REPLY_OPEN_DIR(ie, req, &fi_out);
+	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);

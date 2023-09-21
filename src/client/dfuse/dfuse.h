@@ -535,25 +535,42 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
 					O_CREAT | O_EXCL)
 
-#define IS_IE(N) _Generic((N), struct dfuse_inode_entry * : 1, default : 0)
-#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl * : 1, default : 0)
+/* Macros to check type in other macros.  Check for IE, OH, IE or OH or and Dfuse Type */
+
+#define IS_IE(N) _Generic((N), struct dfuse_inode_entry *: 1, default : 0)
+#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl *: 1, default : 0)
+#define IS_IEOH(N)                                                                                 \
+	_Generic((N), struct dfuse_inode_entry *: 1, struct dfuse_obj_hdl *: 1, default: 0)
+
+#define IS_DFT(N)                                                                                  \
+	_Generic((N), struct dfuse_inode_entry *: 1, struct dfuse_obj_hdl *: 1,                    \
+		 struct dfuse_info *: 1, default: 0)
+
+/* Macros to reply to fuse requests.
+ * As fuse holds a reference on inode or open handle for the duration of a request then after the
+ * reply to the kernel then no reference is held any more and therefore without dfuse taking an
+ * additional reference it is not safe to access the object the request was for.  Therefore these
+ * macros take a inode or open file handle pointer and set it to NULL before replying to the kernel.
+ */
 
 #define DFUSE_REPLY_ERR_RAW(desc, req, status)                                                     \
 	do {                                                                                       \
 		int __err = status;                                                                \
 		int __rc;                                                                          \
+		_Static_assert(IS_DFT(desc), "Param is not correct");                              \
 		if (__err == 0) {                                                                  \
-			DFUSE_TRA_ERROR(desc, "Invalid call to fuse_reply_err: 0");                \
 			__err = EIO;                                                               \
+			DHS_ERROR(desc, __err, "Invalid call to fuse_reply_err: 0");               \
 		}                                                                                  \
 		if (__err == EIO || __err == EINVAL)                                               \
-			DFUSE_TRA_WARNING(desc, "Returning: %d (%s)", __err, strerror(__err));     \
+			DHS_WARN(desc, -__err, "Returning");                                       \
 		else                                                                               \
 			DFUSE_TRA_DEBUG(desc, "Returning: %d (%s)", __err, strerror(__err));       \
+		if (IS_IEOH(desc))                                                                 \
+			(desc) = NULL;                                                             \
 		__rc = fuse_reply_err(req, __err);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_err() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
 #define DFUSE_REPLY_ZERO(_ie, req)                                                                 \
@@ -587,10 +604,10 @@ struct fuse_lowlevel_ops dfuse_ops;
 		}                                                                                  \
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
 				(attr)->st_ino, (attr)->st_mode, (attr)->st_size, timeout);        \
+		(ie) = NULL;                                                                       \
 		__rc = fuse_reply_attr(req, attr, timeout);                                        \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
 
 #define DFUSE_REPLY_ATTR_FORCE(ie, req, timeout)                                                   \
@@ -599,78 +616,90 @@ struct fuse_lowlevel_ops dfuse_ops;
 		DFUSE_TRA_DEBUG(ie, "Returning attr inode %#lx mode %#o size %zi timeout %lf",     \
 				(ie)->ie_stat.st_ino, (ie)->ie_stat.st_mode,                       \
 				(ie)->ie_stat.st_size, timeout);                                   \
+		(ie) = NULL;                                                                       \
 		__rc = fuse_reply_attr(req, &ie->ie_stat, timeout);                                \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_attr() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_attr() error");                                \
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(ie, req, path)                                                        \
+#define DFUSE_REPLY_READLINK(_ie, req, path)                                                       \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);                                \
-		__rc = fuse_reply_readlink(req, path);                                             \
+		DFUSE_TRA_DEBUG(_ie, "Returning target '%s'", path);                               \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_readlink(req, path);                                            \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(ie, "fuse_reply_readlink() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
-	} while (0)
-
-#define DFUSE_REPLY_BUF(desc, req, buf, size)                                                      \
-	do {                                                                                       \
-		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)", buf, size);                     \
-		__rc = fuse_reply_buf(req, buf, size);                                             \
-		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_buf() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_readlink() error");                            \
 	} while (0)
 
 #define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		__rc = fuse_reply_buf(req, buf, size);                                             \
+		_Static_assert(IS_IEOH(desc), "Param is not correct");                             \
+		(desc) = NULL;                                                                     \
+		__rc   = fuse_reply_buf(req, buf, size);                                           \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_buf() returned: %d (%s)", __rc,          \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
 	} while (0)
 
-#define DFUSE_REPLY_XATTR(inode, req, size)                                                        \
+#define DFUSE_REPLY_BUF(desc, req, buf, size)                                                      \
+	do {                                                                                       \
+		DFUSE_TRA_DEBUG(desc, "Returning buffer(%p %#zx)", buf, size);                     \
+		DFUSE_REPLY_BUFQ(desc, req, buf, size);                                            \
+	} while (0)
+
+#define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		__rc = fuse_reply_xattr(req, size);                                                \
+		_Static_assert(IS_IEOH(desc), "Param is not correct");                             \
+		(desc) = NULL;                                                                     \
+		__rc   = fuse_reply_buf(req, buf, size);                                           \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
+	} while (0)
+
+#define DFUSE_REPLY_XATTR(_ie, req, size)                                                          \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_xattr(req, size);                                               \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_xattr() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_WRITE(desc, req, bytes)                                                        \
+#define DFUSE_REPLY_WRITE(_oh, req, bytes)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning write(%#zx)", bytes);                             \
-		__rc = fuse_reply_write(req, bytes);                                               \
+		DFUSE_TRA_DEBUG(_oh, "Returning write(%#zx)", bytes);                              \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_write(req, bytes);                                              \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_write() returned: %d (%s)", __rc,        \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_write() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_OPEN(oh, req, _fi)                                                             \
+#define DFUSE_REPLY_OPEN(_oh, req, _fi)                                                            \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open, keep_cache %d", (_fi)->keep_cache);           \
-		__rc = fuse_reply_open(req, _fi);                                                  \
+		DFUSE_TRA_DEBUG(_oh, "Returning open, keep_cache %d", (_fi)->keep_cache);          \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
 #if HAVE_CACHE_READDIR
 
-#define DFUSE_REPLY_OPEN_DIR(_ie, req, _fi)                                                        \
+#define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning open directory, use_cache %d keep_cache %d",       \
+		DFUSE_TRA_DEBUG(_oh, "Returning open directory, use_cache %d keep_cache %d",       \
 				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
-		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
-		(_ie) = NULL;                                                                      \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
 		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
@@ -680,26 +709,28 @@ struct fuse_lowlevel_ops dfuse_ops;
 
 #error perhaps we can drop this now?
 
-#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+#define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open directory");                                   \
-		__rc = fuse_reply_open(req, _fi);                                                  \
+		DFUSE_TRA_DEBUG(_oh, "Returning open directory");                                  \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open returned: %d (%s)", __rc,             \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
 #endif
 
-#define DFUSE_REPLY_CREATE(desc, req, entry, fi)                                                   \
+#define DFUSE_REPLY_CREATE(_ie, req, entry, fi)                                                    \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning create");                                         \
-		__rc = fuse_reply_create(req, &entry, fi);                                         \
+		DFUSE_TRA_DEBUG(_ie, "Returning create");                                          \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_create(req, &entry, fi);                                        \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_create() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_create() error");                              \
 	} while (0)
 
 #define DFUSE_REPLY_ENTRY(inode, req, entry)                                                       \
@@ -712,29 +743,30 @@ struct fuse_lowlevel_ops dfuse_ops;
 		DFUSE_TRA_DEBUG(inode, "Returning entry inode %#lx mode %#o size %zi timeout %lf", \
 				(entry).attr.st_ino, (entry).attr.st_mode, (entry).attr.st_size,   \
 				(entry).attr_timeout);                                             \
-		__rc = fuse_reply_entry(req, &entry);                                              \
+		(inode) = NULL;                                                                    \
+		__rc    = fuse_reply_entry(req, &entry);                                           \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(inode, "fuse_reply_entry() returned: %d (%s)", __rc,       \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_entry() error");                               \
 	} while (0)
 
-#define DFUSE_REPLY_STATFS(desc, req, stat)                                                        \
+#define DFUSE_REPLY_STATFS(_ie, req, stat)                                                         \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning statfs");                                         \
-		__rc = fuse_reply_statfs(req, stat);                                               \
+		DFUSE_TRA_DEBUG(_ie, "Returning statfs");                                          \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_statfs(req, stat);                                              \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_statfs() error");                              \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL_SIZE(desc, req, arg, size)                                               \
+#define DFUSE_REPLY_IOCTL_SIZE(_ie, req, arg, size)                                                \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning ioctl");                                          \
+		DFUSE_TRA_DEBUG(_ie, "Returning ioctl");                                           \
 		__rc = fuse_reply_ioctl(req, 0, arg, size);                                        \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_ioctl() returned: %d (%s)", __rc,        \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_ioctl() error");                               \
 	} while (0)
 
 #define DFUSE_REPLY_IOCTL(desc, req, arg) DFUSE_REPLY_IOCTL_SIZE(desc, req, &(arg), sizeof(arg))

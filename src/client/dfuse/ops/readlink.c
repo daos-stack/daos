@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,6 @@ dfuse_cb_readlink(fuse_req_t req, fuse_ino_t ino)
 	D_FREE(buf);
 	return;
 err:
-	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
+	DFUSE_REPLY_ERR_RAW(inode, req, rc);
 	D_FREE(buf);
 }
