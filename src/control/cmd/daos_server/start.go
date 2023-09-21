@@ -34,7 +34,7 @@ type startCmd struct {
 	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
 	Insecure            bool    `short:"i" long:"insecure" description:"Allow for insecure connections"`
 	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"Recreate missing superblocks rather than failing"`
-	Auto                bool    `long:"auto" description:"Automatically generate server config used to start service"`
+	AutoFormat          bool    `long:"auto-format" description:"Automatically format storage on server start to bring-up engines without requiring dmg storage format command"`
 }
 
 func (cmd *startCmd) setCLIOverrides() error {
@@ -162,7 +162,7 @@ func (cmd *startCmd) Execute(args []string) error {
 		return err
 	}
 
-	cmd.config.AutoFormat = cmd.Auto
+	cmd.config.AutoFormat = cmd.AutoFormat
 
 	return cmd.start(cmd.Logger, cmd.config)
 }
