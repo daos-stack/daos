@@ -379,20 +379,14 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 	struct dfuse_inode_entry *inode;
 	int                       rc;
 
-	inode = dfuse_inode_lookup(dfuse_info, ino);
-	if (!inode) {
-		DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", ino);
-		D_GOTO(err, rc = ENOENT);
-	}
+	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	if (!inode->ie_dfs->dfs_ops->getxattr)
-		D_GOTO(decref, rc = ENOTSUP);
+		D_GOTO(err, rc = ENOTSUP);
 
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
 
 	return;
-decref:
-	dfuse_ie_decref_unsafe(inode);
 err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }
@@ -478,20 +472,14 @@ df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 	struct dfuse_inode_entry *inode;
 	int                       rc;
 
-	inode = dfuse_inode_lookup(dfuse_info, ino);
-	if (!inode) {
-		DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", ino);
-		D_GOTO(err, rc = ENOENT);
-	}
+	inode = dfuse_inode_lookup_nf(dfuse_info, ino);
 
 	if (!inode->ie_dfs->dfs_ops->statfs)
-		D_GOTO(decref, rc = ENOTSUP);
+		D_GOTO(err, rc = ENOTSUP);
 
 	inode->ie_dfs->dfs_ops->statfs(req, inode);
 
 	return;
-decref:
-	dfuse_ie_decref_unsafe(inode);
 err:
 	DFUSE_REPLY_ERR_RAW(dfuse_info, req, rc);
 }

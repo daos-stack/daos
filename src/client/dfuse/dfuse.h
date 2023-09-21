@@ -553,25 +553,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-/* Decref and reply */
-#define DFUSE_REPLY_ERR(_ie, req, status)                                                          \
-	do {                                                                                       \
-		int __err = status;                                                                \
-		int __rc;                                                                          \
-		if (__err == 0) {                                                                  \
-			DFUSE_TRA_ERROR(_ie, "Invalid call to fuse_reply_err: 0");                 \
-			__err = EIO;                                                               \
-		}                                                                                  \
-		if (__err == EIO || __err == EINVAL)                                               \
-			DHS_ERROR(_ie, __err, "Returning");                                        \
-		else                                                                               \
-			DFUSE_TRA_DEBUG(_ie, "Returning: %d (%s)", __err, strerror(__err));        \
-		dfuse_ie_decref_unsafe(_ie);                                                       \
-		__rc = fuse_reply_err(req, __err);                                                 \
-		if (__rc != 0)                                                                     \
-			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
-	} while (0)
-
 #define DFUSE_REPLY_ZERO(desc, req)                                                                \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -630,16 +611,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_BUFD(inode, req, buf, size)                                                    \
-	do {                                                                                       \
-		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(inode, "Returning buffer(%p %#zx)", buf, size);                    \
-		dfuse_ie_decref_unsafe(inode);                                                     \
-		__rc = fuse_reply_buf(req, buf, size);                                             \
-		if (__rc != 0)                                                                     \
-			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
-	} while (0)
-
 #define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -652,7 +623,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_REPLY_XATTR(inode, req, size)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		dfuse_ie_decref_unsafe(inode);                                                     \
 		__rc = fuse_reply_xattr(req, size);                                                \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_xattr() error");                               \
@@ -735,7 +705,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 	do {                                                                                       \
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(desc, "Returning statfs");                                         \
-		dfuse_ie_decref_unsafe(desc);                                                      \
 		__rc = fuse_reply_statfs(req, stat);                                               \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_statfs() error");                              \
