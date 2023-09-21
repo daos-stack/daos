@@ -188,6 +188,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 

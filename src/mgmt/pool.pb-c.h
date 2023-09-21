@@ -209,10 +209,14 @@ struct  _Mgmt__PoolCreateReq
    */
   size_t n_tierbytes;
   uint64_t *tierbytes;
+  /*
+   * Size in bytes of metadata blob on SSD (manual config)
+   */
+  uint64_t meta_blob_size;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL, 0 }
 
 
 /*
@@ -244,10 +248,14 @@ struct  _Mgmt__PoolCreateResp
    */
   size_t n_tier_bytes;
   uint64_t *tier_bytes;
+  /*
+   * Size in bytes of metadata blob on SSD (manual config)
+   */
+  uint64_t meta_blob_size;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0, 0,NULL, 0,NULL, 0,NULL }
+    , 0, 0, 0,NULL, 0,NULL, 0,NULL, 0 }
 
 
 /*
