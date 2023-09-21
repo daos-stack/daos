@@ -118,11 +118,11 @@ var (
 	)
 )
 
-func FaultConfigDuplicateFabricPort(curIdx, seenIdx int) *fault.Fault {
+func FaultConfigDuplicateFabric(curIdx, seenIdx int) *fault.Fault {
 	return serverConfigFault(
-		code.ServerConfigDuplicateFabricPort,
-		fmt.Sprintf("the fabric port in I/O Engine %d is a duplicate of I/O Engine %d", curIdx, seenIdx),
-		"ensure that each I/O Engine has a unique fabric_iface_port (difference of ~1000 is recommended) and restart",
+		code.ServerConfigDuplicateFabric,
+		fmt.Sprintf("the fabric configuration in I/O Engine %d is a duplicate of I/O Engine %d", curIdx, seenIdx),
+		"ensure that each I/O Engine has a unique combination of provider,fabric_iface,fabric_iface_port and restart",
 	)
 }
 

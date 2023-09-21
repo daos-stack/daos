@@ -164,7 +164,7 @@ const (
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
 	ServerConfigNoEngines
-	ServerConfigDuplicateFabricPort
+	ServerConfigDuplicateFabric
 	ServerConfigDuplicateLogFile
 	ServerConfigDuplicateScmMount
 	ServerConfigDuplicateScmDeviceList

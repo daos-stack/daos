@@ -1611,7 +1611,7 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 		return engine.MockConfig().
 			WithLogFile("b").
 			WithFabricInterface("ib1").
-			WithFabricInterfacePort(43).
+			WithFabricInterfacePort(42).
 			WithStorage(
 				storage.NewTierConfig().
 					WithStorageClass("ram").
@@ -1630,10 +1630,11 @@ func TestServerConfig_validateMultiEngineConfig(t *testing.T) {
 			configA: configA(),
 			configB: configB(),
 		},
-		"duplicate fabric port": {
+		"duplicate fabric config": {
 			configA: configA(),
-			configB: configB().WithFabricInterfacePort(42),
-			expErr:  FaultConfigDuplicateFabricPort(1, 0),
+			configB: configB().
+				WithFabricInterface(configA().Fabric.Interface),
+			expErr: FaultConfigDuplicateFabric(1, 0),
 		},
 		"duplicate log_file": {
 			configA: configA(),

@@ -744,13 +744,16 @@ func (cfg *Server) validateMultiEngineConfig(log logging.Logger) error {
 	seenScmClsIdx := -1
 
 	for idx, engine := range cfg.Engines {
-		fabricPort := fmt.Sprintf("fabricport:%d", engine.Fabric.InterfacePort)
+		fabricConfig := fmt.Sprintf("fabric:%s-%s-%d",
+			engine.Fabric.Provider,
+			engine.Fabric.Interface,
+			engine.Fabric.InterfacePort)
 
-		if seenIn, exists := seenValues[fabricPort]; exists {
-			log.Debugf("%s in %d duplicates %d", fabricPort, idx, seenIn)
-			return FaultConfigDuplicateFabricPort(idx, seenIn)
+		if seenIn, exists := seenValues[fabricConfig]; exists {
+			log.Debugf("%s in %d duplicates %d", fabricConfig, idx, seenIn)
+			return FaultConfigDuplicateFabric(idx, seenIn)
 		}
-		seenValues[fabricPort] = idx
+		seenValues[fabricConfig] = idx
 
 		if engine.LogFile != "" {
 			logConfig := fmt.Sprintf("log_file:%s", engine.LogFile)
