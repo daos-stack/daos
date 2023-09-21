@@ -200,7 +200,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	case len(req.Tierbytes) == 0 && len(req.Tierratio) == 2 && req.Totalbytes > 0:
 		// If no NVMe, adjust ratio as NVMe hasn't been specifically requested.
 		if nvmeMissing {
-			svc.log.Info("config has zero bdevs; excluding NVMe from pool create " +
+			svc.log.Noticef("config has zero bdevs; excluding NVMe from pool create " +
 				"request")
 			req.Tierratio = []float64{1.00, 0.00}
 		}
