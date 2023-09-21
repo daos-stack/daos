@@ -1323,14 +1323,17 @@ pool_map_merge(struct pool_map *map, uint32_t version,
 			/* new buffer may have changes for this domain */
 			if (sdom->do_children != NULL) {
 				struct pool_domain *child = addr;
+				struct pool_comp_cntr	s_cntr;
 
-				D_DEBUG(DB_TRACE, "Scan children of %s[%d]\n",
+				pool_tree_count(sdom, &s_cntr);
+				D_DEBUG(DB_TRACE, "Scan children of %s[%d] tgt_nr %u\n",
 					pool_domain_name(ddom),
-					ddom->do_comp.co_id);
+					ddom->do_comp.co_id, s_cntr.cc_targets);
 
 				if (ddom->do_children == NULL)
 					ddom->do_children = child;
 
+				ddom->do_target_nr += s_cntr.cc_targets;
 				/* copy new child domains to dest buffer */
 				for (j = 0; j < sdom->do_child_nr; j++) {
 					struct pool_component *dc;

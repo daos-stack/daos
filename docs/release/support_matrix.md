@@ -268,7 +268,7 @@ to vendor-specific information for the supported networking hardware.
 ### OFI libfabric
 
 With the exception of UCX for InfiniBand networks, OFI libfabric is the recommended
-networking stack for DAOS.  DAOS Version 2.4 ships with version 1.18.1rc1 of
+networking stack for DAOS.  DAOS Version 2.4 ships with version 1.18.1 of
 [libfabric](https://ofiwg.github.io/libfabric/)
 (but see below for DAOS on HPE Slingshot).
 It is strongly recommended to use exactly the provided libfabric version
@@ -277,7 +277,7 @@ on all DAOS servers and all DAOS clients.
 Links to libfabric releases on github
 (the RPM distribution of DAOS includes libfabric RPM packages with the correct version):
 
-* [libfabric 1.18.1rc1](https://github.com/ofiwg/libfabric/releases/tag/v1.18.1rc1) (release candidate)
+* [libfabric 1.18.1](https://github.com/ofiwg/libfabric/releases/tag/v1.18.1)
 
 Not all libfabric core providers listed in
 [fi\_provider(7)](https://ofiwg.github.io/libfabric/main/man/fi_provider.7.html)
@@ -290,16 +290,12 @@ are supported by DAOS. The following providers are supported:
   fabrics. Note that as an alternative to libfabric, the UCX networking stack
   can be used on InfiniBand fabrics as described in the next subsection.
 * The `ofi+cxi` provider is supported for RDMA communication over Slingshot.
-* The `ofi+opx` (Omni-Path Express) provider is enabled as a _Technology Preview_
-  for RDMA transport over Omni-Path fabrics, for testing and evaluation purposes.
-  In production environments using Omni-Path networking, please continue to use
-  the `ofi+tcp` provider until the `ofi+opx` provider is fully supported.
 
 !!! note
     Starting with libfabric 1.18.0, libfabric has support for TCP without `rxm`.
-    DAOS [PR12436](https://github.com/daos-stack/daos/pull/12436)
-    will remove the automatic addition of `rxm` to the `ofi+tcp` provider string;
-    to get `rxm` it then has to be explicitly added as `ofi+tcp;ofi_rxm`.
+    To support this, DAOS 2.4 no longer automatically adds `rxm` to the `ofi+tcp`
+    provider string. To use `rxm` with DAOS 2.4, it has to be explicitly added
+    as `ofi+tcp;ofi_rxm`.
 
 !!! note
     The `ofi+psm2` provider for Omni-Path fabrics has known issues
@@ -317,15 +313,15 @@ which is maintained by the Unified Communication Framework (UCF) consortium.
 
 DAOS Version 2.4 has been validated primarily with UCX Version 1.14.0-1,
 which is included in the MLNX\_OFED 5.8 levels listed in the next section.
-UCX Version 1.15.0-1 (included in MLNX\_OFED 5.9 and 23.04)
-has not been validated with DAOS 2.4.0.
+UCX Version 1.15.0-1 (included in MLNX\_OFED 5.9 and 23.04 and 23.07)
+has also been validated with DAOS 2.4.0.
 
 * The `ucx+dc_x` provider has been validated and is supported with DAOS Version 2.4.
   It is the recommended fabric provider on InfiniBand fabrics.
 
-* The `ucx+tcp` provider can be used for evaluation and testing purposes,
-  but it has not been fully validated with DAOS Version 2.4 and is not supported
-  for use in production environments.
+* The `ucx+tcp` and `ucx+ud_x` providers can be used for evaluation and testing
+  purposes, but they have not been fully validated with DAOS Version 2.4
+  and are not supported for use in production environments.
 
 
 ### NVIDIA/Mellanox OFED (MLNX\_OFED)
@@ -335,19 +331,21 @@ fabrics, DAOS requires that the
 [Mellanox OFED (MLNX\_OFED)](https://www.mellanox.com/products/infiniband-drivers/linux/mlnx_ofed)
 software stack is installed on the DAOS servers and DAOS clients.
 
-DAOS Version 2.4 has been validated with MLNX\_OFED Version 5.8-1,
-and  both 5.8-1.0.1.1 and 5.8-1.1.2.1 are supported.
-Versions older than 5.8-1 are not supported by DAOS 2.4.
-MLNX\_OFED 5.8-2, 5.9 and 23.04 have not been validated with DAOS 2.4.0.
+DAOS Version 2.4 has been primarily validated with MLNX\_OFED Version 5.8 (LTS),
+and Versions older than 5.8-1 are not supported by DAOS 2.4.
+
+Validation of MLNX\_OFED 5.9 and 23.04 is in progress.
 
 Links to MLNX\_OFED Release Notes:
 
 * [MLNX\_OFED 5.8-1.0.1.1](https://docs.nvidia.com/networking/display/MLNXOFEDv581011/Release+Notes) (October 31, 2022)
 * [MLNX\_OFED 5.8-1.1.2.1](https://docs.nvidia.com/networking/display/MLNXOFEDv581121LTS/Release+Notes) (December 1, 2022)
-* [MLNX\_OFED 5.8-2.0.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv582030LTS) (February 28, 2023)
+* [MLNX\_OFED 5.8-2.0.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv582030LTS/Release+Notes) (February 28, 2023)
+* [MLNX\_OFED 5.8-3.0.7.0](https://docs.nvidia.com/networking/display/MLNXOFEDv583070LTS/Release+Notes) (July 09, 2023)
 * [MLNX\_OFED 5.9-0.5.6.0](https://docs.nvidia.com/networking/display/MLNXOFEDv590560/Release+Notes) (February 2, 2023)
 * [MLNX\_OFED 23.04-0.5.3.3](https://docs.nvidia.com/networking/display/MLNXOFEDv23040533/Release+Notes) (May 8, 2023)
 * [MLNX\_OFED 23.04-1.1.3.0](https://docs.nvidia.com/networking/display/MLNXOFEDv23041130/Release+Notes) (June 1, 2023)
+* [MLNX\_OFED 23.07-0.5.0.0](https://docs.nvidia.com/networking/display/MLNXOFEDv23070500/Release+Notes) (August 10, 2023)
 
 It is strongly recommended that all DAOS servers and all DAOS clients
 run the same version of MLNX\_OFED, and that the InfiniBand adapters are
@@ -367,26 +365,6 @@ of the dual-port adapter(s) is used by DAOS.
 Customers using an [HPE Slingshot](https://www.hpe.com/us/en/compute/hpc/slingshot-interconnect.html)
 fabric should contact their HPE representatives for information on the recommended HPE software stack
 to use with DAOS Version 2.4 and the libfabric CXI provider.
-
-
-### Cornelis Omni-Path Express (OPX)
-
-DAOS Version 2.4 includes a Technology Preview of the libfabric Omni-Path Express
-(OPX) provider that supports [Omni-Path](https://www.cornelisnetworks.com/products/)
-networking from Cornelis Networks. 
-See [fi\_opx(7)](https://ofiwg.github.io/libfabric/main/man/fi_opx.7.html) for details.
-This OPX Technology Preview can be used for evaluation and testing purposes,
-but it is not yet supported for production environments.
-In production environments using Omni-Path networking, please continue to use the
-libfabric TCP provider until the libfabric OXP provider is fully supported.
-
-The DAOS Version 2.4 RPM builds include the required version of libfabric
-to enable the OPX Technology Preview.
-
-Please refer to the
-[Cornelis Networks presentation](https://daosio.atlassian.net/wiki/download/attachments/11015454821/12_Update_on_Omni-Path_Support_for_DAOS_DUG21_19Nov2021.pdf)
-at [DUG21](https://daosio.atlassian.net/wiki/spaces/DC/pages/11015454821/DUG21)
-for information on Omni-Path Express support for DAOS.
 
 
 ## DAOS Scaling
