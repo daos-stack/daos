@@ -27,7 +27,7 @@ pool_rank_1_c:
 pool_rank_1_2:
   size: 5G
   target_list: [1, 2]
-pool_rank_all:
+pool_rank_0_1_2:
   size: 1G
   target_list: [0, 1, 2]
 container:

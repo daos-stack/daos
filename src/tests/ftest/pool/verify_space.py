@@ -83,7 +83,7 @@ class VerifyPoolSpace(TestWithServers):
         pools = []
         self.log_step(' '.join(['Create', description]), True)
         for item in namespaces:
-            namespace = os.path.join(os.sep, 'run', '_'.join(['pool_rank_', str(item)]), '*')
+            namespace = os.path.join(os.sep, 'run', '_'.join(['pool', 'rank', str(item)]), '*')
             pools.append(self.get_pool(namespace=namespace))
         self._query_pool_size(description, pools)
         return pools
@@ -259,7 +259,7 @@ class VerifyPoolSpace(TestWithServers):
         # (7) Create a single pool on all ranks
         #  - System free space should be less on all ranks
         description = 'a single pool on all ranks'
-        pools.extend(self._create_pools(description, ['all']))
+        pools.extend(self._create_pools(description, ['0_1_2']))
         pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
         compare_methods = [compare_reduced, compare_reduced, compare_reduced]
         self._compare_system_pool_size(pool_size, compare_methods)
