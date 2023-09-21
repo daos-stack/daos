@@ -535,6 +535,9 @@ struct fuse_lowlevel_ops dfuse_ops;
 #define DFUSE_UNSUPPORTED_OPEN_FLAGS (DFUSE_UNSUPPORTED_CREATE_FLAGS | \
 					O_CREAT | O_EXCL)
 
+#define IS_IE(N) _Generic((N), struct dfuse_inode_entry * : 1, default : 0)
+#define IS_OH(N) _Generic((N), struct dfuse_obj_hdl * : 1, default : 0)
+
 #define DFUSE_REPLY_ERR_RAW(desc, req, status)                                                     \
 	do {                                                                                       \
 		int __err = status;                                                                \
@@ -553,14 +556,25 @@ struct fuse_lowlevel_ops dfuse_ops;
 					strerror(-__rc));                                          \
 	} while (0)
 
-#define DFUSE_REPLY_ZERO(desc, req)                                                                \
+#define DFUSE_REPLY_ZERO(_ie, req)                                                                 \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(desc, "Returning 0");                                              \
+		DFUSE_TRA_DEBUG(_ie, "Returning 0");                                               \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_err(req, 0);                                                    \
+		if (__rc != 0)                                                                     \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
+	} while (0)
+
+#define DFUSE_REPLY_ZERO_OH(_oh, req)                                                              \
+	do {                                                                                       \
+		int __rc;                                                                          \
+		DFUSE_TRA_DEBUG(_oh, "Returning 0");                                               \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
 		__rc = fuse_reply_err(req, 0);                                                     \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(desc, "fuse_reply_err() returned: %d: (%s)", __rc,         \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
@@ -650,18 +664,21 @@ struct fuse_lowlevel_ops dfuse_ops;
 
 #if HAVE_CACHE_READDIR
 
-#define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
+#define DFUSE_REPLY_OPEN_DIR(_ie, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(oh, "Returning open directory, use_cache %d keep_cache %d",        \
+		DFUSE_TRA_DEBUG(_ie, "Returning open directory, use_cache %d keep_cache %d",       \
 				(_fi)->cache_readdir, (_fi)->keep_cache);                          \
-		__rc = fuse_reply_open(req, _fi);                                                  \
+		_Static_assert(IS_IE(_ie), "Param is not inode entry");                            \
+		(_ie) = NULL;                                                                      \
+		__rc  = fuse_reply_open(req, _fi);                                                 \
 		if (__rc != 0)                                                                     \
-			DFUSE_TRA_ERROR(oh, "fuse_reply_open() returned: %d (%s)", __rc,           \
-					strerror(-__rc));                                          \
+			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
 #else
+
+#error perhaps we can drop this now?
 
 #define DFUSE_REPLY_OPEN_DIR(oh, req, _fi)                                                         \
 	do {                                                                                       \

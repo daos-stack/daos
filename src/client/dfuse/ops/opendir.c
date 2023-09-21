@@ -39,7 +39,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
+	DFUSE_REPLY_OPEN_DIR(ie, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);
@@ -69,10 +69,11 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		dfuse_dcache_set_time(oh->doh_ie);
 	}
 
-	DFUSE_REPLY_ZERO(oh, req);
+	DFUSE_REPLY_ZERO_OH(oh, req);
 	dfuse_dre_drop(dfuse_info, oh);
 	if (oh->doh_evict_on_close) {
 		int rc;
+		/* TODO: Do not access oh->doh_ie here */
 
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
 						      oh->doh_ie->ie_name,

@@ -142,11 +142,12 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
-		DFUSE_REPLY_ZERO(oh, req);
+		DFUSE_REPLY_ZERO_OH(oh, req);
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 
 	if (oh->doh_evict_on_close) {
+		/* TODO: Do not access oh->doh_ie here */
 		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
 						      oh->doh_ie->ie_name,
 						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
