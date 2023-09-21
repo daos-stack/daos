@@ -583,14 +583,17 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		goto umem_create;
 
 	if (!scm_sz) {
-		struct stat lstat;
+		if (!meta_sz) {
+			struct stat lstat;
 
-		rc = stat(path, &lstat);
-		if (rc != 0)
-			return daos_errno2der(errno);
-		meta_sz = lstat.st_size;
-	} else if (meta_sz == 0) {
-		/* Meta blob not specified */
+			rc = stat(path, &lstat);
+			if (rc != 0)
+				return daos_errno2der(errno);
+			meta_sz = lstat.st_size;
+		}
+		/* If scm_sz is zero and meta_sz is not, use input meta_sz */
+	} else {
+		/* Custom scm_sz specified so use it (not regular DAOS pool case) */
 		meta_sz = scm_sz;
 	}
 
