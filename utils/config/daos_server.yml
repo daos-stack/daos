@@ -351,8 +351,8 @@
 #  fabric_iface: ib0
 #
 #  # Specify the fabric network interface port that will be used by this engine.
-#  # The fabric_iface_port must be different for each engine on a DAOS server even
-#  # if each engine is assigned to a different fabric_iface.
+#  # The fabric_iface_port must be different for each engine on a DAOS server
+#  # if each engine is assigned to the same fabric_iface.
 #
 #  fabric_iface_port: 20000
 #
@@ -527,8 +527,8 @@
 #  fabric_iface: ib1
 #
 #  # Specify the fabric network interface port that will be used by this engine.
-#  # The fabric_iface_port must be different for each engine on a DAOS server even
-#  # if each engine is assigned to a different fabric_iface.
+#  # The fabric_iface_port must be different for each engine on a DAOS server
+#  # if each engine is assigned to the same fabric_iface.
 #
 #  fabric_iface_port: 21000
 #
