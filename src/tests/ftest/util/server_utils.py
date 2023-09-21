@@ -479,7 +479,7 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("#" * 80)
         self.log.debug("<SERVER> Collection debug memory info")
         run_remote(self.log, self._hosts, "free -m")
-        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 11")
+        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
         self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
@@ -680,7 +680,6 @@ class DaosServerManager(SubprocessManager):
         # Collect storage and network information from the servers.
         self.display_memory_info()
         self.information.collect_storage_information()
-        self.display_memory_info()
         self.information.collect_network_information()
         self.display_memory_info()
 
