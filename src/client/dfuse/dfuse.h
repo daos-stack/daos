@@ -566,7 +566,7 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DHS_ERROR(desc, __err, "Invalid call to fuse_reply_err: 0");               \
 		}                                                                                  \
 		if (__err == EIO || __err == EINVAL)                                               \
-			DHS_WARN(desc, -__err, "Returning");                                       \
+			DHS_WARN(desc, __err, "Returning");                                        \
 		else                                                                               \
 			DFUSE_TRA_DEBUG(desc, "Returning: %d (%s)", __err, strerror(__err));       \
 		if (IS_IEOH(desc))                                                                 \

@@ -139,7 +139,7 @@ class DaosBuild(DfuseTestBase):
         if run_on_vms:
             dfuse_namespace = dfuse_namespace = "/run/dfuse_vm/*"
             build_jobs = 6 * 2
-            remote_env['D_IL_MAX_EQ'] = '6'
+            remote_env['D_IL_MAX_EQ'] = '2'
 
         intercept_jobs = build_jobs
         if intercept:
