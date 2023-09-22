@@ -24,6 +24,9 @@ D_CASSERT((uint32_t)VOS_VIS_FLAG_VISIBLE == (uint32_t)EVT_VISIBLE);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_PARTIAL == (uint32_t)EVT_PARTIAL);
 D_CASSERT((uint32_t)VOS_VIS_FLAG_LAST == (uint32_t)EVT_LAST);
 
+/** Ensure struct vos_obj_df::vo_addr does not exceed vo_tree's size */
+D_CASSERT(sizeof(bio_addr_t) <= sizeof(struct btr_root));
+
 bool vos_dkey_punch_propagate;
 
 struct vos_key_info {
