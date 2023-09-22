@@ -5295,6 +5295,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct cont_pool_metrics	*metrics;
 	bool				 update_mtime = false;
 	bool				 dup_rpc = false;
+	const char			*clbl = NULL;
+	char				 cuuid[37];
 	int				 rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
@@ -5333,37 +5335,35 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
 		break;
 	case CONT_DESTROY_BYLABEL:
-		dlbl_in = crt_req_get(rpc);
-		rc = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
+	case CONT_DESTROY:
+		if (opc == CONT_DESTROY_BYLABEL) {
+			dlbl_in = crt_req_get(rpc);
+			clbl = dlbl_in->cdli_label;
+			rc = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
+		} else {
+			uuid_unparse(in->ci_uuid, cuuid);
+			rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
+		}
 		if (rc == -DER_NONEXIST && dup_rpc) {
 			D_DEBUG(DB_MD, DF_UUID":%s: do not destroy already-destroyed container\n",
-				DP_UUID(pool_hdl->sph_pool->sp_uuid), dlbl_in->cdli_label);
+				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
 			rc = 0;
 			goto out_lock;
 		} else if (rc == 0 && dup_rpc) {
 			/* original rpc destroyed container. But another one was created! */
 			D_DEBUG(DB_MD, DF_UUID":%s: do not destroy already-destroyed "
 				"(and since recreated!) container\n",
-				DP_UUID(pool_hdl->sph_pool->sp_uuid), dlbl_in->cdli_label);
+				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
 			goto out_contref;
 		} else if (rc != 0) {
 			goto out_lock;
 		}
-		/* NB: call common cont_op_with_cont() same as CONT_DESTROY */
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 		break;
 	default:
-		/* TODO: idempotent rc=0 return for dup_rpc CONT_DESTROY, CONT_OPEN, CONT_CLOSE. */
 		rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
-		if (rc != 0) {
-			if (opc == CONT_DESTROY) {
-				D_DEBUG(DB_MD, DF_CONT": do not destroy already-destroyed "
-					"container\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid));
-				rc = 0;
-			}
+		if (rc != 0)
 			goto out_lock;
-		}
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 	}
 	if (rc != 0)
