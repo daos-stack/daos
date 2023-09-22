@@ -9,6 +9,7 @@
 
 #include <pthread.h>
 #include <stdbool.h>
+#include <gurt/common.h>
 #include <gurt/list.h>
 
 /* A data structure used to describe and register a type */
@@ -52,7 +53,7 @@ struct d_slab_type {
 	d_list_t          st_type_list;
 	d_list_t          st_free_list;
 	d_list_t          st_pending_list;
-	pthread_mutex_t   st_lock;
+	DAOS_MUTEX        st_lock;
 	struct d_slab    *st_slab;
 	void             *st_arg;
 
@@ -77,7 +78,7 @@ struct d_slab_type {
 struct d_slab {
 	d_list_t        slab_list;
 	void           *slab_arg;
-	pthread_mutex_t slab_lock;
+	DAOS_MUTEX      slab_lock;
 	bool            slab_init;
 };
 

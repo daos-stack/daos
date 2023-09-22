@@ -8,7 +8,8 @@
  *
  * tests/suite/daos_capa.c
  */
-#define D_LOGFAC	DD_FAC(tests)
+
+#include <gurt/common.h>
 
 #include <daos/checksum.h>
 #include "daos_test.h"

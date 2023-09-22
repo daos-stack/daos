@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <daos/common.h>
+
 #include "cli_csum.h"
 #include "obj_internal.h"
 

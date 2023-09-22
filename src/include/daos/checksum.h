@@ -108,7 +108,7 @@ struct daos_csummer {
 	bool		 dcs_skip_key_calc;
 	bool		 dcs_skip_key_verify;
 	bool		 dcs_skip_data_verify;
-	pthread_mutex_t	 dcs_lock;
+	DAOS_MUTEX       dcs_lock;
 };
 
 /**

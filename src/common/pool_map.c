@@ -56,7 +56,7 @@ struct pool_comp_sorter {
 /** In memory data structure for pool map */
 struct pool_map {
 	/** protect the refcount */
-	pthread_mutex_t		 po_lock;
+	DAOS_MUTEX               po_lock;
 	/** Current version of pool map */
 	uint32_t		 po_version;
 	/** refcount on the pool map */

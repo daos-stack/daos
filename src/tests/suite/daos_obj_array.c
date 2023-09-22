@@ -9,6 +9,8 @@
  * tests/suite/daos_obj_array.c
  */
 
+#include <gurt/common.h>
+
 #include <daos/checksum.h>
 #include "daos_test.h"
 

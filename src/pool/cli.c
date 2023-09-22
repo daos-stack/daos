@@ -203,9 +203,8 @@ failed:
  * the MS.
  */
 int
-dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
-			struct rsvc_client *cli, pthread_mutex_t *cli_lock,
-			struct dc_mgmt_sys *sys, crt_endpoint_t *ep)
+dc_pool_choose_svc_rank(const char *label, uuid_t puuid, struct rsvc_client *cli,
+			DAOS_MUTEX *cli_lock, struct dc_mgmt_sys *sys, crt_endpoint_t *ep)
 {
 	int			rc;
 	int			i;

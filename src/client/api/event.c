@@ -56,7 +56,7 @@ static uint32_t ev_prog_timeout;
  * this module uses.
  */
 static crt_context_t daos_eq_ctx;
-static pthread_mutex_t daos_eq_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX    daos_eq_lock = DAOS_MUTEX_INITIALIZER;
 static unsigned int eq_ref;
 
 /*

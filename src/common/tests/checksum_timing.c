@@ -14,6 +14,7 @@
 #include <inttypes.h>
 
 #include <getopt.h>
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <gurt/common.h>
 

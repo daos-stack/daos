@@ -226,7 +226,7 @@ struct crt_lookup_item {
 	/* reference count */
 	ATOMIC uint32_t		 li_ref;
 	uint32_t		 li_initialized:1;
-	pthread_mutex_t		 li_mutex;
+	DAOS_MUTEX               li_mutex;
 };
 
 /* structure of global group data */

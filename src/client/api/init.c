@@ -30,7 +30,7 @@
 #include <pthread.h>
 
 /** protect against concurrent daos_init/fini calls */
-static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX          module_lock = DAOS_MUTEX_INITIALIZER;
 
 /** refcount on how many times daos_init has been called */
 static int		module_initialized;

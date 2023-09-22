@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC DD_FAC(client)
-
 #ifndef __DAOS_S3_INTERNAL_H__
 #define __DAOS_S3_INTERNAL_H__
 

@@ -198,7 +198,7 @@ struct crt_rpc_priv {
 	 *   crt_context.cc_mutex
 	 *   crt_gdata.cg_rwlock
 	 */
-	pthread_mutex_t		crp_mutex;
+	DAOS_MUTEX               crp_mutex;
 	struct crt_common_hdr	crp_reply_hdr; /* common header for reply */
 	struct crt_common_hdr	crp_req_hdr; /* common header for request */
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */

@@ -14,7 +14,7 @@
 
 typedef struct {
 	/** 124 + 8 bytes pad for pthread_mutex_t size difference on __aarch64__ */
-	char data[132];
+	char data[140];
 } obj_da_t;
 
 /* Initialize an object obj_da

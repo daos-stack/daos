@@ -8,6 +8,7 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos/tests_lib.h>
 #include <daos/test_perf.h>

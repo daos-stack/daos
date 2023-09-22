@@ -33,10 +33,10 @@ struct loaded_mod {
 
 /* Track list of loaded modules */
 D_LIST_HEAD(loaded_mod_list);
-pthread_mutex_t loaded_mod_list_lock = PTHREAD_MUTEX_INITIALIZER;
+DAOS_MUTEX                loaded_mod_list_lock = DAOS_MUTEX_INITIALIZER;
 
 /* Define an array for faster accessing the module by mod_id */
-static struct dss_module	*dss_modules[DAOS_MAX_MODULE];
+static struct dss_module *dss_modules[DAOS_MAX_MODULE];
 
 struct dss_module *
 dss_module_get(int mod_id)

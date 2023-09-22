@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <cmocka.h>
 
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos/tests_lib.h>
 

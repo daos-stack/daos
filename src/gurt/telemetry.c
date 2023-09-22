@@ -68,7 +68,7 @@ struct d_tm_context {
 static struct d_tm_shmem {
 	struct d_tm_context	*ctx; /** context for the producer */
 	struct d_tm_node_t	*root; /** root node of shmem */
-	pthread_mutex_t		 add_lock; /** for synchronized access */
+	DAOS_MUTEX               add_lock;    /** for synchronized access */
 	bool			 sync_access; /** whether to sync access */
 	bool			 retain; /** retain shmem region on exit */
 	int			 id; /** Instance ID */

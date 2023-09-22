@@ -5,6 +5,7 @@
  */
 
 #include <daos_types.h>
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <evt_priv.h>
 #include "vts_io.h"

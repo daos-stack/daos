@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(vos)
 
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include "evt_priv.h"
 

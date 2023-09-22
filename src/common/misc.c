@@ -545,7 +545,7 @@ daos_file_is_dax(const char *pathname)
  */
 
 struct daos_hhash_table	daos_ht;
-static pthread_mutex_t	daos_ht_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX       daos_ht_lock = DAOS_MUTEX_INITIALIZER;
 static unsigned int	daos_ht_ref;
 
 int

@@ -12,7 +12,7 @@
 static int		done;
 static crt_context_t	crt_ctx;
 static int		msg_counts[MSG_COUNT];
-static pthread_mutex_t	lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX       lock = DAOS_MUTEX_INITIALIZER;
 static pthread_cond_t	cond = PTHREAD_COND_INITIALIZER;
 
 #define NUM_THREADS 16
@@ -145,7 +145,7 @@ int main(int argc, char **argv)
 	printf("Waiting for stop rpc\n");
 	D_MUTEX_LOCK(&lock);
 	while (done == 0)
-		rc = pthread_cond_wait(&cond, &lock);
+		rc = D_CONT_WAIT(&cond, &lock);
 
 	D_MUTEX_UNLOCK(&lock);
 	printf("Stop rpc exited with rc = %d\n", rc);

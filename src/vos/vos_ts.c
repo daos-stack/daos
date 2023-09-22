@@ -9,7 +9,6 @@
  *
  * Author: Jeff Olivier <jeffrey.v.olivier@intel.com>
  */
-#define D_LOGFAC DD_FAC(vos)
 
 #include "vos_internal.h"
 

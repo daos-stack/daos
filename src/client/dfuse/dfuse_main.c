@@ -13,8 +13,6 @@
 #include <sys/types.h>
 #include <hwloc.h>
 
-#define D_LOGFAC DD_FAC(dfuse)
-
 #include "dfuse.h"
 
 #include "daos_fs.h"

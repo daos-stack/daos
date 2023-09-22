@@ -154,11 +154,10 @@ static struct st_g_data *g_data;
  * Locking g_data_lock is only necessary in start() and status() (when free'ing)
  * The rest of the functions that use it are only reachable when g_data is valid
  */
-static pthread_mutex_t g_data_lock;
+static DAOS_MUTEX        g_data_lock = DAOS_MUTEX_INITIALIZER;
 
 void crt_self_test_client_init(void)
 {
-	D_MUTEX_INIT(&g_data_lock, NULL);
 }
 
 void crt_self_test_client_fini(void)

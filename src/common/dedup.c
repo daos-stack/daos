@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos/dedup.h>
 

@@ -852,7 +852,7 @@ detach(struct dc_mgmt_sys *sys)
 }
 
 static D_LIST_HEAD(systems);
-static pthread_mutex_t systems_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX systems_lock = DAOS_MUTEX_INITIALIZER;
 
 static struct dc_mgmt_sys *
 lookup_sys(const char *name)

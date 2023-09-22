@@ -922,6 +922,8 @@ crt_finalize(void)
 				 CRT_LOCKED));
 		}
 
+		D_MUTEX_DESTROY(&prov_data->cpg_mutex);
+
 		if (crt_plugin_gdata.cpg_inited == 1)
 			crt_plugin_fini();
 

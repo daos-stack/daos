@@ -390,7 +390,7 @@ out:
 }
 
 typedef struct {
-	pthread_mutex_t	epc_mutex;
+	DAOS_MUTEX      epc_mutex;
 	pthread_cond_t	epc_cond;
 	unsigned int	epc_error;
 	unsigned int	epc_barrier;
@@ -417,25 +417,24 @@ do {								\
 	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
 } while (0)
 
-#define EQ_TEST_BARRIER(msg, out)				\
-do {								\
-	D_MUTEX_LOCK(&epc_data.epc_mutex);		\
-	if (epc_data.epc_error != 0) {				\
-		D_MUTEX_UNLOCK(&epc_data.epc_mutex);	\
-		goto out;					\
-	}							\
-	epc_data.epc_barrier++;					\
-	if (epc_data.epc_barrier == 1) {			\
-		pthread_cond_wait(&epc_data.epc_cond,		\
-				  &epc_data.epc_mutex);		\
-	} else {						\
-		pthread_cond_broadcast(&epc_data.epc_cond);	\
-		epc_data.epc_barrier = 0;			\
-		epc_data.epc_index++;				\
-	}							\
-	print_error(msg);						\
-	D_MUTEX_UNLOCK(&epc_data.epc_mutex);		\
-} while (0)
+#define EQ_TEST_BARRIER(msg, out)                                                                  \
+	do {                                                                                       \
+		D_MUTEX_LOCK(&epc_data.epc_mutex);                                                 \
+		if (epc_data.epc_error != 0) {                                                     \
+			D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                       \
+			goto out;                                                                  \
+		}                                                                                  \
+		epc_data.epc_barrier++;                                                            \
+		if (epc_data.epc_barrier == 1) {                                                   \
+			D_CONT_WAIT(&epc_data.epc_cond, &epc_data.epc_mutex);                      \
+		} else {                                                                           \
+			pthread_cond_broadcast(&epc_data.epc_cond);                                \
+			epc_data.epc_barrier = 0;                                                  \
+			epc_data.epc_index++;                                                      \
+		}                                                                                  \
+		print_error(msg);                                                                  \
+		D_MUTEX_UNLOCK(&epc_data.epc_mutex);                                               \
+	} while (0)
 
 #define EQ_TEST_DONE(rc)					\
 do {								\
@@ -1032,7 +1031,7 @@ out:
 
 static bool	stop_progress;
 static int	polled_events;
-pthread_mutex_t	eqh_mutex;
+DAOS_MUTEX      eqh_mutex = DAOS_MUTEX_INITIALIZER;
 
 static void *
 th_eq_poll(void *arg)
@@ -1072,10 +1071,6 @@ eq_test_9(void **state)
 	int			i;
 
 	DAOS_TEST_ENTRY("9", "Event multi thread EQ pollers");
-
-	rc = D_MUTEX_INIT(&eqh_mutex, NULL);
-	if (rc)
-		D_GOTO(out, rc);
 
 	rc = sched_getaffinity(0, sizeof(cpuset), &cpuset);
 	if (rc != 0) {

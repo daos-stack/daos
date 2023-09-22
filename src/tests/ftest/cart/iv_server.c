@@ -78,7 +78,7 @@ struct iv_value_struct {
 
 static crt_context_t g_main_ctx;
 static pthread_t g_progress_thread;
-static pthread_mutex_t g_key_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX    g_key_lock = DAOS_MUTEX_INITIALIZER;
 #define LOCK_KEYS() D_MUTEX_LOCK(&g_key_lock)
 #define UNLOCK_KEYS() D_MUTEX_UNLOCK(&g_key_lock)
 

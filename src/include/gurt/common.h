@@ -357,18 +357,92 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 		d_errno2der(_rc);					\
 	})
 
-#define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
-#define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
-#define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
+#if 1
+
+#define DAOS_MUTEX_INITIALIZER                                                                     \
+	{                                                                                          \
+		.lock = PTHREAD_MUTEX_INITIALIZER, .inited = true                                  \
+	}
+
+typedef struct daos_mutex {
+	pthread_mutex_t lock;
+	bool            inited;
+	int            *check;
+} DAOS_MUTEX;
+
+#define D_MUTEX_INIT(x, y)                                                                         \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = pthread_mutex_init(&(x)->lock, y);                                           \
+		if (_rc != 0) {                                                                    \
+			D_ASSERT(_rc != EINVAL);                                                   \
+			D_ERROR("pthread_mutex_init failed; rc=%d\n", _rc);                        \
+		} else {                                                                           \
+			(x)->inited = true;                                                        \
+			D_ALLOC_PTR((x)->check);                                                   \
+		}                                                                                  \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define D_MUTEX_DESTROY(x)                                                                         \
+	({                                                                                         \
+		int _rc;                                                                           \
+		D_ASSERTF((x)->inited, "Lock used without initializing");                          \
+		(x)->inited = false;                                                               \
+		D_FREE((x)->check);                                                                \
+		_rc = pthread_mutex_destroy(&(x)->lock);                                           \
+		D_ASSERTF(_rc == 0, "pthread_mutex_destroy rc=%d %s\n", _rc, strerror(_rc));       \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define D_MUTEX_LOCK(x)                                                                            \
+	({                                                                                         \
+		int _rc;                                                                           \
+		D_ASSERTF((x)->inited, "Lock used without initializing");                          \
+		_rc = pthread_mutex_trylock(&(x)->lock);                                           \
+		if (_rc == EBUSY) {                                                                \
+			int             delay1 = 0;                                                \
+			int             delay2 = 1;                                                \
+			struct timespec _wait  = {.tv_sec = delay1 + delay2};                      \
+			D_DEBUG(DB_MEM, "lock(%p), lock held, waiting", x);                        \
+			while ((_rc = pthread_mutex_timedlock(&(x)->lock, &_wait)) == ETIMEDOUT) { \
+				delay1       = delay2;                                             \
+				delay2       = _wait.tv_sec;                                       \
+				_wait.tv_sec = delay1 + delay2;                                    \
+				D_DEBUG(DB_MEM, "lock(%p), lock still held, waiting %ld", x,       \
+					_wait.tv_sec);                                             \
+			}                                                                          \
+		}                                                                                  \
+		D_ASSERTF(_rc == 0, "pthread_mutex_lock rc=%d %s\n", _rc, strerror(_rc));          \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define D_MUTEX_UNLOCK(x) __D_PTHREAD(pthread_mutex_unlock, &(x)->lock)
+
+#define D_CONT_WAIT(c, x) pthread_cond_wait(c, &(x)->lock)
+
+#else
+
+typedef DAOS_MUTEX pthread_mutex_t;
+
+#define DAOS_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
+
+#define D_MUTEX_INIT(x, y)     __D_PTHREAD_INIT(pthread_mutex_init, x, y)
+#define D_MUTEX_DESTROY(x)     __D_PTHREAD(pthread_mutex_destroy, x)
+#define D_MUTEX_LOCK(x)        __D_PTHREAD(pthread_mutex_lock, x)
+#define D_MUTEX_UNLOCK(x)      __D_PTHREAD(pthread_mutex_unlock, x)
+#define D_CONT_WAIT(c, x)      pthread_cond_wait(c, x)
+
+#endif
+
+#define D_SPIN_LOCK(x)          __D_PTHREAD(pthread_spin_lock, x)
+#define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
 #define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
 #define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
 #define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
-#define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
-#define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
+#define D_RWLOCK_UNLOCK(x)      __D_PTHREAD(pthread_rwlock_unlock, x)
 #define D_SPIN_DESTROY(x)	__D_PTHREAD(pthread_spin_destroy, x)
-#define D_RWLOCK_DESTROY(x)	__D_PTHREAD(pthread_rwlock_destroy, x)
-#define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
+#define D_RWLOCK_DESTROY(x)     __D_PTHREAD(pthread_rwlock_destroy, x)
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
 

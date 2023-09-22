@@ -86,7 +86,7 @@ struct dc_pool {
 	/* pool uuid */
 	uuid_t			dp_pool;
 	struct dc_mgmt_sys     *dp_sys;
-	pthread_mutex_t		dp_client_lock;
+	DAOS_MUTEX              dp_client_lock;
 	struct rsvc_client	dp_client;
 	uuid_t			dp_pool_hdl;
 	uint64_t		dp_capas;
@@ -157,10 +157,9 @@ int dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 int dc_pool_get_redunc(daos_handle_t poh);
 
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
-int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
-			    struct rsvc_client *cli, pthread_mutex_t *cli_lock,
-			    struct dc_mgmt_sys *sys,
-			    crt_endpoint_t *ep);
+int
+     dc_pool_choose_svc_rank(const char *label, uuid_t puuid, struct rsvc_client *cli,
+			     DAOS_MUTEX *cli_lock, struct dc_mgmt_sys *sys, crt_endpoint_t *ep);
 int dc_pool_create_map_refresh_task(daos_handle_t pool_hdl, uint32_t map_version,
 				    tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);

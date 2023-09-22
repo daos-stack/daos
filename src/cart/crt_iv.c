@@ -27,7 +27,7 @@
 static D_LIST_HEAD(ns_list);
 
 /* Lock for manimuplation of ns_list and ns_id */
-static pthread_mutex_t ns_list_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX ns_list_lock = DAOS_MUTEX_INITIALIZER;
 
 /* Structure for uniquely identifying iv namespace */
 struct crt_ivns_id {
@@ -88,7 +88,7 @@ struct pending_fetch {
 struct ivf_key_in_progress {
 	crt_iv_key_t	kip_key;
 	d_list_t	kip_pending_fetch_list;
-	pthread_mutex_t	kip_lock;
+	DAOS_MUTEX      kip_lock;
 
 	bool		kip_rpc_in_progress;
 	uint32_t	kip_refcnt;
@@ -117,7 +117,7 @@ struct crt_ivns_internal {
 	d_list_t			 cii_keys_in_progress_list;
 
 	/* Lock for modification of pending list */
-	pthread_mutex_t			 cii_lock;
+	DAOS_MUTEX                       cii_lock;
 
 	/* Link to ns_list */
 	d_list_t			 cii_link;

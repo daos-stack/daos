@@ -26,13 +26,13 @@
 struct vos_self_mode {
 	struct vos_tls		*self_tls;
 	struct bio_xs_context	*self_xs_ctxt;
-	pthread_mutex_t		 self_lock;
+	DAOS_MUTEX               self_lock;
 	bool			 self_nvme_init;
 	int			 self_ref;
 };
 
-struct vos_self_mode		 self_mode = {
-	.self_lock	= PTHREAD_MUTEX_INITIALIZER,
+struct vos_self_mode self_mode = {
+    .self_lock = DAOS_MUTEX_INITIALIZER,
 };
 
 #define DF_MAX_BUF 128

@@ -15,7 +15,7 @@
 /* The array remember all of registered module keys on one node. */
 struct dss_module_key *dss_module_keys[DAOS_MODULE_KEYS_NR] = { NULL };
 
-pthread_mutex_t dss_module_keys_lock = PTHREAD_MUTEX_INITIALIZER;
+DAOS_MUTEX             dss_module_keys_lock = DAOS_MUTEX_INITIALIZER;
 
 void
 dss_register_key(struct dss_module_key *key)

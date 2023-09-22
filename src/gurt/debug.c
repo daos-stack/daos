@@ -12,7 +12,7 @@
 
 #include <gurt/common.h>
 
-static pthread_mutex_t d_log_lock = PTHREAD_MUTEX_INITIALIZER;
+static DAOS_MUTEX d_log_lock = DAOS_MUTEX_INITIALIZER;
 static int d_log_refcount;
 
 D_FOREACH_GURT_FAC(D_LOG_INSTANTIATE_FAC, D_NOOP)

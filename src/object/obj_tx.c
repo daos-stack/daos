@@ -71,7 +71,7 @@ struct dc_tx {
 	/** Container ptr */
 	struct dc_cont		*tx_co;
 	/** Protects all fields below. */
-	pthread_mutex_t		 tx_lock;
+	DAOS_MUTEX               tx_lock;
 	/** The TX epoch. */
 	struct dtx_epoch	 tx_epoch;
 	/** The task choosing the TX epoch. */

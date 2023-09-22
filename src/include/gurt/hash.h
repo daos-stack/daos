@@ -20,6 +20,8 @@
 #include <gurt/list.h>
 #include <gurt/types.h>
 #include <gurt/atomic.h>
+#include <gurt/debug.h>
+#include <gurt/common.h>
 
 /**
  * Hash table keeps and prints extra debugging information
@@ -214,7 +216,7 @@ enum d_hash_feats {
 
 union d_hash_lock {
 	pthread_spinlock_t	spin;
-	pthread_mutex_t		mutex;
+	DAOS_MUTEX              mutex;
 	pthread_rwlock_t	rwlock;
 };
 

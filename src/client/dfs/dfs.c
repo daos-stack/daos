@@ -149,7 +149,7 @@ struct dfs {
 	/** flag to indicate whether dfs is mounted with balanced mode (DTX) */
 	bool			use_dtx;
 	/** lock for threadsafety */
-	pthread_mutex_t		lock;
+	DAOS_MUTEX               lock;
 	/** layout version of DFS container that is mounted */
 	dfs_layout_ver_t	layout_v;
 	/** uid - inherited from container. */

@@ -67,12 +67,12 @@ d_slab_destroy(struct d_slab *slab)
 	while ((type = d_list_pop_entry(&slab->slab_list, struct d_slab_type, st_type_list))) {
 		if (type->st_count != 0)
 			D_TRACE_WARN(type, "Freeing type with active objects\n");
-		rc = pthread_mutex_destroy(&type->st_lock);
+		rc = D_MUTEX_DESTROY(&type->st_lock);
 		if (rc != 0)
 			D_TRACE_ERROR(type, "Failed to destroy lock %d %s\n", rc, strerror(rc));
 		D_FREE(type);
 	}
-	rc = pthread_mutex_destroy(&slab->slab_lock);
+	rc = D_MUTEX_DESTROY(&slab->slab_lock);
 	if (rc != 0)
 		D_TRACE_ERROR(slab, "Failed to destroy lock %d %s\n", rc, strerror(rc));
 	D_TRACE_DOWN(DB_ANY, slab);

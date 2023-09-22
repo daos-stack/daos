@@ -8,7 +8,6 @@
  *
  * vos/tests/vts_wal.c
  */
-#define D_LOGFAC	DD_FAC(tests)
 
 #include <sys/types.h>
 #include <sys/stat.h>

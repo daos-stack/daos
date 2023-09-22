@@ -73,7 +73,7 @@ struct crt_prov_gdata {
 				cpg_inited		: 1;
 
 	/** Mutext to protect fields above */
-	pthread_mutex_t		cpg_mutex;
+	DAOS_MUTEX cpg_mutex;
 };
 
 #define MAX_NUM_SECONDARY_PROVS 2
@@ -174,7 +174,7 @@ struct crt_plugin_gdata {
 	void				*hlc_error_cb_arg;
 
 	/* mutex to protect all callbacks change only */
-	pthread_mutex_t			 cpg_mutex;
+	DAOS_MUTEX                       cpg_mutex;
 };
 
 extern struct crt_plugin_gdata		crt_plugin_gdata;
@@ -205,7 +205,7 @@ struct crt_context {
 	 * mutex to protect cc_epi_table and timeout binheap (see the lock
 	 * order comment on crp_mutex)
 	 */
-	pthread_mutex_t		 cc_mutex;
+	DAOS_MUTEX               cc_mutex;
 
 	/** timeout per-context */
 	uint32_t		 cc_timeout_sec;
@@ -248,7 +248,7 @@ struct crt_ep_inflight {
 	 * mutex to protect ei_req_q and some counters (see the lock order
 	 * comment on crp_mutex)
 	 */
-	pthread_mutex_t		 epi_mutex;
+	DAOS_MUTEX               epi_mutex;
 };
 
 #define CRT_UNLOCK			(0)

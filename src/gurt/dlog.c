@@ -83,10 +83,11 @@ struct d_log_state {
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
 	int flush_pri;		/* flush priority */
-#ifdef DLOG_MUTEX
-	pthread_mutex_t clogmux;	/* protect clog in threaded env */
-#endif
 };
+
+#ifdef DLOG_MUTEX
+pthread_mutex_t clogmux = PTHREAD_MUTEX_INITIALIZER; /* protect clog in threaded env */
+#endif
 
 struct cache_entry {
 	int		*ce_cache;
@@ -110,8 +111,8 @@ static const char        *default_fac0name = "CLOG";
 static bool               merge_stderr;
 
 #ifdef DLOG_MUTEX
-#define clog_lock()   D_MUTEX_LOCK(&mst.clogmux)
-#define clog_unlock() D_MUTEX_UNLOCK(&mst.clogmux)
+#define clog_lock()   pthread_mutex_lock(&clogmux)
+#define clog_unlock() pthread_mutex_unlock(&clogmux)
 #else
 #define clog_lock()
 #define clog_unlock()
@@ -270,11 +271,7 @@ d_log_add_cache(int *cache, int nr)
 
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
- * close or during a failed open).  this function assumes the clogmux
- * has been allocated (caller must ensure that this is true or we'll
- * die when attempting a clog_lock()).  we will dispose of clogmux.
- * (XXX: might want to switch over to a PTHREAD_MUTEX_INITIALIZER for
- * clogmux at some point?).
+ * close or during a failed open).
  *
  * the caller handles cleanout of d_log_xst.tag (not us).
  */
@@ -337,7 +334,7 @@ static void dlog_cleanout(void)
 	 * do not destroy mutex to allow correct execution of dlog_sync()
 	 * which as been registered using atexit() and to be run upon exit()
 	 */
-	 /* D_MUTEX_DESTROY(&mst.clogmux); */
+	/* pthread_mutex_destroy(&clogmux); */
 #endif
 }
 
@@ -910,13 +907,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		fprintf(stderr, "d_log_open calloc failed.\n");
 		goto early_error;
 	}
-#ifdef DLOG_MUTEX		/* create lock */
-	if (D_MUTEX_INIT(&mst.clogmux, NULL) != 0) {
-		/* XXX: consider cvt to PTHREAD_MUTEX_INITIALIZER */
-		fprintf(stderr, "d_log_open D_MUTEX_INIT failed.\n");
-		goto early_error;
-	}
-#endif
 	/* it is now safe to use dlog_cleanout() for error handling */
 
 	clog_lock();		/* now locked */

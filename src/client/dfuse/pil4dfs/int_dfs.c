@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
-#define D_LOGFAC     DD_FAC(il)
-
 #include <stdio.h>
 #include <dirent.h>
 #include <dlfcn.h>
@@ -225,11 +223,11 @@ struct sigaction       old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
-static pthread_mutex_t lock_dfs;
-static pthread_mutex_t lock_fd;
-static pthread_mutex_t lock_dirfd;
-static pthread_mutex_t lock_mmap;
-static pthread_mutex_t lock_fd_dup2ed;
+static DAOS_MUTEX      lock_dfs       = DAOS_MUTEX_INITIALIZER;
+static DAOS_MUTEX      lock_fd        = DAOS_MUTEX_INITIALIZER;
+static DAOS_MUTEX      lock_dirfd     = DAOS_MUTEX_INITIALIZER;
+static DAOS_MUTEX      lock_mmap      = DAOS_MUTEX_INITIALIZER;
+static DAOS_MUTEX      lock_fd_dup2ed = DAOS_MUTEX_INITIALIZER;
 
 /* store ! umask to apply on mode when creating file to honor system umask */
 static mode_t          mode_not_umask;
@@ -1177,23 +1175,6 @@ remove_dot_and_cleanup(char path[], int len)
 static int
 init_fd_list(void)
 {
-	int rc;
-
-	rc = D_MUTEX_INIT(&lock_fd, NULL);
-	if (rc)
-		return 1;
-	rc = D_MUTEX_INIT(&lock_dirfd, NULL);
-	if (rc)
-		return 1;
-	rc = D_MUTEX_INIT(&lock_mmap, NULL);
-	if (rc)
-		return 1;
-	rc = D_MUTEX_INIT(&lock_fd_dup2ed, NULL);
-	if (rc)
-		return 1;
-
-	/* fatal error above: failure to create mutexes. */
-
 	memset(file_list, 0, sizeof(struct file_obj *) * MAX_OPENED_FILE);
 	memset(dir_list, 0, sizeof(struct dir_obj *) * MAX_OPENED_DIR);
 	memset(mmap_list, 0, sizeof(struct mmap_obj) * MAX_MMAP_BLOCK);
@@ -5333,9 +5314,6 @@ init_myhook(void)
 	}
 
 	update_cwd();
-	rc = D_MUTEX_INIT(&lock_dfs, NULL);
-	if (rc)
-		return;
 
 	rc = init_fd_list();
 	if (rc)

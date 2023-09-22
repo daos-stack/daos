@@ -1713,9 +1713,9 @@ struct dfs_test_async_arg {
 
 struct dfs_test_async_arg th_arg[DFS_TEST_MAX_THREAD_NR];
 
-static bool	stop_progress;
-static int	polled_events;
-pthread_mutex_t	eqh_mutex;
+static bool               stop_progress;
+static int                polled_events;
+DAOS_MUTEX                eqh_mutex = DAOS_MUTEX_INITIALIZER;
 
 static void *
 dfs_test_read_async(void *arg)
@@ -1787,9 +1787,6 @@ dfs_test_async_io_th(void **state)
 	int			rc;
 
 	par_barrier(PAR_COMM_WORLD);
-
-	rc = D_MUTEX_INIT(&eqh_mutex, NULL);
-	assert_int_equal(rc, 0);
 
 	sprintf(name, "file_async_mt_%d", arg->myrank);
 	rc = dfs_test_file_gen(name, 0, OC_S1, IO_SIZE * NUM_IOS);

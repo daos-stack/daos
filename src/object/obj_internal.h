@@ -166,7 +166,7 @@ struct obj_reasb_req {
 	uint32_t			 orr_iod_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
-	pthread_mutex_t			 orr_mutex;
+	DAOS_MUTEX                       orr_mutex;
 	/* target bitmap, one bit for each target (from first data cell to last parity cell. */
 	uint8_t				*tgt_bitmap;
 	/* fetch stat, one per iod */

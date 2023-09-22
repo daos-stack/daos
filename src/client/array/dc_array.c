@@ -8,8 +8,10 @@
  *
  * src/array/dc_array.c
  */
-#define D_LOGFAC	DD_FAC(array)
 
+#include <gurt/dlog.h>
+#include <gurt/debug_setup.h>
+#include <gurt/common.h>
 #include <daos/event.h>
 #include <daos/object.h>
 #include <daos/container.h>

@@ -3,7 +3,6 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(vos)
 
 #include <daos_types.h>
 #include "vos_internal.h"

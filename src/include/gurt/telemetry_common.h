@@ -230,7 +230,7 @@ struct d_tm_node_t {
 	char			*dtn_name; /** metric name */
 	int			dtn_type; /** mask of D_TM_ types */
 	key_t			dtn_shmem_key; /** shmem region key */
-	pthread_mutex_t		dtn_lock; /** individual mutex */
+	DAOS_MUTEX               dtn_lock;      /** individual mutex */
 	struct d_tm_metric_t	*dtn_metric; /** values */
 	bool			dtn_protect; /** synchronized access */
 };

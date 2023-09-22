@@ -3,8 +3,6 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC        DD_FAC(tests)
-
 
 #include <string.h>
 
@@ -14,6 +12,7 @@
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>
+#include <gurt/common.h>
 #include <daos/checksum.h>
 #include <daos/common.h>
 #include <daos/cont_props.h>

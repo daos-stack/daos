@@ -137,7 +137,7 @@ struct d_binheap_ops {
 struct d_binheap {
 	/** different type of locks based on cbt_feats */
 	union {
-		pthread_mutex_t		    d_bh_mutex;
+		DAOS_MUTEX                  d_bh_mutex;
 		pthread_rwlock_t	    d_bh_rwlock;
 	};
 	/** feature bits */
