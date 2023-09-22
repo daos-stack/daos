@@ -143,14 +143,26 @@ class VerifyPoolSpace(TestWithServers):
             compare_methods (list): a list of compare methods to execute per rank
         """
         self.log.info('Verifying system reported pool size for %s', pool_size[-1]['label'])
-        self.log.debug('  Rank  Size   Avail  Mount       Status')
-        self.log.debug('  ----  -----  -----  ----------  ------')
+        self.log.debug('  Rank  Mount       Previous (S/A)  Current (S/A)   Compare  Status')
+        self.log.debug('  ----  ----------  --------------  --------------  -------  ------')
         overall = True
-        for rank, data in sorted(pool_size[-1]['data'].items()):
+        for rank in sorted(pool_size[-1]['data'].keys()):
             status = compare_methods[rank](rank, pool_size)
+            current = pool_size[-1]['data'][rank]
+            if len(pool_size) > 1:
+                previous = pool_size[-1]['data'][rank]
+            else:
+                previous = {'size': 'None', 'avail': 'None'}
+            if compare_methods[rank] is compare_all_available:
+                compare = 'cS=cA'
+            elif compare_methods[rank] is compare_reduced:
+                compare = 'pA>cA'
+            else:
+                compare = 'pA=cA'
             self.log.debug(
-                '  %4s  %5s  %5s  %10s  %s',
-                rank, data['size'], data['avail'], data['mount'], status)
+                '  %4s  %-10s   %-5s / %-5s   %-5s / %-5s  %7s  %s',
+                rank, current['mount'], previous['avail'], previous['size'], current['avail'],
+                current['size'], compare, status)
             overall &= status
         if not overall:
             self.fail('Error detected in system pools size for {}'.format(pool_size[-1]['label']))
