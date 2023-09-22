@@ -597,9 +597,9 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		meta_sz = scm_sz;
 	}
 
-	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
-		"meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
-		xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
+	D_INFO("Create BIO meta context for xs:%p pool:" DF_UUID " "
+	       "meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
+	       xs_ctxt, DP_UUID(pool_id), meta_sz, nvme_sz, wal_sz);
 
 	rc = bio_mc_create(xs_ctxt, pool_id, meta_sz, wal_sz, nvme_sz, mc_flags);
 	if (rc != 0) {
@@ -625,7 +625,8 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	store.stor_ops = &vos_store_ops;
 
 umem_create:
-	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
+	D_INFO("umempobj_create meta_sz: " DF_U64 " store_sz: " DF_U64, meta_sz, store.stor_size);
+	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, meta_sz, 0600, &store);
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
@@ -925,8 +926,9 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64" (meta: "DF_U64"), "
-		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid));
+	D_INFO("Pool Path: %s, size: " DF_U64 ":" DF_U64 " (meta: " DF_U64 "), "
+	       "UUID: " DF_UUID "\n",
+	       path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;

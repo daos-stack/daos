@@ -256,7 +256,8 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 	}
 
 	if (!store->stor_size || (sz < store->stor_size)) {
-		ERR("Invalid umem_store size");
+		D_ERROR("create: Invalid umem_store size (sz=" DF_U64 ", stor_size=" DF_U64 ")\n",
+			sz, store->stor_size);
 		errno = EINVAL;
 		close(fd);
 		return NULL;
@@ -292,7 +293,8 @@ dav_obj_open(const char *path, int flags, struct umem_store *store)
 	size = (size_t)statbuf.st_size;
 
 	if (!store->stor_size || (size < store->stor_size)) {
-		ERR("Invalid umem_store size");
+		D_ERROR("open: Invalid umem_store size (sz=" DF_U64 ", stor_size=" DF_U64 ")\n",
+			size, store->stor_size);
 		errno = EINVAL;
 		close(fd);
 		return NULL;
