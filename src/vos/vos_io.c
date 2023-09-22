@@ -2672,9 +2672,8 @@ vos_dedup_verify(daos_handle_t ioh)
 			 * - Deal with SCM leak on tx commit failure or server
 			 *   crash;
 			 */
-			off = umem_atomic_alloc(vos_ioc2umm(ioc),
-						bio_iov2len(biov),
-						UMEM_TYPE_ANY, 0);
+			off = umem_atomic_alloc(vos_ioc2umm(ioc), bio_iov2len(biov), UMEM_TYPE_ANY,
+						0);
 			if (off == UMOFF_NULL) {
 				D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
 					bio_iov2len(biov));

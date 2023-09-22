@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * bucket.c -- bucket implementation
@@ -90,7 +90,7 @@ bucket_locked_new(struct block_container *c, struct alloc_class *aclass, struct 
 
 	util_mutex_init(&b->lock);
 	b->bucket.locked = b;
-	b->bucket.zset = zset;
+	b->bucket.zset   = zset;
 
 	return b;
 

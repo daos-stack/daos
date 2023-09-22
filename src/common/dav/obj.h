@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2014-2021, Intel Corporation */
+/* Copyright 2014-2023, Intel Corporation */
 
 /*
  * obj.h -- internal definitions for obj module
@@ -45,7 +45,6 @@ typedef uint64_t type_num_t;
 #define CLASS_ID_FROM_FLAG(flag)\
 ((uint16_t)((flag) >> 48))
 
-#define EZONE_ID_FROM_FLAG(flag)\
-((uint32_t)((flag) >> 16))
+#define EZONE_ID_FROM_FLAG(flag) ((uint32_t)((flag) >> 16))
 
 #endif /* __DAOS_COMMON_OBJ_H */

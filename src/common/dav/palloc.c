@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * palloc.c -- implementation of pmalloc POSIX-like API
@@ -178,13 +178,11 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
  * (best-fit, next-fit, ...) varies depending on the bucket container.
  */
 static int
-palloc_reservation_create(struct palloc_heap *heap, size_t size,
-	palloc_constr constructor, void *arg,
-	uint64_t extra_field, uint16_t object_flags,
-	uint16_t class_id, uint32_t zset_id,
-	struct dav_action_internal *out)
+palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr constructor,
+			  void *arg, uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
+			  uint32_t zset_id, struct dav_action_internal *out)
 {
-	int                  err = 0;
+	int                  err       = 0;
 	struct memory_block *new_block = &out->m;
 	struct zone_set     *zset;
 
@@ -305,8 +303,7 @@ palloc_restore_free_chunk_state(struct palloc_heap *heap,
 	struct zone_set *zset = heap_get_zoneset(heap, m->zone_id);
 
 	if (m->type == MEMORY_BLOCK_HUGE) {
-		struct bucket *b = zoneset_bucket_acquire(zset,
-			DEFAULT_ALLOC_CLASS_ID);
+		struct bucket *b = zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID);
 		if (heap_free_chunk_reuse(heap, b, m) != 0) {
 			if (errno == EEXIST)
 				FATAL("duplicate runtime chunk state, possible double free");
@@ -580,18 +577,15 @@ palloc_exec_actions(struct palloc_heap *heap,
  * palloc_reserve -- creates a single reservation
  */
 int
-palloc_reserve(struct palloc_heap *heap, size_t size,
-	palloc_constr constructor, void *arg,
-	uint64_t extra_field, uint16_t object_flags,
-	uint16_t class_id, uint32_t zset_id,
-	struct dav_action *act)
+palloc_reserve(struct palloc_heap *heap, size_t size, palloc_constr constructor, void *arg,
+	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t zset_id,
+	       struct dav_action *act)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
 
-	return palloc_reservation_create(heap, size, constructor, arg,
-		extra_field, object_flags, class_id, zset_id,
-		(struct dav_action_internal *)act);
+	return palloc_reservation_create(heap, size, constructor, arg, extra_field, object_flags,
+					 class_id, zset_id, (struct dav_action_internal *)act);
 }
 
 /*
@@ -765,9 +759,8 @@ palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, siz
 	/* alloc or realloc */
 	if (size != 0) {
 		alloc = &ops[nops++];
-		if (palloc_reservation_create(heap, size, constructor, arg,
-			extra_field, object_flags,
-			class_id, zset_id, alloc) != 0) {
+		if (palloc_reservation_create(heap, size, constructor, arg, extra_field,
+					      object_flags, class_id, zset_id, alloc) != 0) {
 			operation_cancel(ctx);
 			return -1;
 		}

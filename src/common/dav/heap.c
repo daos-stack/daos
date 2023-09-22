@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * heap.c -- heap implementation
@@ -39,19 +39,19 @@
 struct zone_set {
 	uint32_t              zset_id;
 	uint32_t              padding;
-	struct bucket_locked *default_bucket;		       /* bucket for free chunks */
+	struct bucket_locked *default_bucket;                  /* bucket for free chunks */
 	struct bucket_locked *buckets[MAX_ALLOCATION_CLASSES]; /* one bucket per allocation class */
 	struct recycler      *recyclers[MAX_ALLOCATION_CLASSES];
 };
 
 struct heap_rt {
-	struct alloc_class_collection  *alloc_classes;
-	struct zone_set                *default_zset;
-	struct zone_set               **evictable_zsets;
-	os_mutex_t                      run_locks[MAX_RUN_LOCKS];
-	unsigned                        nlocks;
-	unsigned                        nzones;
-	unsigned                        zones_exhausted;
+	struct alloc_class_collection *alloc_classes;
+	struct zone_set               *default_zset;
+	struct zone_set              **evictable_zsets;
+	os_mutex_t                     run_locks[MAX_RUN_LOCKS];
+	unsigned                       nlocks;
+	unsigned                       nzones;
+	unsigned                       zones_exhausted;
 };
 
 /*
@@ -382,7 +382,7 @@ heap_run_into_free_chunk(struct palloc_heap *heap,
 static int
 heap_reclaim_run(struct palloc_heap *heap, struct memory_block *m, int startup)
 {
-	struct chunk_run    *run = heap_get_chunk_run(heap, m);
+	struct chunk_run    *run  = heap_get_chunk_run(heap, m);
 	struct chunk_header *hdr = heap_get_chunk_hdr(heap, m);
 	struct zone_set     *zset = heap_get_zoneset(heap, m->zone_id);
 
@@ -412,8 +412,7 @@ heap_reclaim_run(struct palloc_heap *heap, struct memory_block *m, int startup)
 		STATS_INC(heap->stats, transient, heap_run_allocated,
 			(c->rdsc.nallocs - e.free_space) * run->hdr.block_size);
 	}
-	struct recycler *recycler = heap_get_recycler(heap, zset, c->id,
-		c->rdsc.nallocs);
+	struct recycler *recycler = heap_get_recycler(heap, zset, c->id, c->rdsc.nallocs);
 
 	if (recycler == NULL || recycler_put(recycler, e) < 0)
 		ERR("lost runtime tracking info of %u run due to OOM", c->id);
@@ -505,7 +504,6 @@ static int
 heap_recycle_unused(struct palloc_heap *heap, struct recycler *recycler,
 	struct bucket *defb, int force)
 {
-
 	struct zone_set     *zset;
 	struct memory_block *nm;
 	struct empty_runs    r = recycler_recalc(recycler, force);
@@ -520,7 +518,6 @@ heap_recycle_unused(struct palloc_heap *heap, struct recycler *recycler,
 	nb = defb == NULL ? zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID) : NULL;
 
 	ASSERT(defb != NULL || nb != NULL);
-
 
 	VEC_FOREACH_BY_PTR(nm, &r) {
 		heap_run_into_free_chunk(heap, defb ? defb : nb, nm);
@@ -602,8 +599,7 @@ heap_discard_run(struct palloc_heap *heap, struct memory_block *m)
 
 	D_ASSERT(zset != NULL);
 	if (heap_reclaim_run(heap, m, 0)) {
-		struct bucket *b =
-			zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID);
+		struct bucket *b = zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID);
 
 		heap_run_into_free_chunk(heap, b, m);
 
@@ -638,15 +634,14 @@ static int
 heap_reuse_from_recycler(struct palloc_heap *heap,
 	struct bucket *b, uint32_t units, int force)
 {
-	struct zone_set *zset = bucket_get_zoneset(b);
+	struct zone_set    *zset = bucket_get_zoneset(b);
 	struct memory_block m = MEMORY_BLOCK_NONE;
 
 	m.size_idx = units;
 
 	struct alloc_class *aclass = bucket_alloc_class(b);
 
-	struct recycler *recycler = heap_get_recycler(heap, zset, aclass->id,
-		aclass->rdsc.nallocs);
+	struct recycler *recycler = heap_get_recycler(heap, zset, aclass->id, aclass->rdsc.nallocs);
 
 	if (recycler == NULL) {
 		ERR("lost runtime tracking info of %u run due to OOM",
@@ -692,7 +687,7 @@ heap_ensure_run_bucket_filled(struct palloc_heap *heap, struct bucket *b,
 {
 	int ret = 0;
 	struct alloc_class *aclass = bucket_alloc_class(b);
-	struct zone_set    *zset = bucket_get_zoneset(b);
+	struct zone_set    *zset   = bucket_get_zoneset(b);
 
 	D_ASSERT(zset != NULL);
 	ASSERTeq(aclass->type, CLASS_RUN);
@@ -765,8 +760,7 @@ heap_memblock_on_free(struct palloc_heap *heap, const struct memory_block *m)
 	if (c == NULL)
 		return;
 
-	struct recycler *recycler = heap_get_recycler(heap, zset, c->id,
-		c->rdsc.nallocs);
+	struct recycler *recycler = heap_get_recycler(heap, zset, c->id, c->rdsc.nallocs);
 
 	if (recycler == NULL) {
 		ERR("lost runtime tracking info of %u run due to OOM",
@@ -864,9 +858,9 @@ static int
 heap_default_zoneset_init(struct palloc_heap *heap)
 {
 	struct heap_rt *h = heap->rt;
-	struct zone_set *default_zset;
+	struct zone_set    *default_zset;
 	struct alloc_class *c;
-	uint8_t i;
+	uint8_t             i;
 
 	D_ALLOC_PTR(default_zset);
 	if (default_zset == NULL)
@@ -878,14 +872,15 @@ heap_default_zoneset_init(struct palloc_heap *heap)
 		if (c == NULL)
 			continue;
 
-		default_zset->buckets[c->id] = bucket_locked_new(container_new_seglists(heap), c,
-								 default_zset);
+		default_zset->buckets[c->id] =
+		    bucket_locked_new(container_new_seglists(heap), c, default_zset);
 		if (default_zset->buckets[c->id] == NULL)
 			goto error_bucket_create;
 	}
 
-	default_zset->default_bucket = bucket_locked_new(container_new_ravl(heap),
-		alloc_class_by_id(h->alloc_classes, DEFAULT_ALLOC_CLASS_ID), default_zset);
+	default_zset->default_bucket = bucket_locked_new(
+	    container_new_ravl(heap), alloc_class_by_id(h->alloc_classes, DEFAULT_ALLOC_CLASS_ID),
+	    default_zset);
 
 	if (default_zset->default_bucket == NULL)
 		goto error_bucket_create;
@@ -937,8 +932,8 @@ heap_create_alloc_class_buckets(struct palloc_heap *heap, struct alloc_class *c)
 	struct zone_set *default_zset = heap->rt->default_zset;
 
 	if (default_zset->buckets[c->id] == NULL) {
-		default_zset->buckets[c->id] = bucket_locked_new(container_new_seglists(heap), c,
-								 default_zset);
+		default_zset->buckets[c->id] =
+		    bucket_locked_new(container_new_seglists(heap), c, default_zset);
 		if (default_zset->buckets[c->id] == NULL)
 			return -1;
 	}

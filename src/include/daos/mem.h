@@ -337,9 +337,8 @@ typedef struct {
 	 * \param type_num [IN]	struct type (for PMDK and BMEM)
 	 * \param mbkt_id  [IN]	memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
-					uint64_t flags, unsigned int type_num,
-					unsigned int mbkt_id);
+	umem_off_t (*mo_tx_alloc)(struct umem_instance *umm, size_t size, uint64_t flags,
+				  unsigned int type_num, unsigned int mbkt_id);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -397,8 +396,8 @@ typedef struct {
 	 * \param type_num [IN]		struct type (for PMDK)
 	 * \param mbkt_id  [IN]		memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
-				       unsigned int type_num, unsigned int mbkt_id);
+	umem_off_t (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
+				 unsigned int type_num, unsigned int mbkt_id);
 
 	/**
 	 * Defer free til commit.  For use with reserved extents that are not
@@ -454,8 +453,8 @@ typedef struct {
 	 * \param type_num [IN]	 struct type (for PMDK)
 	 * \param mbkt_id  [IN]	 memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_atomic_alloc)(struct umem_instance *umm, size_t size,
-					    unsigned int type_num, unsigned int mbkt_id);
+	umem_off_t (*mo_atomic_alloc)(struct umem_instance *umm, size_t size, unsigned int type_num,
+				      unsigned int mbkt_id);
 
 	/**
 	 * flush data at specific offset to persistent store.
@@ -561,7 +560,7 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size, mbkt_id)		                                   \
+#define umem_alloc_verb(umm, flags, size, mbkt_id)                                                 \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
@@ -576,13 +575,11 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define umem_alloc(umm, size, mbkt_id)					\
-	umem_alloc_verb(umm, 0, size, mbkt_id)
+#define umem_alloc(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
 
-#define umem_zalloc(umm, size, mbkt_id)					\
-	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+#define umem_zalloc(umm, size, mbkt_id) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
 
-#define umem_alloc_noflush(umm, size, mbkt_id)				\
+#define umem_alloc_noflush(umm, size, mbkt_id)                                                     \
 	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, mbkt_id)
 
 #define umem_free(umm, umoff)                                                                      \
@@ -739,13 +736,15 @@ int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **ac
 /* Free up the array of reserved actions */
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
-umem_off_t umem_reserve(struct umem_instance *umm,
-			struct umem_rsrvd_act *rsrvd_act, size_t size, unsigned int mbkt_id);
-void umem_defer_free(struct umem_instance *umm, umem_off_t off,
-		     struct umem_rsrvd_act *rsrvd_act);
-void umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
-int umem_tx_publish(struct umem_instance *umm,
-		    struct umem_rsrvd_act *rsrvd_act);
+umem_off_t
+umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
+	     unsigned int mbkt_id);
+void
+umem_defer_free(struct umem_instance *umm, umem_off_t off, struct umem_rsrvd_act *rsrvd_act);
+void
+umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
+int
+umem_tx_publish(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
 
 static inline void *
 umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,

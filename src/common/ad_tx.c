@@ -1147,8 +1147,8 @@ umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
-	     unsigned int type_num, unsigned int mbkt_id)
+umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	     unsigned int mbkt_id)
 {
 	struct ad_tx		*tx = tx_get();
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);

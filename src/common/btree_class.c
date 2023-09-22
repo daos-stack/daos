@@ -1142,7 +1142,7 @@ kv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	r->kr_value_len = val->iov_len;
 	r->kr_value_cap = r->kr_value_len;
-	r->kr_value = umem_alloc(&tins->ti_umm, r->kr_value_cap, 0);
+	r->kr_value     = umem_alloc(&tins->ti_umm, r->kr_value_cap, 0);
 	if (UMOFF_IS_NULL(r->kr_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 	v = umem_off2ptr(&tins->ti_umm, r->kr_value);
@@ -1337,7 +1337,7 @@ iv_rec_alloc(struct btr_instance *tins, d_iov_t *key, d_iov_t *val,
 
 	r->ir_value_len = val->iov_len;
 	r->ir_value_cap = r->ir_value_len;
-	r->ir_value = umem_alloc(&tins->ti_umm, r->ir_value_cap, 0);
+	r->ir_value     = umem_alloc(&tins->ti_umm, r->ir_value_cap, 0);
 	if (UMOFF_IS_NULL(r->ir_value))
 		D_GOTO(err_r, rc = tins->ti_umm.umm_nospc_rc);
 	v = umem_off2ptr(&tins->ti_umm, r->ir_value);

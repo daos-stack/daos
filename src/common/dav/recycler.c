@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2022, Intel Corporation */
+/* Copyright 2016-2023, Intel Corporation */
 
 /*
  * recycler.c -- implementation of run recycler
@@ -62,7 +62,7 @@ struct recycler {
 	 */
 	size_t unaccounted_units[MAX_CHUNK];
 	size_t unaccounted_total;
-	size_t nallocs;
+	size_t              nallocs;
 
 	VEC(, struct recycler_element) recalc;
 
@@ -88,7 +88,7 @@ recycler_new(struct palloc_heap *heap, size_t nallocs, struct zone_set *zset)
 
 	r->heap = heap;
 	r->nallocs = nallocs;
-	r->zset = zset;
+	r->zset              = zset;
 	r->unaccounted_total = 0;
 	memset(&r->unaccounted_units, 0, sizeof(r->unaccounted_units));
 
@@ -219,8 +219,7 @@ recycler_recalc(struct recycler *r, int force)
 
 	uint64_t units = r->unaccounted_total;
 
-	uint64_t recalc_threshold =
-		THRESHOLD_MUL * r->nallocs;
+	uint64_t recalc_threshold = THRESHOLD_MUL * r->nallocs;
 
 	if (!force && units < recalc_threshold)
 		return runs;

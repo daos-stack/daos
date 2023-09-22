@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * tx.c -- transactions implementation
@@ -354,8 +354,8 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 		return obj_tx_fail_null(ENOMEM, args.flags);
 
 	if (palloc_reserve(pop->do_heap, size, constructor, &args, type_num, 0,
-		CLASS_ID_FROM_FLAG(args.flags),
-		EZONE_ID_FROM_FLAG(args.flags), action) != 0)
+			   CLASS_ID_FROM_FLAG(args.flags), EZONE_ID_FROM_FLAG(args.flags),
+			   action) != 0)
 		goto err_oom;
 
 	palloc_get_prange(action, &off, &size, 1);
@@ -1669,10 +1669,8 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	ctx = pop->external;
 	operation_start(ctx);
 
-	int ret = palloc_operation(pop->do_heap, 0, offp, size,
-			constructor_alloc, &carg, type_num, 0,
-			CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags),
-			ctx);
+	int ret = palloc_operation(pop->do_heap, 0, offp, size, constructor_alloc, &carg, type_num,
+				   0, CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), ctx);
 
 	lw_tx_end(pop, NULL);
 	return ret;
@@ -1712,13 +1710,12 @@ dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
  * dav_xalloc -- allocates with flags
  */
 int
-dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size,
-	uint64_t type_num, uint64_t flags,
-	dav_constr constructor, void *arg)
+dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
+	   dav_constr constructor, void *arg)
 {
-	DAV_DBG(3, "pop %p offp %p size %zu type_num %llx flags %llx constructor %p arg %p",
-		pop, offp, size, (unsigned long long)type_num,
-		(unsigned long long)flags, constructor, arg);
+	DAV_DBG(3, "pop %p offp %p size %zu type_num %llx flags %llx constructor %p arg %p", pop,
+		offp, size, (unsigned long long)type_num, (unsigned long long)flags, constructor,
+		arg);
 
 	if (size == 0) {
 		ERR("allocation with size 0");
@@ -1727,15 +1724,13 @@ dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size,
 	}
 
 	if (flags & ~DAV_TX_XALLOC_VALID_FLAGS) {
-		ERR("unknown flags 0x%" PRIx64,
-			flags & ~DAV_TX_XALLOC_VALID_FLAGS);
+		ERR("unknown flags 0x%" PRIx64, flags & ~DAV_TX_XALLOC_VALID_FLAGS);
 		errno = EINVAL;
 		return -1;
 	}
 
 	DAV_API_START();
-	int ret = obj_alloc_construct(pop, offp, size, type_num,
-			flags, constructor, arg);
+	int ret = obj_alloc_construct(pop, offp, size, type_num, flags, constructor, arg);
 
 	DAV_API_END();
 	return ret;
@@ -1813,16 +1808,14 @@ dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
 uint64_t
 dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
 {
-	DAV_DBG("pop %p act %p size %zu type_num %llx",
-		pop, act, size,
+	DAV_DBG("pop %p act %p size %zu type_num %llx", pop, act, size,
 		(unsigned long long)type_num);
 
 	DAV_API_START();
 	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
 		return 0;
 
-	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
-		0, 0, 0, act) != 0) {
+	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num, 0, 0, 0, act) != 0) {
 		DAV_API_END();
 		return 0;
 	}
@@ -1835,18 +1828,15 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
  * dav_xreserve -- reserves a single object
  */
 uint64_t
-dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
-	     uint64_t flags)
+dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num, uint64_t flags)
 {
 	struct constr_args carg;
 
-	DAV_DBG(3, "pop %p act %p size %zu type_num %llx flags %llx",
-		pop, act, size,
+	DAV_DBG(3, "pop %p act %p size %zu type_num %llx flags %llx", pop, act, size,
 		(unsigned long long)type_num, (unsigned long long)flags);
 
 	if (flags & ~DAV_ACTION_XRESERVE_VALID_FLAGS) {
-		ERR("unknown flags 0x%" PRIx64,
-			flags & ~DAV_ACTION_XRESERVE_VALID_FLAGS);
+		ERR("unknown flags 0x%" PRIx64, flags & ~DAV_ACTION_XRESERVE_VALID_FLAGS);
 		errno = EINVAL;
 		return 0;
 	}
@@ -1856,13 +1846,12 @@ dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_
 	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
 		return 0;
 
-	carg.zero_init = flags & DAV_FLAG_ZERO;
+	carg.zero_init   = flags & DAV_FLAG_ZERO;
 	carg.constructor = NULL;
-	carg.arg = NULL;
+	carg.arg         = NULL;
 
-	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg,
-		type_num, 0, CLASS_ID_FROM_FLAG(flags),
-		EZONE_ID_FROM_FLAG(flags), act) != 0) {
+	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
+			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
 		DAV_API_END();
 		return 0;
 	}
@@ -1882,7 +1871,7 @@ dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act)
 	palloc_defer_free(pop->do_heap, off, act);
 }
 
-#if	0
+#if 0
 /*
  * dav_publish -- publishes a collection of actions
  */
@@ -1920,7 +1909,6 @@ dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 	DAV_API_END();
 }
 
-
 /*
  * dav_tx_publish -- publishes actions inside of a transaction,
  * with no_abort option
@@ -1928,10 +1916,10 @@ dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
 int
 dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 {
-	struct tx *tx = get_tx();
-	uint64_t flags = 0;
-	uint64_t off, size;
-	int ret;
+	struct tx *tx    = get_tx();
+	uint64_t   flags = 0;
+	uint64_t   off, size;
+	int        ret;
 
 	ASSERT_IN_TX(tx);
 	ASSERT_TX_STAGE_WORK(tx);
@@ -1951,7 +1939,8 @@ dav_tx_publish(struct dav_action *actv, size_t actvcnt)
 		VEC_PUSH_BACK(&tx->actions, actv[i]);
 		if (palloc_action_isalloc(&actv[i])) {
 			palloc_get_prange(&actv[i], &off, &size, 1);
-			struct tx_range_def r = {off, size, DAV_XADD_NO_SNAPSHOT|DAV_XADD_WAL_CPTR};
+			struct tx_range_def r = {off, size,
+						 DAV_XADD_NO_SNAPSHOT | DAV_XADD_WAL_CPTR};
 
 			ret = dav_tx_add_common(tx, &r);
 			D_ASSERT(ret == 0);

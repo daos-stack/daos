@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -216,7 +216,7 @@ ik_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		umem_free(umm, irec->ir_val_off);
 
 		irec->ir_val_msize = val_iov->iov_len;
-		irec->ir_val_off = umem_alloc(umm, val_iov->iov_len, 0);
+		irec->ir_val_off   = umem_alloc(umm, val_iov->iov_len, 0);
 		D_ASSERT(!UMOFF_IS_NULL(irec->ir_val_off));
 	}
 	val = umem_off2ptr(umm, irec->ir_val_off);
