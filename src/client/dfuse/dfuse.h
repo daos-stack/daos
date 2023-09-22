@@ -653,16 +653,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 		DFUSE_REPLY_BUFQ(desc, req, buf, size);                                            \
 	} while (0)
 
-#define DFUSE_REPLY_BUFQ(desc, req, buf, size)                                                     \
-	do {                                                                                       \
-		int __rc;                                                                          \
-		_Static_assert(IS_IEOH(desc), "Param is not correct");                             \
-		(desc) = NULL;                                                                     \
-		__rc   = fuse_reply_buf(req, buf, size);                                           \
-		if (__rc != 0)                                                                     \
-			DS_ERROR(-__rc, "fuse_reply_buf() error");                                 \
-	} while (0)
-
 #define DFUSE_REPLY_XATTR(_ie, req, size)                                                          \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -695,8 +685,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
 
-#if HAVE_CACHE_READDIR
-
 #define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
 	do {                                                                                       \
 		int __rc;                                                                          \
@@ -708,23 +696,6 @@ struct fuse_lowlevel_ops dfuse_ops;
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
 	} while (0)
-
-#else
-
-#error perhaps we can drop this now?
-
-#define DFUSE_REPLY_OPEN_DIR(_oh, req, _fi)                                                        \
-	do {                                                                                       \
-		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_oh, "Returning open directory");                                  \
-		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
-		(_oh) = NULL;                                                                      \
-		__rc  = fuse_reply_open(req, _fi);                                                 \
-		if (__rc != 0)                                                                     \
-			DS_ERROR(-__rc, "fuse_reply_open() error");                                \
-	} while (0)
-
-#endif
 
 #define DFUSE_REPLY_CREATE(_ie, req, entry, fi)                                                    \
 	do {                                                                                       \

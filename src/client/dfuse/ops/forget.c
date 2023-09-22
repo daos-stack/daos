@@ -13,11 +13,13 @@ dfuse_forget_one(struct dfuse_info *dfuse_info, fuse_ino_t ino, uintptr_t nlooku
 	struct dfuse_inode_entry *ie;
 	uint32_t                  old_ref;
 
-	ie = dfuse_inode_lookup(dfuse_info, ino);
-	if (!ie) {
-		DFUSE_TRA_WARNING(dfuse_info, "Unable to find ref for %#lx %lu", ino, nlookup);
-		return;
-	}
+	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
+
+	/* dfuse_inode_lookup_nf does not hold a ref so decref by nlookup -1 using atomics and
+	 * then a single decref at the end which may result in the inode being freed.
+	 */
+
+	nlookup--;
 
 	old_ref = atomic_fetch_sub_relaxed(&ie->ie_ref, nlookup);
 

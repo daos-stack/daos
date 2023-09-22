@@ -238,9 +238,7 @@ show_version(char *name)
 	fprintf(stdout, "%s version %s, libdaos %d.%d.%d\n", name, DAOS_VERSION,
 		DAOS_API_VERSION_MAJOR, DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 	fprintf(stdout, "Using fuse %s\n", fuse_pkgversion());
-#if HAVE_CACHE_READDIR
 	fprintf(stdout, "Kernel readdir support enabled\n");
-#endif
 };
 
 static void
