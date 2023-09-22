@@ -1959,11 +1959,13 @@ dtx_leader_exec_ops_ult(void *arg)
 	struct dtx_leader_handle	*dlh = ult_arg->dlh;
 	struct dtx_sub_status		*sub;
 	struct daos_shard_tgt		*tgt;
+	struct dtx_tls			*tls = dtx_tls_get();
 	uint32_t			 i;
 	uint32_t			 j;
 	uint32_t			 k;
 	int				 rc = 0;
 
+	d_tm_inc_gauge(tls->dt_forward, 1);
 	for (i = dlh->dlh_forward_idx, j = 0, k = 0; j < dlh->dlh_forward_cnt; i++, j++) {
 		sub = &dlh->dlh_subs[i];
 		tgt = &sub->dss_tgt;
@@ -2021,6 +2023,7 @@ dtx_leader_exec_ops_ult(void *arg)
 	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed [%u, %u), for delay %s: %d\n",
 		  dlh->dlh_forward_idx, dlh->dlh_forward_idx + dlh->dlh_forward_cnt,
 		  dlh->dlh_normal_sub_done == 1 ? "yes" : "no", rc);
+	d_tm_dec_gauge(tls->dt_forward, 1);
 }
 
 /**
@@ -2079,7 +2082,7 @@ again:
 	 *	 reasons, let's only create one for all remote targets for now.
 	 */
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, DSS_MEDIUM_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
 			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
@@ -2151,7 +2154,7 @@ exec:
 	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
 
 	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
-			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
+			    dss_get_module_info()->dmi_tgt_id, DSS_MEDIUM_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
 		ABT_future_free(&dlh->dlh_future);

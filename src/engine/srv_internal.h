@@ -67,6 +67,9 @@ struct dss_xstream {
 	struct sched_info	dx_sched_info;
 	tse_sched_t		dx_sched_dsc;
 	struct dss_rpc_cntr	dx_rpc_cntrs[DSS_RC_MAX];
+	struct d_tm_node_t	*dx_16ult_cnt;
+	struct d_tm_node_t	*dx_32ult_cnt;
+	struct d_tm_node_t	*dx_64ult_cnt;
 	/* xstream id, [0, DSS_XS_NR_TOTAL - 1] */
 	int			dx_xs_id;
 	/* VOS target id, [0, dss_tgt_nr - 1]. Invalid (-1) for system XS.
@@ -245,6 +248,10 @@ sched_create_task(struct dss_xstream *dx, void (*func)(void *), void *arg,
 	return dss_abterr2der(rc);
 }
 
+int
+daos_abt_track_thread_create(ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
+			     ABT_thread_attr attr, ABT_thread *newthread);
+
 #ifdef ULT_MMAP_STACK
 /* callback to ensure stack will be freed in exiting-ULT/current-XStream pool */
 static inline void
@@ -291,7 +298,9 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
+	rc = daos_abt_track_thread_create(abt_pool, func, arg, t_attr, thread);
+
+	//rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 

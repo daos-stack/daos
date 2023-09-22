@@ -10,6 +10,7 @@
 #include <daos/common.h>
 #include <daos_errno.h>
 #include "srv_internal.h"
+#include <gurt/telemetry_producer.h>
 
 /* ============== Thread collective functions ============================ */
 
@@ -404,6 +405,61 @@ sched_ult2xs(int xs_type, int tgt_id)
 	}
 	D_ASSERT(xs_id < DSS_XS_NR_TOTAL && xs_id >= dss_sys_xs_nr);
 	return xs_id;
+}
+
+struct track_abt_arg{
+	/* ULT primary function */
+	void (*thread_func)(void *);
+	/* ULT arg */
+	void *thread_arg;
+	size_t	thread_size;
+};
+
+static void abt_func_wrapper(void *arg)
+{
+	struct track_abt_arg	*track_arg = arg;
+	struct dss_xstream	*dx;
+
+	dx = dss_get_xstream(DSS_XS_SELF);
+
+	if (track_arg->thread_size <= 16384)
+		d_tm_inc_gauge(dx->dx_16ult_cnt, 1);
+	else if (track_arg->thread_size >= 65536)
+		d_tm_inc_gauge(dx->dx_64ult_cnt, 1);
+	else
+		d_tm_inc_gauge(dx->dx_32ult_cnt, 1);
+
+	track_arg->thread_func(track_arg->thread_arg);
+
+	if (track_arg->thread_size <= 16384)
+		d_tm_dec_gauge(dx->dx_16ult_cnt, 1);
+	else if (track_arg->thread_size >= 65536)
+		d_tm_dec_gauge(dx->dx_64ult_cnt, 1);
+	else
+		d_tm_dec_gauge(dx->dx_32ult_cnt, 1);
+	D_FREE(track_arg);
+}
+
+int
+daos_abt_track_thread_create(ABT_pool pool, void (*thread_func)(void *), void *thread_arg,
+			     ABT_thread_attr attr, ABT_thread *newthread)
+{
+	struct track_abt_arg *abt_arg;
+	int			rc;
+
+	D_ALLOC_PTR(abt_arg);
+	D_ASSERT(abt_arg != NULL);
+
+	abt_arg->thread_func = thread_func;
+	abt_arg->thread_arg = thread_arg;
+	if (attr == ABT_THREAD_ATTR_NULL)
+		abt_arg->thread_size = 16384;
+	else
+		ABT_thread_attr_get_stacksize(attr, &abt_arg->thread_size);
+
+	rc = ABT_thread_create(pool, abt_func_wrapper, abt_arg, attr, newthread);
+
+	return dss_abterr2der(rc);
 }
 
 static int

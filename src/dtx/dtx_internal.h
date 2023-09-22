@@ -160,6 +160,7 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	struct d_tm_node_t	*dt_forward;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
