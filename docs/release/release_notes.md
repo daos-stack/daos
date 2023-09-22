@@ -1,14 +1,9 @@
-# DAOS Version 2.4 Release Notes (DRAFT)
-
-!!! note
-    This document is a DRAFT of the DAOS Version 2.4 Release Notes.
-    Information in this document may change without notice before the
-    release of DAOS Version 2.4.
+# DAOS Version 2.4 Release Notes
 
 We are pleased to announce the release of DAOS version 2.4.
 
 
-## DAOS Version 2.4.0 (2023-09-xx)
+## DAOS Version 2.4.0 (2023-09-22)
 
 ### General Support
 
@@ -183,6 +178,11 @@ positional argument instead (without `-l`).
   prerequisites that are newer than the version provided in EL8.
   To install those RPMs on EL8 systems, it is necessary to run
   `dnf module enable go-toolset:rhel8` to satisfy the golang requirements.
+
+- [DAOS-13129](https://daosio.atlassian.net/browse/DAOS-13129):
+  With the "Metadata-on-SSD" technology preview, sporadic checksum errors
+  have been observed in 48 hours soak stress testing.
+  This issue is still under investigation.
 
 
 ### Bug fixes
