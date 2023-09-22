@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -250,9 +250,11 @@ extern "C" {
 	ACTION(DER_NVME_IO, (DER_ERR_DAOS_BASE + 42), NVMe I / O error)                            \
 	ACTION(DER_NO_CERT, (DER_ERR_DAOS_BASE + 43), Unable to access one or more certificates)   \
 	ACTION(DER_BAD_CERT, (DER_ERR_DAOS_BASE + 44), Invalid x509 certificate)                   \
-	ACTION(DER_VOS_PARTIAL_UPDATE,	(DER_ERR_DAOS_BASE + 45), VOS partial update error)        \
+	ACTION(DER_VOS_PARTIAL_UPDATE, (DER_ERR_DAOS_BASE + 45),                                   \
+	       Same epoch partial overwrite of VOS array value disallowed)                         \
 	ACTION(DER_CHKPT_BUSY, (DER_ERR_DAOS_BASE + 46),                                           \
-	       Page is temporarily read only due to checkpointing)
+	       Page is temporarily read only due to checkpointing)                                 \
+	ACTION(DER_DIV_BY_ZERO, (DER_ERR_DAOS_BASE + 47), Division by zero)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
