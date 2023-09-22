@@ -213,7 +213,7 @@ read_db_for_stepping_up(struct cont_svc *svc)
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": rdb_tx_begin() failed: "DF_RC"\n", DP_UUID(svc->cs_pool_uuid),
+		D_ERROR(DF_UUID ": rdb_tx_begin() failed: "DF_RC"\n", DP_UUID(svc->cs_pool_uuid),
 			DP_RC(rc));
 		return rc;
 	}
@@ -227,16 +227,16 @@ read_db_for_stepping_up(struct cont_svc *svc)
 	d_iov_set(&value, &md_rpcs_enabled, sizeof(md_rpcs_enabled));
 	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_md_rpcs_enabled, &value);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID": old pool layout, so duplicate RPC detection is disabled\n",
+		D_DEBUG(DB_MD, DF_UUID ": duplicate RPC detection is disabled due to old layout\n",
 			DP_UUID(svc->cs_pool_uuid));
 		rc = 0;
 	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to lookup md_rpcs_enabled: "DF_RC"\n",
+		D_ERROR(DF_UUID ": failed to lookup md_rpcs_enabled: "DF_RC"\n",
 			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
 		goto out_lock;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID": duplicate RPC detection %s (rdb size: "DF_U64" %s %u)\n",
+	D_DEBUG(DB_MD, DF_UUID ": duplicate RPC detection %s (rdb size: "DF_U64" %s %u)\n",
 		DP_UUID(svc->cs_pool_uuid), md_rpcs_enabled ? "enabled" : "disabled", rdb_nbytes,
 		rdb_size_ok ? ">=" : "<", DUP_RPC_MIN_RDB_SIZE);
 
@@ -250,7 +250,7 @@ out_lock:
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
-	int		rc;
+	int rc;
 
 	D_ASSERT(svc->cs_pool == NULL);
 	rc = ds_pool_lookup(svc->cs_pool_uuid, &svc->cs_pool);
@@ -338,8 +338,8 @@ ds_cont_unlock_metadata(struct cont_svc *svc)
  * \param[in]	pool_uuid	pool UUID
  */
 int
-ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
-		      const uuid_t pool_uuid, uint32_t pool_global_version)
+ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid,
+		      uint32_t pool_global_version)
 {
 	struct rdb_kvs_attr	attr;
 	d_iov_t			value;
@@ -351,8 +351,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cuuids, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create container UUIDs KVS: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create container UUIDs KVS: %d\n", DP_UUID(pool_uuid),
+			rc);
 		return rc;
 	}
 
@@ -360,8 +360,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_conts, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create container KVS: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create container KVS: %d\n", DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
@@ -369,8 +368,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create container handle KVS: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create container handle KVS: %d\n", DP_UUID(pool_uuid),
+			rc);
 		return rc;
 	}
 
@@ -378,8 +377,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_md_rpcs, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create metadata RPCs KVS: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": failed to create metadata RPCs KVS: %d\n", DP_UUID(pool_uuid),
+			rc);
 		return rc;
 	}
 
@@ -392,8 +391,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 	d_iov_set(&value, &md_rpcs_enabled, sizeof(md_rpcs_enabled));
 	rc = rdb_tx_update(tx, kvs, &ds_cont_prop_md_rpcs_enabled, &value);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": set md_rpcs_enabled=%d failed, "DF_RC"\n",
-			DP_UUID(pool_uuid), md_rpcs_enabled, DP_RC(rc));
+		D_ERROR(DF_UUID ": set md_rpcs_enabled=%d failed, "DF_RC"\n", DP_UUID(pool_uuid),
+			md_rpcs_enabled, DP_RC(rc));
 			return rc;
 	}
 
@@ -1098,8 +1097,8 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 }
 
 static int
-cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-	    struct cont_svc *svc, bool dup_rpc, crt_rpc_t *rpc)
+cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, bool dup_rpc,
+	    crt_rpc_t *rpc)
 {
 	struct cont_create_in  *in = crt_req_get(rpc);
 	daos_prop_t	       *prop_dup = NULL;
@@ -4906,7 +4905,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 		attr.dsa_order = 16;
 		rc = rdb_tx_create_kvs(&tx, &svc->cs_root, &ds_cont_prop_md_rpcs, &attr);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": failed to create metadata RPCs KVS: %d\n",
+			D_ERROR(DF_UUID ": failed to create metadata RPCs KVS: %d\n",
 				DP_UUID(pool_uuid), rc);
 			D_GOTO(out_lock, rc);
 		}
@@ -4919,7 +4918,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	if (rc && rc != -DER_NONEXIST) {
 		D_GOTO(out_lock, rc);
 	} else if (rc == -DER_NONEXIST) {
-		uint64_t	rdb_nbytes;
+		uint64_t rdb_nbytes;
 
 		rc = rdb_get_size(tx.dt_db, &rdb_nbytes);
 		if (rc != 0)
@@ -4928,11 +4927,12 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 			md_rpcs_enabled = 1;
 		rc = rdb_tx_update(&tx, &svc->cs_root, &ds_cont_prop_md_rpcs_enabled, &value);
 		if (rc != 0) {
-			D_ERROR(DF_UUID": set md_rpcs_enabled=%d failed, "DF_RC"\n",
+			D_ERROR(DF_UUID ": set md_rpcs_enabled=%d failed, "DF_RC"\n",
 				DP_UUID(pool_uuid), md_rpcs_enabled, DP_RC(rc));
 			D_GOTO(out_lock, rc);
 		}
-		D_DEBUG(DB_MD, DF_UUID": duplicate RPC detection %s (rdb size: "DF_U64" %s %u)\n",
+		D_DEBUG(DB_MD,
+			DF_UUID ": duplicate RPC detection %s (rdb size: "DF_U64" %s %u)\n",
 			DP_UUID(pool_uuid), md_rpcs_enabled ? "enabled" : "disabled", rdb_nbytes,
 			md_rpcs_enabled ? ">=" : "<", DUP_RPC_MIN_RDB_SIZE);
 		need_commit = true;
@@ -4950,7 +4950,7 @@ out_lock:
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID" upgrade cs_root and containers: rc %d\n", DP_UUID(pool_uuid), rc);
+	D_DEBUG(DB_MD, DF_UUID " upgrade cs_root and containers: rc %d\n", DP_UUID(pool_uuid), rc);
 	if (need_put_leader)
 		cont_svc_put_leader(svc);
 
@@ -5294,8 +5294,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct cont			*cont = NULL;
 	struct cont_pool_metrics	*metrics;
 	bool				 update_mtime = false;
-	bool				 dup_rpc = false;
-	const char			*clbl = NULL;
+	bool				 dup_rpc      = false;
+	const char			*clbl	      = NULL;
 	char				 cuuid[37];
 	int				 rc;
 
@@ -5345,13 +5345,14 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 			rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
 		}
 		if (rc == -DER_NONEXIST && dup_rpc) {
-			D_DEBUG(DB_MD, DF_UUID":%s: do not destroy already-destroyed container\n",
+			D_DEBUG(DB_MD, DF_UUID ":%s: do not destroy already-destroyed container\n",
 				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
 			rc = 0;
 			goto out_lock;
 		} else if (rc == 0 && dup_rpc) {
 			/* original rpc destroyed container. But another one was created! */
-			D_DEBUG(DB_MD, DF_UUID":%s: do not destroy already-destroyed "
+			D_DEBUG(DB_MD,
+				DF_UUID ":%s: do not destroy already-destroyed "
 				"(and since recreated!) container\n",
 				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
 			goto out_contref;

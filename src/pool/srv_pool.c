@@ -2548,7 +2548,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 			val32 = DAOS_PROP_PO_REINT_MODE_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
-			D_ERROR(DF_UUID": DAOS_PROP_PO_REINT_MODE missing from the pool\n",
+			D_ERROR(DF_UUID ": DAOS_PROP_PO_REINT_MODE missing from the pool\n",
 				DP_UUID(svc->ps_uuid));
 			D_GOTO(out_prop, rc);
 		}

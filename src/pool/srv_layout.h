@@ -79,7 +79,7 @@ extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uint32_t */
 extern d_iov_t ds_pool_prop_reint_mode;		/* uint32_t */
-extern d_iov_t ds_pool_prop_md_rpcs;		/* metadata RPCs KVS  - common to pool, container */
+extern d_iov_t ds_pool_prop_md_rpcs;		/* metadata RPCs KVS - common to pool, container */
 extern d_iov_t ds_pool_prop_md_rpcs_enabled;	/* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 

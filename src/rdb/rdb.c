@@ -50,9 +50,9 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	struct rdb     *db;
 	int		rc;
 
-	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas: caller_term="DF_X64
-		" size="DF_U64" bytes\n", DP_UUID(uuid), path,
-		replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
+	D_DEBUG(DB_MD,
+		DF_UUID ": creating db %s with %u replicas: caller_term="DF_X64" size="DF_U64,
+		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
 
 	/*
 	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
@@ -779,8 +779,8 @@ rdb_get_size(struct rdb *db, uint64_t *sizep)
 
 	rc = vos_pool_query_space(db->d_uuid, &vps);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to query vos pool space: "DF_RC"\n",
-			DP_DB(db), DP_RC(rc));
+		D_ERROR(DF_DB ": failed to query vos pool space: "DF_RC"\n", DP_DB(db),
+			DP_RC(rc));
 		return rc;
 	}
 
