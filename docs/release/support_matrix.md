@@ -1,9 +1,4 @@
-# DAOS Version 2.4 Support (DRAFT)
-
-!!! note
-    This document is a DRAFT of the DAOS Version 2.4 Support document.
-    Information in this document may change without notice before the
-    release of DAOS Version 2.4.
+# DAOS Version 2.4 Support
 
 
 ## Community Support and Commercial Support
@@ -82,7 +77,7 @@ DAOS metadata, and persists the DAOS metadata on NVMe SSDs through
 a write-ahead log (WAL) and asynchronous metadata checkpointing. 
 
 More details on the Metadata-on-SSD functionality can be found in the 
-article [DAOS beyond Persistent Memory]()
+article [DAOS beyond Persistent Memory](https://doi.org/10.1007/978-3-031-40843-4_26)
 in the _ISC High Performance 2023 International Workshops proceedings_
 and in the DAOS Administration Guide.
 
@@ -139,7 +134,7 @@ The DAOS software stack is built and supported on
 Linux for the x86\_64 architecture.
 
 DAOS Version 2.4 has been primarily validated
-on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8.6/)
+on [Rocky Linux 8.6](https://docs.rockylinux.org/release_notes/8_6/)
 and [openSUSE Leap 15.4](https://en.opensuse.org/openSUSE:Roadmap).
 The following subsections provide details on the Linux distributions
 which DAOS Version 2.4 supports on DAOS servers.

@@ -153,7 +153,7 @@ All those parameters can be made persistent in /etc/sysctl.conf by adding a new
 sysctl file under /etc/sysctl.d (e.g. /etc/sysctl.d/95-daos-net.conf)
 with all the relevant settings.
 
-For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/release/2.4/Documentation/librdmacm.md)
+For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
 ### Firewall
 
