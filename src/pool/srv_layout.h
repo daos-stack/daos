@@ -16,7 +16,7 @@
  *     Root KVS (GENERIC):
  *       Pool handle KVS (GENERIC)
  *       Pool user attribute KVS (GENERIC)
- *       Metadata RPCs KVS (GENERIC) - NB used by both pool and container modules
+ *       Service ops KVS (GENERIC) - NB used by both pool and container modules
  *
  * The version of the whole layout is stored in ds_pool_prop_global_version.
  */
@@ -79,8 +79,8 @@ extern d_iov_t ds_pool_prop_checkpoint_mode;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_freq;    /* uint32_t */
 extern d_iov_t ds_pool_prop_checkpoint_thresh;  /* uint32_t */
 extern d_iov_t ds_pool_prop_reint_mode;		/* uint32_t */
-extern d_iov_t ds_pool_prop_md_rpcs;		/* metadata RPCs KVS - common to pool, container */
-extern d_iov_t ds_pool_prop_md_rpcs_enabled;	/* uint32_t - common to pool, container */
+extern d_iov_t ds_pool_prop_svc_ops;		/* service ops KVS - common to pool, container */
+extern d_iov_t ds_pool_prop_svc_ops_enabled;	/* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -108,6 +108,13 @@ struct pool_hdl_v0 {
  *
  * Each key is a (null-terminated) string. Each value is a user-defined byte
  * array. Sizes of keys (or values) may vary.
+ */
+
+/*
+ * Service ops KVS (RDB_KVS_GENERIC)
+ *
+ * Each key is a client UUID and HLC timestamp, defined in struct svc_op_key.
+ * Each value represents the result of handling that RPC, defined in struct svc_op_val.
  */
 
 extern daos_prop_t pool_prop_default;

@@ -2663,8 +2663,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 				in->pri_domains.ca_arrays);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid,
-				   DAOS_POOL_GLOBAL_VERSION);
+	rc =
+	    ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid, DAOS_POOL_GLOBAL_VERSION);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
 
@@ -5619,8 +5619,8 @@ pool_svc_reconf_ult(void *arg)
 	/* If adding replicas, get the correct rdb size (do not trust DAOS_MD_CAP). */
 	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_nbytes);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get rdb size: "DF_RC"\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		D_ERROR(DF_UUID": failed to get rdb size: " DF_RC "\n", DP_UUID(svc->ps_uuid),
+			DP_RC(rc));
 		goto out_cur;
 	}
 
@@ -7150,12 +7150,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 	struct pool_membership_out	*out = crt_reply_get(rpc);
 	d_rank_list_t			*ranks;
 	d_iov_t				 id;
-	struct pool_svc			*svc;
 	int				 rc;
-
-	rc = pool_svc_lookup_leader(in->pmi_uuid, &svc, NULL);
-	if (rc != 0)
-		goto out;
 
 	rc = daos_rank_list_dup(&ranks, in->pmi_targets);
 	if (rc != 0)

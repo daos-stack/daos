@@ -23,7 +23,7 @@
  *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
- *     Metadata RPCs KVS (GENERIC) - NB used by both pool and container modules
+ *     Service ops KVS (GENERIC) - NB used by both pool and container modules
  *
  * The version of the whole layout is defined by ds_pool_prop_global_version.
  */
@@ -53,8 +53,8 @@
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
-extern d_iov_t ds_cont_prop_md_rpcs;		/* metadata RPCs KVS - common to pool, container */
-extern d_iov_t ds_cont_prop_md_rpcs_enabled;	/* uint32_t - common to pool, container */
+extern d_iov_t ds_cont_prop_svc_ops;		/* service ops KVS - common to pool, container */
+extern d_iov_t ds_cont_prop_svc_ops_enabled;	/* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*
@@ -161,10 +161,10 @@ struct container_hdl {
 };
 
 /*
- * Metadata RPCs KVS (RDB_KVS_GENERIC)
+ * Service ops KVS (RDB_KVS_GENERIC)
  *
- * Each key is a client UUID and HLC timestamp, defined in struct md_rpc_key.
- * Each value represents the result of handling that RPC, defined in struct md_rpc_val.
+ * Each key is a client UUID and HLC timestamp, defined in struct svc_op_key.
+ * Each value represents the result of handling that RPC, defined in struct svc_op_val.
  */
 
 extern daos_prop_t cont_prop_default;

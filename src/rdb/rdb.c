@@ -774,12 +774,12 @@ rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 int
 rdb_get_size(struct rdb *db, uint64_t *sizep)
 {
-	int			rc;
-	struct vos_pool_space	vps;
+	int		      rc;
+	struct vos_pool_space vps;
 
 	rc = vos_pool_query_space(db->d_uuid, &vps);
 	if (rc != 0) {
-		D_ERROR(DF_DB ": failed to query vos pool space: "DF_RC"\n", DP_DB(db),
+		D_ERROR(DF_DB ": failed to query vos pool space: " DF_RC "\n", DP_DB(db),
 			DP_RC(rc));
 		return rc;
 	}

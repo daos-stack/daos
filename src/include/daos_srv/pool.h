@@ -171,15 +171,15 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
-struct md_rpc_key {
-	uint64_t	mdk_client_time;
-	uuid_t		mdk_client_id;
+struct svc_op_key {
+	uint64_t mdk_client_time;
+	uuid_t	 mdk_client_id;
 	/* TODO: add a (cart) opcode to the key? */
 };
 
-struct md_rpc_val {
-	int		mdv_rc;
-	char		mdv_resvd[62];
+struct svc_op_val {
+	int  mdv_rc;
+	char mdv_resvd[62];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
