@@ -93,6 +93,10 @@ type baseCmd struct {
 	cmdutil.LogCmd
 }
 
+type asyncCmd struct {
+	Async bool `short:"a" long:"async" description:"Run command asynchronously (do not wait for completion)"`
+}
+
 // cmdConfigSetter is an interface for setting the control config on a command
 type cmdConfigSetter interface {
 	setConfig(*control.Config)

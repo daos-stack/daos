@@ -39,6 +39,11 @@ type testRequest struct {
 	Deadline time.Time
 	Timeout  time.Duration
 	Sys      string
+	Async    bool
+}
+
+func (r *testRequest) isAsync() bool {
+	return r.Async
 }
 
 func (tr *testRequest) isMSRequest() bool {
