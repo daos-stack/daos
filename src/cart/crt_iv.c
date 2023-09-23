@@ -2737,6 +2737,14 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 	struct crt_rpc_priv	*rpc_priv;
 	struct crt_context	*crt_ctx;
 
+	/* handle locally generated errors during IV operations synchronously to ensure unregister
+	 * of bulk buffer will occur before freeing it, just in case peer will finally make it
+	 * unexpectedly
+	 */
+	if (cb_info->cci_rc == -DER_TIMEDOUT || cb_info->cci_rc == -DER_EXCLUDED ||
+	    cb_info->cci_rc == -DER_CANCELED)
+		goto callback;
+
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	D_ASSERT(rpc_priv != NULL);
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
@@ -2757,6 +2765,7 @@ handle_response_cb(const struct crt_cb_info *cb_info)
 		info->cci_rpc = cb_info->cci_rpc;
 		info->cci_rc = cb_info->cci_rc;
 		info->cci_arg = cb_info->cci_arg;
+
 		rc = crt_ctx->cc_iv_resp_cb((crt_context_t)crt_ctx,
 					    info,
 					    handle_response_cb_internal,
