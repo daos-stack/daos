@@ -5594,8 +5594,8 @@ pool_svc_reconf_ult(void *arg)
 	d_rank_list_t		*to_add;
 	d_rank_list_t		*to_remove;
 	d_rank_list_t		*new;
-	uint64_t		 rdb_nbytes = 0;
-	int			 rc;
+	uint64_t                 rdb_nbytes = 0;
+	int                      rc;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 

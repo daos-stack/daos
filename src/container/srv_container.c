@@ -4869,7 +4869,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 {
 	int                           rc;
 	struct rdb_tx                 tx;
-	struct upgrade_cont_iter_args args = { 0 };
+	struct upgrade_cont_iter_args args            = { 0 };
 	bool                          need_put_leader = false;
 	d_iov_t                       value;
 	struct rdb_kvs_attr           attr;
@@ -5289,7 +5289,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct cont_open_bylabel_out   *olbl_out = NULL;
 	struct cont_destroy_bylabel_in *dlbl_in  = NULL;
 	struct rdb_tx                   tx;
-	crt_opcode_t                    opc = opc_get(rpc->cr_opc);
+	crt_opcode_t                    opc  = opc_get(rpc->cr_opc);
 	struct cont                    *cont = NULL;
 	struct cont_pool_metrics       *metrics;
 	bool                            update_mtime = false;
