@@ -1415,6 +1415,19 @@ class DmgCommand(DmgCommandBase):
             ("check", "set-policy"), reset_defaults=reset_defaults,
             all_interactive=all_interactive, policies=policies)
 
+    def check_repair(self, seq_num, action):
+        """Call dmg check repair.
+
+        Args:
+            seq_num (str): Pool ID to repair.
+            action (str): Repair action number.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "repair"), seq_num=seq_num, action=action)
+
     def check_start(self, pool=None, dry_run=False, reset=False, failout=None, auto=None,
                     find_orphans=False, policies=None):
         """Call dmg check start.
