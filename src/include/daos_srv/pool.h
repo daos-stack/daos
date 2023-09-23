@@ -173,7 +173,7 @@ struct ds_pool_child {
 
 struct svc_op_key {
 	uint64_t mdk_client_time;
-	uuid_t	 mdk_client_id;
+	uuid_t   mdk_client_id;
 	/* TODO: add a (cart) opcode to the key? */
 };
 

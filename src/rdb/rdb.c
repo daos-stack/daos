@@ -51,7 +51,7 @@ rdb_create(const char *path, const uuid_t uuid, uint64_t caller_term, size_t siz
 	int		rc;
 
 	D_DEBUG(DB_MD,
-		DF_UUID ": creating db %s with %u replicas: caller_term="DF_X64" size="DF_U64,
+		DF_UUID ": creating db %s with %u replicas: caller_term=" DF_X64 " size="DF_U64,
 		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr, caller_term, size);
 
 	/*
@@ -774,7 +774,7 @@ rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp)
 int
 rdb_get_size(struct rdb *db, uint64_t *sizep)
 {
-	int		      rc;
+	int                   rc;
 	struct vos_pool_space vps;
 
 	rc = vos_pool_query_space(db->d_uuid, &vps);

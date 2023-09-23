@@ -68,7 +68,7 @@
 /*
  * Version 1 corresponds to 2.2 (aggregation optimizations)
  * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
- * Version 3 corresponds to 2.6 (root embedded values, metadata RPC tracking KVS)
+ * Version 3 corresponds to 2.6 (root embedded values, pool service operations tracking KVS)
  */
 #define DAOS_POOL_GLOBAL_VERSION 3
 

@@ -5619,7 +5619,7 @@ pool_svc_reconf_ult(void *arg)
 	/* If adding replicas, get the correct rdb size (do not trust DAOS_MD_CAP). */
 	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_nbytes);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get rdb size: " DF_RC "\n", DP_UUID(svc->ps_uuid),
+		D_ERROR(DF_UUID ": failed to get rdb size: " DF_RC "\n", DP_UUID(svc->ps_uuid),
 			DP_RC(rc));
 		goto out_cur;
 	}
