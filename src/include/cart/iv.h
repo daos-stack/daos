@@ -239,6 +239,7 @@ typedef int (*crt_iv_on_hash_cb_t)(crt_iv_namespace_t ivns,
 typedef enum {
 	CRT_IV_PERM_READ = 0x1,
 	CRT_IV_PERM_WRITE = 0x2,
+	CRT_IV_NO_ALLOC = 0x4,
 } crt_iv_perm_t;
 
 /**
