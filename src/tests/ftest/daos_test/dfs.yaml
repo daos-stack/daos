@@ -11,6 +11,7 @@ timeouts:
 pool:
   scm_size: 8G
 server_config:
+  crt_timeout: 60
   engines_per_host: 2
   name: daos_server
   servers:
