@@ -1139,9 +1139,27 @@ pipeline {
                 script {
                     parallel(
                         'Functional Hardware Medium': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium'),
+                            name: 'Functional Hardware Medium',
+                            pragma_suffix: 'hw-medium',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            timer_tags: 'pr daily_regression',
+                            default_tags: 'pr',
+                            default_nvme: 'auto',
+                            provider: 'ofi+verbs;ofi_rxm',
+                        ),
                         'Functional Hardware Large': getFunctionalTestStage(
-                            name: 'Functional Hardware Large')
+                            name: 'Functional Hardware Large',
+                            pragma_suffix: 'hw-large',
+                            label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,large',
+                            timer_tags: 'pr daily_regression',
+                            default_tags: 'pr',
+                            default_nvme: 'auto',
+                            provider: 'ofi+verbs;ofi_rxm',
+                        )
                     )
                 }
             }
