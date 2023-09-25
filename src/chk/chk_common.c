@@ -72,6 +72,7 @@ chk_pool_alloc(struct btr_instance *tins, d_iov_t *key_iov, d_iov_t *val_iov,
 	if (rc != 0)
 		D_GOTO(out, rc = dss_abterr2der(rc));
 
+	D_INIT_LIST_HEAD(&cpr->cpr_shutdown_link);
 	D_INIT_LIST_HEAD(&cpr->cpr_shard_list);
 	D_INIT_LIST_HEAD(&cpr->cpr_pending_list);
 	cpr->cpr_refs = 1;
@@ -498,7 +499,8 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 		}
 
 		if (!ins->ci_is_leader &&
-		    cpr->cpr_bk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED)
+		    (cpr->cpr_bk.cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED ||
+		     cpr->cpr_not_export_ps))
 			chk_pool_shutdown(cpr, false);
 
 		/* Drop the reference that is held when create in chk_pool_alloc(). */
@@ -507,6 +509,26 @@ chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t ph
 
 	if (ret != NULL)
 		*ret = rc;
+}
+
+void
+chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret)
+{
+	struct chk_pool_rec	*cpr;
+	struct chk_pool_rec	*tmp;
+
+	/*
+	 * Hold reference on each before stop one to guarantee that the next
+	 * 'tmp' will not be unlinked from the list during stop current cpr.
+	 */
+	d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link)
+		chk_pool_get(cpr);
+
+	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
+		if (ret == NULL || *ret == 0)
+			chk_pool_stop_one(ins, cpr->cpr_uuid, status, CHK_INVAL_PHASE, ret);
+		chk_pool_put(cpr);
+	}
 }
 
 int
@@ -771,10 +793,15 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 	if (cpr->cpr_stop || unlikely(iv->ci_phase < cbk->cb_phase))
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 
+	if (cpr->cpr_done)
+		goto out;
+
 	if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
 		cpr->cpr_done = 1;
-		if (iv->ci_pool_destroyed)
+		if (iv->ci_pool_destroyed) {
 			cpr->cpr_destroyed = 1;
+			cpr->cpr_not_export_ps = 1;
+		}
 	} else if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_FAILED ||
 		 iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_IMPLICATED) {
 		cpr->cpr_skip = 1;
@@ -784,6 +811,16 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 		D_GOTO(out, rc = -DER_NOTAPPLICABLE);
 	}
 
+	if (!ins->ci_is_leader && !cpr->cpr_destroyed && cpr->cpr_done) {
+		if (iv->ci_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED &&
+		    !cpr->cpr_not_export_ps) {
+			chk_pool_start_svc(cpr, NULL);
+		} else if (ins->ci_sched_running && !ins->ci_sched_exiting) {
+			chk_pool_get(cpr);
+			d_list_add_tail(&cpr->cpr_shutdown_link, &ins->ci_pool_shutdown_list);
+		}
+	}
+
 	if (iv->ci_phase != cbk->cb_phase || iv->ci_pool_status != cbk->cb_pool_status ||
 	    cpr->cpr_destroyed) {
 		cbk->cb_phase = iv->ci_phase;
@@ -791,10 +828,6 @@ chk_pool_handle_notify(struct chk_instance *ins, struct chk_iv *iv)
 		uuid_unparse_lower(cpr->cpr_uuid, uuid_str);
 		rc = chk_bk_update_pool(cbk, uuid_str);
 	}
-
-	if (rc == 0 && !ins->ci_is_leader && !cpr->cpr_destroyed &&
-	    cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED)
-		chk_pool_start_svc(cpr, NULL);
 
 out:
 	if (cpr != NULL)
@@ -1173,6 +1206,7 @@ chk_ins_init(struct chk_instance **p_ins)
 	D_INIT_LIST_HEAD(&ins->ci_pool_list);
 
 	ins->ci_pending_hdl = DAOS_HDL_INVAL;
+	D_INIT_LIST_HEAD(&ins->ci_pool_shutdown_list);
 
 	rc = ABT_rwlock_create(&ins->ci_abt_lock);
 	if (rc != ABT_SUCCESS)
@@ -1227,6 +1261,7 @@ chk_ins_fini(struct chk_instance **p_ins)
 	D_ASSERT(d_list_empty(&ins->ci_pool_list));
 
 	D_ASSERT(daos_handle_is_inval(ins->ci_pending_hdl));
+	D_ASSERT(d_list_empty(&ins->ci_pool_shutdown_list));
 
 	if (ins->ci_sched != ABT_THREAD_NULL)
 		ABT_thread_free(&ins->ci_sched);

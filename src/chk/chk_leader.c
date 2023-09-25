@@ -226,13 +226,14 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 		uint32_t pool_status, bool bcast)
 {
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
 	struct chk_iv		 iv = { 0 };
 	int			 rc = 0;
 
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
-		chk_pool_stop_one(ins, cpr->cpr_uuid, pool_status, CHK_INVAL_PHASE, NULL);
+	ins->ci_sched_exiting = 1;
+
+	D_ASSERT(d_list_empty(&ins->ci_pool_shutdown_list));
+
+	chk_pool_stop_all(ins, pool_status, NULL);
 
 	if ((bcast && ins_status == CHK__CHECK_INST_STATUS__CIS_FAILED) ||
 	    ins_status == CHK__CHECK_INST_STATUS__CIS_IMPLICATED ||
@@ -261,6 +262,8 @@ chk_leader_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 			D_ERROR(DF_LEADER" exit with status %u: "DF_RC"\n",
 				DP_LEADER(ins), ins_status, DP_RC(rc));
 	}
+
+	ins->ci_sched_exiting = 0;
 }
 
 static void
@@ -312,6 +315,8 @@ chk_leader_post_repair(struct chk_instance *ins, struct chk_pool_rec *cpr,
 			iv.ci_ins_status = ins->ci_bk.cb_ins_status;
 			iv.ci_phase = cbk->cb_phase;
 			iv.ci_pool_status = cbk->cb_pool_status;
+			if (cpr->cpr_destroyed)
+				iv.ci_pool_destroyed = 1;
 
 			/* Synchronously notify the engines that check on the pool got failure. */
 			rc = chk_iv_update(ins->ci_iv_ns, &iv, CRT_IV_SHORTCUT_NONE,
@@ -396,6 +401,39 @@ out:
 	return rc;
 }
 
+static void
+chk_leader_fail_pool(struct chk_pool_rec *cpr, int result)
+{
+	struct chk_instance		*ins = cpr->cpr_ins;
+	struct chk_bookmark		*cbk = &ins->ci_bk;
+	struct chk_report_unit		 cru = { 0 };
+	Chk__CheckInconsistClass	 cla;
+	Chk__CheckInconsistAction	 act;
+	uint64_t			 seq;
+	int				 rc;
+
+	cla = CHK__CHECK_INCONSIST_CLASS__CIC_UNKNOWN;
+	act = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
+	seq = chk_report_seq_gen(ins);
+	cbk->cb_statistics.cs_ignored++;
+	cpr->cpr_skip = 1;
+
+	cru.cru_gen = cbk->cb_gen;
+	cru.cru_cla = cla;
+	cru.cru_act = act;
+	cru.cru_rank = dss_self_rank();
+	cru.cru_pool = (uuid_t *)&cpr->cpr_uuid;
+	cru.cru_pool_label = cpr->cpr_label;
+	cru.cru_msg = "Some engine failed to report information for pool.\n";
+	cru.cru_result = result;
+
+	rc = chk_leader_report(&cru, &seq, NULL);
+
+	D_WARN(DF_LEADER" some engine failed to report information for pool "
+	       DF_UUIDF", action %u, seq "DF_X64", remote_rc %d, report_rc %d\n",
+	       DP_LEADER(ins), DP_UUID(cpr->cpr_uuid), act, seq, result, rc);
+}
+
 /*
  * NOTE: Initialize and construct clues_out from cpr. The caller is responsible for freeing
  *	 clues->pcs_array with D_FREE, but the borrowed clues->pcs_array->pc_svc_clue must be kept.
@@ -408,6 +446,7 @@ chk_leader_build_pool_clues(struct chk_pool_rec *cpr)
 	struct ds_pool_clue	*clue;
 	struct ds_pool_clues	 clues;
 	int			 rc = 0;
+	bool			 update = false;
 
 	clues.pcs_cap = 4;
 	clues.pcs_len = 0;
@@ -418,7 +457,26 @@ chk_leader_build_pool_clues(struct chk_pool_rec *cpr)
 
 	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
 		clue = cps->cps_data;
-		if (clue == NULL || clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
+
+		/* Related engine failed to report the pool shard(s), have to skip it. */
+		if (clue == NULL || clue->pc_tgt_nr < 0) {
+			if (clue == NULL)
+				rc = -DER_NOMEM;
+			else
+				rc = clue->pc_rc;
+			chk_leader_fail_pool(cpr, rc);
+
+			D_GOTO(out, update = true);
+		}
+
+		/* Related engine failed to report PS because of PS shutdown trouble, skip it. */
+		if (clue->pc_rc == -DER_BUSY) {
+			chk_leader_fail_pool(cpr, rc);
+
+			D_GOTO(out, update = true);
+		}
+
+		if (clue->pc_rc <= 0 || clue->pc_svc_clue == NULL)
 			continue;
 
 		if (clues.pcs_len == clues.pcs_cap) {
@@ -447,7 +505,7 @@ out:
 		 * parse the pool clues, then have to skip it. Notify the check engines.
 		 */
 		cpr->cpr_skip = 1;
-		chk_leader_post_repair(ins, cpr, &rc, false, true);
+		chk_leader_post_repair(ins, cpr, &rc, update, true);
 	}
 
 	return rc;
@@ -687,6 +745,9 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 	act = prop->cp_policies[cla];
 	cbk->cb_statistics.cs_total++;
 
+	/* For orphan pool, do not export pool service until being registered to MS successfully. */
+	cpr->cpr_not_export_ps = 1;
+
 	switch (act) {
 	case CHK__CHECK_INCONSIST_ACTION__CIA_DEFAULT:
 		/*
@@ -719,6 +780,7 @@ chk_leader_orphan_pool(struct chk_pool_rec *cpr)
 			} else {
 				cbk->cb_statistics.cs_repaired++;
 				cpr->cpr_exist_on_ms = 1;
+				cpr->cpr_not_export_ps = 0;
 			}
 		}
 		break;
@@ -869,6 +931,7 @@ ignore:
 			} else {
 				cbk->cb_statistics.cs_repaired++;
 				cpr->cpr_exist_on_ms = 1;
+				cpr->cpr_not_export_ps = 0;
 			}
 		}
 		break;
@@ -909,14 +972,6 @@ chk_leader_no_quorum_pool(struct chk_pool_rec *cpr)
 	int				 decision = -1;
 	int				 result = 0;
 	int				 rc = 0;
-
-	result = chk_pool_has_err(cpr);
-	if (result != 0) {
-		cpr->cpr_skip = 1;
-		D_WARN(DF_LEADER" some engine failed to report information for pool "
-		       DF_UUIDF", skip it\n", DP_LEADER(ins), DP_UUID(cpr->cpr_uuid));
-		goto out;
-	}
 
 	cla = CHK__CHECK_INCONSIST_CLASS__CIC_POOL_LESS_SVC_WITHOUT_QUORUM;
 	act = prop->cp_policies[cla];
@@ -1214,6 +1269,61 @@ out:
 }
 
 /*
+ * Whether need to stop current check instance or not.
+ *
+ * \param ins	[IN]	The leader instance.
+ * \param ret	[OUT]	When return true, set it as 1 if the checker is completed,
+ *			set it as 0 if someone wants to stop the checker.
+ */
+static int
+chk_leader_need_stop(struct chk_instance *ins, int *ret)
+{
+	struct chk_pool_rec	*cpr;
+	bool			 dangling = false;
+
+	if (d_list_empty(&ins->ci_rank_list)) {
+		d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
+			if (!cpr->cpr_skip && !cpr->cpr_done && cpr->cpr_dangling) {
+				dangling = true;
+				break;
+			}
+		}
+
+		if (!dangling) {
+			/*
+			 * "ci_stopping" means that the user wants to stop checker for some pools.
+			 * But the specified pools may be not in checking. "ci_pool_stopped" means
+			 * the checker for some pools are really stopped.
+			 */
+			if (ins->ci_pool_stopped) {
+				D_ASSERT(ins->ci_stopping);
+				*ret = 0;
+				return true;
+			}
+
+			*ret = 1;
+			return true;
+		}
+	}
+
+	if (!ins->ci_sched_running) {
+		*ret = 0;
+		return true;
+	}
+
+	return false;
+}
+
+static inline bool
+chk_leader_pool_need_stop(struct chk_pool_rec *cpr, int *ret)
+{
+	if (*ret < 0 || cpr->cpr_skip || cpr->cpr_stop)
+		return true;
+
+	return chk_leader_need_stop(cpr->cpr_ins, ret);
+}
+
+/*
  * Collect pool svc clues, and try to choose the available replica.
  * After the process, if the pool has no PS replica available, then
  * it is either destroyed or skipped for subsequent check.
@@ -1225,7 +1335,7 @@ chk_leader_handle_pool_clues(struct chk_pool_rec *cpr)
 	int			 rc;
 
 	rc = chk_leader_build_pool_clues(cpr);
-	if (rc != 0)
+	if (chk_leader_pool_need_stop(cpr, &rc))
 		goto out;
 
 	clues = &cpr->cpr_clues;
@@ -1836,61 +1946,6 @@ out_post:
 	return rc;
 }
 
-/*
- * Whether need to stop current check instance or not.
- *
- * \param ins	[IN]	The leader instance.
- * \param ret	[OUT]	When return true, set it as 1 if the checker is completed,
- *			set it as 0 if someone wants to stop the checker.
- */
-static inline int
-chk_leader_need_stop(struct chk_instance *ins, int *ret)
-{
-	struct chk_pool_rec	*cpr;
-	bool			 dangling = false;
-
-	if (d_list_empty(&ins->ci_rank_list)) {
-		d_list_for_each_entry(cpr, &ins->ci_pool_list, cpr_link) {
-			if (!cpr->cpr_skip && !cpr->cpr_done && cpr->cpr_dangling) {
-				dangling = true;
-				break;
-			}
-		}
-
-		if (!dangling) {
-			/*
-			 * "ci_stopping" means that the user wants to stop checker for some pools.
-			 * But the specified pools may be not in checking. "ci_pool_stopped" means
-			 * the checker for some pools are really stopped.
-			 */
-			if (ins->ci_pool_stopped) {
-				D_ASSERT(ins->ci_stopping);
-				*ret = 0;
-				return true;
-			}
-
-			*ret = 1;
-			return true;
-		}
-	}
-
-	if (!ins->ci_sched_running) {
-		*ret = 0;
-		return true;
-	}
-
-	return false;
-}
-
-static inline bool
-chk_leader_pool_need_stop(struct chk_pool_rec *cpr, int *ret)
-{
-	if (*ret < 0 || cpr->cpr_skip || cpr->cpr_stop)
-		return true;
-
-	return chk_leader_need_stop(cpr->cpr_ins, ret);
-}
-
 static void
 chk_leader_pool_ult(void *arg)
 {
@@ -1901,6 +1956,7 @@ chk_leader_pool_ult(void *arg)
 	struct ds_pool_clue	*clue;
 	struct chk_iv		 iv = { 0 };
 	char			 uuid_str[DAOS_UUID_STR_SIZE];
+	uint32_t		 flags = 0;
 	int			 rc = 0;
 
 	D_INFO(DF_LEADER" pool ult enter for "DF_UUIDF"\n", DP_LEADER(ins), DP_UUID(cpr->cpr_uuid));
@@ -1962,13 +2018,17 @@ start:
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
+	if (cpr->cpr_for_orphan)
+		flags |= CPSF_FOR_ORPHAN;
+	if (cpr->cpr_not_export_ps)
+		flags |= CPSF_NOT_EXPORT_PS;
+
 	/*
 	 * Notify all related pool shards to start the pool. Piggyback the
 	 * phase CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST to the pool shards.
 	 */
 	rc = chk_pool_start_remote(ranks, cbk->cb_gen, cpr->cpr_uuid,
-				   CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST,
-				   cpr->cpr_for_orphan ? CPSF_FOR_ORPHAN : 0);
+				   CHK__CHECK_SCAN_PHASE__CSP_POOL_LIST, flags);
 	d_rank_list_free(ranks);
 	if (rc != 0)
 		cpr->cpr_skip = 1;
@@ -2742,8 +2802,6 @@ chk_leader_start(uint32_t rank_nr, d_rank_t *ranks, uint32_t policy_nr, struct c
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
 	uuid_t			*c_pools = NULL;
 	struct umem_attr	 uma = { 0 };
 	uuid_t			 dummy_pool = { 0 };
@@ -2901,9 +2959,7 @@ remote:
 	goto out_exit;
 
 out_stop_pools:
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
-		chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
-				  CHK_INVAL_PHASE, NULL);
+	chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED, NULL);
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_time.ct_stop_time = time(NULL);
 		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
@@ -2970,8 +3026,6 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 {
 	struct chk_instance	*ins = chk_leader;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
 	int			 rc = 0;
 	int			 i;
 
@@ -3021,12 +3075,9 @@ chk_leader_stop(int pool_nr, uuid_t pools[])
 		goto out;
 
 	if (pool_nr == 0) {
-		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-			chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_STOPPED,
-					  CHK_INVAL_PHASE, &rc);
-			if (rc != 0)
-				D_GOTO(out, rc);
-		}
+		chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_STOPPED, &rc);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	} else {
 		for (i = 0; i < pool_nr; i++) {
 			chk_pool_stop_one(ins, pools[i], CHK__CHECK_POOL_STATUS__CPS_STOPPED,
@@ -3418,9 +3469,7 @@ chk_leader_act(uint64_t seq, uint32_t act, bool for_all)
 
 	if (likely(prop->cp_policies[cla] != act)) {
 		prop->cp_policies[cla] = act;
-		rc = chk_prop_update(prop, NULL);
-		if (rc != 0)
-			goto out;
+		chk_prop_update(prop, NULL);
 	}
 
 	/*

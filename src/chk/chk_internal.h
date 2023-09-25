@@ -354,7 +354,10 @@ enum chk_mbs_flags {
 };
 
 enum chk_pool_start_flags {
+	/* The pool is not in check list, but it is reported by engine for potential orphan pool. */
 	CPSF_FOR_ORPHAN		= 1,
+	/* Do not export pool service after check done. */
+	CPSF_NOT_EXPORT_PS	= 2,
 };
 
 enum chk_rejoin_flags {
@@ -518,6 +521,8 @@ struct chk_instance {
 	struct btr_root		 ci_pending_btr;
 	daos_handle_t		 ci_pending_hdl;
 
+	d_list_t		 ci_pool_shutdown_list;
+
 	/* The slowest phase for the failed pool or rank. */
 	uint32_t		 ci_slowest_fail_phase;
 
@@ -540,6 +545,7 @@ struct chk_instance {
 
 	uint32_t		 ci_is_leader:1,
 				 ci_sched_running:1,
+				 ci_sched_exiting:1,
 				 ci_for_orphan:1,
 				 ci_orphan_done:1, /* leader has processed orphan pools. */
 				 ci_pool_stopped:1, /* check on some pools have been stopped. */
@@ -577,6 +583,8 @@ struct chk_pool_shard {
 struct chk_pool_rec {
 	/* Link into chk_instance::ci_pool_list. */
 	d_list_t		 cpr_link;
+	/* Link into chk_instance::ci_pool_shutdown_list. */
+	d_list_t		 cpr_shutdown_link;
 	/* The list of chk_pool_shard. */
 	d_list_t		 cpr_shard_list;
 	/* The list of chk_pending_rec. */
@@ -594,6 +602,7 @@ struct chk_pool_rec {
 				 cpr_healthy:1,
 				 cpr_delay_label:1,
 				 cpr_exist_on_ms:1,
+				 cpr_not_export_ps:1,
 				 cpr_map_refreshed:1;
 	int			 cpr_advice;
 	int			 cpr_refs;
@@ -688,6 +697,8 @@ void  chk_pool_remove_nowait(struct chk_pool_rec *cpr);
 void chk_pool_start_svc(struct chk_pool_rec *cpr, int *ret);
 
 void chk_pool_stop_one(struct chk_instance *ins, uuid_t uuid, int status, uint32_t phase, int *ret);
+
+void chk_pool_stop_all(struct chk_instance *ins, uint32_t status, int *ret);
 
 int chk_pools_pause_cb(struct sys_db *db, char *table, d_iov_t *key, void *args);
 
@@ -1002,6 +1013,7 @@ chk_pool_put(struct chk_pool_rec *cpr)
 		d_list_del(&cpr->cpr_link);
 		D_ASSERT(cpr->cpr_thread == ABT_THREAD_NULL);
 		D_ASSERT(d_list_empty(&cpr->cpr_pending_list));
+		D_ASSERT(d_list_empty(&cpr->cpr_shutdown_link));
 
 		while ((cps = d_list_pop_entry(&cpr->cpr_shard_list, struct chk_pool_shard,
 					       cps_link)) != NULL) {
@@ -1042,11 +1054,15 @@ chk_pool_shutdown(struct chk_pool_rec *cpr, bool locked)
 
 	d_iov_set(&psid, cpr->cpr_uuid, sizeof(uuid_t));
 	rc = ds_rsvc_stop(DS_RSVC_CLASS_POOL, &psid, RDB_NIL_TERM, false);
-	D_DEBUG(DB_MD, "Stop PS for "DF_UUIDF": "DF_RC"\n",
+	D_DEBUG(DB_MD, "Shutdown PS for "DF_UUIDF": "DF_RC"\n",
 		DP_UUID(cpr->cpr_uuid), DP_RC(rc));
+	cpr->cpr_start_post = 0;
+
 	ds_pool_stop(cpr->cpr_uuid);
 	cpr->cpr_started = 0;
-	cpr->cpr_start_post = 0;
+
+	D_DEBUG(DB_MD, "Stop pool for "DF_UUIDF" with locked %s\n",
+		DP_UUID(cpr->cpr_uuid), locked ? "true" : "false");
 
 	if (!locked)
 		ABT_mutex_unlock(cpr->cpr_mutex);
@@ -1068,24 +1084,6 @@ chk_pool_in_zombie(struct chk_pool_rec *cpr)
 	}
 
 	return found;
-}
-
-static inline int
-chk_pool_has_err(struct chk_pool_rec *cpr)
-{
-	struct chk_pool_shard	*cps;
-	struct ds_pool_clue	*clue;
-	int			 rc = 0;
-
-	d_list_for_each_entry(cps, &cpr->cpr_shard_list, cps_link) {
-		clue = cps->cps_data;
-		if (clue->pc_rc < 0) {
-			rc = clue->pc_rc;
-			break;
-		}
-	}
-
-	return rc >= 0 ? 0 : rc;
 }
 
 static inline int

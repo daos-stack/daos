@@ -168,12 +168,18 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 {
 	struct chk_bookmark	*cbk = &ins->ci_bk;
 	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
 	struct chk_iv		 iv = { 0 };
 	int			 rc;
 
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
-		chk_pool_stop_one(ins, cpr->cpr_uuid, pool_status, CHK_INVAL_PHASE, NULL);
+	ins->ci_sched_exiting = 1;
+
+	while ((cpr = d_list_pop_entry(&ins->ci_pool_shutdown_list, struct chk_pool_rec,
+				       cpr_shutdown_link)) != NULL) {
+		chk_pool_shutdown(cpr, false);
+		chk_pool_put(cpr);
+	}
+
+	chk_pool_stop_all(ins, pool_status, NULL);
 
 	chk_destroy_pending_tree(ins);
 	chk_destroy_pool_tree(ins);
@@ -193,7 +199,7 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 	    ins_status != CHK__CHECK_INST_STATUS__CIS_STOPPED &&
 	    ins_status != CHK__CHECK_INST_STATUS__CIS_IMPLICATED && ins->ci_iv_ns != NULL) {
 		if (DAOS_FAIL_CHECK(DAOS_CHK_PS_NOTIFY_LEADER))
-			return;
+			goto out;
 
 		iv.ci_gen = cbk->cb_gen;
 		iv.ci_phase = cbk->cb_phase;
@@ -207,6 +213,9 @@ chk_engine_exit(struct chk_instance *ins, uint32_t ins_phase, uint32_t ins_statu
 			 DF_ENGINE" on rank %u notify leader for its exit, status %u: rc = %d\n",
 			 DP_ENGINE(ins), dss_self_rank(), ins_status, rc);
 	}
+
+out:
+	ins->ci_sched_exiting = 0;
 }
 
 static int
@@ -1795,7 +1804,8 @@ out:
 		if (likely(update))
 			rc1 = chk_bk_update_pool(cbk, uuid_str);
 
-		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED) {
+		if (cbk->cb_pool_status == CHK__CHECK_POOL_STATUS__CPS_CHECKED &&
+		    !cpr->cpr_not_export_ps) {
 			chk_pool_start_svc(cpr, &rc2);
 			if (cpr->cpr_started && cpr->cpr_start_post)
 				/*
@@ -1813,7 +1823,11 @@ out:
 
 	ds_pool_svc_put_leader(svc);
 	cpr->cpr_done = 1;
-	chk_pool_put(cpr);
+	if (ins->ci_sched_running && !ins->ci_sched_exiting &&
+	    (cbk->cb_pool_status != CHK__CHECK_POOL_STATUS__CPS_CHECKED || cpr->cpr_not_export_ps))
+		d_list_add_tail(&cpr->cpr_shutdown_link, &ins->ci_pool_shutdown_list);
+	else
+		chk_pool_put(cpr);
 	D_FREE(cpma);
 }
 
@@ -1822,6 +1836,7 @@ chk_engine_sched(void *args)
 {
 	struct chk_instance	*ins = args;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
+	struct chk_pool_rec	*cpr;
 	uint32_t		 ins_phase;
 	uint32_t		 ins_status;
 	uint32_t		 pool_status;
@@ -1867,6 +1882,12 @@ chk_engine_sched(void *args)
 			rc = chk_bk_update_engine(cbk);
 			if (rc != 0)
 				goto out;
+		}
+
+		while ((cpr = d_list_pop_entry(&ins->ci_pool_shutdown_list, struct chk_pool_rec,
+					       cpr_shutdown_link)) != NULL) {
+			chk_pool_shutdown(cpr, false);
+			chk_pool_put(cpr);
 		}
 	}
 
@@ -2128,8 +2149,6 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 {
 	struct chk_instance		*ins = chk_engine;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct chk_pool_rec		*cpr;
-	struct chk_pool_rec		*tmp;
 	struct umem_attr		 uma = { 0 };
 	char				 uuid_str[DAOS_UUID_STR_SIZE];
 	d_rank_t			 myrank = dss_self_rank();
@@ -2219,9 +2238,7 @@ chk_engine_start(uint64_t gen, uint32_t rank_nr, d_rank_t *ranks, uint32_t polic
 	goto out_done;
 
 out_stop:
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
-		chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
-				  CHK_INVAL_PHASE, NULL);
+	chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED, NULL);
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_time.ct_stop_time = time(NULL);
 		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;
@@ -2265,8 +2282,6 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 {
 	struct chk_instance	*ins = chk_engine;
 	struct chk_bookmark	*cbk = &ins->ci_bk;
-	struct chk_pool_rec	*cpr;
-	struct chk_pool_rec	*tmp;
 	d_rank_t		 myrank = dss_self_rank();
 	int			 rc = 0;
 	int			 i;
@@ -2291,12 +2306,9 @@ chk_engine_stop(uint64_t gen, int pool_nr, uuid_t pools[], uint32_t *flags)
 	D_INFO(DF_ENGINE" stopping on rank %u with %d pools\n", DP_ENGINE(ins), myrank, pool_nr);
 
 	if (pool_nr == 0) {
-		d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link) {
-			chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_STOPPED,
-					  CHK_INVAL_PHASE, &rc);
-			if (rc != 0)
-				D_GOTO(out, rc);
-		}
+		chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_STOPPED, &rc);
+		if (rc != 0)
+			D_GOTO(out, rc);
 	} else {
 		for (i = 0; i < pool_nr; i++) {
 			chk_pool_stop_one(ins, pools[i], CHK__CHECK_POOL_STATUS__CPS_STOPPED,
@@ -2630,9 +2642,7 @@ chk_engine_act(uint64_t gen, uint64_t seq, uint32_t cla, uint32_t act, uint32_t 
 
 	if (likely(prop->cp_policies[cla] != act)) {
 		prop->cp_policies[cla] = act;
-		rc = chk_prop_update(prop, NULL);
-		if (rc != 0)
-			goto out;
+		chk_prop_update(prop, NULL);
 	}
 
 	/*
@@ -2883,6 +2893,9 @@ chk_engine_pool_start(uint64_t gen, uuid_t uuid, uint32_t phase, uint32_t flags)
 	/* Maybe resent one. */
 	if (unlikely(cpr->cpr_started))
 		D_GOTO(out, rc = -DER_ALREADY);
+
+	if (flags & CPSF_NOT_EXPORT_PS)
+		cpr->cpr_not_export_ps = 1;
 
 	cbk = &cpr->cpr_bk;
 	chk_pool_get(cpr);
@@ -3240,8 +3253,6 @@ chk_engine_rejoin(void *args)
 	struct chk_instance		*ins = chk_engine;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	struct chk_pool_rec		*cpr;
-	struct chk_pool_rec		*tmp;
 	uuid_t				*pools = NULL;
 	struct chk_iv			 iv = { 0 };
 	struct umem_attr		 uma = { 0 };
@@ -3349,9 +3360,7 @@ again:
 	goto out_log;
 
 out_stop:
-	d_list_for_each_entry_safe(cpr, tmp, &ins->ci_pool_list, cpr_link)
-		chk_pool_stop_one(ins, cpr->cpr_uuid, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED,
-				  CHK_INVAL_PHASE, NULL);
+	chk_pool_stop_all(ins, CHK__CHECK_POOL_STATUS__CPS_IMPLICATED, NULL);
 	if (cbk->cb_ins_status == CHK__CHECK_INST_STATUS__CIS_RUNNING) {
 		cbk->cb_time.ct_stop_time = time(NULL);
 		cbk->cb_ins_status = CHK__CHECK_INST_STATUS__CIS_FAILED;

@@ -392,8 +392,8 @@ struct ds_pool_clue {
 	d_rank_t			 pc_rank;
 	enum ds_pool_dir		 pc_dir;
 	int				 pc_rc;
+	int				 pc_tgt_nr;
 	uint32_t			 pc_label_len;
-	uint32_t			 pc_tgt_nr;
 	/*
 	 * DAOS check phase for current pool shard. Different pool shards may claim different
 	 * check phase because some shards may has ever missed the RPC for check phase update.
