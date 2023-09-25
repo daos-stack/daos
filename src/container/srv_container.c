@@ -31,7 +31,6 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_MDTIMES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT 2
-#define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS   3
 
 #define DUP_OP_MIN_RDB_SIZE                         (1 << 30) /* 1 GiB */
 
@@ -201,52 +200,6 @@ ds_cont_svc_fini(struct cont_svc **svcp)
 static int cont_svc_ec_agg_leader_start(struct cont_svc *svc);
 static void cont_svc_ec_agg_leader_stop(struct cont_svc *svc);
 
-static int
-read_db_for_stepping_up(struct cont_svc *svc)
-{
-	int           rc;
-	struct rdb_tx tx;
-	uint64_t      rdb_nbytes;
-	d_iov_t       value;
-	uint32_t      svc_ops_enabled = 0;
-	bool          rdb_size_ok;
-
-	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": rdb_tx_begin() failed: " DF_RC "\n", DP_UUID(svc->cs_pool_uuid),
-			DP_RC(rc));
-		return rc;
-	}
-	ds_cont_rdlock_metadata(svc);
-
-	rc = rdb_get_size(svc->cs_rsvc->s_db, &rdb_nbytes);
-	if (rc != 0)
-		goto out_lock;
-	rdb_size_ok = (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE);
-
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &value);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate RPC detection is disabled due to old layout\n",
-			DP_UUID(svc->cs_pool_uuid));
-		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
-			DP_UUID(svc->cs_pool_uuid), DP_RC(rc));
-		goto out_lock;
-	}
-
-	D_DEBUG(DB_MD, DF_UUID ": duplicate RPC detection %s (rdb size: " DF_U64 " %s %u)\n",
-		DP_UUID(svc->cs_pool_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_nbytes,
-		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
-
-out_lock:
-	ds_cont_unlock_metadata(svc);
-	rdb_tx_end(&tx);
-
-	return rc;
-}
-
 int
 ds_cont_svc_step_up(struct cont_svc *svc)
 {
@@ -260,10 +213,6 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 		return rc;
 	}
 	D_ASSERT(svc->cs_pool != NULL);
-
-	rc = read_db_for_stepping_up(svc);
-	if (rc != 0)
-		return rc;
 
 	rc = cont_svc_ec_agg_leader_start(svc);
 	if (rc != 0)
@@ -338,13 +287,9 @@ ds_cont_unlock_metadata(struct cont_svc *svc)
  * \param[in]	pool_uuid	pool UUID
  */
 int
-ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid,
-		      uint32_t pool_global_version)
+ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid)
 {
 	struct rdb_kvs_attr attr;
-	d_iov_t             value;
-	uint64_t            rdb_nbytes;
-	uint32_t            svc_ops_enabled = 0;
 	int                 rc;
 
 	attr.dsa_class = RDB_KVS_GENERIC;
@@ -370,28 +315,6 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t poo
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": failed to create container handle KVS: %d\n", DP_UUID(pool_uuid),
 			rc);
-		return rc;
-	}
-
-	attr.dsa_class = RDB_KVS_GENERIC;
-	attr.dsa_order = 16;
-	rc             = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_svc_ops, &attr);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n", DP_UUID(pool_uuid), rc);
-		return rc;
-	}
-
-	/* Determine if duplicate RPC detection (with svc_ops KVS) will be enabled/used */
-	rc = rdb_get_size(tx->dt_db, &rdb_nbytes);
-	if (rc != 0)
-		return rc;
-	if (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE)
-		svc_ops_enabled = 1;
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_update(tx, kvs, &ds_cont_prop_svc_ops_enabled, &value);
-	if (rc != 0) {
-		D_ERROR(DF_UUID ": set svc_ops_enabled=%d failed, " DF_RC "\n", DP_UUID(pool_uuid),
-			svc_ops_enabled, DP_RC(rc));
 		return rc;
 	}
 
@@ -4869,12 +4792,8 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 {
 	int                           rc;
 	struct rdb_tx                 tx;
-	struct upgrade_cont_iter_args args            = { 0 };
+	struct upgrade_cont_iter_args args            = {0};
 	bool                          need_put_leader = false;
-	d_iov_t                       value;
-	struct rdb_kvs_attr           attr;
-	uint32_t                      svc_ops_enabled = 0;
-	bool                          need_commit     = false;
 
 	uuid_copy(args.pool_uuid, pool_uuid);
 
@@ -4894,62 +4813,17 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	args.need_commit = false;
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	/* Upgrade for the (common to all containers) service operations KVS */
-	d_iov_set(&value, NULL, 0);
-	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_svc_ops, &value);
-	if (rc && rc != -DER_NONEXIST) {
-		D_GOTO(out_lock, rc);
-	} else if (rc == -DER_NONEXIST) {
-		attr.dsa_class = RDB_KVS_GENERIC;
-		attr.dsa_order = 16;
-		rc = rdb_tx_create_kvs(&tx, &svc->cs_root, &ds_cont_prop_svc_ops, &attr);
-		if (rc != 0) {
-			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
-				DP_UUID(pool_uuid), rc);
-			D_GOTO(out_lock, rc);
-		}
-		need_commit = true;
-	}
-
-	/* And enable the new service operations KVS only if rdb is large enough */
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(&tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &value);
-	if (rc && rc != -DER_NONEXIST) {
-		D_GOTO(out_lock, rc);
-	} else if (rc == -DER_NONEXIST) {
-		uint64_t rdb_nbytes;
-
-		rc = rdb_get_size(tx.dt_db, &rdb_nbytes);
-		if (rc != 0)
-			D_GOTO(out_lock, rc);
-		if (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE)
-			svc_ops_enabled = 1;
-		rc = rdb_tx_update(&tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &value);
-		if (rc != 0) {
-			D_ERROR(DF_UUID ": set svc_ops_enabled=%d failed, " DF_RC "\n",
-				DP_UUID(pool_uuid), svc_ops_enabled, DP_RC(rc));
-			D_GOTO(out_lock, rc);
-		}
-		D_DEBUG(DB_MD,
-			DF_UUID ": duplicate RPC detection %s (rdb size: " DF_U64 " %s %u)\n",
-			DP_UUID(pool_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_nbytes,
-			svc_ops_enabled ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
-		need_commit = true;
-	}
-
 	/* Upgrade per-container metadata */
-	need_commit = (need_commit | args.need_commit);
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
 			    upgrade_cont_cb, &args);
-	if (rc == 0 && need_commit)
+	if (rc == 0 && args.need_commit)
 		rc = rdb_tx_commit(&tx);
 
-out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID " upgrade cs_root and containers: rc %d\n", DP_UUID(pool_uuid), rc);
+	D_DEBUG(DB_MD, DF_UUID " upgrade all container: rc %d\n", DP_UUID(pool_uuid), rc);
 	if (need_put_leader)
 		cont_svc_put_leader(svc);
 

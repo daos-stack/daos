@@ -38,7 +38,10 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
-#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED 1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
+
+#define DUP_OP_MIN_RDB_SIZE (1 << 30)
 
 /* Pool service crt event */
 struct pool_svc_event {
@@ -661,6 +664,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
+	uint32_t		svc_ops_enabled = 0;
+	uint64_t		rdb_size;
 	int			rc;
 	struct daos_prop_entry *entry;
 
@@ -734,8 +739,28 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Create pool service operations KVS */
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_svc_ops, &attr);
+	if (rc != 0) {
+		D_ERROR("failed to create service ops KVS, " DF_RC "\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Determine if duplicate service operations detection will be enabled */
+	rc = rdb_get_size(tx->dt_db, &rdb_size);
+	if (rc != 0)
+		goto out_map_buf;
+	if (rdb_size >= DUP_OP_MIN_RDB_SIZE)
+		svc_ops_enabled = 1;
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc != 0)
+		D_ERROR("failed to set svc_ops_enabled, " DF_RC "\n", DP_RC(rc));
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -1456,7 +1481,10 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx		tx;
 	d_iov_t			value;
-	bool			version_exists = false;
+	bool			version_exists  = false;
+	bool			rdb_size_ok     = false;
+	uint32_t		svc_ops_enabled = 0;
+	uint64_t		rdb_size;
 	struct daos_prop_entry *svc_rf_entry;
 	int			rc;
 
@@ -1539,6 +1567,28 @@ check_map:
 		svc->ps_reconf_sched.psc_svc_rf = svc_rf_entry->dpe_val;
 	else
 		svc->ps_reconf_sched.psc_svc_rf = -1;
+
+	/* Check if duplicate operations detection is enabled, for informative debug log */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
+	if (rc != 0)
+		goto out_lock;
+	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
+
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
+		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -2663,8 +2713,7 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 				in->pri_domains.ca_arrays);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
-	rc =
-	    ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid, DAOS_POOL_GLOBAL_VERSION);
+	rc = ds_cont_init_metadata(&tx, &svc->ps_root, in->pri_op.pi_uuid);
 	if (rc != 0)
 		D_GOTO(out_tx, rc);
 
@@ -4571,6 +4620,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids = 0;
 	uint32_t		connectable;
+	uint32_t		svc_ops_enabled = 0;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -4796,6 +4846,65 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
+	/* Upgrade for the pool/container service operations KVS */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops\n", DP_UUID(pool_uuid));
+
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		struct rdb_kvs_attr attr;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops KVS\n", DP_UUID(pool_uuid));
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc = rdb_tx_create_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
+				DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+
+	/* And enable the new service operations KVS only if rdb is large enough */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_enabled\n", DP_UUID(pool_uuid));
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops enabled boolean: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		uint64_t rdb_nbytes;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops enabled boolean\n",
+			DP_UUID(pool_uuid));
+
+		rc = rdb_get_size(tx->dt_db, &rdb_nbytes);
+		if (rc != 0)
+			D_GOTO(out_free, rc);
+		if (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE)
+			svc_ops_enabled = 1;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": set svc_ops_enabled=%d failed, " DF_RC "\n",
+				DP_UUID(pool_uuid), svc_ops_enabled, DP_RC(rc));
+			D_GOTO(out_free, rc);
+		}
+		D_DEBUG(DB_MD,
+			DF_UUID ": duplicate RPC detection %s (rdb size: " DF_U64 " %s %u)\n",
+			DP_UUID(pool_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_nbytes,
+			svc_ops_enabled ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
+		need_commit = true;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": need_commit=%s\n", DP_UUID(pool_uuid),
+		need_commit ? "true" : "false");
 	if (need_commit) {
 		daos_prop_t *prop = NULL;
 
