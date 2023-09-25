@@ -123,9 +123,10 @@ class VerifyPoolSpace(TestWithServers):
         for data in result.output:
             for line in data.stdout:
                 info = re.split(r'\s+', line)
-                if len(info) > 5 and info[0] == 'tmpfs':
+                if len(info) > 5:
                     for rank in self.server_managers[0].get_host_ranks(data.hosts):
                         system_pool_size[rank] = {
+                            'dev': info[0],
                             'size': info[1],
                             'used': info[2],
                             'avail': info[3],
