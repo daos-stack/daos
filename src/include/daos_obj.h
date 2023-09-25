@@ -482,10 +482,10 @@ typedef struct {
 	uint32_t	kd_val_type;
 } daos_key_desc_t;
 
-static uint32_t
+static enum daos_obj_redun
 daos_obj_id2ord(daos_obj_id_t oid)
 {
-	return (oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT;
+	return (enum daos_obj_redun)((oid.hi & OID_FMT_CLASS_MASK) >> OID_FMT_CLASS_SHIFT);
 }
 
 static inline daos_oclass_id_t

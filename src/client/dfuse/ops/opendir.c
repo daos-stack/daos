@@ -71,5 +71,16 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	DFUSE_REPLY_ZERO(oh, req);
 	dfuse_dre_drop(dfuse_info, oh);
+	if (oh->doh_evict_on_close) {
+		int rc;
+
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
+						      oh->doh_ie->ie_name,
+						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+
+		if (rc != 0)
+			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
+					strerror(-rc));
+	}
 	dfuse_oh_free(dfuse_info, oh);
 };

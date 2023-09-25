@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
-timeout: 120
+timeout: 180
 server_config:
   name: daos_server
   engines_per_host: 2

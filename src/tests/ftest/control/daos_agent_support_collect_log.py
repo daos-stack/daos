@@ -14,7 +14,7 @@ class DaosAgentSupportCollectLogTest(SupportTestBase):
     :avocado: recursive
     """
 
-    def test_daos_agent_collect_log(self):
+    def test_daos_agent_support_collect_log(self):
         """JIRA ID: DAOS-10625
 
         Test Description:

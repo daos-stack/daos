@@ -11,10 +11,10 @@ void
 dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *parent,
 		 const char *name)
 {
-	struct dfuse_projection_info *fs_handle = fuse_req_userdata(req);
-	const struct fuse_ctx        *ctx       = fuse_req_ctx(req);
-	struct dfuse_inode_entry     *ie;
-	int                           rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	const struct fuse_ctx    *ctx        = fuse_req_ctx(req);
+	struct dfuse_inode_entry *ie;
+	int                       rc;
 
 	D_ALLOC_PTR(ie);
 	if (!ie)
@@ -22,7 +22,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *par
 
 	DFUSE_TRA_UP(ie, parent, "inode");
 
-	dfuse_ie_init(fs_handle, ie);
+	dfuse_ie_init(dfuse_info, ie);
 
 	ie->ie_stat.st_uid = ctx->uid;
 	ie->ie_stat.st_gid = ctx->gid;
@@ -42,7 +42,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link, struct dfuse_inode_entry *par
 
 	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, &ie->ie_stat.st_ino);
 
-	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
+	dfuse_reply_entry(dfuse_info, ie, NULL, true, req);
 
 	return;
 err:

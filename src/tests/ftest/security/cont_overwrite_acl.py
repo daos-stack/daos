@@ -141,7 +141,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             # Check that the acl file was unchanged
             self.acl_file_diff(content)
 
-    def test_no_user_permissions(self):
+    def test_cont_overwrite_acl_no_perm(self):
         """
         JIRA ID: DAOS-3708
 
@@ -151,7 +151,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,daily_regression,
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=OverwriteContainerACLTest,test_no_user_permissions
+        :avocado: tags=OverwriteContainerACLTest,test_cont_overwrite_acl_no_perm
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

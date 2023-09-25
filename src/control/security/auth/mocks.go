@@ -8,6 +8,7 @@ package auth
 
 import (
 	"os/user"
+	"strconv"
 
 	"github.com/pkg/errors"
 )
@@ -16,6 +17,7 @@ import (
 
 type MockUser struct {
 	username   string
+	uid        uint32
 	groupIDs   []uint32
 	groupIDErr error
 }
@@ -33,6 +35,26 @@ func (u *MockUser) Gid() (uint32, error) {
 		return 0, errors.New("no mock gids to return")
 	}
 	return u.groupIDs[0], nil
+}
+
+func NewMockExtWithUser(name string, uid uint32, gids ...uint32) *MockExt {
+	me := &MockExt{
+		LookupUserIDResult: &MockUser{
+			uid:      uid,
+			username: name,
+			groupIDs: gids,
+		},
+	}
+
+	if len(gids) > 0 {
+		for _, gid := range gids {
+			me.LookupGroupIDResults = append(me.LookupGroupIDResults, &user.Group{
+				Gid: strconv.Itoa(int(gid)),
+			})
+		}
+	}
+
+	return me
 }
 
 type MockExt struct {
@@ -58,7 +80,11 @@ func (e *MockExt) LookupGroupID(gid uint32) (*user.Group, error) {
 	e.LookupGroupIDGid = gid
 	var result *user.Group
 	if len(e.LookupGroupIDResults) > 0 {
-		result = e.LookupGroupIDResults[e.LookupGroupIDCallCount]
+		resultIdx := int(e.LookupGroupIDCallCount)
+		if len(e.LookupGroupIDResults) <= resultIdx {
+			resultIdx = len(e.LookupGroupIDResults) - 1
+		}
+		result = e.LookupGroupIDResults[resultIdx]
 	}
 	e.LookupGroupIDCallCount++
 	return result, e.LookupGroupIDErr

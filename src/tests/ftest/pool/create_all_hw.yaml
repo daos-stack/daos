@@ -7,26 +7,26 @@ hosts:
   test_servers: 3
 
 timeouts:
-  test_one_pool: 240
-  test_two_pools: 320
-  test_recycle_pools: 1000
+  test_one_pool_hw: 240
+  test_two_pools_hw: 320
+  test_recycle_pools_hw: 1000
 
-test_one_pool:
+test_one_pool_hw:
   deltas:
     scm: 18874368       # 18MiB
     nvme: 1048576       # 1MiB
 
-test_recycle_pools:
+test_recycle_pools_hw:
   pool_count: 50
   deltas:
     scm: 18874368       # 18MiB
     nvme: 0             # 0MiB
 
-  test_two_pools:
+  test_two_pools_hw:
     scm: 18874368       # 18MiB
     nvme: 1048576       # 1MiB
 
-test_two_pools:
+test_two_pools_hw:
   deltas:
     pool_half:
       scm: 18874368     # 18MiB

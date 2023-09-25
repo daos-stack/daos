@@ -10,13 +10,13 @@ from exception_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
 
-class DaosRacerTest(TestWithServers):
+class DaosRacerParallelTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
     """
 
-    def test_parallel(self):
+    def test_daos_racer_parallel(self):
         """JIRA-8445: multi-client daos_racer/consistency checker test.
 
         Test Description:
@@ -29,8 +29,8 @@ class DaosRacerTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,daosracer
-        :avocado: tags=daos_racer,DaosRacerTest,test_parallel
+        :avocado: tags=io,daos_racer
+        :avocado: tags=DaosRacerParallelTest,test_daos_racer_parallel
         """
         # Create the dmg command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())

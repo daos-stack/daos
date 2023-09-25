@@ -85,12 +85,7 @@ func processFabricProvider(cfg *config.Server) {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
-		if rxmProv == provider {
-			return true
-		}
-	}
-	return false
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
@@ -193,6 +188,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 

@@ -6,14 +6,14 @@
 from support_test_base import SupportTestBase
 
 
-class DaosSupportCollectLogTest(SupportTestBase):
+class DaosServerSupportCollectLogTest(SupportTestBase):
     # pylint: disable=too-many-ancestors
     """Test Class Description:Verify the daos_server support collect-log command.
 
     :avocado: recursive
     """
 
-    def test_daos_support_collect_log(self):
+    def test_daos_server_support_collect_log(self):
         """JIRA ID: DAOS-10625
 
         Test Description:

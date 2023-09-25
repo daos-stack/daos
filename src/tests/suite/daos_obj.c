@@ -3262,7 +3262,7 @@ fetch_replica_unavail(void **state)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** Lookup */
-	buf = calloc(size, 1);
+	D_ALLOC(buf, size);
 	assert_non_null(buf);
 	/** inject CRT error failure to update pool map + retry */
 	daos_fail_loc_set(DAOS_SHARD_OBJ_RW_CRT_ERROR | DAOS_FAIL_ONCE);
@@ -3748,8 +3748,8 @@ split_sgl_internal(void **state, int size)
 	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
-	sbuf1 = calloc(size/2, 1);
-	sbuf2 = calloc(size/2, 1);
+	D_ALLOC(sbuf1, size / 2);
+	D_ALLOC(sbuf2, size / 2);
 
 	/** init dkey */
 	d_iov_set(&dkey, "dkey", strlen("dkey"));

@@ -222,9 +222,9 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_pool_find(sys, label, puuid, &ranklist);
 		if (rc) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
-				 DF_UUID ":%s: dc_mgmt_pool_find() failed, " DF_RC "\n",
-				 DP_UUID(puuid), label ? label : "", DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR, rc,
+				  DF_UUID ":%s: dc_mgmt_pool_find() failed", DP_UUID(puuid),
+				  label ? label : "");
 			return rc;
 		}
 		if (cli_lock)
@@ -603,9 +603,9 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
-			 DF_UUID ":%s: cannot find pool service: " DF_RC "\n",
-			 DP_UUID(pool->dp_pool), label ? label : "", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR, rc,
+			  DF_UUID ":%s: cannot find pool service", DP_UUID(pool->dp_pool),
+			  label ? label : "");
 		goto out;
 	}
 
@@ -2758,15 +2758,15 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 
 	if (n <= 0 || names == NULL || ((sizes == NULL
 	    || values == NULL) && !readonly)) {
-		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p"
-			", sizes = %p", n, names, values, sizes);
+		D_ERROR("Invalid Arguments: n = %d, names = %p, values = %p, sizes = %p\n", n,
+			names, values, sizes);
 		return -DER_INVAL;
 	}
 
 	for (i = 0; i < n; i++) {
 		if (names[i] == NULL || *names[i] == '\0') {
-			D_ERROR("Invalid Arguments: names[%d] = %s",
-				i, names[i] == NULL ? "NULL" : "\'\\0\'");
+			D_ERROR("Invalid Arguments: names[%d] = %s\n", i,
+				names[i] == NULL ? "NULL" : "\'\\0\'");
 
 			return -DER_INVAL;
 		}

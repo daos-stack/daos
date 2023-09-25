@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -229,6 +229,31 @@ err_put1:
 err_ptask:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_kv_close_direct(daos_handle_t oh)
+{
+	struct dc_kv	*kv;
+	int		rc;
+
+	kv = kv_hdl2ptr(oh);
+	if (kv == NULL)
+		return -DER_NO_HDL;
+
+	rc = daos_obj_close(kv->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		kv_decref(kv);
+		return rc;
+	}
+
+	kv_hdl_unlink(kv);
+	/* -1 for ref taken here */
+	kv_decref(kv);
+	/* -1 for kv handle */
+	kv_decref(kv);
+	return 0;
 }
 
 int

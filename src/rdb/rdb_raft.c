@@ -1050,8 +1050,8 @@ rdb_raft_cb_persist_term(raft_server_t *raft, void *arg, raft_term_t term,
 	d_iov_set(&values[1], &vote, sizeof(vote));
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 2 /* n */, keys, values);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update term %ld and vote %d: %d\n",
-			DP_DB(db), term, vote, rc);
+		D_ERROR(DF_DB ": failed to update term %ld and vote %d: " DF_RC "\n", DP_DB(db),
+			term, vote, DP_RC(rc));
 
 	return rc;
 }
@@ -1151,8 +1151,8 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 		rc = rdb_tx_apply(db, index, entry->data.buf, entry->data.len,
 				  rdb_raft_lookup_result(db, index), &crit);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to apply entry "DF_U64": %d\n",
-				DP_DB(db), index, rc);
+			D_ERROR(DF_DB ": failed to apply entry " DF_U64 ": " DF_RC "\n", DP_DB(db),
+				index, DP_RC(rc));
 			goto err;
 		}
 	} else if (raft_entry_is_cfg_change(entry)) {
@@ -1185,8 +1185,8 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 	rc = rdb_lc_update(db->d_lc, index, RDB_LC_ATTRS, crit, n,
 			   keys, values);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to persist entry "DF_U64": %d\n",
-			DP_DB(db), index, rc);
+		D_ERROR(DF_DB ": failed to persist entry " DF_U64 ": " DF_RC "\n", DP_DB(db), index,
+			DP_RC(rc));
 		goto err_discard;
 	}
 
@@ -1211,8 +1211,8 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 	rc = rdb_mc_update(db->d_mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_lc,
 			   &values[0]);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to update log tail "DF_U64": %d\n",
-			DP_DB(db), db->d_lc_record.dlr_tail, rc);
+		D_ERROR(DF_DB ": failed to update log tail " DF_U64 ": " DF_RC "\n", DP_DB(db),
+			db->d_lc_record.dlr_tail, DP_RC(rc));
 		db->d_lc_record.dlr_tail--;
 		goto err_discard;
 	}
@@ -1225,8 +1225,8 @@ rdb_raft_log_offer_single(struct rdb *db, raft_entry_t *entry, uint64_t index)
 err_discard:
 	rc_tmp = rdb_lc_discard(db->d_lc, index, index);
 	if (rc_tmp != 0)
-		D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
-			DP_DB(db), index, rc_tmp);
+		D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n", DP_DB(db), index,
+			DP_RC(rc_tmp));
 err:
 	return rc;
 }
@@ -1443,10 +1443,15 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
 {
 	int rc;
 
-	D_DEBUG(DB_TRACE, DF_DB": snapping "DF_U64"\n", DP_DB(db),
-		index);
+	D_DEBUG(DB_TRACE, DF_DB ": snapping " DF_U64 "\n", DP_DB(db), index);
+
 	rc = raft_begin_snapshot(db->d_raft, index);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
+	if (rc != 0) {
+		int rc2 = rdb_raft_rc(rc);
+		D_ERROR(DF_DB ": raft_begin_snapshot() returned %d: " DF_RC, DP_DB(db), rc,
+			DP_RC(rc2));
+		return rc2;
+	}
 	/*
 	 * VOS snaps every new index implicitly.
 	 *
@@ -1456,9 +1461,10 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
 	 */
 	rc = raft_end_snapshot(db->d_raft);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to poll entries: %d\n",
-			DP_DB(db), rc);
-		rc = rdb_raft_rc(rc);
+		int rc2 = rdb_raft_rc(rc);
+
+		D_ERROR(DF_DB ": failed to poll entries: %d: " DF_RC, DP_DB(db), rc, DP_RC(rc2));
+		rc = rc2;
 	}
 
 	return rc;
@@ -1595,8 +1601,8 @@ rdb_compactd(void *arg)
 			break;
 		rc = rdb_raft_compact(db, base);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to compact to base "DF_U64
-				": %d\n", DP_DB(db), base, rc);
+			D_ERROR(DF_DB ": failed to compact to base " DF_U64 ": " DF_RC "\n",
+				DP_DB(db), base, DP_RC(rc));
 			break;
 		}
 		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
@@ -1976,8 +1982,8 @@ rdb_raft_append_apply_internal(struct rdb *db, msg_entry_t *mentry,
 	rc = rdb_raft_check_state(db, &state, rc);
 	if (rc != 0) {
 		if (rc != -DER_NOTLEADER)
-			D_ERROR(DF_DB": failed to append entry: %d\n",
-				DP_DB(db), rc);
+			D_ERROR(DF_DB ": failed to append entry: " DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
 		goto out_result;
 	}
 
@@ -2098,8 +2104,8 @@ rdb_timerd(void *arg)
 		rc = rdb_raft_check_state(db, &state, rc);
 		ABT_mutex_unlock(db->d_raft_mutex);
 		if (rc != 0)
-			D_ERROR(DF_DB": raft_periodic() failed: %d\n",
-				DP_DB(db), rc);
+			D_ERROR(DF_DB ": raft_periodic() failed: " DF_RC "\n", DP_DB(db),
+				DP_RC(rc));
 		if (db->d_stop)
 			break;
 

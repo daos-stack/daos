@@ -173,7 +173,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         # Verify that the ACL file is now composed of the updated ACEs
         self.acl_file_diff(self.cont_acl + ace_to_add_2 + ace_to_add_3)
 
-    def test_no_user_permissions(self):
+    def test_update_cont_acl_no_perm(self):
         """
         JIRA ID: DAOS-3711
 
@@ -183,7 +183,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=security,container,container_acl,daos_cmd
-        :avocado: tags=UpdateContainerACLTest,test_no_user_permissions
+        :avocado: tags=UpdateContainerACLTest,test_update_cont_acl_no_perm
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

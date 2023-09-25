@@ -178,22 +178,6 @@ func (svc *mgmtSvc) join(ctx context.Context, req *mgmtpb.JoinReq, peerAddr *net
 		MapVersion: joinResponse.MapVersion,
 	}
 
-	// If the rank is local to the MS leader, then we need to wire up at least
-	// one in order to perform a CaRT group update.
-	if common.IsLocalAddr(peerAddr) && req.Idx == 0 {
-		resp.LocalJoin = true
-
-		srvs := svc.harness.Instances()
-		if len(srvs) == 0 {
-			return nil, errors.New("invalid Join request (index 0 doesn't exist?!?)")
-		}
-		srv := srvs[0]
-
-		if err := srv.SetupRank(ctx, joinResponse.Member.Rank, joinResponse.MapVersion); err != nil {
-			return nil, errors.Wrap(err, "SetupRank on local instance failed")
-		}
-	}
-
 	return resp, nil
 }
 
@@ -506,7 +490,10 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
-	members := svc.membership.Members(hitRanks)
+	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
+	if err != nil {
+		return nil, errors.Wrap(err, "get membership")
+	}
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}

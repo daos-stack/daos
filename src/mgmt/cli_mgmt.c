@@ -349,7 +349,7 @@ alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
 	for (i = 0; i < resp->n_rank_uris; i++) {
 		uris[i].dru_rank = resp->rank_uris[i]->rank;
 
-		D_ASPRINTF(uris[i].dru_uri, resp->rank_uris[i]->uri);
+		D_STRNDUP(uris[i].dru_uri, resp->rank_uris[i]->uri, CRT_ADDR_STR_MAX_LEN - 1);
 		if (uris[i].dru_uri == NULL) {
 			free_rank_uris(uris, i);
 			return -DER_NOMEM;
@@ -1094,13 +1094,12 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {
 		if (label) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR,
-				 "%s: MGMT_POOL_FIND rpc failed to %d ranks, " DF_RC "\n", label,
-				 ms_ranks->rl_nr, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR, rc,
+				  "%s: MGMT_POOL_FIND rpc failed to %d ranks", label,
+				  ms_ranks->rl_nr);
 		} else {
-			D_ERROR(DF_UUID ": MGMT_POOL_FIND rpc failed to %d "
-					"ranks, " DF_RC "\n",
-				DP_UUID(puuid), ms_ranks->rl_nr, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": MGMT_POOL_FIND rpc failed to %d ranks",
+				 DP_UUID(puuid), ms_ranks->rl_nr);
 		}
 		goto decref;
 	}

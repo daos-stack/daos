@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -50,6 +51,7 @@ type (
 	// for a MockInvoker.
 	MockInvokerConfig struct {
 		Sys                 string
+		Component           build.Component
 		UnaryError          error
 		UnaryResponse       *UnaryResponse
 		UnaryResponseSet    []*UnaryResponse
@@ -100,6 +102,10 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 
 func (mi *MockInvoker) GetSystem() string {
 	return mi.cfg.Sys
+}
+
+func (mi *MockInvoker) GetComponent() build.Component {
+	return mi.cfg.Component
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
@@ -162,16 +168,16 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 			}
 			if delay > 0 {
 				mi.log.Debugf("delaying mock response for %s", delay)
-				time.Sleep(delay)
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
+					return
+				}
 			}
 
-			select {
-			case <-ctx.Done():
-				mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
-				return
-			case responses <- hr:
-				mi.log.Debug("sending mock response")
-			}
+			mi.log.Debug("sending mock response")
+			responses <- hr
 		}
 		close(responses)
 	}(invokeCount)
@@ -601,6 +607,7 @@ type (
 		AvailBytes  uint64 // Available raw storage
 		UsableBytes uint64 // Effective storage available for data
 		NvmeState   *storage.NvmeDevState
+		NvmeRole    *storage.BdevRoles
 	}
 
 	MockScmConfig struct {
@@ -672,6 +679,9 @@ func MockStorageScanResp(t *testing.T,
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
 		if mockNvmeConfig.NvmeState != nil {
 			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+		}
+		if mockNvmeConfig.NvmeRole != nil {
+			smdDevice.Roles = *mockNvmeConfig.NvmeRole
 		}
 		smdDevice.Rank = mockNvmeConfig.Rank
 		nvmeControllers = append(nvmeControllers, nvmeController)

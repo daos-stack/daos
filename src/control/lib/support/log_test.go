@@ -245,7 +245,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 			cmd:       "hostnamefoo",
 			option:    "",
 			expResult: "",
-			expErr:    errors.New("sh: hostnamefoo: command not found"),
+			expErr:    errors.New("command not found"),
 		},
 		"Check valid Command with invalid target directory": {
 			target:    targetTestDir + "/dir1",
@@ -344,28 +344,23 @@ func TestSupport_rsyncLog(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		targetFolder string
-		TargetHost   string
+		AdminNode    string
 		expErr       error
 	}{
 		"rsync to invalid Target directory": {
 			targetFolder: targetTestDir + "/foo/bar",
-			TargetHost:   hostName + ":/tmp/foo/bar/",
-			expErr:       errors.New("Error running command"),
-		},
-		"rsync to invalid Target Host": {
-			targetFolder: targetTestDir + "/foo/bar",
-			TargetHost:   "invalid-host",
+			AdminNode:    hostName + ":/tmp/foo/bar/",
 			expErr:       errors.New("Error running command"),
 		},
 		"rsync invalid log directory": {
 			targetFolder: srcPath + "/file1",
-			TargetHost:   hostName,
+			AdminNode:    hostName,
 			expErr:       errors.New("not a directory"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			rsLog.TargetFolder = tc.targetFolder
-			rsLog.TargetHost = tc.TargetHost
+			rsLog.AdminNode = tc.AdminNode
 			gotErr := rsyncLog(log, rsLog)
 			test.CmpErr(t, tc.expErr, gotErr)
 		})

@@ -1346,8 +1346,11 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 	retry_cnt = 0;
 	while (retry_cnt <= MAX_POOL_TGT_STATE_RETRY) {
-		char *expected_state_dup = strdup(expected_state);
-		char *state = strtok(expected_state_dup, "|");
+		char *expected_state_dup;
+		char *state;
+
+		D_STRNDUP(expected_state_dup, expected_state, strlen(expected_state));
+		state = strtok(expected_state_dup, "|");
 
 		rc = daos_pool_query_target(poh, tgtidx, rank, &tgt_info, NULL);
 		if (rc) {
