@@ -168,15 +168,16 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid, int ntargets, const char *group, d_ran
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
-		    daos_prop_t *prop, d_rank_list_t **svcp,
-		    int domains_nr, uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains, size_t meta_blob_size)
 {
 	d_rank_list_t			*pg_ranks = NULL;
 	d_rank_list_t			*pg_targets = NULL;
 	int				rc;
 	int				rc_cleanup;
+
+	D_DEBUG(DB_MGMT, DF_UUID ": meta blob size %ld", DP_UUID(pool_uuid), meta_blob_size);
 
 	/* Sanity check targets versus cart's current primary group members.
 	 * If any targets not in PG, flag error before MGMT_TGT_ corpcs fail.
