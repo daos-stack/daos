@@ -677,14 +677,10 @@ out_free_path:
 }
 
 int
-dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode, bool ignore_unsup)
+dfs_sys_chmod(dfs_sys_t *dfs_sys, const char *path, mode_t mode)
 {
 	int		rc;
 	struct sys_path	sys_path;
-
-	if (ignore_unsup) {
-		mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
-	}
 
 	if (dfs_sys == NULL)
 		return EINVAL;

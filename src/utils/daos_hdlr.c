@@ -528,6 +528,10 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 {
 	int rc = 0;
 
+	if (ignore_unsup) {
+		mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	}
+
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
 		/* POSIX returns -1 on error and sets errno
@@ -538,7 +542,7 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 			rc = errno;
 		}
 	} else if (file_dfs->type == DAOS) {
-		rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode, ignore_unsup);
+		rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode);
 		if (rc == ENOTSUP && !ignore_unsup) {
 			/* If the file has unsupported mode bits, unset them
 			 * and retry the chmod. We track these errors so they
@@ -546,7 +550,8 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 			 * operation.
 			 */
 			(*num_chmod_enotsup)++;
-			rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode, true);
+			mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+			rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode);
 		}
 	} else {
 		rc = EINVAL;
