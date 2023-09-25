@@ -366,11 +366,9 @@ check_fd_mountpoint(const char *mountpoint)
 
 	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
 	if (res != 1) {
-		errno = EINVAL;
 		return -1;
 	}
 	if (len != strnlen(mountpoint, NAME_MAX)) {
-		errno = EINVAL;
 		return -1;
 	}
 
@@ -669,9 +667,7 @@ main(int argc, char **argv)
 		 */
 		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
 		if (fd < 0) {
-			DFUSE_TRA_WARNING(dfuse_info,
-					  "Mount point is not a valid file descriptor: %d (%s)", fd,
-					  strerror(errno));
+			DFUSE_TRA_WARNING(dfuse_info, "Mount point is not a valid file descriptor");
 			printf("Mount point does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
