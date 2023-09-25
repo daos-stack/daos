@@ -111,6 +111,7 @@ static _Atomic uint32_t        daos_init_cnt;
 static bool             report;
 static long int         page_size;
 
+static pid_t            daos_init_pid;
 static bool             daos_inited;
 static bool             daos_debug_inited;
 static int              num_dfs;
@@ -969,6 +970,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 				*is_target_path = 0;
 				goto out_normal;
 			}
+			daos_init_pid = getpid();
 			daos_inited = true;
 			atomic_fetch_add_relaxed(&daos_init_cnt, 1);
 		}
@@ -5586,7 +5588,7 @@ finalize_dfs(void)
 		D_FREE(dfs_list[i].fs_root);
 	}
 
-	if (daos_inited) {
+	if (daos_inited && (getpid() == daos_init_pid)) {
 		uint32_t init_cnt, j;
 
 		init_cnt = atomic_load_relaxed(&daos_init_cnt);

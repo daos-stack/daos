@@ -13,7 +13,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/syscall.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -52,7 +51,7 @@ struct ioil_global {
 	uint16_t	iog_eq_count_max;
 	uint16_t	iog_eq_count;
 	uint16_t	iog_eq_idx;
-	pid_t           iog_init_tid;
+	pid_t           iog_init_pid;
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
@@ -297,7 +296,8 @@ ioil_init(void)
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
-	ioil_iog.iog_init_tid = syscall(SYS_gettid);
+	/* Set an invalid pid */
+	ioil_iog.iog_init_pid = 0;
 
 	/* Get maximum number of file descriptors */
 	rc = getrlimit(RLIMIT_NOFILE, &rlimit);
@@ -364,10 +364,21 @@ ioil_fini(void)
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
 	int               rc;
-	pid_t             tid = syscall(SYS_gettid);
+	pid_t             pid = getpid();
 
-	if (tid != ioil_iog.iog_init_tid) {
-		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from alternate thread");
+	if (ioil_iog.iog_daos_init) {
+		int i;
+
+		/** destroy EQs created by threads */
+		for (i = 0; i < ioil_iog.iog_eq_count; i++)
+			daos_eq_destroy(ioil_iog.iog_eqs[i], 0);
+		/** destroy main thread eq */
+		if (daos_handle_is_valid(ioil_iog.iog_main_eqh))
+			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
+	}
+
+	if (pid != ioil_iog.iog_init_pid) {
+		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from forked processes");
 		return;
 	}
 
@@ -398,17 +409,8 @@ ioil_fini(void)
 			ioil_shrink_pool(pool);
 	}
 
-	if (ioil_iog.iog_daos_init) {
-		int i;
-
-		/** destroy EQs created by threads */
-		for (i = 0; i < ioil_iog.iog_eq_count; i++)
-			daos_eq_destroy(ioil_iog.iog_eqs[i], 0);
-		/** destroy main thread eq */
-		if (daos_handle_is_valid(ioil_iog.iog_main_eqh))
-			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
+	if (ioil_iog.iog_daos_init)
 		daos_fini();
-	}
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
 }
@@ -776,6 +778,7 @@ call_daos_init(int fd)
 		goto out;
 	}
 	rcb = true;
+	ioil_iog.iog_init_pid = getpid();
 
 out:
 	i = 0;
