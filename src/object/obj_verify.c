@@ -267,22 +267,22 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		D_ASSERT(cursor->type != OBJ_ITER_NONE);
 
 		if (cursor->type == OBJ_ITER_RECX) {
+			int rc = -DER_IO;
 			/* The value is either SV or EV, cannot be both. */
-			D_ERROR(DF_OID" akey "DF_KEY
-				" misc SV and EV together.\n",
-				DP_OID(oid), DP_KEY(&iod->iod_name));
-			return -DER_IO;
+			DL_ERROR(rc, DF_OID " " DF_AKEY " misc SV and EV together", DP_OID(oid),
+				 DP_KEY(&iod->iod_name));
+			return rc;
 		}
 
 		if (cursor->type == OBJ_ITER_SINGLE) {
+			int rc = -DER_IO;
 			/* We have already specified the epoch when enumerate,
 			 * so there will be at most one SV rec can be returned
 			 * for an akey.
 			 */
-			D_ERROR(DF_OID" akey "DF_KEY
-				" returned multiple SV recs.\n",
-				DP_OID(oid), DP_KEY(&iod->iod_name));
-			return -DER_IO;
+			DL_ERROR(rc, DF_OID " " DF_AKEY " returned multiple SV recs", DP_OID(oid),
+				 DP_KEY(&iod->iod_name));
+			return rc;
 		}
 	} else {
 		D_ASSERTF(cursor->type == OBJ_ITER_NONE,
@@ -325,11 +325,10 @@ dc_obj_verify_parse_sv(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 	}
 
 	if (data != cursor->ptr + dova->kds[idx].kd_key_len) {
-		D_ERROR(DF_OID" akey "DF_KEY
-			" returned invalid SV rec, size %ld.\n",
-			DP_OID(oid), DP_KEY(&iod->iod_name),
-			dova->kds[idx].kd_key_len);
-		return -DER_IO;
+		int rc = -DER_IO;
+		DL_ERROR(rc, DF_OID " " DF_AKEY " returned invalid SV rec, size %ld", DP_OID(oid),
+			 DP_KEY(&iod->iod_name), dova->kds[idx].kd_key_len);
+		return rc;
 	}
 
 	cursor->type = OBJ_ITER_SINGLE;
@@ -356,11 +355,11 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		D_ASSERT(cursor->type != OBJ_ITER_NONE);
 
 		if (cursor->type == OBJ_ITER_SINGLE) {
+			int rc = -DER_IO;
 			/* The value is either SV or EV, cannot be both. */
-			D_ERROR(DF_OID" akey "DF_KEY
-				" misc EV and SV together.\n",
-				DP_OID(oid), DP_KEY(&iod->iod_name));
-			return -DER_IO;
+			DL_ERROR(rc, DF_OID " " DF_AKEY " misc EV and SV together", DP_OID(oid),
+				 DP_KEY(&iod->iod_name));
+			return rc;
 		}
 	} else {
 		D_ASSERTF(cursor->type == OBJ_ITER_NONE,
@@ -380,28 +379,26 @@ dc_obj_verify_parse_ev(struct dc_obj_verify_args *dova, daos_obj_id_t oid,
 		if (iod->iod_size == DAOS_SIZE_MAX) {
 			iod->iod_size = rec->rec_size;
 		} else if (iod->iod_size != rec->rec_size) {
+			int rc = -DER_IO;
 			/* Not merge punched and non-punched. */
 			if (iod->iod_size == 0 || rec->rec_size == 0) {
 				cursor->iod_off = data - cursor->ptr;
 				return 1;
 			}
 
-			D_ERROR(DF_OID" akey "DF_KEY
-				"contains multiple EV rec size %ld/%lu\n",
-				DP_OID(oid), DP_KEY(&iod->iod_name),
-				iod->iod_size, (unsigned long)rec->rec_size);
-			return -DER_IO;
+			DL_ERROR(rc, DF_OID " " DF_AKEY "contains multiple EV rec size %ld/%lu",
+				 DP_OID(oid), DP_KEY(&iod->iod_name), iod->iod_size,
+				 (unsigned long)rec->rec_size);
+			return rc;
 		}
 
 		tmp = i_recx->rx_idx + i_recx->rx_nr;
 		if (r_recx->rx_idx < tmp) {
-			D_ERROR(DF_OID" akey "DF_KEY
-				" contains recs overlap %lu/%lu/%lu\n",
-				DP_OID(oid), DP_KEY(&iod->iod_name),
-				(unsigned long)r_recx->rx_idx,
-				(unsigned long)i_recx->rx_idx,
-				(unsigned long)i_recx->rx_nr);
-			return -DER_IO;
+			int rc = -DER_IO;
+			DL_ERROR(rc, DF_OID " " DF_AKEY " contains recs overlap %lu/%lu/%lu",
+				 DP_OID(oid), DP_KEY(&iod->iod_name), (unsigned long)r_recx->rx_idx,
+				 (unsigned long)i_recx->rx_idx, (unsigned long)i_recx->rx_nr);
+			return rc;
 		}
 
 		if (tmp == 0) {
@@ -533,11 +530,12 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->dkey, &cur_b->dkey)) {
-		D_WARN(DF_OID" (reps %u, inconsistent) "
-			"shard %u has dkey "DF_KEY", but shard %u has dkey "DF_KEY".\n",
-			DP_OID(oid), reps,
-			shard_a, DP_KEY(&cur_a->dkey),
-			shard_b, DP_KEY(&cur_b->dkey));
+		rc = -DER_MISMATCH;
+		DL_WARN(rc,
+			DF_OID " (reps %u, inconsistent) shard %u has " DF_DKEY
+			       ", but shard %u has " DF_DKEY,
+			DP_OID(oid), reps, shard_a, DP_KEY(&cur_a->dkey), shard_b,
+			DP_KEY(&cur_b->dkey));
 		return -DER_MISMATCH;
 	}
 
@@ -546,11 +544,12 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		return 0;
 
 	if (!daos_key_match(&cur_a->iod.iod_name, &cur_b->iod.iod_name)) {
-		D_WARN(DF_OID" (reps %u, inconsistent) shard %u has akey "
-		       DF_KEY", but shard %u has akey "DF_KEY".\n",
-		       DP_OID(oid), reps,
-		       shard_a, DP_KEY(&cur_a->iod.iod_name),
-		       shard_b, DP_KEY(&cur_b->iod.iod_name));
+		rc = -DER_MISMATCH;
+		DL_WARN(rc,
+			DF_OID " (reps %u, inconsistent) shard %u has " DF_AKEY
+			       ", but shard %u has " DF_AKEY,
+			DP_OID(oid), reps, shard_a, DP_KEY(&cur_a->iod.iod_name), shard_b,
+			DP_KEY(&cur_b->iod.iod_name));
 		return -DER_MISMATCH;
 	}
 
@@ -652,8 +651,9 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 
 	D_ASSERT(obj != NULL);
 	tgt_off = obj_ec_shard_off(obj, io->ui_dkey_hash, io->ui_oid.id_shard);
-	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64" dkey_hash "DF_U64
-		" tgt off %u\n", DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
+	D_DEBUG(DB_TRACE,
+		"compare " DF_DKEY " nr %d shard " DF_U64 " dkey_hash " DF_U64 " tgt off %u\n",
+		DP_KEY(&io->ui_dkey), nr, shard, io->ui_dkey_hash, tgt_off);
 	if (nr == 0 || is_ec_parity_shard_by_tgt_off(tgt_off, obj_get_oca(obj))) {
 		obj_decref(obj);
 		return 0;
@@ -698,7 +698,7 @@ dc_obj_verify_ec_cb(struct dc_obj_enum_unpack_io *io, void *arg)
 	}
 
 	if (idx == 0) {
-		D_DEBUG(DB_TRACE, "all punched "DF_KEY" nr %d shard "DF_U64"\n",
+		D_DEBUG(DB_TRACE, "all punched " DF_DKEY " nr %d shard " DF_U64 "\n",
 			DP_KEY(&io->ui_dkey), nr, shard);
 		obj_decref(obj);
 		return 0;

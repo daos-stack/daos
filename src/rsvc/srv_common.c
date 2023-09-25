@@ -90,9 +90,8 @@ ds_rsvc_set_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_update(tx, path, &key, &value);
 		if (rc != 0) {
-			D_ERROR("%s: failed to update attribute "DF_KEY
-				": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to update attribute " DF_KKEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_bulk;
 		}
 	}
@@ -153,14 +152,12 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_delete(tx, path, &key);
 		if (rc == -DER_NONEXIST) {
-			D_DEBUG(DB_ANY, "%s: failed to delete attribute "DF_KEY
-				": "DF_RC"\n", svc->s_name, DP_KEY(&key),
-				DP_RC(rc));
+			D_DEBUG(DB_ANY, "%s: failed to delete attribute " DF_KKEY ": %d\n",
+				svc->s_name, DP_KEY(&key), rc);
 			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to delete attribute "DF_KEY
-				": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to delete attribute " DF_KKEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_bulk;
 		}
 	}
@@ -252,12 +249,12 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			iovs[j - 1].iov_buf_len += sizes[i];
 			sizes[i] = 0;
 
-			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute " DF_KKEY ": " DF_RC "\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			nonexist++;
 		} else if (rc != 0) {
-			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
-				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			DL_ERROR(rc, "%s: failed to lookup attribute " DF_KKEY, svc->s_name,
+				 DP_KEY(&key));
 			goto out_iovs;
 		} else if (sizes[i] > 0) {
 			daos_size_t size;

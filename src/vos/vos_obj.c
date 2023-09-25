@@ -593,7 +593,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 
 	if (akey == NULL) {
 		rc = dbtree_key2anchor(obj->obj_toh, dkey, anchor);
-		D_DEBUG(DB_TRACE, "oid=" DF_UOID " dkey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+		D_DEBUG(DB_TRACE, "oid=" DF_UOID " " DF_DKEY " to anchor: rc=" DF_RC "\n",
 			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
 		goto out;
 	}
@@ -606,14 +606,13 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 			daos_anchor_set_eof(anchor);
 			goto out;
 		}
-		D_ERROR("Error preparing dkey: oid=" DF_UOID " dkey=" DF_KEY " rc=" DF_RC "\n",
-			DP_UOID(oid), DP_KEY(dkey), DP_RC(rc));
+		DL_ERROR(rc, "Error preparing dkey: oid=" DF_UOID " " DF_DKEY, DP_UOID(oid),
+			 DP_KEY(dkey));
 		D_GOTO(out, rc);
 	}
 
 	rc = dbtree_key2anchor(toh, akey, anchor);
-	D_DEBUG(DB_TRACE,
-		"oid=" DF_UOID " dkey=" DF_KEY " akey=" DF_KEY " to anchor: rc=" DF_RC "\n",
+	D_DEBUG(DB_TRACE, "oid=" DF_UOID " " DF_DKEY " " DF_AKEY " to anchor: rc=" DF_RC "\n",
 		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey), DP_RC(rc));
 
 	key_tree_release(toh, false);

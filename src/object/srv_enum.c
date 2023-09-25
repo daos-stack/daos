@@ -296,9 +296,10 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct ds_obj_enum_arg *ar
 		iov->iov_len += pi_size;
 	}
 
-	D_DEBUG(DB_IO, "Pack key "DF_KEY" iov total %zd kds len %d eph "
-		DF_U64" punched eph num "DF_U64"\n", DP_KEY(&key_ent->ie_key),
-		iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
+	D_DEBUG(DB_IO,
+		"Pack key " DF_KKEY " iov total %zd kds len %d eph " DF_U64
+		" punched eph num " DF_U64 "\n",
+		DP_KEY(&key_ent->ie_key), iov->iov_len, arg->kds_len - 1, key_ent->ie_epoch,
 		key_ent->ie_punch);
 	return 0;
 }

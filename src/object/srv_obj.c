@@ -759,12 +759,9 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *iod, uint64_t *off)
 	int			i;
 	int			rc = 0;
 
-	D_DEBUG(DB_TRACE, "opc %d oid "DF_UOID" dkey "DF_KEY
-		" tgt/xs %d/%d epc "DF_X64".\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid),
-		DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id,
+	D_DEBUG(DB_TRACE, "opc %d oid " DF_UOID " " DF_DKEY " tgt/xs %d/%d epc " DF_X64 ".\n",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id,
 		orw->orw_epoch);
 
 	if (obj_rpc_is_fetch(rpc)) {
@@ -1357,10 +1354,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 
 	dkey = (daos_key_t *)&orw->orw_dkey;
-	D_DEBUG(DB_IO,
-		"opc %d oid "DF_UOID" dkey "DF_KEY" tag %d epc "DF_X64" flags %x.\n",
-		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey),
-		tag, orw->orw_epoch, orw->orw_flags);
+	D_DEBUG(DB_IO, "opc %d oid " DF_UOID " " DF_DKEY " tag %d epc " DF_X64 " flags %x.\n",
+		opc_get(rpc->cr_opc), DP_UOID(orw->orw_oid), DP_KEY(dkey), tag, orw->orw_epoch,
+		orw->orw_flags);
 
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
@@ -1826,8 +1822,8 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 				skip = (iod_parent->iod_nr == 0 || iod_parent->iod_recxs == NULL);
 			}
 			if (skip) {
-				D_DEBUG(DB_IO, "akey[%d] "DF_KEY" array skipped.\n",
-					i, DP_KEY(&iod_parent->iod_name));
+				D_DEBUG(DB_IO, "[%d] " DF_AKEY " array skipped.\n", i,
+					DP_KEY(&iod_parent->iod_name));
 				setbit(*skips, i);
 				continue;
 			}
@@ -1869,9 +1865,10 @@ obj_get_iods_offs_by_oid(daos_unit_oid_t uoid, struct obj_iod_array *iod_array,
 			    (*iods)[idx].iod_size != DAOS_REC_ANY &&
 			    (*iods)[idx].iod_size <=
 			    OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca))) {
-				D_DEBUG(DB_IO, "akey[%d] "DF_KEY" singv skipped, size %zu, "
-					"tgt_off %d, data_tgt_nr %d.\n", i,
-					DP_KEY(&iod_parent->iod_name), (*iods)[idx].iod_size,
+				D_DEBUG(DB_IO,
+					"[%d] " DF_AKEY " singv skipped, size %zu, "
+					"tgt_off %d, data_tgt_nr %d.\n",
+					i, DP_KEY(&iod_parent->iod_name), (*iods)[idx].iod_size,
 					tgt_off, obj_ec_data_tgt_nr(oca));
 				setbit(*skips, i);
 				continue;
@@ -2569,12 +2566,11 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI".\n",
-		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
-		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
+		"rpc %p opc %d oid " DF_UOID " " DF_DKEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI ".\n",
+		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(dkey), dss_get_module_info()->dmi_tgt_id,
+		dss_get_module_info()->dmi_xs_id, orw->orw_epoch, orw->orw_map_ver, ioc.ioc_map_ver,
+		DP_DTI(&orw->orw_dti));
 
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
@@ -2803,11 +2799,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	}
 
 	D_DEBUG(DB_IO,
-		"rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI" layout %u.\n",
+		"rpc %p opc %d oid " DF_UOID " " DF_DKEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI " layout %u.\n",
 		rpc, opc, DP_UOID(orw->orw_oid), DP_KEY(&orw->orw_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti), ioc.ioc_layout_ver);
 
 	if (obj_rpc_is_fetch(rpc) && !(orw->orw_flags & ORF_EC_RECOV) &&
@@ -3694,15 +3689,11 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 			DP_DTI(&opi->opi_dti));
 	else
 		D_DEBUG(DB_TRACE,
-			"punch key %p oid "DF_UOID" dkey "
-			DF_KEY" tag/xs %d/%d epc "
-			DF_X64", pmv %u/%u dti "DF_DTI".\n",
-			rpc, DP_UOID(opi->opi_oid),
-			DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
-			dss_get_module_info()->dmi_tgt_id,
-			dss_get_module_info()->dmi_xs_id, opi->opi_epoch,
-			opi->opi_map_ver, ioc.ioc_map_ver,
-			DP_DTI(&opi->opi_dti));
+			"punch key %p oid " DF_UOID " " DF_DKEY " tag/xs %d/%d epc " DF_X64
+			", pmv %u/%u dti " DF_DTI ".\n",
+			rpc, DP_UOID(opi->opi_oid), DP_KEY(&opi->opi_dkeys.ca_arrays[0]),
+			dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id,
+			opi->opi_epoch, opi->opi_map_ver, ioc.ioc_map_ver, DP_DTI(&opi->opi_dti));
 
 	rc = process_epoch(&opi->opi_epoch, NULL /* epoch_first */,
 			   &opi->opi_flags);
@@ -5272,11 +5263,11 @@ ds_obj_key2anchor_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out, rc);
 
-	D_DEBUG(DB_IO, "rpc %p opc %d oid "DF_UOID" dkey "DF_KEY" tag/xs %d/%d epc "
-		DF_X64", pmv %u/%u dti "DF_DTI".\n",
+	D_DEBUG(DB_IO,
+		"rpc %p opc %d oid " DF_UOID " " DF_DKEY " tag/xs %d/%d epc " DF_X64
+		", pmv %u/%u dti " DF_DTI ".\n",
 		rpc, DAOS_OBJ_RPC_KEY2ANCHOR, DP_UOID(oki->oki_oid), DP_KEY(&oki->oki_dkey),
-		dss_get_module_info()->dmi_tgt_id,
-		dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
+		dss_get_module_info()->dmi_tgt_id, dss_get_module_info()->dmi_xs_id, oki->oki_epoch,
 		oki->oki_map_ver, ioc.ioc_map_ver, DP_DTI(&oki->oki_dti));
 
 	rc = process_epoch(&oki->oki_epoch, NULL, &oki->oki_flags);

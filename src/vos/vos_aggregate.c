@@ -350,7 +350,7 @@ vos_agg_filter(daos_handle_t ih, vos_iter_desc_t *desc, void *cb_arg, unsigned i
 			D_DEBUG(DB_EPC, "Skip untouched oid:"DF_UOID"\n",
 				DP_UOID(desc->id_oid));
 		} else {
-			D_DEBUG(DB_EPC, "Skip untouched %s:"DF_KEY"\n",
+			D_DEBUG(DB_EPC, "Skip untouched %s: " DF_KKEY "\n",
 				desc->id_type == VOS_ITER_DKEY ? "dkey" : "akey",
 				DP_KEY(&desc->id_key));
 		}

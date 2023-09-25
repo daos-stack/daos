@@ -4104,9 +4104,9 @@ dump_key_and_anchor_eof_check(struct obj_auxi_args *obj_auxi,
 	d_list_for_each_entry_safe(key, tmp, arg->merged_list, key_list) {
 		int left = key->key.iov_len;
 
-		D_DEBUG(DB_TRACE, DF_OID" opc 0x%x cnt %d key "DF_KEY"\n",
-			DP_OID(obj_auxi->obj->cob_md.omd_id), obj_auxi->opc,
-			cnt + 1, DP_KEY(&key->key));
+		D_DEBUG(DB_TRACE, DF_OID " opc 0x%x cnt %d " DF_KKEY,
+			DP_OID(obj_auxi->obj->cob_md.omd_id), obj_auxi->opc, cnt + 1,
+			DP_KEY(&key->key));
 		while (left > 0) {
 			int copy_size = min(iov->iov_buf_len - iov_off,
 					    key->key.iov_len);

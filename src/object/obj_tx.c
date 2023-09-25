@@ -2803,10 +2803,11 @@ dc_tx_add_update(struct dc_tx *tx, struct dc_object *obj, uint64_t flags, daos_k
 
 	tx->tx_write_cnt++;
 
-	D_DEBUG(DB_TRACE, "Cache update: DTI "DF_DTI", obj "DF_OID", dkey "
-		DF_KEY", flags %lx, nr = %d, write cnt %d\n",
-		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
-		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+	D_DEBUG(DB_TRACE,
+		"Cache update: DTI " DF_DTI ", obj " DF_OID ", " DF_DKEY
+		", flags %lx, nr = %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)), DP_KEY(dkey), flags, nr,
+		tx->tx_write_cnt);
 
 	return 0;
 
@@ -2882,10 +2883,11 @@ dc_tx_add_punch_dkey(struct dc_tx *tx, struct dc_object *obj, uint64_t flags, da
 
 	tx->tx_write_cnt++;
 
-	D_DEBUG(DB_TRACE, "Cache punch dkey: DTI "DF_DTI", obj "DF_OID", dkey "
-		DF_KEY", flags %lx, write cnt %d\n",
-		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
-		DP_KEY(dkey), flags, tx->tx_write_cnt);
+	D_DEBUG(DB_TRACE,
+		"Cache punch dkey: DTI " DF_DTI ", obj " DF_OID ", " DF_DKEY
+		", flags %lx, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)), DP_KEY(dkey), flags,
+		tx->tx_write_cnt);
 
 	return 0;
 }
@@ -2931,10 +2933,11 @@ dc_tx_add_punch_akeys(struct dc_tx *tx, struct dc_object *obj, uint64_t flags, d
 
 	tx->tx_write_cnt++;
 
-	D_DEBUG(DB_TRACE, "Cache punch akey: DTI "DF_DTI", obj "DF_OID", dkey "
-		DF_KEY", flags %lx, nr %d, write cnt %d\n",
-		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
-		DP_KEY(dkey), flags, nr, tx->tx_write_cnt);
+	D_DEBUG(DB_TRACE,
+		"Cache punch akey: DTI " DF_DTI ", obj " DF_OID ", " DF_DKEY
+		", flags %lx, nr %d, write cnt %d\n",
+		DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)), DP_KEY(dkey), flags, nr,
+		tx->tx_write_cnt);
 
 	return 0;
 
@@ -3021,10 +3024,11 @@ done:
 	tx->tx_read_cnt++;
 
 	if (dkey != NULL)
-		D_DEBUG(DB_TRACE, "Cache read opc %d: DTI "DF_DTI", obj "DF_OID
-			", dkey "DF_KEY", flags %lx, nr %d, read cnt %d\n",
-			opc, DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)),
-			DP_KEY(dkey), flags, nr, tx->tx_read_cnt);
+		D_DEBUG(DB_TRACE,
+			"Cache read opc %d: DTI " DF_DTI ", obj " DF_OID ", " DF_DKEY
+			", flags %lx, nr %d, read cnt %d\n",
+			opc, DP_DTI(&tx->tx_id), DP_OID(dc_tx_dcsr2oid(dcsr)), DP_KEY(dkey), flags,
+			nr, tx->tx_read_cnt);
 	else
 		D_DEBUG(DB_TRACE, "Cache enum obj: DTI "DF_DTI", obj "DF_OID
 			", flags %lx, nr %d, read cnt %d\n",

@@ -500,7 +500,7 @@ io_obj_iter_test(struct io_test_args *arg, daos_epoch_range_t *epr,
 				assert_rc_equal(rc, 0);
 				goto probe_from_anchor;
 			} else if (nr == 11) {
-				printf(DF_KEY " expected to be " DF_KEY "\n", DP_KEY(&saved_dkey),
+				printf(DF_DKEY " expected to be " DF_DKEY "\n", DP_KEY(&saved_dkey),
 				       DP_KEY(&ent.ie_key));
 				assert_memory_equal(saved_dkey.iov_buf, ent.ie_key.iov_buf,
 						    ent.ie_key.iov_len);

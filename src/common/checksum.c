@@ -225,8 +225,8 @@ daos_csummer_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		d_iov_t tmp;
 
 		d_iov_set(&tmp, buf, buf_len);
-		C_TRACE("Updated csum(type=%s) for "DF_KEY"\n",
-			daos_csummer_get_name(obj), DP_KEY(&tmp));
+		C_TRACE("Updated csum(type=%s) for " DF_KKEY, daos_csummer_get_name(obj),
+			DP_KEY(&tmp));
 	}
 
 	return rc;
@@ -891,7 +891,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_calc)
 		return 0;
 
-	C_TRACE("Creating checksum for key: "DF_KEY"\n", DP_KEY(key));
+	C_TRACE("Creating checksum for " DF_KKEY, DP_KEY(key));
 	D_ALLOC(csum_info, sizeof(*csum_info) + size);
 	if (csum_info == NULL)
 		return -DER_NOMEM;
@@ -903,8 +903,7 @@ daos_csummer_calc_key(struct daos_csummer *csummer, daos_key_t *key,
 	rc = daos_csummer_calc_for_iov(csummer, key, dkey_csum_buf, size);
 	if (rc == 0) {
 		*p_csum = csum_info;
-		C_TRACE("Checksum created for key: "DF_KEY"->"DF_CI"\n",
-			DP_KEY(key), DP_CI(*csum_info));
+		C_TRACE("Checksum created for " DF_KKEY "->" DF_CI, DP_KEY(key), DP_CI(*csum_info));
 	} else {
 		D_ERROR("calc_for_iov error: "DF_RC"\n", DP_RC(rc));
 		*p_csum = NULL;
@@ -1012,33 +1011,34 @@ daos_csummer_verify_key(struct daos_csummer *obj, daos_key_t *key,
 		return 0;
 
 	if (!ci_is_valid(csum)) {
+		rc = -DER_CSUM;
 		if (csum == NULL) {
-			D_ERROR("checksums is enabled, but "
-				"dcs_csum_info is NULL, "
-				"key: "DF_KEY"\n", DP_KEY(key));
+			DL_ERROR(rc, "checksums is enabled, but dcs_csum_info is NULL, " DF_KKEY,
+				 DP_KEY(key));
 		} else {
-			D_ERROR("checksums is enabled, but "
-				"dcs_csum_info is invalid, "
-				"key: "DF_KEY", csum: "DF_CI"\n", DP_KEY(key),
-				DP_CI(*csum));
+			DL_ERROR(rc,
+				 "checksums is enabled, but dcs_csum_info is invalid, " DF_KKEY
+				 ", csum: " DF_CI,
+				 DP_KEY(key), DP_CI(*csum));
 		}
-		return -DER_CSUM;
+		return rc;
 	}
 
 	D_ASSERT(key != NULL);
 
 	rc = daos_csummer_calc_key(obj, key, &csum_info_verify);
 	if (rc != 0) {
-		D_ERROR("daos_csummer_calc error: "DF_RC"\n", DP_RC(rc));
+		DL_ERROR(rc, "daos_csummer_calc error");
 		return rc;
 	}
 
 	match = daos_csummer_compare_csum_info(obj, csum, csum_info_verify);
 	if (!match) {
-		D_ERROR("Key checksums don't match. Key: "DF_KEY" Calculated: "
-				DF_CI" != Received: "DF_CI"\n",
-			DP_KEY(key),
-			DP_CI(*csum_info_verify), DP_CI(*csum));
+		rc = -DER_CSUM;
+		DL_ERROR(rc,
+			 "Key checksums don't match. " DF_KKEY " Calculated: " DF_CI
+			 " != Received: " DF_CI,
+			 DP_KEY(key), DP_CI(*csum_info_verify), DP_CI(*csum));
 		daos_csummer_free_ci(obj, &csum_info_verify);
 		return -DER_CSUM;
 	}

@@ -150,7 +150,12 @@ char *DP_UUID(const void *uuid);
 
 #ifdef DAOS_BUILD_RELEASE
 
-#define DF_KEY       "[%d]"
+/* Key printing.  Use AKEY or DKEY in preference however if key type is known or can vary then KKEY.
+ * These will be compiled out for releases however print as strings for development builds.
+ */
+#define DF_KKEY      "key[%d]"
+#define DF_AKEY      "akey[%d]"
+#define DF_DKEY      "dkey[%d]"
 #define DP_KEY(_key) (int)((_key)->iov_len)
 
 #define DF_DE        "de[%zi]"
@@ -161,7 +166,9 @@ char *DP_UUID(const void *uuid);
 char *
 daos_key2str(daos_key_t *key);
 
-#define DF_KEY      "[%d] '%s'"
+#define DF_KKEY     "[%d] key'%s'"
+#define DF_AKEY     "[%d] akey'%s'"
+#define DF_DKEY     "[%d] dkey'%s'"
 #define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
 
 char *

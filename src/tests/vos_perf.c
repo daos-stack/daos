@@ -278,10 +278,10 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	if (ppa->pa_verbose) {
 		switch (type) {
 		case VOS_ITER_DKEY:
-			D_PRINT("\tdkey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\t" DF_DKEY "\n", DP_KEY(&entry->ie_key));
 			break;
 		case VOS_ITER_AKEY:
-			D_PRINT("\takey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			D_PRINT("\t" DF_AKEY "\n", DP_KEY(&entry->ie_key));
 			break;
 		case VOS_ITER_SINGLE:
 			D_PRINT("\tsingv="DF_U64" bytes\n", entry->ie_rsize);
@@ -352,7 +352,7 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (param->pa_verbose)
-			D_PRINT("Punch "DF_UOID" dkey="DF_KEY"\n", DP_UOID(ts_uoids[i]),
+			D_PRINT("Punch " DF_UOID " " DF_DKEY "\n", DP_UOID(ts_uoids[i]),
 				DP_KEY(dkey));
 		rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, 0, dkey, 0, NULL, NULL);
 		(*epoch)++;

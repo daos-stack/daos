@@ -21,16 +21,16 @@
  */
 #define CSTAG "[CSUM]"
 
-#define DF_C_IOD CSTAG"IOD {akey: "DF_KEY", type: %s, nr: %d, size: %lu} CSUM"
+#define DF_C_IOD      CSTAG "IOD {" DF_AKEY ", type: %s, nr: %d, size: %lu} CSUM"
 #define DP_C_IOD(i) DP_KEY(&(i)->iod_name), \
 	(i)->iod_type == DAOS_IOD_SINGLE ? "SINGLE" : \
 	(i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY" : "UNKNOWN", \
 	(i)->iod_nr, (i)->iod_size
 
-#define DF_C_UOID_DKEY CSTAG"OBJ ("DF_UOID", "DF_KEY")"
+#define DF_C_UOID_DKEY            CSTAG "OBJ (" DF_UOID ", " DF_DKEY ")"
 #define DP_C_UOID_DKEY(oid, dkey) DP_UOID(oid), DP_KEY(dkey)
 
-#define DF_C_OID_DKEY CSTAG"OBJ ("DF_OID", "DF_KEY")"
+#define DF_C_OID_DKEY             CSTAG "OBJ (" DF_OID ", " DF_DKEY ")"
 #define DP_C_OID_DKEY(oid, dkey) DP_OID(oid), DP_KEY(dkey)
 
 #define DF_LAYOUT "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"

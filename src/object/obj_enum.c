@@ -443,11 +443,10 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 	key.iov_buf = key_data;
 	key.iov_buf_len = kds->kd_key_len;
 	key.iov_len = kds->kd_key_len;
-	if (kds->kd_val_type == OBJ_ITER_AKEY &&
-	    io->ui_dkey.iov_buf == NULL) {
-		D_ERROR("No dkey for akey "DF_KEY" invalid buf.\n",
-			DP_KEY(&key));
-		return -DER_INVAL;
+	if (kds->kd_val_type == OBJ_ITER_AKEY && io->ui_dkey.iov_buf == NULL) {
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "No dkey for " DF_KKEY " invalid buf", DP_KEY(&key));
+		return rc;
 	}
 
 	if (kds->kd_val_type == OBJ_ITER_DKEY) {
@@ -467,13 +466,11 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 			rc = daos_iov_copy(&io->ui_dkey, &key);
 			io->ui_dkey_hash = obj_dkey2hash(io->ui_oid.id_pub, &key);
 		}
-		D_DEBUG(DB_IO, "process dkey "DF_KEY": rc "DF_RC"\n",
-			DP_KEY(&key), DP_RC(rc));
+		D_DEBUG(DB_IO, "process " DF_DKEY ": %d\n", DP_KEY(&key), rc);
 		return rc;
 	}
 
-	D_DEBUG(DB_IO, "process akey " DF_KEY "\n",
-		DP_KEY(&key));
+	D_DEBUG(DB_IO, "process key " DF_AKEY "\n", DP_KEY(&key));
 
 	if (io->ui_iods_top == -1 ||
 	    !daos_key_match(&io->ui_iods[io->ui_iods_top].iod_name, &key))

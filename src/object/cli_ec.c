@@ -985,9 +985,8 @@ obj_reasb_req_dump(struct obj_reasb_req *reasb_req, d_sg_list_t *usgl,
 	tgt_recx_nrs = ec_recx_array->oer_tgt_recx_nrs;
 	tgt_recx_idxs = ec_recx_array->oer_tgt_recx_idxs;
 	D_PRINT("================ reasb req %d ================\n", i);
-	D_PRINT("iod, akey "DF_KEY", iod_size "DF_U64", iod_nr %d\n",
-		DP_KEY(&iod->iod_name), iod->iod_size,
-		iod->iod_nr);
+	D_PRINT("iod, " DF_AKEY ", iod_size " DF_U64 ", iod_nr %d\n", DP_KEY(&iod->iod_name),
+		iod->iod_size, iod->iod_nr);
 	D_PRINT("recxs per target [daos_idx, nr]:\n");
 	for (tgt = 0; tgt < obj_ec_tgt_nr(oca); tgt++) {
 		if (tgt_recx_nrs[tgt] == 0)

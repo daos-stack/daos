@@ -183,9 +183,8 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	int		      rc = 0;
 
 	if (param->pa_verbose)
-		D_PRINT("%s dkey="DF_KEY" akey="DF_KEY"\n",
-			op_type == TS_DO_UPDATE ? "Update" : "Fetch ",
-			DP_KEY(dkey), DP_KEY(akey));
+		D_PRINT("%s " DF_DKEY " " DF_AKEY "\n",
+			op_type == TS_DO_UPDATE ? "Update" : "Fetch ", DP_KEY(dkey), DP_KEY(akey));
 
 	cred = credit_take(&ts_ctx);
 	if (!cred) {

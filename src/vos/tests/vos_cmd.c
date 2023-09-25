@@ -447,10 +447,10 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 
 	switch (type) {
 	case VOS_ITER_DKEY:
-		printf("dkey=" DF_KEY "\n", DP_KEY(&entry->ie_key));
+		printf(DF_DKEY "\n", DP_KEY(&entry->ie_key));
 		break;
 	case VOS_ITER_AKEY:
-		printf("\takey=" DF_KEY "\n", DP_KEY(&entry->ie_key));
+		printf("\t" DF_AKEY "\n", DP_KEY(&entry->ie_key));
 		break;
 	case VOS_ITER_RECX:
 		val = vos_pool_biov2addr(current_open->kp_poh, &entry->ie_biov);

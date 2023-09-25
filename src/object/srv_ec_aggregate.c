@@ -2110,8 +2110,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	int	rc;
 
 	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
-		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
-			DP_KEY(&entry->ie_key));
+		D_DEBUG(DB_EPC, "Skip " DF_DKEY " ec agg on re-probe\n", DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
@@ -2124,7 +2123,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	rc = agg_shard_is_leader(agg_param->ap_pool_info.api_pool, agg_entry);
 	if (rc == 1) {
-		D_DEBUG(DB_EPC, "oid:"DF_UOID":"DF_KEY" ec agg starting\n",
+		D_DEBUG(DB_EPC, "oid:" DF_UOID ":" DF_DKEY " ec agg starting\n",
 			DP_UOID(agg_entry->ae_oid), DP_KEY(&agg_entry->ae_dkey));
 		agg_reset_dkey_entry(&agg_param->ap_agg_entry, entry);
 		rc = 0;
@@ -2274,7 +2273,7 @@ check:
 				DP_UOID(desc->id_oid), desc->id_agg_write,
 				agg_param->ap_filter_eph);
 		else
-			D_DEBUG(DB_EPC, "Skip key:"DF_KEY" agg_epoch="DF_X64" filter="DF_X64"\n",
+			D_DEBUG(DB_EPC, "Skip " DF_AKEY " agg_epoch=" DF_X64 " filter=" DF_X64 "\n",
 				DP_KEY(&desc->id_key), desc->id_agg_write,
 				agg_param->ap_filter_eph);
 		agg_param->ap_credits++;

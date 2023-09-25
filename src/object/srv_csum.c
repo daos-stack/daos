@@ -731,12 +731,11 @@ ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 					     &iod->iod_name,
 					     &csum->ic_akey);
 		if (rc != 0) {
-			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
-					       "failed for akey: "DF_KEY", csum: "DF_CI", "
-					       "error: "DF_RC"\n",
-				DP_C_UOID_DKEY(*uoid, dkey), i,
-				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
-				DP_CI(csum->ic_akey), DP_RC(rc));
+			DL_ERROR(rc,
+				 DF_C_UOID_DKEY "iod[%d]: " DF_C_IOD " verify_key "
+						"failed for " DF_AKEY ", csum: " DF_CI,
+				 DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod),
+				 DP_KEY(&iod->iod_name), DP_CI(csum->ic_akey));
 			return rc;
 		}
 	}
