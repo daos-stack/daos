@@ -415,6 +415,8 @@ def get_base_env(clean=False):
     env['D_LOG_MASK'] = 'DEBUG'
     env['D_LOG_SIZE'] = '5g'
     env['FI_UNIVERSE_SIZE'] = '128'
+    # Increase argobots stack size to avoid stack overflow caused by NDCTL
+    env['ABT_THREAD_STACKSIZE'] = '16384'
 
     # Enable this to debug memory errors, it has a performance impact but will scan the heap
     # for corruption.  See DAOS-12735 for why this can cause problems in practice.
