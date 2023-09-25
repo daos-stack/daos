@@ -351,21 +351,30 @@ show_help(char *name)
 	    name, DAOS_VERSION);
 }
 
+/*
+ * Checks whether a mountpoint path is a valid file descriptor.
+ *
+ * Returns the file descriptor on success, -1 on failure.
+ */
 static int
 check_fd_mountpoint(const char *mountpoint)
 {
 	int fd  = -1;
 	int len = 0;
+	int fd_flags;
+	int res;
 
-	int res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
 	if (res != 1) {
+		errno = EINVAL;
 		return -1;
 	}
 	if (len != strnlen(mountpoint, NAME_MAX)) {
+		errno = EINVAL;
 		return -1;
 	}
 
-	int fd_flags = fcntl(fd, F_GETFD);
+	fd_flags = fcntl(fd, F_GETFD);
 	if (fd_flags == -1) {
 		return -1;
 	}
@@ -659,7 +668,10 @@ main(int argc, char **argv)
 		 * fail for these paths.
 		 */
 		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
-		if (fd == -1) {
+		if (fd < 0) {
+			DFUSE_TRA_WARNING(dfuse_info,
+					  "Mount point is not a valid file descriptor: %d (%s)", fd,
+					  strerror(errno));
 			printf("Mount point does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
