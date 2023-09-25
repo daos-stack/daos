@@ -1139,18 +1139,26 @@ pipeline {
                 script {
                     parallel(
                         'Functional Hardware Medium': getFunctionalTestStage(
-                            name: 'Functional Hardware Medium',
-                            pragma_suffix: 'hw-medium',
-                            label: cachedCommitPragma(
-                                'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-                            next_version: next_version,
-                            stage_tags: 'hw,medium,-provider',
-                            timer_tags: 'pr daily_regression',
-                            default_tags: getFunctionalTagsDefault('pr'),
-                            default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
-                            // job_status: job_status_internal
-                        ),
+                            name: 'Functional Hardware Medium'),
+                        'Functional Hardware Large': getFunctionalTestStage(
+                            name: 'Functional Hardware Large')
+                    )
+                }
+            }
+        }
+                        // 'Functional Hardware Medium': getFunctionalTestStage(
+                        //     name: 'Functional Hardware Medium',
+                        //     pragma_suffix: 'hw-medium',
+                        //     label: cachedCommitPragma(
+                        //         'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
+                        //     next_version: next_version,
+                        //     stage_tags: 'hw,medium,-provider',
+                        //     timer_tags: 'pr daily_regression',
+                        //     default_tags: getFunctionalTagsDefault('pr'),
+                        //     default_nvme: 'auto',
+                        //     provider: 'ofi+verbs;ofi_rxm',
+                        //     job_status: job_status_internal
+                        // ),
                         // 'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
                         //     name: 'Functional Hardware Medium MD on SSD',
                         //     pragma_suffix: 'hw-medium-md-on-ssd',
@@ -1191,10 +1199,10 @@ pipeline {
                         //     default_nvme: 'auto',
                         //     provider: 'ofi+verbs;ofi_rxm',
                         //     job_status: job_status_internal)
-                    )
-                }
-            }
-        } // stage('Test Hardware')
+        //             )
+        //         }
+        //     }
+        // } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
                 stage('Bullseye Report on EL 8') {
