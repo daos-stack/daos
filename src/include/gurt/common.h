@@ -506,6 +506,10 @@ int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
 
+typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
+
+void d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg);
+
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type.
