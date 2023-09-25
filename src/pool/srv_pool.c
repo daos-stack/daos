@@ -41,7 +41,7 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
 #define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
 
-#define DUP_OP_MIN_RDB_SIZE (1 << 30)
+#define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
 
 /* Pool service crt event */
 struct pool_svc_event {
@@ -664,8 +664,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
-	uint32_t		svc_ops_enabled = 0;
-	uint64_t		rdb_size;
+	uint32_t                svc_ops_enabled        = 0;
+	uint64_t                rdb_size;
 	int			rc;
 	struct daos_prop_entry *entry;
 
@@ -1481,10 +1481,10 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx		tx;
 	d_iov_t			value;
-	bool			version_exists  = false;
-	bool			rdb_size_ok     = false;
-	uint32_t		svc_ops_enabled = 0;
-	uint64_t		rdb_size;
+	bool                    version_exists  = false;
+	bool                    rdb_size_ok     = false;
+	uint32_t                svc_ops_enabled = 0;
+	uint64_t                rdb_size;
 	struct daos_prop_entry *svc_rf_entry;
 	int			rc;
 
@@ -4620,7 +4620,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids = 0;
 	uint32_t		connectable;
-	uint32_t		svc_ops_enabled = 0;
+	uint32_t                svc_ops_enabled = 0;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -4852,8 +4852,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	d_iov_set(&value, NULL, 0);
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &value);
 	if (rc && rc != -DER_NONEXIST) {
-		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n",
-			DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n", DP_UUID(pool_uuid), rc);
 		D_GOTO(out_free, rc);
 	} else if (rc == -DER_NONEXIST) {
 		struct rdb_kvs_attr attr;
@@ -4861,7 +4860,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		D_DEBUG(DB_MD, DF_UUID ": creating service ops KVS\n", DP_UUID(pool_uuid));
 		attr.dsa_class = RDB_KVS_GENERIC;
 		attr.dsa_order = 16;
-		rc = rdb_tx_create_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &attr);
+		rc             = rdb_tx_create_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &attr);
 		if (rc != 0) {
 			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
 				DP_UUID(pool_uuid), rc);
@@ -4869,7 +4868,6 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		}
 		need_commit = true;
 	}
-
 
 	/* And enable the new service operations KVS only if rdb is large enough */
 	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_enabled\n", DP_UUID(pool_uuid));
@@ -5703,8 +5701,8 @@ pool_svc_reconf_ult(void *arg)
 	d_rank_list_t		*to_add;
 	d_rank_list_t		*to_remove;
 	d_rank_list_t		*new;
-	uint64_t                 rdb_nbytes = 0;
-	int                      rc;
+	uint64_t rdb_nbytes = 0;
+	int      rc;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 

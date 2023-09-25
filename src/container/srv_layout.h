@@ -53,8 +53,8 @@
 extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
-extern d_iov_t ds_cont_prop_svc_ops;		/* service ops KVS - common to pool, container */
-extern d_iov_t ds_cont_prop_svc_ops_enabled;	/* uint32_t - common to pool, container */
+extern d_iov_t ds_cont_prop_svc_ops;            /* service ops KVS - common to pool, container */
+extern d_iov_t ds_cont_prop_svc_ops_enabled;    /* uint32_t - common to pool, container */
 /* Please read the IMPORTANT notes above before adding new keys. */
 
 /*

@@ -32,8 +32,6 @@
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_NHANDLES 2
 #define DAOS_POOL_GLOBAL_VERSION_WITH_CONT_EX_EVICT 2
 
-#define DUP_OP_MIN_RDB_SIZE                         (1 << 30) /* 1 GiB */
-
 static int
 cont_prop_read(struct rdb_tx *tx, struct cont *cont, uint64_t bits,
 	       daos_prop_t **prop_out, bool ignore_not_set);
@@ -287,25 +285,27 @@ ds_cont_unlock_metadata(struct cont_svc *svc)
  * \param[in]	pool_uuid	pool UUID
  */
 int
-ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid)
+ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
+		      const uuid_t pool_uuid)
 {
-	struct rdb_kvs_attr attr;
-	int                 rc;
+	struct rdb_kvs_attr	attr;
+	int			rc;
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cuuids, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create container UUIDs KVS: %d\n", DP_UUID(pool_uuid),
-			rc);
+		D_ERROR(DF_UUID": failed to create container UUIDs KVS: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
-	rc             = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_conts, &attr);
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_conts, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create container KVS: %d\n", DP_UUID(pool_uuid), rc);
+		D_ERROR(DF_UUID": failed to create container KVS: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
@@ -313,8 +313,8 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t poo
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to create container handle KVS: %d\n", DP_UUID(pool_uuid),
-			rc);
+		D_ERROR(DF_UUID": failed to create container handle KVS: %d\n",
+			DP_UUID(pool_uuid), rc);
 		return rc;
 	}
 
@@ -4790,10 +4790,10 @@ out_free_prop:
 int
 ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 {
-	int                           rc;
-	struct rdb_tx                 tx;
-	struct upgrade_cont_iter_args args            = {0};
-	bool                          need_put_leader = false;
+	int				rc;
+	struct rdb_tx			tx;
+	struct upgrade_cont_iter_args	args = { 0 };
+	bool				need_put_leader = false;
 
 	uuid_copy(args.pool_uuid, pool_uuid);
 
@@ -4813,7 +4813,6 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	args.need_commit = false;
 	ABT_rwlock_wrlock(svc->cs_lock);
 
-	/* Upgrade per-container metadata */
 	rc = rdb_tx_iterate(&tx, &svc->cs_conts, false /* !backward */,
 			    upgrade_cont_cb, &args);
 	if (rc == 0 && args.need_commit)
@@ -4823,7 +4822,7 @@ ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc)
 	rdb_tx_end(&tx);
 
 out_svc:
-	D_DEBUG(DB_MD, DF_UUID " upgrade all container: rc %d\n", DP_UUID(pool_uuid), rc);
+	D_DEBUG(DB_MD, DF_UUID" upgrade all container: rc %d\n", DP_UUID(pool_uuid), rc);
 	if (need_put_leader)
 		cont_svc_put_leader(svc);
 
