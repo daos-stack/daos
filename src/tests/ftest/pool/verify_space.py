@@ -105,7 +105,7 @@ class VerifyPoolSpace(TestWithServers):
         except CommandFailure as error:
             self.fail("IOR write to {} failed, {}".format(description, error))
 
-    def _get_system_pool_size(self, description):
+    def _get_system_pool_size(self, description, scm_mounts):
         """Get the pool size information from the df system command.
 
         Args:
@@ -116,7 +116,7 @@ class VerifyPoolSpace(TestWithServers):
         """
         system_pool_size = {}
         self.log_step(' '.join(['Collect system-level DAOS mount information for', description]))
-        command = 'df -h | grep daos'
+        command = 'df -h | grep -E \'{}\''.format('|'.join(scm_mounts))
         result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
         if not result.passed:
             self.fail('Error collecting system level daos mount information')
@@ -189,6 +189,9 @@ class VerifyPoolSpace(TestWithServers):
         :avocado: tags=pool
         :avocado: tags=VerifyPoolSpace,test_verify_pool_space
         """
+        scm_mounts = set()
+        for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
+            scm_mounts.add(engine_params.get_value("scm_mount"))
         dmg = self.get_dmg_command()
         ior_kwargs = {
             'test': self,
@@ -209,15 +212,18 @@ class VerifyPoolSpace(TestWithServers):
         # (0) Collect initial system information
         #  - System available space should equal the free space
         description = 'initial configuration w/o pools'
-        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        pool_size.append(
+            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
         compare_methods = [compare_all_available, compare_all_available, compare_all_available]
         self._compare_system_pool_size(pool_size, compare_methods)
+        dmg.storage_query_usage()
 
         # (1) Create a single pool on a rank 0
         #  - System free space should be less on rank 0 only
         description = 'a single pool on rank 0'
         pools.extend(self._create_pools(description, [0]))
-        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        pool_size.append(
+            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
         compare_methods = [compare_reduced, compare_equal, compare_equal]
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[0:1])
@@ -236,7 +242,8 @@ class VerifyPoolSpace(TestWithServers):
         #  - System free space should be less on rank 1 only
         description = 'multiple pools on rank 1'
         pools.extend(self._create_pools(description, ['1_a', '1_b', '1_c']))
-        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        pool_size.append(
+            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
         compare_methods = [compare_equal, compare_reduced, compare_equal]
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[1:4])
@@ -255,7 +262,8 @@ class VerifyPoolSpace(TestWithServers):
         #  - System free space should be less on rank 1 and 2
         description = 'a single pool on ranks 1 & 2'
         pools.extend(self._create_pools(description, ['1_2']))
-        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        pool_size.append(
+            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
         compare_methods = [compare_equal, compare_reduced, compare_reduced]
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[4:5])
@@ -274,7 +282,8 @@ class VerifyPoolSpace(TestWithServers):
         #  - System free space should be less on all ranks
         description = 'a single pool on all ranks'
         pools.extend(self._create_pools(description, ['0_1_2']))
-        pool_size.append({'label': description, 'data': self._get_system_pool_size(description)})
+        pool_size.append(
+            {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
         compare_methods = [compare_reduced, compare_reduced, compare_reduced]
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[5:6])
