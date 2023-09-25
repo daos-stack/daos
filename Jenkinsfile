@@ -74,6 +74,11 @@ void job_step_update(def value) {
 Map nlt_test() {
     // groovylint-disable-next-line NoJavaUtilDate
     Date startDate = new Date()
+    try {
+        unstash('nltr')
+    } catch (e) {
+        print 'Unstash failed, results from NLT stage will not be included'
+    }
     sh label: 'Fault injection testing using NLT',
        script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
     List filesList = []
@@ -1104,7 +1109,6 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
-                        unstash('nltr')
                         job_step_update(nlt_test())
                         recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
                                        skipPublishingChecks: true,
