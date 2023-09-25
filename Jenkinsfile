@@ -1141,7 +1141,8 @@ pipeline {
                         'Functional Hardware Medium': getFunctionalTestStage(
                             name: 'Functional Hardware Medium',
                             pragma_suffix: 'hw-medium',
-                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
+                            label: cachedCommitPragma(
+                                'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
                             timer_tags: 'pr daily_regression',
