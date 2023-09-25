@@ -582,19 +582,19 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
 
-	if (!scm_sz) {
-		if (!meta_sz) {
+	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
+	if (!meta_sz) {
+		if (!scm_sz) {
 			struct stat lstat;
 
 			rc = stat(path, &lstat);
 			if (rc != 0)
 				return daos_errno2der(errno);
 			meta_sz = lstat.st_size;
+		} else {
+			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
+			meta_sz = scm_sz;
 		}
-		/* If scm_sz is zero and meta_sz is not, use input meta_sz */
-	} else {
-		/* Custom scm_sz specified so use it (not regular DAOS pool case) */
-		meta_sz = scm_sz;
 	}
 
 	D_INFO("Create BIO meta context for xs:%p pool:" DF_UUID " "
