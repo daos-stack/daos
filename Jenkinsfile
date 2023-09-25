@@ -1147,7 +1147,44 @@ pipeline {
                             timer_tags: 'pr daily_regression',
                             default_tags: 'pr',
                             default_nvme: 'auto',
+                            provider: null,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium MD on SSD',
+                            pragma_suffix: 'hw-medium-md-on-ssd',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,-provider',
+                            timer_tags: 'pr,md-on-ssd daily_regression,md-on-ssd',
+                            default_tags: 'pr,md-on-ssd',
+                            default_nvme: 'auto_md_on_ssd',
+                            provider: null,
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium Verbs Provider',
+                            pragma_suffix: 'hw-medium',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            timer_tags: 'pr daily_regression',
+                            default_tags: 'pr',
+                            default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
+                            job_status: job_status_internal
+                        ),
+                        'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
+                            name: 'Functional Hardware Medium UCX Provider',
+                            pragma_suffix: 'hw-medium-ucx-provider',
+                            label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
+                            next_version: next_version,
+                            stage_tags: 'hw,medium,provider',
+                            timer_tags: 'pr daily_regression',
+                            default_tags: 'pr',
+                            default_nvme: 'auto',
+                            provider: 'ucx+dc_x',
+                            job_status: job_status_internal
                         ),
                         'Functional Hardware Large': getFunctionalTestStage(
                             name: 'Functional Hardware Large',
@@ -1158,69 +1195,13 @@ pipeline {
                             timer_tags: 'pr daily_regression',
                             default_tags: 'pr',
                             default_nvme: 'auto',
-                            provider: 'ofi+verbs;ofi_rxm',
+                            provider: null,
+                            job_status: job_status_internal
                         )
                     )
                 }
             }
-        }
-                        // 'Functional Hardware Medium': getFunctionalTestStage(
-                        //     name: 'Functional Hardware Medium',
-                        //     pragma_suffix: 'hw-medium',
-                        //     label: cachedCommitPragma(
-                        //         'Test-label-hw-medium', params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL),
-                        //     next_version: next_version,
-                        //     stage_tags: 'hw,medium,-provider',
-                        //     timer_tags: 'pr daily_regression',
-                        //     default_tags: getFunctionalTagsDefault('pr'),
-                        //     default_nvme: 'auto',
-                        //     provider: 'ofi+verbs;ofi_rxm',
-                        //     job_status: job_status_internal
-                        // ),
-                        // 'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
-                        //     name: 'Functional Hardware Medium MD on SSD',
-                        //     pragma_suffix: 'hw-medium-md-on-ssd',
-                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL,
-                        //     next_version: next_version,
-                        //     stage_tags: 'hw,medium',
-                        //     default_tags: getFunctionalTagsDefault('md_on_ssd'),
-                        //     default_nvme: 'auto_md_on_ssd',
-                        //     provider: 'ofi+verbs;ofi_rxm',
-                        //     job_status: job_status_internal),
-                        // 'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
-                        //     name: 'Functional Hardware Medium Verbs Provider',
-                        //     pragma_suffix: 'hw-medium-verbs-provider',
-                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
-                        //     next_version: next_version,
-                        //     stage_tags: 'hw,medium,provider',
-                        //     default_tags: getFunctionalTagsDefault('pr'),
-                        //     default_nvme: 'auto',
-                        //     provider: 'ofi+verbs;ofi_rxm',
-                        //     job_status: job_status_internal),
-                        // 'Functional Hardware Medium UCX Provider': getFunctionalTestStage(
-                        //     name: 'Functional Hardware Medium UCX Provider',
-                        //     pragma_suffix: 'hw-medium-ucx-provider',
-                        //     label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
-                        //     next_version: next_version,
-                        //     stage_tags: 'hw,medium,provider',
-                        //     default_tags: getFunctionalTagsDefault('pr'),
-                        //     default_nvme: 'auto',
-                        //     provider: 'ucx+dc_x',
-                        //     job_status: job_status_internal),
-                        // 'Functional Hardware Large': getFunctionalTestStage(
-                        //     name: 'Functional Hardware Large',
-                        //     pragma_suffix: 'hw-large',
-                        //     label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
-                        //     next_version: next_version,
-                        //     stage_tags: 'hw,large',
-                        //     default_tags: getFunctionalTagsDefault('pr'),
-                        //     default_nvme: 'auto',
-                        //     provider: 'ofi+verbs;ofi_rxm',
-                        //     job_status: job_status_internal)
-        //             )
-        //         }
-        //     }
-        // } // stage('Test Hardware')
+        } // stage('Test Hardware')
         stage('Test Report') {
             parallel {
                 stage('Bullseye Report on EL 8') {
