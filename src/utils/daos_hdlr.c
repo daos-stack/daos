@@ -670,7 +670,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		rc = symlink(symlink_value, dst_path);
 		if ((rc != 0) && (errno == EEXIST)) {
 			rc = -DER_EXIST;
-			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
+			D_DEBUG(DB_TRACE, "Link exists.\n");
 			D_GOTO(out_copy_symlink, rc);
 		} else if (rc != 0) {
 			rc = daos_errno2der(errno);
@@ -682,7 +682,7 @@ fs_copy_symlink(struct cmd_args_s *ap,
 		rc = dfs_sys_symlink(dst_file_dfs->dfs_sys, symlink_value, dst_path);
 		if (rc == EEXIST) {
 			rc = -DER_EXIST;
-			D_DEBUG(DB_TRACE, "Link %s exists.\n", dst_path);
+			D_DEBUG(DB_TRACE, "Link exists.\n");
 			D_GOTO(out_copy_symlink, rc);
 		} else if (rc != 0) {
 			rc = daos_errno2der(rc);

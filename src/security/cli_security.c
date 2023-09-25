@@ -175,35 +175,26 @@ out:
 static int
 acl_from_prop(daos_prop_t *prop, uint32_t prop_type, struct daos_acl **acl_out)
 {
-	struct daos_prop_entry	*entry;
-	struct daos_acl		*acl;
-	char			*type_str;
-	int			rc;
+	struct daos_prop_entry *entry;
+	struct daos_acl        *acl;
+	int                     rc;
 
 	D_ASSERT(acl_out != NULL);
 	D_ASSERT(prop_type == DAOS_PROP_PO_ACL || prop_type == DAOS_PROP_CO_ACL);
 
-	switch (prop_type) {
-	case DAOS_PROP_PO_ACL:
-		type_str = "pool";
-		break;
-	case DAOS_PROP_CO_ACL:
-		type_str = "container";
-		break;
-	default:
-		D_ASSERTF(false, "prop type %d", prop_type);
-	}
-
 	entry = daos_prop_entry_get(prop, prop_type);
 	if (entry == NULL) {
-		D_ERROR("no %s ACL in property\n", type_str);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "no %s ACL in property",
+			 prop_type == DAOS_PROP_PO_ACL ? "pool" : "container");
+		return rc;
 	}
 	acl = (struct daos_acl *)entry->dpe_val_ptr;
 
 	rc = daos_acl_validate(acl);
 	if (rc != 0) {
-		D_ERROR("%s ACL is invalid\n", type_str);
+		DL_ERROR(rc, "%s ACL is invalid",
+			 prop_type == DAOS_PROP_PO_ACL ? "pool" : "container");
 		return rc;
 	}
 

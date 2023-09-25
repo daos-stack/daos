@@ -115,9 +115,9 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			 * return GRPVER to retry until pool map is updated
 			 * or the pool is stopped.
 			 */
-			RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: "
-				  DF_RC"\n", co_hdr->coh_grpid,
-				  DP_RC(-DER_GRPVER));
+			/* d_log_check: disable=print-string */
+			RPC_ERROR(rpc_priv, "crt_grp_lookup_grpid: %s failed: " DF_RC "\n",
+				  co_hdr->coh_grpid, DP_RC(-DER_GRPVER));
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}

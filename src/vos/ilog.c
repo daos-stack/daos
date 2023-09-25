@@ -969,9 +969,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 	}
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_TRACE,
-		"%s in incarnation log " DF_X64 " status: rc=" DF_RC " tree_version: %d\n",
-		opc_str[opc], id_in->id_epoch, DP_RC(rc), ilog_mag2ver(lctx->ic_root->lr_magic));
+	D_DEBUG(DB_TRACE, "%s in incarnation log " DF_X64 " status: tree_version: %d rc: %d\n",
+		opc_str[opc], id_in->id_epoch, ilog_mag2ver(lctx->ic_root->lr_magic), rc);
 
 	if (rc == 0 && version != ilog_mag2ver(lctx->ic_root->lr_magic) &&
 	    (opc == ILOG_OP_PERSIST || opc == ILOG_OP_ABORT)) {
@@ -1576,10 +1575,9 @@ collapse:
 	empty = ilog_empty(root);
 done:
 	rc = ilog_tx_end(lctx, rc);
-	D_DEBUG(DB_TRACE, "%s in incarnation log epr:"DF_X64"-"DF_X64
-		" status: "DF_RC", removed %d entries\n",
-		discard ? "Discard" : "Aggregation", epr->epr_lo,
-		epr->epr_hi, DP_RC(rc), removed);
+	D_DEBUG(DB_TRACE,
+		"%s in incarnation log epr:" DF_X64 "-" DF_X64 " status: %d, removed %d entries\n",
+		discard ? "Discard" : "Aggregation", epr->epr_lo, epr->epr_hi, rc, removed);
 	if (rc)
 		return rc;
 

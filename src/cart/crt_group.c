@@ -288,8 +288,10 @@ generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 
 	parsed = sscanf(tmp_addr, "0x%x", &raw_addr);
 	if (parsed != 1) {
-		D_ERROR("Failed to parse address '%s'\n", tmp_addr);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to parse address '%s'", tmp_addr);
+		return rc;
 	}
 
 	/* TODO: Perform proper parsing of CXI addresses */
@@ -334,8 +336,10 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	 */
 	p = strrchr(tmp_addr, ':');
 	if (p == NULL) {
-		D_ERROR("Badly formed ADDR '%s'\n", tmp_addr);
-		D_GOTO(exit, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Badly formed ADDR '%s'", tmp_addr);
+		goto exit;
 	}
 
 	/* Split <string> from <port> part in URI */
@@ -344,8 +348,10 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	base_port = atoi(p) - tag;
 
 	if (base_port <= 0) {
-		D_ERROR("Failed to parse addr=%s correctly\n", tmp_addr);
-		D_GOTO(exit, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to parse addr=%s correctly", tmp_addr);
+		goto exit;
 	}
 
 	prov_name = crt_provider_name_get(prov_type);
@@ -403,6 +409,7 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 		if (rc)
 			D_GOTO(exit, rc);
 
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_NET, "Parsed uri '%s', base_addr='%s' prov=%d\n",
 			uri, base_addr, provider);
 
@@ -416,8 +423,9 @@ grp_li_uri_set(struct crt_lookup_item *li, int tag, const char *uri)
 				 * TODO: implement generate_opx_uris() function. Once done OPX
 				 * 'contig_ep' setting should be set to true
 				 */
-				D_ERROR("Unknown provider %d for uri='%s'\n", provider, uri);
 				rc = -DER_INVAL;
+				/* d_log_check: disable=print-string */
+				DL_ERROR(rc, "Unknown provider %d for uri='%s'", provider, uri);
 			}
 
 			if (rc)
@@ -681,9 +689,9 @@ grp_lc_uri_insert_internal_locked(struct crt_grp_priv *grp_priv,
 		rc = grp_li_uri_set(li, tag, uri);
 
 		if (rc != DER_SUCCESS) {
-			D_ERROR("Failed to set uri for %d:%d, uri=%s\n",
-				li->li_rank, tag, uri);
 			rc = -DER_NOMEM;
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "Failed to set uri for %d:%d, uri=%s", li->li_rank, tag, uri);
 		}
 
 		D_DEBUG(DB_TRACE, "Filling in URI in lookup table. "
@@ -1240,6 +1248,7 @@ crt_group_lookup(crt_group_id_t grp_id)
 	D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
 	grp_priv = crt_grp_lookup_locked(grp_id);
 	if (grp_priv == NULL)
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_TRACE, "group non-exist (%s).\n", grp_id);
 	D_RWLOCK_UNLOCK(&crt_grp_list_rwlock);
 
@@ -1550,9 +1559,6 @@ crt_hdlr_uri_lookup(crt_rpc_t *rpc_req)
 	if (strncmp(ul_in->ul_grp_id, default_grp_priv->gp_pub.cg_grpid,
 		    CRT_GROUP_ID_MAX_LEN) == 0) {
 		grp_priv = default_grp_priv;
-		D_DEBUG(DB_TRACE, "ul_grp_id %s matches with gg_primary_grp"
-			"%s.\n", ul_in->ul_grp_id,
-			default_grp_priv->gp_pub.cg_grpid);
 	} else {
 		/* handle subgroup lookups */
 		D_RWLOCK_RDLOCK(&crt_grp_list_rwlock);
@@ -1804,15 +1810,15 @@ open_tmp_attach_info_file(char **filename)
 	umask(old_mode);
 
 	if (tmp_fd == -1) {
-		D_ERROR("mkstemp() failed on %s, error: %s.\n",
-			*filename, strerror(errno));
+		/* d_log_check: disable=print-string */
+		DS_ERROR(errno, "mkstemp() failed on %s", *filename);
 		return NULL;
 	}
 
 	tmp_file = fdopen(tmp_fd, "w");
 	if (tmp_file == NULL) {
-		D_ERROR("fdopen() failed on %s, error: %s\n",
-			*filename, strerror(errno));
+		/* d_log_check: disable=print-string */
+		DS_ERROR(errno, "fdopen() failed on %s", *filename);
 		close(tmp_fd);
 	}
 
@@ -1837,13 +1843,17 @@ crt_group_config_path_set(const char *path)
 
 	rc = stat(path, &buf);
 	if (rc != 0) {
-		D_ERROR("bad path specified: %s\n", path);
-		return d_errno2der(errno);
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "bad path specified: %s", path);
+		return rc;
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
-		D_ERROR("not a directory: %s\n", path);
-		return -DER_NOTDIR;
+		rc = -DER_NOTDIR;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "not a directory: %s", path);
+		return rc;
 	}
 
 	strncpy(crt_attach_prefix, path, CRT_MAX_ATTACH_PREFIX - 1);
@@ -1937,38 +1947,43 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 	fp = open_tmp_attach_info_file(&tmp_name);
 	if (fp == NULL) {
-		D_ERROR("cannot create temp file.\n");
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		DL_ERROR(rc, "cannot create temp file");
+		goto out;
 	}
 	D_ASSERT(tmp_name != NULL);
 	rc = fprintf(fp, "%s %s\n", "name", grpid);
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "write to file %s failed", tmp_name);
+		goto out;
 	}
 	rc = fprintf(fp, "%s %d\n", "size", grp_priv->gp_size);
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "write to file %s failed", tmp_name);
+		goto out;
 	}
 	if (forall)
 		rc = fprintf(fp, "all\n");
 	else
 		rc = fprintf(fp, "self\n");
 	if (rc < 0) {
-		D_ERROR("write to file %s failed (%s).\n",
-			tmp_name, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "write to file %s failed", tmp_name);
+		goto out;
 	}
 
 	if (!forall || grp_priv->gp_size == 1) {
 		rc = fprintf(fp, "%d %s\n", rank, addr);
 		if (rc < 0) {
-			D_ERROR("write to file %s failed (%s).\n",
-				tmp_name, strerror(errno));
-			D_GOTO(out, rc = d_errno2der(errno));
+			rc = d_errno2der(errno);
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "write to file %s failed", tmp_name);
+			goto out;
 		}
 		D_GOTO(done, rc);
 	}
@@ -1985,9 +2000,9 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 
 		rc = crt_rank_uri_get(grp, rank, 0, &uri);
 		if (rc != 0) {
-			D_ERROR("crt_rank_uri_get(%s, %d) failed "
-				"rc: %d.\n", grpid, rank, rc);
-			D_GOTO(out, rc);
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "crt_rank_uri_get(%s, %d) failed", grpid, rank);
+			goto out;
 		}
 
 		D_ASSERT(uri != NULL);
@@ -1997,28 +2012,31 @@ crt_group_config_save(crt_group_t *grp, bool forall)
 		D_FREE(uri);
 
 		if (rc < 0) {
-			D_ERROR("write to file %s failed (%s).\n",
-				tmp_name, strerror(errno));
-			D_GOTO(out, rc = d_errno2der(errno));
+			rc = d_errno2der(errno);
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "write to file %s failed", tmp_name);
+			goto out;
 		}
 	}
 
 done:
 	if (fclose(fp) != 0) {
-		D_ERROR("file %s closing failed (%s).\n",
-			tmp_name, strerror(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "file %s closing failed", tmp_name);
 		fp = NULL;
-		D_GOTO(out, rc = d_errno2der(errno));
+		goto out;
 	}
 	fp = NULL;
 
 	rc = rename(tmp_name, filename);
 	if (rc != 0) {
-		D_ERROR("Failed to rename %s to %s (%s).\n",
-			tmp_name, filename, strerror(errno));
 		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to rename %s to %s", tmp_name, filename);
 	}
 
+	/* d_log_check: disable=print-string */
 	D_DEBUG(DB_ALL, "Group config saved in %s\n", filename);
 out:
 	if (grp_priv && locked)
@@ -2051,9 +2069,9 @@ crt_group_config_remove(crt_group_t *grp)
 
 	grp_priv = crt_grp_pub2priv(grp);
 	if (!crt_is_service() || !grp_priv->gp_primary) {
-		D_ERROR("Can only remove config info for primary service "
-			"grp.\n");
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		DL_ERROR(rc, "Can only remove config info for primary service grp");
+		goto out;
 	}
 
 	filename = crt_grp_attach_info_filename(grp_priv);
@@ -2065,8 +2083,8 @@ crt_group_config_remove(crt_group_t *grp)
 	rc = unlink(filename);
 	if (rc != 0) {
 		rc = d_errno2der(errno);
-		D_ERROR("Failed to remove %s (%s).\n",
-			filename, strerror(errno));
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to remove %s", filename);
 	}
 
 out:
@@ -2102,9 +2120,10 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 
 	fp = fopen(filename, "r");
 	if (fp == NULL) {
-		D_ERROR("open file %s failed (%s).\n",
-			filename, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "open file %s failed", filename);
+		goto out;
 	}
 
 	D_ALLOC(grpname, CRT_GROUP_ID_MAX_LEN + 1);
@@ -2114,30 +2133,34 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 	snprintf(fmt, 64, "%%*s%%%ds", CRT_GROUP_ID_MAX_LEN);
 	rc = fscanf(fp, fmt, grpname);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "read from file %s failed", filename);
+		goto out;
 	}
 	if (strncmp(grpname, grpid, CRT_GROUP_ID_MAX_LEN) != 0) {
-		D_ERROR("grpname %s in file mismatch with grpid %s.\n",
-			grpname, grpid);
-		D_GOTO(out, rc = -DER_INVAL);
+		rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "grpname %s in file mismatch with grpid %s", grpname, grpid);
+		goto out;
 	}
 
 	grp_size = 0;
 
 	rc = fscanf(fp, "%*s%d", &grp_size);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "read from file %s failed", filename);
+		goto out;
 	}
 
 	rc = fscanf(fp, "%4s", all_or_self);
 	if (rc == EOF) {
-		D_ERROR("read from file %s failed (%s).\n",
-			filename, strerror(errno));
-		D_GOTO(out, rc = d_errno2der(errno));
+		rc = d_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "read from file %s failed", filename);
+		goto out;
 	}
 
 	D_ALLOC(addr_str, CRT_ADDR_STR_MAX_LEN + 1);
@@ -2155,12 +2178,11 @@ crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank)
 			break;
 		}
 
-		rc = crt_group_primary_add_internal(grp_priv, rank, 0,
-						    addr_str);
+		rc = crt_group_primary_add_internal(grp_priv, rank, 0, addr_str);
 		if (rc != 0) {
-			D_ERROR("crt_group_node_add_internal() failed;"
-				" rank=%d uri='%s' rc=%d\n",
-				rank, addr_str, rc);
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "crt_group_node_add_internal() failed; rank=%d uri='%s'", rank,
+				 addr_str);
 			break;
 		}
 
@@ -2180,8 +2202,8 @@ out:
 	D_FREE(addr_str);
 
 	if (rc != 0)
-		D_ERROR("crt_grp_config_psr_load (grpid %s) failed, rc: %d.\n",
-			grpid, rc);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "crt_grp_config_psr_load (grpid %s) failed", grpid);
 
 	return rc;
 }
@@ -2844,8 +2866,8 @@ crt_group_view_create(crt_group_id_t srv_grpid,
 
 	rc = crt_grp_priv_create(&grp_priv, srv_grpid, true);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
-			srv_grpid, DP_RC(rc));
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "crt_grp_priv_create(%s) failed", srv_grpid);
 		D_GOTO(out, rc);
 	}
 
@@ -2953,8 +2975,8 @@ crt_group_secondary_create(crt_group_id_t grp_name, crt_group_t *primary_grp,
 
 	rc = crt_grp_priv_create(&grp_priv, grp_name, false);
 	if (rc != 0) {
-		D_ERROR("crt_grp_priv_create(%s) failed, " DF_RC "\n",
-			grp_name, DP_RC(rc));
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "crt_grp_priv_create(%s) failed", grp_name);
 		D_GOTO(out, rc);
 	}
 

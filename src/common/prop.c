@@ -209,12 +209,14 @@ str_valid(const char *str, const char *prop_name, size_t max_len)
 	size_t len;
 
 	if (unlikely(str == NULL)) {
+		/* d_log_check: disable=print-string */
 		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
+		/* d_log_check: disable=print-string */
 		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
 			max_len);
 		return false;
@@ -305,6 +307,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
 			if (!daos_label_is_valid(prop->dpp_entries[i].dpe_str)) {
+				/* d_log_check: disable=print-string */
 				D_ERROR("invalid label \"%s\"\n", prop->dpp_entries[i].dpe_str);
 				return false;
 			}
@@ -1112,11 +1115,12 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_GLOBAL_VERSION) == 0 ||
 		   strcmp(name, DAOS_PROP_ENTRY_OBJ_VERSION) == 0) {
-		D_ERROR("Property %s is read only\n", name);
+		/* d_log_check: disable=print-string */
 		rc = -DER_INVAL;
+		DL_ERROR(rc, "Property %s is read only", name);
 	} else {
-		D_ERROR("Property %s is invalid\n", name);
 		rc = -DER_INVAL;
+		DL_ERROR(rc, "Property %s is invalid", name);
 	}
 
 	return rc;
@@ -1148,8 +1152,11 @@ daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **_prop)
 	D_FREE(local);
 
 	if (n == 0) {
-		D_ERROR("Invalid property format %s\n", str);
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Invalid property format %s", str);
+		return rc;
+		;
 	}
 
 	/** allocate a property with the number of entries needed */

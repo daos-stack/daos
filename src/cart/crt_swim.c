@@ -1189,15 +1189,13 @@ int crt_swim_init(int crt_ctx_idx)
 	/* Search the attr in inject yml first */
 	d_fa_swim_drop_rpc = d_fault_attr_lookup(CRT_SWIM_FAIL_DROP_RPC);
 	if (d_fa_swim_drop_rpc != NULL) {
-		D_EMIT("fa_swim_drop_rpc: id=%u/0x%x, "
-			"interval=%u, max=" DF_U64 ", x=%u, y=%u, args='%s'\n",
-			d_fa_swim_drop_rpc->fa_id,
-			d_fa_swim_drop_rpc->fa_id,
-			d_fa_swim_drop_rpc->fa_interval,
-			d_fa_swim_drop_rpc->fa_max_faults,
-			d_fa_swim_drop_rpc->fa_probability_x,
-			d_fa_swim_drop_rpc->fa_probability_y,
-			d_fa_swim_drop_rpc->fa_argument);
+		/* d_log_check: disable=print-string */
+		D_EMIT("fa_swim_drop_rpc: id=%u/0x%x, interval=%u, max=" DF_U64
+		       ", x=%u, y=%u, args='%s'\n",
+		       d_fa_swim_drop_rpc->fa_id, d_fa_swim_drop_rpc->fa_id,
+		       d_fa_swim_drop_rpc->fa_interval, d_fa_swim_drop_rpc->fa_max_faults,
+		       d_fa_swim_drop_rpc->fa_probability_x, d_fa_swim_drop_rpc->fa_probability_y,
+		       d_fa_swim_drop_rpc->fa_argument);
 		if (d_fa_swim_drop_rpc->fa_argument != NULL)
 			crt_swim_fault_init(d_fa_swim_drop_rpc->fa_argument);
 	} else {

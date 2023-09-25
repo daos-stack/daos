@@ -71,8 +71,7 @@ pool_file_destroy(void **state)
 	if (arg->fname[0]) {
 		ret = remove(arg->fname[0]);
 		if (ret != 0)
-			D_ERROR("Removing %s failed\n",
-				arg->fname[0]);
+			D_ERROR("Removing " DF_DE " failed", DP_DE(arg->fname[0]));
 		D_FREE(arg->fname[0]);
 	}
 	D_FREE(arg->fname);

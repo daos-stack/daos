@@ -78,8 +78,11 @@ dump_envariables(void)
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
 		val = getenv(envars[i]);
 		if (strcmp(envars[i], "D_PROVIDER_AUTH_KEY") == 0 && val)
+			/* d_log_check: disable=print-string */
+
 			D_INFO("%s = %s\n", envars[i], "********");
 		else
+			/* d_log_check: disable=print-string */
 			D_INFO("%s = %s\n", envars[i], val);
 	}
 }
@@ -91,8 +94,12 @@ dump_opt(crt_init_options_t *opt)
 	D_INFO("crt_timeout = %d\n", opt->cio_crt_timeout);
 	D_INFO("max_ctx_num = %d\n", opt->cio_ctx_max_num);
 	D_INFO("swim_idx = %d\n", opt->cio_swim_crt_idx);
+	/* d_log_check: disable=print-string */
+
 	D_INFO("provider = %s\n", opt->cio_provider);
+	/* d_log_check: disable=print-string */
 	D_INFO("interface = %s\n", opt->cio_interface);
+	/* d_log_check: disable=print-string */
 	D_INFO("domain = %s\n", opt->cio_domain);
 }
 
@@ -508,6 +515,7 @@ apply_if_not_set(const char *env_name, const char *new_value)
 	old_val = getenv(env_name);
 
 	if (old_val == NULL) {
+		/* d_log_check: disable=print-string */
 		D_INFO("%s not set, setting to %s\n", env_name, new_value);
 		setenv(env_name, new_value, true);
 	}
@@ -525,8 +533,7 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	/* rxm and verbs providers only works with regular EP */
 	if (prov != CRT_PROV_OFI_SOCKETS &&
 	    crt_provider_is_sep(primary, prov)) {
-		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-		       "for current provider, ignoring it.\n");
+		D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid for current provider, ignoring it.");
 		crt_provider_set_sep(prov, primary, false);
 	}
 
@@ -616,7 +623,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 	crt_setup_log_fac();
 
-	D_INFO("libcart version %s initializing\n", CART_VERSION);
+	D_INFO("libcart version " CART_VERSION " initializing");
 
 	if (opt)
 		dump_opt(opt);
@@ -657,11 +664,13 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (path != NULL && strlen(path) > 0) {
 			rc = crt_group_config_path_set(path);
 			if (rc != 0)
-				D_ERROR("Got %s from ENV CRT_ATTACH_INFO_PATH, "
-					"but crt_group_config_path_set failed "
-					"rc: %d, ignore the ENV.\n", path, rc);
+				/* d_log_check: disable=print-string */
+				DL_ERROR(rc,
+					 "Got %s from ENV CRT_ATTACH_INFO_PATH, "
+					 "but crt_group_config_path_set failed ignore the ENV",
+					 path);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
+				D_DEBUG(DB_ALL, "set group_config_path as\n");
 		}
 
 		if (opt && opt->cio_auth_key)
@@ -719,8 +728,10 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
-			D_ERROR("Requested provider %s not found\n", provider_env);
-			D_GOTO(unlock, rc = -DER_NONEXIST);
+			rc = -DER_NONEXIST;
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "Requested provider %s not found\n", provider_env);
+			goto unlock;
 		}
 
 		rc = __split_arg(interface_env, &iface0, &iface1);
@@ -1010,10 +1021,11 @@ crt_get_port_opx(int *port)
 
 #define PORT_RANGE_STR_SIZE 32
 
+#define IP_PROC_FILE        "/proc/sys/net/ipv4/ip_local_port_range"
+
 static void
 crt_port_range_verify(int port)
 {
-	char	proc[] = "/proc/sys/net/ipv4/ip_local_port_range";
 	FILE	*f;
 	char	buff[PORT_RANGE_STR_SIZE];
 	int	start_port = -1;
@@ -1021,9 +1033,9 @@ crt_port_range_verify(int port)
 	char	*p;
 	int	rc;
 
-	f = fopen(proc, "r");
+	f = fopen(IP_PROC_FILE, "r");
 	if (!f) {
-		D_ERROR("Failed to open %s for reading\n", proc);
+		D_ERROR("Failed to open '" IP_PROC_FILE "' for reading");
 		return;
 	}
 
@@ -1031,7 +1043,7 @@ crt_port_range_verify(int port)
 
 	rc = fread(buff, 1, PORT_RANGE_STR_SIZE - 1, f);
 	if (rc <= 0) {
-		D_ERROR("Failed to read from file %s\n", proc);
+		D_ERROR("Failed to read from file '" IP_PROC_FILE "'");
 		fclose(f);
 		return;
 	}
@@ -1060,13 +1072,13 @@ crt_port_range_verify(int port)
 
 	if (port >= start_port && port <= end_port) {
 		D_WARN("Requested port %d is inside of the local port range "
-		       "as specified by file '%s'\n", port, proc);
+		       "as specified by file '" IP_PROC_FILE "'",
+		       port);
 		D_WARN("In order to avoid port conflicts pick a different "
 		       "value outside of the %d-%d range\n",
 		       start_port, end_port);
 	}
 }
-
 
 static int
 crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
@@ -1115,8 +1127,10 @@ crt_na_fill_ip_addr(struct crt_na_config *na_cfg)
 	}
 	freeifaddrs(if_addrs);
 	if (ip_str == NULL) {
-		D_ERROR("no IP addr found on interface %s\n", na_cfg->noc_interface);
-		D_GOTO(out, rc = -DER_PROTO);
+		rc = -DER_PROTO;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "no IP addr found on interface %s", na_cfg->noc_interface);
+		goto out;
 	}
 
 out:
@@ -1155,6 +1169,7 @@ crt_na_config_init(bool primary, crt_provider_t provider,
 	crt_na_fill_ip_addr(na_cfg);
 	if (crt_is_service() && port_str != NULL && strlen(port_str) > 0) {
 		if (!is_integer_str(port_str)) {
+			/* d_log_check: disable=print-string */
 			D_DEBUG(DB_ALL, "ignoring invalid OFI_PORT %s.", port_str);
 		} else {
 			port = atoi(port_str);

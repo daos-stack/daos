@@ -127,7 +127,7 @@ class FileParser:
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
             'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
-            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG', 'D_CDEBUG']
+            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG', 'D_CDEBUG', 'IV_DEBUG']
 
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
@@ -140,6 +140,12 @@ for prefix in ['DL', 'DHL', 'DS', 'DHS']:
 
 PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
+
+ALLOWED_VARS = ['strerror', 'db_file', 'ii_group_name', 'cg_grpid', 'agg_op2str', 'gc_name',
+                'opc_str', 'oi_str', 'sr_name', 's_name', 'ds_rsvc_state_str', 'cpf_name',
+                'bb_name', 'bio_state_enum_to_str', 'traddr', 'dlerror()', 'prop_str',
+                'act_opc2str', 'dc_agent_sockpath', 'getenv', 'cel_grp_id', 'ul_uri', 'crp_tgt_uri',
+                'SWIM_RPC_TYPE_STR', 'ul_grp_id', 'cg_grpid']
 
 
 class AllChecks():
@@ -158,6 +164,7 @@ class AllChecks():
         Iterate over the input file line by line checking for logging use and run checks on lines
         where the macros are used.  Ignore lines within macro definitions.
         """
+        skip_next = False
         prev_macro = False
         for line in self._fo:
             if line.endswith('\\'):
@@ -171,13 +178,23 @@ class AllChecks():
                 line.write(self._output)
                 continue
 
+            if 'd_log_check' in line:
+                if 'd_log_check: disable=print-string' in line:
+                    skip_next = True
+                else:
+                    line.warning('Invalid suppression')
+
             if not any(map(line.startswith, PREFIXES_ALL)):
                 line.write(self._output)
                 continue
 
             line.expand()
 
-            self.check_print_string(line)
+            if skip_next:
+                line.note('Skipping printf string check')
+                skip_next = False
+            else:
+                self.check_print_string(line)
             self.check_quote(line)
             self.check_return(line)
             self.check_df_rc_dot(line)
@@ -202,18 +219,43 @@ class AllChecks():
         print('Changes saved, run git-clang-format to format them.')
 
     def check_print_string(self, line):
-        """Check for %s in message"""
+        """Check for %s in message
+
+        Annotate the previous line of code with this string to suppress this message.
+        /* d_log_check: disable=print-string */
+        """
         if line.startswith('DH_PERROR'):
             return
         count = line.count('%s')
         if count == 0:
             return
-        if count == 1 and line.count('strerror') == 1:
-            return
-        if '?' in line:
-            line.note('Message uses %s with trigraph')
-        else:
-            line.note('Message uses %s without trigraph')
+        # if count == 1 and line.count('strerror') == 1:
+        #     return
+
+        found = 0
+        used = []
+
+        for var in ALLOWED_VARS:
+            if line.count(var) != 0:
+
+                found += line.count(var)
+                used.append(var)
+
+                if found == count:
+                    var_s = ','.join(used)
+                    line.note(f"Message prints string with '{var_s}'")
+                    return
+        tris = line.count('?')
+        if tris != 0:
+            found += tris
+            used.append('trigraph')
+
+            if found == count:
+                var_s = ','.join(used)
+                line.note(f"Message prints string with '{var_s}'")
+                return
+
+        line.note(f'Message prints string without explanation {found}/{count}')
 
     def check_quote(self, line):
         """Check for double quotes in message"""

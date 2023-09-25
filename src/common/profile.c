@@ -227,7 +227,7 @@ daos_profile_dump(struct daos_profile *dp)
 	file = fopen(path, "a");
 	if (file == NULL) {
 		rc = daos_errno2der(errno);
-		D_ERROR("open %s: %s\n", path, strerror(errno));
+		DS_ERROR(rc, "open failed");
 		goto out;
 	}
 

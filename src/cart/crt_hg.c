@@ -134,14 +134,18 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 	 */
 	provider_str = strtok_r(copy_uri, "://", &track);
 	if (!provider_str) {
-		D_ERROR("Failed to parse provider string from uri=%s\n", uri);
-		return -DER_INVAL;
+		int rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to parse provider string from uri=%s", uri);
+		return rc;
 	}
 
 	addr_str = strtok_r(NULL, " ", &track);
 	if (!addr_str) {
-		D_ERROR("Failed to parse address string from uri=%s\n", uri);
-		return -DER_INVAL;
+		int rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to parse address string from uri=%s", uri);
+		return rc;
 	}
 
 	if (prov)
@@ -888,8 +892,6 @@ crt_hg_class_init(int provider, int idx, bool primary, hg_class_t **ret_hg_class
 			HG_Finalize(hg_class);
 			D_GOTO(out, rc);
 		}
-
-		D_DEBUG(DB_NET, "New ctx (idx:%d), address: %s.\n", idx, addr_str);
 
 		/* If address for this provider isn't filled yet*/
 		if (prov_data->cpg_addr[0] == '\0')

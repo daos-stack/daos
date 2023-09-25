@@ -225,12 +225,11 @@ unixcomm_connect(char *sockaddr, int flags, struct unixcomm **newcommp)
 	fill_socket_address(sockaddr, &address);
 	errno = 0;
 	if (connect(handle->fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-		int rc = errno;
-
-		D_ERROR("Failed to connect to %s, errno=%d(%s)\n",
-			address.sun_path, rc, strerror(rc));
+		int rc = daos_errno2der(errno);
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to connect to %s", address.sun_path);
 		unixcomm_close(handle);
-		return daos_errno2der(rc);
+		return rc;
 	}
 
 	*newcommp = handle;

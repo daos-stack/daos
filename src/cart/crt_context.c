@@ -182,8 +182,10 @@ crt_context_create_on_provider(crt_context_t *crt_ctx, const char *provider, boo
 
 	provider_idx = crt_str_to_provider(provider);
 	if (provider_idx == -1) {
-		D_ERROR("Invalid requested provider '%s'\n", provider);
-		return -DER_INVAL;
+		int rc = -DER_INVAL;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Invalid requested provider '%s'", provider);
+		return rc;
 	}
 
 	return crt_context_provider_create(crt_ctx, provider_idx, primary);

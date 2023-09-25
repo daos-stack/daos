@@ -562,8 +562,7 @@ obj_reclaim(struct pl_map *map, uint32_t layout_ver, uint32_t new_layout_ver,
 		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
 			break;
 
-		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
-			DP_RC(rc), DP_UOID(oid));
+		D_DEBUG(DB_REBUILD, "retry by " DF_UOID "/%d", DP_UOID(oid), rc);
 		/* Busy - inform iterator and yield */
 		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);

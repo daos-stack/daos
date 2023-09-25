@@ -168,12 +168,13 @@ ctl_client_cb(const struct crt_cb_info *info)
 		wfrs->num_ctx = out_ls_args->cel_ctx_num;
 		wfrs->rc = out_ls_args->cel_rc;
 
-		D_DEBUG(DB_TEST, "ctx_num: %d\n",
-			out_ls_args->cel_ctx_num);
+		D_DEBUG(DB_TEST, "ctx_num: %d\n", out_ls_args->cel_ctx_num);
 		addr_str = out_ls_args->cel_addr_str.iov_buf;
 		for (i = 0; i < out_ls_args->cel_ctx_num; i++) {
+			/* d_log_check: disable=print-string */
+
 			D_DEBUG(DB_TEST, "    %s\n", addr_str);
-				addr_str += (strlen(addr_str) + 1);
+			addr_str += (strlen(addr_str) + 1);
 		}
 	} else {
 		wfrs->rc = info->cci_rc;
@@ -325,8 +326,10 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
-		D_ERROR("Failed to open %s for reading\n", grp_cfg_file);
-		D_GOTO(out, rc = -DER_NONEXIST);
+		rc = -DER_NONEXIST;
+		/* d_log_check: disable=print-string */
+		DL_ERROR(rc, "Failed to open %s for reading", grp_cfg_file);
+		goto out;
 	}
 
 	while (1) {
@@ -343,8 +346,8 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 						parsed_rank, parsed_addr);
 
 		if (rc != 0) {
-			D_ERROR("Failed to add %d %s; rc=%d\n",
-				parsed_rank, parsed_addr, rc);
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "Failed to add %d %s", parsed_rank, parsed_addr);
 			break;
 		}
 	}
@@ -391,15 +394,12 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 						rank_uri->uri);
 
 		if (rc != 0) {
-			D_ERROR("failed to add rank %u URI %s to group %s: "
-				DF_RC"\n",
-				rank_uri->rank,
-				rank_uri->uri,
-				name,
-				DP_RC(rc));
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "failed to add rank %u URI %s to group %s", rank_uri->rank,
+				 rank_uri->uri, name);
 			goto err_group;
 		}
-
+		/* d_log_check: disable=print-string */
 		D_INFO("rank: %d uri: %s\n", rank_uri->rank, rank_uri->uri);
 	}
 
@@ -433,6 +433,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	/* These two are always set */
+	/* d_log_check: disable=print-string */
 	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_net_cfg_info.provider);
 	rc = setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
 	if (rc != 0)
@@ -452,14 +453,17 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
-			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
-				"but server is unset!\n", cli_srx_set);
-			D_GOTO(cleanup, rc = -DER_INVAL);
+			rc = -DER_INVAL;
+			/* d_log_check: disable=print-string */
+			DL_ERROR(rc, "Client set FI_OFI_RXM_USE_SRX to %s, but server is unset!",
+				 cli_srx_set);
+			goto cleanup;
 		}
 	}
 
@@ -472,28 +476,31 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
 	}
 
 	ofi_interface = getenv("OFI_INTERFACE");
 	if (!ofi_interface) {
 		rc = setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
+		/* d_log_check: disable=print-string */
 		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
-		D_DEBUG(DB_MGMT,
-			"Using client provided OFI_INTERFACE: %s\n",
-			ofi_interface);
+		/* d_log_check: disable=print-string */
+		D_DEBUG(DB_MGMT, "Using client provided OFI_INTERFACE: %s\n", ofi_interface);
 	}
 
 	ofi_domain = getenv("OFI_DOMAIN");
 	if (!ofi_domain) {
 		rc = setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
+		/* d_log_check: disable=print-string */
 		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
+		/* d_log_check: disable=print-string */
 		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
@@ -771,14 +778,16 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 	/* send the request */
 	rc = crt_req_send(rpc_req, crtu_log_msg_cb, &resp);
 	if (rc < 0) {
-		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
+		/* d_log_check: disable=print-string */
+		DL_WARN(rc, "rpc failed, message: \"%s\" not sent", msg);
 		goto cleanup;
 	}
 
 	/* Wait for response */
 	rc = crtu_sem_timedwait(&resp.sem, 30, __LINE__);
 	if (rc < 0) {
-		D_WARN("Messaage logged timed out: %s\n", msg);
+		/* d_log_check: disable=print-string */
+		DL_WARN(rc, "Messaage logged timed out: %s", msg);
 		crt_req_abort(rpc_req);
 		goto cleanup;
 	}
@@ -787,7 +796,7 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 cleanup:
 	crt_req_decref(rpc_req);
 exit:
-	D_INFO("Return code %d\n", rc);
+	DL_INFO(rc, "Return code");
 	return rc;
 }
 
