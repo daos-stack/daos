@@ -729,10 +729,10 @@ class TestPool(TestDaosApiBase):
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
 
-                if self.pool_query_delay:
+                if self.pool_query_delay.value:
                     self.log.info(
                         "Waiting %s seconds before issuing next dmg pool query",
-                        self.pool_query_delay)
+                        self.pool_query_delay.value)
                     sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
