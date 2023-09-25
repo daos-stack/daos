@@ -2,6 +2,8 @@
  * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
+ *
+ * foo
  */
 
 /* daos_hdlr.c - resource and operation-specific handler functions
