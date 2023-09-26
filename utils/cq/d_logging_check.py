@@ -234,8 +234,6 @@ class AllChecks():
         count = line.count('%s')
         if count == 0:
             return
-        # if count == 1 and line.count('strerror') == 1:
-        #     return
 
         found = 0
         used = []
