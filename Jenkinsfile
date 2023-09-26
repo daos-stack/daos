@@ -1144,10 +1144,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
-                            timer_tags: 'pr daily_regression',
-                            default_tags: 'pr',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: null,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
@@ -1155,11 +1153,10 @@ pipeline {
                             pragma_suffix: '-hw-medium-md-on-ssd',
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_MD_ON_SDD_LABEL,
                             next_version: next_version,
-                            stage_tags: 'hw,medium,-provider',
-                            timer_tags: 'pr,md-on-ssd daily_regression,md-on-ssd',
-                            default_tags: 'pr,md-on-ssd',
+                            stage_tags: 'hw,medium',
+                            default_tags: startedByTimer() ?
+                                'pr,md-on-ssd daily_regression,md-on-ssd' : 'pr,md-on-ssd',
                             default_nvme: 'auto_md_on_ssd',
-                            provider: null,
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
@@ -1168,8 +1165,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_VERBS_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
-                            timer_tags: 'pr daily_regression',
-                            default_tags: 'pr',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
                             job_status: job_status_internal
@@ -1180,8 +1176,7 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_MEDIUM_UCX_PROVIDER_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,medium,provider',
-                            timer_tags: 'pr daily_regression',
-                            default_tags: 'pr',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ucx+dc_x',
                             job_status: job_status_internal
@@ -1192,10 +1187,8 @@ pipeline {
                             label: params.FUNCTIONAL_HARDWARE_LARGE_LABEL,
                             next_version: next_version,
                             stage_tags: 'hw,large',
-                            timer_tags: 'pr daily_regression',
-                            default_tags: 'pr',
+                            default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            provider: null,
                             job_status: job_status_internal
                         )
                     )
