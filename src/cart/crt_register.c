@@ -469,8 +469,9 @@ crt_proto_register_common(struct crt_proto_format *cpf)
 			/* TODO: Make this a D_WARN and resolve client issues
 			 * after the 1.2 release.
 			 */
-			D_WARN("Registering protocol without checking %s.%#x %d\n", cpf->cpf_name,
-			       cpf->cpf_base, cpf->cpf_ver);
+			D_DEBUG(DB_ALL, "Registering protocol without checking"
+				" %s.%#x %d\n",
+				cpf->cpf_name, cpf->cpf_base, cpf->cpf_ver);
 	}
 
 	/* reg L1 */

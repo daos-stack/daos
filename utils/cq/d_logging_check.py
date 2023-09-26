@@ -178,7 +178,7 @@ class AllChecks():
                 line.write(self._output)
                 continue
 
-            if 'd_log_check' in line:
+            if 'd_log_check:' in line:
                 if 'd_log_check: disable=print-string' in line:
                     skip_next = True
                 else:
