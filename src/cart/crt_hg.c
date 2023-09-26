@@ -11,8 +11,8 @@
 #include "crt_internal.h"
 
 /*
- * na_dict table should be in the same order of enum crt_provider_t, the last one
- * is terminator with NULL nad_str.
+ * List of supported CaRT providers. The table is terminated with the last entry
+ * having nad_str = NULL.
  */
 struct crt_na_dict crt_na_dict[] = {
 	{
@@ -21,22 +21,11 @@ struct crt_na_dict crt_na_dict[] = {
 		.nad_contig_eps	= false,
 		.nad_port_bind  = false,
 	}, {
-		.nad_type	= CRT_PROV_OFI_SOCKETS,
-		.nad_str	= "ofi+sockets",
-		.nad_alt_str	= "ofi+socket",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = true,
-	}, {
 		.nad_type	= CRT_PROV_OFI_VERBS_RXM,
 		.nad_str	= "ofi+verbs;ofi_rxm",
 		.nad_alt_str	= "ofi+verbs",
 		.nad_contig_eps	= true,
 		.nad_port_bind  = true,
-	}, {
-		.nad_type	= CRT_PROV_OFI_GNI,
-		.nad_str	= "ofi+gni",
-		.nad_contig_eps	= true,
-		.nad_port_bind  = false,
 	}, {
 		.nad_type	= CRT_PROV_OFI_TCP,
 		.nad_str	= "ofi+tcp",
@@ -156,13 +145,14 @@ crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr)
 crt_provider_t
 crt_prov_str_to_prov(const char *prov_str)
 {
-	int i;
+	int i = 0;
 
-	for (i = 0; i < CRT_PROV_COUNT; i++) {
+	while (crt_na_dict[i].nad_str) {
 		if (strcmp(prov_str, crt_na_dict[i].nad_str) == 0 ||
 		    (crt_na_dict[i].nad_alt_str &&
 		     strcmp(prov_str, crt_na_dict[i].nad_alt_str) == 0))
 			return crt_na_dict[i].nad_type;
+		i++;
 	}
 
 	return CRT_PROV_UNKNOWN;
@@ -511,10 +501,26 @@ crt_provider_domain_get(bool primary, int provider)
 	return prov_data->cpg_na_config.noc_domain;
 }
 
+static struct crt_na_dict *
+crt_get_na_dict_entry(int provider)
+{
+	struct crt_na_dict *entry = &crt_na_dict[0];
+
+	while (entry && entry->nad_str) {
+		if (entry->nad_type == provider)
+			return entry;
+		entry++;
+	}
+
+	return NULL;
+}
+
 char *
 crt_provider_name_get(int provider)
 {
-	return crt_na_dict[provider].nad_str;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_str : NULL;
 }
 
 static char*
@@ -541,13 +547,17 @@ crt_provider_is_block_mode(int provider)
 bool
 crt_provider_is_contig_ep(int provider)
 {
-	return crt_na_dict[provider].nad_contig_eps;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_contig_eps : false;
 }
 
 bool
 crt_provider_is_port_based(int provider)
 {
-	return crt_na_dict[provider].nad_port_bind;
+	struct crt_na_dict *entry = crt_get_na_dict_entry(provider);
+
+	return entry ? entry->nad_port_bind : false;
 }
 
 bool
