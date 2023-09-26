@@ -44,6 +44,9 @@ vea_upgrade(struct vea_space_info *vsi, struct umem_instance *umem,
 	uint64_t	   offset;
 	d_iov_t		   key, val;
 	struct vea_hint_df dummy;
+	daos_handle_t bitmap_btr;
+	struct umem_attr uma = {0};
+	struct vea_hint_df *df;
 
 	if (version < 3)
 		return 0;
@@ -52,6 +55,29 @@ vea_upgrade(struct vea_space_info *vsi, struct umem_instance *umem,
 	rc = umem_tx_begin(umem, NULL);
 	if (rc != 0)
 		return rc;
+
+	/*
+	 * bitmap tree reused vec tree which was created with
+	 * BTR_FEAT_DIRECT_KEY, recreate tree with BTR_FEAT_UINT_KEY
+	 */
+	if (daos_handle_is_valid(vsi->vsi_md_bitmap_btr)) {
+		dbtree_destroy(vsi->vsi_md_bitmap_btr, NULL);
+		vsi->vsi_md_bitmap_btr = DAOS_HDL_INVAL;
+	}
+
+	/* Create bitmap tree */
+	uma.uma_id = umem->umm_id;
+	uma.uma_pool = umem->umm_pool;
+	rc = dbtree_create_inplace(DBTREE_CLASS_IFV, BTR_FEAT_UINT_KEY, VEA_TREE_ODR, &uma,
+				   &md->vsd_bitmap_tree, &bitmap_btr);
+	if (rc != 0)
+		goto out;
+
+	/* Open bitmap tree */
+	rc = dbtree_open_inplace(&md->vsd_bitmap_tree, &uma,
+				 &vsi->vsi_md_bitmap_btr);
+	if (rc != 0)
+		goto out;
 
 	offset = VEA_BITMAP_CHUNK_HINT_KEY;
 	d_iov_set(&key, &offset, sizeof(offset));
@@ -69,6 +95,16 @@ vea_upgrade(struct vea_space_info *vsi, struct umem_instance *umem,
 		goto out;
 
 	md->vsd_compat |= VEA_COMPAT_FEATURE_BITMAP;
+	d_iov_set(&val, NULL, 0);
+	rc = dbtree_fetch(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ, DAOS_INTENT_DEFAULT,
+			  &key, NULL, &val);
+	if (rc)
+		goto out;
+
+	df = (struct vea_hint_df *)val.iov_buf;
+	rc = vea_hint_load(df, &vsi->vsi_bitmap_hint_context);
+	if (rc)
+		goto out;
 
 out:
 	/* Commit/Abort transaction on success/error */
