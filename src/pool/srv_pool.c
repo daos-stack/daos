@@ -5695,6 +5695,12 @@ pool_svc_reconf_ult(void *varg)
 	if (to_remove->rl_nr > 0) {
 		d_rank_list_t *tmp;
 
+		/*
+		 * Since the ds_rsvc_dist_stop part is likely to hit RPC
+		 * timeouts, after removing the replicas from the membership,
+		 * we notify the MS first, and then come back to
+		 * ds_rsvc_dist_stop.
+		 */
 		rc = d_rank_list_dup(&tmp, to_remove);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": failed to duplicate to_remove: "DF_RC"\n",
@@ -5731,6 +5737,20 @@ pool_svc_reconf_ult(void *varg)
 
 		d_rank_list_free(new);
 	}
+	if (reconf->psc_canceled) {
+		rc = -DER_OP_CANCELED;
+		goto out_to_add_remove;
+	}
+
+	/*
+	 * Don't attempt to destroy any removed replicas in the "synchronous
+	 * remove" mode, so that we don't delay pool_svc_update_map_internal
+	 * for too long. Ignore the return value of this ds_rsvc_dist_stop
+	 * call.
+	 */
+	if (!arg->sca_sync_remove && to_remove->rl_nr > 0)
+		ds_rsvc_dist_stop(svc->ps_rsvc.s_class, &svc->ps_rsvc.s_id, to_remove,
+				  NULL /* excluded */, svc->ps_rsvc.s_term, true /* destroy */);
 
 out_to_add_remove:
 	d_rank_list_free(to_remove);

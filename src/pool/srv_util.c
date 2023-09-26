@@ -332,7 +332,7 @@ compute_svc_reconf_objective(int svc_rf, d_rank_list_t *replicas)
 }
 
 /*
- * Find n ranks with states in nodes but not in blacklist_0, and append them to
+ * Find n ranks with states in nodes but not in blacklist, and append them to
  * list. Return the number of ranks appended or an error.
  */
 static int
@@ -546,7 +546,8 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 static void
 testu_plan_svc_reconfs(int svc_rf, d_rank_t ranks[], int n_ranks, d_rank_t down_ranks[],
 		       int n_down_ranks, d_rank_t replicas_ranks[], int n_replicas_ranks,
-		       d_rank_t self, d_rank_list_t **to_add, d_rank_list_t **to_remove)
+		       d_rank_t self, int expected_rc, d_rank_list_t **to_add,
+		       d_rank_list_t **to_remove)
 {
 	struct pool_map	       *map;
 	d_rank_list_t		replicas_list;
@@ -558,7 +559,7 @@ testu_plan_svc_reconfs(int svc_rf, d_rank_t ranks[], int n_ranks, d_rank_t down_
 	replicas_list.rl_nr = n_replicas_ranks;
 
 	rc = ds_pool_plan_svc_reconfs(svc_rf, map, &replicas_list, self, to_add, to_remove);
-	D_ASSERT(rc == 0);
+	D_ASSERTF(rc == expected_rc, "rc=%d expected_rc=%d\n", rc, expected_rc);
 
 	pool_map_decref(map);
 }
@@ -570,10 +571,11 @@ ds_pool_test_plan_svc_reconfs(void)
 	d_rank_list_t	       *to_add;
 	d_rank_list_t	       *to_remove;
 
-#define call_testu_plan_svc_reconfs								\
+#define call_testu_plan_svc_reconfs(expected_rc)						\
 	testu_plan_svc_reconfs(svc_rf, ranks, ARRAY_SIZE(ranks), down_ranks,			\
 			       ARRAY_SIZE(down_ranks), replicas_ranks,				\
-			       ARRAY_SIZE(replicas_ranks), self, &to_add, &to_remove);
+			       ARRAY_SIZE(replicas_ranks), self, expected_rc, &to_add,		\
+			       &to_remove);
 
 #define call_d_rank_list_free									\
 	d_rank_list_free(to_add);								\
@@ -586,12 +588,22 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	down_ranks[] = {};
 		d_rank_t	replicas_ranks[] = {0, 1, 2, 3, 4};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 0);
 
 		call_d_rank_list_free
+	}
+
+	/* The PS leader itself must not be undesired. */
+	{
+		int		svc_rf = 1;
+		d_rank_t	ranks[] = {0, 1, 2};
+		d_rank_t	down_ranks[] = {0};
+		d_rank_t	replicas_ranks[] = {0, 1, 2};
+
+		call_testu_plan_svc_reconfs(-DER_INVAL)
 	}
 
 	/* One lonely replica. */
@@ -601,7 +613,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	down_ranks[] = {};
 		d_rank_t	replicas_ranks[] = {0};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 0);
@@ -617,7 +629,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -634,7 +646,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -651,7 +663,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1, 2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -668,7 +680,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0, 1, 2};
 		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
@@ -686,7 +698,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_add_candidates[] = {3, 4};
 		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 1);
 		D_ASSERT(testu_rank_sets_belong(to_add, expected_to_add_candidates,
@@ -708,7 +720,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1, 2, 3};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -725,7 +737,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0, 1, 2};
 		d_rank_t	expected_to_remove[] = {1, 2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
@@ -743,7 +755,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_add[] = {3, 4, 5};
 		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -762,7 +774,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_remove_candidates[] = {1, 2, 3, 4, 5, 6, 7, 8};
 		d_rank_list_t	tmp;
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 4);
@@ -784,7 +796,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_add[] = {9};
 		d_rank_t	expected_to_remove[] = {1, 3, 5, 7};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
