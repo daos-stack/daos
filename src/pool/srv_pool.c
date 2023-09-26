@@ -6052,9 +6052,8 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	 * If the map modification affects myself, leave it to a new PS leader
 	 * if there's another PS replica, or reject it.
 	 */
-	rc = pool_map_find_nodes(map, dss_self_rank(), &node);
-	D_ASSERTF(rc == 0 || rc == 1, "find self node: %d\n", rc);
-	if (rc == 0 || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
+	node = pool_map_find_node_by_rank(map, dss_self_rank());
+	if (node == NULL || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
 		d_rank_list_t *replicas;
 
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
