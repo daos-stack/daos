@@ -364,6 +364,7 @@ ioil_fini(void)
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
 	int               rc;
+	pid_t             pid;
 
 	if (ioil_iog.iog_daos_init) {
 		int i;
@@ -380,32 +381,33 @@ ioil_fini(void)
 
 	ioil_show_summary();
 
-	/* Tidy up any open connections */
-	d_list_for_each_entry_safe(pool, pnext,
-				   &ioil_iog.iog_pools_head, iop_pools) {
-		d_list_for_each_entry_safe(cont, cnext,
-					   &pool->iop_container_head,
-					   ioc_containers) {
-			/* Retry disconnect on out of memory errors, this is mainly for fault
-			 * injection testing.  Do not attempt to shrink the pool here as that
-			 * is tried later, and if the container close succeeds but pool close
-			 * fails the cont may not be valid afterwards.
-			 */
-			rc = ioil_shrink_cont(cont, false, true);
+	pid = getpid();
+	if (ioil_iog.iog_daos_init && pid == ioil_iog.iog_init_pid) {
+		/* Tidy up any open connections */
+		d_list_for_each_entry_safe(pool, pnext,
+					   &ioil_iog.iog_pools_head, iop_pools) {
+			d_list_for_each_entry_safe(cont, cnext,
+						   &pool->iop_container_head,
+						   ioc_containers) {
+				/* Retry disconnect on out of memory errors, this is mainly for
+				 * fault injection testing.  Do not attempt to shrink the pool
+				 * here as that is tried later, and if the container close
+				 * succeeds but pool close fails the cont may not be valid
+				 * afterwards.
+				 */
+				rc = ioil_shrink_cont(cont, false, true);
+				if (rc == -DER_NOMEM)
+					ioil_shrink_cont(cont, false, true);
+			}
+			rc = ioil_shrink_pool(pool);
 			if (rc == -DER_NOMEM)
-				ioil_shrink_cont(cont, false, true);
+				ioil_shrink_pool(pool);
 		}
-		rc = ioil_shrink_pool(pool);
-		if (rc == -DER_NOMEM)
-			ioil_shrink_pool(pool);
+		daos_fini();
 	}
+	if (ioil_iog.iog_daos_init && pid != ioil_iog.iog_init_pid)
+		DFUSE_TRA_INFO(&ioil_iog, "Ignoring daos_fini() from forked processes");
 
-	if (ioil_iog.iog_daos_init) {
-		if (getpid() != ioil_iog.iog_init_pid)
-			DFUSE_TRA_INFO(&ioil_iog, "Ignoring daos_fini() from forked processes");
-		else
-			daos_fini();
-	}
 	ioil_iog.iog_initialized = false;
 	DFUSE_TRA_DOWN(&ioil_iog);
 
