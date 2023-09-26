@@ -199,6 +199,9 @@ class DefaultEnvironment():
         class myItem():
             """Fake class for Env variables"""
 
+            def remove(self, value):
+                return
+
             def __index__(self):
                 return 0
 
