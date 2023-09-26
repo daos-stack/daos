@@ -12,6 +12,7 @@
 #include <math.h>
 #include <float.h>
 #include <pthread.h>
+#include <malloc.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <sys/shm.h>
@@ -933,6 +934,27 @@ d_tm_print_timestamp(time_t *clk, char *name, int format, int opt_fields,
 	}
 }
 
+static void
+d_tm_print_meminfo(struct d_tm_meminfo_t *meminfo, char *name, int format,
+		   int opt_fields, FILE *stream)
+{
+	if ((name == NULL) || (stream == NULL))
+		return;
+
+	if (format == D_TM_CSV) {
+		fprintf(stream, "%s", name);
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, ",arena,ordblks,uordblks,fordblks");
+		fprintf(stream, ",%zu,%zu,%zu,%zu", meminfo->arena, meminfo->ordblks,
+			meminfo->uordblks, meminfo->fordblks);
+	} else {
+		if (opt_fields & D_TM_INCLUDE_TYPE)
+			fprintf(stream, "type: arena,ordblks,uordblks,fordblks,");
+		fprintf(stream, "%s:%zu,%zu,%zu,%zu", name, meminfo->arena,
+			meminfo->ordblks, meminfo->uordblks, meminfo->fordblks);
+	}
+}
+
 /**
  * Prints the time snapshot \a tms with \a name to the \a stream provided
  *
@@ -1147,6 +1169,9 @@ d_tm_print_metadata(char *desc, char *units, int format, FILE *stream)
 	}
 }
 
+static int
+d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
+		 struct d_tm_node_t *node);
 /**
  * Prints a single \a node.
  * Used as a convenience function to demonstrate usage for the client
@@ -1179,6 +1204,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	char               *name           = NULL;
 	char               *desc           = NULL;
 	char               *units          = NULL;
+	struct d_tm_meminfo_t	meminfo;
 	bool                stats_printed  = false;
 	bool                show_timestamp = false;
 	bool                show_meta      = false;
@@ -1246,6 +1272,14 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			break;
 		}
 		d_tm_print_timestamp(&clk, name, format, opt_fields, stream);
+		break;
+	case D_TM_MEMINFO:
+		rc = d_tm_get_meminfo(ctx, &meminfo, node);
+		if (rc != DER_SUCCESS) {
+			fprintf(stream, "Error on meminfo read: %d\n", rc);
+			break;
+		}
+		d_tm_print_meminfo(&meminfo, name, format, opt_fields, stream);
 		break;
 	case D_TM_TIMER_SNAPSHOT:
 	case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
@@ -1742,6 +1776,41 @@ d_tm_record_timestamp(struct d_tm_node_t *metric)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value = (uint64_t)time(NULL);
+	d_tm_node_unlock(metric);
+}
+
+/**
+ * Record the current meminfo
+ *
+ * \param[in]	metric	Pointer to the metric
+ */
+void
+d_tm_record_meminfo(struct d_tm_node_t *metric)
+{
+#if __GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 33)
+	struct mallinfo2 mi;
+
+	mi = mallinfo2();
+#else
+	struct mallinfo mi;
+
+	mi = mallinfo();
+#endif
+
+	if (metric == NULL)
+		return;
+
+	if (metric->dtn_type != D_TM_MEMINFO) {
+		D_ERROR("Failed to record meminfo on item %s not a "
+			"meminfo.  Operation mismatch: " DF_RC "\n",
+			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
+		return;
+	}
+	d_tm_node_lock(metric);
+	metric->dtn_metric->dtm_data.meminfo.arena = mi.arena;
+	metric->dtn_metric->dtm_data.meminfo.ordblks = mi.ordblks;
+	metric->dtn_metric->dtm_data.meminfo.uordblks = mi.uordblks;
+	metric->dtn_metric->dtm_data.meminfo.fordblks = mi.fordblks;
 	d_tm_node_unlock(metric);
 }
 
@@ -2976,6 +3045,36 @@ d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
 	}
 	return DER_SUCCESS;
 }
+
+static int
+d_tm_get_meminfo(struct d_tm_context *ctx, struct d_tm_meminfo_t *meminfo,
+		 struct d_tm_node_t *node)
+{
+	struct d_tm_metric_t	*metric_data = NULL;
+	struct d_tm_shmem_hdr	*shmem = NULL;
+	int			 rc;
+
+	if (ctx == NULL || meminfo == NULL || node == NULL)
+		return -DER_INVAL;
+
+	rc = validate_node_ptr(ctx, node, &shmem);
+	if (rc != 0)
+		return rc;
+
+	if (node->dtn_type != D_TM_MEMINFO)
+		return -DER_OP_NOT_PERMITTED;
+
+	metric_data = conv_ptr(shmem, node->dtn_metric);
+	if (metric_data != NULL) {
+		d_tm_node_lock(node);
+		*meminfo = metric_data->dtm_data.meminfo;
+		d_tm_node_unlock(node);
+	} else {
+		return -DER_METRIC_NOT_FOUND;
+	}
+	return DER_SUCCESS;
+}
+
 
 /**
  * Client function to read the specified high resolution timer.
