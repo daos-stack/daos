@@ -465,11 +465,6 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 				idx, ei.Index())
 		}
 
-		if !ei.IsReady() {
-			resp.Errors[idx] = "not ready"
-			continue
-		}
-
 		if err := updateSetLogMasksReq(svc.srvCfg.Engines[idx], &eReq); err != nil {
 			resp.Errors[idx] = err.Error()
 			continue

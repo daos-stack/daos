@@ -251,7 +251,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
 	svc.log.Debugf("group update request: version: %d, ranks: %s", req.MapVersion, rankSet)
 	dResp, err := svc.harness.CallDrpc(ctx, drpc.MethodGroupUpdate, req)
 	if err != nil {
-		if err == errInstanceNotReady {
+		if err == errEngineNotReady {
 			return err
 		}
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
