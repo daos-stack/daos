@@ -730,7 +730,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		if (primary_provider == CRT_PROV_UNKNOWN) {
 			rc = -DER_NONEXIST;
 			/* d_log_check: disable=print-string */
-			DL_ERROR(rc, "Requested provider %s not found\n", provider_env);
+			DL_ERROR(rc, "Requested provider %s not found", provider_env);
 			goto unlock;
 		}
 
