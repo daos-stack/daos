@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -445,7 +445,7 @@ enum_unpack_key(daos_key_desc_t *kds, char *key_data,
 	key.iov_len = kds->kd_key_len;
 	if (kds->kd_val_type == OBJ_ITER_AKEY && io->ui_dkey.iov_buf == NULL) {
 		rc = -DER_INVAL;
-		DL_ERROR(rc, "No dkey for " DF_KKEY " invalid buf", DP_KEY(&key));
+		DL_ERROR(rc, "No dkey for " DF_AKEY " invalid buf", DP_KEY(&key));
 		return rc;
 	}
 

@@ -166,10 +166,10 @@ char *DP_UUID(const void *uuid);
 char *
 daos_key2str(daos_key_t *key);
 
-#define DF_KKEY     "[%d] key'%s'"
-#define DF_AKEY     "[%d] akey'%s'"
-#define DF_DKEY     "[%d] dkey'%s'"
-#define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
+#define DF_KKEY     "key'%s'[%d]"
+#define DF_AKEY     "akey'%s'[%d]"
+#define DF_DKEY     "dkey'%s'[%d]"
+#define DP_KEY(key) daos_key2str(key), (int)(key)->iov_len
 
 char *
 daos_de2str(const char *de);
