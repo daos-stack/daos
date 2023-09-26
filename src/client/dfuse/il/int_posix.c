@@ -364,7 +364,6 @@ ioil_fini(void)
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
 	int               rc;
-	pid_t             pid = getpid();
 
 	if (ioil_iog.iog_daos_init) {
 		int i;
@@ -377,14 +376,6 @@ ioil_fini(void)
 			daos_eq_destroy(ioil_iog.iog_main_eqh, 0);
 	}
 
-	if (pid != ioil_iog.iog_init_pid) {
-		DFUSE_TRA_INFO(&ioil_iog, "Ignoring destructor from forked processes");
-		return;
-	}
-
-	ioil_iog.iog_initialized = false;
-
-	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
 	ioil_show_summary();
@@ -409,8 +400,15 @@ ioil_fini(void)
 			ioil_shrink_pool(pool);
 	}
 
-	if (ioil_iog.iog_daos_init)
-		daos_fini();
+	if (ioil_iog.iog_daos_init) {
+		if (getpid() != ioil_iog.iog_init_pid)
+			DFUSE_TRA_INFO(&ioil_iog, "Ignoring daos_fini() from forked processes");
+		else
+			daos_fini();
+	}
+	ioil_iog.iog_initialized = false;
+	DFUSE_TRA_DOWN(&ioil_iog);
+
 	ioil_iog.iog_daos_init = false;
 	daos_debug_fini();
 }
