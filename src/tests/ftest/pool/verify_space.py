@@ -9,22 +9,25 @@ import re
 from apricot import TestWithServers
 
 from exception_utils import CommandFailure
+from general_utils import human_to_bytes
 from ior_utils import run_ior
 from job_manager_utils import get_job_manager
 from run_utils import run_remote
 
 
-def compare_all_available(rank, pool_size):
-    """Determine if all of the pool size is available.
+def compare_initial(rank, pool_size):
+    """Determine if all of the pool size is greater than or equal to the available.
 
     Args:
         rank (int): server rank
         pool_size (list): list of pool_size dictionaries
 
     Returns:
-        bool: is all of the pool size is available
+        bool: is all of the pool size is greater than or equal to the available
     """
-    return pool_size[-1]['data'][rank]['size'] == pool_size[-1]['data'][rank]['avail']
+    current_size = human_to_bytes(pool_size[-1]['data'][rank]['size'])
+    current_avail = human_to_bytes(pool_size[-1]['data'][rank]['avail'])
+    return current_size >= current_avail
 
 
 def compare_equal(rank, pool_size):
@@ -37,7 +40,9 @@ def compare_equal(rank, pool_size):
     Returns:
         bool: does the previous value equal the current value
     """
-    return pool_size[-2]['data'][rank]['avail'] == pool_size[-1]['data'][rank]['avail']
+    previous_avail = human_to_bytes(pool_size[-2]['data'][rank]['avail'])
+    current_avail = human_to_bytes(pool_size[-1]['data'][rank]['avail'])
+    return previous_avail == current_avail
 
 
 def compare_reduced(rank, pool_size):
@@ -50,7 +55,9 @@ def compare_reduced(rank, pool_size):
     Returns:
         bool: does the previous value equal the current value
     """
-    return pool_size[-2]['data'][rank]['avail'] > pool_size[-1]['data'][rank]['avail']
+    previous_avail = human_to_bytes(pool_size[-2]['data'][rank]['avail'])
+    current_avail = human_to_bytes(pool_size[-1]['data'][rank]['avail'])
+    return previous_avail > current_avail
 
 
 class VerifyPoolSpace(TestWithServers):
@@ -116,22 +123,18 @@ class VerifyPoolSpace(TestWithServers):
         """
         system_pool_size = {}
         self.log_step(' '.join(['Collect system-level DAOS mount information for', description]))
-        command = 'df -h | grep -E \'{}\''.format('|'.join(scm_mounts))
+        fields = ('source', 'size', 'used', 'avail', 'pcent', 'target')
+        command = "df -h --output={} | grep -E '{}'".format(','.join(fields), '|'.join(scm_mounts))
         result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
         if not result.passed:
             self.fail('Error collecting system level daos mount information')
         for data in result.output:
             for line in data.stdout:
                 info = re.split(r'\s+', line)
-                if len(info) > 5:
+                if len(info) >= len(fields):
                     for rank in self.server_managers[0].get_host_ranks(data.hosts):
                         system_pool_size[rank] = {
-                            'dev': info[0],
-                            'size': info[1],
-                            'used': info[2],
-                            'avail': info[3],
-                            r'use%': info[4],
-                            'mount': info[5]}
+                            field: info[index] for index, field in enumerate(fields)}
         if len(system_pool_size) != len(self.server_managers[0].hosts):
             self.fail('Error obtaining system pool data for all hosts: {}'.format(system_pool_size))
         return system_pool_size
@@ -145,7 +148,7 @@ class VerifyPoolSpace(TestWithServers):
         """
         self.log.info('Verifying system reported pool size for %s', pool_size[-1]['label'])
         self.log.debug(
-            '  Rank  Mount       Previous (Size/Avail)  Current (Size/Avail)   Compare  Status')
+            '  Rank  Mount       Previous (Avail/Size)  Current (Avail/Size)   Compare  Status')
         self.log.debug(
             '  ----  ----------  ---------------------  ---------------------  -------  ------')
         overall = True
@@ -156,15 +159,17 @@ class VerifyPoolSpace(TestWithServers):
                 previous = pool_size[-1]['data'][rank]
             else:
                 previous = {'size': 'None', 'avail': 'None'}
-            if compare_methods[rank] is compare_all_available:
-                compare = 'cS=cA'
+            if compare_methods[rank] is compare_initial:
+                compare = 'cS>=cA'
             elif compare_methods[rank] is compare_reduced:
                 compare = 'pA>cA'
-            else:
+            elif compare_methods[rank] is compare_equal:
                 compare = 'pA=cA'
+            else:
+                compare = 'None'
             self.log.debug(
                 '  %4s  %-10s   %9s / %-8s   %9s / %-8s  %7s  %s',
-                rank, current['mount'], previous['avail'], previous['size'], current['avail'],
+                rank, current['target'], previous['avail'], previous['size'], current['avail'],
                 current['size'], compare, status)
             overall &= status
         if not overall:
@@ -215,7 +220,7 @@ class VerifyPoolSpace(TestWithServers):
         description = 'initial configuration w/o pools'
         pool_size.append(
             {'label': description, 'data': self._get_system_pool_size(description, scm_mounts)})
-        compare_methods = [compare_all_available, compare_all_available, compare_all_available]
+        compare_methods = [compare_initial, compare_initial, compare_initial]
         self._compare_system_pool_size(pool_size, compare_methods)
         dmg.storage_query_usage()
 
