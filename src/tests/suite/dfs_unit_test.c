@@ -1018,16 +1018,17 @@ dfs_test_mt_mkdir(void **state)
 static void
 dfs_test_rename(void **state)
 {
-	test_arg_t		*arg = *state;
-	dfs_obj_t		*obj1, *obj2;
-	char			*f1 = "f1";
-	char			*f2 = "f2";
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	char			buf[64];
-	struct stat		stbuf;
-	struct timespec		prev_ts;
-	int			rc;
+	test_arg_t     *arg = *state;
+	dfs_obj_t      *obj1, *obj2;
+	char           *f1 = "f1";
+	char           *f2 = "f2";
+	d_sg_list_t     sgl;
+	d_iov_t         iov;
+	char            buf[64];
+	struct stat     stbuf;
+	struct timespec prev_ts;
+	int             rc;
+	daos_event_t    ev, *evp;
 
 	if (arg->myrank != 0)
 		return;
@@ -1061,8 +1062,6 @@ dfs_test_rename(void **state)
 	assert_int_equal(rc, 0);
 	rc = dfs_chmod(dfs_mt, NULL, f2, S_IFREG | S_IRUSR | S_IWUSR | S_IXUSR);
 	assert_int_equal(rc, 0);
-
-	daos_event_t ev, *evp;
 
 	memset(&stbuf, 0, sizeof(stbuf));
 	stbuf.st_size = 1234;
@@ -1488,14 +1487,19 @@ dfs_test_chown(void **state)
 static void
 run_time_tests(dfs_obj_t *obj, char *name, int mode)
 {
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	char			buf[64];
-	struct stat		stbuf;
-	struct timespec		prev_ts, first_ts;
-	daos_size_t		size;
-	dfs_obj_t		*tmp_obj;
-	int			rc;
+	d_sg_list_t     sgl;
+	d_iov_t         iov;
+	char            buf[64];
+	struct stat     stbuf;
+	struct timespec prev_ts, first_ts;
+	daos_size_t     size;
+	dfs_obj_t      *tmp_obj;
+	int             rc;
+	struct tm       tm = {0};
+	time_t          ts;
+	char           *p;
+	struct tm      *timeptr;
+	char            time_str[64];
 
 	rc = dfs_stat(dfs_mt, NULL, name, &stbuf);
 	assert_int_equal(rc, 0);
@@ -1592,12 +1596,6 @@ run_time_tests(dfs_obj_t *obj, char *name, int mode)
 		/** check the mtime was updated with the setattr */
 		assert_true(check_ts(prev_ts, stbuf.st_mtim));
 	}
-
-	struct tm	tm = {0};
-	time_t		ts;
-	char		*p;
-	struct tm       *timeptr;
-	char		time_str[64];
 
 	/** set the mtime to 2020 */
 	p = strptime("2020-12-31", "%Y-%m-%d", &tm);
@@ -1854,6 +1852,11 @@ dfs_test_async_io(void **state)
 	dfs_obj_t		*obj;
 	int			i, j;
 	int			rc;
+	struct daos_event        evs[NUM_IOS];
+	d_sg_list_t              sgls[NUM_IOS];
+	d_iov_t                  iovs[NUM_IOS];
+	daos_size_t              read_sizes[NUM_IOS];
+	char                    *bufs[NUM_IOS];
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -1863,12 +1866,6 @@ dfs_test_async_io(void **state)
 
 	rc = dfs_open(dfs_mt, NULL, name, S_IFREG, O_RDONLY, 0, 0, NULL, &obj);
 	assert_int_equal(rc, 0);
-
-	struct daos_event	evs[NUM_IOS];
-	d_sg_list_t		sgls[NUM_IOS];
-	d_iov_t			iovs[NUM_IOS];
-	daos_size_t		read_sizes[NUM_IOS];
-	char			*bufs[NUM_IOS];
 
 	for (i = 0; i < NUM_IOS; i++) {
 		rc = daos_event_init(&evs[i], arg->eq, NULL);
@@ -2510,6 +2507,12 @@ dfs_test_checker(void **state)
 	uint64_t		nr_oids = 0;
 	char			*cname = "cont_chkr";
 	int			rc;
+	int                      num_files = 0;
+	int                      num_dirs  = 0;
+	daos_anchor_t            anchor    = {0};
+	uint32_t                 num_ents  = 10;
+	struct dirent            ents[10];
+	struct stat              stbufs[10];
 
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
@@ -2667,13 +2670,6 @@ dfs_test_checker(void **state)
 	assert_int_equal(rc, 0);
 
 	/** readdir of /lost+found/tlf confirming there are 10 files and dirs */
-	int			num_files = 0;
-	int			num_dirs = 0;
-	daos_anchor_t		anchor = {0};
-	uint32_t		num_ents = 10;
-	struct dirent		ents[10];
-	struct stat		stbufs[10];
-
 	rc = dfs_init();
 	assert_int_equal(rc, 0);
 	rc = dfs_connect(arg->pool.pool_str, arg->group, cname, O_CREAT | O_RDWR, NULL, &dfs);
@@ -3059,13 +3055,21 @@ dfs_test_fix_chunk_size(void **state)
 static void
 dfs_test_pipeline_find(void **state)
 {
-	dfs_obj_t	*dir1, *f1;
-	int		i;
-	time_t		ts = 0;
-	mode_t		create_mode = S_IWUSR | S_IRUSR;
-	int		create_flags = O_RDWR | O_CREAT | O_EXCL;
-	char		*dirname = "pipeline_dir";
-	int		rc;
+	dfs_obj_t      *dir1, *f1;
+	int             i;
+	time_t          ts           = 0;
+	mode_t          create_mode  = S_IWUSR | S_IRUSR;
+	int             create_flags = O_RDWR | O_CREAT | O_EXCL;
+	char           *dirname      = "pipeline_dir";
+	int             rc;
+	dfs_predicate_t pred      = {0};
+	dfs_pipeline_t *dpipe     = NULL;
+	uint32_t        num_split = 0, j;
+	daos_anchor_t  *anchors;
+	struct dirent  *dents    = NULL;
+	daos_obj_id_t  *oids     = NULL;
+	daos_size_t    *csizes   = NULL;
+	uint64_t        nr_total = 0, nr_matched = 0, nr_scanned;
 
 	rc = dfs_open(dfs_mt, NULL, dirname, create_mode | S_IFDIR, create_flags,
 		      OC_SX, 0, NULL, &dir1);
@@ -3101,32 +3105,19 @@ dfs_test_pipeline_find(void **state)
 		}
 	}
 
-	dfs_predicate_t pred = {0};
-	dfs_pipeline_t *dpipe = NULL;
-
 	strcpy(pred.dp_name, "%.6%");
 	pred.dp_newer = ts;
 	rc = dfs_pipeline_create(dfs_mt, pred, DFS_FILTER_NAME | DFS_FILTER_NEWER, &dpipe);
 	assert_int_equal(rc, 0);
 
-
-	uint32_t num_split = 0, j;
-
 	rc = dfs_obj_anchor_split(dir1, &num_split, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Anchor split in %u parts\n", num_split);
-
-	daos_anchor_t *anchors;
-	struct dirent *dents = NULL;
-	daos_obj_id_t *oids = NULL;
-	daos_size_t *csizes = NULL;
 
 	anchors = malloc(sizeof(daos_anchor_t) * num_split);
 	dents = malloc (sizeof(struct dirent) * NR_ENUM);
 	oids = calloc(NR_ENUM, sizeof(daos_obj_id_t));
 	csizes = calloc(NR_ENUM, sizeof(daos_size_t));
-
-	uint64_t nr_total = 0, nr_matched = 0, nr_scanned;
 
 	for (j = 0; j < num_split; j++) {
 		daos_anchor_t *anchor = &anchors[j];

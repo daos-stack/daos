@@ -373,6 +373,8 @@ ds_mgmt_system_module_init(void)
 	crt_group_t    *group;
 	size_t		len;
 
+	D_CASSERT(DAOS_SYS_NAME_MAX + 1 <= sizeof(mgmt_svc_db_uuid));
+
 	/* Set the MS ID to the system name. */
 	group = crt_group_lookup(NULL);
 	D_ASSERT(group != NULL);
@@ -384,7 +386,6 @@ ds_mgmt_system_module_init(void)
 	d_iov_set(&mgmt_svc_id, mgmt_svc_id_s, len + 1);
 
 	/* Set the MS DB UUID bytes to the system name bytes. */
-	D_CASSERT(DAOS_SYS_NAME_MAX + 1 <= sizeof(mgmt_svc_db_uuid));
 	memcpy(mgmt_svc_db_uuid, mgmt_svc_id.iov_buf, mgmt_svc_id.iov_len);
 
 	ds_rsvc_class_register(DS_RSVC_CLASS_MGMT, &mgmt_svc_rsvc_class);

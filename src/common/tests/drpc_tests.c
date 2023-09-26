@@ -65,8 +65,8 @@ teardown_drpc_mocks(void **state)
 static void
 test_drpc_connect_returns_null_if_socket_fails(void **state)
 {
-	socket_return = -ENOENT; /* < 0 indicates failure */
 	struct drpc *drpc;
+	socket_return = -ENOENT; /* < 0 indicates failure */
 
 	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_NONEXIST);
 	assert_null(drpc);
@@ -75,8 +75,8 @@ test_drpc_connect_returns_null_if_socket_fails(void **state)
 static void
 test_drpc_connect_returns_null_if_connect_fails(void **state)
 {
-	connect_return = -ENOENT; /* < 0 indicates failure */
 	struct drpc *drpc;
+	connect_return = -ENOENT; /* < 0 indicates failure */
 
 	assert_rc_equal(drpc_connect(TEST_SOCK_ADDR, &drpc), -DER_NONEXIST);
 	assert_null(drpc);

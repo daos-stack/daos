@@ -1440,6 +1440,7 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 	int			 rc = 0;
 	d_sg_list_t		 sgl = oeo->oeo_sgl;
 	d_iov_t			 csum_iov = oeo->oeo_csum_iov;
+	struct csum_enum_args    csum_args = {0};
 
 	if (enum_args->eaa_nr == NULL ||
 	    *enum_args->eaa_nr == 0 ||
@@ -1449,8 +1450,6 @@ csum_enum_verify(const struct obj_enum_args *enum_args,
 	csummer = enum_args->eaa_obj->do_co->dc_csummer;
 	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
 		return 0; /** csums not enabled */
-
-	struct csum_enum_args csum_args = {0};
 
 	csum_args.csummer = daos_csummer_copy(csummer);
 	if (csum_args.csummer == NULL)
@@ -1859,6 +1858,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	int				ret = task->dt_result;
 	int				rc = 0;
 	crt_rpc_t			*rpc;
+	bool                             check;
+	bool                             changed;
+	bool                             first;
+	bool                             is_ec_obj;
 
 	cb_args = (struct obj_query_key_cb_args *)data;
 	rpc = cb_args->rpc;
@@ -1912,10 +1915,10 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 	if (flags == 0)
 		goto set_max_epoch;
 
-	bool check = true;
-	bool changed = false;
-	bool first = (cb_args->dkey->iov_len == 0);
-	bool is_ec_obj = obj_is_ec(cb_args->obj);
+	check     = true;
+	changed   = false;
+	first     = (cb_args->dkey->iov_len == 0);
+	is_ec_obj = obj_is_ec(cb_args->obj);
 
 	if (flags & DAOS_GET_DKEY) {
 		uint64_t *val = (uint64_t *)okqo->okqo_dkey.iov_buf;

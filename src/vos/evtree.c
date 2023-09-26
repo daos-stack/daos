@@ -1710,9 +1710,9 @@ evt_root_activate(struct evt_context *tcx, const struct evt_entry_in *ent)
 	umem_off_t			 nd_off;
 	int				 rc;
 	const struct dcs_csum_info	*csum;
+	uint32_t                         inob = ent->ei_inob;
 
 	root = tcx->tc_root;
-	uint32_t inob = ent->ei_inob;
 	csum = &ent->ei_csum;
 
 	D_ASSERT(root->tr_depth == 0);
@@ -3245,10 +3245,11 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 	if (leaf) {
 		umem_off_t desc_off;
 		uint32_t   csum_buf_size = 0;
+		size_t     desc_size;
 
 		if (ci_is_valid(&ent->ei_csum))
 			csum_buf_size = ci_csums_len(ent->ei_csum);
-		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
+		desc_size = sizeof(struct evt_desc) + csum_buf_size;
 		ne = evt_node_entry_at(tcx, nd, i);
 
 		evt_rect_write(&ne->ne_rect, &ent->ei_rect);

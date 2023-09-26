@@ -15,6 +15,7 @@ DESIRED_FLAGS = ['-fstack-usage',
                  '-Wno-unused-command-line-argument',
                  '-Wmismatched-dealloc',
                  '-Wfree-nonheap-object',
+                 '-Wdeclaration-after-statement',
                  '-Wframe-larger-than=4096']
 
 # Compiler flags to prevent optimizing out security checks

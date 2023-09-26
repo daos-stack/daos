@@ -608,6 +608,9 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 	struct ds_cont_child	*cont;
 	int			rc;
 
+	D_CASSERT(offsetof(struct ds_cont_child, sc_uuid) + sizeof(uuid_t) ==
+		  offsetof(struct ds_cont_child, sc_pool_uuid));
+
 	D_ASSERT(po_uuid != NULL);
 	D_DEBUG(DB_MD, DF_CONT": opening\n", DP_CONT(po_uuid, co_uuid));
 
@@ -643,8 +646,6 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		goto out_pool;
 
 	/* sc_uuid, sc_pool_uuid contiguous in memory within the structure */
-	D_CASSERT(offsetof(struct ds_cont_child, sc_uuid) + sizeof(uuid_t) ==
-		  offsetof(struct ds_cont_child, sc_pool_uuid));
 	uuid_copy(cont->sc_uuid, co_uuid);
 	uuid_copy(cont->sc_pool_uuid, po_uuid);
 

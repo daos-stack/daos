@@ -1011,13 +1011,14 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			strncpy(*full_path, "/", 2);
 		} else {
 			size_t path_len;
+			int    len_item_name;
+
 			/* full_path holds the full path inside dfs container */
 			strncpy(*full_path, full_path_parse + (*dfs_mt)->len_fs_root, len + 1);
 			for (pos = len - 1; pos >= (*dfs_mt)->len_fs_root; pos--) {
 				if (full_path_parse[pos] == '/')
 					break;
 			}
-			int len_item_name;
 
 			len_item_name = strnlen(full_path_parse + pos + 1, len);
 			if (len_item_name >= DFS_MAX_NAME) {

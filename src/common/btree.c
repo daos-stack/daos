@@ -3781,8 +3781,9 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
 		}
 	} else {
-		D_ASSERT(key != NULL || anchor != NULL);
 		char hkey[DAOS_HKEY_MAX];
+
+		D_ASSERT(key != NULL || anchor != NULL);
 
 		if (key)
 			btr_hkey_gen(tcx, key, hkey);

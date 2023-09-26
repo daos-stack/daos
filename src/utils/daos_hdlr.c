@@ -582,6 +582,7 @@ fs_copy_file(struct cmd_args_s *ap,
 	while (total_bytes < file_length) {
 		ssize_t left_to_read = buf_size;
 		uint64_t bytes_left = file_length - total_bytes;
+		ssize_t  bytes_to_write;
 
 		if (bytes_left < buf_size)
 			left_to_read = (size_t)bytes_left;
@@ -591,7 +592,7 @@ fs_copy_file(struct cmd_args_s *ap,
 			DH_PERROR_DER(ap, rc, "File read failed");
 			D_GOTO(out_buf, rc);
 		}
-		ssize_t bytes_to_write = left_to_read;
+		bytes_to_write = left_to_read;
 
 		rc = file_write(ap, dst_file_dfs, dst_path, buf, &bytes_to_write);
 		if (rc != 0) {

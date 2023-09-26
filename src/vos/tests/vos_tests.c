@@ -98,10 +98,11 @@ run_all_tests(int keys)
 int
 main(int argc, char **argv)
 {
-	int	rc = 0;
-	int	nr_failed = 0;
-	int	opt = 0;
-	int	index = 0;
+	int                  rc        = 0;
+	int                  nr_failed = 0;
+	int                  opt       = 0;
+	int                  index     = 0;
+	bool                 test_run  = false;
 	int                  otype;
 	int                  keys;
 	const char          *vos_command    = NULL;
@@ -140,7 +141,6 @@ main(int argc, char **argv)
 	}
 
 	gc = 0;
-	bool test_run = false;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, &index)) != -1) {

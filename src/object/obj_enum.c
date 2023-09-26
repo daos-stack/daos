@@ -71,13 +71,11 @@ enum {
 static int
 unpack_recx_csum(d_iov_t *csum_iov, d_iov_t *csum_iov_out)
 {
+	struct dcs_csum_info *tmp_csum_info;
 	int rc;
 
 	if (csum_iov == NULL || csum_iov->iov_len <= 0)
 		return 0;
-
-	/** unpack csums */
-	struct dcs_csum_info *tmp_csum_info;
 
 	D_ASSERT(csum_iov->iov_buf != NULL);
 	ci_cast(&tmp_csum_info, csum_iov);

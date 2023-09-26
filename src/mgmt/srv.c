@@ -325,9 +325,8 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	 * the yield below is to workaround an ofi err msg at client-side -
 	 * fi_cq_readerr got err: 5(Input/output error) ..
 	 */
-	int i;
 
-	for (i = 0; i < 200; i++) {
+	for (int i = 0; i < 200; i++) {
 		ABT_thread_yield();
 		usleep(10);
 	}

@@ -565,6 +565,8 @@ nvme_test_simulate_IO_error(void **state)
 	int		rx_nr; /* number of record extents */
 	int		rank_pos = 0, rank = 1;
 	int		ndisks, rc, i;
+	char             control_err[][50] = {"detected blob I/O error! writeErr:true",
+					      "detected blob I/O error! readErr:true"};
 
 	FAULT_INJECTION_REQUIRED();
 
@@ -726,9 +728,6 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Verify writeErr=true and readErr:true available in control log
 	 */
-	char control_err[][50] = {
-		"detected blob I/O error! writeErr:true",
-		"detected blob I/O error! readErr:true"};
 	for (i = 0; i < 2 ; i++) {
 		rc = verify_state_in_log(devices[rank_pos].host,
 					 control_log_file, control_err[i]);

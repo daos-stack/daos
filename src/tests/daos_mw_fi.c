@@ -63,6 +63,12 @@ action_obj(daos_handle_t coh, daos_obj_id_t oid, int op, const char *name)
 	daos_handle_t	oh;
 	daos_key_t	dkey;
 	int		rc, rc2;
+	mode_t          bad_mode  = 0xDEADBEAF;
+	daos_size_t     bad_csize = 13;
+	d_sg_list_t     sgl;
+	d_iov_t         sg_iovs[2];
+	daos_iod_t      iod;
+	daos_recx_t     recxs[2];
 
 	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -86,13 +92,6 @@ action_obj(daos_handle_t coh, daos_obj_id_t oid, int op, const char *name)
 			fprintf(stderr, "daos_obj_punch_dkeys() failed: "DF_RC"\n", DP_RC(rc));
 		goto close;
 	}
-
-	mode_t		bad_mode = 0xDEADBEAF;
-	daos_size_t	bad_csize = 13;
-	d_sg_list_t	sgl;
-	d_iov_t		sg_iovs[2];
-	daos_iod_t	iod;
-	daos_recx_t	recxs[2];
 
 	D_ASSERT(op == CORRUPT_ENTRY);
 	/** corrupt the mode type bits and chunk size */

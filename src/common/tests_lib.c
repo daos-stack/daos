@@ -155,6 +155,7 @@ void
 dts_log(const char *msg, const char *file, const char *func, int line,
 		uint64_t py_logfac)
 {
+	int mask;
 	int logfac = 0;
 
 	switch (py_logfac) {
@@ -172,7 +173,7 @@ dts_log(const char *msg, const char *file, const char *func, int line,
 		break;
 	}
 
-	int mask = d_log_check(logfac | D_LOGFAC);
+	mask = d_log_check(logfac | D_LOGFAC);
 
 	if (mask)
 		d_log(mask, "%s:%d %s() %s", file, line, func, msg);

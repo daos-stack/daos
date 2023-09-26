@@ -332,14 +332,6 @@ main(int argc, char **argv)
 	char		 filter[1024];
 #endif
 
-	d_register_alt_assert(mock_assert);
-
-	par_init(&argc, &argv);
-
-	par_rank(PAR_COMM_WORLD, &rank);
-	par_size(PAR_COMM_WORLD, &size);
-	par_barrier(PAR_COMM_WORLD);
-
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
 		{"mgmt",	no_argument,		NULL,	'm'},
@@ -388,6 +380,14 @@ main(int argc, char **argv)
 		{"help",	no_argument,		NULL,	'h'},
 		{NULL,		0,			NULL,	0}
 	};
+
+	d_register_alt_assert(mock_assert);
+
+	par_init(&argc, &argv);
+
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = daos_init();
 	if (rc) {

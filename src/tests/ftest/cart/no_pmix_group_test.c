@@ -317,6 +317,8 @@ int main(int argc, char **argv)
 	int			rc;
 	int			num_attach_retries = 20;
 	uint32_t		primary_grp_version = 1;
+	d_rank_t                 real_ranks[]        = {0, 1, 2, 3, 4, 5, 6, 7};
+	d_rank_t                 sec_ranks[]         = {10, 9, 8, 7, 6, 41, 42, 43};
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
@@ -439,9 +441,6 @@ int main(int argc, char **argv)
 		D_ERROR("Expected group_size=0 got=%d\n", grp_size);
 		assert(0);
 	}
-
-	d_rank_t real_ranks[] = {0, 1, 2, 3, 4, 5,  6,  7};
-	d_rank_t sec_ranks[] = {10, 9, 8, 7, 6, 41, 42, 43};
 
 	/* Populate secondary group with 1 rank at a time */
 	for (i = 0 ; i < 8; i++) {

@@ -720,10 +720,11 @@ setup_obj_data_for_sv(struct csum_test_ctx *ctx, bool large_buf)
 static void
 iov_update_fill(d_iov_t *iov, char *data, uint64_t len_to_fill)
 {
-	iov->iov_len = len_to_fill;
 	const size_t data_len = strlen(data); /** don't include '\0' */
 	size_t bytes_to_copy = min(data_len, len_to_fill);
 	char *dest = iov->iov_buf;
+
+	iov->iov_len = len_to_fill;
 
 	assert_int_not_equal(0, data_len);
 	while (len_to_fill > 0) {
@@ -1915,17 +1916,16 @@ ctx_obj_update(struct csum_test_ctx *ctx)
 static void
 test_fetch_task_api(void **state)
 {
-	struct csum_test_ctx	 ctx;
-	struct dcs_csum_info	*csum_info = NULL;
-	int			 rc;
+	struct csum_test_ctx  ctx;
+	struct dcs_csum_info *csum_info = NULL;
+	d_iov_t               iov       = {0};
+	int                   rc;
 
 	setup_from_test_args(&ctx, *state);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC64, false, 1024 * 32, OC_SX);
 	setup_single_recx_data(&ctx, "abc", 1024);
 
 	ctx_obj_update(&ctx);
-
-	d_iov_t iov = {0};
 
 	rc = tst_obj_fetch(ctx.oh, 1, &ctx.dkey, 1, &ctx.fetch_iod,
 			   &ctx.fetch_sgl, NULL, 0, NULL, &iov);
@@ -2415,6 +2415,7 @@ test_enumerate_object2(void **state)
 	daos_key_desc_t		 kds[KDS_NR] = {0};
 	uint8_t			 csum_buf[2048];
 	int			 rc;
+	daos_epoch_range_t       epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 
 	d_iov_set(&csum_iov, csum_buf, sizeof(csum_buf));
 	csum_iov.iov_len = 0;
@@ -2436,7 +2437,6 @@ test_enumerate_object2(void **state)
 	d_sgl_init(&list_sgl, 1);
 	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 64);
 	/** Sanity check that no failure still returns success */
-	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 
 	/** force to only list visible extents */
 	daos_anchor_set_flags(&dkey_anchor,

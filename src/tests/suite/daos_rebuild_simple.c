@@ -1220,11 +1220,10 @@ rebuild_with_dfs_open_create_punch(void **state)
 	int		i;
 	daos_size_t	chunk_size = 1048576;
 	int		rc;
+	dfs_attr_t       attr = {};
 
 	if (!test_runable(arg, 6))
 		return;
-
-	dfs_attr_t attr = {};
 
 	attr.da_props = daos_prop_alloc(1);
 	assert_non_null(attr.da_props);

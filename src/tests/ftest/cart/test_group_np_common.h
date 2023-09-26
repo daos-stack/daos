@@ -597,15 +597,17 @@ parse_verify_swim_status_arg(char *source)
 	cursor = source;
 
 	for (m = 0; m < maxMatches; m++) {
+		unsigned int g      = 0;
+		unsigned int offset = 0;
+
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
 			/* avoid checkpatch warning */
 			break;	/* No more matches */
 		}
 
-		unsigned int g = 0;
-		unsigned int offset = 0;
-
 		for (g = 0; g < maxGroups; g++) {
+			char cC[strlen(cursor) + 1];
+
 			if (groupArray[g].rm_so == (size_t)-1) {
 				/* avoid checkpatch warning */
 				break;	/* No more groups */
@@ -615,8 +617,6 @@ parse_verify_swim_status_arg(char *source)
 				/* avoid checkpatch warning */
 				offset = groupArray[g].rm_eo;
 			}
-
-			char cC[strlen(cursor) + 1];
 
 			strcpy(cC, cursor);
 			cC[groupArray[g].rm_eo] = 0;
@@ -768,6 +768,7 @@ test_parse_args(int argc, char **argv)
 		 &test_g.t_write_completion_file, 1},
 		{0, 0, 0, 0}
 	};
+	struct t_swim_status vss;
 
 	test_g.cg_num_ranks = 0;
 	test_g.t_use_cfg = true;
@@ -780,8 +781,6 @@ test_parse_args(int argc, char **argv)
 
 	/* Default value: non-existent rank with status "alive" */
 	test_g.t_verify_swim_status = (struct t_swim_status){ -1, 0 };
-
-	struct t_swim_status vss;
 
 	while (1) {
 		rc = getopt_long(argc, argv, "n:a:c:h:u:r:ml", long_options,

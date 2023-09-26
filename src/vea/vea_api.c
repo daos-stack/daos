@@ -620,10 +620,12 @@ vea_tx_publish(struct vea_space_info *vsi, struct vea_hint_context *hint,
 int
 vea_free(struct vea_space_info *vsi, uint64_t blk_off, uint32_t blk_cnt)
 {
-	D_ASSERT(vsi != NULL);
-	struct umem_instance *umem = vsi->vsi_umem;
+	struct umem_instance      *umem;
 	struct free_commit_cb_arg *fca;
-	int rc;
+	int                        rc;
+
+	D_ASSERT(vsi != NULL);
+	umem = vsi->vsi_umem;
 
 	D_ALLOC_PTR(fca);
 	if (fca == NULL)
@@ -690,9 +692,10 @@ vea_set_ext_age(struct vea_space_info *vsi, uint64_t blk_off, uint64_t age)
 int
 vea_hint_load(struct vea_hint_df *phd, struct vea_hint_context **thc)
 {
+	struct vea_hint_context *hint_ctxt;
+
 	D_ASSERT(phd != NULL);
 	D_ASSERT(thc != NULL);
-	struct vea_hint_context *hint_ctxt;
 
 	D_ALLOC_PTR(hint_ctxt);
 	if (hint_ctxt == NULL)

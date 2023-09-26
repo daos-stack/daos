@@ -138,9 +138,7 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 
 					continue;
 				}
-				bool ret = parse_param_val(param_idx, tok,
-							   out_pd);
-				if (!ret)
+				if (!parse_param_val(param_idx, tok, out_pd))
 					goto out;
 
 				param_idx = POLICY_BAD_PARAM;

@@ -563,13 +563,14 @@ dtx_15(void **state)
 static void
 dtx_16(void **state)
 {
-	FAULT_INJECTION_REQUIRED();
 	test_arg_t	*arg = *state;
 	char		*update_buf;
 	const char	*dkey = dts_dtx_dkey;
 	const char	*akey = dts_dtx_akey;
 	daos_obj_id_t	 oid;
 	struct ioreq	 req;
+
+	FAULT_INJECTION_REQUIRED();
 
 	print_message("Resend after DTX aggregation\n");
 

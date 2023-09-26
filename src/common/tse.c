@@ -947,12 +947,13 @@ tse_task_create(tse_task_func_t task_func, tse_sched_t *sched, void *priv,
 	struct tse_task_private	 *dtp;
 	tse_task_t		 *task;
 
+	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
+
 	D_ALLOC_PTR(task);
 	if (task == NULL)
 		return -DER_NOMEM;
 
 	dtp = tse_task2priv(task);
-	D_CASSERT(sizeof(task->dt_private) >= sizeof(*dtp));
 
 	D_INIT_LIST_HEAD(&dtp->dtp_list);
 	D_INIT_LIST_HEAD(&dtp->dtp_task_list);

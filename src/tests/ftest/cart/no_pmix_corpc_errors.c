@@ -264,6 +264,8 @@ int main(int argc, char **argv)
 	crt_rpc_t		*rpc;
 	sem_t			sem;
 	int			rc;
+	d_rank_t                 real_ranks[] = {0, 1, 2, 3, 4, 5, 6, 7};
+	d_rank_t                 sec_ranks[]  = {10, 9, 8, 7, 6, 41, 42, 43};
 
 	if (D_ON_VALGRIND) {
 		crtu_set_shutdown_delay(10);
@@ -383,9 +385,6 @@ int main(int argc, char **argv)
 		D_ERROR("Expected group_size=0 got=%d\n", grp_size);
 		assert(0);
 	}
-
-	d_rank_t real_ranks[] = {0, 1, 2, 3, 4, 5,  6,  7};
-	d_rank_t sec_ranks[] = {10, 9, 8, 7, 6, 41, 42, 43};
 
 	/* Populate secondary group with 1 rank at a time */
 	for (i = 0 ; i < 8; i++) {

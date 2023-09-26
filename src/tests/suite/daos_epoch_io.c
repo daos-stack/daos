@@ -1467,6 +1467,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	int			 rc = 0;
 	/*Array for snapshot epoch*/
 	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
+	int                      line_nr                       = 0;
 
 	if (io_conf == NULL || strlen(io_conf) == 0) {
 		print_message("invalid io_conf.\n");
@@ -1479,8 +1480,6 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 			      io_conf, errno, strerror(errno));
 		return daos_errno2der(errno);
 	}
-
-	int line_nr = 0;
 
 	do {
 		size_t	cmd_size;

@@ -92,14 +92,6 @@ main(int argc, char **argv)
 	int		 size;
 	int		 rc;
 
-	d_register_alt_assert(mock_assert);
-
-	par_init(&argc, &argv);
-
-	par_rank(PAR_COMM_WORLD, &rank);
-	par_size(PAR_COMM_WORLD, &size);
-	par_barrier(PAR_COMM_WORLD);
-
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
 		{"dmg_config",	required_argument,	NULL,	'n'},
@@ -108,6 +100,14 @@ main(int argc, char **argv)
 		{"sys",		no_argument,		NULL,	's'},
 		{NULL,		0,			NULL,	0}
 	};
+
+	d_register_alt_assert(mock_assert);
+
+	par_init(&argc, &argv);
+
+	par_rank(PAR_COMM_WORLD, &rank);
+	par_size(PAR_COMM_WORLD, &size);
+	par_barrier(PAR_COMM_WORLD);
 
 	rc = daos_init();
 	if (rc) {

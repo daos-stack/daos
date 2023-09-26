@@ -31,14 +31,12 @@ crt_lib_init(void)
 	int		rc;
 	uint64_t	start_rpcid;
 
+	/* avoid size mis-matching between client/server side /see crt_proc_uuid_t() */
+
+	D_CASSERT(sizeof(uuid_t) == 16);
+
 	rc = D_RWLOCK_INIT(&crt_gdata.cg_rwlock, NULL);
 	D_ASSERT(rc == 0);
-
-	/*
-	 * avoid size mis-matching between client/server side
-	 * /see crt_proc_uuid_t().
-	 */
-	D_CASSERT(sizeof(uuid_t) == 16);
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;

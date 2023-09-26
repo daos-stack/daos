@@ -1298,6 +1298,7 @@ check_short_read_cb(tse_task_t *task, void *data)
 	daos_size_t		nr_short_recs = 0;
 	bool			break_on_lower = false;
 	int			rc = task->dt_result;
+	daos_array_get_size_t   *size_args;
 
 	if (rc != 0) {
 		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
@@ -1390,8 +1391,6 @@ next:
 	}
 
 	/** Schedule the get size to properly check for short reads */
-	daos_array_get_size_t	*size_args;
-
 	size_args	= daos_task_get_args(task);
 	size_args->oh	= args->oh;
 	size_args->th	= DAOS_TX_NONE;

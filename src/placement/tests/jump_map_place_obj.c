@@ -431,13 +431,14 @@ jtc_set_status_on_target(struct jm_test_ctx *ctx, const int status,
 			 const uint32_t id)
 {
 	struct pool_target_id_list tgts;
-	struct pool_target_id tgt_id = {.pti_id = id};
+	struct pool_target_id      tgt_id = {.pti_id = id};
+	int                        rc;
 
-	tgts.pti_ids = &tgt_id;
+	tgts.pti_ids    = &tgt_id;
 	tgts.pti_number = 1;
 
-	int rc = ds_pool_map_tgts_update(ctx->po_map, &tgts, status,
-					 false, &ctx->ver, ctx->enable_print_debug_msgs);
+	rc = ds_pool_map_tgts_update(ctx->po_map, &tgts, status, false, &ctx->ver,
+				     ctx->enable_print_debug_msgs);
 
 	/* Make sure pool map changed */
 	assert_success(rc);
@@ -535,19 +536,19 @@ jtc_get_layout_rebuild_count(struct jm_test_ctx *ctx)
 static bool
 jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 {
-	int i;
-	int target_num;
-	bool *target_set;
-	bool result = false;
+	int      target_num;
+	bool    *target_set;
+	bool     result = false;
+	uint32_t total_targets;
 
 	D_ASSERT(ctx != NULL);
 	D_ASSERT(ctx->po_map != NULL);
-	const uint32_t total_targets = pool_map_target_nr(ctx->po_map);
+	total_targets = pool_map_target_nr(ctx->po_map);
 
 	D_ALLOC_ARRAY(target_set, total_targets);
 	D_ASSERT(target_set != NULL);
 
-	for (i = 0; i < ctx->layout->ol_nr; i++) {
+	for (int i = 0; i < ctx->layout->ol_nr; i++) {
 		target_num = ctx->layout->ol_shards[i].po_target;
 
 		if (target_num != -1) {
@@ -1060,10 +1061,9 @@ chained_rebuild_completes_all_at_once(void **state)
 	struct jm_test_ctx	 ctx;
 
 	jtc_init_with_layout(&ctx, 9, 1, 1, OC_EC_2P1G1, g_verbose);
-	int i;
 
 	/* fail two sets of layouts, should still be one good one layout */
-	for (i = 0; i < 2; i++) {
+	for (int i = 0; i < 2; i++) {
 		jtc_set_status_on_all_shards(&ctx, DOWN);
 		jtc_set_status_on_all_shards(&ctx, DOWNOUT);
 		jtc_assert_scan_and_layout(&ctx);

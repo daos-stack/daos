@@ -466,6 +466,11 @@ example_daos_array()
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_obj_id_t	oid;
 	int		rc;
+	daos_array_iod_t iod;
+	d_sg_list_t      sgl;
+	daos_range_t     rg;
+	d_iov_t          iov;
+	daos_size_t      array_size;
 
 	if (rank == 0)
 		printf("Example of DAOS Array:\n");
@@ -508,12 +513,6 @@ example_daos_array()
 		ASSERT(cell_size == 1, "array open failed");
 		ASSERT(csize == 1048576, "array open failed");
 	}
-
-	daos_array_iod_t iod;
-	d_sg_list_t	sgl;
-	daos_range_t	rg;
-	d_iov_t		iov;
-	daos_size_t	array_size;
 
 	/** set array location */
 	iod.arr_nr = 1; /** number of ranges / array iovec */
@@ -594,6 +593,7 @@ example_daos_kv()
 	daos_obj_id_t	oid;
 	char		key[32] = {0};
 	int		i, rc;
+	int             num_keys;
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (rank == 0)
@@ -645,7 +645,7 @@ example_daos_kv()
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	int num_keys = 0;
+	num_keys = 0;
 
 	/** enumerate all keys */
 	list_keys(oh, &num_keys);

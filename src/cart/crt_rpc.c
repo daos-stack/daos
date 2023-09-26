@@ -773,6 +773,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	d_rank_list_t			*membs;
 	bool				found;
 	int				rc = 0;
+	char                            *fill_uri;
 
 	chained_rpc_priv = cb_info->cci_arg;
 	lookup_rpc  = cb_info->cci_rpc;
@@ -818,7 +819,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	 * If requested tag does not match returned tag, issue URI
 	 * request directly to the rank:tag=0 server
 	 */
-	char *fill_uri = NULL;
+	fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
 		if (!crt_provider_is_contig_ep(ctx->cc_hg_ctx.chc_provider)) {
