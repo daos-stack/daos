@@ -141,6 +141,11 @@ for prefix in ['DL', 'DHL', 'DS', 'DHS']:
 PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
 
+# Variables that are checked for when %s is using in a logging macro.  The number of %s calls
+# is counted, and the number of times any of the strings below is included is also counted and
+# if the two are the same then no warning is issued.  This allows us to skip checks for cases where
+# strings are of known types, for example uris or CaRT group names, or performing enum->string
+# lookup.
 ALLOWED_VARS = ['strerror', 'db_file', 'ii_group_name', 'cg_grpid', 'agg_op2str', 'gc_name',
                 'opc_str', 'oi_str', 'sr_name', 's_name', 'ds_rsvc_state_str', 'cpf_name',
                 'bb_name', 'bio_state_enum_to_str', 'traddr', 'dlerror()', 'prop_str',
