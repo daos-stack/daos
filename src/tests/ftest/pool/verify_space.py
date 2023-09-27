@@ -156,11 +156,11 @@ class VerifyPoolSpace(TestWithServers):
             status = compare_methods[rank](rank, pool_size)
             current = pool_size[-1]['data'][rank]
             if len(pool_size) > 1:
-                previous = pool_size[-1]['data'][rank]
+                previous = pool_size[-2]['data'][rank]
             else:
                 previous = {'size': 'None', 'avail': 'None'}
             if compare_methods[rank] is compare_initial:
-                compare = 'cS>=cA'
+                compare = 'cA<cS'
             elif compare_methods[rank] is compare_reduced:
                 compare = 'pA>cA'
             elif compare_methods[rank] is compare_equal:
@@ -179,16 +179,17 @@ class VerifyPoolSpace(TestWithServers):
         """Test ID: DAOS-3672.
 
         Test steps:
-        1) Create a single pool on a single server and list associated storage, verify correctness
-        2) Use IOR to fill containers to varying degrees of fullness, verify storage listing
-        3) Create multiple pools on a single server, list associated storage, verify correctness
-        4) Use IOR to fill containers to varying degrees of fullness, verify storage listing for all
+        1) Start servers and list associated storage, verify correctness
+        2) Create a single pool on a single server and list associated storage, verify correctness
+        3) Use IOR to fill containers to varying degrees of fullness, verify storage listing
+        4) Create multiple pools on a single server, list associated storage, verify correctness
+        5) Use IOR to fill containers to varying degrees of fullness, verify storage listing for all
            pools
-        5) Create a single pool that spans many servers, list associated storage, verify correctness
-        6) Use IOR to fill containers to varying degrees of fullness, verify storage listing
-        7) Create multiple pools that span many servers, list associated storage, verify correctness
-        8) Use IOR to fill containers to varying degrees of fullness, verify storage listing
-        9) Fail one of the servers for a pool spanning many servers.  Verify the storage listing.
+        6) Create a single pool that spans many servers, list associated storage, verify correctness
+        7) Use IOR to fill containers to varying degrees of fullness, verify storage listing
+        8) Create multiple pools that span many servers, list associated storage, verify correctness
+        9) Use IOR to fill containers to varying degrees of fullness, verify storage listing
+        10) Fail one of the servers for a pool spanning many servers.  Verify the storage listing.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
@@ -215,7 +216,7 @@ class VerifyPoolSpace(TestWithServers):
         pools = []
         pool_size = []
 
-        # (0) Collect initial system information
+        # (1) Collect initial system information
         #  - System available space should equal the free space
         description = 'initial configuration w/o pools'
         pool_size.append(
@@ -224,7 +225,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
         dmg.storage_query_usage()
 
-        # (1) Create a single pool on a rank 0
+        # (2) Create a single pool on a rank 0
         #  - System free space should be less on rank 0 only
         description = 'a single pool on rank 0'
         pools.extend(self._create_pools(description, [0]))
@@ -234,7 +235,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[0:1])
 
-        # (2) Write various amounts of data to the single pool on a single engine
+        # (3) Write various amounts of data to the single pool on a single engine
         #  - System free space should not change
         container = self.get_container(pools[0])
         compare_methods = [compare_equal, compare_equal, compare_equal]
@@ -244,7 +245,7 @@ class VerifyPoolSpace(TestWithServers):
             self._query_pool_size(description, pools[0:1])
         dmg.storage_query_usage()
 
-        # (3) Create multiple pools on rank 1
+        # (4) Create multiple pools on rank 1
         #  - System free space should be less on rank 1 only
         description = 'multiple pools on rank 1'
         pools.extend(self._create_pools(description, ['1_a', '1_b', '1_c']))
@@ -254,7 +255,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[1:4])
 
-        # (4) Write various amounts of data to the multiple pools on rank 1
+        # (5) Write various amounts of data to the multiple pools on rank 1
         #  - System free space should not change
         compare_methods = [compare_equal, compare_equal, compare_equal]
         for index, block_size in enumerate(('200M', '2G', '7G')):
@@ -264,7 +265,7 @@ class VerifyPoolSpace(TestWithServers):
             self._query_pool_size(description, pools[1 + index:2 + index])
         dmg.storage_query_usage()
 
-        # (5) Create a single pool on ranks 1 & 2
+        # (6) Create a single pool on ranks 1 & 2
         #  - System free space should be less on rank 1 and 2
         description = 'a single pool on ranks 1 & 2'
         pools.extend(self._create_pools(description, ['1_2']))
@@ -274,7 +275,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[4:5])
 
-        # (6) Write various amounts of data to the single pool on ranks 1 & 2
+        # (7) Write various amounts of data to the single pool on ranks 1 & 2
         #  - System free space should not change
         container = self.get_container(pools[4])
         compare_methods = [compare_equal, compare_equal, compare_equal]
@@ -284,7 +285,7 @@ class VerifyPoolSpace(TestWithServers):
             self._query_pool_size(description, pools[4:5])
         dmg.storage_query_usage()
 
-        # (7) Create a single pool on all ranks
+        # (8) Create a single pool on all ranks
         #  - System free space should be less on all ranks
         description = 'a single pool on all ranks'
         pools.extend(self._create_pools(description, ['0_1_2']))
@@ -294,7 +295,7 @@ class VerifyPoolSpace(TestWithServers):
         self._compare_system_pool_size(pool_size, compare_methods)
         self._query_pool_size(description, pools[5:6])
 
-        # (8) Write various amounts of data to the single pool on all ranks
+        # (9) Write various amounts of data to the single pool on all ranks
         #  - System free space should not change
         container = self.get_container(pools[5])
         compare_methods = [compare_equal, compare_equal, compare_equal]
@@ -304,7 +305,7 @@ class VerifyPoolSpace(TestWithServers):
             self._query_pool_size(description, pools[5:6])
         dmg.storage_query_usage()
 
-        # (9) Stop one of the servers for a pool spanning many servers
+        # (10) Stop one of the servers for a pool spanning many servers
         self._query_pool_size(description, pools)
 
         # Step #9

@@ -32,6 +32,7 @@ pool_rank_0_1_2:
   target_list: [0, 1, 2]
 container:
   type: POSIX
+  control_method: daos
 ior:
   api: DFS
   dfs_chunk: 1048576

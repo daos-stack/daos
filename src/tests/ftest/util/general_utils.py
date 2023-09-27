@@ -147,7 +147,7 @@ def human_to_bytes(size):
         DaosTestError: when an invalid human readable size value is provided
 
     Returns:
-        int: value translated to bytes.
+        int|float: value translated to bytes.
 
     """
     conversion = {}
@@ -155,11 +155,11 @@ def human_to_bytes(size):
         conversion[unit] = 1000 ** index
         conversion[f'{unit}b'] = 1000 ** index
         conversion[f'{unit}ib'] = 1024 ** index
-    match = re.findall(r'([0-9.]+)\s*([a-zA-Z]+|)', size)
     try:
+        match = re.findall(r'([0-9.]+)\s*([a-zA-Z]+|)', str(size))
         number = match[0][0]
         unit = match[0][1].lower()
-    except IndexError as error:
+    except (TypeError, IndexError) as error:
         raise DaosTestError(f'Invalid human readable size format: {size}') from error
     try:
         value = float(number) * conversion[unit]
