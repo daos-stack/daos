@@ -100,3 +100,6 @@ checksum:
   test_with_checksum: false
 test_ranks:
   rank_list: ["4,5"]
+perform_osa_tasks:
+  exclude: "exclude"
+  drain: "drain"

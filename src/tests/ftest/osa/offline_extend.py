@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+from time import sleep
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
@@ -99,12 +99,14 @@ class OSAOfflineExtend(OSAUtils):
             output = self.pool.extend(rank_val)
             self.log.info(output)
             if self.test_exclude_or_drain == "exclude":
-                time.sleep(5)
+                self.pool.wait_for_rebuild_to_start()
+                sleep(4)
                 self.log.info("Exclude rank 3 while rebuild is happening")
                 output = self.pool.exclude("3")
             elif self.test_exclude_or_drain == "drain":
-                time.sleep(5)
-                self.log.info("Drain rank 3 while rebuild is happening")
+                # Drain cannot be performed while extend rebuild is happening.
+                self.print_and_assert_on_rebuild_failure(output)
+                self.log.info("Drain rank 3 after extend rebuild is completed")
                 output = self.pool.drain("3")
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_extend = self.pool.get_total_free_space(refresh=True)
@@ -223,13 +225,13 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
-        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_exclude_after_rebuild
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_exclude_during_rebuild
         """
         self.test_exclude_or_drain = self.params.get("exclude", '/run/perform_osa_tasks/*')
         self.log.info("Offline Extend Testing: Exclude during Rebuild")
         self.run_offline_extend_test(1, data=True)
 
-    def test_osa_offline_extend_drain_during_rebuild(self):
+    def test_osa_offline_extend_drain_after_rebuild(self):
         """Test ID: DAOS-14441.
 
         Test Description: Validate Offline extend after rebuild is started
@@ -238,8 +240,8 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=osa,osa_extend,offline_extend
-        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_drain_during_rebuild
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_drain_after_rebuild
         """
         self.test_exclude_or_drain = self.params.get("drain", '/run/perform_osa_tasks/*')
-        self.log.info("Offline Extend Testing: Drain during rebuild")
+        self.log.info("Offline Extend Testing: Drain after rebuild")
         self.run_offline_extend_test(1, data=True)
