@@ -918,82 +918,102 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 	int				 nr = 0;
 	uint64_t			 blk_off;
 	uint32_t			 blk_cnt;
+	d_list_t			 reclaim_list;
 
+	/*
+	 * Reclaim might yield for MD-on-SSD, so pick up empty entries
+	 * to avoid allocation firstly.
+	 */
+	D_INIT_LIST_HEAD(&reclaim_list);
 	for (i = 0; i < VEA_MAX_BITMAP_CLASS; i++) {
 		d_list_for_each_entry_safe(bitmap_entry, tmp_entry,
 				&vsi->vsi_class.vfc_bitmap_empty[i], vbe_link) {
 			vfb = &bitmap_entry->vbe_bitmap;
 			D_ASSERT(vfb->vfb_class == i + 1);
 			D_ASSERT(is_bitmap_empty(vfb->vfb_bitmaps, vfb->vfb_bitmap_sz));
-			d_list_del_init(&bitmap_entry->vbe_link);
-			D_ALLOC_PTR(fca);
-			if (!fca)
-				return -DER_NOMEM;
-
-			blk_off = vfb->vfb_blk_off;
-			blk_cnt = vfb->vfb_blk_cnt;
-			fca->fca_vsi = vsi;
-			fca->fca_vfe.vfe_ext.vfe_blk_off = blk_off;
-			fca->fca_vfe.vfe_ext.vfe_blk_cnt = blk_cnt;
-			fca->fca_vfe.vfe_ext.vfe_age = 0; /* not used */
-
-			rc = umem_tx_begin(umem, vsi->vsi_txd);
-			if (rc != 0) {
-				D_FREE(fca);
-				return rc;
-			}
-
-			/*
-			 * Even in-memory bitmap failed to remove from tree, it is ok
-			 * because this bitmap chunk has been removed from allocation LRU list.
-			 */
-			d_iov_set(&key, &fca->fca_vfe.vfe_ext.vfe_blk_off,
-				  sizeof(fca->fca_vfe.vfe_ext.vfe_blk_off));
-			dbtree_destroy(bitmap_entry->vbe_agg_btr, NULL);
-			rc = dbtree_delete(fca->fca_vsi->vsi_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
-			if (rc) {
-				D_ERROR("Remove ["DF_U64", %u] from bitmap tree "
-					"error: "DF_RC"\n", fca->fca_vfe.vfe_ext.vfe_blk_off,
-					fca->fca_vfe.vfe_ext.vfe_blk_cnt, DP_RC(rc));
-				goto abort;
-			}
-			dec_stats(fca->fca_vsi, STAT_FRAGS_BITMAP, 1);
-			dec_stats(fca->fca_vsi, STAT_FREE_BITMAP_BLKS, blk_cnt);
-
-			d_iov_set(&key, &blk_off, sizeof(blk_off));
-			rc = dbtree_delete(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
-			if (rc) {
-				D_ERROR("Remove ["DF_U64", %u] from persistent bitmap "
-					"tree error: "DF_RC"\n", blk_off, blk_cnt, DP_RC(rc));
-				goto abort;
-			}
-			/* call persistent_free_extent instead */
-			rc = persistent_free(vsi, &fca->fca_vfe);
-			if (rc) {
-				D_ERROR("Remove ["DF_U64", %u] from persistent "
-					"extent tree error: "DF_RC"\n", blk_off,
-					blk_cnt, DP_RC(rc));
-				goto abort;
-			}
-			rc = umem_tx_add_callback(umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
-						  free_commit_cb, fca);
-			if (rc == 0)
-				fca = NULL;
-abort:
-			D_FREE(fca);
-			/* Commit/Abort transaction on success/error */
-			rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
-			if (rc)
-				return rc;
+			d_list_move_tail(&bitmap_entry->vbe_link, &reclaim_list);
 			nr++;
 			if (nr >= nr_reclaim)
-				goto out;
+				break;
 		}
+	}
+
+	nr = 0;
+	d_list_for_each_entry_safe(bitmap_entry, tmp_entry, &reclaim_list, vbe_link) {
+		vfb = &bitmap_entry->vbe_bitmap;
+		d_list_del_init(&bitmap_entry->vbe_link);
+		D_ALLOC_PTR(fca);
+		if (!fca) {
+			rc = -DER_NOMEM;
+			goto out;
+		}
+
+		blk_off = vfb->vfb_blk_off;
+		blk_cnt = vfb->vfb_blk_cnt;
+		fca->fca_vsi = vsi;
+		fca->fca_vfe.vfe_ext.vfe_blk_off = blk_off;
+		fca->fca_vfe.vfe_ext.vfe_blk_cnt = blk_cnt;
+		fca->fca_vfe.vfe_ext.vfe_age = 0; /* not used */
+
+		rc = umem_tx_begin(umem, vsi->vsi_txd);
+		if (rc != 0) {
+			D_FREE(fca);
+			goto out;
+		}
+
+		/*
+		 * Even in-memory bitmap failed to remove from tree, it is ok
+		 * because this bitmap chunk has been removed from allocation LRU list.
+		 */
+		d_iov_set(&key, &fca->fca_vfe.vfe_ext.vfe_blk_off,
+			  sizeof(fca->fca_vfe.vfe_ext.vfe_blk_off));
+		dbtree_destroy(bitmap_entry->vbe_agg_btr, NULL);
+		rc = dbtree_delete(fca->fca_vsi->vsi_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
+		if (rc) {
+			D_ERROR("Remove ["DF_U64", %u] from bitmap tree "
+				"error: "DF_RC"\n", fca->fca_vfe.vfe_ext.vfe_blk_off,
+				fca->fca_vfe.vfe_ext.vfe_blk_cnt, DP_RC(rc));
+			goto abort;
+		}
+		dec_stats(fca->fca_vsi, STAT_FRAGS_BITMAP, 1);
+		dec_stats(fca->fca_vsi, STAT_FREE_BITMAP_BLKS, blk_cnt);
+
+		d_iov_set(&key, &blk_off, sizeof(blk_off));
+		rc = dbtree_delete(vsi->vsi_md_bitmap_btr, BTR_PROBE_EQ, &key, NULL);
+		if (rc) {
+			D_ERROR("Remove ["DF_U64", %u] from persistent bitmap "
+				"tree error: "DF_RC"\n", blk_off, blk_cnt, DP_RC(rc));
+			goto abort;
+		}
+		rc = persistent_free_extent(vsi, &fca->fca_vfe.vfe_ext);
+		if (rc) {
+			D_ERROR("Remove ["DF_U64", %u] from persistent "
+				"extent tree error: "DF_RC"\n", blk_off,
+				blk_cnt, DP_RC(rc));
+			goto abort;
+		}
+		rc = umem_tx_add_callback(umem, vsi->vsi_txd, UMEM_STAGE_ONCOMMIT,
+					  free_commit_cb, fca);
+		if (rc == 0)
+			fca = NULL;
+abort:
+		D_FREE(fca);
+		/* Commit/Abort transaction on success/error */
+		rc = rc ? umem_tx_abort(umem, rc) : umem_tx_commit(umem);
+		if (rc)
+			goto out;
+		nr++;
 	}
 
 out:
 	if (nr_reclaimed)
 		*nr_reclaimed = nr;
+
+	d_list_for_each_entry_safe(bitmap_entry, tmp_entry, &reclaim_list, vbe_link) {
+		vfb = &bitmap_entry->vbe_bitmap;
+		d_list_move_tail(&bitmap_entry->vbe_link,
+				 &vsi->vsi_class.vfc_bitmap_empty[vfb->vfb_class - 1]);
+	}
 	return rc;
 }
 
