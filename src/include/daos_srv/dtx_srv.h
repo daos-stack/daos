@@ -305,12 +305,7 @@ dtx_entry_get(struct dtx_entry *dte)
 	return dte;
 }
 
-static inline void
-dtx_entry_put(struct dtx_entry *dte)
-{
-	if (--(dte->dte_refs) == 0)
-		D_FREE(dte);
-}
+void dtx_entry_put(struct dtx_entry *dte);
 
 static inline bool
 dtx_is_valid_handle(const struct dtx_handle *dth)
