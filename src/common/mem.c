@@ -1876,6 +1876,10 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 	uint64_t bit;
 	uint64_t idx;
 
+	D_ASSERT(wr_tx != -1ULL);
+	D_ASSERTF(store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) >= 0,
+		  "tx_id:"DF_U64" < last_inflight:"DF_U64"\n", wr_tx, pinfo->pi_last_inflight);
+
 	for (bit_nr = start_bit; bit_nr <= end_bit; bit_nr++) {
 		idx = bit_nr >> UMEM_CHUNK_IDX_SHIFT; /** uint64_t index */
 		bit = bit_nr & UMEM_CHUNK_IDX_MASK;
@@ -1889,10 +1893,6 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 		d_list_del(&pinfo->pi_link);
 		d_list_add_tail(&pinfo->pi_link, &cache->ca_pgs_dirty);
 	}
-
-	if (store->stor_ops->so_wal_id_cmp(store, wr_tx, pinfo->pi_last_inflight) <= 0 ||
-	    wr_tx == -1ULL)
-		return;
 
 	pinfo->pi_last_inflight = wr_tx;
 }
