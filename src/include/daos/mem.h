@@ -312,6 +312,9 @@ struct umem_instance;
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
 
+/* Macros associated with Memory buckets */
+#define	UMEM_DEFAULT_MBKT_ID	0
+
 /* type num used by umem ops */
 enum {
 	UMEM_TYPE_ANY,
@@ -575,12 +578,17 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define umem_alloc(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
+#define umem_alloc(umm, size)  umem_alloc_verb(umm, 0, size, UMEM_DEFAULT_MBKT_ID)
 
-#define umem_zalloc(umm, size, mbkt_id) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+#define umem_alloc_from_bucket(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
 
-#define umem_alloc_noflush(umm, size, mbkt_id)                                                     \
-	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, mbkt_id)
+#define umem_zalloc(umm, size) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, UMEM_DEFAULT_MBKT_ID)
+
+#define umem_zalloc_from_bucket(umm, size, mbkt_id)						   \
+	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+
+#define umem_alloc_noflush(umm, size)								   \
+	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, UMEM_DEFAULT_MBKT_ID)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -737,8 +745,13 @@ int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **ac
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
 umem_off_t
-umem_reserve(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
+umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
 	     unsigned int mbkt_id);
+#define umem_reserve(umm, rsrvd_act, size)							\
+	umem_reserve_common(umm, rsrvd_act, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_reserve_from_bucket(umm, rsrvd_act, size, mbkt_id)					\
+	umem_reserve_common(umm, rsrvd_act, size, mbkt_id)
+
 void
 umem_defer_free(struct umem_instance *umm, umem_off_t off, struct umem_rsrvd_act *rsrvd_act);
 void
@@ -755,7 +768,14 @@ umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
 }
 
 static inline umem_off_t
-umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num,
+umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, UMEM_DEFAULT_MBKT_ID);
+}
+
+static inline umem_off_t
+umem_atomic_alloc_from_bucket(struct umem_instance *umm, size_t len, unsigned int type_num,
 		  unsigned int mbkt_id)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);

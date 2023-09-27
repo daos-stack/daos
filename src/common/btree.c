@@ -667,7 +667,7 @@ btr_node_alloc(struct btr_context *tcx, umem_off_t *nd_off_p)
 		nd_off = btr_ops(tcx)->to_node_alloc(&tcx->tc_tins,
 						     btr_node_size(tcx));
 	else
-		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx), 0);
+		nd_off = umem_zalloc(btr_umm(tcx), btr_node_size(tcx));
 
 	if (UMOFF_IS_NULL(nd_off))
 		return btr_umm(tcx)->umm_nospc_rc;
@@ -862,7 +862,8 @@ btr_root_alloc(struct btr_context *tcx)
 	struct btr_instance	*tins = &tcx->tc_tins;
 	struct btr_root		*root;
 
-	tins->ti_root_off = umem_zalloc(btr_umm(tcx), sizeof(struct btr_root), 0);
+	tins->ti_root_off = umem_zalloc(btr_umm(tcx),
+					sizeof(struct btr_root));
 	if (UMOFF_IS_NULL(tins->ti_root_off))
 		return btr_umm(tcx)->umm_nospc_rc;
 

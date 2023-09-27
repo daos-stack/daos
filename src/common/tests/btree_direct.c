@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2023 Intel Corporation.
+ * (C) Copyright 2018-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -123,7 +123,8 @@ sk_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	char			*vbuf;
 	umem_off_t		 srec_off;
 
-	srec_off = umem_zalloc(&tins->ti_umm, sizeof(*srec) + key_iov->iov_len, 0);
+	srec_off = umem_zalloc(&tins->ti_umm,
+				   sizeof(*srec) + key_iov->iov_len);
 	D_ASSERT(!UMOFF_IS_NULL(srec_off)); /* lazy bone... */
 
 	srec = (struct sk_rec *)umem_off2ptr(&tins->ti_umm, srec_off);
@@ -132,7 +133,7 @@ sk_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	srec->sr_key_len = key_iov->iov_len;
 	srec->sr_val_size = srec->sr_val_msize = val_iov->iov_len;
 
-	srec->sr_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len, 0);
+	srec->sr_val_off = umem_alloc(&tins->ti_umm, val_iov->iov_len);
 	D_ASSERT(!UMOFF_IS_NULL(srec->sr_val_off));
 
 	vbuf = umem_off2ptr(&tins->ti_umm, srec->sr_val_off);
@@ -241,7 +242,7 @@ sk_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		umem_free(umm, srec->sr_val_off);
 
 		srec->sr_val_msize = val_iov->iov_len;
-		srec->sr_val_off   = umem_alloc(umm, val_iov->iov_len, 0);
+		srec->sr_val_off = umem_alloc(umm, val_iov->iov_len);
 		D_ASSERT(!UMOFF_IS_NULL(srec->sr_val_off));
 	}
 	val = umem_off2ptr(umm, srec->sr_val_off);

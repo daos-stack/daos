@@ -249,7 +249,7 @@ ktr_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	rbund = iov2rec_bundle(val_iov);
 
-	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund), 0);
+	rec->rec_off = umem_zalloc(&tins->ti_umm, vos_krec_size(rbund));
 	if (UMOFF_IS_NULL(rec->rec_off))
 		return -DER_NOSPACE;
 
@@ -334,7 +334,7 @@ ktr_rec_update(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 ktr_node_alloc(struct btr_instance *tins, int size)
 {
-	return umem_zalloc(&tins->ti_umm, size, 0);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t key_btr_ops = {
@@ -692,7 +692,7 @@ svt_check_availability(struct btr_instance *tins, struct btr_record *rec,
 static umem_off_t
 svt_node_alloc(struct btr_instance *tins, int size)
 {
-	return umem_zalloc(&tins->ti_umm, size, 0);
+	return umem_zalloc(&tins->ti_umm, size);
 }
 
 static btr_ops_t singv_btr_ops = {

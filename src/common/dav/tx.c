@@ -1265,68 +1265,7 @@ dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
  * dav_tx_alloc -- allocates a new object
  */
 uint64_t
-dav_tx_alloc(size_t size, uint64_t type_num)
-{
-	uint64_t off;
-
-	DAV_API_START();
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-
-	uint64_t flags = tx_abort_on_failure_flag(tx);
-
-	if (size == 0) {
-		ERR("allocation with size 0");
-		off = obj_tx_fail_null(EINVAL, flags);
-		DAV_API_END();
-		return off;
-	}
-
-	off = tx_alloc_common(tx, size, (type_num_t)type_num,
-			constructor_tx_alloc, ALLOC_ARGS(flags));
-
-	DAV_API_END();
-	return off;
-}
-
-/*
- * dav_tx_zalloc -- allocates a new zeroed object
- */
-uint64_t
-dav_tx_zalloc(size_t size, uint64_t type_num)
-{
-	uint64_t off;
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-
-	uint64_t flags = DAV_FLAG_ZERO;
-
-	flags |= tx_abort_on_failure_flag(tx);
-
-	DAV_API_START();
-	if (size == 0) {
-		ERR("allocation with size 0");
-		off = obj_tx_fail_null(EINVAL, flags);
-		DAV_API_END();
-		return off;
-	}
-
-	off = tx_alloc_common(tx, size, (type_num_t)type_num,
-			constructor_tx_alloc, ALLOC_ARGS(flags));
-
-	DAV_API_END();
-	return off;
-}
-
-/*
- * dav_tx_xalloc -- allocates a new object
- */
-uint64_t
-dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
+dav_tx_alloc(size_t size, uint64_t type_num, uint64_t flags)
 {
 	uint64_t off;
 	struct tx *tx = get_tx();
@@ -1680,37 +1619,7 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
  * dav_alloc -- allocates a new object
  */
 int
-dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
-	  uint64_t type_num, dav_constr constructor, void *arg)
-{
-	DAV_DBG("pop %p offp %p size %zu type_num %llx constructor %p arg %p",
-		pop, offp, size, (unsigned long long)type_num, constructor, arg);
-
-	if (size == 0) {
-		ERR("allocation with size 0");
-		errno = EINVAL;
-		return -1;
-	}
-
-	if (offp == NULL) {
-		ERR("allocation offp is NULL");
-		errno = EINVAL;
-		return -1;
-	}
-
-	DAV_API_START();
-	int ret = obj_alloc_construct(pop, offp, size, type_num,
-			0, constructor, arg);
-
-	DAV_API_END();
-	return ret;
-}
-
-/*
- * dav_xalloc -- allocates with flags
- */
-int
-dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
+dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
 	   dav_constr constructor, void *arg)
 {
 	DAV_DBG(3, "pop %p offp %p size %zu type_num %llx flags %llx constructor %p arg %p", pop,
@@ -1806,29 +1715,7 @@ dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
  * dav_reserve -- reserves a single object
  */
 uint64_t
-dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
-{
-	DAV_DBG("pop %p act %p size %zu type_num %llx", pop, act, size,
-		(unsigned long long)type_num);
-
-	DAV_API_START();
-	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
-		return 0;
-
-	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num, 0, 0, 0, act) != 0) {
-		DAV_API_END();
-		return 0;
-	}
-
-	DAV_API_END();
-	return act->heap.offset;
-}
-
-/*
- * dav_xreserve -- reserves a single object
- */
-uint64_t
-dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num, uint64_t flags)
+dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num, uint64_t flags)
 {
 	struct constr_args carg;
 

@@ -1952,9 +1952,9 @@ vos_reserve_scm(struct vos_container *cont, struct umem_rsrvd_act *rsrvd_scm,
 	D_ASSERT(size > 0);
 
 	if (vos_cont2umm(cont)->umm_ops->mo_reserve != NULL) {
-		umoff = umem_reserve(vos_cont2umm(cont), rsrvd_scm, size, 0);
+		umoff = umem_reserve(vos_cont2umm(cont), rsrvd_scm, size);
 	} else {
-		umoff = umem_alloc(vos_cont2umm(cont), size, 0);
+		umoff = umem_alloc(vos_cont2umm(cont), size);
 	}
 
 	return umoff;
@@ -2672,8 +2672,9 @@ vos_dedup_verify(daos_handle_t ioh)
 			 * - Deal with SCM leak on tx commit failure or server
 			 *   crash;
 			 */
-			off = umem_atomic_alloc(vos_ioc2umm(ioc), bio_iov2len(biov), UMEM_TYPE_ANY,
-						0);
+			off = umem_atomic_alloc(vos_ioc2umm(ioc),
+						bio_iov2len(biov),
+						UMEM_TYPE_ANY);
 			if (off == UMOFF_NULL) {
 				D_ERROR("Failed to alloc "DF_U64" bytes SCM\n",
 					bio_iov2len(biov));

@@ -118,14 +118,7 @@ typedef int (*dav_constr)(dav_obj_t *pop, void *ptr, void *arg);
  * memory reserved for the object is automatically reclaimed.
  */
 int
-dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, dav_constr constructor,
-	  void *arg);
-
-/*
- * Allocates with flags a new object from the pool.
- */
-int
-dav_xalloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
+dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
 	   dav_constr constructor, void *arg);
 
 /**
@@ -248,40 +241,20 @@ dav_tx_errno(void);
 /*
  * Transactionally allocates a new object.
  *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
- *
- * This function must be called during TX_STAGE_WORK.
- */
-uint64_t
-dav_tx_alloc(size_t size, uint64_t type_num);
-
-/*
- * Transactionally allocates a new object.
- *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
+ * If successful, returns offset of the object in the heap.
+ * Otherwise, stage changes to TX_STAGE_ONABORT and an zero is returned.
  * 'Flags' is a bitmask of the following values:
  *  - POBJ_XALLOC_ZERO - zero the allocated object
  *  - POBJ_XALLOC_NO_FLUSH - skip flush on commit
  *  - POBJ_XALLOC_NO_ABORT - if the function does not end successfully,
+ *  - DAV_CLASS_ID(id)	   - id of allocation class to use.
+ *  - DAV_EZONE_ID(id)	   - id of zone to use.
  *  do not abort the transaction and return the error number.
  *
  * This function must be called during TX_STAGE_WORK.
  */
 uint64_t
-dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags);
-
-/*
- * Transactionally allocates new zeroed object.
- *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
- *
- * This function must be called during TX_STAGE_WORK.
- */
-uint64_t
-dav_tx_zalloc(size_t size, uint64_t type_num);
+dav_tx_alloc(size_t size, uint64_t type_num, uint64_t flags);
 
 /*
  * Transactionally frees an existing object.
@@ -391,9 +364,7 @@ struct dav_action {
 	(DAV_XALLOC_CLASS_MASK | DAV_XALLOC_EZONE_MASK | DAV_XALLOC_ZERO)
 
 uint64_t
-dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num);
-uint64_t
-dav_xreserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
+dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
 	     uint64_t flags);
 void
 dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act);

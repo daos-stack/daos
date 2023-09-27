@@ -901,7 +901,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 	umem_off_t			 dbd_off;
 	int				 rc;
 
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE, 0);
+	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space when create active DTX table.\n");
 		return -DER_NOSPACE;
@@ -1710,7 +1710,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 		memcpy(DAE_MBS_INLINE(dae), dth->dth_mbs->dm_data,
 		       DAE_MBS_DSIZE(dae));
 	} else {
-		rec_off = umem_zalloc(umm, DAE_MBS_DSIZE(dae), 0);
+		rec_off = umem_zalloc(umm, DAE_MBS_DSIZE(dae));
 		if (umoff_is_null(rec_off)) {
 			D_ERROR("No space to store DTX mbs "
 				DF_DTI"\n", DP_DTI(&DAE_XID(dae)));
@@ -1727,7 +1727,7 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 		D_ASSERTF(count > 0, "Invalid DTX rec count %d\n", count);
 
 		size = sizeof(umem_off_t) * count;
-		rec_off = umem_zalloc(umm, size, 0);
+		rec_off = umem_zalloc(umm, size);
 		if (umoff_is_null(rec_off)) {
 			D_ERROR("No space to store active DTX "DF_DTI"\n",
 				DP_DTI(&DAE_XID(dae)));
@@ -2013,7 +2013,7 @@ again:
 new_blob:
 	dbd_prev = dbd;
 	/* Need new @dbd */
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE, 0);
+	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
