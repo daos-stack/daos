@@ -28,7 +28,6 @@ class OSAOfflineExtend(OSAUtils):
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         self.rank = self.params.get("rank_list", "/run/test_ranks/*")
         self.test_oclass = None
-        self.test_exclude_or_drain = None
         self.dmg_command.exit_status_exception = True
 
     def run_offline_extend_test(self, num_pool, data=False, oclass=None,
