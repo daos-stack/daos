@@ -528,9 +528,13 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 {
 	int rc = 0;
 
-	if (ignore_unsup) {
-		mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
+	/* Unset any unsupported mode bits. We track these errors so they can
+	 * be surfaced to the user at the end of the copy operation.
+	 */
+	if (!ignore_unsup && mode & (S_ISVTX | S_ISGID | S_ISUID)) {
+		(*num_chmod_enotsup)++;
 	}
+	mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
 
 	if (file_dfs->type == POSIX) {
 		rc = chmod(path, mode);
@@ -543,16 +547,6 @@ file_chmod(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path, m
 		}
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode);
-		if (rc == ENOTSUP && !ignore_unsup) {
-			/* If the file has unsupported mode bits, unset them
-			 * and retry the chmod. We track these errors so they
-			 * can be surfaced to the user at the end of the copy
-			 * operation.
-			 */
-			(*num_chmod_enotsup)++;
-			mode &= ~(S_ISVTX | S_ISGID | S_ISUID);
-			rc = dfs_sys_chmod(file_dfs->dfs_sys, path, mode);
-		}
 	} else {
 		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", path, file_dfs->type);
