@@ -982,7 +982,7 @@ class DaosServer():
                 self.test_pool = pobj
         return pools
 
-    def _make_pool(self):
+    def _make_pool(self, name='NLT'):
         """Create a DAOS pool"""
         # If running as a small system with tmpfs already mounted then this is likely a docker
         # container so restricted in size.
@@ -991,7 +991,7 @@ class DaosServer():
         else:
             size = 1024 * 4
 
-        rc = self.run_dmg(['pool', 'create', 'NLT', '--scm-size', f'{size}M'])
+        rc = self.run_dmg(['pool', 'create', name, '--scm-size', f'{size}M'])
         print(rc)
         assert rc.returncode == 0
         self.fetch_pools()
@@ -5928,6 +5928,15 @@ def run(wf, args):
     fi_test_dfuse = False
 
     fatal_errors = BoolRatchet()
+
+    for idx in range(50):
+
+        with DaosServer(conf, test_class='first', wf=wf_server,
+                        fatal_errors=fatal_errors) as server:
+
+            server._make_pool(f'pool_{idx}')
+            server.run_dmg(['pool', 'destroy', f'pool_{idx}'])
+    return fatal_errors
 
     if args.mode == 'fi':
         fi_test = True
