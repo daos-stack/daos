@@ -25,6 +25,7 @@ class DaosServerSupportCollectLogTest(SupportTestBase):
         :avocado: tags=DaosSupportCollectLogTest,test_daos_server_support_collect_log
         """
         self.log_hosts = self.hostlist_servers
+        self.run_user = 'daos_server'
         # Create the custom log data which will be collected via support collect-log,
         # Later verify the data file is archived as part of collection.
         self.create_custom_log("Server_Support_Logs")
