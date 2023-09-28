@@ -578,10 +578,6 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		store.store_standalone = true;
 	}
 
-	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
-		goto umem_create;
-
 	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
 	if (!meta_sz) {
 		if (!scm_sz) {
@@ -596,6 +592,10 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 			meta_sz = scm_sz;
 		}
 	}
+
+	/* No NVMe is configured or current xstream doesn't have NVMe context */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
+		goto umem_create;
 
 	D_INFO("Create BIO meta context for xs:%p pool:" DF_UUID " "
 	       "meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
