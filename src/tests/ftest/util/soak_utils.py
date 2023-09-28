@@ -700,7 +700,9 @@ def start_dfuse(self, pool, container, name=None, job_spec=None):
     dfuse.bind_cores = self.params.get("cores", dfuse.namespace, None)
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container
-    mount_dir = dfuse.mount_dir.value
+    unique = get_random_string(5, self.used)
+    self.used.append(unique)
+    mount_dir = dfuse.mount_dir.value + unique
     dfuse.update_params(mount_dir=mount_dir, pool=pool.identifier, cont=container.identifier)
     dfuselog = os.path.join(
         self.soak_log_dir,

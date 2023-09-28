@@ -323,17 +323,22 @@ struct dfuse_inode_ops {
 };
 
 struct dfuse_event {
-	fuse_req_t                    de_req; /**< The fuse request handle */
-	daos_event_t                  de_ev;
-	size_t                        de_len; /**< The size returned by daos */
-	d_iov_t                       de_iov;
-	d_sg_list_t                   de_sgl;
-	d_list_t                      de_list;
-	struct dfuse_eq              *de_eqt;
-	struct dfuse_obj_hdl         *de_oh;
-	off_t                         de_req_position; /**< The file position requested by fuse */
-	size_t                        de_req_len;
+	fuse_req_t       de_req; /**< The fuse request handle */
+	daos_event_t     de_ev;
+	size_t           de_len; /**< The size returned by daos */
+	d_iov_t          de_iov;
+	d_sg_list_t      de_sgl;
+	d_list_t         de_list;
+	struct dfuse_eq *de_eqt;
+	union {
+		struct dfuse_obj_hdl     *de_oh;
+		struct dfuse_inode_entry *de_ie;
+	};
+	off_t  de_req_position; /**< The file position requested by fuse */
+	size_t de_req_len;
 	void (*de_complete_cb)(struct dfuse_event *ev);
+
+	struct stat de_attr;
 };
 
 extern struct dfuse_inode_ops dfuse_dfs_ops;
@@ -364,11 +369,10 @@ struct dfuse_pool {
 
 /** Container information
  *
- * This represents a container that DFUSE is accessing.  All containers
- * will have a valid dfs_handle.
+ * This represents a container that DFUSE is accessing.  All containers will have a valid dfs
+ * handle.
  *
- * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's
- * members.
+ * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's members.
  *
  * uuid may be NULL for pool inodes.
  */

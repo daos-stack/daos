@@ -3,6 +3,7 @@
 
 def scons():
     """Execute build"""
+
     Import('env')
 
     denv = env.Clone()
@@ -19,11 +20,13 @@ def scons():
 
     src = ['daos_serialize.c']
     if have_hdf5 is True:
-        print("Building with hdf5 bindings.")
+        if not GetOption('silent'):
+            print("Building with hdf5 bindings.")
         daos_serialize = denv.d_library('daos_serialize', src, LIBS=libraries)
         denv.Install('$PREFIX/lib64/', daos_serialize)
     else:
-        print("No installed hdf5 detected, DAOS serialization is not enabled")
+        if not GetOption('silent'):
+            print("No installed hdf5 detected, DAOS serialization is not enabled")
 
 
 if __name__ == "SCons.Script":

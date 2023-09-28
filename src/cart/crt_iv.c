@@ -1650,9 +1650,7 @@ crt_iv_fetch(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_hash(ivns_internal, iv_key, &root_rank);
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "Failed to get hash, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "Failed to get hash");
 		D_GOTO(exit, rc);
 	}
 
@@ -1759,9 +1757,7 @@ exit:
 		if (put_needed)
 			iv_ops->ivo_on_put(ivns, iv_value, user_priv);
 
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "Failed to issue IV fetch, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "Failed to issue IV fetch");
 
 		if (cb_info) {
 			IVNS_DECREF(cb_info->ifc_ivns_internal);
@@ -2192,8 +2188,6 @@ handle_ivsync_response(const struct crt_cb_info *cb_info)
 /* Helper function to issue update sync
  * Important note: iv_key and iv_value are destroyed right after this call,
  * as such they need to be copied over
- *
- * TODO: This is leaking memory on failure.
  */
 static int
 crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
@@ -2203,7 +2197,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 		     crt_iv_comp_cb_t update_comp_cb, void *cb_arg,
 		     void *user_priv, int update_rc)
 {
-	crt_rpc_t		*corpc_req;
+	crt_rpc_t               *corpc_req = NULL;
 	struct crt_iv_sync_in	*input;
 	int			rc = 0;
 	bool			delay_completion = false;
@@ -2314,10 +2308,8 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 
 		/* Copy iv_key over as it will get destroyed after this call */
 		D_ALLOC(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf_len);
-		if (iv_sync_cb->isc_iv_key.iov_buf == NULL) {
-			/* Avoid checkpatch warning */
+		if (iv_sync_cb->isc_iv_key.iov_buf == NULL)
 			D_GOTO(exit, rc = -DER_NOMEM);
-		}
 
 		memcpy(iv_sync_cb->isc_iv_key.iov_buf, iv_key->iov_buf,
 		       iv_key->iov_buf_len);
@@ -2333,9 +2325,12 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	}
 
 	rc = crt_req_send(corpc_req, handle_response_cb, iv_sync_cb);
-	if (rc != 0)
-		D_ERROR("crt_req_send(): "DF_RC"\n", DP_RC(rc));
+	if (rc != 0) {
+		DL_ERROR(rc, "crt_req_send() failed, not calling decref");
 
+		/* Do not call decref on this rpc below if req_send failed */
+		corpc_req = NULL;
+	}
 exit:
 	if (delay_completion == false || rc != 0) {
 		if (rc != 0)
@@ -2357,6 +2352,8 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
+		if (corpc_req != NULL)
+			RPC_PUB_DECREF(corpc_req);
 	}
 	return rc;
 }
@@ -2401,17 +2398,16 @@ finalize_transfer_back(struct update_cb_info *cb_info, int rc)
 	child_output->rc = rc;
 
 	ivns = cb_info->uci_ivns_internal;
-
-	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
-	D_ASSERT(iv_ops != NULL);
-
-	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
-			   cb_info->uci_user_priv);
-
 	crt_reply_send(cb_info->uci_child_rpc);
 
 	/* ADDREF done in crt_hdlr_iv_update */
 	crt_bulk_free(cb_info->uci_bulk_hdl);
+
+	iv_ops = crt_iv_ops_get(ivns, cb_info->uci_class_id);
+	D_ASSERT(iv_ops != NULL);
+	iv_ops->ivo_on_put(ivns, &cb_info->uci_iv_value,
+			   cb_info->uci_user_priv);
+
 	RPC_PUB_DECREF(cb_info->uci_child_rpc);
 
 	/* addref in transfer_back_to_child() */
@@ -2458,11 +2454,11 @@ int transfer_back_to_child(crt_iv_key_t *key, struct update_cb_info *cb_info,
 				     &cb_info->uci_iv_value, update_rc,
 				     cb_info->uci_cb_arg);
 
-		/* Corresponding on_get() done in crt_iv_update_internal */
-		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
-
 		if (cb_info->uci_bulk_hdl != CRT_BULK_NULL)
 			crt_bulk_free(cb_info->uci_bulk_hdl);
+
+		/* Corresponding on_get() done in crt_iv_update_internal */
+		iv_ops->ivo_on_put(ivns, NULL, cb_info->uci_user_priv);
 
 		/* addref done in crt_hdlr_iv_update */
 		IVNS_DECREF(cb_info->uci_ivns_internal);
@@ -2521,10 +2517,11 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 		child_output = crt_reply_get(iv_info->uci_child_rpc);
 
 		/* uci_bulk_hdl will not be set for invalidate call */
-		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL) {
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, &iv_info->uci_iv_value,
 					   iv_info->uci_user_priv);
-
+		}
 		child_output->rc = output->rc;
 
 		if (cb_info->cci_rc != 0)
@@ -2539,7 +2536,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	} else {
 		d_sg_list_t *tmp_iv_value;
 
-		if (iv_info->uci_bulk_hdl == NULL)
+		if (iv_info->uci_bulk_hdl == CRT_BULK_NULL)
 			tmp_iv_value = NULL;
 		else
 			tmp_iv_value = &iv_info->uci_iv_value;
@@ -2560,14 +2557,13 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_cb_arg,
 					  iv_info->uci_user_priv,
 					  rc);
+		if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
+			crt_bulk_free(iv_info->uci_bulk_hdl);
 		if (rc != 0) {
 			iv_ops->ivo_on_put(iv_info->uci_ivns_internal, tmp_iv_value,
 					   iv_info->uci_user_priv);
 		}
 	}
-
-	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
-		crt_bulk_free(iv_info->uci_bulk_hdl);
 
 	/* addref done in crt_hdlr_iv_update */
 	IVNS_DECREF(iv_info->uci_ivns_internal);
@@ -2856,6 +2852,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_ERROR("crt_ivu_rpc_issue(): "DF_RC"\n", DP_RC(rc));
 			D_GOTO(send_error, rc);
 		}
+		rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+
 	} else if (update_rc == 0) {
 		/* If sync was bi-directional - transfer value back */
 		if (sync_type->ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
@@ -2867,7 +2865,8 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 
 			D_GOTO(exit, rc);
 		}
-		output->rc = -DER_SUCCESS;
+		rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+		output->rc = rc;
 		iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value, cb_info->buc_user_priv);
 
 		crt_reply_send(info->bci_bulk_desc->bd_rpc);
@@ -2878,17 +2877,14 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
-
-	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 exit:
 	return rc;
 
 send_error:
-	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
-			   cb_info->buc_user_priv);
-
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
 	output->rc = rc;
+	iv_ops->ivo_on_put(ivns_internal, &cb_info->buc_iv_value,
+			   cb_info->buc_user_priv);
 
 	crt_reply_send(info->bci_bulk_desc->bd_rpc);
 	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
@@ -3277,9 +3273,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "ivo_on_hash() failed");
 		D_GOTO(exit, rc);
 	}
 
@@ -3370,10 +3364,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
-			 DLOG_INFO, DLOG_ERR,
-			 "ivo_on_update failed with rc = "DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DLOG_INFO, DLOG_ERR, rc,
+			  "ivo_on_update failed");
 
 		update_comp_cb(ivns, class_id, iv_key, NULL,
 			       iv_value, rc, cb_arg);
@@ -3466,9 +3458,7 @@ crt_iv_get_nchildren(crt_iv_namespace_t ivns, uint32_t class_id,
 	}
 	rc = iv_ops->ivo_on_hash(ivns, iv_key, &root_rank);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "ivo_on_hash() failed, rc="DF_RC"\n",
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "ivo_on_hash() failed");
 		D_GOTO(exit, rc);
 	}
 

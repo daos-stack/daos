@@ -38,6 +38,8 @@ drain_dkeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -103,6 +105,8 @@ cont_open_in_drain(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -157,6 +161,8 @@ drain_akeys(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -207,6 +213,8 @@ drain_indexes(void **state)
 	int			tgt = DEFAULT_FAIL_TGT;
 	int			i;
 	int			j;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -267,6 +275,7 @@ drain_snap_update_keys(void **state)
 	char		buf[256];
 	int		buf_len = 256;
 
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -342,6 +351,8 @@ drain_snap_punch_keys(void **state)
 	char		 buf[256];
 	int		 buf_len = 256;
 	uint32_t	 number;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -429,6 +440,8 @@ drain_multiple(void **state)
 	int		j;
 	int		k;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -495,6 +508,8 @@ drain_large_rec(void **state)
 	char			buffer[5000];
 	char			v_buffer[5000];
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -543,6 +558,8 @@ drain_objects(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	int		i;
 
+	FAULT_INJECTION_REQUIRED();
+
 	if (!test_runable(arg, 4))
 		return;
 
@@ -568,6 +585,8 @@ drain_fail_and_retry_objects(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oids[OBJ_NR];
 	int		i;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -597,6 +616,8 @@ drain_then_exclude(void **state)
 {
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;
@@ -848,6 +869,8 @@ dfs_extend_drain_common(void **state, int opc, uint32_t objclass)
 	struct extend_drain_cb_arg cb_arg;
 	dfs_attr_t attr = {};
 	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	if (!test_runable(arg, 4))
 		return;

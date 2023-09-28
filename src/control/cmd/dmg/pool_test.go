@@ -42,6 +42,10 @@ func Test_Dmg_PoolTierRatioFlag(t *testing.T) {
 		"empty": {
 			expErr: errors.New("no tier ratio specified"),
 		},
+		"invalid": {
+			input:  "ABCD",
+			expErr: errors.New("invalid tier ratio \"ABCD\""),
+		},
 		"less than 100%": {
 			input:  "10,80",
 			expErr: errors.New("must add up to"),
@@ -226,7 +230,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with missing size",
 			"pool create label",
 			"",
-			errors.New("must be supplied"),
+			errors.New("must be set"),
 		},
 		{
 			"Create pool with missing label",
@@ -275,6 +279,12 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create label --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
 			"",
 			errors.New("may not be mixed"),
+		},
+		{
+			"Create pool with incompatible arguments (auto with meta-blob)",
+			fmt.Sprintf("pool create label --size %s --meta-size 32G", testSizeStr),
+			"",
+			errors.New("can only be set"),
 		},
 		{
 			"Create pool with too-large tier-ratio (auto)",
@@ -355,7 +365,7 @@ func TestPoolCommands(t *testing.T) {
 			"Create pool with incompatible arguments (-n without -s)",
 			fmt.Sprintf("pool create label --nvme-size %s", testSizeStr),
 			"",
-			errors.New("must be supplied"),
+			errors.New("must be set"),
 		},
 		{
 			"Create pool with minimal arguments",
@@ -373,6 +383,30 @@ func TestPoolCommands(t *testing.T) {
 				}),
 			}, " "),
 			nil,
+		},
+		{
+			"Create pool with manual meta blob size",
+			fmt.Sprintf("pool create label --scm-size %s --meta-size 1024G",
+				testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []ranklist.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+					MetaBytes: humanize.GByte * 1024,
+					Properties: []*daos.PoolProperty{
+						propWithVal("label", "label"),
+					},
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with manual meta blob size smaller than scm",
+			"pool create label --scm-size 1026G --meta-size 1024G",
+			"",
+			errors.New("can not be smaller than"),
 		},
 		{
 			"Create pool with manual ranks",

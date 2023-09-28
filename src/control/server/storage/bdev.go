@@ -76,7 +76,8 @@ type NvmeDevState int32
 
 // NvmeDevState values representing the operational device state.
 const (
-	NvmeStateNormal NvmeDevState = iota
+	NvmeStateUnknown NvmeDevState = iota
+	NvmeStateNormal
 	NvmeStateNew
 	NvmeStateFaulty
 	NvmeStateUnplugged

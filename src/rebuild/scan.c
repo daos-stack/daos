@@ -646,7 +646,7 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 	rc = 0;
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
-	    rpt->rt_rebuild_op != RB_OP_UPGRADE) {
+	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
 		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
 			DP_UOID(oid), myrank, mytarget);
 		return 0;
@@ -756,8 +756,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	if (rc <= 0) {
-		D_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, DF_UOID" rebuild shards:" DF_RC"\n",
-			 DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, rc, DF_UOID " rebuild shards",
+			  DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 
@@ -1026,8 +1026,7 @@ rebuild_scan_leader(void *data)
 			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 				D_INFO(DF_UUID "wait for global dtx %u rebuild ver %u\n",
 				       DP_UUID(rpt->rt_pool_uuid),
-				       rpt->rt_global_dtx_resync_version,
-				       rpt->rt_rebuild_ver);
+				       rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
 				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
 			}
 			ABT_mutex_unlock(rpt->rt_lock);

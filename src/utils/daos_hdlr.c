@@ -1569,6 +1569,7 @@ dm_connect(struct cmd_args_s *ap,
 				DH_PERROR_DER(ap, rc, "failed to open container");
 				D_GOTO(err, rc);
 			}
+			fprintf(ap->outstream, "Successfully created container %s\n", ca->dst_cont);
 		}
 		if (is_posix_copy) {
 			rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, O_RDWR, DFS_SYS_NO_LOCK,
