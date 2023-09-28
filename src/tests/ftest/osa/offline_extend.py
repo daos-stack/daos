@@ -31,7 +31,8 @@ class OSAOfflineExtend(OSAUtils):
         self.test_exclude_or_drain = None
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_extend_test(self, num_pool, data=False, oclass=None):
+    def run_offline_extend_test(self, num_pool, data=False, oclass=None,
+                                test_exclude_or_drain=None):
         """Run the offline extend without data.
 
         Args:
@@ -98,12 +99,12 @@ class OSAOfflineExtend(OSAUtils):
                 self.delete_extra_container(self.pool)
             output = self.pool.extend(rank_val)
             self.log.info(output)
-            if self.test_exclude_or_drain == "exclude":
+            if test_exclude_or_drain == "exclude":
                 self.pool.wait_for_rebuild_to_start()
                 sleep(4)
                 self.log.info("Exclude rank 3 while rebuild is happening")
                 output = self.pool.exclude("3")
-            elif self.test_exclude_or_drain == "drain":
+            elif test_exclude_or_drain == "drain":
                 # Drain cannot be performed while extend rebuild is happening.
                 self.print_and_assert_on_rebuild_failure(output)
                 self.log.info("Drain rank 3 after extend rebuild is completed")
@@ -227,9 +228,8 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_exclude_during_rebuild
         """
-        self.test_exclude_or_drain = self.params.get("exclude", '/run/perform_osa_tasks/*')
         self.log.info("Offline Extend Testing: Exclude during Rebuild")
-        self.run_offline_extend_test(1, data=True)
+        self.run_offline_extend_test(1, data=True, test_exclude_or_drain="exclude")
 
     def test_osa_offline_extend_drain_after_rebuild(self):
         """Test ID: DAOS-14441.
@@ -242,6 +242,5 @@ class OSAOfflineExtend(OSAUtils):
         :avocado: tags=osa,osa_extend,offline_extend
         :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_drain_after_rebuild
         """
-        self.test_exclude_or_drain = self.params.get("drain", '/run/perform_osa_tasks/*')
         self.log.info("Offline Extend Testing: Drain after rebuild")
-        self.run_offline_extend_test(1, data=True)
+        self.run_offline_extend_test(1, data=True, test_exclude_or_drain="drain")
