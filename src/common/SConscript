@@ -33,7 +33,8 @@ def build_daos_common(denv, client):
         common_libs.extend(['pmemobj', 'abt'])
         benv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
         benv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
-        benv['CCFLAGS'].remove('-Wdeclaration-after-statement')
+        if '-Wdeclaration-after-statement' in benv['CCFLAGS']:
+            benv['CCFLAGS'].remove('-Wdeclaration-after-statement')
         benv.Append(OBJPREFIX="v_")
         libname = 'daos_common_pmem'
         benv.require('pmdk', 'argobots')
@@ -92,8 +93,8 @@ def scons():
     tlibenv = env.Clone(LIBS=[])
     tlibenv.require('isal', 'isal_crypto', 'protobufc')
     tlibenv.AppendUnique(LIBS=['cart', 'gurt', 'lz4', 'json-c'])
-    tlibenv['CCFLAGS'].remove('-Wdeclaration-after-statement')
-
+    if '-Wdeclaration-after-statement' in tlibenv['CCFLAGS']:
+        tlibenv['CCFLAGS'].remove('-Wdeclaration-after-statement')
     tests_lib = tlibenv.d_library('daos_tests', ['tests_lib.c', 'tests_dmg_helpers.c'])
 
     tlibenv.Install('$PREFIX/lib64/', tests_lib)
