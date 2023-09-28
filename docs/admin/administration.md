@@ -969,11 +969,11 @@ policies for all major components in a DAOS system.
 
 ||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
 |:---|:---:|:---:|:---:|:---:|:---:|
-|Server|x.y|x.y.z|x.(y±1)|n/a|x.y|
-|Engine||x.y|n/a|x.(y±1)|n/a|
-|Agent|||n/a|x.y.z|n/a|
-|Client||||n/a|n/a|
-|Admin|||||n/a|
+|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
+|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
+|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
+|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
+|Admin|x.y|n/a|n/a|n/a|n/a|
 
 Key:
   * x.y.z: Major.Minor.Patch must be equal
