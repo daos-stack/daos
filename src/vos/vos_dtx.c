@@ -2218,6 +2218,7 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	}
 
 	rc = dtx_rec_release(cont, dae, true);
+	dae->dae_preparing = 0;
 	if (rc == 0) {
 		dae->dae_aborting = 1;
 		rc = umem_tx_commit(umm);
