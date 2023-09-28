@@ -100,4 +100,3 @@ checksum:
   test_with_checksum: false
 test_ranks:
   rank_list: ["4,5"]
-
