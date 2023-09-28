@@ -12,6 +12,7 @@ on:
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
       - 'utils/scripts/helpers/*'
+      - site_scons
       - utils/ci
       - ci
       - requirements.txt
