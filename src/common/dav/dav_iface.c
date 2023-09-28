@@ -21,6 +21,7 @@
 
 #define	DAV_HEAP_INIT	0x1
 #define MEGABYTE	((uintptr_t)1 << 20)
+#define MD_BLOB_HDR_SZ  (1UL << 12) /* VOS_BLK_SZ bytes */
 
 /*
  * get_uuid_lo -- (internal) evaluates XOR sum of least significant
@@ -255,7 +256,7 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 		}
 	}
 
-	if (!store->stor_size || (sz < store->stor_size)) {
+	if (!store->stor_size || (sz > (store->stor_size + MD_BLOB_HDR_SZ))) {
 		D_ERROR("create: Invalid umem_store size (sz=" DF_U64 ", stor_size=" DF_U64 ")\n",
 			sz, store->stor_size);
 		errno = EINVAL;
