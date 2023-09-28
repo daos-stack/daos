@@ -47,7 +47,7 @@ func Test_ValidateLogMasks(t *testing.T) {
 		},
 		"single level; single assignment; illegal use of all": {
 			masks:  "ERR,all=DBUG",
-			expErr: errors.New(""),
+			expErr: errors.New("identifier can not be used"),
 		},
 		"single level; single assignment; bad level": {
 			masks:  "ERR,mgmt=DEG",
