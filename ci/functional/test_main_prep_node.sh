@@ -40,34 +40,30 @@ ib_count=-1
 
 set +x
 while IFS= read -r line; do
-    if [[ "$line" != *" Omni-Path "* ]]; then continue; fi
-        ((opa_count=opa_count+1))
-done < <(lspci | grep "Omni-Path")
+    ((opa_count++)) || true
+done < <(lspci --mm | grep "Omni-Path")
 if [ $opa_count -gt 0 ]; then
-    ((ib_count=opa_count-1)) || true
+    ((ib_count=opa_count)) || true
 fi
 
 while IFS= read -r line; do
-    if [[ "$line" != *"ConnectX"* ]]; then continue; fi
     mlnx_type="${line##*-}"
     mlnx_type="${mlnx_type%*]}"
     if [ "$mlnx_type" -ge 6 ]; then
-        ((hdr_count=hdr_count+1))
+        ((hdr_count++)) || true
     fi
-done < <(lspci | grep "ConnectX")
+done < <(lspci -mm | grep "ConnectX")
 if [ $hdr_count -gt 0 ]; then
-    ((ib_count=hdr_count-1)) || true
+    ((ib_count=hdr_count)) || true
 fi
 
 # Can not have Omni-Path and Mellanox HDR on the same system.
 if [ $hdr_count -gt 0 ] && [ $opa_count -gt 0 ]; then
-    ib_message="$({
-        echo "Invalid hardware configuration.  Found:"
-        echo "$hdr_count Mellanox HDR ConnectX adapters."
-        echo "and"
-        echo "$opa_count Omni-Path adapters"
-        echo "The Onmi-Path adapters will not be used."
-        })"
+    ib_message="Invalid hardware configuration.  Found:
+$hdr_count Mellanox HDR ConnectX adapters,
+and
+$opa_count Omni-Path adapters.
+The Onmi-Path adapters will not be used."
     mail_message+="${nl}${ib_message}${nl}"
     echo "$ib_message"
 fi
@@ -80,21 +76,22 @@ function do_wait_for_ib {
     while [ "$SECONDS" -lt "$timeout" ]; do
       ip link set up "$1" || true
       sleep 2
-      if ip addr show "$iface" | grep "inet "; then
+      if ip addr show "$1" | grep "inet "; then
         return 0
       fi
       sleep ${retry_wait}
     done
+    return 1
 }
 
 # First check for infinband devices
-for i in $(seq 0 $ib_count); do
+for i in $(seq 0 $((ib_count-1))); do
     iface="ib$i"
     if do_wait_for_ib "$iface"; then
         set +x
         if ! ip addr show "$iface" | grep "inet "; then
             ib_message="$({
-                echo "Found interface $iface down after reboot on $HOSTNAME"
+                echo "Found interface $iface down after reboot on $HOSTNAME."
                 ip addr show "$iface" || true
                 cat /sys/class/net/"$iface"/mode || true
                 ip link set up "$iface" || true
@@ -102,14 +99,10 @@ for i in $(seq 0 $ib_count); do
                 } 2>&1)"
             mail_message+="${nl}${ib_message}${nl}"
             echo "$ib_message"
+            result=1
+        fi
         else
             echo "OK: Interface $iface is up."
-        fi
-        if ! ip addr show "$iface" | grep "inet "; then
-            echo "Fail: $ib_message"
-            result=1
-            echo "Failed to bring up interface $iface on $HOSTNAME. " \
-            "Please file a SRE ticket."
         fi
         if [ -e "/sys/class/net/$iface/device/numa_node" ]; then
             set -x
@@ -121,7 +114,6 @@ for i in $(seq 0 $ib_count); do
         mail_message+="${nl}${ib_message}${nl}"
         echo "$ib_message"
         result=1
-        echo "Please file a SRE ticket."
     fi
 done
 
@@ -133,9 +125,11 @@ if [ -e /sys/class/net/ib1 ]; then
     dimm_count=0
     while IFS= read -r line; do
         if [[ "$line" != *"| Healthy "* ]]; then continue; fi
-        ((dimm_count=dimm_count+1))
+        ((dimm_count++)) || true
     done < <(ipmctl show -dimm)
     if [ $dimm_count -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
+       # Not fatal, the PMEM DIMM should be replaced when downtime can be
+       # scheduled for this system.
        dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen."
        mail_message+="$nl$dimm_message$nl$(ipmctl show -dimm)$nl"
     else
@@ -145,7 +139,7 @@ if [ -e /sys/class/net/ib1 ]; then
     dimm_rcount=0
     while IFS= read -r line; do
         if [[ "$line" != *"| AppDirect"*"| Healthy"* ]]; then continue; fi
-        ((dimm_rcount=dimm_rcount+1))
+        ((dimm_rcount++)) || true
     done < <(ipmctl show -region)
 
     if [ $dimm_rcount -ne 2 ]; then
@@ -165,7 +159,7 @@ if [ -e /sys/class/net/ib1 ]; then
         if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
             continue
         fi
-        nvme_count=$((nvme_count+1))
+        $((nvme_count++)) || true
     done < <(printf %s "$nvme_devices")
 
     if [ $((nvme_count%2)) -ne 0 ]; then
@@ -181,10 +175,10 @@ if [ -e /sys/class/net/ib1 ]; then
     lsbk_pmem=0
     while IFS= read -r line; do
         if [[ "$line" = nvme* ]];then
-            lsbk_nvme=$((lsbk_nvme+1))
+            $((lsbk_nvme++)) || true
         fi
         if [[ "$line" = pmem* ]];then
-            lsbk_pmem=$((lsbk_pmem+1))
+            $((lsbk_pmem++)) || true
         fi
     done < <(lsblk)
 

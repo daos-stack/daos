@@ -18,7 +18,7 @@ cluster_reboot () {
 
     # shellcheck disable=SC2029,SC2089
     poll_cmd=( clush -B -S -o "-i ci_key" -l root -w "${tnodes}" )
-    poll_cmd+=( cat /etc/os-release )
+    poll_cmd+=( '"cat /etc/os-release"' )
     reboot_timeout=900 # 15 minutes
     retry_wait=10 # seconds
     timeout=$((SECONDS + reboot_timeout))
