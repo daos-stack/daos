@@ -45,7 +45,7 @@ class OSAOnlineExtend(OSAUtils):
         self.daos_racer.run()
 
     def run_online_extend_test(self, num_pool, racer=False, oclass=None, app_name="ior",
-                               test_exclude_or_drain=None):
+                               exclude_or_drain=None):
         """Run the Online extend without data.
 
         Args:
@@ -113,12 +113,12 @@ class OSAOnlineExtend(OSAUtils):
             initial_free_space = self.pool.get_total_free_space(refresh=True)
             output = self.pool.extend(self.ranks)
             self.log.info(output)
-            if test_exclude_or_drain == "exclude":
+            if exclude_or_drain == "exclude":
                 self.pool.wait_for_rebuild_to_start()
                 time.sleep(4)
                 self.log.info("Exclude rank 3 while rebuild is happening")
                 output = self.pool.exclude("3")
-            elif test_exclude_or_drain == "drain":
+            elif exclude_or_drain == "drain":
                 # Drain cannot be performed while extend rebuild is happening.
                 self.print_and_assert_on_rebuild_failure(output)
                 self.log.info("Drain rank 3 after extend rebuild is completed")
@@ -238,7 +238,7 @@ class OSAOnlineExtend(OSAUtils):
         :avocado: tags=OSAOnlineExtend,test_osa_online_extend_exclude_during_rebuild
         """
         self.log.info("Online Extend Testing: Exclude during Rebuild")
-        self.run_online_extend_test(1, test_exclude_or_drain="exclude")
+        self.run_online_extend_test(1, exclude_or_drain="exclude")
 
     def test_osa_online_extend_drain_after_rebuild(self):
         """Test ID: DAOS-14441.
@@ -252,4 +252,4 @@ class OSAOnlineExtend(OSAUtils):
         :avocado: tags=OSAOnlineExtend,test_osa_online_extend_drain_after_rebuild
         """
         self.log.info("Online Extend Testing: Drain after rebuild")
-        self.run_online_extend_test(1, test_exclude_or_drain="drain")
+        self.run_online_extend_test(1, exclude_or_drain="drain")
