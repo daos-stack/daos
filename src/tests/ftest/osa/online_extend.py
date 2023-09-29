@@ -53,6 +53,7 @@ class OSAOnlineExtend(OSAUtils):
              racer (bool): Run the testing along with daos_racer. Defaults to False.
              oclass (str): Object Class (eg: RP_2G1, etc). Default to None.
              app_name (str): App (ior or mdtest) to run during the testing. Defaults to ior.
+             exclude_or_drain (str): Pass "exclude" or "drain" string. Defaults to None.
         """
         # Pool dictionary
         pool = {}
@@ -115,6 +116,8 @@ class OSAOnlineExtend(OSAUtils):
             self.log.info(output)
             if exclude_or_drain == "exclude":
                 self.pool.wait_for_rebuild_to_start()
+                # Give a 4 minute delay so that some objects are moved
+                # as part of rebuild operation.
                 time.sleep(4)
                 self.log.info("Exclude rank 3 while rebuild is happening")
                 output = self.pool.exclude("3")

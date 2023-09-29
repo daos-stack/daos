@@ -39,6 +39,7 @@ class OSAOfflineExtend(OSAUtils):
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
             oclass (list) : list of daos object class (eg: "RP_2G8")
+            exclude_or_drain (str): Pass "exclude" or "drain" string. Defaults to None.
         """
         # Create a pool
         pool = {}
@@ -100,6 +101,8 @@ class OSAOfflineExtend(OSAUtils):
             self.log.info(output)
             if exclude_or_drain == "exclude":
                 self.pool.wait_for_rebuild_to_start()
+                # Give a 4 second delay so that some objects are moved
+                # as part of rebuild operation.
                 sleep(4)
                 self.log.info("Exclude rank 3 while rebuild is happening")
                 output = self.pool.exclude("3")
