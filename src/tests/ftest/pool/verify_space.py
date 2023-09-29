@@ -60,6 +60,21 @@ def compare_reduced(rank, pool_size):
     return previous_avail > current_avail
 
 
+def compare_missing(rank, pool_size):
+    """Determine if data exists previously but not currently for this rank.
+
+    Args:
+        rank (int): server rank
+        pool_size (list): list of pool_size dictionaries
+
+    Returns:
+        bool: does data exist previously but not currently for this rank.
+    """
+    previous = pool_size[-2]['data']
+    current = pool_size[-1]['data']
+    return rank in previous and rank not in current
+
+
 class VerifyPoolSpace(TestWithServers):
     """Verify pool space with system commands.
 
@@ -306,7 +321,7 @@ class VerifyPoolSpace(TestWithServers):
         # (9) Write various amounts of data to the single pool on all ranks
         #  - System free space should not change
         container = self.get_container(pools[5])
-        for block_size in ('5G'):
+        for block_size in ('1G', '5G'):
             self._write_data(description, ior_kwargs, container, block_size)
             data_label = f'{description} after writing data using a {block_size} block size'
             self._check_pool_size(
@@ -315,16 +330,13 @@ class VerifyPoolSpace(TestWithServers):
         dmg.storage_query_usage()
 
         # (10) Stop one of the servers for a pool spanning many servers
+        description = 'all pools after stopping rank 1'
+        self.log_step(f'Checking {description}', True)
+        self.server_managers[0].stop_ranks([1], self.d_log)
+        status = self.server_managers[0].verify_expected_states()
+        if not status['expected']:
+            self.fail("Rank 1 was not stopped")
+        self._check_pool_size(
+            description, pool_size, scm_mounts, [compare_equal, compare_missing, compare_equal])
         self._query_pool_size(description, pools)
-
-        # Step #10
-        # dmg system stop -r 1
-        # dmg system query -v
-        # dmg pool query $DAOS_POOL1
-        # dmg pool query $DAOS_POOL2
-        #    ERROR: dmg: pool query failed: rpc error: code = Unknown desc =
-        #    unable to find any available service ranks for pool
-        # clush -w wolf-[181-183] df -h | grep daos
-        #    wolf-181: tmpfs                          20G  3.0G   18G  15% /mnt/daos
-        #    wolf-182: tmpfs                          20G   20G  927M  96% /mnt/daos
-        #    wolf-183: tmpfs                          20G  6.8G   14G  34% /mnt/daos
+        dmg.storage_query_usage()
