@@ -22,13 +22,13 @@ pool_rank_1_b:
   target_list: [1]
   description: 'multiple pools on a single server (rank 1)'
 pool_rank_1_c:
-  size: 8G
+  size: 95G
   target_list: [1]
 pool_rank_1_2:
-  size: 95G
+  size: 200G
   target_list: [1, 2]
 pool_rank_0_1_2:
-  size: 200G
+  size: 175G
   target_list: [0, 1, 2]
 container:
   type: POSIX
