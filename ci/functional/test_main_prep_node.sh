@@ -42,7 +42,7 @@ set +x
 while IFS= read -r line; do
     ((opa_count++)) || true
 done < <(lspci --mm | grep "Omni-Path")
-if [ $opa_count -gt 0 ]; then
+if [ "$opa_count" -gt 0 ]; then
     ((ib_count=opa_count)) || true
 fi
 
@@ -53,12 +53,12 @@ while IFS= read -r line; do
         ((hdr_count++)) || true
     fi
 done < <(lspci -mm | grep "ConnectX")
-if [ $hdr_count -gt 0 ]; then
+if [ "$hdr_count" -gt 0 ]; then
     ((ib_count=hdr_count)) || true
 fi
 
 # Can not have Omni-Path and Mellanox HDR on the same system.
-if [ $hdr_count -gt 0 ] && [ $opa_count -gt 0 ]; then
+if [ "$hdr_count" -gt 0 ] && [ "$opa_count" -gt 0 ]; then
     ib_message="Invalid hardware configuration.  Found:
 $hdr_count Mellanox HDR ConnectX adapters,
 and
@@ -100,7 +100,6 @@ for i in $(seq 0 $((ib_count-1))); do
             mail_message+="${nl}${ib_message}${nl}"
             echo "$ib_message"
             result=1
-        fi
         else
             echo "OK: Interface $iface is up."
         fi
@@ -127,7 +126,7 @@ if [ -e /sys/class/net/ib1 ]; then
         if [[ "$line" != *"| Healthy "* ]]; then continue; fi
         ((dimm_count++)) || true
     done < <(ipmctl show -dimm)
-    if [ $dimm_count -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
+    if [ "$dimm_count" -eq 0 ] || [ $((dimm_count%2)) -ne 0 ]; then
        # Not fatal, the PMEM DIMM should be replaced when downtime can be
        # scheduled for this system.
        dimm_message="FAIL: Wrong number $dimm_count healthy PMEM DIMMs seen."
@@ -142,7 +141,7 @@ if [ -e /sys/class/net/ib1 ]; then
         ((dimm_rcount++)) || true
     done < <(ipmctl show -region)
 
-    if [ $dimm_rcount -ne 2 ]; then
+    if [ "$dimm_rcount" -ne 2 ]; then
        nvme_message="FAIL: Found $dimm_rcount of DIMM PMEM regions, need 2."
        mail_message+="$nl$nvme_message$nl$(ipmctl show -region)$nl"
        result=1
@@ -159,7 +158,7 @@ if [ -e /sys/class/net/ib1 ]; then
         if [[ "$line" != *"Class:"*"Non-Volatile memory controller"* ]];then
             continue
         fi
-        $((nvme_count++)) || true
+        ((nvme_count++)) || true
     done < <(printf %s "$nvme_devices")
 
     if [ $((nvme_count%2)) -ne 0 ]; then
@@ -175,10 +174,10 @@ if [ -e /sys/class/net/ib1 ]; then
     lsbk_pmem=0
     while IFS= read -r line; do
         if [[ "$line" = nvme* ]];then
-            $((lsbk_nvme++)) || true
+            ((lsbk_nvme++)) || true
         fi
         if [[ "$line" = pmem* ]];then
-            $((lsbk_pmem++)) || true
+            ((lsbk_pmem++)) || true
         fi
     done < <(lsblk)
 
