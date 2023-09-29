@@ -304,8 +304,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 	if (server)
 		setenv("UCX_IB_FORK_INIT", "n", 1);
-	else
-		setenv("NA_UCX_REMAP_SEND_NOMEM", "1", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
