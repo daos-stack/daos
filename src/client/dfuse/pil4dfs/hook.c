@@ -730,8 +730,9 @@ free_memory(void)
 
 	D_FREE(path_ld);
 	D_FREE(path_libc);
-	free(path_libpthread);
 	D_FREE(module_list);
+	if (path_libpthread)
+		free(path_libpthread);
 
 	if (lib_name_list) {
 		for (i = 0; i < num_lib_in_map; i++) {
