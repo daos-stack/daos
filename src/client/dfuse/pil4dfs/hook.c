@@ -538,7 +538,7 @@ get_position_of_next_line(const char buff[], const int pos_start, const int max_
 static void
 get_module_maps(void)
 {
-	char    *szBuf = NULL, szLibName[512];
+	char    *szBuf = NULL, *lib_name;
 	int      iPos, iPos_Save, ReadItem, read_size;
 	uint64_t addr_B, addr_E;
 
@@ -547,6 +547,13 @@ get_module_maps(void)
 	num_seg          = 0;
 	num_lib_in_map   = 0;
 
+	D_ALLOC(lib_name, PATH_MAX);
+	if (lib_name == NULL) {
+		D_FATAL("Failed to allocate memory for lib_name. %d (%s)\n", ENOMEM,
+			strerror(ENOMEM));
+		D_FREE(szBuf);
+		exit_on_error();
+	}
 	/* start from the beginging */
 	iPos = 0;
 	while (iPos >= 0) {
@@ -568,17 +575,19 @@ get_module_maps(void)
 		iPos = get_position_of_next_line(szBuf, iPos + 38, read_size);
 		if ((iPos - iPos_Save) > 73) {
 			/* with a lib name */
-			ReadItem = sscanf(szBuf + iPos_Save + 73, "%s", szLibName);
+			ReadItem = sscanf(szBuf + iPos_Save + 73, "%s", lib_name);
 			if (ReadItem == 1) {
-				if (strncmp(szLibName, "[stack]", 7) == 0) {
+				if (strncmp(lib_name, "[stack]", 7) == 0) {
 					num_seg--;
 					break;
 				}
-				if (query_lib_name_in_list(szLibName) == -1) {
+				if (query_lib_name_in_list(lib_name) == -1) {
 					/* a new name not in list */
-					D_STRNDUP(lib_name_list[num_lib_in_map], szLibName,
+					D_STRNDUP(lib_name_list[num_lib_in_map], lib_name,
 						  PATH_MAX);
 					if (lib_name_list[num_lib_in_map] == NULL) {
+						D_FREE(szBuf);
+						D_FREE(lib_name);
 						D_FATAL("Failed to allocate memory for "
 							"lib_name_list[%d] %d (%s)\n",
 							num_lib_in_map, ENOMEM, strerror(ENOMEM));
@@ -600,6 +609,7 @@ get_module_maps(void)
 		}
 	}
 	D_FREE(szBuf);
+	D_FREE(lib_name);
 }
 
 /*
