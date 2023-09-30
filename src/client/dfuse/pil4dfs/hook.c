@@ -41,6 +41,7 @@
 #include <inttypes.h>
 #include <linux/limits.h>
 #include <capstone/capstone.h>
+#include <gurt/common.h>
 
 #include "hook.h"
 #include "hook_int.h"
@@ -98,20 +99,38 @@ static char     *path_libpthread;
 #define MAP_SIZE_LIMIT	(16*1024*1024)
 
 /*
- * get_string_pos - Determine the start and end positions of a string.
+ * get_path_pos - Determine the start and end positions of a path in /proc/self/maps.
  */
 static void
-get_string_pos(char *buf, char **start, char **end)
+get_path_pos(char *buf, char **start, char **end, int path_offset, char *buf_min, char *buf_max)
 {
-	*start = buf;
-	while (**start != ' ') {
-		(*start)--;
-	}
-	(*start)++;
+	int i;
 
-	*end = buf;
-	while (**end != ' ' && **end != '\n') {
-		(*end)++;
+	*start = NULL;
+	*end = NULL;
+
+	/* look backward for a '\n', the end of last line */
+	for (i = 0; i < PATH_MAX + path_offset; i++) {
+		if (*(buf - i) == '\n') {
+			/* the beginning of lib path */
+			*start = buf - i + path_offset;
+			break;
+		}
+		if ((buf - i) < buf_min) {
+			break;
+		}
+	}
+
+	/* look forward for a '\n', the end of current line */
+	for (i = 0; i < PATH_MAX; i++) {
+		if (*(buf + i) == '\n') {
+			/* the beginning of lib path */
+			*end = buf + i;
+			break;
+		}
+		if ((buf + i) > buf_max) {
+			break;
+		}
 	}
 }
 
@@ -122,7 +141,7 @@ static int
 read_map_file(char **buf)
 {
 	bool buffer_full;
-	int max_read_size, complete = 0, read_size;
+	int max_read_size, complete = 0, read_size, error;
 	FILE *fIn;
 
 	max_read_size = MAX_MAP_SIZE;
@@ -131,17 +150,20 @@ read_map_file(char **buf)
 	/* Keep reading the file until finish the whole file. Increase the buffer size if needed. */
 	while (complete == 0) {
 		buffer_full = false;
-		*buf = malloc(max_read_size + 1);
+		D_ALLOC(*buf, max_read_size + 1);
 		if (*buf == NULL) {
-			printf("Failed allocate memory (%d bytes).\nQuit\n", max_read_size + 1);
-			exit(1);
+			D_FATAL("Failed allocate memory (%d bytes). %d (%s)\n", max_read_size + 1,
+				ENOMEM, strerror(ENOMEM));
+			exit_on_error();
 		}
 
 		/* non-seekable file. fread is needed!!! */
 		fIn = fopen("/proc/self/maps", "r");
 		if (fIn == NULL) {
-			printf("Fail to open file: /proc/self/maps\nQuit\n");
-			exit(1);
+			error = errno;
+			D_FATAL("Fail to open file: /proc/self/maps. %d (%s)\n", error,
+				strerror(error));
+			exit_on_error();
 		}
 
 		/* fgets seems not working. */
@@ -150,8 +172,9 @@ read_map_file(char **buf)
 		fclose(fIn);
 
 		if (read_size < 0) {
-			printf("Error to read file /proc/self/maps.\nQuit\n");
-			exit(1);
+			D_FATAL("Error to read file /proc/self/maps. %d (%s)\n", EIO,
+				strerror(EIO));
+			exit_on_error();
 		} else if (read_size == max_read_size) {
 			/* need to increase the buffer and try again */
 			max_read_size *= 3;
@@ -162,10 +185,12 @@ read_map_file(char **buf)
 		}
 		(*buf)[read_size] = '\0';
 		if (buffer_full)
-			free(*buf);
+			D_FREE(*buf);
 		if (max_read_size >= MAP_SIZE_LIMIT) {
-			printf("/proc/self/maps is TOO large!\nQuit.\n");
-			exit(1);
+			/* not likely to be here */
+			D_FATAL("/proc/self/maps is TOO large! %d (%s)\n", EFBIG,
+				strerror(EFBIG));
+			exit_on_error();
 		}
 	}
 
@@ -179,88 +204,126 @@ read_map_file(char **buf)
 static void
 determine_lib_path(void)
 {
+	int   path_offset   = 0, read_size, i, rc;
 	char *read_buff_map = NULL;
-	char *pos, *start, *end;
+	char *pos, *start, *end, lib_ver_str[32] = "", *lib_dir_str = NULL;
 
-	read_map_file(&read_buff_map);
+	read_size = read_map_file(&read_buff_map);
 
-	pos = strstr(read_buff_map, "/lib64/ld-linux");
+	/* need to find the offset of lib path in the line */
+	pos = strstr(read_buff_map, "[heap]");
+	/* look back for the first '\n', the end of last line */
+	for(i = 0; i < 128; i++) {
+		if (*(pos - i) == '\n') {
+			/* path_offset is the offset from the end of previous line to the beginning
+			 * of the lib path string in current line
+			 */
+			path_offset = i;
+			break;
+		}
+		if ((pos - i) < read_buff_map) {
+			break;
+		}
+	}
+	if (path_offset == 0) {
+		D_FATAL("Fail to determine path_offset in /proc/self/maps!\n");
+		exit_on_error();
+	}
+
+	pos = strstr(read_buff_map, "ld-linux");
 	if (pos == NULL)
 		/* try a different format */
-		pos = strstr(read_buff_map, "/lib64/ld-2");
+		pos = strstr(read_buff_map, "ld-2.");
 	if (pos == NULL) {
-		printf("Warning: Failed to find ld.so.\n");
+		D_FATAL("Failed to find ld.so!\n");
 		goto err;
 	}
-	get_string_pos(pos, &start, &end);
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
+	if (start == NULL || end == NULL) {
+		D_FATAL("get_path_pos() failed to determine the path for ld.so!\n");
+		goto err;
+	}
 	if ((end - start + 1) >= PATH_MAX) {
-		printf("Warning: path of path_ld is too long.\n");
+		D_FATAL("path_ld is too long! %d (%s)\n", ENAMETOOLONG, strerror(ENAMETOOLONG));
 		goto err;
 	}
-	path_ld = malloc(end - start + 1);
+	D_STRNDUP(path_ld, start, end - start + 1);
 	if (path_ld == NULL) {
-		printf("Warning: Failed to allocate memory for path_ld.\n");
+		D_FATAL("Failed to allocate memory for path_ld. %d (%s)\n", ENOMEM,
+			strerror(ENOMEM));
 		goto err;
 	}
-	memcpy(path_ld, start, end - start);
 	path_ld[end - start] = 0;
 
-	pos = strstr(read_buff_map, "/lib64/libc.so");
+	pos = strstr(read_buff_map, "libc.so");
 	if (pos == NULL)
 		/* try a different format */
-		pos = strstr(read_buff_map, "/lib64/libc-2");
+		pos = strstr(read_buff_map, "libc-2.");
 	if (pos == NULL) {
-		printf("Warning: Failed to find libc.so.\n");
+		D_FATAL("Failed to find the path of libc.so!\n");
 		goto err;
 	}
-	get_string_pos(pos, &start, &end);
+	get_path_pos(pos, &start, &end, path_offset, read_buff_map, read_buff_map + read_size);
+	if (start == NULL || end == NULL) {
+		D_FATAL("get_path_pos() failed to determine the path for libc.so.!\n");
+		goto err;
+	}
 	if ((end - start + 1) >= PATH_MAX) {
-		printf("The length of path_libc is too long!\nQuit\n");
+		D_FATAL("path_libc is too long! %d (%s)\n", ENAMETOOLONG, strerror(ENAMETOOLONG));
 		goto err;
 	}
-	path_libc = malloc(end - start + 1);
+	/* extract the directory where libc.so is located in. */
+	D_STRNDUP(lib_dir_str, start, pos - start);
+	if (lib_dir_str == NULL) {
+		D_FATAL("Failed to allocate memory for lib_dir_str. %d (%s)\n", ENOMEM,
+			strerror(ENOMEM));
+		goto err;
+	}
+	lib_dir_str[pos - start - 1] = 0;
+	D_STRNDUP(path_libc, start, end - start + 1);
 	if (path_libc == NULL) {
-		printf("Warning: Failed to allocate memory for path_libc.\n");
+		D_FATAL("Failed to allocate memory for path_libc. %d (%s)\n", ENOMEM,
+			strerror(ENOMEM));
 		goto err;
 	}
-	_Pragma("GCC diagnostic push")
-	_Pragma("GCC diagnostic ignored \"-Warray-bounds\"")
-	_Pragma("GCC diagnostic ignored \"-Wstringop-overflow\"")
-	_Pragma("GCC diagnostic ignored \"-Wrestrict\"")
-	memcpy(path_libc, start, end - start);
 	path_libc[end - start] = 0;
-	_Pragma("GCC diagnostic pop")
+	D_FREE(read_buff_map);
 
-	/* compose path_libpthread with path_libc string */
-	if ((end - start + 1 + 6) >= PATH_MAX) {
-		printf("The length of path_libpthread is too long!\nQuit\n");
-		goto err;
-	}
-	path_libpthread = malloc(end - start + 1 + 6);
-	if (path_libpthread == NULL) {
-		printf("Warning: Failed to allocate memory for path_libpthread.\n");
-		goto err;
+	pos = strstr(path_libc, "libc-2.");
+	if (pos) {
+		/* containing version in name. example, 2.17 */
+		memcpy(lib_ver_str, pos + 5, 4);
+		lib_ver_str[4] = 0;
 	}
 
-	memcpy(path_libpthread, start, end - start);
-	path_libpthread[end - start + 1 + 5] = 0;
-	pos = strstr(path_libpthread, "libc");
-	memcpy(pos + 3    , "pthread", 7);
-	memcpy(pos + 3 + 7, path_libc + (pos - path_libpthread + 4), end - start + 1 + 6 -
-	       (pos - path_libpthread + 4));
-	if (path_libpthread[end - start + 1 + 4] >= '5' &&
-	    path_libpthread[end - start + 1 + 4] <= '7') {
-		path_libpthread[end - start + 1 + 4] = '0';
+	if (lib_ver_str[0]) {
+		/* with version in name */
+		rc = asprintf(&path_libpthread, "%s/libpthread-%s.so", lib_dir_str, lib_ver_str);
+	} else {
+		rc = asprintf(&path_libpthread, "%s/libpthread.so.0", lib_dir_str);
 	}
+	if (rc < 0) {
+		D_FATAL("Failed to allocate memory for path_libpthread. %d (%s)\n", ENOMEM,
+			strerror(ENOMEM));
+		goto err_1;
+	}
+	if (rc >= PATH_MAX) {
+		free(path_libpthread);
+		D_FATAL("path_libpthread is too long! %d (%s)\n", ENAMETOOLONG,
+			strerror(ENAMETOOLONG));
+		goto err_1;
+	}	
+	D_FREE(lib_dir_str);
 
-	free(read_buff_map);
 	found_libc = 1;
 	return;
 
 err:
-	free(read_buff_map);
+	D_FREE(read_buff_map);
+err_1:
+	D_FREE(lib_dir_str);
 	found_libc = 0;
-	exit(1);
+	exit_on_error();
 }
 
 /*
@@ -291,20 +354,21 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 
 	rc = stat(lib_path, &file_stat);
 	if (rc == -1) {
-		printf("Fail to query stat of file %s. %s\nQuit\n", lib_path, strerror(errno));
-		exit(1);
+		D_FATAL("Fail to query stat of file %s. %d (%s)\n", lib_path, errno,
+			strerror(errno));
+		exit_on_error();
 	}
 
 	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
-		printf("Fail to open file %s\nQuit\n", lib_path);
-		exit(1);
+		D_FATAL("Fail to open file %s. %d (%s)\n", lib_path, errno, strerror(errno));
+		exit_on_error();
 	}
 
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
-		printf("Fail to mmap file %s\nQuit\n", lib_path);
-		exit(1);
+		D_FATAL("Fail to mmap file %s. %d (%s)\n", lib_path, errno, strerror(errno));
+		exit_on_error();
 	}
 	header = (Elf64_Ehdr *)map_start;
 
@@ -315,8 +379,8 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 			symb_base_addr = (void *)(sections[i].sh_offset + map_start);
 			sym_rec_size   = sections[i].sh_entsize;
 			if (sections[i].sh_entsize == 0) {
-				printf("Error: Unexpected entry size.\nQuit\n");
-				exit(1);
+				D_FATAL("Error: Unexpected entry size.\n");
+				exit_on_error();
 			}
 			num_sym        = sections[i].sh_size / sections[i].sh_entsize;
 
@@ -379,14 +443,14 @@ uninstall_hook(void)
 				continue;
 			if (mprotect(pbaseOrg, MemSize_Modify,
 				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
-				printf("Error in executing p_mp().\n");
-				exit(1);
+				D_FATAL("mprotect() failed. %d (%s)\n", errno, strerror(errno));
+				exit_on_error();
 			}
 			/* save original code for uninstall */
 			memcpy(tramp_list[iFunc].addr_org_func, tramp_list[iFunc].org_code, 5);
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
-				printf("Error in executing p_mp().\n");
-				exit(1);
+				D_FATAL("mprotect() failed. %d (%s)\n", errno, strerror(errno));
+				exit_on_error();
 			}
 		}
 	}
@@ -394,7 +458,7 @@ uninstall_hook(void)
 	for (i = 0; i < num_patch_blk; i++) {
 		if (patch_blk_list[i].patch_addr) {
 			if (munmap(patch_blk_list[i].patch_addr, MIN_MEM_SIZE))
-				perror("munmap");
+				D_WARN("munmap() failed. %d (%s)\n", errno, strerror(errno));
 			patch_blk_list[i].patch_addr = 0;
 		}
 	}
@@ -512,15 +576,18 @@ get_module_maps(void)
 				}
 				if (query_lib_name_in_list(szLibName) == -1) {
 					/* a new name not in list */
-					lib_name_list[num_lib_in_map] = strdup(szLibName);
+					D_STRNDUP(lib_name_list[num_lib_in_map], szLibName,
+						  PATH_MAX);
 					if (lib_name_list[num_lib_in_map] == NULL) {
-						printf("Error> strdup(szLibName) failed.\nQuit\n");
-						exit(1);
+						D_FATAL("Failed to allocate memory for "
+							"lib_name_list[%d] %d (%s)\n",
+							num_lib_in_map, ENOMEM, strerror(ENOMEM));
+						exit_on_error();
 					}
 					lib_base_addr[num_lib_in_map] = addr_B;
 					num_lib_in_map++;
 					if (num_lib_in_map >= MAX_NUM_LIB) {
-						printf("Warning> lib_base_addr is FULL.\n"
+						D_WARN("lib_base_addr is FULL.\n"
 						       "You may need to increase MAX_NUM_LIB.\n");
 						break;
 					}
@@ -528,12 +595,11 @@ get_module_maps(void)
 			}
 		}
 		if (num_seg >= MAX_NUM_SEG) {
-			printf("Warning> num_seg >= MAX_NUM_LIB\n"
-			       "You may want to increase MAX_NUM_LIB.\n");
+			D_WARN("num_seg >= MAX_NUM_LIB.\nYou may want to increase MAX_NUM_LIB.\n");
 			break;
 		}
 	}
-	free(szBuf);
+	D_FREE(szBuf);
 }
 
 /*
@@ -601,17 +667,17 @@ allocate_memory_block_for_patches(void)
 			}
 
 			if (iSeg < 0) {
-				printf("Something wrong! The address you queried is not\n"
-				       "inside any module! Quit\n");
-				exit(1);
+				D_FATAL("Something wrong! The address you queried is not "
+					"inside any module! Quit\n");
+				exit_on_error();
 			}
 			p_Alloc = (void *)(addr_max[iSeg]);
 
 			if (iSeg < (num_seg - 1)) {
 				if ((addr_min[iSeg + 1] - addr_max[iSeg]) < MIN_MEM_SIZE) {
-					printf("Only %" PRIu64 " bytes available.\nQuit\n",
-					       addr_min[iSeg + 1] - addr_max[iSeg]);
-					exit(1);
+					D_FATAL("Only %" PRIu64 " bytes available.\nQuit\n",
+						addr_min[iSeg + 1] - addr_max[iSeg]);
+					exit_on_error();
 				}
 			}
 
@@ -619,12 +685,12 @@ allocate_memory_block_for_patches(void)
 			    mmap(p_Alloc, MIN_MEM_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC,
 				 MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 			if (patch_blk_list[num_patch_blk].patch_addr == MAP_FAILED) {
-				printf("Fail to allocate code block at %p with mmap().\nQuit\n",
-				       p_Alloc);
-				exit(1);
+				D_FATAL("mmap() failed. %d (%s)\n", errno, strerror(errno));
+				exit_on_error();
 			} else if (patch_blk_list[num_patch_blk].patch_addr != p_Alloc) {
-				printf("Allocated at %p. Desired at %p\n",
-				       patch_blk_list[num_patch_blk].patch_addr, p_Alloc);
+				D_FATAL("Allocated at %p. Desired at %p\n",
+					patch_blk_list[num_patch_blk].patch_addr, p_Alloc);
+				exit_on_error();
 			}
 
 			patch_blk_list[num_patch_blk].num_trampoline = 0;
@@ -657,6 +723,32 @@ determine_mem_block_size(const void *addr)
 	}
 }
 
+static void
+free_memory(void)
+{
+	int i;
+
+	D_FREE(path_ld);
+	D_FREE(path_libc);
+	free(path_libpthread);
+	D_FREE(module_list);
+
+	if (lib_name_list) {
+		for (i = 0; i < num_lib_in_map; i++) {
+			D_FREE(lib_name_list[i]);
+		}
+		D_FREE(lib_name_list);
+	}
+}
+
+static void
+exit_on_error(void)
+{
+	free_memory();
+	/* The destructor function in libpil4dfs.so will be run by exit(). */
+	exit(1);
+}
+
 /* The max number of instruments of the entry code in original function to analyze */
 #define MAX_INSTUMENTS (24)
 
@@ -686,8 +778,8 @@ install_hook(void)
 
 	rc = sysconf(_SC_PAGESIZE);
 	if (rc == -1) {
-		printf("Failed to query page size. %s\nQuit\n", strerror(errno));
-		exit(1);
+		D_FATAL("sysconf() failed to query page size. %d (%s)\n", errno, strerror(errno));
+		exit_on_error();
 	}
 	page_size = (size_t)rc;
 	mask      = ~(page_size - 1);
@@ -696,8 +788,8 @@ install_hook(void)
 	allocate_memory_block_for_patches();
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
-		printf("ERROR: Failed to initialize engine!\n");
-		exit(1);
+		D_FATAL("Failed to initialize engine!\n");
+		exit_on_error();
 	}
 	cs_opt_skipdata skipdata = {
 		.mnemonic = "db",
@@ -742,8 +834,8 @@ install_hook(void)
 					     (unsigned char *)tramp_list[nFunc_InBlk].addr_org_func,
 					     MAX_LEN_DISASSEMBLE, 0, 0, &insn);
 			if (num_inst <= 0) {
-				printf("Failed to disassemble code.\n");
-				exit(1);
+				D_FATAL("cs_disasm() failed to disassemble code.\n");
+				goto err;
 			}
 
 			for (idx_inst = 0; idx_inst < num_inst; idx_inst++) {
@@ -828,9 +920,8 @@ install_hook(void)
 			    (void *)(tramp_list[nFunc_InBlk].addr_org_func));
 			if (mprotect(pbaseOrg, MemSize_Modify,
 				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
-				printf("Error in executing mprotect(). %s\n",
-				       module_list[idx_mod].func_name_list[iFunc]);
-				exit(1);
+				D_ERROR("mprotect() failed. %d (%s)\n", errno, strerror(errno));
+				goto err;
 			}
 
 			/* save original code for uninstall */
@@ -844,9 +935,8 @@ install_hook(void)
 				  (long int)(tramp_list[nFunc_InBlk].addr_org_func) - 5);
 
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
-				printf("Error in executing mprotect(). %s\n",
-				       module_list[idx_mod].func_name_list[iFunc]);
-				exit(1);
+				D_ERROR("mprotect() failed. %d (%s)\n", errno, strerror(errno));
+				goto err;
 			}
 
 			nFunc_InBlk++;
@@ -863,24 +953,17 @@ install_hook(void)
 
 	cs_close(&handle);
 
-	if (path_ld)
-		free(path_ld);
-	if (path_libc)
-		free(path_libc);
-	if (path_libpthread)
-		free(path_libpthread);
-	if (module_list)
-		free(module_list);
-
-	if (lib_name_list) {
-		for (j = 0; j < num_lib_in_map; j++) {
-			if (lib_name_list[j] != NULL)
-				free(lib_name_list[j]);
-		}
-		free(lib_name_list);
-	}
+	free_memory();
 
 	return num_hook_installed;
+
+err:
+	if (insn) {
+		cs_free(insn, num_inst);
+		insn = NULL;
+	}
+	exit_on_error();
+	return 0;
 }
 
 /*
@@ -910,17 +993,19 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 
 	/* Do initialization work at the very first time. */
 	if (!num_hook) {
-		module_list = malloc(sizeof(struct module_patch_info_t) * MAX_MODULE);
+		D_ALLOC_ARRAY(module_list, MAX_MODULE);
 		if (module_list == NULL) {
-			printf("Failed to allocate memory for module_list.\nQuit\n");
-			exit(1);
+			D_FATAL("Failed to allocate memory for module_list. %d (%s)\n", ENOMEM,
+				strerror(ENOMEM));
+			exit_on_error();
 		}
 		memset(module_list, 0, sizeof(struct module_patch_info_t) * MAX_MODULE);
 
-		lib_name_list = (char **)malloc(sizeof(char *) * MAX_NUM_LIB);
+		D_ALLOC(lib_name_list, sizeof(char *) * MAX_NUM_LIB);
 		if (lib_name_list == NULL) {
-			printf("Failed to allocate memory for lib_name_list.\nQuit\n");
-			exit(1);
+			D_FATAL("Failed to allocate memory for lib_name_list. %d (%s)\n", ENOMEM,
+				strerror(ENOMEM));
+			exit_on_error();
 		}
 		memset(lib_name_list, 0, sizeof(char *) * MAX_NUM_LIB);
 
@@ -951,7 +1036,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 			/* not loaded yet, then load the library */
 			module = dlopen(module_name_local, RTLD_LAZY);
 			if (module == NULL) {
-				printf("Error> Fail to dlopen: %s.\n", module_name_local);
+				D_ERROR("dlopen() failed. %d (%s)\n", errno, strerror(errno));
 				return REGISTER_DLOPEN_FAILED;
 			}
 			get_module_maps();
@@ -960,8 +1045,8 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 
 	idx = query_lib_name_in_list(module_name_local);
 	if (idx == -1) {
-		printf("Failed to find %s in /proc/pid/maps\nQuit\n", module_name_local);
-		exit(1);
+		D_FATAL("Failed to find %s in /proc/pid/maps\n", module_name_local);
+		exit_on_error();
 	}
 
 	idx_mod = query_registered_module(module_name_local);
@@ -979,7 +1064,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		num_module++;
 	} else {
 		if (module_list[idx_mod].module_base_addr != lib_base_addr[idx])
-			printf("WARNING> module_base_addr != lib_base_addr\n");
+			D_WARN("module_base_addr != lib_base_addr\n");
 
 		strcpy(module_list[idx_mod].func_name_list[module_list[idx_mod].num_hook],
 		       func_name);
@@ -993,8 +1078,8 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	num_hook++;
 
 	if (num_hook > MAX_PATCH) {
-		printf("Error> num_hook > MAX_PATCH. MAX_PATCH needs to be increased.\nQuit\n");
-		exit(1);
+		D_FATAL("num_hook > MAX_PATCH. MAX_PATCH needs to be increased.\n");
+		exit_on_error();
 	}
 
 	return REGISTER_SUCCESS;
@@ -1019,9 +1104,9 @@ query_all_org_func_addr(void)
 
 		if (idx == -1) {
 			/* a new name not in list */
-			printf("Fail to find library %s in maps.\nQuit\n",
+			D_FATAL("Fail to find library %s in maps.\nQuit\n",
 			       module_list[idx_mod].module_name);
-			exit(1);
+			exit_on_error();
 		} else {
 			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);
 			module_list[idx_mod].module_base_addr = lib_base_addr[idx];

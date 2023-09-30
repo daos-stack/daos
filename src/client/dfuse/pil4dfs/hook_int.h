@@ -154,4 +154,10 @@ allocate_memory_block_for_patches(void);
 static int
 query_lib_name_in_list(const char *lib_name_str);
 
+static void
+free_memory(void);
+
+static void
+exit_on_error(void);
+
 #endif
