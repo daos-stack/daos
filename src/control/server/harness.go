@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -61,7 +62,7 @@ type Engine interface {
 	IsReady() bool
 	LocalState() system.MemberState
 	RemoveSuperblock() error
-	Run(context.Context, bool)
+	Run(context.Context)
 	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
@@ -76,7 +77,7 @@ type EngineHarness struct {
 	instances     []Engine
 	started       atm.Bool
 	faultDomain   *system.FaultDomain
-	onDrpcFailure []func(context.Context, error)
+	onDrpcFailure []onDrpcFailureFn
 }
 
 // NewEngineHarness returns an initialized *EngineHarness.
@@ -146,8 +147,10 @@ func (h *EngineHarness) AddInstance(ei Engine) error {
 	return nil
 }
 
+type onDrpcFailureFn func(ctx context.Context, err error)
+
 // OnDrpcFailure registers callbacks to be invoked on dRPC call failure.
-func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error)) {
+func (h *EngineHarness) OnDrpcFailure(fns ...onDrpcFailureFn) {
 	h.Lock()
 	defer h.Unlock()
 
@@ -156,44 +159,62 @@ func (h *EngineHarness) OnDrpcFailure(fns ...func(ctx context.Context, err error
 
 // CallDrpc calls the supplied dRPC method on a managed I/O Engine instance.
 func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body proto.Message) (resp *drpc.Response, err error) {
-	defer func() {
-		if err == nil {
-			return
-		}
-		// If the context was canceled, don't trigger callbacks.
-		if errors.Cause(err) == context.Canceled {
-			return
-		}
-		// Don't trigger callbacks for these errors which can happen when
-		// things are still starting up.
-		if err == FaultHarnessNotStarted || err == errEngineNotReady {
-			return
-		}
-
-		h.log.Debugf("invoking dRPC failure handlers for %s", err)
-		h.RLock()
-		defer h.RUnlock()
-		for _, fn := range h.onDrpcFailure {
-			fn(ctx, err)
-		}
-	}()
-
 	if !h.isStarted() {
 		return nil, FaultHarnessNotStarted
 	}
 
-	// Iterate through the managed instances, looking for
-	// the first one that is available to service the request.
-	// If the request fails, that error will be returned.
-	for _, i := range h.Instances() {
+	instances := h.Instances()
+	if len(instances) == 0 {
+		return nil, errors.New("no engine instances to service drpc call")
+	}
+
+	// Iterate through the managed instances, looking for the first one that is available to
+	// service the request. If non-transient error is returned from CallDrpc, that error will
+	// be returned immediately. If a transient error is returned, continue to the next engine.
+	drpcErrs := make([]error, 0, len(instances))
+	for _, i := range instances {
 		resp, err = i.CallDrpc(ctx, method, body)
+		if err == nil {
+			break
+		}
+
+		drpcErrs = append(drpcErrs, errors.Cause(err))
+		msg := fmt.Sprintf("failure on engine instance %d: %s", i.Index(), err)
 
 		switch errors.Cause(err) {
 		case errEngineNotReady, errDRPCNotReady, FaultDataPlaneNotStarted:
+			h.log.Debug("drpc call transient " + msg)
 			continue
-		default:
-			return
 		}
+
+		h.log.Debug("drpc call hard " + msg)
+		break
+	}
+
+	if err == nil {
+		return // Request sent.
+	}
+
+	var e error
+	hasDRPCErr := false
+	for _, e = range drpcErrs {
+		switch e {
+		case errDRPCNotReady, FaultDataPlaneNotStarted:
+			// If no engines can service request and drpc specific error has
+			// been returned then pass that error to the failure handlers.
+			hasDRPCErr = true
+			break
+		}
+	}
+	if !hasDRPCErr {
+		return // Don't trigger handlers on failures not related to dRPC comms.
+	}
+
+	h.log.Debugf("invoking dRPC failure handlers for %s", e)
+	h.RLock()
+	defer h.RUnlock()
+	for _, fn := range h.onDrpcFailure {
+		fn(ctx, e)
 	}
 
 	return
@@ -203,6 +224,20 @@ type dbLeader interface {
 	IsLeader() bool
 	ShutdownRaft() error
 	ResignLeadership(error) error
+}
+
+func newOnDrpcFailureFn(log logging.Logger, db dbLeader) onDrpcFailureFn {
+	return func(_ context.Context, errIn error) {
+		if !db.IsLeader() {
+			return
+		}
+
+		// If we cannot service a dRPC request on this node, we should resign as leader in
+		// order to force a new leader election.
+		if err := db.ResignLeadership(errIn); err != nil {
+			log.Errorf("failed to resign leadership after dRPC failure: %s", err)
+		}
+	}
 }
 
 // Start starts harness by setting up and starting dRPC before initiating
@@ -225,30 +260,10 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	defer h.started.SetFalse()
 
 	for _, ei := range h.Instances() {
-		ei.Run(ctx, cfg.RecreateSuperblocks)
+		ei.Run(ctx)
 	}
 
-	h.OnDrpcFailure(func(_ context.Context, errIn error) {
-		if !db.IsLeader() {
-			return
-		}
-
-		switch errors.Cause(errIn) {
-		case errDRPCNotReady, FaultDataPlaneNotStarted:
-			break
-		default:
-			// Don't shutdown on other failures which are
-			// not related to dRPC communications.
-			return
-		}
-
-		// If we cannot service a dRPC request on this node,
-		// we should resign as leader in order to force a new
-		// leader election.
-		if err := db.ResignLeadership(errIn); err != nil {
-			h.log.Errorf("failed to resign leadership after dRPC failure: %s", err)
-		}
-	})
+	h.OnDrpcFailure(newOnDrpcFailureFn(h.log, db))
 
 	<-ctx.Done()
 	h.log.Debug("shutting down harness")

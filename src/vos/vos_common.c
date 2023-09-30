@@ -288,7 +288,6 @@ cancel:
 		dae = dth->dth_ent;
 		if (dae != NULL) {
 			if (err == 0 && unlikely(dae->dae_preparing && dae->dae_aborting)) {
-				dae->dae_preparing = 0;
 				rc = vos_dtx_abort_internal(cont, dae, true);
 				D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
 					 "Delay abort DTX "DF_DTI" (1): rc = %d\n",
@@ -409,7 +408,7 @@ vos_tls_fini(int tags, void *data)
 
 	umem_fini_txd(&tls->vtl_txd);
 	if (tls->vtl_ts_table)
-		vos_ts_table_free(&tls->vtl_ts_table);
+		vos_ts_table_free(&tls->vtl_ts_table, tls);
 	D_FREE(tls);
 }
 
@@ -420,7 +419,28 @@ vos_standalone_tls_fini(void)
 		vos_tls_fini(DAOS_TGT_TAG, self_mode.self_tls);
 		self_mode.self_tls = NULL;
 	}
+}
 
+void
+vos_lru_alloc_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_inc_gauge(tls->vtl_lru_alloc_size, size);
+}
+
+void
+vos_lru_free_track(void *arg, daos_size_t size)
+{
+	struct vos_tls *tls = arg;
+
+	if (tls == NULL || tls->vtl_lru_alloc_size == NULL)
+		return;
+
+	d_tm_dec_gauge(tls->vtl_lru_alloc_size, size);
 }
 
 static void *
@@ -465,16 +485,12 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	}
 
 	if (tags & DAOS_TGT_TAG) {
-		rc = vos_ts_table_alloc(&tls->vtl_ts_table);
+		rc = vos_ts_table_alloc(&tls->vtl_ts_table, tls);
 		if (rc) {
 			D_ERROR("Error in creating timestamp table: %d\n", rc);
 			goto failed;
 		}
 	}
-
-	if (tgt_id < 0)
-		/** skip sensor setup on standalone vos & sys xstream */
-		return tls;
 
 	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 			     "Number of committed entries kept around for reply"
@@ -483,6 +499,37 @@ vos_tls_init(int tags, int xs_id, int tgt_id)
 	if (rc)
 		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
+	if (tgt_id >= 0) {
+		rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
+				     "Number of committed entries kept around for reply"
+				     " reconstruction", "entries",
+				     "io/dtx/committed/tgt_%u", tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_dtx_cmt_ent_cnt, D_TM_GAUGE,
+				     "Number of committed entries", "entry",
+				     "mem/vos/dtx_cmt_ent_%u/tgt_%u",
+				     sizeof(struct vos_dtx_cmt_ent), tgt_id);
+		if (rc)
+			D_WARN("Failed to create committed cnt: "DF_RC"\n",
+			       DP_RC(rc));
+
+		rc = d_tm_add_metric(&tls->vtl_obj_cnt, D_TM_GAUGE,
+				     "Number of cached vos object", "entry",
+				     "mem/vos/vos_obj_%u/tgt_%u",
+				     sizeof(struct vos_object), tgt_id);
+		if (rc)
+			D_WARN("Failed to create vos obj cnt: "DF_RC"\n", DP_RC(rc));
+
+	}
+
+	rc = d_tm_add_metric(&tls->vtl_lru_alloc_size, D_TM_GAUGE,
+			     "Active DTX table LRU size", "byte",
+			     "mem/vos/vos_lru_size/tgt_%d", tgt_id);
+	if (rc)
+		D_WARN("Failed to create LRU alloc size: "DF_RC"\n", DP_RC(rc));
 
 	return tls;
 failed:

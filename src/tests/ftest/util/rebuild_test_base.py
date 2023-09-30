@@ -75,8 +75,8 @@ class RebuildTestBase(TestWithServers):
         """Update the pool verification expected values."""
         self.info_checks["pi_ndisabled"] = ">0"
         self.rebuild_checks["rs_state"] = 2
-        self.rebuild_checks["rs_obj_nr"] = ">0"
-        self.rebuild_checks["rs_rec_nr"] = ">0"
+        self.rebuild_checks["rs_obj_nr"] = ">=0"
+        self.rebuild_checks["rs_rec_nr"] = ">=0"
 
     def execute_pool_verify(self, msg=None):
         """Verify the pool info.

@@ -756,6 +756,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 		   daos_epoch_t cmt_time, struct vos_dtx_cmt_ent **dce_p,
 		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
+	struct vos_tls			*tls = vos_tls_get(false);
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
 	d_iov_t				 kiov;
@@ -820,6 +821,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti, daos_epoch_t 
 	if (dce == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	d_tm_inc_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	DCE_CMT_TIME(dce) = cmt_time;
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
@@ -2217,6 +2219,7 @@ vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, 
 	}
 
 	rc = dtx_rec_release(cont, dae, true);
+	dae->dae_preparing = 0;
 	if (rc == 0) {
 		dae->dae_aborting = 1;
 		rc = umem_tx_commit(umm);
@@ -2470,6 +2473,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 		cont->vc_dtx_committed_count--;
 		cont->vc_pool->vp_dtx_committed_count--;
 		d_tm_dec_gauge(tls->vtl_committed, 1);
+		d_tm_dec_gauge(tls->vtl_dtx_cmt_ent_cnt, 1);
 	}
 
 	if (epoch != cont_df->cd_newest_aggregated) {
@@ -3135,6 +3139,11 @@ vos_dtx_rsrvd_fini(struct dtx_handle *dth)
 	}
 }
 
+static const struct lru_callbacks lru_dtx_cache_cbs = {
+	.lru_on_alloc = vos_lru_alloc_track,
+	.lru_on_free = vos_lru_free_track,
+};
+
 int
 vos_dtx_cache_reset(daos_handle_t coh, bool force)
 {
@@ -3169,7 +3178,8 @@ vos_dtx_cache_reset(daos_handle_t coh, bool force)
 		lrua_array_free(cont->vc_dtx_array);
 
 	rc = lrua_array_alloc(&cont->vc_dtx_array, DTX_ARRAY_LEN, DTX_ARRAY_NR,
-			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE, NULL, NULL);
+			      sizeof(struct vos_dtx_act_ent), LRU_FLAG_REUSE_UNIQUE,
+			      &lru_dtx_cache_cbs, vos_tls_get(false));
 	if (rc != 0) {
 		D_ERROR("Failed to re-create DTX active array for "DF_UUID": "DF_RC"\n",
 			DP_UUID(cont->vc_id), DP_RC(rc));
