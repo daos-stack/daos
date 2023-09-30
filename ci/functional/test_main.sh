@@ -37,6 +37,7 @@ test_cluster() {
         "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}           \
         FIRST_NODE=${first_node}                        \
         TEST_RPMS=${TEST_RPMS}                          \
+        NODELIST=${tnodes}                              \
         $(cat ci/functional/test_main_prep_node.sh)"
 }
 
@@ -62,6 +63,8 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
+# collect the _results.xml files from test_storage_prep
+clush -o '-i ci_key' -l root -w "$tnodes" --rcopy ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 if $TEST_RPMS; then
     # shellcheck disable=SC2029
