@@ -92,11 +92,12 @@ else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi
 
-# Now rename the previously collected so that Jenkins will
-# use them for Junit processing
+# Now rename the previously collected hardware test data for Jenkins
+# to use them for Junit processing.
+: "${STAGE_NAME:=}"
 for node in ${tnodes//,/ }; do
     old_name="./hardware_prep_node_results.xml.$node"
-    new_name="./hardware_prep_node_${node}_results.xml"
+    new_name="${STAGE_NAME}/hardware_prep/${node}/results.xml"
     if [ -e "$old_name" ]; then
         mv "$old_name" "$new_name"
     fi
