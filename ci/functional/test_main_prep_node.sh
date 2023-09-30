@@ -287,8 +287,8 @@ tc="tests=\"$testruns\""
 junit_xml="<testsuite name=\"$ts\" skipped=\"0\" $tf $te $tc>$nl
 $testcases</testsuite>$nl"
 
-# Each junit file needs a unique name for when they are collected.
-echo "$junit_xml" > "./hardware_prep_node_${mynodenum}_results.xml"
+# Each junit file needs the same name for when they are collected.
+echo "$junit_xml" > "./hardware_prep_node_results.xml"
 
 do_mail
 

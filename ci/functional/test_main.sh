@@ -54,6 +54,16 @@ if ! test_cluster; then
     test_cluster
 fi
 
+# collect the _results.xml files from test_main_prep_nodes before they
+# may be deleted by pre-test cleanup.
+# Cannot use a wildcard for collection as that just ends up
+# with a wild card in the collected filename which just makes
+# things more confusing.
+rm -f ./hardware_prep_node_results.xml.* ./hardware_prep_nodde_*_results.xml
+clush -o '-i ci_key' -l root -w "$tnodes" \
+      --rcopy hardware_prep_node_results.xml
+# This results in file names with the node name as the suffix.
+
 # this is being mis-flagged as SC2026 where shellcheck.net is OK with it
 # shellcheck disable=SC2026
 trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
@@ -67,8 +77,7 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
-# collect the _results.xml files from test_storage_prep
-clush -o '-i ci_key' -l root -w "$tnodes" --rcopy ./*_results.xml
+
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
 if $TEST_RPMS; then
     # shellcheck disable=SC2029
@@ -82,3 +91,13 @@ if $TEST_RPMS; then
 else
     ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
 fi
+
+# Now rename the previously collected so that Jenkins will
+# use them for Junit processing
+for node in ${tnodes//,/ }; do
+    old_name="./hardware_prep_node_results.xml.$node"
+    new_name="./hardware_prep_node_${node}_results.xml"
+    if [ -e "$old_name" ]; then
+        mv "$old_name" "$new_name"
+    fi
+done
