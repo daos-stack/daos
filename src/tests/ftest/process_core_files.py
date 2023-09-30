@@ -8,11 +8,12 @@ from collections import defaultdict
 from fnmatch import fnmatch
 import logging
 import os
+import re
 import sys
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
-from util.run_utils import run_local, find_command, RunException
+from util.run_utils import run_remote, run_local, find_command, RunException
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)
@@ -26,6 +27,51 @@ CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
 
 class CoreFileException(Exception):
     """Base exception for this module."""
+
+
+def get_core_file_pattern(log, hosts, process_cores):
+    """Get the core file pattern information from the hosts if collecting core files.
+
+    Args:
+        log (Logger): logger for the messages produced by this method
+        clients (NodeSet): hosts designated for the client role in testing
+        process_cores (bool): whether or not to collect core files after the tests complete
+
+    Raises:
+        CoreFileException: if there was an error obtaining the core file pattern information
+
+    Returns:
+        dict: a dictionary containing the path and pattern for the core files per NodeSet
+    """
+    core_files = {}
+    if not process_cores:
+        log.debug("Not collecting core files")
+        return core_files
+
+    # Determine the core file pattern being used by the hosts
+    command = "cat /proc/sys/kernel/core_pattern"
+    result = run_remote(log, hosts, command)
+
+    # Verify all the hosts have the same core file pattern
+    if not result.passed:
+        raise CoreFileException("Error obtaining the core file pattern")
+
+    # Get the path and pattern information from the core pattern
+    for data in result.output:
+        str_hosts = str(data.hosts)
+        try:
+            info = os.path.split(result.output[0].stdout[-1])
+        except (TypeError, IndexError) as error:
+            raise CoreFileException(
+                "Error obtaining the core file pattern and directory") from error
+        if not info[0]:
+            raise CoreFileException("Error obtaining the core file pattern directory")
+        core_files[str_hosts] = {"path": info[0], "pattern": re.sub(r"%[A-Za-z]", "*", info[1])}
+        log.info(
+            "Collecting any '%s' core files written to %s on %s",
+            core_files[str_hosts]["pattern"], core_files[str_hosts]["path"], str_hosts)
+
+    return core_files
 
 
 class CoreFileProcessing():
