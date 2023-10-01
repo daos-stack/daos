@@ -154,7 +154,7 @@ read_map_file(char **buf)
 		if (*buf == NULL) {
 			D_FATAL("Failed allocate memory (%d bytes). %d (%s)\n", max_read_size + 1,
 				ENOMEM, strerror(ENOMEM));
-			exit_on_error();
+			exit(1);
 		}
 
 		/* non-seekable file. fread is needed!!! */
@@ -163,7 +163,7 @@ read_map_file(char **buf)
 			error = errno;
 			D_FATAL("Fail to open file: /proc/self/maps. %d (%s)\n", error,
 				strerror(error));
-			exit_on_error();
+			exit(1);
 		}
 
 		/* fgets seems not working. */
@@ -174,7 +174,7 @@ read_map_file(char **buf)
 		if (read_size < 0) {
 			D_FATAL("Error to read file /proc/self/maps. %d (%s)\n", EIO,
 				strerror(EIO));
-			exit_on_error();
+			exit(1);
 		} else if (read_size == max_read_size) {
 			/* need to increase the buffer and try again */
 			max_read_size *= 3;
@@ -190,7 +190,7 @@ read_map_file(char **buf)
 			/* not likely to be here */
 			D_FATAL("/proc/self/maps is TOO large! %d (%s)\n", EFBIG,
 				strerror(EFBIG));
-			exit_on_error();
+			exit(1);
 		}
 	}
 
@@ -227,7 +227,7 @@ determine_lib_path(void)
 	}
 	if (path_offset == 0) {
 		D_FATAL("Fail to determine path_offset in /proc/self/maps!\n");
-		exit_on_error();
+		exit(1);
 	}
 
 	pos = strstr(read_buff_map, "ld-linux");
@@ -323,7 +323,7 @@ err:
 err_1:
 	D_FREE(lib_dir_str);
 	found_libc = 0;
-	exit_on_error();
+	exit(1);
 }
 
 /*
@@ -356,19 +356,19 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 	if (rc == -1) {
 		D_FATAL("Fail to query stat of file %s. %d (%s)\n", lib_path, errno,
 			strerror(errno));
-		exit_on_error();
+		exit(1);
 	}
 
 	fd = open(lib_path, O_RDONLY);
 	if (fd == -1) {
 		D_FATAL("Fail to open file %s. %d (%s)\n", lib_path, errno, strerror(errno));
-		exit_on_error();
+		exit(1);
 	}
 
 	map_start = mmap(0, file_stat.st_size, PROT_READ, MAP_SHARED, fd, 0);
 	if ((long int)map_start == -1) {
 		D_FATAL("Fail to mmap file %s. %d (%s)\n", lib_path, errno, strerror(errno));
-		exit_on_error();
+		exit(1);
 	}
 	header = (Elf64_Ehdr *)map_start;
 
@@ -380,7 +380,7 @@ query_func_addr(const char lib_path[], const char func_name_list[][MAX_LEN_FUNC_
 			sym_rec_size   = sections[i].sh_entsize;
 			if (sections[i].sh_entsize == 0) {
 				D_FATAL("Error: Unexpected entry size.\n");
-				exit_on_error();
+				exit(1);
 			}
 			num_sym        = sections[i].sh_size / sections[i].sh_entsize;
 
@@ -444,13 +444,13 @@ uninstall_hook(void)
 			if (mprotect(pbaseOrg, MemSize_Modify,
 				     PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
 				D_FATAL("mprotect() failed. %d (%s)\n", errno, strerror(errno));
-				exit_on_error();
+				exit(1);
 			}
 			/* save original code for uninstall */
 			memcpy(tramp_list[iFunc].addr_org_func, tramp_list[iFunc].org_code, 5);
 			if (mprotect(pbaseOrg, MemSize_Modify, PROT_READ | PROT_EXEC) != 0) {
 				D_FATAL("mprotect() failed. %d (%s)\n", errno, strerror(errno));
-				exit_on_error();
+				exit(1);
 			}
 		}
 	}
@@ -538,26 +538,25 @@ get_position_of_next_line(const char buff[], const int pos_start, const int max_
 static void
 get_module_maps(void)
 {
-	char    *szBuf = NULL, *lib_name;
+	char    *buf = NULL, *lib_name;
 	int      iPos, iPos_Save, ReadItem, read_size;
 	uint64_t addr_B, addr_E;
 
-	read_size = read_map_file(&szBuf);
+	read_size = read_map_file(&buf);
 
 	num_seg          = 0;
-	num_lib_in_map   = 0;
 
 	D_ALLOC(lib_name, PATH_MAX);
 	if (lib_name == NULL) {
 		D_FATAL("Failed to allocate memory for lib_name. %d (%s)\n", ENOMEM,
 			strerror(ENOMEM));
-		D_FREE(szBuf);
-		exit_on_error();
+		D_FREE(buf);
+		exit(1);
 	}
 	/* start from the beginging */
 	iPos = 0;
 	while (iPos >= 0) {
-		ReadItem = sscanf(szBuf + iPos, "%lx-%lx", &addr_B, &addr_E);
+		ReadItem = sscanf(buf + iPos, "%lx-%lx", &addr_B, &addr_E);
 		if (ReadItem == 2) {
 			addr_min[num_seg] = addr_B;
 			addr_max[num_seg] = addr_E;
@@ -572,10 +571,10 @@ get_module_maps(void)
 		}
 		iPos_Save = iPos;
 		/* find the next line */
-		iPos = get_position_of_next_line(szBuf, iPos + 38, read_size);
+		iPos = get_position_of_next_line(buf, iPos + 38, read_size);
 		if ((iPos - iPos_Save) > 73) {
 			/* with a lib name */
-			ReadItem = sscanf(szBuf + iPos_Save + 73, "%s", lib_name);
+			ReadItem = sscanf(buf + iPos_Save + 73, "%s", lib_name);
 			if (ReadItem == 1) {
 				if (strncmp(lib_name, "[stack]", 7) == 0) {
 					num_seg--;
@@ -586,12 +585,12 @@ get_module_maps(void)
 					D_STRNDUP(lib_name_list[num_lib_in_map], lib_name,
 						  PATH_MAX);
 					if (lib_name_list[num_lib_in_map] == NULL) {
-						D_FREE(szBuf);
+						D_FREE(buf);
 						D_FREE(lib_name);
 						D_FATAL("Failed to allocate memory for "
 							"lib_name_list[%d] %d (%s)\n",
 							num_lib_in_map, ENOMEM, strerror(ENOMEM));
-						exit_on_error();
+						exit(1);
 					}
 					lib_base_addr[num_lib_in_map] = addr_B;
 					num_lib_in_map++;
@@ -608,7 +607,7 @@ get_module_maps(void)
 			break;
 		}
 	}
-	D_FREE(szBuf);
+	D_FREE(buf);
 	D_FREE(lib_name);
 }
 
@@ -679,7 +678,7 @@ allocate_memory_block_for_patches(void)
 			if (iSeg < 0) {
 				D_FATAL("Something wrong! The address you queried is not "
 					"inside any module! Quit\n");
-				exit_on_error();
+				exit(1);
 			}
 			p_Alloc = (void *)(addr_max[iSeg]);
 
@@ -687,7 +686,7 @@ allocate_memory_block_for_patches(void)
 				if ((addr_min[iSeg + 1] - addr_max[iSeg]) < MIN_MEM_SIZE) {
 					D_FATAL("Only %" PRIu64 " bytes available.\nQuit\n",
 						addr_min[iSeg + 1] - addr_max[iSeg]);
-					exit_on_error();
+					exit(1);
 				}
 			}
 
@@ -696,11 +695,11 @@ allocate_memory_block_for_patches(void)
 				 MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 			if (patch_blk_list[num_patch_blk].patch_addr == MAP_FAILED) {
 				D_FATAL("mmap() failed. %d (%s)\n", errno, strerror(errno));
-				exit_on_error();
+				exit(1);
 			} else if (patch_blk_list[num_patch_blk].patch_addr != p_Alloc) {
 				D_FATAL("Allocated at %p. Desired at %p\n",
 					patch_blk_list[num_patch_blk].patch_addr, p_Alloc);
-				exit_on_error();
+				exit(1);
 			}
 
 			patch_blk_list[num_patch_blk].num_trampoline = 0;
@@ -733,8 +732,8 @@ determine_mem_block_size(const void *addr)
 	}
 }
 
-static void
-free_memory(void)
+void
+free_memory_in_hook(void)
 {
 	int i;
 
@@ -750,14 +749,6 @@ free_memory(void)
 		}
 		D_FREE(lib_name_list);
 	}
-}
-
-static void
-exit_on_error(void)
-{
-	free_memory();
-	/* The destructor function in libpil4dfs.so will be run by exit(). */
-	exit(1);
 }
 
 /* The max number of instruments of the entry code in original function to analyze */
@@ -790,7 +781,7 @@ install_hook(void)
 	rc = sysconf(_SC_PAGESIZE);
 	if (rc == -1) {
 		D_FATAL("sysconf() failed to query page size. %d (%s)\n", errno, strerror(errno));
-		exit_on_error();
+		exit(1);
 	}
 	page_size = (size_t)rc;
 	mask      = ~(page_size - 1);
@@ -800,7 +791,7 @@ install_hook(void)
 
 	if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle)) {
 		D_FATAL("Failed to initialize engine!\n");
-		exit_on_error();
+		exit(1);
 	}
 	cs_opt_skipdata skipdata = {
 		.mnemonic = "db",
@@ -964,7 +955,7 @@ install_hook(void)
 
 	cs_close(&handle);
 
-	free_memory();
+	free_memory_in_hook();
 
 	return num_hook_installed;
 
@@ -973,7 +964,7 @@ err:
 		cs_free(insn, num_inst);
 		insn = NULL;
 	}
-	exit_on_error();
+	exit(1);
 	return 0;
 }
 
@@ -1008,7 +999,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		if (module_list == NULL) {
 			D_FATAL("Failed to allocate memory for module_list. %d (%s)\n", ENOMEM,
 				strerror(ENOMEM));
-			exit_on_error();
+			exit(1);
 		}
 		memset(module_list, 0, sizeof(struct module_patch_info_t) * MAX_MODULE);
 
@@ -1016,7 +1007,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 		if (lib_name_list == NULL) {
 			D_FATAL("Failed to allocate memory for lib_name_list. %d (%s)\n", ENOMEM,
 				strerror(ENOMEM));
-			exit_on_error();
+			exit(1);
 		}
 		memset(lib_name_list, 0, sizeof(char *) * MAX_NUM_LIB);
 
@@ -1057,7 +1048,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 	idx = query_lib_name_in_list(module_name_local);
 	if (idx == -1) {
 		D_FATAL("Failed to find %s in /proc/pid/maps\n", module_name_local);
-		exit_on_error();
+		exit(1);
 	}
 
 	idx_mod = query_registered_module(module_name_local);
@@ -1090,7 +1081,7 @@ register_a_hook(const char *module_name, const char *func_name, const void *new_
 
 	if (num_hook > MAX_PATCH) {
 		D_FATAL("num_hook > MAX_PATCH. MAX_PATCH needs to be increased.\n");
-		exit_on_error();
+		exit(1);
 	}
 
 	return REGISTER_SUCCESS;
@@ -1117,7 +1108,7 @@ query_all_org_func_addr(void)
 			/* a new name not in list */
 			D_FATAL("Fail to find library %s in maps.\nQuit\n",
 			       module_list[idx_mod].module_name);
-			exit_on_error();
+			exit(1);
 		} else {
 			strcpy(module_list[idx_mod].module_name, lib_name_list[idx]);
 			module_list[idx_mod].module_base_addr = lib_base_addr[idx];

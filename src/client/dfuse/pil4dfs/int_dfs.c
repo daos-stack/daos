@@ -94,6 +94,7 @@ static _Atomic uint64_t        num_open;
 static _Atomic uint64_t        num_stat;
 static _Atomic uint64_t        num_opendir;
 static _Atomic uint64_t        num_readdir;
+static _Atomic uint64_t        num_link;
 static _Atomic uint64_t        num_unlink;
 static _Atomic uint64_t        num_seek;
 static _Atomic uint64_t        num_mkdir;
@@ -225,6 +226,7 @@ struct sigaction       old_segv;
 
 /* the flag to indicate whether initlization is finished or not */
 static bool            hook_enabled;
+static bool            hook_enabled_bak;
 static pthread_mutex_t lock_dfs;
 static pthread_mutex_t lock_fd;
 static pthread_mutex_t lock_dirfd;
@@ -3231,6 +3233,7 @@ symlink(const char *symvalue, const char *path)
 	rc = dfs_release(obj);
 	if (rc)
 		goto out_err;
+	atomic_fetch_add_relaxed(&num_link, 1);
 
 	FREE(parent_dir);
 	return 0;
@@ -4790,9 +4793,6 @@ ioctl(int fd, unsigned long request, ...)
 		return 0;
 	}
 
-	/* We output the message only if env "D_IL_REPORT" is set. */
-	if (report)
-		D_ERROR("ioctl() is not implemented yet: %d (%s)\n", ENOTSUP, strerror(ENOTSUP));
 	errno = ENOTSUP;
 
 	return -1;
@@ -5485,6 +5485,7 @@ init_myhook(void)
 
 	install_hook();
 	hook_enabled = 1;
+	hook_enabled_bak = hook_enabled;
 }
 
 static void
@@ -5492,7 +5493,7 @@ print_summary(void)
 {
 	uint64_t op_sum = 0;
 	uint64_t read_loc, write_loc, open_loc, stat_loc;
-	uint64_t opendir_loc, readdir_loc, unlink_loc, seek_loc;
+	uint64_t opendir_loc, readdir_loc, link_loc, unlink_loc, seek_loc;
 	uint64_t mkdir_loc, rmdir_loc, rename_loc, mmap_loc;
 
 	if (!report)
@@ -5504,6 +5505,7 @@ print_summary(void)
 	stat_loc    = atomic_load_relaxed(&num_stat);
 	opendir_loc = atomic_load_relaxed(&num_opendir);
 	readdir_loc = atomic_load_relaxed(&num_readdir);
+	link_loc    = atomic_load_relaxed(&num_link);
 	unlink_loc  = atomic_load_relaxed(&num_unlink);
 	seek_loc    = atomic_load_relaxed(&num_seek);
 	mkdir_loc   = atomic_load_relaxed(&num_mkdir);
@@ -5518,6 +5520,7 @@ print_summary(void)
 	fprintf(stderr, "[stat   ]  %" PRIu64 "\n", stat_loc);
 	fprintf(stderr, "[opendir]  %" PRIu64 "\n", opendir_loc);
 	fprintf(stderr, "[readdir]  %" PRIu64 "\n", readdir_loc);
+	fprintf(stderr, "[link   ]  %" PRIu64 "\n", link_loc);
 	fprintf(stderr, "[unlink ]  %" PRIu64 "\n", unlink_loc);
 	fprintf(stderr, "[seek   ]  %" PRIu64 "\n", seek_loc);
 	fprintf(stderr, "[mkdir  ]  %" PRIu64 "\n", mkdir_loc);
@@ -5526,7 +5529,7 @@ print_summary(void)
 	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
 	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc +
-		 unlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
+		 link_loc + unlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
@@ -5569,7 +5572,10 @@ finalize_myhook(void)
 		D_MUTEX_DESTROY(&lock_mmap);
 		D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
-		uninstall_hook();
+		if (hook_enabled_bak)
+			uninstall_hook();
+		else
+			free_memory_in_hook();
 	}
 
 	if (daos_debug_inited)
