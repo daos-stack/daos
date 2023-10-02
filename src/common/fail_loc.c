@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,11 +45,13 @@ daos_fail_check(uint64_t fail_loc)
 		uint32_t id = DAOS_FAIL_ID_GET(fail_loc);
 
 		attr = d_fault_attr_lookup(id);
+		D_INFO("lookup id: %p\n", attr);
 	}
 
 	if (attr == NULL) {
 		grp = DAOS_FAIL_GROUP_GET(fail_loc);
 		attr = d_fault_attr_lookup(grp);
+		D_INFO("lookup grp: %p\n", attr);
 	}
 
 	if (attr == NULL) {
@@ -66,6 +68,7 @@ daos_fail_check(uint64_t fail_loc)
 		return 1;
 	}
 
+	D_INFO("should not fail\n");
 	return 0;
 }
 
