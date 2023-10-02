@@ -15,13 +15,19 @@ runs:
       if: ${{ inputs.condition }}
       shell: bash
       run: |
+          . ci/gha_functions.sh
           STAGE_NAME='${{ env.STAGE_NAME }}'
           REQID='${{ github.event.pull_request.number }}-${{ github.run_number }}'
           CP_PRIORITY=${{ env.CP_PRIORITY }}
-          JENKINS_URL='${{ env.JENKINS_URL }}'                         \
-          LABEL='${{ env.LABEL }}'                                  \
-          PRIORITY=${CP_PRIORITY:-3}                                   \
-          REQID="$REQID-${STAGE_NAME// /_}" ci/gha_provision_cluster.sh
+          if ! JENKINS_URL='${{ env.JENKINS_URL }}'                   \
+               LABEL='${{ env.LABEL }}'                               \
+               PRIORITY=${CP_PRIORITY:-3}                             \
+               provision_cluster "$STAGE_NAME" "${{ github.run_id }}" \
+                                 "${{ runner.name }}"                 \
+                                 "$REQID-${STAGE_NAME// /_}"; then
+               echo "Failed to provision cluster"
+               exit 1
+          fi
     - name: Wait for nodes to be ready
       if: ${{ inputs.condition }}
       shell: bash
