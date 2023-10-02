@@ -2672,6 +2672,18 @@ local_transaction(void **state)
 	iod.iod_recxs = NULL;
 	iod.iod_nr    = 1;
 
+	/* XXX */
+	// d_iov_set(&fetch_sgl.sg_iovs[0], (void *)buf, sizeof(buf));
+	// iod.iod_size = strlen(first);
+	// memset(buf, 'x', sizeof(buf));
+	// rc =
+	// 	vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey[0], 1, &iod, &fetch_sgl);
+	// assert_rc_equal(rc, 0);
+	// printf("size=" DF_U64 "\n", iod.iod_size);
+	// printf("dkey[0] buf = %.*s\n", (int)strlen(first), buf);
+	// fflush(stdout);
+	/* XXX */
+
 	d_iov_set(&sgl.sg_iovs[0], (void *)first, iod.iod_size);
 
 	for (i = 0; i < 2; i++) {
@@ -2682,12 +2694,12 @@ local_transaction(void **state)
 				       NULL, &sgl, dth);
 		assert_rc_equal(rc, 0);
 
-		rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 1, &iod,
-				       NULL, &sgl, dth);
-		assert_rc_equal(rc, 0);
+		// rc = vos_obj_update_ex(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 1, &iod,
+		// 		       NULL, &sgl, dth);
+		// assert_rc_equal(rc, 0);
 
-		rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 0, NULL, dth);
-		assert_rc_equal(rc, 0);
+		// rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch++, 0, 0, &dkey[1], 0, NULL, dth);
+		// assert_rc_equal(rc, 0);
 
 		if (i == 0) {
 			/** Abort first time */
