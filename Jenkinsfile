@@ -1145,7 +1145,7 @@ pipeline {
                             next_version: next_version,
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
-                            default_nvme: 'auto',
+                            nvme: 'auto',
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium MD on SSD': getFunctionalTestStage(
@@ -1156,7 +1156,7 @@ pipeline {
                             stage_tags: 'hw,medium',
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
-                            default_nvme: 'auto_md_on_ssd',
+                            nvme: 'auto_md_on_ssd',
                             job_status: job_status_internal
                         ),
                         'Functional Hardware Medium Verbs Provider': getFunctionalTestStage(
