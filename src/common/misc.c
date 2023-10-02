@@ -701,6 +701,8 @@ out:
 	return &daos_crt_init_opt;
 }
 
+static __thread uuid_t dti_uuid;
+
 void
 daos_dti_gen_unique(struct dtx_id *dti)
 {
@@ -715,17 +717,21 @@ daos_dti_gen_unique(struct dtx_id *dti)
 void
 daos_dti_gen(struct dtx_id *dti, bool zero)
 {
-	static __thread uuid_t uuid;
-
 	if (zero) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
-		if (uuid_is_null(uuid))
-			uuid_generate(uuid);
+		if (uuid_is_null(dti_uuid))
+			uuid_generate(dti_uuid);
 
-		uuid_copy(dti->dti_uuid, uuid);
+		uuid_copy(dti->dti_uuid, dti_uuid);
 		dti->dti_hlc = d_hlc_get();
 	}
+}
+
+void
+daos_dti_reset(void)
+{
+	memset(dti_uuid, 0, sizeof(dti_uuid));
 }
 
 /**
