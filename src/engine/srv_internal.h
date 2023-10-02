@@ -280,8 +280,6 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 {
 	ABT_pool		 abt_pool = dx->dx_pools[DSS_POOL_GENERIC];
 	struct sched_info	*info = &dx->dx_sched_info;
-	ABT_thread_attr		 attr = t_attr;
-	size_t			 stack_size;
 	int			 rc;
 #ifdef ULT_MMAP_STACK
 	bool			 tls_set = dss_tls_get() ? true : false;
@@ -303,31 +301,7 @@ sched_create_thread(struct dss_xstream *dx, void (*func)(void *), void *arg,
 		/* Atomic integer assignment from different xstream */
 		info->si_stats.ss_busy_ts = info->si_cur_ts;
 
-	if (attr == NULL) {
-		rc = ABT_thread_attr_create(&attr);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("Create ABT thread args failed. %d\n", rc);
-			goto out_;
-		}
-	}
-	rc = ABT_thread_attr_get_stacksize(attr, &stack_size);
-	if (rc != ABT_SUCCESS) {
-		D_ERROR("Set ABT get stack size failed. %d\n", rc);
-		goto out_;
-	}
-	if (stack_size < 16384) {
-		rc = ABT_thread_attr_set_stacksize(attr, 16384);
-		if (rc != ABT_SUCCESS) {
-			D_ERROR("Set ABT stack size failed. %d\n", rc);
-			goto out_;
-		}
-	}
-	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, attr,
-				    thread);
-out_:
-	if (t_attr == NULL) {
-		ABT_thread_attr_free(&attr);
-	}
+	rc = daos_abt_thread_create(cur_dx->dx_sp, dss_free_stack_cb, abt_pool, func, arg, t_attr, thread);
 	return dss_abterr2der(rc);
 }
 
