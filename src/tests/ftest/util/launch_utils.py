@@ -680,7 +680,7 @@ class TestRunner():
 class TestGroup():
     """Runs a group of tests with same configuration."""
 
-    def __init__(self, avocado, test_env, servers, control, clients, tags, nvme,
+    def __init__(self, avocado, test_env, servers, clients, control, tags, nvme,
                  yaml_directory=None, yaml_extension=None):
         # pylint: disable=too-many-arguments
         """_summary_.
@@ -706,7 +706,7 @@ class TestGroup():
         self._partition_hosts = NodeSet(self._servers or self._clients)
         self._tags = tags
         self._nvme = nvme
-        self._yaml_directory = yaml_directory
+        self.yaml_directory = yaml_directory
         self._yaml_extension = yaml_extension
 
         self.tests = []
@@ -737,8 +737,6 @@ class TestGroup():
             self._yaml_directory = value
             if not os.path.exists(self._yaml_directory):
                 os.mkdir(self._yaml_directory)
-
-        # logger.info("Modified test yaml files being created in: %s", self._yaml_directory)
 
     @property
     def details(self):
@@ -851,6 +849,7 @@ class TestGroup():
 
         updater = YamlUpdater(
             logger, self._servers, self._clients, storage, multiplier, override, verbose)
+        logger.info("Modified test yaml files being created in: %s", self._yaml_directory)
 
         # Replace any placeholders in the extra yaml file, if provided
         if extra_yaml:
