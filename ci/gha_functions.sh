@@ -41,18 +41,11 @@ cleanup_provision_request () {
 }
 
 cancel_provision() {
-    trap 'rm -f $cookiejar' EXIT
-    cookiejar="$(mktemp)"
-    # shellcheck disable=SC2153
-    crumb="$(curl --cookie-jar "$cookiejar" \
-             "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
-    # shellcheck disable=SC2001
+    # shellcheck disable=SC2001,SC2153
     url="$(echo "$QUEUE_URL" | sed -e 's|item/\(.*\)/|cancelItem?id=\1|')"
-    trap 'set -x; rm -f $cookiejar $headers_file' EXIT
-    headers_file="$(mktemp)"
-    if ! curl -D "$headers_file" -v -f -X POST --cookie "$cookiejar" -H "$crumb" "$url"; then
+
+    if ! VERBOSE=true jenkins_curl -X POST "$url"; then
         echo "Failed to cancel cluster provision request."
-        cat "$headers_file"
         return 1
     fi
 }
@@ -94,6 +87,7 @@ wait_nodes_ready() {
     local wait_seconds=600
 
     while [ $SECONDS -lt $wait_seconds ]; do
+        # shellcheck disable=SC2153
         if clush -B -S -l root -w "$NODESTRING" "set -eux;
           while [ \$SECONDS -lt \$(($wait_seconds-\$SECONDS)) ]; do
               if [ -d /var/chef/reports ]; then
@@ -112,7 +106,140 @@ escape_single_quotes() {
     sed -e "s/'/'\"'\"'/g"
 }
 
+# Persist these across calls
+cookiejar=""
+crumb=""
+
+jenkins_curl() {
+    local args=("$@")
+
+    local q=()
+    if ${QUIET:-false}; then
+        q+=(-s)
+    fi
+    local v=()
+    if ${VERBOSE:-true}; then
+        v+=(-v)
+    fi
+    local headers_file
+    # shellcheck disable=SC2154
+    trap 'if [ -z "${__bash_unit_current_test__:-}" ]; then set -x; fi; rm -f $headers_file' RETURN
+    trap 'if [ -z "${__bash_unit_current_test__:-}" ]; then set -x; fi; rm -f $cookiejar' EXIT
+    if [ -z "$cookiejar" ]; then
+        cookiejar="$(mktemp)"
+        # shellcheck disable=SC2153
+        crumb="$(curl -f "${q[@]}" "${v[@]}" --cookie-jar "$cookiejar" \
+                 "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
+    fi
+    # shellcheck disable=SC2001,SC2153
+    headers_file="$(mktemp)"
+    if ! curl -f -D "$headers_file" --cookie "$cookiejar" -H "$crumb" "${q[@]}" "${v[@]}" "${args[@]}"; then
+        echo "curl failed" >&2
+        cat "$headers_file" >&2
+        return 1
+    fi
+    if [ -e /dev/fd/3 ]; then
+        cat "$headers_file" >&3
+    fi
+}
+
+provision_cluster() {
+    set -euxo pipefail
+    local stage_name="$1"
+    local runid=$2
+    local runner=$3
+    local reqid=${4:-$(reqidgen)}
+
+    local wait_seconds=600
+
+    echo "CLUSTER_REQUEST_reqid=$reqid" >> "$GITHUB_ENV"
+    local url="${JENKINS_URL}job/Get%20a%20cluster/buildWithParameters?token=mytoken&LABEL=$LABEL&REQID=$reqid&BuildPriority=${PRIORITY:-3}"
+    if ! queue_url=$(VERBOSE=true jenkins_curl -X POST "$url" 3>&1 >/dev/null |
+                     sed -ne 's/\r//' -e '/Location:/s/.*: //p') || [ -z "$queue_url" ]; then
+        echo "Failed to request a cluster."
+        return 1
+    fi
+    echo QUEUE_URL="$queue_url" >> "$GITHUB_ENV"
+    # disable xtrace here as this could loop for a long time
+    set +x
+    while [ ! -f /scratch/Get\ a\ cluster/"$reqid" ]; do
+        if [ $((SECONDS % 60)) -eq 0 ]; then
+            { local cancelled why
+              read -r cancelled; read -r why; } < \
+                <(VERBOSE=true QUIET=true jenkins_curl "${queue_url}api/json/" |
+                  jq -r .cancelled,.why)
+            if [ "$cancelled" == "true" ]; then
+                echo "Cluster request cancelled from Jenkins"
+                exit 1
+            fi
+            echo "$why"
+        fi
+        sleep 1
+    done
+    set -x
+    local nodestring
+    nodestring=$(cat /scratch/Get\ a\ cluster/"$reqid")
+    if [ "$nodestring" = "cancelled" ]; then
+        echo "Cluster request cancelled from Jenkins"
+        return 1
+    fi
+    { echo "NODESTRING=$nodestring"
+      echo "NODELIST=$nodestring"; } >> "$GITHUB_ENV"
+    echo "NODE_COUNT=$(echo "$nodestring" | tr ',' ' ' | wc -w)" >> "$GITHUB_ENV"
+    if [[ $nodestring = *vm* ]]; then
+        ssh -oPasswordAuthentication=false -v root@"${nodestring%%vm*}" \
+            "POOL=${CP_PROVISIONING_POOL:-}
+             NODESTRING=$nodestring
+             NODELIST=$nodestring
+             DISTRO=$DISTRO_WITH_VERSION
+             $(cat ci/provisioning/provision_vm_cluster.sh)"
+    else
+        local START=$SECONDS
+        while [ $((SECONDS-START)) -lt $wait_seconds ]; do
+            if clush -B -S -l root -w "$nodestring" '[ -d /var/chef/reports ]'; then
+                # shellcheck disable=SC2016
+                clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 600 "if [ -e /root/job_info ]; then
+                        cat /root/job_info
+                    fi
+                    echo \"Last provisioning run info:
+GitHub Actions URL: https://github.com/daos-stack/daos/actions/runs/$runid
+Runner: $runner
+Stage Name: $stage_name\" > /root/job_info
+                    if ! POOL=\"\" restore_partition.sh daos_ci-el8 noreboot; then
+                        rc=\${PIPESTATUS[0]}
+                        # TODO: this needs to be derived from the stage name
+                        distro=el8
+                        while [[ \$distro = *.* ]]; do
+                            distro=\${distro%.*}
+                                if ! restore_partition.sh daos_ci-\${distro} noreboot; then
+                                    rc=\${PIPESTATUS[0]}
+                                    continue
+                                else
+                                    exit 0
+                                fi
+                        done
+                        exit \"\$rc\"
+                        fi"
+                    clush -B -S -l root -w "$nodestring" --connect_timeout 30 --command_timeout 120 -S 'init 6' || true
+                    START=$SECONDS
+                    while [ $((SECONDS-START)) -lt $wait_seconds ]; do
+                        if clush -B -S -l root -w "$nodestring" '[ -d /var/chef/reports ]'; then
+                            exit 0
+                        fi
+                        sleep 1
+                    done
+                    exit 1
+            fi
+            sleep 1
+        done
+        exit 1
+    fi
+
+}
+
+
 # This is run under the unit test framework at https://github.com/pgrange/bash_unit/
+# I.e. ../bash_unit/bash_unit ci/gha_functions.sh ci/gha_functions.sh
 test_test_tag_and_features() {
     # Simple Test-tag: test
     assert_equals "$(CP_TEST_TAG="always_passes always_fails" get_test_tags "-hw")" "always_passes,-hw always_fails,-hw"
@@ -153,4 +280,10 @@ HW_LARGE_LABEL=new_icx9
 REQUIRED_GITHOOKS=true
 SIGNED_OFF_BY=Brian\ J.\ Murrell\ \<brian.murrell@intel.com\>'
 
+}
+
+test_jenkins_curl() {
+    JENKINS_URL="${JENKINS_URL:-https://build.hpdd.intel.com/}"
+    assert_equals "$(QUIET=true VERBOSE=false jenkins_curl -X POST "${JENKINS_URL}api/xml" 3>&1 >/dev/null | grep '^X-Content-Type-Options:')" "X-Content-Type-Options: nosniff
+"
 }
