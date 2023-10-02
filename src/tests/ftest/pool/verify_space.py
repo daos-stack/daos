@@ -60,21 +60,6 @@ def compare_reduced(rank, pool_size):
     return previous_avail > current_avail
 
 
-def compare_missing(rank, pool_size):
-    """Determine if data exists previously but not currently for this rank.
-
-    Args:
-        rank (int): server rank
-        pool_size (list): list of pool_size dictionaries
-
-    Returns:
-        bool: does data exist previously but not currently for this rank.
-    """
-    previous = pool_size[-2]['data']
-    current = pool_size[-1]['data']
-    return rank in previous and rank not in current
-
-
 class VerifyPoolSpace(TestWithServers):
     """Verify pool space with system commands.
 
@@ -337,6 +322,6 @@ class VerifyPoolSpace(TestWithServers):
         if not status['expected']:
             self.fail("Rank 1 was not stopped")
         self._check_pool_size(
-            description, pool_size, scm_mounts, [compare_equal, compare_missing, compare_equal])
+            description, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
         self._query_pool_size(description, pools)
         dmg.storage_query_usage()
