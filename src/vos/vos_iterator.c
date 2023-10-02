@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -91,8 +91,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	if (dict->id_ops->iop_nested_prepare == NULL ||
 	    iter->it_ops->iop_nested_tree_fetch == NULL) {
-		D_ERROR("nested iterator prepare isn't supported for %s",
-			dict->id_name);
+		D_ERROR("nested iterator prepare isn't supported for %s\n", dict->id_name);
 		return -DER_NOSYS;
 	}
 
@@ -106,8 +105,8 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 		return -DER_NONEXIST;
 	}
 
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
+	old = vos_dth_get(!!iter->it_for_sysdb);
+	vos_dth_set(iter->it_dth, !!iter->it_for_sysdb);
 	rc = iter->it_ops->iop_nested_tree_fetch(iter, type, &info);
 	if (rc != 0) {
 		VOS_TX_TRACE_FAIL(rc, "Problem fetching nested tree (%s) from "
@@ -123,8 +122,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
 	if (rc != 0) {
-		D_ERROR("Failed to prepare %s iterator: %d\n", dict->id_name,
-			rc);
+		D_ERROR("Failed to prepare %s iterator: " DF_RC "\n", dict->id_name, DP_RC(rc));
 		goto out;
 	}
 
@@ -141,8 +139,27 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	*cih = vos_iter2hdl(citer);
 
 out:
-	vos_dth_set(old);
+	vos_dth_set(old, !!iter->it_for_sysdb);
 	return rc;
+}
+
+static bool
+is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
+{
+	struct vos_pool		*vos_pool;
+	struct vos_container	*vos_cont;
+
+	if (type == VOS_ITER_COUUID) {
+		vos_pool = vos_hdl2pool(param->ip_hdl);
+		D_ASSERT(vos_pool != NULL);
+
+		return vos_pool->vp_sysdb;
+	}
+
+	vos_cont = vos_hdl2cont(param->ip_hdl);
+	D_ASSERT(vos_cont != NULL);
+
+	return vos_cont->vc_pool->vp_sysdb;
 }
 
 int
@@ -155,6 +172,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
 	int			 rlevel;
+	bool			 is_sysdb;
 
 	if (ih == NULL) {
 		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
@@ -163,11 +181,11 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 
 	*ih = DAOS_HDL_INVAL;
 
-	if (daos_handle_is_inval(param->ip_hdl) &&
-	    daos_handle_is_inval(param->ip_ih)) {
-		D_ERROR("No valid handle specified in vos_iter_param\n");
+	if (daos_handle_is_inval(param->ip_hdl)) {
+		D_ERROR("No valid pool or cont handle specified in vos_iter_param\n");
 		return -DER_INVAL;
 	}
+	is_sysdb = is_sysdb_pool(type, param);
 
 	for (dict = &vos_iterators[0]; dict->id_ops != NULL; dict++) {
 		if (dict->id_type == type)
@@ -213,17 +231,17 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
 	}
-	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth);
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth, is_sysdb);
 	if (rc != 0)
 		goto out;
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 
-	old = vos_dth_get();
-	vos_dth_set(dth);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(dth, is_sysdb);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
-	vos_dth_set(old);
+	vos_dth_set(old, is_sysdb);
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
 				"\n", dict->id_name, DP_RC(rc));
@@ -317,13 +335,14 @@ vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
 	int		     rc;
+	bool		     is_sysdb = !!iter->it_for_sysdb;
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, flags);
-	vos_dth_set(old);
+	vos_dth_set(old, is_sysdb);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
@@ -344,7 +363,8 @@ static inline int
 iter_verify_state(struct vos_iterator *iter)
 {
 	if (iter->it_state == VOS_ITS_NONE) {
-		D_ERROR("Please call vos_iter_probe to initialize cursor\n");
+		D_ERROR("Please call vos_iter_probe to initialize cursor " DF_RC "\n",
+			DP_RC(-DER_NO_PERM));
 		return -DER_NO_PERM;
 	} else if (iter->it_state == VOS_ITS_END) {
 		D_DEBUG(DB_TRACE, "The end of iteration\n");
@@ -360,6 +380,7 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
 	int		     rc;
+	bool		     is_sysdb = !!iter->it_for_sysdb;
 
 	rc = iter_verify_state(iter);
 	if (rc)
@@ -367,10 +388,10 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_next(iter, anchor);
-	vos_dth_set(old);
+	vos_dth_set(old, is_sysdb);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
@@ -387,7 +408,8 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
-	int rc;
+	bool		     is_sysdb = !!iter->it_for_sysdb;
+	int		     rc;
 
 	rc = iter_verify_state(iter);
 	if (rc)
@@ -395,10 +417,10 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_fetch(iter, it_entry, anchor);
-	vos_dth_set(old);
+	vos_dth_set(old, is_sysdb);
 
 	return rc;
 }
@@ -656,13 +678,13 @@ out:
 static inline void
 vos_iter_sched_sync(struct vos_iterator *iter)
 {
-	iter->it_seq = vos_sched_seq();
+	iter->it_seq = vos_sched_seq(!!iter->it_for_sysdb);
 }
 
 static inline bool
 vos_iter_sched_check(struct vos_iterator *iter)
 {
-	uint64_t seq = vos_sched_seq();
+	uint64_t seq = vos_sched_seq(!!iter->it_for_sysdb);
 	bool     ret = iter->it_seq != seq;
 
 	iter->it_seq = seq;
@@ -970,6 +992,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	daos_anchor_t     *anchor;
 	int                rc;
 	struct dtx_handle *old;
+	bool		   is_sysdb = !!iter->it_for_sysdb;
 
 	D_ASSERT(iter->it_anchors != NULL);
 
@@ -1004,10 +1027,10 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
 	}
 
-	old = vos_dth_get();
-	vos_dth_set(iter->it_dth);
+	old = vos_dth_get(is_sysdb);
+	vos_dth_set(iter->it_dth, is_sysdb);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
-	vos_dth_set(old);
+	vos_dth_set(old, is_sysdb);
 
 	if (rc == 0)
 		return 0;

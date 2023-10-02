@@ -78,6 +78,17 @@ func FaultRamdiskLowMem(memType string, confRamdiskSize, memNeed, memHave uint64
 			"file if reducing the requested amount of RAM is not possible")
 }
 
+// FaultRamdiskBadSize indicates that the already-mounted ramdisk is out
+// of spec with the calculated ramdisk size for the engine.
+func FaultRamdiskBadSize(existingSize, calcSize uint64) *fault.Fault {
+	return storageFault(
+		code.ScmRamdiskBadSize,
+		fmt.Sprintf("already-mounted ramdisk size %s is too far from optimal size of %s",
+			humanize.IBytes(existingSize), humanize.IBytes(calcSize)),
+		fmt.Sprintf("unmount the ramdisk and allow DAOS to manage it, or remount with size %s",
+			humanize.IBytes(calcSize)))
+}
+
 // FaultConfigRamdiskUnderMinMem indicates that the tmpfs size requested in config is less than
 // minimum allowed.
 func FaultConfigRamdiskUnderMinMem(confSize, memRamdiskMin uint64) *fault.Fault {
@@ -97,71 +108,75 @@ var (
 		code.ScmNoPMem,
 		"No PMem modules exist on storage server", "Install PMem modules and retry command")
 
-	// FaultScmConfigTierMissing indicates a Fault when no scm tier is present in engine storage config.
+	// FaultScmConfigTierMissing indicates a Fault when no scm tier is present in engine
+	// storage config.
 	FaultScmConfigTierMissing = storageFault(
 		code.ScmConfigTierMissing,
 		"missing scm storage tier in engine storage config",
 		"add a scm tier in the first position of the engine storage tiers list in server config file and "+
 			"restart daos_server")
 
-	// FaultBdevConfigTierTypeMismatch represents an error where an incompatible mix of emulated and
-	// non-emulated NVMe devices are present in the storage config.
+	// FaultBdevConfigTierTypeMismatch represents an error where an incompatible mix of
+	// emulated and non-emulated NVMe devices are present in the storage config.
 	FaultBdevConfigTierTypeMismatch = storageFault(
 		code.BdevConfigTierTypeMismatch,
 		"bdev tiers found with both emulated and non-emulated NVMe types specified in config",
 		"change config tiers to specify either emulated or non-emulated NVMe devices, but not a mix of both")
 
-	// FaultBdevConfigRolesWithDCPM indicates a Fault when bdev roles are specified with DCPM SCM class.
+	// FaultBdevConfigRolesWithDCPM indicates a Fault when bdev roles are specified with DCPM
+	// SCM class.
 	FaultBdevConfigRolesWithDCPM = storageFault(
 		code.BdevConfigRolesWithDCPM,
-		"bdev tier roles specified in config with scm class set to dcpm",
-		"MD-on-SSD roles are only supported if the scm tier is of class ram, change dcpm tier to ram or "+
+		"MD-on-SSD roles has been specified in config with scm class set to dcpm",
+		"'bdev_roles' are only supported if the scm tier is of class ram so change dcpm tier to ram or "+
 			"remove role assignments from bdev tiers then restart daos_server after updating server "+
 			"config file")
 
-	// FaultBdevConfigRolesMissing indicates a Fault when bdev roles are specified on some but not all
-	// bdev tiers.
+	// FaultBdevConfigRolesMissing indicates a Fault when bdev roles are specified on some but
+	// not all bdev tiers.
 	FaultBdevConfigRolesMissing = storageFault(
 		code.BdevConfigRolesMissing,
-		"bdev tier roles have been specified on some but not all bdev tiers in config",
-		"set MD-on-SSD roles on all bdev tiers in server config file and restart daos_server")
+		"bdev tier MD-on-SSD roles have been specified on some but not all bdev tiers in config",
+		"set 'bdev_roles' on all bdev tiers in server config file then restart daos_server")
 
 	// FaultBdevConfigRolesWalDataNoMeta indicates an invalid configuration where WAL and Data
 	// roles are specified on a bdev tier but not Meta.
 	FaultBdevConfigRolesWalDataNoMeta = storageFault(
 		code.BdevConfigRolesWalDataNoMeta,
-		"WAL and Data roles have been specified on a bdev tier without Meta role",
-		"set MD-on-SSD roles on all bdev tiers in server config file but avoid the "+
-			"unsupported WAL+Data combination and restart daos_server")
+		"WAL and Data MD-on-SSD roles have been specified on a bdev tier without Meta role",
+		"set 'bdev_roles` on all bdev tiers in server config file but avoid the unsupported WAL+Data "+
+			"combination then restart daos_server")
 
-	// FaultBdevConfigMultiTiersWithoutRoles indicates a Fault when multiple bdev tiers exist but no roles
-	// are specified.
+	// FaultBdevConfigMultiTiersWithoutRoles indicates a Fault when multiple bdev tiers exist
+	// but no roles are specified.
 	FaultBdevConfigMultiTiersWithoutRoles = storageFault(
 		code.BdevConfigMultiTierWithoutRoles,
-		"multiple bdev tiers but roles have not been specified",
-		"set MD-on-SSD roles on all bdev tiers or use only a single bdev tier, restart daos_server "+
-			"after updating server config file")
+		"multiple bdev tiers but MD-on-SSD roles have not been specified",
+		"set 'bdev_roles` on all bdev tiers or use only a single bdev tier in server config file then "+
+			"restart daos_server")
 
-	// FaultBdevConfigBadNrTiersWithRoles indicates a Fault when an invalid number of bdev tiers exist when
-	// roles are specified.
+	// FaultBdevConfigBadNrTiersWithRoles indicates a Fault when an invalid number of bdev tiers
+	// exist when roles are specified.
 	FaultBdevConfigBadNrTiersWithRoles = storageFault(
 		code.BdevConfigBadNrTiersWithRoles,
 		"only 1, 2 or 3 bdev tiers are supported when MD-on-SSD roles are specified",
-		"reduce the number of bdev tiers to 3 or less in server config file and restart daos_server")
+		"reduce the number of bdev tiers to 3 or less in server config file then restart daos_server")
 
-	// FaultBdevConfigControlMetadataNoRoles indicates a fault when control_metadata path
-	// has been specified in server config file but MD-on-SSD has not been enabled.
+	// FaultBdevConfigControlMetadataNoRoles indicates a fault when control_metadata path has
+	// been specified in server config file but MD-on-SSD has not been enabled.
 	FaultBdevConfigControlMetadataNoRoles = storageFault(
 		code.BdevConfigControlMetadataNoRoles,
-		"using a control_metadata path requires md-on-ssd bdev tier roles",
-		"assign 'bdev_roles' to bdev tiers in the engine storage section of the config")
+		"using 'control_metadata.path' requires MD-on-SSD roles",
+		"set 'bdev_roles' on bdev tiers in the engine storage section of the server config file then "+
+			"restart daos_server")
 
 	// FaultBdevConfigRolesNoControlMetadata indicates a fault when control_metadata path
 	// has not been specified in server config file but MD-on-SSD has been enabled.
 	FaultBdevConfigRolesNoControlMetadata = storageFault(
 		code.BdevConfigRolesNoControlMetadata,
-		"a control_metadata path is required when md-on-ssd bdev tier roles are specified",
-		"assign 'path' in 'control_metadata' storage section of the config to use MD-on-SSD")
+		"'control_metadata.path' is required when MD-on-SSD roles are specified",
+		"set 'control_metadata.path' in the engine storage section of the server config file then "+
+			"restart daos_server")
 )
 
 // FaultBdevConfigBadNrRoles creates a Fault when an unexpected number of roles have been assigned
@@ -170,7 +185,7 @@ func FaultBdevConfigBadNrRoles(role string, gotNr, wantNr int) *fault.Fault {
 	return storageFault(
 		code.BdevConfigRolesBadNr,
 		fmt.Sprintf("found %d %s tiers, wanted %d", gotNr, role, wantNr),
-		fmt.Sprintf("assign %s role to %d tiers in server config file and restart daos_server",
+		fmt.Sprintf("assign %s role to %d tiers in server config file then restart daos_server",
 			role, wantNr))
 }
 
@@ -191,7 +206,7 @@ func FaultBdevAccelEngineUnknown(input string, options ...string) *fault.Fault {
 	return storageFault(
 		code.BdevAccelEngineUnknown,
 		fmt.Sprintf("unknown acceleration engine setting %q", input),
-		fmt.Sprintf("supported settings are %v, update server config file and restart daos_server",
+		fmt.Sprintf("supported settings are %v, update server config file then restart daos_server",
 			options))
 }
 
@@ -201,7 +216,7 @@ func FaultBdevConfigOptFlagUnknown(input string, options ...string) *fault.Fault
 	return storageFault(
 		code.BdevConfigOptFlagUnknown,
 		fmt.Sprintf("unknown option flag given: %q", input),
-		fmt.Sprintf("supported options are %v, update server config file and restart daos_server",
+		fmt.Sprintf("supported options are %v, update server config file then restart daos_server",
 			options))
 }
 

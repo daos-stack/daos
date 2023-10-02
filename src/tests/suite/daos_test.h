@@ -22,23 +22,6 @@
 #include <dirent.h>
 
 #include <cmocka.h>
-#ifdef OVERRIDE_CMOCKA_SKIP
-/* redefine cmocka's skip() so it will no longer abort()
- * if CMOCKA_TEST_ABORT=1
- *
- * it can't be redefined as a function as it must return from current context
- */
-#undef skip
-#define skip() \
-	do { \
-		const char *abort_test = getenv("CMOCKA_TEST_ABORT"); \
-		if (abort_test != NULL && abort_test[0] == '1') \
-			print_message("Skipped !!!\n"); \
-		else \
-			_skip(__FILE__, __LINE__); \
-		return; \
-	} while  (0)
-#endif
 
 #if FAULT_INJECTION
 #define FAULT_INJECTION_REQUIRED() do { } while (0)
@@ -57,6 +40,7 @@
 #include <daos/sys_debug.h>
 #include <daos/tests_lib.h>
 #include <daos.h>
+#include <daos_mgmt.h>
 
 #if D_HAS_WARNING(4, "-Wframe-larger-than=")
 	#pragma GCC diagnostic ignored "-Wframe-larger-than="
@@ -106,6 +90,7 @@ struct test_pool {
 	 * can not be changed.
 	 */
 	d_rank_list_t		*svc;
+	char			*label;
 	/* flag of slave that share the pool of other test_arg_t */
 	bool			slave;
 	bool			destroyed;
@@ -350,6 +335,7 @@ int run_daos_ec_io_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_epoch_io_test(int rank, int size, int *tests, int test_size);
 int run_daos_obj_array_test(int rank, int size);
 int run_daos_array_test(int rank, int size, int *sub_tests, int sub_tests_size);
+int run_daos_cr_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_kv_test(int rank, int size);
 int run_daos_epoch_test(int rank, int size);
 int run_daos_epoch_recovery_test(int rank, int size);
@@ -378,6 +364,7 @@ int run_daos_degrade_simple_ec_test(int rank, int size, int *sub_tests,
 				    int sub_tests_size);
 int run_daos_upgrade_test(int rank, int size, int *sub_tests,
 			  int sub_tests_size);
+int run_daos_pipeline_test(int rank, int size);
 void daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid, const char *grp,
 		      d_rank_list_t *svc, d_rank_t rank);
 void daos_start_server(test_arg_t *arg, const uuid_t pool_uuid,
@@ -404,6 +391,7 @@ int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
+int ec_tgt_nr_get(daos_obj_id_t oid);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
@@ -643,8 +631,7 @@ test_rmdir(const char *path, bool force)
 	if (dir == NULL) {
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
-		D_ERROR("can't open directory %s, %d (%s)",
-			path, errno, strerror(errno));
+		D_ERROR("can't open directory %s, %d (%s)\n", path, errno, strerror(errno));
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -662,17 +649,15 @@ test_rmdir(const char *path, bool force)
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
 			if (rc != 0)
-				D_ERROR("test_rmdir %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("test_rmdir %s failed, rc %d\n", fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
 			if (rc != 0)
-				D_ERROR("unlink %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("unlink %s failed, rc %d\n", fullpath, rc);
 			break;
 		default:
-			D_WARN("find unexpected type %d", ent->d_type);
+			D_WARN("find unexpected type %d\n", ent->d_type);
 		}
 
 		D_FREE(fullpath);
@@ -688,6 +673,23 @@ test_rmdir(const char *path, bool force)
 out:
 	D_FREE(fullpath);
 	return rc;
+}
+
+/* Zero out uuids, free svc rank lists in pool info returned by DAOS API */
+static inline void
+clean_pool_info(daos_size_t npools, daos_mgmt_pool_info_t *pools)
+{
+	int	i;
+
+	if (pools) {
+		for (i = 0; i < npools; i++) {
+			uuid_clear(pools[i].mgpi_uuid);
+			if (pools[i].mgpi_svc) {
+				d_rank_list_free(pools[i].mgpi_svc);
+				pools[i].mgpi_svc = NULL;
+			}
+		}
+	}
 }
 
 #endif

@@ -131,7 +131,7 @@ out:
 		}
 	}
 
-	return 0;
+	return rc;
 }
 
 int
@@ -324,8 +324,11 @@ daos_sgl_get_bytes(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	if (p_buf_len != NULL)
 		*p_buf_len = 0;
 
-	if (idx->iov_idx >= sgl->sg_nr)
+	if (idx->iov_idx >= sgl->sg_nr) {
+		if (p_buf != NULL)
+			*p_buf = NULL;
 		return true; /** no data in sgl to get bytes from */
+	}
 
 	len = check_buf ? sgl->sg_iovs[idx->iov_idx].iov_buf_len :
 		sgl->sg_iovs[idx->iov_idx].iov_len;
@@ -361,7 +364,7 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 		   size_t requested_bytes, daos_sgl_process_cb process_cb,
 		   void *cb_args)
 {
-	uint8_t		*buf = NULL;
+	uint8_t		*buf;
 	size_t		 len = 0;
 	bool		 end = false;
 	int		 rc  = 0;
@@ -371,15 +374,16 @@ daos_sgl_processor(d_sg_list_t *sgl, bool check_buf, struct daos_sgl_idx *idx,
 	 * an error occurs
 	 */
 	while (requested_bytes > 0 && !end && !rc) {
+		buf = NULL;
 		end = daos_sgl_get_bytes(sgl, check_buf, idx, requested_bytes,
 					 &buf, &len);
 		requested_bytes -= len;
-		if (process_cb != NULL)
+		if (process_cb != NULL && buf != NULL)
 			rc = process_cb(buf, len, cb_args);
 	}
 
 	if (requested_bytes)
-		D_INFO("Requested more bytes than what's available in sgl");
+		D_INFO("Requested more bytes than what's available in sgl\n");
 
 	return rc;
 }
@@ -701,6 +705,8 @@ out:
 	return &daos_crt_init_opt;
 }
 
+static __thread uuid_t dti_uuid;
+
 void
 daos_dti_gen_unique(struct dtx_id *dti)
 {
@@ -715,17 +721,21 @@ daos_dti_gen_unique(struct dtx_id *dti)
 void
 daos_dti_gen(struct dtx_id *dti, bool zero)
 {
-	static __thread uuid_t uuid;
-
 	if (zero) {
 		memset(dti, 0, sizeof(*dti));
 	} else {
-		if (uuid_is_null(uuid))
-			uuid_generate(uuid);
+		if (uuid_is_null(dti_uuid))
+			uuid_generate(dti_uuid);
 
-		uuid_copy(dti->dti_uuid, uuid);
+		uuid_copy(dti->dti_uuid, dti_uuid);
 		dti->dti_hlc = d_hlc_get();
 	}
+}
+
+void
+daos_dti_reset(void)
+{
+	memset(dti_uuid, 0, sizeof(dti_uuid));
 }
 
 /**
@@ -768,4 +778,109 @@ daos_hlc2timestamp(uint64_t hlc, time_t *ts)
 
 	*ts = tspec.tv_sec;
 	return 0;
+}
+
+/** Find requested number of unused bits (neither set it @used or @reserved */
+int
+daos_find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits)
+{
+	int	nr_saved;
+	int	at_saved;
+	int	nr;
+	int	at;
+	int	i;
+	int	j;
+
+	nr = nr_saved = 0;
+	at = at_saved = -1;
+
+	for (i = 0; i < bmap_sz; i++) {
+		uint64_t free_bits = ~used[i];
+
+		if (reserved)
+			free_bits &= ~reserved[i];
+
+		if (free_bits == 0) { /* no space in the current int64 */
+			if (nr > nr_saved) {
+				nr_saved = nr;
+				at_saved = at;
+			}
+			nr = 0;
+			at = -1;
+			continue;
+		}
+
+		j = ffsll(free_bits);
+		D_ASSERT(j > 0);
+		if (at >= 0 && j == 1) {
+			D_ASSERT(nr > 0);
+			nr++;
+		} else {
+			at = i * 64 + j - 1;
+			nr = 1;
+		}
+
+		for (; j < 64; j++) {
+			if (nr == *bits) /* done */
+				goto out;
+
+			if (isset64(&free_bits, j)) {
+				if (at < 0)
+					at = i * 64 + j;
+				nr++;
+				continue;
+			}
+
+			if (nr > nr_saved) {
+				nr_saved = nr;
+				at_saved = at;
+			}
+			nr = 0;
+			at = -1;
+			if ((free_bits >> j) == 0)
+				break;
+		}
+		if (nr == *bits)
+			goto out;
+	}
+ out:
+	if (nr == *bits || nr > nr_saved) {
+		nr_saved = nr;
+		at_saved = at;
+	}
+
+	if (nr_saved >= bits_min)
+		*bits = nr_saved;
+	else
+		at_saved = -1;
+
+	return at_saved;
+}
+
+int
+daos_count_free_bits(uint64_t *used, int bmap_sz)
+{
+	int	i;
+	int	j;
+	int	nr = 0;
+
+	for (i = 0; i < bmap_sz; i++) {
+		uint64_t free_bits = ~used[i];
+
+		/* no free bits in the current int64 */
+		if (free_bits == 0)
+			continue;
+
+		j = ffsll(free_bits);
+		D_ASSERT(j > 0);
+		nr++;
+		for (; j < 64; j++) {
+			if (isset64(&free_bits, j))
+				nr++;
+			if ((free_bits >> j) == 0)
+				break;
+		}
+	}
+
+	return nr;
 }

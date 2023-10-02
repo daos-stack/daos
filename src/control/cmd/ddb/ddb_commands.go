@@ -20,12 +20,13 @@ func addAppCommands(app *grumble.App, ctx *DdbContext) {
 		HelpGroup: "vos",
 		Flags: func(f *grumble.Flags) {
 			f.Bool("r", "recursive", false, "Recursively list the contents of the path")
+			f.Bool("d", "details", false, "List more details of items in path")
 		},
 		Args: func(a *grumble.Args) {
 			a.String("path", "Optional, list contents of the provided path", grumble.Default(""))
 		},
 		Run: func(c *grumble.Context) error {
-			return ddbLs(ctx, c.Args.String("path"), c.Flags.Bool("recursive"))
+			return ddbLs(ctx, c.Args.String("path"), c.Flags.Bool("recursive"), c.Flags.Bool("details"))
 		},
 		Completer: nil,
 	})

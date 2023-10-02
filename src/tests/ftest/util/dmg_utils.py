@@ -500,6 +500,33 @@ class DmgCommand(DmgCommandBase):
                                      raise_exception=raise_exception, masks=masks, streams=streams,
                                      subsystems=subsystems)
 
+    def support_collect_log(self, stop_on_error=None, target_folder=None, archive=None,
+                            extra_logs_dir=None, target_host=None):
+        """Collect logs for debug purpose.
+
+        Args:
+            stop_on_error (bool, optional): Stop the collect-log command on very first error.
+            target (str, optional): Target Folder location to copy logs
+            archive (bool, optional): Archive the log/config files
+            extra_logs_dir (str, optional): Collect the Logs from given custom directory
+            target-host (str, optional): R sync all the logs to target system
+        Raises:
+            CommandFailure: if the dmg support collect-log command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        kwargs = {
+            "stop_on_error": stop_on_error,
+            "target_folder": target_folder,
+            "archive": archive,
+            "extra_logs_dir": extra_logs_dir,
+            "target_host": target_host,
+        }
+
+        return self._get_json_result(("support", "collect-log"), **kwargs)
+
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
                     tier_ratio=None, properties=None, label=None, nranks=None):
@@ -714,6 +741,21 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(
             ("pool", "update-acl"), pool=pool, acl_file=acl_file, entry=entry)
+
+    def pool_upgrade(self, pool):
+        """Call dmg pool upgrade.
+
+        Args:
+            pool (str): pool to upgrade
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        Raises:
+            CommandFailure: if the command fails.
+
+        """
+        return self._get_json_result(("pool", "upgrade"), pool=pool)
 
     def pool_overwrite_acl(self, pool, acl_file):
         """Overwrite the acl for a given pool.
@@ -1049,8 +1091,8 @@ class DmgCommand(DmgCommandBase):
         # Example JSON output:
         # {
         #   "response": {
-        #     "CurrentLeader": "127.0.0.1:10001",
-        #     "Replicas": [
+        #     "current_leader": "127.0.0.1:10001",
+        #     "replicas": [
         #       "127.0.0.1:10001"
         #     ]
         #   },
@@ -1333,14 +1375,13 @@ class DmgCommand(DmgCommandBase):
         """Call dmg version.
 
         Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
-            CommandFailure: if the dmg storage query command fails.
+            CommandFailure: if the dmg version command fails.
 
         """
-        return self._get_result(["version"])
+        return self._get_json_result(("version",))
 
     def check_enable(self, pool=None, stop=True):
         """Call dmg check enable.
@@ -1357,6 +1398,22 @@ class DmgCommand(DmgCommandBase):
             self.system_stop(force=True)
 
         return self._get_json_result(("check", "enable"), pool=pool)
+
+    def check_set_policy(self, reset_defaults=False, all_interactive=False, policies=None):
+        """Call dmg check set-policy [options] [policies].
+
+        Args:
+            reset_defaults (bool, optional): Set all policies to default action. Defaults to False.
+            all_interactive (bool, optional): Set all policies to interactive. Defaults to False.
+            policies (str, optional): The policies for DAOS checker. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary.
+
+        """
+        return self._get_json_result(
+            ("check", "set-policy"), reset_defaults=reset_defaults,
+            all_interactive=all_interactive, policies=policies)
 
     def check_start(self, pool=None, dry_run=False, reset=False, failout=None, auto=None,
                     find_orphans=False, policies=None):
@@ -1379,6 +1436,18 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("check", "start"), pool=pool, dry_run=dry_run, reset=reset, failout=failout,
             auto=auto, find_orphans=find_orphans, policies=policies)
+
+    def check_stop(self, pool=None):
+        """Call dmg check stop.
+
+        Args:
+            pool (str): Pool label or UUID. Defaults to None.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("check", "stop"), pool=pool)
 
     def check_query(self, pool=None):
         """Call dmg check query.

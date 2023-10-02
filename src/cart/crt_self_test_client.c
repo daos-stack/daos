@@ -108,14 +108,14 @@ struct st_g_data {
 	uint32_t			  next_endpt_idx;
 
 	/*
-	 * Used to track how many RPCs are currently inflight
+	 * Used to track how many RPCs are currently in-flight
 	 * NOTE: Write-protected by ctr_lock
 	 */
 	uint32_t			  num_inflight;
 };
 
 /*
- * An instance of this structure exists per inflight RPC to serve as the
+ * An instance of this structure exists per in-flight RPC to serve as the
  * "private" data for each repetition
  */
 struct st_cb_args {
@@ -178,7 +178,7 @@ close_session_cb(const struct crt_cb_info *cb_info)
 		D_WARN("Close session failed for endpoint=%u:%u\n",
 		       endpt->rank, endpt->tag);
 
-	/* Decrement the number of inflight RPCs now that this one is done */
+	/* Decrement the number of in-flight RPCs now that this one is done */
 	ST_DEC_NUM_INFLIGHT();
 
 	if (g_data->num_inflight == 0)
@@ -211,7 +211,7 @@ static void close_sessions(void)
 
 		/* Don't bother to close sessions for nodes where open failed */
 		if (g_data->endpts[i].session_id < 0) {
-			/* No actual send - decrement the inflight counter */
+			/* No actual send - decrement the in-flight counter */
 			ST_DEC_NUM_INFLIGHT();
 
 			continue;
@@ -234,7 +234,7 @@ static void close_sessions(void)
 			/* Mark the node as evicted (likely already done) */
 			g_data->endpts[i].evicted = 1;
 
-			/* Sending failed - decrement the inflight counter */
+			/* Sending failed - decrement the in-flight counter */
 			ST_DEC_NUM_INFLIGHT();
 
 			continue;
@@ -258,7 +258,7 @@ static void close_sessions(void)
 			g_data->endpts[i].session_id = -1;
 			g_data->endpts[i].evicted = 1;
 
-			/* Sending failed - decrement the inflight counter */
+			/* Sending failed - decrement the in-flight counter */
 			ST_DEC_NUM_INFLIGHT();
 
 			continue;
@@ -444,7 +444,7 @@ static void send_next_rpc(struct st_cb_args *cb_args, int skip_inc_complete)
 			break;
 		}
 
-/* Good - This inflight RPC perpetuates itself */
+/* Good - This in-flight RPC perpetuates itself */
 send_rpc:
 		/* Give the callback a pointer to this endpoint entry */
 		cb_args->endpt = endpt_ptr;
@@ -498,7 +498,7 @@ try_again:
 abort:
 	/*
 	 * Since it is impossible to send another RPC, there is now one less
-	 * RPC inflight
+	 * RPC in-flight
 	 */
 	ST_DEC_NUM_INFLIGHT();
 
@@ -582,7 +582,7 @@ static void launch_test_rpcs(void)
 		close_sessions();
 	}
 
-	/* Attempt to send the requested number of inflight RPCs */
+	/* Attempt to send the requested number of in-flight RPCs */
 	ST_SET_NUM_INFLIGHT(g_data->max_inflight);
 
 	/* Launch max_inflight separate RPCs to get the test started */
@@ -623,7 +623,7 @@ open_session_cb(const struct crt_cb_info *cb_info)
 		endpt->session_id = *session_id;
 	}
 
-	/* Decrement the number of inflight RPCs now that this one is done */
+	/* Decrement the number of in-flight RPCs now that this one is done */
 	ST_DEC_NUM_INFLIGHT();
 
 	if (g_data->num_inflight == 0)
@@ -679,7 +679,7 @@ static void open_sessions(void)
 			g_data->endpts[i].session_id = -1;
 			g_data->endpts[i].evicted = 1;
 
-			/* Sending failed - decrement the inflight counter */
+			/* Sending failed - decrement the in-flight counter */
 			ST_DEC_NUM_INFLIGHT();
 		}
 		D_ASSERTF(new_rpc != NULL,
@@ -717,7 +717,7 @@ static void open_sessions(void)
 			g_data->endpts[i].session_id = -1;
 			g_data->endpts[i].evicted = 1;
 
-			/* Sending failed - decrement the inflight counter */
+			/* Sending failed - decrement the in-flight counter */
 			ST_DEC_NUM_INFLIGHT();
 		}
 
@@ -809,7 +809,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->max_inflight == 0) {
-		D_ERROR("Max inflight must be greater than zero\n");
+		D_ERROR("Max in-flight must be greater than zero\n");
 		D_GOTO(send_reply, ret = -DER_INVAL);
 	}
 	if (args->rep_count == 0) {
@@ -877,7 +877,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 
 	/*
 	 * Set up a bulk descriptor to use later to send the latencies back
-	 * to the self-test requestor
+	 * to the self-test requester
 	 */
 	d_iov_set(&g_data->rep_latencies_iov, g_data->rep_latencies,
 		 g_data->rep_count * sizeof(g_data->rep_latencies[0]));
@@ -922,7 +922,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 	else
 		alloc_buf_len = test_buf_len;
 
-	/* Allocate "private" buffers for each inflight RPC */
+	/* Allocate "private" buffers for each in-flight RPC */
 	for (alloc_idx = 0; alloc_idx < g_data->max_inflight; alloc_idx++) {
 		struct st_cb_args *cb_args;
 
@@ -946,7 +946,7 @@ crt_self_test_start_handler(crt_rpc_t *rpc_req)
 		if (test_buf_len == 0)
 			continue;
 
-		/* Allocate a new data buffer for this inflight RPC */
+		/* Allocate a new data buffer for this in-flight RPC */
 		D_ALLOC(cb_args->buf, alloc_buf_len);
 		if (cb_args->buf == NULL)
 			D_GOTO(fail_cleanup, ret = -DER_NOMEM);

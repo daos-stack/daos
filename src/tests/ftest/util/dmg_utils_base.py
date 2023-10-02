@@ -104,6 +104,8 @@ class DmgCommandBase(YamlCommand):
             self.sub_command_class = self.TelemetrySubCommand()
         elif self.sub_command.value == "version":
             self.sub_command_class = self.VersionSubCommand()
+        elif self.sub_command.value == "support":
+            self.sub_command_class = self.SupportSubCommand()
         else:
             self.sub_command_class = None
 
@@ -127,6 +129,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.QuerySubCommand()
             elif self.sub_command.value == "repair":
                 self.sub_command_class = self.RepairSubCommand()
+            elif self.sub_command.value == "set-policy":
+                self.sub_command_class = self.SetpolicySubCommand()
             elif self.sub_command.value == "start":
                 self.sub_command_class = self.StartSubCommand()
             elif self.sub_command.value == "stop":
@@ -175,6 +179,16 @@ class DmgCommandBase(YamlCommand):
                 self.seq_num = BasicParameter(None, position=1)
                 self.action = BasicParameter(None, position=2)
                 self.for_all = FormattedParameter("--for-all", False)
+
+        class SetpolicySubCommand(CommandWithParameters):
+            """Defines an object for the dmg check set-policy command."""
+
+            def __init__(self):
+                """Create a dmg check set-policy object."""
+                super().__init__("/run/dmg/check/start/*", "set-policy")
+                self.reset_defaults = FormattedParameter("--reset-defaults", False)
+                self.all_interactive = FormattedParameter("--all-interactive", False)
+                self.policies = FormattedParameter("--policies={}", None)
 
         class StartSubCommand(CommandWithParameters):
             """Defines an object for the dmg check start command."""
@@ -395,6 +409,8 @@ class DmgCommandBase(YamlCommand):
                 self.sub_command_class = self.SetPropSubCommand()
             elif self.sub_command.value == "update-acl":
                 self.sub_command_class = self.UpdateAclSubCommand()
+            elif self.sub_command.value == "upgrade":
+                self.sub_command_class = self.UpgradeSubCommand()
             elif self.sub_command.value == "reintegrate":
                 self.sub_command_class = self.ReintegrateSubCommand()
             else:
@@ -564,6 +580,14 @@ class DmgCommandBase(YamlCommand):
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
 
+        class UpgradeSubCommand(CommandWithParameters):
+            """Defines an object for the dmg pool upgrade command."""
+
+            def __init__(self):
+                """Create a dmg pool upgrade command object."""
+                super().__init__("/run/dmg/pool/upgrade/*", "upgrade")
+                self.pool = BasicParameter(None, position=1)
+
     class ServerSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg server sub command."""
 
@@ -592,6 +616,33 @@ class DmgCommandBase(YamlCommand):
                 self.streams = FormattedParameter("-d {}", None)
                 # Subsystems syntax is identical to the 'DD_SUBSYS' environment variable.
                 self.subsystems = FormattedParameter("-s {}", None)
+
+    class SupportSubCommand(CommandWithSubCommand):
+        """Defines an object for the dmg support sub command."""
+
+        def __init__(self):
+            """Create a dmg support subcommand object."""
+            super().__init__("/run/dmg/support/*", "support")
+
+        def get_sub_command_class(self):
+            # pylint: disable=redefined-variable-type
+            """Get the dmg support sub command object."""
+            if self.sub_command.value == "collect-log":
+                self.sub_command_class = self.CollectlogSubCommand()
+            else:
+                self.sub_command_class = None
+
+        class CollectlogSubCommand(CommandWithParameters):
+            """Defines an object for the dmg support collect-log command."""
+
+            def __init__(self):
+                """Create a dmg support collect-log command object."""
+                super().__init__("/run/dmg/support/collect-log/*", "collect-log")
+                self.stop_on_error = FormattedParameter("--stop-on-error", False)
+                self.target_folder = FormattedParameter("--target-folder={}", None)
+                self.archive = FormattedParameter("--archive", False)
+                self.extra_logs_dir = FormattedParameter("--extra-logs-dir={}", None)
+                self.target_host = FormattedParameter("--target-host={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
         """Defines an object for the dmg storage sub command."""

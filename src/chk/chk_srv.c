@@ -26,7 +26,8 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
-			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags, &clues);
+			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags,
+			      csi->csi_iv_uuid, &clues);
 	if (rc > 0) {
 		D_ALLOC_PTR(rank);
 		if (rank == NULL) {
@@ -53,8 +54,7 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
-	if (cso->cso_status < 0)
-		ds_pool_clues_fini(&clues);
+	/* @clues will be freed via chk_start_post_reply. Do not free it here. */
 }
 
 static void
@@ -101,7 +101,8 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	int				 rc;
 
 	rc = chk_engine_query(cqi->cqi_gen, cqi->cqi_uuids.ca_count, cqi->cqi_uuids.ca_arrays,
-			      &shard_nr, &shards);
+			      &cqo->cqo_ins_status, &cqo->cqo_ins_phase, &shard_nr, &shards,
+			      &cqo->cqo_gen);
 	if (rc != 0) {
 		cqo->cqo_status = rc;
 		cqo->cqo_cap = 0;
@@ -118,8 +119,7 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
-	if (cqo->cqo_status < 0)
-		chk_query_free(shards, shard_nr);
+	/* @shards will be freed via chk_query_post_reply. Do not free it here. */
 }
 
 static void
@@ -172,8 +172,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
 
-	if (cclo->cclo_status < 0)
-		D_FREE(conts);
+	/* @conts will be freed via chk_cont_list_post_reply. Do not free it here. */
 }
 
 static void
@@ -183,7 +182,8 @@ ds_chk_pool_start_hdlr(crt_rpc_t *rpc)
 	struct chk_pool_start_out	*cpso = crt_reply_get(rpc);
 	int				 rc;
 
-	rc = chk_engine_pool_start(cpsi->cpsi_gen, cpsi->cpsi_pool, cpsi->cpsi_phase);
+	rc = chk_engine_pool_start(cpsi->cpsi_gen, cpsi->cpsi_pool, cpsi->cpsi_phase,
+				   cpsi->cpsi_flags);
 
 	cpso->cpso_status = rc;
 	cpso->cpso_rank = dss_self_rank();
@@ -236,9 +236,8 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_options = cri->cri_options.ca_arrays;
 	cru.cru_details = cri->cri_details.ca_arrays;
 	cru.cru_result = cri->cri_ics_result;
-	cro->cro_seq = cri->cri_seq;
 
-	rc = chk_leader_report(&cru, &cro->cro_seq, NULL);
+	rc = chk_leader_report(&cru, &cri->cri_seq, NULL);
 
 	cro->cro_status = rc;
 	rc = crt_reply_send(rpc);
@@ -255,7 +254,8 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 	int			 pool_nr = 0;
 	int			 rc;
 
-	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, &pool_nr, &pools);
+	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, cri->cri_iv_uuid, &cro->cro_flags,
+			       &pool_nr, &pools);
 
 	cro->cro_status = rc;
 	if (rc == 0) {
@@ -373,7 +373,7 @@ struct dss_module chk_module = {
 	.sm_setup		= ds_chk_setup,
 	.sm_cleanup		= ds_chk_cleanup,
 	.sm_proto_count		= 1,
-	.sm_proto_fmt		= &chk_proto_fmt,
-	.sm_cli_count		= 0,
-	.sm_handlers		= chk_handlers,
+	.sm_proto_fmt		= {&chk_proto_fmt},
+	.sm_cli_count		= {0},
+	.sm_handlers		= {chk_handlers},
 };

@@ -14,7 +14,7 @@
 #define ENUM_DESC_NR		5 /* number of keys/records returned by enum */
 #define ENUM_DESC_BUF		512 /* all keys/records returned by enum */
 #define LIBSERIALIZE		"libdaos_serialize.so"
-#define NUM_SERIALIZE_PROPS	18
+#define NUM_SERIALIZE_PROPS	19
 
 #include <stdio.h>
 #include <dirent.h>
@@ -23,6 +23,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -49,12 +50,16 @@ struct file_dfs {
 };
 
 /* Report an error with a system error number using a standard output format */
-#define DH_PERROR_SYS(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+#define DH_PERROR_SYS(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, strerror(RC), (RC));    \
+	} while (0)
 
 /* Report an error with a daos error number using a standard output format */
-#define DH_PERROR_DER(AP, RC, STR, ...)					\
-	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+#define DH_PERROR_DER(AP, RC, STR, ...)                                                            \
+	do {                                                                                       \
+		fprintf((AP)->errstream, STR ": %s (%d)\n", ##__VA_ARGS__, d_errdesc(RC), (RC));   \
+	} while (0)
 
 static int
 cont_destroy_snap_hdlr(struct cmd_args_s *ap);
@@ -726,9 +731,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* create the destination directory if it does not exist. Assume root always exists */
 	if (strcmp(dst_path, "/") != 0) {
 		rc = file_mkdir(ap, dst_file_dfs, dst_path, &tmp_mode_dir);
-		if (rc == EEXIST) {
-			DH_PERROR_SYS(ap, rc, "Directory '%s' exists", dst_path);
-		} else if (rc != 0) {
+		if (rc != 0 && rc != EEXIST) {
+			DH_PERROR_SYS(ap, rc, "mkdir '%s' failed", dst_path);
 			D_GOTO(out, rc = daos_errno2der(rc));
 		}
 	}
@@ -1171,6 +1175,7 @@ dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_p
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_EC_PDA;
 	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_RP_PDA;
 	props->dpp_entries[17].dpe_type = DAOS_PROP_CO_SCRUBBER_DISABLED;
+	props->dpp_entries[18].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	/* Conditionally get the OID. Should always be true for serialization. */
 	if (get_oid) {
@@ -1485,10 +1490,8 @@ dm_connect(struct cmd_args_s *ap,
 				dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "provide a destination pool or UNS path "
-					      "of the form:\n\t --dst </$pool> | </path/to/uns>");
-				D_GOTO(err, rc);
+				DH_PERROR_SYS(ap, rc, "failed to create destination UNS path");
+				D_GOTO(err, rc = daos_errno2der(rc));
 			}
 			snprintf(ca->dst_cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
@@ -1567,6 +1570,7 @@ dm_connect(struct cmd_args_s *ap,
 				DH_PERROR_DER(ap, rc, "failed to open container");
 				D_GOTO(err, rc);
 			}
+			fprintf(ap->outstream, "Successfully created container %s\n", ca->dst_cont);
 		}
 		if (is_posix_copy) {
 			rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, O_RDWR, DFS_SYS_NO_LOCK,
@@ -1668,43 +1672,44 @@ dm_disconnect(struct cmd_args_s *ap,
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(src_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close source container");
-			daos_cont_close(ca->src_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
-			daos_pool_disconnect(ca->src_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->src_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(ap, rc,
+						      "failed to disconnect source pool on retry");
+			}
 		}
 	}
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "failed to unmount source");
-				dfs_sys_umount(dst_file_dfs->dfs_sys);
-			}
+			if (rc != 0)
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 			dst_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->dst_coh, NULL);
-		if (rc != 0) {
+		if (rc != 0)
 			DH_PERROR_DER(ap, rc, "failed to close destination container");
-			daos_cont_close(ca->dst_coh, NULL);
-		}
 		rc = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
-			daos_pool_disconnect(ca->dst_poh, NULL);
+			if (rc == -DER_NOMEM) {
+				rc = daos_pool_disconnect(ca->dst_poh, NULL);
+				if (rc != 0)
+					DH_PERROR_DER(
+					    ap, rc,
+					    "failed to disconnect destination pool on retry");
+			}
 		}
 	}
 	return rc;
@@ -2421,5 +2426,142 @@ out:
 		D_FREE(ca->src);
 		D_FREE(ca->dst);
 	}
+	return rc;
+}
+
+int
+dfuse_count_query(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	int                    rc    = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		if (rc != ENOENT)
+			DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	query.ino = ap->dfuse_mem.ino;
+
+	rc = ioctl(fd, DFUSE_IOCTL_COUNT_QUERY, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+	ap->dfuse_mem.found           = query.found;
+
+close:
+	close(fd);
+	return rc;
+}
+
+/* Dfuse cache evict (and helper).
+ * Open a path and make a ioctl call for dfuse to evict it.  IF the path is the root then dfuse
+ * cannot do this so perform the same over all the top-level directory entries instead.
+ */
+
+static int
+dfuse_evict_helper(int fd, struct dfuse_mem_query *query)
+{
+	struct dirent *ent;
+	DIR           *dir;
+	int            rc = 0;
+
+	dir = fdopendir(fd);
+	if (dir == 0) {
+		rc = errno;
+		return rc;
+	}
+
+	while ((ent = readdir(dir)) != NULL) {
+		int cfd;
+
+		cfd = openat(fd, ent->d_name, O_NOFOLLOW, O_RDONLY);
+		if (cfd < 0) {
+			rc = errno;
+			goto out;
+		}
+
+		rc = ioctl(cfd, DFUSE_IOCTL_DFUSE_EVICT, query);
+		close(cfd);
+		if (rc < 0) {
+			rc = errno;
+			goto out;
+		}
+	}
+
+out:
+	closedir(dir);
+	return rc;
+}
+
+int
+dfuse_evict(struct cmd_args_s *ap)
+{
+	struct dfuse_mem_query query = {};
+	struct stat            buf;
+	int                    rc = -DER_SUCCESS;
+	int                    fd;
+
+	fd = open(ap->path, O_NOFOLLOW, O_RDONLY);
+	if (fd < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to open path");
+		return daos_errno2der(rc);
+	}
+
+	rc = fstat(fd, &buf);
+	if (rc < 0) {
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Failed to stat file");
+		rc = daos_errno2der(rc);
+		goto close;
+	}
+
+	if (buf.st_ino == 1) {
+		rc = dfuse_evict_helper(fd, &query);
+		if (rc != 0) {
+			DH_PERROR_SYS(ap, rc, "Unable to traverse root");
+			rc = daos_errno2der(rc);
+			goto close;
+		}
+		goto out;
+	}
+
+	rc = ioctl(fd, DFUSE_IOCTL_DFUSE_EVICT, &query);
+	if (rc < 0) {
+		rc = errno;
+		if (rc == ENOTTY) {
+			rc = -DER_MISC;
+		} else {
+			DH_PERROR_SYS(ap, rc, "ioctl failed");
+			rc = daos_errno2der(errno);
+		}
+		goto close;
+	}
+
+	ap->dfuse_mem.ino = buf.st_ino;
+out:
+	ap->dfuse_mem.inode_count     = query.inode_count;
+	ap->dfuse_mem.fh_count        = query.fh_count;
+	ap->dfuse_mem.pool_count      = query.pool_count;
+	ap->dfuse_mem.container_count = query.container_count;
+
+close:
+	close(fd);
 	return rc;
 }

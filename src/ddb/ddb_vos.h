@@ -9,36 +9,42 @@
 
 #include <daos_prop.h>
 #include <daos_srv/vos_types.h>
-#include "ddb_common.h"
+#include "ddb_tree_path.h"
 
 struct ddb_cont {
-	uuid_t		ddbc_cont_uuid;
-	uint32_t	ddbc_idx;
+	uuid_t				 ddbc_cont_uuid;
+	uint32_t			 ddbc_idx;
+	struct dv_indexed_tree_path	*ddbc_path;
 };
 
 struct ddb_obj {
-	daos_obj_id_t		ddbo_oid;
-	uint32_t		ddbo_idx;
-	enum daos_otype_t	ddbo_otype;
-	char			ddbo_otype_str[32];
-	uint32_t		ddbo_nr_grps;
+	daos_obj_id_t			ddbo_oid;
+	uint32_t			ddbo_idx;
+	enum daos_otype_t		ddbo_otype;
+	char				ddbo_otype_str[32];
+	uint32_t			ddbo_nr_grps;
+	struct dv_indexed_tree_path	*ddbo_path;
 };
 
 struct ddb_key {
-	daos_key_t	ddbk_key;
-	uint32_t	ddbk_idx;
-	vos_iter_type_t ddbk_child_type;
+	daos_key_t			ddbk_key;
+	uint32_t			ddbk_idx;
+	vos_iter_type_t			ddbk_child_type;
+	struct dv_indexed_tree_path	*ddbk_path;
 };
 
 struct ddb_sv {
-	uint64_t	ddbs_record_size;
-	uint32_t	ddbs_idx;
+	uint64_t			ddbs_record_size;
+	uint32_t			ddbs_idx;
+	struct dv_indexed_tree_path	*ddbs_path;
 };
 
 struct ddb_array {
-	uint64_t	ddba_record_size;
-	daos_recx_t	ddba_recx;
-	uint32_t	ddba_idx;
+	uint64_t			ddba_record_size;
+	daos_recx_t			ddba_recx;
+	uint32_t			ddba_idx;
+	struct dv_indexed_tree_path	*ddba_path;
+
 };
 
 /* Open and close a pool for a ddb_ctx */
@@ -76,8 +82,11 @@ struct vos_tree_handlers {
  * @return		0 if success, else error
  */
 int dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-	       struct vos_tree_handlers *handlers, void *handler_args);
+	       struct vos_tree_handlers *handlers, void *handler_args,
+	       struct dv_indexed_tree_path *itp);
 
+/* need a special function to get a container idx */
+int dv_get_cont_idx(daos_handle_t poh, uuid_t uuid);
 /* The following functions lookup a vos path part given a starting point and the index desired */
 int dv_get_cont_uuid(daos_handle_t poh, uint32_t idx, uuid_t uuid);
 int dv_get_object_oid(daos_handle_t coh, uint32_t idx, daos_unit_oid_t *uoid);
@@ -95,7 +104,7 @@ int dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_
  * @param pb		The path builder structure
  * @return		0 if successful, else error
  */
-int dv_path_verify(struct dv_tree_path_builder *pb);
+int dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *vtp);
 
 struct ddb_superblock {
 	uuid_t		dsb_id;

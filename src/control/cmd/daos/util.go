@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 	"unsafe"
 
 	"github.com/google/uuid"
@@ -138,24 +137,22 @@ func freeString(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
 
-func createWriteStream(ctx context.Context, prefix string, printLn func(line string)) (*C.FILE, func(), error) {
-	// Create a FILE object for the handler to use for
-	// printing output or errors, and call the callback
-	// for each line.
+func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE, func(), error) {
+	// Create a FILE object for the handler to use for printing output or errors, and call the
+	// callback for each line.
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err
 	}
+	done := make(chan bool, 1)
 
 	stream, err := fd2FILE(w.Fd(), "w")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	go func(ctx context.Context, prefix string) {
-		if prefix != "" {
-			prefix = ": "
-		}
+	go func(ctx context.Context) {
+		defer close(done)
 
 		rdr := bufio.NewReader(r)
 		for {
@@ -165,21 +162,20 @@ func createWriteStream(ctx context.Context, prefix string, printLn func(line str
 			default:
 				line, err := rdr.ReadString('\n')
 				if err != nil {
-					if !(errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed)) {
+					if !errors.Is(err, io.EOF) {
 						printLn(fmt.Sprintf("read err: %s", err))
 					}
 					return
 				}
-				printLn(fmt.Sprintf("%s%s", prefix, line))
+				printLn(line)
 			}
 		}
-	}(ctx, prefix)
+	}(ctx)
 
 	return stream, func() {
-		C.fflush(stream)
 		C.fclose(stream)
-		r.Close()
 		w.Close()
+		<-done
 	}, nil
 }
 
@@ -220,7 +216,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	ap.sysname = C.CString(build.DefaultSystemName)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	outStream, outCleanup, err := createWriteStream(ctx, "", log.Info)
+	outStream, outCleanup, err := createWriteStream(ctx, log.Info)
 	if err != nil {
 		freeCmdArgs(ap)
 		cancel()
@@ -228,7 +224,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	}
 	ap.outstream = outStream
 
-	errStream, errCleanup, err := createWriteStream(ctx, "handler", log.Error)
+	errStream, errCleanup, err := createWriteStream(ctx, log.Error)
 	if err != nil {
 		outCleanup()
 		freeCmdArgs(ap)
@@ -241,8 +237,6 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 		outCleanup()
 		errCleanup()
 		freeCmdArgs(ap)
-		// Give the streams a chance to flush.
-		time.Sleep(250 * time.Millisecond)
 		cancel()
 	}, nil
 }
@@ -253,7 +247,7 @@ type daosCaller interface {
 
 type daosCmd struct {
 	cmdutil.NoArgsCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 }
 

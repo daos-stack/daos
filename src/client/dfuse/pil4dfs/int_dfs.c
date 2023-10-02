@@ -116,12 +116,6 @@ static bool             daos_debug_inited;
 static int              num_dfs;
 static struct dfs_mt    dfs_list[MAX_DAOS_MT];
 
-static void
-discover_daos_mount(void);
-static void
-discover_dfuse(void);
-static int
-retrieve_handles_from_fuse(int idx);
 static int
 init_dfs(int idx);
 static int
@@ -338,8 +332,9 @@ lookup_insert_dir(struct dfs_mt *mt, const char *name, size_t len, dfs_obj_t **o
 		return rc;
 
 	if (!S_ISDIR(mode)) {
-		*obj = oh;
-		return 0;
+		/* Not a directory, return ENOENT*/
+		dfs_release(oh);
+		return ENOTDIR;
 	}
 
 	/* Allocate struct and string in a single buffer.  This includes a extra byte so name will
@@ -573,59 +568,61 @@ query_dfs_mount(const char *path)
 	return idx;
 }
 
-static void
-discover_daos_mount(void)
+/* Discover fuse mount points from env DAOS_MOUNT_POINT.
+ * Return 0 for success. A non-zero value means something wrong in setting
+ * and the caller will call abort() to terminate current application.
+ */
+static int
+discover_daos_mount_with_env(void)
 {
-	int   idx, len_fs_root;
+	int   idx, len_fs_root, rc;
 	char *fs_root   = NULL;
 	char *pool      = NULL;
 	char *container = NULL;
 
-	/* Find the list of dfuse from /proc/mounts */
-	discover_dfuse();
-
 	/* Add the mount if env DAOS_MOUNT_POINT is set. */
 	fs_root = getenv("DAOS_MOUNT_POINT");
 	if (fs_root == NULL)
-		return;
+		/* env DAOS_MOUNT_POINT is undefined, return success (0) */
+		D_GOTO(out, rc = 0);
 
 	if (num_dfs >= MAX_DAOS_MT) {
-		D_WARN("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
-		return;
+		D_FATAL("dfs_list[] is full already. Need to incease MAX_DAOS_MT.\n");
+		D_GOTO(out, rc = EBUSY);
 	}
 
 	if (access(fs_root, R_OK)) {
-		D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n", fs_root, errno,
-			strerror(errno));
-		return;
+		D_FATAL("no read permission for %s: %d (%s)\n", fs_root, errno,	strerror(errno));
+		D_GOTO(out, rc = EACCES);
 	}
 
+	/* check whether fs_root exists in dfs_list[] already. "idx >= 0" means exists. */
 	idx = query_dfs_mount(fs_root);
 	if (idx >= 0)
-		return;
+		D_GOTO(out, rc = 0);
 
 	/* Not found in existing list, then append this new mount point. */
 	len_fs_root = strnlen(fs_root, DFS_MAX_PATH);
 	if (len_fs_root >= DFS_MAX_PATH) {
-		D_DEBUG(DB_ANY, "DAOS_MOUNT_POINT is too long. It is ignored.\n");
-		return;
+		D_FATAL("DAOS_MOUNT_POINT is too long.\n");
+		D_GOTO(out, rc = ENAMETOOLONG);
 	}
 
 	pool = getenv("DAOS_POOL");
 	if (pool == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_POOL is not set.\n");
-		return;
+		D_FATAL("DAOS_POOL is not set.\n");
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	container = getenv("DAOS_CONTAINER");
 	if (container == NULL) {
-		D_DEBUG(DB_ANY, "DAOS_CONTAINER is not set.\n");
-		return;
+		D_FATAL("DAOS_CONTAINER is not set.\n");
+		D_GOTO(out, rc = EINVAL);
 	}
 
 	D_STRNDUP(dfs_list[num_dfs].fs_root, fs_root, len_fs_root);
 	if (dfs_list[num_dfs].fs_root == NULL)
-		return;
+		D_GOTO(out, rc = ENOMEM);
 
 	dfs_list[num_dfs].pool         = pool;
 	dfs_list[num_dfs].cont         = container;
@@ -633,12 +630,20 @@ discover_daos_mount(void)
 	dfs_list[num_dfs].len_fs_root  = len_fs_root;
 	atomic_init(&dfs_list[num_dfs].inited, 0);
 	num_dfs++;
+	rc = 0;
+
+out:
+	return rc;
 }
 
 #define MNT_TYPE_FUSE	"fuse.daos"
-static void
-discover_dfuse(void)
+/* Discover fuse mount points from /proc/self/mounts. Return 0 for success. Otherwise
+ * return Linux errno and disable function interception.
+ */
+static int
+discover_dfuse_mounts(void)
 {
+	int            rc = 0;
 	FILE          *fp;
 	struct mntent *fs_entry;
 	struct dfs_mt *pt_dfs_mt;
@@ -648,14 +653,15 @@ discover_dfuse(void)
 	fp = setmntent("/proc/self/mounts", "r");
 
 	if (fp == NULL) {
+		rc = errno;
 		D_ERROR("failed to open /proc/self/mounts: %d (%s)\n", errno, strerror(errno));
-		return;
+		return rc;
 	}
 
 	while ((fs_entry = getmntent(fp)) != NULL) {
 		if (num_dfs >= MAX_DAOS_MT) {
-			D_WARN("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
-			break;
+			D_FATAL("dfs_list[] is full. Need to increase MAX_DAOS_MT.\n");
+			abort();
 		}
 		pt_dfs_mt = &dfs_list[num_dfs];
 		if (strncmp(fs_entry->mnt_type, MNT_TYPE_FUSE, sizeof(MNT_TYPE_FUSE)) == 0) {
@@ -663,7 +669,7 @@ discover_dfuse(void)
 			pt_dfs_mt->len_fs_root  = strnlen(fs_entry->mnt_dir, DFS_MAX_PATH);
 			if (pt_dfs_mt->len_fs_root >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "mnt_dir[] is too long! Skip this entry.\n");
-				continue;
+				D_GOTO(out, rc = ENAMETOOLONG);
 			}
 			if (access(fs_entry->mnt_dir, R_OK)) {
 				D_DEBUG(DB_ANY, "no read permission for %s: %d (%s)\n",
@@ -675,19 +681,23 @@ discover_dfuse(void)
 			pt_dfs_mt->pool         = NULL;
 			D_STRNDUP(pt_dfs_mt->fs_root, fs_entry->mnt_dir, pt_dfs_mt->len_fs_root);
 			if (pt_dfs_mt->fs_root == NULL)
-				continue;
+				D_GOTO(out, rc = ENOMEM);
 			num_dfs++;
 		}
 	}
 
+out:
 	endmntent(fp);
+	return rc;
 }
+
+#define NAME_LEN 128
 
 static int
 retrieve_handles_from_fuse(int idx)
 {
 	struct dfuse_hs_reply hs_reply;
-	int                   fd, cmd, rc, errno_saved;
+	int                   fd, cmd, rc, errno_saved, read_size;
 	d_iov_t               iov = {};
 	char                  *buff = NULL;
 	size_t                buff_size;
@@ -720,14 +730,52 @@ retrieve_handles_from_fuse(int idx)
 	}
 
 	iov.iov_buf = buff;
-	cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
-	rc  = ioctl(fd, cmd, iov.iov_buf);
-	if (rc != 0) {
-		errno_saved = errno;
-		D_DEBUG(DB_ANY, "failed to query pool handle from dfuse with ioctl(): %d (%s)\n",
-			errno_saved, strerror(errno_saved));
-		goto err;
+
+	/* Max size of ioctl is 16k */
+	if (hs_reply.fsr_pool_size < (16 * 1024)) {
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_POH,
+			   hs_reply.fsr_pool_size);
+		rc  = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY,
+				"failed to query pool handle from dfuse with ioctl(): %d (%s)\n",
+				errno_saved, strerror(errno_saved));
+			goto err;
+		}
+	} else {
+		char fname[NAME_LEN];
+		FILE *tmp_file;
+
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
+		errno = 0;
+		rc = ioctl(fd, cmd, fname);
+		if (rc != 0) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY, "ioctl call on %d failed: %d (%s)\n", fd, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
+		errno = 0;
+		tmp_file = fopen(fname, "rb");
+		if (tmp_file == NULL) {
+			errno_saved = errno;
+			D_DEBUG(DB_ANY, "fopen(%s) failed: %d (%s)\n", fname, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
+		read_size = fread(iov.iov_buf, 1, hs_reply.fsr_pool_size, tmp_file);
+		fclose(tmp_file);
+		unlink(fname);
+		if (read_size != hs_reply.fsr_pool_size) {
+			errno_saved = EAGAIN;
+			D_DEBUG(DB_ANY, "fread expected %zu bytes, read %d bytes : %d (%s)\n",
+				hs_reply.fsr_pool_size, read_size, errno_saved,
+				strerror(errno_saved));
+			goto err;
+		}
 	}
+
 	iov.iov_buf_len = hs_reply.fsr_pool_size;
 	iov.iov_len     = iov.iov_buf_len;
 	rc              = daos_pool_global2local(iov, &dfs_list[idx].poh);
@@ -1033,7 +1081,7 @@ again:
 		return EINVAL;
 	}
 
-	while (p_Offset_2Dots > 0) {
+	while (p_Offset_2Dots != NULL) {
 		pMax = p_Offset_2Dots + 4;
 		for (p_Back = p_Offset_2Dots - 2; p_Back >= path; p_Back--) {
 			if (*p_Back == '/') {
@@ -1078,8 +1126,7 @@ remove_dot_and_cleanup(char path[], int len)
 	/* the length of path[] is already checked in the caller of this function. */
 
 	p_Offset_Dots = strstr(path, "/./");
-
-	while (p_Offset_Dots > 0) {
+	while ((p_Offset_Dots != NULL)) {
 		p_Offset_Dots[0] = 0;
 		p_Offset_Dots[1] = 0;
 		p_Offset_Dots    = strstr(p_Offset_Dots + 2, "/./");
@@ -1089,7 +1136,7 @@ remove_dot_and_cleanup(char path[], int len)
 
 	/* replace "//" with "/" */
 	p_Offset_Slash = strstr(path, "//");
-	while (p_Offset_Slash > 0) {
+	while (p_Offset_Slash != NULL) {
 		p_Offset_Slash[0] = 0;
 		p_Offset_Slash    = strstr(p_Offset_Slash + 1, "//");
 		if (p_Offset_Slash == NULL)
@@ -1426,7 +1473,7 @@ free_map(int idx)
 }
 
 static int
-Get_Fd_Redirected(int fd)
+get_fd_redirected(int fd)
 {
 	int i, fd_ret = fd;
 
@@ -1896,18 +1943,17 @@ new_open_pthread(const char *pathname, int oflags, ...)
 static int
 new_close_common(int (*next_close)(int fd), int fd)
 {
-	int fd_Directed;
+	int fd_directed;
 
 	if (!hook_enabled)
 		return next_close(fd);
 
-	fd_Directed = Get_Fd_Redirected(fd);
-
-	if (fd_Directed >= FD_DIR_BASE) {
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed >= FD_DIR_BASE) {
 		/* directory */
-		free_dirfd(fd_Directed - FD_DIR_BASE);
+		free_dirfd(fd_directed - FD_DIR_BASE);
 		return 0;
-	} else if (fd_Directed >= FD_FILE_BASE) {
+	} else if (fd_directed >= FD_FILE_BASE) {
 		/* This fd is a kernel fd. There was a duplicate fd created. */
 		if (fd < FD_FILE_BASE)
 			return close_dup_fd_src(next_close, fd);
@@ -1942,17 +1988,19 @@ static ssize_t
 read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
 {
 	ssize_t rc;
+	int	fd_directed;
 
 	if (!hook_enabled)
 		return next_read(fd, buf, size);
 
-	if (fd >= FD_FILE_BASE) {
-		rc = pread(fd, buf, size, file_list[fd - FD_FILE_BASE]->offset);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed >= FD_FILE_BASE) {
+		rc = pread(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
-			file_list[fd - FD_FILE_BASE]->offset += rc;
+			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
 	} else {
-		return next_read(fd, buf, size);
+		return next_read(fd_directed, buf, size);
 	}
 }
 
@@ -1974,6 +2022,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	daos_size_t bytes_read;
 	char       *ptr = (char *)buf;
 	int         rc;
+	int         fd_directed;
 	d_iov_t     iov;
 	d_sg_list_t sgl;
 
@@ -1984,16 +2033,19 @@ pread(int fd, void *buf, size_t size, off_t offset)
 		next_pread = dlsym(RTLD_NEXT, "pread64");
 		D_ASSERT(next_pread != NULL);
 	}
+	if (!hook_enabled)
+		return next_pread(fd, buf, size, offset);
 
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_pread(fd, buf, size, offset);
 
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	d_iov_set(&iov, (void *)ptr, size);
 	sgl.sg_iovs = &iov;
-	rc          = dfs_read(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-			       file_list[fd - FD_FILE_BASE]->file, &sgl,
+	rc          = dfs_read(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+			       file_list[fd_directed - FD_FILE_BASE]->file, &sgl,
 			       offset, &bytes_read, NULL);
 	if (rc) {
 		D_ERROR("dfs_read(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc, strerror(rc));
@@ -2016,18 +2068,20 @@ ssize_t
 write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
 {
-	ssize_t rc;
+	ssize_t	rc;
+	int	fd_directed;
 
 	if (!hook_enabled)
 		return next_write(fd, buf, size);
 
-	if (fd >= FD_FILE_BASE) {
-		rc = pwrite(fd, buf, size, file_list[fd - FD_FILE_BASE]->offset);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed >= FD_FILE_BASE) {
+		rc = pwrite(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
-			file_list[fd - FD_FILE_BASE]->offset += rc;
+			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
 	} else {
-		return next_write(fd, buf, size);
+		return next_write(fd_directed, buf, size);
 	}
 }
 
@@ -2048,6 +2102,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 {
 	char       *ptr = (char *)buf;
 	int         rc;
+	int         fd_directed;
 	d_iov_t     iov;
 	d_sg_list_t sgl;
 
@@ -2058,15 +2113,19 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 		next_pwrite = dlsym(RTLD_NEXT, "pwrite64");
 		D_ASSERT(next_pwrite != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_pwrite(fd, buf, size, offset);
+
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_pwrite(fd, buf, size, offset);
 
 	sgl.sg_nr     = 1;
 	sgl.sg_nr_out = 0;
 	d_iov_set(&iov, (void *)ptr, size);
 	sgl.sg_iovs = &iov;
-	rc          = dfs_write(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-				file_list[fd - FD_FILE_BASE]->file, &sgl, offset, NULL);
+	rc          = dfs_write(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+				file_list[fd_directed - FD_FILE_BASE]->file, &sgl, offset, NULL);
 	if (rc) {
 		D_ERROR("dfs_write(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc,
 			strerror(rc));
@@ -2087,19 +2146,23 @@ __pwrite64(int fd, const void *buf, size_t size, off_t offset) __attribute__((al
 static int
 new_fxstat(int vers, int fd, struct stat *buf)
 {
-	int rc;
+	int rc, fd_directed;
 
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
 		return next_fxstat(vers, fd, buf);
 
-	if (fd < FD_DIR_BASE) {
-		rc          = dfs_ostat(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-					file_list[fd - FD_FILE_BASE]->file, buf);
-		buf->st_ino = file_list[fd - FD_FILE_BASE]->st_ino;
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
+		return next_fxstat(vers, fd, buf);
+
+	if (fd_directed < FD_DIR_BASE) {
+		rc          = dfs_ostat(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+					file_list[fd_directed - FD_FILE_BASE]->file, buf);
+		buf->st_ino = file_list[fd_directed - FD_FILE_BASE]->st_ino;
 	} else {
-		rc          = dfs_ostat(dir_list[fd - FD_DIR_BASE]->dfs_mt->dfs,
-					dir_list[fd - FD_DIR_BASE]->dir, buf);
-		buf->st_ino = dir_list[fd - FD_DIR_BASE]->st_ino;
+		rc          = dfs_ostat(dir_list[fd_directed - FD_DIR_BASE]->dfs_mt->dfs,
+					dir_list[fd_directed - FD_DIR_BASE]->dir, buf);
+		buf->st_ino = dir_list[fd_directed - FD_DIR_BASE]->st_ino;
 	}
 
 	if (rc) {
@@ -2327,10 +2390,14 @@ static off_t
 lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t offset, int whence)
 {
 	int         rc;
+	int         fd_directed;
 	off_t       new_offset;
 	struct stat fstat;
 
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_lseek(fd, offset, whence);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_lseek(fd, offset, whence);
 
 	atomic_fetch_add_relaxed(&num_seek, 1);
@@ -2340,11 +2407,11 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 		new_offset = offset;
 		break;
 	case SEEK_CUR:
-		new_offset = file_list[fd - FD_FILE_BASE]->offset + offset;
+		new_offset = file_list[fd_directed - FD_FILE_BASE]->offset + offset;
 		break;
 	case SEEK_END:
 		fstat.st_size = 0;
-		rc            = new_fxstat(1, fd, &fstat);
+		rc            = new_fxstat(1, fd_directed, &fstat);
 		if (rc != 0)
 			return (-1);
 		new_offset = fstat.st_size + offset;
@@ -2359,7 +2426,7 @@ lseek_comm(off_t (*next_lseek)(int fd, off_t offset, int whence), int fd, off_t 
 		return (-1);
 	}
 
-	file_list[fd - FD_FILE_BASE]->offset = new_offset;
+	file_list[fd_directed - FD_FILE_BASE]->offset = new_offset;
 	return new_offset;
 }
 
@@ -2431,6 +2498,7 @@ int
 fstatfs(int fd, struct statfs *sfs)
 {
 	int              rc;
+	int              fd_directed;
 	struct dfs_mt   *dfs_mt;
 	daos_pool_info_t info = {.pi_bits = DPI_SPACE};
 
@@ -2442,13 +2510,14 @@ fstatfs(int fd, struct statfs *sfs)
 	if (!hook_enabled)
 		return next_fstatfs(fd, sfs);
 
-	if (fd < FD_FILE_BASE)
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_fstatfs(fd, sfs);
 
-	if (fd < FD_DIR_BASE)
-		dfs_mt = file_list[fd - FD_FILE_BASE]->dfs_mt;
+	if (fd_directed < FD_DIR_BASE)
+		dfs_mt = file_list[fd_directed - FD_FILE_BASE]->dfs_mt;
 	else
-		dfs_mt = dir_list[fd - FD_DIR_BASE]->dfs_mt;
+		dfs_mt = dir_list[fd_directed - FD_DIR_BASE]->dfs_mt;
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc != 0) {
 		errno = rc;
@@ -3214,9 +3283,11 @@ write_all(int fd, const void *buf, size_t count)
 	ssize_t rc, byte_written = 0;
 	char   *p_buf = (char *)buf;
 	int     errno_save;
+	int     fd_directed;
 
-	if (fd >= FD_FILE_BASE)
-		return write(fd, buf, count);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed >= FD_FILE_BASE)
+		return write(fd_directed, buf, count);
 
 	while (count != 0 && (rc = write(fd, p_buf, count)) != 0) {
 		if (rc == -1) {
@@ -3640,18 +3711,22 @@ getcwd(char *buf, size_t size)
 int
 isatty(int fd)
 {
+	int fd_directed;
+
 	if (next_isatty == NULL) {
 		next_isatty = dlsym(RTLD_NEXT, "isatty");
 		D_ASSERT(next_isatty != NULL);
 	}
 	if (!hook_enabled)
 		return next_isatty(fd);
-
-	if (fd >= FD_FILE_BASE)
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed >= FD_FILE_BASE) {
 		/* non-terminal */
+		errno = ENOTTY;
 		return 0;
-	else
+	} else {
 		return next_isatty(fd);
+	}
 }
 
 int
@@ -3748,6 +3823,7 @@ chdir(const char *path)
 	char             item_name[DFS_MAX_NAME];
 	char             *parent_dir = NULL;
 	char             *full_path  = NULL;
+	bool             is_root;
 
 	if (next_chdir == NULL) {
 		next_chdir = dlsym(RTLD_NEXT, "chdir");
@@ -3770,10 +3846,13 @@ chdir(const char *path)
 		return rc;
 	}
 
-	if (!parent && (strncmp(item_name, "/", 2) == 0))
+	if (!parent && (strncmp(item_name, "/", 2) == 0)) {
+		is_root = true;
 		rc = dfs_stat(dfs_mt->dfs, NULL, NULL, &stat_buf);
-	else
+	} else {
+		is_root = false;
 		rc = dfs_stat(dfs_mt->dfs, parent, item_name, &stat_buf);
+	}
 	if (rc)
 		D_GOTO(out_err, rc);
 	if (!S_ISDIR(stat_buf.st_mode)) {
@@ -3781,7 +3860,10 @@ chdir(const char *path)
 			strerror(ENOTDIR));
 		D_GOTO(out_err, rc = ENOTDIR);
 	}
-	rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
+	if (is_root)
+		rc = dfs_access(dfs_mt->dfs, NULL, NULL, X_OK);
+	else
+		rc = dfs_access(dfs_mt->dfs, parent, item_name, X_OK);
 	if (rc)
 		D_GOTO(out_err, rc);
 	len_str = snprintf(cur_dir, DFS_MAX_PATH, "%s%s", dfs_mt->fs_root, full_path);
@@ -3934,40 +4016,48 @@ out_err:
 int
 fsync(int fd)
 {
+	int fd_directed;
+
 	if (next_fsync == NULL) {
 		next_fsync = dlsym(RTLD_NEXT, "fsync");
 		D_ASSERT(next_fsync != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_fsync(fd);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_fsync(fd);
 
-	if (fd >= FD_DIR_BASE) {
+	if (fd_directed >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	return dfs_sync(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs);
+	return dfs_sync(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs);
 }
 
 int
 ftruncate(int fd, off_t length)
 {
-	int rc;
+	int rc, fd_directed;
 
 	if (next_ftruncate == NULL) {
 		next_ftruncate = dlsym(RTLD_NEXT, "ftruncate");
 		D_ASSERT(next_ftruncate != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_ftruncate(fd, length);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_ftruncate(fd, length);
 
-	if (fd >= FD_DIR_BASE) {
+	if (fd_directed >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
 
-	rc = dfs_punch(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-		       file_list[fd - FD_FILE_BASE]->file, length, DFS_MAX_FSIZE);
+	rc = dfs_punch(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       file_list[fd_directed - FD_FILE_BASE]->file, length, DFS_MAX_FSIZE);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -4097,25 +4187,28 @@ chmod(const char *path, mode_t mode)
 int
 fchmod(int fd, mode_t mode)
 {
-	int rc;
+	int rc, fd_directed;
 
 	if (next_fchmod == NULL) {
 		next_fchmod = dlsym(RTLD_NEXT, "fchmod");
 		D_ASSERT(next_fchmod != NULL);
 	}
 
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_fchmod(fd, mode);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_fchmod(fd, mode);
 
-	if (fd >= FD_DIR_BASE) {
+	if (fd_directed >= FD_DIR_BASE) {
 		errno = EINVAL;
 		return (-1);
 	}
 
 	rc =
-	    dfs_chmod(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-		      file_list[fd - FD_FILE_BASE]->parent,
-		      file_list[fd - FD_FILE_BASE]->item_name, mode);
+	    dfs_chmod(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		      file_list[fd_directed - FD_FILE_BASE]->parent,
+		      file_list[fd_directed - FD_FILE_BASE]->item_name, mode);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -4211,7 +4304,7 @@ utime(const char *path, const struct utimbuf *times)
 		stbuf.st_mtim.tv_nsec = 0;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
@@ -4283,7 +4376,7 @@ utimes(const char *path, const struct timeval times[2])
 		stbuf.st_mtim.tv_nsec = times[1].tv_usec * 1000;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		D_ERROR("dfs_osetattr() failed: %d (%s)\n", rc, strerror(rc));
 		dfs_release(obj);
@@ -4358,7 +4451,7 @@ utimens_timespec(const char *path, const struct timespec times[2], int flags)
 		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
 	}
 
-	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
@@ -4428,6 +4521,7 @@ int
 futimens(int fd, const struct timespec times[2])
 {
 	int             rc;
+	int             fd_directed;
 	struct timespec times_loc;
 	struct stat     stbuf;
 
@@ -4435,7 +4529,10 @@ futimens(int fd, const struct timespec times[2])
 		next_futimens = dlsym(RTLD_NEXT, "futimens");
 		D_ASSERT(next_futimens != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_futimens(fd, times);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_futimens(fd, times);
 
 	if (times == NULL) {
@@ -4451,9 +4548,9 @@ futimens(int fd, const struct timespec times[2])
 		stbuf.st_mtim.tv_nsec = times[1].tv_nsec;
 	}
 
-	rc = dfs_osetattr(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-			  file_list[fd - FD_FILE_BASE]->file, &stbuf,
-			  DFS_SET_ATTR_ATIME | DFS_SET_ATTR_MTIME);
+	rc = dfs_osetattr(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+			  file_list[fd_directed - FD_FILE_BASE]->file, &stbuf,
+			  DFS_SET_ATTR_MTIME);
 	if (rc) {
 		errno = rc;
 		return (-1);
@@ -4476,7 +4573,7 @@ futimens(int fd, const struct timespec times[2])
 static int
 new_fcntl(int fd, int cmd, ...)
 {
-	int     fd_Directed, param, OrgFunc = 1;
+	int     fd_directed, param, OrgFunc = 1;
 	int     Next_Dirfd, Next_fd, rc;
 	va_list arg;
 
@@ -4497,40 +4594,40 @@ new_fcntl(int fd, int cmd, ...)
 		param = va_arg(arg, int);
 		va_end(arg);
 
-		fd_Directed = Get_Fd_Redirected(fd);
+		fd_directed = get_fd_redirected(fd);
 
 		if (!hook_enabled)
 			return libc_fcntl(fd, cmd, param);
 
 		if (cmd == F_GETFL) {
-			if (fd_Directed >= FD_DIR_BASE)
-				return dir_list[fd_Directed - FD_DIR_BASE]->open_flag;
-			else if (fd_Directed >= FD_FILE_BASE)
-				return file_list[fd_Directed - FD_FILE_BASE]->open_flag;
+			if (fd_directed >= FD_DIR_BASE)
+				return dir_list[fd_directed - FD_DIR_BASE]->open_flag;
+			else if (fd_directed >= FD_FILE_BASE)
+				return file_list[fd_directed - FD_FILE_BASE]->open_flag;
 			else
 				return libc_fcntl(fd, cmd);
 		}
 
-		if (fd_Directed >= FD_FILE_BASE) {
+		if (fd_directed >= FD_FILE_BASE) {
 			if (cmd == F_SETFD)
 				return 0;
 		}
 
-		if (fd_Directed >= FD_FILE_BASE)
+		if (fd_directed >= FD_FILE_BASE)
 			OrgFunc = 0;
 
 		if ((cmd == F_DUPFD) || (cmd == F_DUPFD_CLOEXEC)) {
-			if (fd_Directed >= FD_DIR_BASE) {
+			if (fd_directed >= FD_DIR_BASE) {
 				rc = find_next_available_dirfd(
-						dir_list[fd_Directed - FD_DIR_BASE], &Next_Dirfd);
+						dir_list[fd_directed - FD_DIR_BASE], &Next_Dirfd);
 				if (rc) {
 					errno = rc;
 					return (-1);
 				}
 				return (Next_Dirfd + FD_DIR_BASE);
-			} else if (fd_Directed >= FD_FILE_BASE) {
+			} else if (fd_directed >= FD_FILE_BASE) {
 				rc = find_next_available_fd(
-						file_list[fd_Directed - FD_FILE_BASE], &Next_fd);
+						file_list[fd_directed - FD_FILE_BASE], &Next_fd);
 				if (rc) {
 					errno = rc;
 					return (-1);
@@ -4572,6 +4669,7 @@ ioctl(int fd, unsigned long request, ...)
 	va_list                         arg;
 	void                           *param;
 	struct dfuse_user_reply        *reply;
+	int                             fd_directed;
 
 	va_start(arg, request);
 	param = va_arg(arg, void *);
@@ -4581,7 +4679,10 @@ ioctl(int fd, unsigned long request, ...)
 		next_ioctl = dlsym(RTLD_NEXT, "ioctl");
 		D_ASSERT(next_ioctl != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_ioctl(fd, request, param);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_ioctl(fd, request, param);
 
 	/* To pass existing test of ioctl() with DFUSE_IOCTL_DFUSE_USER */
@@ -4612,8 +4713,7 @@ dup(int oldfd)
 	}
 	if (!hook_enabled)
 		return next_dup(oldfd);
-
-	fd_directed = Get_Fd_Redirected(oldfd);
+	fd_directed = get_fd_redirected(oldfd);
 	if (fd_directed >= FD_FILE_BASE)
 		return new_fcntl(oldfd, F_DUPFD, 0);
 
@@ -4623,7 +4723,7 @@ dup(int oldfd)
 int
 dup2(int oldfd, int newfd)
 {
-	int fd, fd_Directed, idx, rc, errno_save;
+	int fd, fd_directed, idx, rc, errno_save;
 
 	/* Need more work later. */
 	if (next_dup2 == NULL) {
@@ -4648,19 +4748,19 @@ dup2(int oldfd, int newfd)
 		errno = ENOTSUP;
 		return -1;
 	}
-	fd_Directed = query_fd_forward_dest(newfd);
-	if (fd_Directed >= FD_FILE_BASE) {
-		D_ERROR("unimplemented yet for fd_Directed >= FD_FILE_BASE: %d (%s)\n", ENOTSUP,
+	fd_directed = query_fd_forward_dest(newfd);
+	if (fd_directed >= FD_FILE_BASE) {
+		D_ERROR("unimplemented yet for fd_directed >= FD_FILE_BASE: %d (%s)\n", ENOTSUP,
 			strerror(ENOTSUP));
 		errno = ENOTSUP;
 		return -1;
 	}
 
 	if (oldfd >= FD_FILE_BASE)
-		fd_Directed = oldfd;
+		fd_directed = oldfd;
 	else
-		fd_Directed = query_fd_forward_dest(oldfd);
-	if (fd_Directed >= FD_FILE_BASE) {
+		fd_directed = query_fd_forward_dest(oldfd);
+	if (fd_directed >= FD_FILE_BASE) {
 		rc = close(newfd);
 		if (rc != 0 && errno != EBADF)
 			return -1;
@@ -4679,7 +4779,7 @@ dup2(int oldfd, int newfd)
 			errno = EBUSY;
 			return (-1);
 		}
-		idx = allocate_dup2ed_fd(fd, fd_Directed);
+		idx = allocate_dup2ed_fd(fd, fd_directed);
 		if (idx >= 0)
 			return fd;
 		else
@@ -4752,11 +4852,14 @@ __dup2(int oldfd, int newfd) __attribute__((alias("dup2"), leaf, nothrow));
 void *
 new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 {
-	int             rc, idx_map;
+	int             rc, idx_map, fd_directed;
 	struct stat     stat_buf;
 	void            *addr_ret;
 
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_mmap(addr, length, prot, flags, fd, offset);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_mmap(addr, length, prot, flags, fd, offset);
 
 	atomic_fetch_add_relaxed(&num_mmap, 1);
@@ -4765,8 +4868,8 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 	if (addr_ret == MAP_FAILED)
 		return MAP_FAILED;
 
-	rc = dfs_ostat(file_list[fd - FD_FILE_BASE]->dfs_mt->dfs,
-		       file_list[fd - FD_FILE_BASE]->file, &stat_buf);
+	rc = dfs_ostat(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
+		       file_list[fd_directed - FD_FILE_BASE]->file, &stat_buf);
 	if (rc) {
 		errno = rc;
 		return MAP_FAILED;
@@ -4779,13 +4882,13 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		return MAP_FAILED;
 	}
 
-	file_list[fd - FD_FILE_BASE]->idx_mmap = idx_map;
+	file_list[fd_directed - FD_FILE_BASE]->idx_mmap = idx_map;
 	mmap_list[idx_map].addr = (char *)addr_ret;
 	mmap_list[idx_map].length = length;
 	mmap_list[idx_map].file_size = stat_buf.st_size;
 	mmap_list[idx_map].prot = prot;
 	mmap_list[idx_map].flags = flags;
-	mmap_list[idx_map].fd = fd;
+	mmap_list[idx_map].fd = fd_directed;
 	mmap_list[idx_map].num_pages = length & (page_size - 1) ?
 				       (length / page_size + 1) :
 				       (length / page_size);
@@ -4881,11 +4984,16 @@ new_munmap(void *addr, size_t length)
 int
 posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
+	int fd_directed;
+
 	if (next_posix_fadvise == NULL) {
 		next_posix_fadvise = dlsym(RTLD_NEXT, "posix_fadvise");
 		D_ASSERT(next_posix_fadvise != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_posix_fadvise(fd, offset, len, advice);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fadvise(fd, offset, len, advice);
 
 	/* Hint to turn off caching. */
@@ -4906,11 +5014,16 @@ posix_fadvise64(int fd, off_t offset, off_t len, int advice)
 int
 flock(int fd, int operation)
 {
+	int fd_directed;
+
 	if (next_flock == NULL) {
 		next_flock = dlsym(RTLD_NEXT, "flock");
 		D_ASSERT(next_flock != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_flock(fd, operation);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_flock(fd, operation);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -4923,11 +5036,16 @@ flock(int fd, int operation)
 int
 fallocate(int fd, int mode, off_t offset, off_t len)
 {
+	int fd_directed;
+
 	if (next_fallocate == NULL) {
 		next_fallocate = dlsym(RTLD_NEXT, "fallocate");
 		D_ASSERT(next_fallocate != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_fallocate(fd, mode, offset, len);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_fallocate(fd, mode, offset, len);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -4941,11 +5059,16 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 int
 posix_fallocate(int fd, off_t offset, off_t len)
 {
+	int fd_directed;
+
 	if (next_posix_fallocate == NULL) {
 		next_posix_fallocate = dlsym(RTLD_NEXT, "posix_fallocate");
 		D_ASSERT(next_posix_fallocate != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_posix_fallocate(fd, offset, len);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate(fd, offset, len);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -4959,11 +5082,16 @@ posix_fallocate(int fd, off_t offset, off_t len)
 int
 posix_fallocate64(int fd, off64_t offset, off64_t len)
 {
+	int fd_directed;
+
 	if (next_posix_fallocate64 == NULL) {
 		next_posix_fallocate64 = dlsym(RTLD_NEXT, "posix_fallocate64");
 		D_ASSERT(next_posix_fallocate64 != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_posix_fallocate64(fd, offset, len);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_posix_fallocate64(fd, offset, len);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -4977,11 +5105,16 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 int
 tcgetattr(int fd, void *termios_p)
 {
+	int fd_directed;
+
 	if (next_tcgetattr == NULL) {
 		next_tcgetattr = dlsym(RTLD_NEXT, "tcgetattr");
 		D_ASSERT(next_tcgetattr != NULL);
 	}
-	if (!hook_enabled || fd < FD_FILE_BASE)
+	if (!hook_enabled)
+		return next_tcgetattr(fd, termios_p);
+	fd_directed = get_fd_redirected(fd);
+	if (fd_directed < FD_FILE_BASE)
 		return next_tcgetattr(fd, termios_p);
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
@@ -5180,6 +5313,25 @@ init_myhook(void)
 			report = false;
 	}
 
+	/* Find dfuse mounts from /proc/mounts */
+	rc = discover_dfuse_mounts();
+	if (rc) {
+		/* Do not enable interception if discover_dfuse_mounts() failed. */
+		D_DEBUG(DB_ANY, "discover_dfuse_mounts() failed: %d (%s)\n", rc, strerror(rc));
+		return;
+	}
+
+	rc = discover_daos_mount_with_env();
+	if (rc) {
+		D_FATAL("discover_daos_mount_with_env() failed: %d (%s)", rc, strerror(rc));
+		abort();
+	}
+	if (num_dfs == 0) {
+		/* Do not enable interception if no DFS mounts found. */
+		D_DEBUG(DB_ANY, "No DFS mount points found.\n");
+		return;
+	}
+
 	update_cwd();
 	rc = D_MUTEX_INIT(&lock_dfs, NULL);
 	if (rc)
@@ -5234,10 +5386,8 @@ init_myhook(void)
 	 */
 
 	init_fd_dup2_list();
-	discover_daos_mount();
 
 	install_hook();
-
 	hook_enabled = 1;
 }
 
@@ -5310,19 +5460,21 @@ close_all_dirfd(void)
 static __attribute__((destructor)) void
 finalize_myhook(void)
 {
-	close_all_duped_fd();
-	close_all_fd();
-	close_all_dirfd();
+	if (num_dfs > 0) {
+		close_all_duped_fd();
+		close_all_fd();
+		close_all_dirfd();
 
-	finalize_dfs();
+		finalize_dfs();
 
-	D_MUTEX_DESTROY(&lock_dfs);
-	D_MUTEX_DESTROY(&lock_dirfd);
-	D_MUTEX_DESTROY(&lock_fd);
-	D_MUTEX_DESTROY(&lock_mmap);
-	D_MUTEX_DESTROY(&lock_fd_dup2ed);
+		D_MUTEX_DESTROY(&lock_dfs);
+		D_MUTEX_DESTROY(&lock_dirfd);
+		D_MUTEX_DESTROY(&lock_fd);
+		D_MUTEX_DESTROY(&lock_mmap);
+		D_MUTEX_DESTROY(&lock_fd_dup2ed);
 
-	uninstall_hook();
+		uninstall_hook();
+	}
 
 	if (daos_debug_inited)
 		daos_debug_fini();

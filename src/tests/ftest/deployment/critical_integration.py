@@ -4,10 +4,11 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from datetime import datetime
+import json
+
 from ClusterShell.NodeSet import NodeSet
 
-from general_utils import run_command, DaosTestError, get_journalctl
+from general_utils import run_command, DaosTestError, get_journalctl, journalctl_time
 from ior_test_base import IorTestBase
 from exception_utils import CommandFailure
 
@@ -60,18 +61,18 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         failed_nodes = NodeSet()
         for host in self.hostlist_servers:
             daos_server_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
-                               " 'daos_server version'".format(host))
+                               " 'daos_server version -j'".format(host))
             remote_root_access = ("ssh -oNumberOfPasswordPrompts=0 root@{}"
                                   " 'echo hello'".format(host))
             command_for_inter_node = ("clush --nostdin -S -b -w {}"
                                       " 'echo hello'".format(str(self.hostlist_servers)))
             try:
-                out = run_command(daos_server_cmd)
-                daos_server_version_list.append(out.stdout.split(b' ')[3])
+                out = json.loads((run_command(daos_server_cmd)).stdout)
+                daos_server_version_list.append(out['response']['version'])
                 if check_remote_root_access:
                     run_command(remote_root_access)
                 IorTestBase._execute_command(self, command_for_inter_node, hosts=[host])
-            except (DaosTestError, CommandFailure) as error:
+            except (DaosTestError, CommandFailure, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
         if failed_nodes:
@@ -79,12 +80,12 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
 
         for host in self.hostlist_clients:
             dmg_version_cmd = ("ssh -oNumberOfPasswordPrompts=0 {}"
-                               " 'dmg version -i'".format(host))
+                               " dmg version -i -j".format(host))
 
             try:
-                out = run_command(dmg_version_cmd)
-                dmg_version_list.append(out.stdout.split(b' ')[2])
-            except DaosTestError as error:
+                out = json.loads((run_command(dmg_version_cmd)).stdout)
+                dmg_version_list.append(out['response']['version'])
+            except (DaosTestError, KeyError) as error:
                 self.log.error("Error: %s", error)
                 failed_nodes.add(host)
         if failed_nodes:
@@ -93,7 +94,7 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         result_daos_server = (daos_server_version_list.count(daos_server_version_list[0])
                               == len(daos_server_version_list))
         result_dmg = dmg_version_list.count(dmg_version_list[0]) == len(dmg_version_list)
-        result_client_server = daos_server_version_list[0][1:] == dmg_version_list[0]
+        result_client_server = daos_server_version_list[0] == dmg_version_list[0]
 
         # libfabric version check
         all_nodes = self.hostlist_servers | self.hostlist_clients
@@ -105,7 +106,6 @@ class CriticalIntegrationWithoutServers(TestWithoutServers):
         else:
             same_libfab_nodes = libfabric_output.stdout_text.split('\n')[1].split('(')[1][:-1]
         libfabric_version = libfabric_output.stdout_text.split('\n')[3].split(' ')[1]
-
         result_libfabric_version = int(same_libfab_nodes) == len(all_nodes)
 
         if (result_daos_server and result_dmg and result_client_server
@@ -152,7 +152,7 @@ class CriticalIntegrationWithServers(TestWithServers):
         self.log.info("sub_rank_list: %s", sub_rank_list)
 
         # stop ranks, verify they stopped successfully and restart the stopped ranks
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         for sub_list in sub_rank_list:
             ranks_to_stop = ",".join([str(rank) for rank in sub_list])
             self.log.info("Ranks to stop: %s", ranks_to_stop)
@@ -171,7 +171,7 @@ class CriticalIntegrationWithServers(TestWithServers):
             if check_started_ranks:
                 self.fail("Following Ranks {} failed to restart".format(check_started_ranks))
 
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # gather journalctl logs for each server host, verify system stop event was sent to logs
         results = get_journalctl(hosts=self.hostlist_servers, since=since,

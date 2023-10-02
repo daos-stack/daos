@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"net"
 	"strings"
 	"sync"
 	"time"
@@ -35,19 +36,15 @@ type fabricScanFn func(ctx context.Context, providers ...string) (*NUMAFabric, e
 // NewInfoCache creates a new InfoCache with appropriate parameters set.
 func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryInvoker, cfg *Config) *InfoCache {
 	ic := &InfoCache{
-		log:           log,
-		ignoreIfaces:  cfg.ExcludeFabricIfaces,
-		client:        client,
-		cache:         cache.NewItemCache(log),
-		getAttachInfo: control.GetAttachInfo,
-		fabricScan: func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
-			scanner := hwprov.DefaultFabricScanner(log)
-			fis, err := scanner.Scan(ctx, provs...)
-			if err != nil {
-				return nil, err
-			}
-			return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
-		},
+		log:            log,
+		ignoreIfaces:   cfg.ExcludeFabricIfaces,
+		client:         client,
+		cache:          cache.NewItemCache(log),
+		getAttachInfo:  control.GetAttachInfo,
+		fabricScan:     getFabricScanFn(log, cfg, hwprov.DefaultFabricScanner(log)),
+		netIfaces:      net.Interfaces,
+		devClassGetter: hwprov.DefaultNetDevClassProvider(log),
+		devStateGetter: hwprov.DefaultNetDevStateProvider(log),
 	}
 
 	if cfg.DisableCache {
@@ -65,6 +62,16 @@ func NewInfoCache(ctx context.Context, log logging.Logger, client control.UnaryI
 	}
 
 	return ic
+}
+
+func getFabricScanFn(log logging.Logger, cfg *Config, scanner *hardware.FabricScanner) fabricScanFn {
+	return func(ctx context.Context, provs ...string) (*NUMAFabric, error) {
+		fis, err := scanner.Scan(ctx, provs...)
+		if err != nil {
+			return nil, err
+		}
+		return NUMAFabricFromScan(ctx, log, fis).WithIgnoredDevices(cfg.ExcludeFabricIfaces), nil
+	}
 }
 
 type cacheItem struct {
@@ -132,9 +139,6 @@ func (ci *cachedAttachInfo) Refresh(ctx context.Context) error {
 		return errors.New("cachedAttachInfo is nil")
 	}
 
-	ci.Lock()
-	defer ci.Unlock()
-
 	req := &control.GetAttachInfoReq{System: ci.system, AllRanks: true}
 	resp, err := ci.fetch(ctx, ci.rpcClient, req)
 	if err != nil {
@@ -178,9 +182,6 @@ func (cfi *cachedFabricInfo) Refresh(ctx context.Context) error {
 		return errors.New("cachedFabricInfo is nil")
 	}
 
-	cfi.Lock()
-	defer cfi.Unlock()
-
 	results, err := cfi.fetch(ctx)
 	if err != nil {
 		return errors.Wrap(err, "refreshing cached fabric info")
@@ -197,8 +198,12 @@ type InfoCache struct {
 	cache                   *cache.ItemCache
 	fabricCacheDisabled     atm.Bool
 	attachInfoCacheDisabled atm.Bool
-	getAttachInfo           getAttachInfoFn
-	fabricScan              fabricScanFn
+
+	getAttachInfo  getAttachInfoFn
+	fabricScan     fabricScanFn
+	netIfaces      func() ([]net.Interface, error)
+	devClassGetter hardware.NetDevClassProvider
+	devStateGetter hardware.NetDevStateProvider
 
 	client            control.UnaryInvoker
 	attachInfoRefresh time.Duration
@@ -317,7 +322,28 @@ func (c *InfoCache) GetAttachInfo(ctx context.Context, sys string) (*control.Get
 		return nil, errors.Errorf("unexpected attach info data type %T", item)
 	}
 
-	return cai.lastResponse, nil
+	return copyGetAttachInfoResp(cai.lastResponse), nil
+}
+
+func copyGetAttachInfoResp(orig *control.GetAttachInfoResp) *control.GetAttachInfoResp {
+	if orig == nil {
+		return nil
+	}
+
+	cp := new(control.GetAttachInfoResp)
+	*cp = *orig
+
+	// Copy slices instead of using original pointers
+	cp.MSRanks = make([]uint32, len(orig.MSRanks))
+	_ = copy(cp.MSRanks, orig.MSRanks)
+	cp.ServiceRanks = make([]*control.PrimaryServiceRank, len(orig.ServiceRanks))
+	_ = copy(cp.ServiceRanks, orig.ServiceRanks)
+
+	if orig.ClientNetHint.EnvVars != nil {
+		cp.ClientNetHint.EnvVars = make([]string, len(orig.ClientNetHint.EnvVars))
+		_ = copy(cp.ClientNetHint.EnvVars, orig.ClientNetHint.EnvVars)
+	}
+	return cp
 }
 
 func (c *InfoCache) getAttachInfoRemote(ctx context.Context, sys string) (*control.GetAttachInfoResp, error) {
@@ -344,7 +370,7 @@ func (c *InfoCache) GetFabricDevice(ctx context.Context, numaNode int, netDevCla
 	if c == nil {
 		return nil, errors.New("InfoCache is nil")
 	}
-	nf, err := c.getNUMAFabric(ctx, provider)
+	nf, err := c.getNUMAFabric(ctx, netDevClass, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -352,14 +378,20 @@ func (c *InfoCache) GetFabricDevice(ctx context.Context, numaNode int, netDevCla
 	return nf.GetDevice(numaNode, netDevClass, provider)
 }
 
-func (c *InfoCache) getNUMAFabric(ctx context.Context, providers ...string) (*NUMAFabric, error) {
+func (c *InfoCache) getNUMAFabric(ctx context.Context, netDevClass hardware.NetDevClass, providers ...string) (*NUMAFabric, error) {
 	if !c.IsFabricCacheEnabled() {
 		c.log.Debug("NUMAFabric not cached, rescanning")
+		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
+			return nil, err
+		}
 		return c.fabricScan(ctx, providers...)
 	}
 
 	createItem := func() (cache.Item, error) {
 		c.log.Debug("NUMAFabric cache miss")
+		if err := c.waitFabricReady(ctx, netDevClass); err != nil {
+			return nil, err
+		}
 		return newCachedFabricInfo(c.log, c.fabricScan), nil
 	}
 
@@ -375,6 +407,31 @@ func (c *InfoCache) getNUMAFabric(ctx context.Context, providers ...string) (*NU
 	}
 
 	return cfi.lastResults, nil
+}
+
+func (c *InfoCache) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
+	ifaces, err := c.netIfaces()
+	if err != nil {
+		return errors.Wrap(err, "getting net interfaces")
+	}
+
+	var needIfaces []string
+	for _, iface := range ifaces {
+		devClass, err := c.devClassGetter.GetNetDevClass(iface.Name)
+		if err != nil {
+			return errors.Wrapf(err, "getting device class for %s", iface.Name)
+		}
+		if devClass == netDevClass {
+			needIfaces = append(needIfaces, iface.Name)
+		}
+	}
+
+	return hardware.WaitFabricReady(ctx, c.log, hardware.WaitFabricReadyParams{
+		StateProvider:  c.devStateGetter,
+		FabricIfaces:   needIfaces,
+		IgnoreUnusable: true,
+		IterationSleep: time.Second,
+	})
 }
 
 // Refresh forces any enabled, refreshable caches to re-fetch their content immediately.

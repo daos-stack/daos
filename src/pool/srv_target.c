@@ -842,6 +842,7 @@ ds_pool_chk_post(uuid_t uuid)
 	struct pool_child_lookup_arg	 collective_arg = { 0 };
 	int				 rc = 0;
 
+	D_ASSERT(engine_in_check());
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	D_DEBUG(DB_MGMT, "Post handle pool starting for "DF_UUIDF" after DAOS check: "DF_RC"\n",
@@ -857,12 +858,28 @@ ds_pool_chk_post(uuid_t uuid)
 	if (pool->sp_stopping)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
+	pool->sp_fetch_hdls = 1;
+	pool_fetch_hdls_ult(pool);
+
+	rc = ds_pool_start_ec_eph_query_ult(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out;
+	}
+
 	collective_arg.pla_uuid = uuid;
 	rc = dss_thread_collective(ds_pool_chk_post_one, &collective_arg, 0);
 
 out:
-	if (pool != NULL)
+	if (pool != NULL) {
+		if (rc != 0) {
+			ds_pool_tgt_ec_eph_query_abort(pool);
+			pool_fetch_hdls_ult_abort(pool);
+		}
+
 		daos_lru_ref_release(pool_cache, &pool->sp_entry);
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Post handle pool started for "DF_UUIDF" after DAOS check: "DF_RC"\n",
@@ -920,20 +937,22 @@ ds_pool_start(uuid_t uuid)
 
 	pool = pool_obj(llink);
 
-	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
-			    0, 0, NULL);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_pool, rc);
-	}
+	if (!engine_in_check()) {
+		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0, 0, NULL);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create fetch ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_pool, rc);
+		}
 
-	pool->sp_fetch_hdls = 1;
-	rc = ds_pool_start_ec_eph_query_ult(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_ult, rc);
+		pool->sp_fetch_hdls = 1;
+
+		rc = ds_pool_start_ec_eph_query_ult(pool);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_ult, rc);
+		}
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
@@ -1697,16 +1716,23 @@ update_vos_prop_on_targets(void *in)
 		goto out;
 
 	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 2)
+	if (pool->sp_global_version >= 3) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.6 df=%d\n", VOS_POOL_DF_2_6);
+		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
+	} else if (pool->sp_global_version == 2) {
+		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.4 df=%d\n", VOS_POOL_DF_2_4);
 		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	else if (pool->sp_global_version == 1)
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_2);
+	} else {
+		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
+		D_GOTO(out, ret = -DER_NO_PERM);
+	}
 
 	if (pool->sp_checkpoint_props_changed) {
 		pool->sp_checkpoint_props_changed = 0;
 		if (child->spc_chkpt_req != NULL)
 			sched_req_wakeup(child->spc_chkpt_req);
 	}
+	child->spc_reint_mode = pool->sp_reint_mode;
 out:
 	ds_pool_child_put(child);
 
@@ -1725,9 +1751,11 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_redun_fac = iv_prop->pip_redun_fac;
 	pool->sp_ec_pda = iv_prop->pip_ec_pda;
 	pool->sp_rp_pda = iv_prop->pip_rp_pda;
+	pool->sp_perf_domain = iv_prop->pip_perf_domain;
 	pool->sp_space_rb = iv_prop->pip_space_rb;
 
-	if (iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
+	if (iv_prop->pip_reint_mode == DAOS_REINT_MODE_DATA_SYNC &&
+	    iv_prop->pip_self_heal & DAOS_SELF_HEAL_AUTO_REBUILD)
 		pool->sp_disable_rebuild = 0;
 	else
 		pool->sp_disable_rebuild = 1;
@@ -1743,6 +1771,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_scrub_mode = iv_prop->pip_scrub_mode;
 	pool->sp_scrub_freq_sec = iv_prop->pip_scrub_freq;
 	pool->sp_scrub_thresh = iv_prop->pip_scrub_thresh;
+	pool->sp_reint_mode = iv_prop->pip_reint_mode;
 
 	pool->sp_checkpoint_props_changed = 0;
 	if (pool->sp_checkpoint_mode != iv_prop->pip_checkpoint_mode) {
@@ -1810,10 +1839,9 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 		}
 		rc = ds_pool_hdl_is_from_srv(pool, in->tmi_op.pi_hdl);
 		if (rc < 0) {
-			D_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR,
-				 DF_UUID": failed to check server pool handle "DF_UUID": "DF_RC"\n",
-				 DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl),
-				 DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NOTLEADER, DLOG_DBG, DLOG_ERR, rc,
+				  DF_UUID ": failed to check server pool handle " DF_UUID,
+				  DP_UUID(in->tmi_op.pi_uuid), DP_UUID(in->tmi_op.pi_hdl));
 			if (rc == -DER_NOTLEADER)
 				rc = -DER_AGAIN;
 			goto out_pool;
@@ -1916,11 +1944,8 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 
 		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UOID"\n",
 			DP_RC(rc), DP_UOID(ent->ie_oid));
-		/* Busy - inform iterator and yield */
-		*acts |= VOS_ITER_CB_YIELD;
 		dss_sleep(0);
 	} while (1);
-
 
 	if (rc != 0)
 		D_ERROR("discard object pool/object "DF_UUID"/"DF_UOID" rc: "DF_RC"\n",
@@ -1968,9 +1993,19 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
 	uuid_copy(arg->cont_uuid, entry->ie_couuid);
+	do {
+		/* Inform the iterator and delete the object */
+		*acts |= VOS_ITER_CB_DELETE;
+		rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
+				 arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
 
-	rc = vos_iterate(&param, VOS_ITER_OBJ, false, &anchor, obj_discard_cb, NULL,
-			 arg, NULL);
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(entry->ie_couuid));
+		dss_sleep(0);
+	} while (1);
+
 	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
@@ -2011,8 +2046,16 @@ pool_child_discard(void *data)
 
 	cont_arg.tgt_discard = arg;
 	child->spc_discard_done = 0;
-	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
-			 cont_discard_cb, NULL, &cont_arg, NULL);
+	do {
+		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
+				 cont_discard_cb, NULL, &cont_arg, NULL);
+		if (rc != -DER_BUSY && rc != -DER_INPROGRESS)
+			break;
+
+		D_DEBUG(DB_REBUILD, "retry by "DF_RC"/"DF_UUID"\n",
+			DP_RC(rc), DP_UUID(arg->pool_uuid));
+		dss_sleep(0);
+	} while (1);
 
 	child->spc_discard_done = 1;
 
@@ -2065,10 +2108,11 @@ ds_pool_tgt_discard_ult(void *data)
 	rc = dss_thread_collective_reduce(&coll_ops, &coll_args, DSS_ULT_DEEP_STACK);
 	if (coll_args.ca_exclude_tgts)
 		D_FREE(coll_args.ca_exclude_tgts);
-	D_CDEBUG(rc == 0, DB_MD, DLOG_ERR, DF_UUID" tgt discard:" DF_RC"\n",
-		 DP_UUID(arg->pool_uuid), DP_RC(rc));
+	DL_CDEBUG(rc == 0, DB_MD, DLOG_ERR, rc, DF_UUID " tgt discard", DP_UUID(arg->pool_uuid));
 put:
 	pool->sp_need_discard = 0;
+	pool->sp_discard_status = rc;
+
 	ds_pool_put(pool);
 free:
 	tgt_discard_arg_free(arg);
@@ -2103,6 +2147,7 @@ ds_pool_tgt_discard_handler(crt_rpc_t *rpc)
 	}
 
 	pool->sp_need_discard = 1;
+	pool->sp_discard_status = 0;
 	rc = dss_ult_create(ds_pool_tgt_discard_ult, arg, DSS_XS_SYS, 0, 0, NULL);
 
 	ds_pool_put(pool);

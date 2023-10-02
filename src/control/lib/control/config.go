@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -92,6 +93,10 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		return nil, err
 	}
 	cfg.Path = cfgPath
+
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return nil, fmt.Errorf("invalid system name: %q", cfg.SystemName)
+	}
 
 	return cfg, nil
 }

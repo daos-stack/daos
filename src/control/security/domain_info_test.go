@@ -7,15 +7,23 @@
 package security_test
 
 import (
+	"fmt"
 	"syscall"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
 func TestSecurity_DomainInfo_String(t *testing.T) {
+	pid1Str := "systemd"
+	sysDistro := system.GetDistribution()
+	if sysDistro.ID == "debian" {
+		pid1Str = "init"
+	}
+
 	ucred_noPid := &syscall.Ucred{
 		Pid: 0,
 		Uid: 123456,
@@ -48,7 +56,7 @@ func TestSecurity_DomainInfo_String(t *testing.T) {
 		},
 		"creds (PID)": {
 			di:     security.InitDomainInfo(ucred_Pid, "ctx"),
-			expStr: "pid: 1 (systemd) uid: 0 (root) gid: 0 (root)",
+			expStr: fmt.Sprintf("pid: 1 (%s) uid: 0 (root) gid: 0 (root)", pid1Str),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -16,6 +16,7 @@ import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
+from datetime import datetime
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
@@ -1317,6 +1318,20 @@ def get_display_size(size):
         bytes_to_human(size, binary=False))
 
 
+def append_error(errors, title, details=None):
+    """Helper adding an error to the list of errors
+
+    Args:
+        errors (list): List of error messages
+        title (str): Error message title
+        details (list, optional): List of string of the error details
+    """
+    msg = title
+    if details:
+        msg += "\n\t" + "\n\t".join(details)
+    errors.append(msg)
+
+
 def report_errors(test, errors):
     """Print errors and fail the test if there's any errors.
 
@@ -1403,6 +1418,19 @@ def get_journalctl(hosts, since, until, journalctl_type):
     command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
     err = "Error gathering system log events"
     return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+
+
+def journalctl_time(when=None):
+    # pylint: disable=wrong-spelling-in-docstring
+    """Get time formatted for journalctl.
+
+    Args:
+        when (datetime, optional): time to format. Defaults to datetime.now()
+
+    Returns:
+        str: the time in journalctl format
+    """
+    return (when or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_avocado_config_value(section, key):

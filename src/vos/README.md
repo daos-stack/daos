@@ -131,7 +131,7 @@ Otherwise, a "miss" is returned, meaning that this key has never been updated in
 This ensures that the most recent value in the epoch history of is returned irrespective of the time-order in which they were integrated and that all updates after the requested epoch are ignored.
 
 Similarly, when reading an array object, its index is traversed to create a gather descriptor that collects all object extent fragments in the requested extent with the highest epoch number less than or equal to the requested epoch.
-Entries in the gather descriptor either reference an extent containing data, a punched extent that the requestor can interpret as all zeroes, or a "miss", meaning that this VOS has received no updates in this extent.
+Entries in the gather descriptor either reference an extent containing data, a punched extent that the requester can interpret as all zeroes, or a "miss", meaning that this VOS has received no updates in this extent.
 Again, this ensures that the most recent data in the epoch history of the array is returned for all offsets in the requested extent, irrespective of the time-order in which they were written, and that all updates after the requested epoch are ignored.
 
 <a id="711"></a>

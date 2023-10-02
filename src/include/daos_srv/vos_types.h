@@ -20,6 +20,7 @@
 
 #define VOS_POOL_DF_2_2 24
 #define VOS_POOL_DF_2_4 25
+#define VOS_POOL_DF_2_6 26
 
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
@@ -95,8 +96,10 @@ enum vos_pool_open_flags {
 	VOS_POF_EXTERNAL_FLUSH	= (1 << 3),
 	/** RDB pool */
 	VOS_POF_RDB	= (1 << 4),
+	/** SYS DB pool */
+	VOS_POF_SYSDB	= (1 << 5),
 	/** Open the pool for daos check query, that will bypass EXEL flags. */
-	VOS_POF_FOR_CHECK_QUERY = (1 << 5),
+	VOS_POF_FOR_CHECK_QUERY = (1 << 6),
 };
 
 enum vos_oi_attr {
@@ -301,6 +304,8 @@ enum {
 	VOS_POOL_FEAT_CHK = (1ULL << 1),
 	/** Dynamic evtree root supported for this pool */
 	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
+	/** Embedded value in tree root supported */
+	VOS_POOL_FEAT_EMB_VALUE = (1ULL << 3),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -411,9 +416,7 @@ typedef int (*vos_iter_filter_cb_t)(daos_handle_t ih, vos_iter_desc_t *desc,
  * Parameters for initializing VOS iterator
  */
 typedef struct {
-	/** standalone prepare:	pool connection handle or container open handle
-	 *  nested prepare:	DAOS_HDL_INVAL
-	 */
+	/** pool connection handle or container open handle */
 	daos_handle_t		ip_hdl;
 	/** standalone prepare:	DAOS_HDL_INVAL
 	 *  nested prepare:	parent iterator handle

@@ -7,6 +7,7 @@
 #ifndef __DAOS_IOSRV_CHECKSUM_H__
 #define __DAOS_IOSRV_CHECKSUM_H__
 
+#include <daos/object.h>
 #include <daos_srv/bio.h>
 #include <daos_srv/pool.h>
 #include <daos/checksum.h>
@@ -57,5 +58,11 @@ int
 ds_start_scrubbing_ult(struct ds_pool_child *child);
 void
 ds_stop_scrubbing_ult(struct ds_pool_child *child);
+
+int
+ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
+		    struct dcs_csum_info *dkey_csum,
+		    daos_iod_t *iods, struct dcs_iod_csums *iod_csums, uint32_t nr,
+		    daos_unit_oid_t *uoid);
 
 #endif

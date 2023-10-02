@@ -43,7 +43,7 @@ $ cat /proc/meminfo | grep -e "^Huge"
 The platform was tested and validated with the following dependencies:
 - [Docker CE](https://docs.docker.com/engine/install/centos/) latest
   [RPMs](https://download.docker.com/linux/centos/docker-ce.repo)
-- [DAOS 2.3](https://docs.daos.io/v2.3/) local RPMS builds from [DAOS master
+- [DAOS 2.6](https://docs.daos.io/v2.6/) local RPMS builds from [DAOS master
   branch](https://github.com/daos-stack/daos/tree/master)
 - [rockylinux/rockylinux:8.6](https://hub.docker.com/r/rockylinux/rockylinux/) official docker
   images.
@@ -225,7 +225,7 @@ $ docker exec daos-admin dmg -i storage format
 
 Upon successful completion of the format, the storage engine is started, and pools
 can be created using the daos admin tool.  For more advanced configurations and usage refer to the
-section [DAOS Tour](https://docs.daos.io/v2.3/QSG/tour/).
+section [DAOS Tour](https://docs.daos.io/v2.6/QSG/tour/).
 
 
 ### Via Docker Compose

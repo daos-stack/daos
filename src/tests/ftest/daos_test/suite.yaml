@@ -9,6 +9,7 @@ timeout: 600
 timeouts:
   test_daos_degraded_mode: 450
   test_daos_management: 110
+  test_daos_cat_recovery: 1800
   test_daos_pool: 180
   test_daos_container: 450
   test_daos_epoch: 125
@@ -23,15 +24,16 @@ timeouts:
   test_daos_epoch_recovery: 104
   test_daos_md_replication: 104
   test_daos_rebuild_simple: 1800
-  test_daos_drain_simple: 2000
+  test_daos_drain_simple: 3600
   test_daos_extend_simple: 3600
   test_daos_oid_allocator: 640
   test_daos_checksum: 500
-  test_daos_rebuild_ec: 4800
+  test_daos_rebuild_ec: 6400
   test_daos_aggregate_ec: 200
   test_daos_degraded_ec: 1900
   test_daos_dedup: 220
   test_daos_upgrade: 300
+  test_daos_pipeline: 60
 pool:
   # This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
@@ -81,6 +83,7 @@ daos_tests:
   num_clients:
     test_daos_degraded_mode: 1
     test_daos_management: 1
+    test_daos_cat_recovery: 1
     test_daos_pool: 2
     test_daos_container: 1
     test_daos_epoch: 1
@@ -106,9 +109,11 @@ daos_tests:
     test_daos_degraded_ec: 1
     test_daos_dedup: 1
     test_daos_upgrade: 1
+    test_daos_pipeline: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management
+    test_daos_cat_recovery: DAOS_Cat_Recovery
     test_daos_pool: DAOS_Pool
     test_daos_container: DAOS_Container
     test_daos_epoch: DAOS_Epoch
@@ -134,9 +139,11 @@ daos_tests:
     test_daos_dedup: DAOS_Dedup
     test_daos_extend_simple: DAOS_Extend_Simple
     test_daos_upgrade: DAOS_Upgrade
+    test_daos_pipeline: DAOS_Pipeline
   daos_test:
     test_daos_degraded_mode: d
     test_daos_management: m
+    test_daos_cat_recovery: F
     test_daos_pool: p
     test_daos_container: c
     test_daos_epoch: e
@@ -161,7 +168,8 @@ daos_tests:
     test_daos_aggregate_ec: Z
     test_daos_degraded_ec: X
     test_daos_dedup: U
-    test_daos_upgrade: P
+    test_daos_upgrade: G
+    test_daos_pipeline: P
   args:
     test_daos_ec_io: -l"EC_4P2G1"
     test_daos_rebuild_ec: -s5

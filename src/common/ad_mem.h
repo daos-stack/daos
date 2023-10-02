@@ -36,9 +36,9 @@ struct ad_tx {
 	d_list_t		 tx_ar_pub;
 	d_list_t		 tx_gp_pub;
 	d_list_t		 tx_gp_reset;
-	/** inflight frees */
+	/** in-flight frees */
 	d_list_t		 tx_frees;
-	/** inflight allocations */
+	/** in-flight allocations */
 	d_list_t		 tx_allocs;
 	uint32_t		 tx_redo_act_nr;
 	uint32_t		 tx_redo_payload_len;

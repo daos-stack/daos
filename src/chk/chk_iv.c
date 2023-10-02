@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,10 +57,9 @@ chk_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 	return 0;
 }
 
-static int
+static void
 chk_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	return 0;
 }
 
 static int
@@ -97,7 +96,7 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			 * rank (trigger RPC to the check leader - the IV parent via returning
 			 * -DER_IVCB_FORWARD.
 			 */
-			D_ASSERTF(!chk_is_on_leader(src_iv->ci_gen, -1, false),
+			D_ASSERTF(!chk_is_on_leader(src_iv->ci_gen, CHK_LEADER_RANK, false),
 				  "Invalid IV forward path for gen "DF_X64"/"DF_X64", rank %u, "
 				  "phase %u, status %d/%d, from_psl %s\n",
 				  src_iv->ci_gen, src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
@@ -116,7 +115,7 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			 *	 the check leader.
 			 */
 			if (!src_iv->ci_from_psl)
-				D_ASSERTF(chk_is_on_leader(src_iv->ci_gen, -1, false),
+				D_ASSERTF(chk_is_on_leader(src_iv->ci_gen, CHK_LEADER_RANK, false),
 					  "Invalid IV forward path for gen "DF_X64"/"DF_X64
 					  ", rank %u, phase %u, status %d/%d\n", src_iv->ci_gen,
 					  src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
@@ -193,7 +192,7 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	iv->ci_rank = dss_self_rank();
 	iv->ci_seq = d_hlc_get();
 
-	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
+	if (chk_is_on_leader(iv->ci_gen, CHK_LEADER_RANK, false) && iv->ci_to_leader) {
 		/*
 		 * It is the check engine sends IV message to the check leader on
 		 * the same rank. Then directly notify the check leader without RPC.
@@ -213,9 +212,11 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
-		 "CHK iv "DF_X64"/"DF_X64" on rank %u, to_leader %s, from_psl %s: "DF_RC"\n",
-		 iv->ci_gen, iv->ci_seq, iv->ci_rank, iv->ci_to_leader ? "yes" : "no",
-		 iv->ci_from_psl ? "yes" : "no", DP_RC(rc));
+		 "CHK iv "DF_X64"/"DF_X64" on rank %u, phase %u, ins_status %u, "
+		 "pool_status %u, to_leader %s, from_psl %s, destroyed %s: rc = %d\n",
+		 iv->ci_gen, iv->ci_seq, iv->ci_rank, iv->ci_phase, iv->ci_ins_status,
+		 iv->ci_pool_status, iv->ci_to_leader ? "yes" : "no",
+		 iv->ci_from_psl ? "yes" : "no", iv->ci_pool_destroyed ? "yes" : "no", rc);
 
 	return rc;
 }

@@ -22,8 +22,9 @@ class HarnessBasicTest(TestWithoutServers):
         """Simple test of apricot test code.
 
         :avocado: tags=all
+        :avocado: tags=vm
         :avocado: tags=harness,harness_basic_test
-        :avocado: tags=always_fails,test_always_fails
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails
         """
         self.fail("NOOP test to do nothing but fail")
 
@@ -33,7 +34,7 @@ class HarnessBasicTest(TestWithoutServers):
         :avocado: tags=all
         :avocado: tags=hw,large,medium,small
         :avocado: tags=harness,harness_basic_test
-        :avocado: tags=always_fails,test_always_fails_hw
+        :avocado: tags=HarnessBasicTest,always_fails,test_always_fails_hw
         """
         self.test_always_fails()
 

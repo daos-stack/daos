@@ -94,6 +94,13 @@ func (ic *ItemCache) Keys() []string {
 		return nil
 	}
 
+	ic.mutex.RLock()
+	defer ic.mutex.RUnlock()
+
+	return ic.keys()
+}
+
+func (ic *ItemCache) keys() []string {
 	keys := []string{}
 	for k := range ic.items {
 		keys = append(keys, k)
@@ -144,13 +151,14 @@ func (ic *ItemCache) GetOrCreate(ctx context.Context, key string, missFn ItemCre
 		ic.set(item)
 	}
 
+	item.Lock()
 	if item.NeedsRefresh() {
 		if err := item.Refresh(ctx); err != nil {
+			item.Unlock()
 			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
 		ic.log.Debugf("refreshed item %q", key)
 	}
-	item.Lock()
 
 	return item, item.Unlock, nil
 }
@@ -174,13 +182,14 @@ func (ic *ItemCache) Get(ctx context.Context, key string) (Item, func(), error) 
 		return nil, noopRelease, err
 	}
 
+	item.Lock()
 	if item.NeedsRefresh() {
 		if err := item.Refresh(ctx); err != nil {
+			item.Unlock()
 			return nil, noopRelease, errors.Wrapf(err, "fetch data for %q", key)
 		}
 		ic.log.Debugf("refreshed item %q", key)
 	}
-	item.Lock()
 
 	return item, item.Unlock, nil
 }
@@ -203,18 +212,28 @@ func (ic *ItemCache) Refresh(ctx context.Context, keys ...string) error {
 	defer ic.mutex.Unlock()
 
 	if len(keys) == 0 {
-		keys = ic.Keys()
+		keys = ic.keys()
 	}
 
 	for _, key := range keys {
-		item, err := ic.get(key)
-		if err != nil {
+		if err := ic.refreshItem(ctx, key); err != nil {
 			return err
 		}
-
-		if err := item.Refresh(ctx); err != nil {
-			return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
-		}
 	}
+	return nil
+}
+
+func (ic *ItemCache) refreshItem(ctx context.Context, key string) error {
+	item, err := ic.get(key)
+	if err != nil {
+		return err
+	}
+
+	item.Lock()
+	defer item.Unlock()
+	if err := item.Refresh(ctx); err != nil {
+		return errors.Wrapf(err, "failed to refresh cached item %q", item.Key())
+	}
+
 	return nil
 }

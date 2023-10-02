@@ -487,19 +487,19 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	if (req->n_properties > 0) {
 		prop = daos_prop_merge(base_props, req_props);
-		daos_prop_free(req_props);
-		daos_prop_free(base_props);
 		if (prop == NULL) {
 			D_GOTO(out, rc = -DER_NOMEM);
 		}
 	} else {
 		prop = base_props;
+		base_props = NULL;
 	}
 
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
-				 prop, &svc, req->n_faultdomains, req->faultdomains);
+				 prop, &svc, req->n_faultdomains, req->faultdomains,
+				 req->meta_blob_size);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -522,7 +522,10 @@ out:
 
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
+	daos_prop_free(base_props);
+	daos_prop_free(req_props);
 	daos_prop_free(prop);
+
 	if (targets != NULL)
 		d_rank_list_free(targets);
 
@@ -774,7 +777,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_exclude_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -824,7 +826,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_drain_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1093,7 +1094,6 @@ out:
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_upgrade_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
@@ -1310,8 +1310,7 @@ add_acl_to_response(struct daos_acl *acl, Mgmt__ACLResp *resp)
 
 	rc = daos_acl_to_strs(acl, &ace_list, &ace_nr);
 	if (rc != 0) {
-		D_ERROR("Couldn't convert ACL to string list, rc="DF_RC"",
-			DP_RC(rc));
+		D_ERROR("Couldn't convert ACL to string list: " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -1365,7 +1364,6 @@ pack_acl_resp(Mgmt__ACLResp *acl_resp, Drpc__Response *drpc_resp)
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate buffer for packed ACLResp\n");
 	} else {
 		mgmt__aclresp__pack(acl_resp, body);
 		drpc_resp->body.len = len;
@@ -2410,11 +2408,21 @@ void
 ds_mgmt_drpc_set_up(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
 	Mgmt__DaosResp	resp = MGMT__DAOS_RESP__INIT;
+	int		rc;
 
 	D_INFO("Received request to setup engine\n");
 
-	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+	rc = dss_module_setup_all();
+	if (rc != 0) {
+		D_ERROR("Module setup failed: %d\n", rc);
+		goto err;
+	}
 
+	D_INFO("Modules successfully set up\n");
+
+	dss_init_state_set(DSS_INIT_STATE_SET_UP);
+err:
+	resp.status = rc;
 	pack_daos_response(&resp, drpc_resp);
 }
 

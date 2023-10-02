@@ -16,6 +16,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/security"
 )
 
@@ -83,6 +84,11 @@ func LoadConfig(cfgPath string) (*Config, error) {
 	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
 		return nil, err
 	}
+
+	if !daos.SystemNameIsValid(cfg.SystemName) {
+		return nil, fmt.Errorf("invalid system name: %q", cfg.SystemName)
+	}
+
 	return cfg, nil
 }
 

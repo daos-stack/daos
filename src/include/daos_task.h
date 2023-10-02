@@ -24,6 +24,7 @@ extern "C" {
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos/tse.h>
+#include <daos_pipeline.h>
 
 /** DAOS operation codes for task creation */
 typedef enum {
@@ -122,6 +123,10 @@ typedef enum {
 	DAOS_OPC_OBJ_KEY2ANCHOR,
 	DAOS_OPC_CONT_SNAP_OIT_CREATE,
 	DAOS_OPC_CONT_SNAP_OIT_DESTROY,
+
+	/** Pipeline APIs */
+	DAOS_OPC_PIPELINE_RUN,
+
 	DAOS_OPC_MAX
 } daos_opc_t;
 
@@ -843,19 +848,15 @@ typedef daos_obj_list_t		daos_obj_list_recx_t;
 */
 typedef daos_obj_list_t		daos_obj_list_obj_t;
 
-/** daos_obj_key2anchor args */
-typedef struct {
-	/** Object open handle */
-	daos_handle_t		oh;
-	/** Transaction open handle. */
-	daos_handle_t		th;
-	/** Distribution key. */
-	daos_key_t		*dkey;
-	/** Attribute key. */
-	daos_key_t		*akey;
-	/** Anchor to set */
-	daos_anchor_t		*anchor;
-} daos_obj_key2anchor_t;
+/**
+ * parameter subset for list_obj -
+ * daos_handle_t	oh;
+ * daos_handle_t	th;
+ * daos_key_t		*dkey;
+ * daos_key_t		*akey;
+ * daos_anchor_t	*anchor;
+ */
+typedef daos_obj_list_t		daos_obj_key2anchor_t;
 
 /** Array create args */
 typedef struct {
@@ -1037,6 +1038,40 @@ typedef struct {
 	/** Hash anchor for the next call. */
 	daos_anchor_t		*anchor;
 } daos_kv_list_t;
+
+/** Pipeline run args */
+typedef struct {
+	/** object handler */
+	daos_handle_t			oh;
+	/** transaction handler */
+	daos_handle_t			th;
+	/** pipeline object */
+	daos_pipeline_t			*pipeline;
+	/** conditional operations */
+	uint64_t			flags;
+	/** operation done on this specific dkey */
+	daos_key_t			*dkey;
+	/** I/O descriptors in the iods table. */
+	uint32_t			*nr_iods;
+	/** akeys */
+	daos_iod_t			*iods;
+	/** anchor to start from last returned key */
+	daos_anchor_t			*anchor;
+	/** number of keys in kds and sgl_keys */
+	uint32_t			*nr_kds;
+	/** keys' metadata */
+	daos_key_desc_t			*kds;
+	/** dkeys */
+	d_sg_list_t			*sgl_keys;
+	/** records  */
+	d_sg_list_t			*sgl_recx;
+	/** records' size */
+	daos_size_t			*recx_size;
+	/** aggregations */
+	d_sg_list_t			*sgl_agg;
+	/** returned pipeline stats  */
+	daos_pipeline_stats_t		*stats;
+} daos_pipeline_run_t;
 
 /**
  * Create an asynchronous task and associate it with a daos client operation.

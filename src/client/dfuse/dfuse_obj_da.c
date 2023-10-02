@@ -144,7 +144,7 @@ obj_da_destroy(obj_da_t *da)
 
 	rc = pthread_mutex_destroy(&real_da->lock);
 	if (rc != 0)
-		D_ERROR("Failed to destroy lock %d %s", rc, strerror(rc));
+		D_ERROR("Failed to destroy lock %d %s\n", rc, strerror(rc));
 
 	return -DER_SUCCESS;
 }

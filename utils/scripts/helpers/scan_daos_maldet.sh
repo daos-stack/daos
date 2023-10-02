@@ -10,20 +10,28 @@ mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 source "$mydir/distro_info.sh"
 
 if command -v dnf; then
-  sudo dnf install \
-    daos{,-{client,server,tests,debuginfo,devel}}-"${DAOS_PKG_VERSION}"
+    if [ -n "$DAOS_PKG_VERSION" ]; then
+        DAOS_PKG_VERSION="-$DAOS_PKG_VERSION"
+    else
+        # don't need artifactory if no version was specified,
+        # as that means we are using the packages in the build
+        . /etc/os-release
+        dnf -y config-manager \
+            --disable daos-stack-daos-"${DISTRO_GENERIC}"-"${VERSION_ID%%.*}"-x86_64-stable-local-artifactory
+    fi
+    sudo dnf install daos{,-{client,server,tests,debuginfo,devel}}"$DAOS_PKG_VERSION"
 elif command -v apt-get; then
-  echo "Ubuntu not implemented yet."
-  exit 1
+    echo "Ubuntu not implemented yet."
+    exit 1
 else
-  echo "Unknown distribution."
-  exit 1
+    echo "Unknown distribution."
+    exit 1
 fi
 fails=0
 errs=0
 mal_fnd=""
 if ! sudo /usr/local/sbin/maldet --update-sigs; then
-   ((fails+=1))
+    ((fails+=1)) || true
     mal_fnd='<failure message="Maldet signature update failed" type="warning"/>'
 fi
 
@@ -42,10 +50,10 @@ malxml="maldetect_$PUBLIC_DISTRO$MAJOR_VERSION.xml"
 rm -f "$malxml"
 clam_fnd=""
 if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
-  ((errs+=1))
-  clam_fnd="<error message=\"Malware Detected\" type=\"error\">
-      <![CDATA[ $(cat /var/tmp/clamscan.out) ]]>
-    </error>"
+    ((errs+=1)) || true
+    clam_fnd="<error message=\"Malware Detected\" type=\"error\">
+  <![CDATA[ $(cat /var/tmp/clamscan.out) ]]>
+</error>"
 fi
 
 cat << EOF > "$malxml"

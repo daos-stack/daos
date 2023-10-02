@@ -73,6 +73,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 		smbc        *scm.MockBackendConfig
 		tierCfgs    storage.TierConfigs
 		expResp     *ctlpb.StorageScanResp
+		expErr      error
 	}{
 		"successful scan; scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
@@ -403,6 +404,17 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
+		"scan usage": {
+			req: &ctlpb.StorageScanReq{
+				Scm: &ctlpb.ScanScmReq{
+					Usage: true,
+				},
+				Nvme: &ctlpb.ScanNvmeReq{
+					Meta: true,
+				},
+			},
+			expErr: FaultDataPlaneNotStarted,
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -434,8 +446,9 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			}
 
 			resp, err := cs.StorageScan(test.Context(t), tc.req)
+			test.CmpErr(t, tc.expErr, err)
 			if err != nil {
-				t.Fatal(err)
+				return
 			}
 
 			if tc.req.Nvme.Health || tc.req.Nvme.Meta {
@@ -680,6 +693,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 		smsc              *system.MockSysConfig
 		storageCfgs       []storage.TierConfigs
 		engineTargetCount []int
+		enginesNotReady   bool
 		scanTwice         bool
 		junkResp          bool
 		drpcResps         map[int][]*mockDrpcResponse
@@ -1389,6 +1403,45 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				MemInfo: proto.MockPBMemInfo(),
 			},
 		},
+		"multi-engine; multi-tier; with usage; engines not ready": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  &ctlpb.ScanScmReq{Usage: true},
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount1.Path).
+						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+					storage.NewTierConfig().
+						WithStorageClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
+			engineTargetCount: []int{4, 4},
+			enginesNotReady:   true,
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: newSmdDevResp(1)},
+					{Message: newBioHealthResp(1)},
+				},
+				1: {
+					{Message: newSmdDevResp(2)},
+					{Message: newBioHealthResp(2)},
+				},
+			},
+			expErr: errEngineNotReady,
+		},
 		// Sometimes when more than a few ssds are assigned to engine without many targets,
 		// some of the smd entries for the latter ssds are in state "NEW" rather than
 		// "NORMAL", when in this state, health is unavailable and DER_NONEXIST is returned.
@@ -1516,7 +1569,10 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			var engineCfgs []*engine.Config
 			for i, sc := range tc.storageCfgs {
 				log.Debugf("storage cfg contains bdevs %v for engine %d", sc.Bdevs(), i)
-				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
+				engineCfgs = append(engineCfgs,
+					engine.MockConfig().
+						WithStorage(sc...).
+						WithTargetCount(tc.engineTargetCount[i]))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, csbmbc, tc.smbc, tc.smsc)
@@ -1552,7 +1608,11 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 						Controllers: *tc.eCtrlrs[idx],
 					})
 				}
-				ne := newTestEngine(log, false, sp, ec)
+				te := newTestEngine(log, false, sp, ec)
+
+				if tc.enginesNotReady {
+					te.ready.SetFalse()
+				}
 
 				// mock drpc responses
 				dcc := new(mockDrpcClientConfig)
@@ -1566,17 +1626,16 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				} else {
 					t.Fatal("drpc response mocks unpopulated")
 				}
-				ne.setDrpcClient(newMockDrpcClient(dcc))
-				ne._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
-				ne.setTargetCount(tc.engineTargetCount[idx])
-				for _, tc := range ne.storage.GetBdevConfigs() {
+				te.setDrpcClient(newMockDrpcClient(dcc))
+				te._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
+				for _, tc := range te.storage.GetBdevConfigs() {
 					tc.Bdev.DeviceRoles.OptionBits = storage.OptionBits(storage.BdevRoleAll)
 				}
-				md := ne.storage.GetControlMetadata()
+				md := te.storage.GetControlMetadata()
 				md.Path = "/foo"
 				md.DevicePath = md.Path
 
-				cs.harness.instances[idx] = ne
+				cs.harness.instances[idx] = te
 			}
 			cs.harness.started.SetTrue()
 
@@ -1718,6 +1777,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		scmMounted       bool // if scmMounted we emulate ext4 fs is mounted
+		tmpfsEmpty       bool // if false, an already-mounted ramdisk is not empty
 		superblockExists bool
 		instancesStarted bool // engine already started
 		sMounts          []string
@@ -1923,6 +1983,44 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
 							Info:   fmt.Sprintf(msgNvmeFormatSkip, 0),
 						},
+					},
+				},
+				Mrets: []*ctlpb.ScmMountResult{
+					{
+						Mntpoint: "/mnt/daos",
+						State: &ctlpb.ResponseState{
+							Status: ctlpb.ResponseStatus_CTL_SUCCESS,
+							Info:   "SCM is already formatted",
+						},
+					},
+				},
+			},
+		},
+		"ram already mounted but empty": {
+			scmMounted: true,
+			tmpfsEmpty: true,
+			sMounts:    []string{"/mnt/daos"},
+			sClass:     storage.ClassRam,
+			sSize:      6,
+			bClass:     storage.ClassNvme,
+			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{mockNvmeController0},
+				},
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
+							Formatted: true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.StorageFormatResp{
+				Crets: []*ctlpb.NvmeControllerResult{
+					{
+						PciAddr: mockNvmeController0.PciAddr,
+						State:   new(ctlpb.ResponseState),
 					},
 				},
 				Mrets: []*ctlpb.ScmMountResult{
@@ -2188,6 +2286,19 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				GetfsStr:       getFsRetStr,
 				SourceToTarget: devToMount,
 			}
+			if tc.sClass == storage.ClassRam {
+				total := uint64(1234)
+				avail := total
+				if !tc.tmpfsEmpty {
+					avail--
+				}
+				smsc.GetfsUsageResps = []system.GetfsUsageRetval{
+					{
+						Total: total,
+						Avail: avail,
+					},
+				}
+			}
 			sysProv := system.NewMockSysProvider(log, smsc)
 			mounter := mount.NewProvider(log, sysProv)
 			scmProv := scm.NewProvider(log, nil, sysProv, mounter)
@@ -2242,7 +2353,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
-					if err := ei.createSuperblock(false); err != nil {
+					if err := ei.createSuperblock(); err != nil {
 						t.Fatal(err)
 					}
 				} else {
@@ -2273,7 +2384,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				go func(ctx context.Context, e *EngineInstance) {
 					select {
 					case <-ctx.Done():
-					case awaitCh <- e.awaitStorageReady(ctx, false):
+					case awaitCh <- e.awaitStorageReady(ctx):
 					}
 				}(ctx, ei.(*EngineInstance))
 			}
@@ -2780,6 +2891,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 		scanNvmeResp *ctlpb.ScanNvmeResp
 	}
 	type ExpectedOutput struct {
+		totalBytes     []uint64
 		availableBytes []uint64
 		usableBytes    []uint64
 		message        string
@@ -2834,6 +2946,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2848,6 +2961,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{4, 5, 6, 7},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2861,6 +2975,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme2",
 									TgtIds:      []int32{8, 9, 10, 11},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2875,6 +2990,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme3",
 									TgtIds:      []int32{0, 1, 2},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2888,6 +3004,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme4",
 									TgtIds:      []int32{3, 4, 5},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2900,6 +3017,13 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+					20 * hugeClusterSize,
+					20 * hugeClusterSize,
+					20 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -2943,6 +3067,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2957,6 +3082,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{4, 5, 6},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2971,6 +3097,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme2",
 									TgtIds:      []int32{7, 8, 9, 10},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2985,6 +3112,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme3",
 									TgtIds:      []int32{0, 1, 2},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -2999,6 +3127,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme4",
 									TgtIds:      []int32{3, 4},
+									TotalBytes:  20 * hugeClusterSize,
 									AvailBytes:  20 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3011,6 +3140,13 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+					20 * hugeClusterSize,
+					20 * hugeClusterSize,
+					20 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					10 * hugeClusterSize,
@@ -3046,6 +3182,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3060,6 +3197,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{0, 1, 2},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNew,
@@ -3072,6 +3210,10 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					0,
@@ -3102,6 +3244,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3116,6 +3259,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{0, 1, 2},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateFaulty,
@@ -3128,6 +3272,10 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					0,
@@ -3158,6 +3306,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3172,6 +3321,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3184,6 +3334,10 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					0,
@@ -3214,6 +3368,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * hugeClusterSize,
 									AvailBytes:  10 * hugeClusterSize,
 									ClusterSize: hugeClusterSize,
 									DevState:    devStateNormal,
@@ -3228,6 +3383,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:       "nvme1",
 									TgtIds:     []int32{0, 1, 2},
+									TotalBytes: 10 * hugeClusterSize,
 									AvailBytes: 10 * hugeClusterSize,
 									DevState:   devStateNormal,
 									Rank:       0,
@@ -3239,6 +3395,10 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					10 * hugeClusterSize,
+					10 * hugeClusterSize,
+				},
 				availableBytes: []uint64{
 					10 * hugeClusterSize,
 					0,
@@ -3286,6 +3446,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme0",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3300,6 +3461,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme1",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3314,6 +3476,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme2",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3328,6 +3491,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme3",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3342,6 +3506,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme4",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3356,6 +3521,7 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 								{
 									Uuid:        "nvme5",
 									TgtIds:      []int32{0, 1, 2, 3},
+									TotalBytes:  10 * humanize.GiByte,
 									AvailBytes:  10 * humanize.GiByte,
 									ClusterSize: clusterSize,
 									DevState:    devStateNormal,
@@ -3368,6 +3534,14 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 				},
 			},
 			output: ExpectedOutput{
+				totalBytes: []uint64{
+					320 * clusterSize,
+					320 * clusterSize,
+					320 * clusterSize,
+					0 * humanize.GiByte,
+					0 * humanize.GiByte,
+					0 * humanize.GiByte,
+				},
 				availableBytes: []uint64{
 					320 * clusterSize,
 					320 * clusterSize,
@@ -3405,6 +3579,9 @@ func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
 
 			for idx, ctlr := range tc.input.scanNvmeResp.GetCtrlrs() {
 				dev := ctlr.GetSmdDevices()[0]
+				test.AssertEqual(t, tc.output.totalBytes[idx], dev.GetTotalBytes(),
+					fmt.Sprintf("Invalid total bytes with ctlr %s (index=%d): wait=%d, got=%d",
+						ctlr.GetPciAddr(), idx, tc.output.totalBytes[idx], dev.GetTotalBytes()))
 				test.AssertEqual(t, tc.output.availableBytes[idx], dev.GetAvailBytes(),
 					fmt.Sprintf("Invalid available bytes with ctlr %s (index=%d): wait=%d, got=%d",
 						ctlr.GetPciAddr(), idx, tc.output.availableBytes[idx], dev.GetAvailBytes()))

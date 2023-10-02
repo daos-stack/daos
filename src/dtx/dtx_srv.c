@@ -39,6 +39,22 @@ dtx_tls_init(int tags, int xs_id, int tgt_id)
 		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
 		       DP_RC(rc));
 
+	rc = d_tm_add_metric(&tls->dt_dtx_leader_total, D_TM_GAUGE,
+			     "total number of leader dtx in cache", "entry",
+			     "mem/dtx/dtx_leader_handle_%u/tgt_%u",
+			     sizeof(struct dtx_leader_handle), tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
+		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->dt_dtx_entry_total, D_TM_GAUGE,
+			     "total number of dtx entry in cache", "entry",
+			     "mem/dtx/dtx_entry_%u/tgt_%u",
+			     sizeof(struct dtx_entry), tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX entry metric: " DF_RC"\n",
+		       DP_RC(rc));
+
 	return tls;
 }
 
@@ -105,7 +121,6 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
-
 	return metrics;
 }
 
@@ -440,17 +455,17 @@ static struct daos_rpc_handler dtx_handlers[] = {
 
 #undef X
 
-struct dss_module dtx_module =  {
-	.sm_name	= "dtx",
-	.sm_mod_id	= DAOS_DTX_MODULE,
-	.sm_ver		= DAOS_DTX_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= dtx_init,
-	.sm_fini	= dtx_fini,
-	.sm_setup	= dtx_setup,
-	.sm_proto_fmt	= &dtx_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= dtx_handlers,
-	.sm_key		= &dtx_module_key,
-	.sm_metrics	= &dtx_metrics,
+struct dss_module dtx_module = {
+    .sm_name        = "dtx",
+    .sm_mod_id      = DAOS_DTX_MODULE,
+    .sm_ver         = DAOS_DTX_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = dtx_init,
+    .sm_fini        = dtx_fini,
+    .sm_setup       = dtx_setup,
+    .sm_proto_fmt   = {&dtx_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {dtx_handlers},
+    .sm_key         = &dtx_module_key,
+    .sm_metrics     = &dtx_metrics,
 };

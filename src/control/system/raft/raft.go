@@ -49,6 +49,7 @@ const (
 	raftOpUpdateSystemAttrs
 	raftOpAddCheckerFinding
 	raftOpUpdateCheckerFinding
+	raftOpRemoveCheckerFinding
 	raftOpClearCheckerFindings
 
 	sysDBFile = "daos_system.db"
@@ -87,6 +88,7 @@ func (ro raftOp) String() string {
 		"updateSystemAttrs",
 		"addCheckerFinding",
 		"updateCheckerFinding",
+		"removeCheckerFinding",
 		"clearCheckerFindings",
 	}[ro]
 }
@@ -533,7 +535,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		f.data.applyPoolUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpUpdateSystemAttrs:
 		f.data.applySystemUpdate(c.Op, c.Data, f.EmergencyShutdown)
-	case raftOpAddCheckerFinding, raftOpUpdateCheckerFinding, raftOpClearCheckerFindings:
+	case raftOpAddCheckerFinding, raftOpUpdateCheckerFinding, raftOpRemoveCheckerFinding, raftOpClearCheckerFindings:
 		f.data.applyCheckerUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	default:
 		f.EmergencyShutdown(errors.Errorf("unhandled Apply operation: %d", c.Op))
@@ -669,6 +671,11 @@ func (d *dbData) applyCheckerUpdate(op raftOp, data []byte, panicFn func(error))
 		}
 	case raftOpUpdateCheckerFinding:
 		if err := d.Checker.updateFinding(f); err != nil {
+			panicFn(err)
+			return
+		}
+	case raftOpRemoveCheckerFinding:
+		if err := d.Checker.removeFinding(f); err != nil {
 			panicFn(err)
 			return
 		}

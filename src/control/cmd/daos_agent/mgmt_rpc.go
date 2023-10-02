@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -43,11 +42,7 @@ type mgmtModule struct {
 	monitor        *procMon
 	useDefaultNUMA bool
 
-	numaGetter     hardware.ProcessNUMAProvider
-	devClassGetter hardware.NetDevClassProvider
-	devStateGetter hardware.NetDevStateProvider
-	fabricScanner  *hardware.FabricScanner
-	netIfaces      func() ([]net.Interface, error)
+	numaGetter hardware.ProcessNUMAProvider
 }
 
 func (mod *mgmtModule) HandleCall(ctx context.Context, session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -216,42 +211,7 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, sys string) (*mgmt
 }
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass hardware.NetDevClass, provider string) (*FabricInterface, error) {
-	if err := mod.waitFabricReady(ctx, netDevClass); err != nil {
-		return nil, err
-	}
-
 	return mod.cache.GetFabricDevice(ctx, numaNode, netDevClass, provider)
-}
-
-func (mod *mgmtModule) waitFabricReady(ctx context.Context, netDevClass hardware.NetDevClass) error {
-	mod.fabricMutex.Lock()
-	defer mod.fabricMutex.Unlock()
-
-	if mod.netIfaces == nil {
-		mod.netIfaces = net.Interfaces
-	}
-	ifaces, err := mod.netIfaces()
-	if err != nil {
-		return err
-	}
-
-	var needIfaces []string
-	for _, iface := range ifaces {
-		devClass, err := mod.devClassGetter.GetNetDevClass(iface.Name)
-		if err != nil {
-			return err
-		}
-		if devClass == netDevClass {
-			needIfaces = append(needIfaces, iface.Name)
-		}
-	}
-
-	return hardware.WaitFabricReady(ctx, mod.log, hardware.WaitFabricReadyParams{
-		StateProvider:  mod.devStateGetter,
-		FabricIfaces:   needIfaces,
-		IgnoreUnusable: true,
-		IterationSleep: time.Second,
-	})
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

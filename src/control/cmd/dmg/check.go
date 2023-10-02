@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -46,10 +46,10 @@ func (p poolIDSet) List() (ids []string) {
 }
 
 type checkCmdBase struct {
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
 }
 
 func (c *checkCmdBase) Execute(_ []string) error {
@@ -221,8 +221,8 @@ func (cmd *checkQueryCmd) Execute(_ []string) error {
 	req.Uuids = cmd.Args.Pools.List()
 
 	resp, err := control.SystemCheckQuery(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 	if err != nil {
 		return err
@@ -281,7 +281,7 @@ func (f *getRepPolFlag) UnmarshalFlag(fv string) error {
 
 	i := 0
 	f.ReqClasses = make([]control.SystemCheckFindingClass, len(f.ParsedProps))
-	for class := range f.ParsedProps {
+	for _, class := range f.ParsedProps.ToSlice() {
 		if err := f.ReqClasses[i].FromString(class); err != nil {
 			return err
 		}
@@ -304,7 +304,8 @@ func (f *getRepPolFlag) Complete(match string) []flags.Completion {
 type checkGetPolicyCmd struct {
 	checkCmdBase
 
-	Args struct {
+	LastUsed bool `short:"L" long:"last" description:"Fetch the last policy used by the checker."`
+	Args     struct {
 		Classes getRepPolFlag `description:"Inconsistency class names"`
 	} `positional-args:"yes"`
 }
@@ -313,10 +314,11 @@ func (cmd *checkGetPolicyCmd) Execute(_ []string) error {
 	ctx := context.Background()
 
 	req := new(control.SystemCheckGetPolicyReq)
+	req.LastUsed = cmd.LastUsed
 	req.SetClasses(cmd.Args.Classes.ReqClasses)
 	resp, err := control.SystemCheckGetPolicy(ctx, cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 	if err != nil {
 		return err

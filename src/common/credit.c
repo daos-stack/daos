@@ -60,7 +60,7 @@ credit_poll(struct credit_context *tsc, bool drain)
 	int		 rc;
 
 	if (tsc->tsc_cred_inuse == 0)
-		return 0; /* nothing inflight (sync mode never set inuse) */
+		return 0; /* nothing in-flight (sync mode never set inuse) */
 
 	while (1) {
 		rc = daos_eq_poll(tsc->tsc_eqh, 0, DAOS_EQ_WAIT, DTS_CRED_MAX,
@@ -79,7 +79,7 @@ credit_poll(struct credit_context *tsc, bool drain)
 		if (tsc->tsc_cred_avail == 0)
 			continue; /* still no available event */
 
-		/* if caller wants to drain, is there any event inflight? */
+		/* if caller wants to drain, is there any event in-flight? */
 		if (tsc->tsc_cred_inuse != 0 && drain)
 			continue;
 
@@ -109,7 +109,7 @@ credit_take(struct credit_context *tsc)
 	}
 }
 
-/** drain all the inflight credits */
+/** drain all the in-flight credits */
 int
 credit_drain(struct credit_context *tsc)
 {

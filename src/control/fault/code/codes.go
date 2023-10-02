@@ -79,6 +79,7 @@ const (
 	ScmBadRegion
 	ScmInvalidPMem
 	ScmRamdiskLowMem
+	ScmRamdiskBadSize
 	ScmConfigTierMissing
 )
 
@@ -188,6 +189,7 @@ const (
 	ServerConfigRamdiskOverMaxMem
 	ServerConfigScmDiffClass
 	ServerConfigEngineBdevRolesMismatch
+	ServerConfigSysRsvdZero
 )
 
 // SPDK library bindings codes

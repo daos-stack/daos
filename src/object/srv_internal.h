@@ -81,8 +81,8 @@ struct migrate_pool_tls {
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
 
-	/* The current inflight iod, mainly used for controlling
-	 * rebuild inflight rate to avoid the DMA buffer overflow.
+	/* The current in-flight iod, mainly used for controlling
+	 * rebuild in-flight rate to avoid the DMA buffer overflow.
 	 */
 	uint64_t		mpt_inflight_size;
 	uint64_t		mpt_inflight_max_size;
@@ -259,8 +259,7 @@ void ds_obj_enum_handler(crt_rpc_t *rpc);
 void ds_obj_key2anchor_handler(crt_rpc_t *rpc);
 void ds_obj_punch_handler(crt_rpc_t *rpc);
 void ds_obj_tgt_punch_handler(crt_rpc_t *rpc);
-void ds_obj_query_key_handler_0(crt_rpc_t *rpc);
-void ds_obj_query_key_handler_1(crt_rpc_t *rpc);
+void ds_obj_query_key_handler(crt_rpc_t *rpc);
 void ds_obj_sync_handler(crt_rpc_t *rpc);
 void ds_obj_migrate_handler(crt_rpc_t *rpc);
 void ds_obj_ec_agg_handler(crt_rpc_t *rpc);

@@ -437,7 +437,7 @@ class EngineYamlParameters(YamlParameters):
         "common": [
             "D_LOG_FILE_APPEND_PID=1",
             "COVFILE=/tmp/test.cov"],
-        "ofi+tcp": [],
+        "ofi+tcp;ofi_rxm": [],
         "ofi+verbs": [
             "FI_OFI_RXM_USE_SRX=1"],
         "ofi+cxi": [
@@ -459,7 +459,7 @@ class EngineYamlParameters(YamlParameters):
         namespace = [os.sep] + base_namespace.split(os.sep)[1:-1] + ["engines", str(index), "*"]
         self._base_namespace = base_namespace
         self._index = index
-        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp")
+        self._provider = provider or os.environ.get("CRT_PHY_ADDR_STR", "ofi+tcp;ofi_rxm")
         self._max_storage_tiers = max_storage_tiers
         super().__init__(os.path.join(*namespace))
 

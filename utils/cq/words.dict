@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -179,6 +180,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -257,6 +259,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -376,6 +379,7 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
 runuser
 rw
@@ -392,7 +396,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src
@@ -487,6 +493,7 @@ vm
 vos
 wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

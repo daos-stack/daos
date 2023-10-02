@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -139,6 +139,7 @@ enum {
 	D_TM_CLOCK_PROCESS_CPUTIME	= 0x100,
 	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
 	D_TM_LINK			= 0x400,
+	D_TM_MEMINFO			= 0x800,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
@@ -146,7 +147,8 @@ enum {
 					   D_TM_DURATION | \
 					   D_TM_GAUGE | \
 					   D_TM_STATS_GAUGE | \
-					   D_TM_LINK)
+					   D_TM_LINK | \
+					   D_TM_MEMINFO)
 };
 
 enum {
@@ -203,10 +205,18 @@ struct d_tm_histogram_t {
 	int			dth_value_multiplier;
 };
 
+struct d_tm_meminfo_t {
+	uint64_t arena;
+	uint64_t ordblks;
+	uint64_t uordblks;
+	uint64_t fordblks;
+};
+
 struct d_tm_metric_t {
 	union data {
 		uint64_t	value;
 		struct		timespec tms[2];
+		struct d_tm_meminfo_t meminfo;
 	}			dtm_data;
 	struct d_tm_stats_t	*dtm_stats;
 	struct d_tm_histogram_t	*dtm_histogram;

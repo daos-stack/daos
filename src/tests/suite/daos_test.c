@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIP"
+#define TESTS "mFpcetTViADKCoRvSXbOzZUdrNbBIPG"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -43,6 +43,7 @@ print_usage(int rank)
 	print_message("\n\nDAOS TESTS\n=============================\n");
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("daos_test -m|--mgmt\n");
+	print_message("daos_test -F|--cat_recov\n");
 	print_message("daos_test -p|--pool\n");
 	print_message("daos_test -c|--cont\n");
 	print_message("daos_test -C|--capa\n");
@@ -70,7 +71,8 @@ print_usage(int rank)
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -B|--extend_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
-	print_message("daos_test -P|--upgrade\n");
+	print_message("daos_test -P|--daos_pipeline\n");
+	print_message("daos_test -G|--upgrade\n");
 	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -105,6 +107,12 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=====================");
 			nr_failed = run_daos_mgmt_test(rank, size, sub_tests,
 						       sub_tests_size);
+			break;
+		case 'F':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS catastrophic recovery tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_cr_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		case 'p':
 			daos_test_print(rank, "\n\n=================");
@@ -291,10 +299,15 @@ run_specified_tests(const char *tests, int rank, int size,
 			break;
 		case 'P':
 			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS Pipeline tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_pipeline_test(rank, size);
+			break;
+		case 'G':
+			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS upgrade tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_upgrade_test(rank, size, sub_tests,
-							   sub_tests_size);
+			nr_failed += run_daos_upgrade_test(rank, size, sub_tests, sub_tests_size);
 			break;
 		default:
 			D_ASSERT(0);
@@ -337,6 +350,7 @@ main(int argc, char **argv)
 	static struct option long_options[] = {
 		{"all",		no_argument,		NULL,	'a'},
 		{"mgmt",	no_argument,		NULL,	'm'},
+		{"cat_recov",	no_argument,		NULL,	'F'},
 		{"pool",	no_argument,		NULL,	'p'},
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
@@ -363,6 +377,7 @@ main(int argc, char **argv)
 		{"degrade_ec",	no_argument,		NULL,	'X'},
 		{"drain_simple",	no_argument,	NULL,	'b'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
+		{"pipeline",	no_argument,	NULL,	'P'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
 						CHECKSUM_ARG_VAL_TYPE},
@@ -392,7 +407,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:P",
+			    "amFpcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:GP",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

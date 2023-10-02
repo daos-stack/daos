@@ -67,7 +67,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
 			case "version", "telemetry config", "telemetry run", "config generate",
-				"manpage", "system set-prop", "check repair":
+				"manpage", "system set-prop", "support collect-log", "check repair":
 				return
 			case "storage nvme-rebind":
 				testArgs = append(testArgs, "-l", "foo.com", "-a",

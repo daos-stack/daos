@@ -134,18 +134,19 @@ crtu_progress_fn(void *data)
 	while (opts.shutdown == 0)
 		crt_progress(*p_ctx, 1000);
 
-	if (opts.is_swim_enabled && idx == 0)
-		crt_swim_disable_all();
+	if (opts.is_server) {
+		if (opts.is_swim_enabled && idx == 0)
+			crt_swim_disable_all();
 
-	rc = crtu_drain_queue(*p_ctx);
-	D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
+		rc = crtu_drain_queue(*p_ctx);
+		D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
 
-	if (opts.delay_shutdown_sec > 0)
-		sleep(opts.delay_shutdown_sec);
+		if (opts.delay_shutdown_sec > 0)
+			sleep(opts.delay_shutdown_sec);
+	}
 
 	rc = crt_context_destroy(*p_ctx, 1);
-	D_ASSERTF(rc == 0, "Failed to destroy context %p rc=%d\n",
-		  p_ctx, rc);
+	D_ASSERTF(rc == 0, "Failed to destroy context %p rc=%d\n", p_ctx, rc);
 
 	pthread_exit(rc ? *p_ctx : NULL);
 

@@ -236,6 +236,8 @@ struct vos_pool {
 	uint32_t                 vp_dying  : 1;
 	/** exclusive handle (see VOS_POF_EXCL) */
 	int			vp_excl:1;
+	/* this pool is for sysdb */
+	bool			vp_sysdb;
 	/** this pool is for rdb */
 	bool			vp_rdb;
 	/** caller specifies pool is small (for sys space reservation) */
@@ -266,7 +268,7 @@ struct vos_pool {
 	struct vea_space_info	*vp_vea_info;
 	/** Reserved sys space (for space reclaim, rebuild, etc.) in bytes */
 	daos_size_t		vp_space_sys[DAOS_MEDIA_MAX];
-	/** Held space by inflight updates. In bytes */
+	/** Held space by in-flight updates. In bytes */
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
@@ -569,19 +571,19 @@ extern struct vos_iter_ops vos_dtx_iter_ops;
 static inline void
 vos_pool_addref(struct vos_pool *pool)
 {
-	d_uhash_link_addref(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_addref(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_decref(struct vos_pool *pool)
 {
-	d_uhash_link_putref(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_putref(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_hash_del(struct vos_pool *pool)
 {
-	d_uhash_link_delete(vos_pool_hhash_get(), &pool->vp_hlink);
+	d_uhash_link_delete(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
 }
 
 /**
@@ -591,7 +593,7 @@ vos_pool_hash_del(struct vos_pool *pool)
 static inline struct daos_lru_cache *
 vos_get_obj_cache(void)
 {
-	return vos_tls_get()->vtl_ocache;
+	return vos_tls_get(false)->vtl_ocache;
 }
 
 /**
@@ -701,7 +703,7 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 
 /** Return the already active dtx id, if any */
 uint32_t
-vos_dtx_get(void);
+vos_dtx_get(bool standalone);
 
 /**
  * Deregister the record from the DTX entry.
@@ -732,6 +734,9 @@ int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 			int count, daos_epoch_t epoch, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
+
+int
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
 
 void
 vos_dtx_post_handle(struct vos_container *cont,
@@ -1036,7 +1041,8 @@ struct vos_iterator {
 				 it_for_discard:1,
 				 it_for_migration:1,
 				 it_show_uncommitted:1,
-				 it_ignore_uncommitted:1;
+				 it_ignore_uncommitted:1,
+				 it_for_sysdb:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1202,7 +1208,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm);
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
 
 /** Finish the transaction and publish or cancel the reservations or
  *  return if err == 0 and it's a multi-modification transaction that
@@ -1431,17 +1437,27 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 }
 
 static inline bool
-vos_dtx_hit_inprogress(void)
+vos_dtx_hit_inprogress(bool standalone)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth;
+
+	if (standalone)
+		return false;
+
+	dth = vos_dth_get(false);
 
 	return dth != NULL && dth->dth_share_tbd_count > 0;
 }
 
 static inline bool
-vos_dtx_continue_detect(int rc)
+vos_dtx_continue_detect(int rc, bool standalone)
 {
-	struct dtx_handle	*dth = vos_dth_get();
+	struct dtx_handle	*dth;
+
+	if (standalone)
+		return false;
+
+	dth = vos_dth_get(false);
 
 	/* Continue to detect other potential in-prepared DTX. */
 	return rc == -DER_INPROGRESS && dth != NULL &&
@@ -1710,4 +1726,6 @@ int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
 
+void vos_lru_free_track(void *arg, daos_size_t size);
+void vos_lru_alloc_track(void *arg, daos_size_t size);
 #endif /* __VOS_INTERNAL_H__ */

@@ -348,8 +348,8 @@ struct  _Mgmt__CheckQueryResp
   /*
    * The whole check instance status depends on the each engine status:
    * As long as one target is in CIS_RUNNING, then the instance is CIS_RUNNING.
-   * Otherwise, in turn with the status of CIS_FAILED, CIS_CRASHED, CIS_PAUSED,
-   * CIS_STOPPED, CIS_COMPLETED.
+   * Otherwise, in turn with the status of CIS_FAILED, CIS_STOPPED, CIS_IMPLICATED,
+   * CIS_COMPLETED, CIS_PAUSED, CIS_INIT.
    */
   Chk__CheckInstStatus ins_status;
   /*
@@ -362,7 +362,7 @@ struct  _Mgmt__CheckQueryResp
   /*
    * Dryrun indicates that the checker is running in dry-run mode (i.e. no changes made).
    */
-  protobuf_c_boolean         dryrun;
+  protobuf_c_boolean dryrun;
   /*
    * Inconsistency statistics during the phases range
    * [CSP_PREPARE, CSP_POOL_LIST] for the whole system.
@@ -383,12 +383,10 @@ struct  _Mgmt__CheckQueryResp
   size_t n_reports;
   Chk__CheckReport **reports;
 };
-#define MGMT__CHECK_QUERY_RESP__INIT                                                               \
-	{                                                                                          \
-		PROTOBUF_C_MESSAGE_INIT(&mgmt__check_query_resp__descriptor)                       \
-		, 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, 0,      \
-		    NULL, NULL, 0, NULL, 0, NULL                                                   \
-	}
+#define MGMT__CHECK_QUERY_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_query_resp__descriptor) \
+    , 0, CHK__CHECK_INST_STATUS__CIS_INIT, CHK__CHECK_SCAN_PHASE__CSP_PREPARE, 0, NULL, NULL, 0,NULL, 0,NULL }
+
 
 /*
  * For 'dmg check set-policy'
@@ -468,10 +466,11 @@ struct  _Mgmt__CheckGetPolicyReq
   char *sys;
   size_t n_classes;
   Chk__CheckInconsistClass *classes;
+  protobuf_c_boolean last_used;
 };
 #define MGMT__CHECK_GET_POLICY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__check_get_policy_req__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0 }
 
 
 /*

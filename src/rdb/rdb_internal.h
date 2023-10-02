@@ -91,6 +91,8 @@ struct rdb {
 	ABT_cond                d_commit_cv;    /* for waking active pool checkpoint */
 	daos_handle_t		d_mc;		/* metadata container */
 	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
+	bool			d_new;		/* for skipping lease recovery */
+	bool			d_use_leases;	/* when verifying leadership */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
@@ -208,7 +210,7 @@ int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx)
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 3
+#define DAOS_RDB_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */

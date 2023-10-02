@@ -13,12 +13,13 @@ class CartCoRpcOneNodeTest(CartTest):
     :avocado: recursive
     """
 
-    def test_cart_corpc(self):
+    def test_cart_corpc_one_node(self):
         """Test CaRT CoRPC.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,corpc,one_node,memcheck
-        :avocado: tags=test_cart_corpc
+        :avocado: tags=CartCoRpcOneNodeTest,test_cart_corpc_one_node
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)

@@ -256,7 +256,7 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
-	/*Decrease inflights on error or successful callback completion chain*/
+	/*Decrease in-flights on error or successful callback completion chain*/
 	dev_health->bdh_inflights--;
 out:
 	/* Free I/O request in the completion callback */
@@ -843,7 +843,7 @@ bio_fini_health_monitoring(struct bio_xs_context *ctxt, struct bio_blobstore *bb
 	struct bio_dev_health	*bdh = &bb->bb_dev_health;
 	int			 rc;
 
-	/* Drain the inflight request before putting I/O channel */
+	/* Drain the in-flight request before putting I/O channel */
 	D_ASSERT(bdh->bdh_inflights < 2);
 	if (bdh->bdh_inflights > 0) {
 		D_INFO("Wait for health collecting done...\n");

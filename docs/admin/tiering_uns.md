@@ -87,9 +87,9 @@ will be accessible through the native HDF5 connector with the POSIX VFD.
 The POSIX data mover was released with DAOS v1.2 and supports data migration
 to/from a POSIX filesystem. Parallel data migration is available through
 mpiFileUtils, which contains a DAOS backend. Serial data migration is supported
-through the daos filesystem copy utility. The first version of the data mover
-tool that contains support for HDF5 containers is scheduled for release in DAOS
-v2.4.
+through the daos filesystem copy utility.
+A version of the data mover tool that contains support for HDF5 containers
+is planned for a future release of DAOS.
 
 ### Container Parking
 
@@ -98,8 +98,8 @@ container to a set of POSIX files that can be stored or “parked” in an exter
 POSIX filesystem. This transformation is agnostic to the data model and
 container type and retains most DAOS internal metadata. The serialized file(s)
 are written to a POSIX filesystem in an HDF5 file format. A preview of the
-serialization and deserialization tools is available in DAOS v2.0 through
-mpiFileUtils, and they will be officially released in DAOS v2.4.
+serialization and deserialization tools is available through
+mpiFileUtils, and they will be officially released in a future DAOS release.
 
 More details and instructions on data mover usage can be found at:
 https://github.com/daos-stack/daos/blob/master/docs/user/datamover.md

@@ -26,14 +26,13 @@ DAOS 2.2 did enable VMD-managed devices in the `daos_server.yml` configuration f
 (and as arguments to some DAOS management commands), but did 
 _not_ yet provide any additional functionality over non-VMD devices.
 
-DAOS 2.4 introduces the **LED management** feature that requires VMD.
+DAOS 2.4 introduced the **LED management** feature that requires VMD.
 
-The following function is targeted for a future DAOS release:
-* **Surprise hot-plug management** through VMD is a DAOS 2.6 roadmap item.
+**Surprise hot-plug management** through VMD is roadmap item for DAOS 2.6.
 
-This document explains how to enable VMD in DAOS 2.4 environments.
+This document explains how to enable VMD.
 Customers who intend to utilize DAOS capabilities that depend on VMD
-are encouraged to enable VMD with DAOS 2.4, because changing from a
+are encouraged to enable VMD when setting up the DAOS cluster, because changing from a
 non-VMD setup to VMD is not possible without reformatting the DAOS storage.
 
 

@@ -3,7 +3,6 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import socket
 import time
 
@@ -93,7 +92,7 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
-        l_addr = sys_leader_info["response"]["CurrentLeader"]
+        l_addr = sys_leader_info["response"]["current_leader"]
 
         return get_hostname(l_addr)
 
@@ -171,7 +170,8 @@ class ManagementServiceResilience(TestWithServers):
 
         """
         self.log.info("*** launching %d servers", resilience_num)
-        replicas = NodeSet.fromlist(random.sample(list(self.hostlist_servers), resilience_num))
+        replicas = NodeSet.fromlist(
+            self.random.sample(list(self.hostlist_servers), resilience_num))
         server_groups = {
             self.server_group:
                 {
@@ -202,7 +202,7 @@ class ManagementServiceResilience(TestWithServers):
             NodeSet: hosts that were stopped.
 
         """
-        kill_list = NodeSet.fromlist(random.sample(list(replicas), num_hosts))
+        kill_list = NodeSet.fromlist(self.random.sample(list(replicas), num_hosts))
         if not leader.intersection(kill_list):
             kill_list.remove(kill_list[-1])
             kill_list.add(leader)

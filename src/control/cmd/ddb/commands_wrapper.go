@@ -61,12 +61,13 @@ func ddbPoolIsOpen(ctx *DdbContext) bool {
 	return bool(C.ddb_pool_is_open(&ctx.ctx))
 }
 
-func ddbLs(ctx *DdbContext, path string, recursive bool) error {
+func ddbLs(ctx *DdbContext, path string, recursive bool, details bool) error {
 	/* Set up the options */
 	options := C.struct_ls_options{}
 	options.path = C.CString(path)
 	defer freeString(options.path)
 	options.recursive = C.bool(recursive)
+	options.details = C.bool(details)
 	/* Run the c code command */
 	return daosError(C.ddb_run_ls(&ctx.ctx, &options))
 }

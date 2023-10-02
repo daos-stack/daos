@@ -33,11 +33,18 @@
 		assert_int_equal((a).lo, (b).lo); \
 	} while (0)
 
+#define assert_uoid_equal(a, b) \
+	do { \
+		assert_oid_equal((a).id_pub, (b).id_pub); \
+		assert_int_equal((a).id_shard, (b).id_shard); \
+		assert_int_equal((a).id_layout_ver, (b).id_layout_ver); \
+	} while (0)
+
 #define assert_oid_not_equal(a, b) assert_true(a.hi != b.hi || a.lo != b.lo)
+
 #define assert_key_equal(a, b) \
 	do { \
 		assert_int_equal(a.iov_len, b.iov_len); \
-		assert_int_equal(a.iov_buf_len, b.iov_buf_len); \
 		assert_memory_equal(a.iov_buf, b.iov_buf, a.iov_len); \
 	} while (0)
 
@@ -45,6 +52,12 @@
 	do { \
 		if (a.iov_len == b.iov_len && a.iov_buf_len == b.iov_buf_len) \
 			assert_memory_not_equal(a.iov_buf, b.iov_buf, a.iov_len); \
+	} while (0)
+
+#define assert_recx_equal(a, b) \
+	do { \
+		assert_int_equal((a).rx_nr, (b).rx_nr); \
+		assert_int_equal((a).rx_idx, (b).rx_idx); \
 	} while (0)
 
 #define assert_string_contains(str, substr) \

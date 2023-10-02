@@ -23,6 +23,9 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#if BUILD_PIPELINE
+#include <daos/pipeline.h>
+#endif
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -128,6 +131,11 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_obj_key2anchor, sizeof(daos_obj_key2anchor_t)},
 	{dc_cont_snap_oit_create, sizeof(daos_cont_snap_oit_create_t)},
 	{dc_cont_snap_oit_destroy, sizeof(daos_cont_snap_oit_destroy_t)},
+
+#if BUILD_PIPELINE
+	/** Pipeline */
+	{dc_pipeline_run, sizeof(daos_pipeline_run_t)},
+#endif
 };
 
 /**
@@ -234,9 +242,19 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+#if BUILD_PIPELINE
+	/** set up pipeline */
+	rc = dc_pipeline_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+#endif
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
+#if BUILD_PIPELINE
+out_obj:
+	dc_obj_fini();
+#endif
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -291,6 +309,9 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+#if BUILD_PIPELINE
+	dc_pipeline_fini();
+#endif
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

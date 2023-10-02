@@ -19,6 +19,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
@@ -187,7 +188,7 @@ type PoolCreateCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	GroupName  ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
 	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
 	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
@@ -198,6 +199,7 @@ type PoolCreateCmd struct {
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -207,11 +209,18 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size.IsSet() && (cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet()) {
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	}
-	if !cmd.Size.IsSet() && !cmd.ScmSize.IsSet() {
-		return errors.New("either --size or --scm-size must be supplied")
+	if cmd.Size.IsSet() {
+		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
+			return errIncompatFlags("size", "scm-size", "nvme-size")
+		}
+		if cmd.MetaSize.IsSet() {
+			// NOTE DAOS-14223: --meta-size value is currently not taken into account
+			//                  when storage tier sizes are auto-calculated so only
+			//                  support in manual mode.
+			return errors.New("--meta-size can only be set if --scm-size is set")
+		}
+	} else if !cmd.ScmSize.IsSet() {
+		return errors.New("either --size or --scm-size must be set")
 	}
 
 	if cmd.Args.PoolLabel != "" {
@@ -298,19 +307,28 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmBytes := cmd.ScmSize.bytes
 		nvmeBytes := cmd.NVMeSize.bytes
+		metaBytes := cmd.MetaSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)",
-			humanize.Bytes(scmBytes),
-			humanize.Bytes(nvmeBytes),
-			scmRatio*100)
+		if metaBytes > 0 && metaBytes < scmBytes {
+			return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
+				humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
+		}
+		req.MetaBytes = metaBytes
+
+		msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
+			" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes), scmRatio*100)
+		if metaBytes > 0 {
+			msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
+		}
+		cmd.Info(msg)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -355,9 +373,10 @@ type PoolListCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	cmdutil.JSONOutputCmd
+	Verbose     bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery     bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -374,17 +393,24 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	initialResp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, nil)
+	// If rebuild-only pools requested, list the pools which has been rebuild only
+	// and not in idle state, otherwise list all the pools.
+	resp := new(control.ListPoolsResp)
+	if err := updateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose, cmd.NoQuery); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
@@ -397,6 +423,17 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+// Update the pool list, which has been rebuild and not in idle state.
+func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
+	for _, pool := range resp.Pools {
+		if !rebuildOnly || pool.RebuildState != "idle" {
+			finalResp.Pools = append(finalResp.Pools, pool)
+		}
+	}
+
+	return nil
+}
+
 type PoolID struct {
 	ui.LabelOrUUIDFlag
 }
@@ -406,7 +443,7 @@ type poolCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
 		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
@@ -598,8 +635,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -638,8 +675,8 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -686,6 +723,9 @@ type PoolSetPropCmd struct {
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "perf_domain" {
+			return errors.New("can't set perf_domain on existing pool.")
+		}
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
 		}
@@ -703,8 +743,8 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	}
 
 	err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -731,8 +771,8 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.PoolGetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -760,8 +800,8 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 	req := &control.PoolGetACLReq{ID: cmd.PoolID().String()}
 
 	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -830,8 +870,8 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -878,8 +918,8 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -908,8 +948,8 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

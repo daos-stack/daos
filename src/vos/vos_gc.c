@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -875,7 +875,7 @@ gc_check_cont(struct vos_container *cont)
 int
 gc_add_pool(struct vos_pool *pool)
 {
-	struct vos_tls	   *tls = vos_tls_get();
+	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
 
 	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
 		DP_UUID(pool->vp_id));
@@ -941,7 +941,7 @@ gc_log_pool(struct vos_pool *pool)
 static int
 vos_gc_run(int *credits)
 {
-	struct vos_tls	*tls	 = vos_tls_get();
+	struct vos_tls	*tls	 = vos_tls_get(true);
 	d_list_t	*pools	 = &tls->vtl_gc_pools;
 	int		 rc	 = 0;
 	int		 checked = 0;
@@ -1083,7 +1083,7 @@ vos_gc_yield(void *arg)
 	int			 rc;
 
 	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get() == NULL);
+	D_ASSERT(vos_dth_get(false) == NULL);
 
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;
@@ -1107,12 +1107,13 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
 	struct vos_pool		*pool = vos_hdl2pool(poh);
-	struct vos_tls		*tls  = vos_tls_get();
+	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
 	struct vos_gc_param	 param;
 	uint32_t		 nr_flushed = 0;
 	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
+	D_ASSERT(pool->vp_sysdb == false);
 
 	vos_space_update_metrics(pool);
 

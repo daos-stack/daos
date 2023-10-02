@@ -202,11 +202,11 @@ lookup_object(struct io_test_args *arg, daos_unit_oid_t oid)
 	 *  tree.   If this returns 0, we need to release the object though
 	 *  this is only presently used to check existence
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(),
+	rc = vos_obj_hold(vos_obj_cache_current(true),
 			  vos_hdl2cont(arg->ctx.tc_co_hdl), oid, &epr, 0,
 			  VOS_OBJ_VISIBLE, DAOS_INTENT_DEFAULT, &obj, 0);
 	if (rc == 0)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+		vos_obj_release(vos_obj_cache_current(true), obj, false);
 	return rc;
 }
 
@@ -1840,13 +1840,14 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tfrags_aging: "DF_U64"\n",
+		    "\tfrags_aging: "DF_U64" \tfrags_bitmap: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
 		    stat->vs_frags_large, stat->vs_frags_small,
-		    stat->vs_frags_aging);
+		    stat->vs_frags_aging, stat->vs_frags_bitmap);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
-		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
-		    stat->vs_resrv_large, stat->vs_resrv_small);
+		    "\tresrv_small: "DF_U64", \tresrv_bitmap: "DF_U64"\n",
+		    stat->vs_resrv_hint, stat->vs_resrv_large,
+		    stat->vs_resrv_small, stat->vs_resrv_bitmap);
 }
 
 static int

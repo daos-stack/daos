@@ -1,8 +1,8 @@
 /**
-* (C) Copyright 2022 Intel Corporation.
-*
-* SPDX-License-Identifier: BSD-2-Clause-Patent
-*/
+ * (C) Copyright 2022-2023 Intel Corporation.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
+ */
 #include <ctype.h>
 #include <getopt.h>
 #include <gurt/debug.h>
@@ -10,6 +10,8 @@
 #include "ddb.h"
 #include "ddb_common.h"
 #include "ddb_parse.h"
+
+#define MAX_COMMAND_LEN              1024
 
 #define same(a, b) (strcmp((a), (b)) == 0)
 #define COMMAND_NAME_HELP "help"
@@ -38,10 +40,11 @@ static int
 ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 		uint32_t argc, char **argv)
 {
-	char		 *options_short = "r";
+	char		 *options_short = "rd";
 	int		  index = 0, opt;
 	struct option	  options_long[] = {
 		{ "recursive", no_argument, NULL, 'r' },
+		{ "details", no_argument, NULL, 'd' },
 		{ NULL }
 	};
 
@@ -54,6 +57,9 @@ ls_option_parse(struct ddb_ctx *ctx, struct ls_options *cmd_args,
 		switch (opt) {
 		case 'r':
 			cmd_args->recursive = true;
+			break;
+		case 'd':
+			cmd_args->details = true;
 			break;
 		case '?':
 			ddb_printf(ctx, "Unknown option: '%c'\n", optopt);
@@ -754,7 +760,12 @@ ddb_run_cmd(struct ddb_ctx *ctx, const char *cmd_str, bool write_mode)
 	struct argv_parsed	 parse_args = {0};
 	struct ddb_cmd_info	 info = {0};
 	int			 rc;
-	char			*cmd_copy = strdup(cmd_str);
+	char                    *cmd_copy;
+
+	D_STRNDUP(cmd_copy, cmd_str, MAX_COMMAND_LEN);
+
+	if (cmd_copy == NULL)
+		return -DER_NOMEM;
 
 	/* Remove newline if needed */
 	if (cmd_copy[strlen(cmd_copy) - 1] == '\n')
@@ -889,6 +900,8 @@ ddb_commands_help(struct ddb_ctx *ctx)
 	ddb_print(ctx, "Options:\n");
 	ddb_print(ctx, "    -r, --recursive\n");
 	ddb_print(ctx, "\tRecursively list the contents of the path\n");
+	ddb_print(ctx, "    -d, --details\n");
+	ddb_print(ctx, "\tList more details of items in path\n");
 	ddb_print(ctx, "\n");
 
 	/* Command: open */

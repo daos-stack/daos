@@ -95,93 +95,11 @@ test_time(void **state)
 	assert_int_equal(timeleft, 0);
 }
 
-#define D_CHECK_STRLIMITS(name, base)				\
-	do {							\
-		value = d_errstr(-DER_ERR_##name##_BASE);	\
-		assert_string_equal(value, "DER_UNKNOWN");	\
-		value = d_errstr(-DER_ERR_##name##_LIMIT);	\
-		assert_string_equal(value, "DER_UNKNOWN");	\
-		value = d_errstr(DER_ERR_##name##_BASE);	\
-		assert_string_equal(value, "DER_UNKNOWN");	\
-		value = d_errstr(DER_ERR_##name##_LIMIT);	\
-		assert_string_equal(value, "DER_UNKNOWN");	\
-	} while (0);
-
-#define D_CHECK_ERR_IN_RANGE(name, value, errstr)		\
-	do {							\
-		const char	*str = d_errstr(-name);		\
-		assert_string_not_equal(str, "DER_UNKNOWN");	\
-	} while (0);
-
-#define D_CHECK_IN_RANGE(name, base)	\
-	D_FOREACH_##name##_ERR(D_CHECK_ERR_IN_RANGE)
-
-#define D_FOREACH_CUSTOM1_ERR(ACTION)				\
-	ACTION(DER_CUSTOM1,	(DER_ERR_CUSTOM1_BASE + 1),	\
-	       "Custom error description 1")			\
-	ACTION(DER_CUSTOM2,	(DER_ERR_CUSTOM1_BASE + 2),	\
-	       "Custom error description 2")
-
-#define D_FOREACH_CUSTOM2_ERR(ACTION)				\
-	ACTION(DER_CUSTOM3,	(DER_ERR_CUSTOM2_BASE + 1),	\
-	       "Custom error description 3")			\
-	ACTION(DER_CUSTOM4,	(DER_ERR_CUSTOM2_BASE + 2),	\
-	       "Custom error description 4")
-
-D_DEFINE_RANGE_ERRNO(CUSTOM1, 2000)
-D_DEFINE_RANGE_ERRNO(CUSTOM2, 3000)
-
-D_DEFINE_RANGE_ERRSTR(CUSTOM1)
-D_DEFINE_RANGE_ERRSTR(CUSTOM2)
-
-void test_d_errstr_v2(void **state)
+void
+test_d_errstr(void **state)
 {
-	const char	*value;
-	int		rc;
+	const char *value;
 
-	rc = D_REGISTER_RANGE(CUSTOM1);
-	assert_int_equal(rc, 0);
-
-	rc = D_REGISTER_RANGE(CUSTOM2);
-	assert_int_equal(rc, 0);
-
-	value = d_errstr(-DER_CUSTOM1);
-	assert_string_equal(value, "DER_CUSTOM1");
-
-	value = d_errstr(-DER_CUSTOM2);
-	assert_string_equal(value, "DER_CUSTOM2");
-
-	value = d_errstr(-DER_CUSTOM3);
-	assert_string_equal(value, "DER_CUSTOM3");
-
-	value = d_errstr(-DER_CUSTOM4);
-	assert_string_equal(value, "DER_CUSTOM4");
-
-	D_DEREGISTER_RANGE(CUSTOM1);
-	D_DEREGISTER_RANGE(CUSTOM2);
-
-	/* CUSTOM1 and CUSTOM2 overlap with DAOS codes */
-	value = d_errstr(-DER_CUSTOM1);
-	assert_string_not_equal(value, "DER_CUSTOM1");
-	assert_string_not_equal(value, "DER_UNKNOWN");
-
-	value = d_errstr(-DER_CUSTOM2);
-	assert_string_not_equal(value, "DER_CUSTOM2");
-	assert_string_not_equal(value, "DER_UNKNOWN");
-
-	value = d_errstr(-DER_CUSTOM3);
-	assert_string_equal(value, "DER_UNKNOWN");
-
-	value = d_errstr(-DER_CUSTOM4);
-	assert_string_equal(value, "DER_UNKNOWN");
-}
-
-void test_d_errstr(void **state)
-{
-	const char	*value;
-
-	D_FOREACH_ERR_RANGE(D_CHECK_STRLIMITS)
-	D_FOREACH_ERR_RANGE(D_CHECK_IN_RANGE)
 	value = d_errstr(-DER_INVAL);
 	assert_string_equal(value, "DER_INVAL");
 	value = d_errstr(DER_INVAL);
@@ -198,20 +116,30 @@ void test_d_errstr(void **state)
 	assert_string_equal(value, "DER_SUCCESS");
 	value = d_errstr(-DER_IVCB_FORWARD);
 	assert_string_equal(value, "DER_IVCB_FORWARD");
-#ifdef TEST_OLD_ERROR
-	value = d_errstr(-DER_FREE_MEM);
-	assert_string_equal(value, "DER_FREE_MEM");
-	value = d_errstr(-DER_STALE);
-	assert_string_equal(value, "DER_STALE");
-	(void)test_d_errstr_v2;
-#else
-	test_d_errstr_v2(state);
-#endif
+
+	/* Check the boundary at the end of the GURT error numbers, this will need updating if
+	 * additional error numbers are added.
+	 */
+	value = d_errstr(-DER_HG_FATAL);
+	assert_string_equal(value, "DER_HG_FATAL");
+	value = d_errstr(-1045);
+	assert_string_equal(value, "DER_HG_FATAL");
+	value = d_errstr(-(DER_HG_FATAL + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
+
+	/* Check the end of the DAOS error numbers. */
+	value = d_errstr(-DER_NOT_RESUME);
+	assert_string_equal(value, "DER_NOT_RESUME");
+	value = d_errstr(-2048);
+	assert_string_equal(value, "DER_NOT_RESUME");
+	value = d_errstr(-(DER_NOT_RESUME + 1));
+	assert_string_equal(value, "DER_UNKNOWN");
 }
 
-void test_d_errdesc(void **state)
+void
+test_d_errdesc(void **state)
 {
-	const char	*value;
+	const char *value;
 
 	value = d_errdesc(-DER_INVAL);
 	assert_string_equal(value, "Invalid parameters");
@@ -2149,25 +2077,25 @@ test_d_rank_list_dup_sort_uniq(void **state)
 int
 main(int argc, char **argv)
 {
-	const struct CMUnitTest	tests[] = {
-		cmocka_unit_test(test_time),
-		cmocka_unit_test(test_d_errstr),
-		cmocka_unit_test(test_d_errdesc),
-		cmocka_unit_test(test_gurt_list),
-		cmocka_unit_test(test_gurt_hlist),
-		cmocka_unit_test(test_binheap),
-		cmocka_unit_test(test_log),
-		cmocka_unit_test(test_gurt_hash_empty),
-		cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
-		cmocka_unit_test(test_gurt_hash_decref),
-		cmocka_unit_test(test_gurt_alloc),
-		cmocka_unit_test(test_gurt_hash_parallel_same_operations),
-		cmocka_unit_test(test_gurt_hash_parallel_different_operations),
-		cmocka_unit_test(test_gurt_hash_parallel_refcounting),
-		cmocka_unit_test(test_gurt_atomic),
-		cmocka_unit_test(test_gurt_string_buffer),
-		cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
-		cmocka_unit_test(test_hash_perf),
+	const struct CMUnitTest tests[] = {
+	    cmocka_unit_test(test_time),
+	    cmocka_unit_test(test_d_errstr),
+	    cmocka_unit_test(test_d_errdesc),
+	    cmocka_unit_test(test_gurt_list),
+	    cmocka_unit_test(test_gurt_hlist),
+	    cmocka_unit_test(test_binheap),
+	    cmocka_unit_test(test_log),
+	    cmocka_unit_test(test_gurt_hash_empty),
+	    cmocka_unit_test(test_gurt_hash_insert_lookup_delete),
+	    cmocka_unit_test(test_gurt_hash_decref),
+	    cmocka_unit_test(test_gurt_alloc),
+	    cmocka_unit_test(test_gurt_hash_parallel_same_operations),
+	    cmocka_unit_test(test_gurt_hash_parallel_different_operations),
+	    cmocka_unit_test(test_gurt_hash_parallel_refcounting),
+	    cmocka_unit_test(test_gurt_atomic),
+	    cmocka_unit_test(test_gurt_string_buffer),
+	    cmocka_unit_test(test_d_rank_list_dup_sort_uniq),
+	    cmocka_unit_test(test_hash_perf),
 	};
 
 	d_register_alt_assert(mock_assert);
