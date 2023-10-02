@@ -2470,7 +2470,7 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
-	if (dtx_is_valid_handle(dth))
+	if (dtx_is_real_handle(dth))
 		epoch = dth->dth_epoch;
 
 	D_DEBUG(DB_TRACE,
