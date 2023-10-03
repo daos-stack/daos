@@ -262,7 +262,7 @@ def define_components(reqs):
                 libs=['isal_crypto'])
 
     reqs.define('pmdk',
-                retriever=GitRepoRetriever('https://github.com/pmem/pmdk.git'),
+                retriever=GitRepoRetriever('https://github.com/grom72/pmdk.git'),
                 commands=[['make',
                            'all',
                            'BUILD_RPMEM=n',
