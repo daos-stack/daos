@@ -832,6 +832,12 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return 0;
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_UPGRADE) {
+		rc = vos_cont_upgrade(iter_param->ip_hdl, entry->ie_couuid);
+		if (rc != 0)
+			return rc;
+	}
+
 	rc = vos_cont_open(iter_param->ip_hdl, entry->ie_couuid, &coh);
 	if (rc != 0) {
 		D_ERROR("Open container "DF_UUID" failed: "DF_RC"\n",
@@ -985,10 +991,17 @@ rebuild_scanner(void *data)
 	if (!rebuild_status_match(rpt, PO_COMP_ST_UP)) {
 		rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 				 rebuild_container_scan_cb, NULL, &arg, NULL);
+		if (rc != 0)
+			D_GOTO(put, rc);
 	}
 
+	if (rpt->rt_rebuild_op == RB_OP_UPGRADE) {
+		rc = vos_pool_upgrade(child->spc_hdl, POOL_DF_VERSION);
+		if (rc)
+			D_GOTO(out, rc);
+	}
+put:
 	ds_pool_child_put(child);
-
 out:
 	tls->rebuild_pool_scan_done = 1;
 	if (ult_send != ABT_THREAD_NULL)

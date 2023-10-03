@@ -1561,18 +1561,6 @@ update_vos_prop_on_targets(void *in)
 	if (ret)
 		goto out;
 
-	/** If necessary, upgrade the vos pool format */
-	if (pool->sp_global_version >= 3) {
-		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.6 df=%d\n", VOS_POOL_DF_2_6);
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_6);
-	} else if (pool->sp_global_version == 2) {
-		D_DEBUG(DB_MGMT, "Upgrading durable format to 2.4 df=%d\n", VOS_POOL_DF_2_4);
-		ret = vos_pool_upgrade(child->spc_hdl, VOS_POOL_DF_2_4);
-	} else {
-		D_ERROR("2.2 or earlier pool can't be upgraded to 2.6\n");
-		D_GOTO(out, ret = -DER_NO_PERM);
-	}
-
 	if (pool->sp_checkpoint_props_changed) {
 		pool->sp_checkpoint_props_changed = 0;
 		if (child->spc_chkpt_req != NULL)

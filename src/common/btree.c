@@ -3444,6 +3444,18 @@ dbtree_close(daos_handle_t toh)
 	return 0;
 }
 
+void
+dbtree_reset_root(daos_handle_t toh, struct btr_root *root)
+{
+	struct btr_context	*tcx;
+
+	tcx = btr_hdl2tcx(toh);
+	if (tcx == NULL)
+		return;
+
+	tcx->tc_tins.ti_root = root;
+}
+
 /** Destroy a tree node and all its children recursively. */
 static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,

@@ -472,6 +472,17 @@ int
 vos_cont_update_boundary(daos_handle_t coh, uint64_t epoch);
 
 /**
+ * Upgrade container durable format.
+ *
+ * \param poh	[IN]	pool handle.
+ * \param co_uuid [IN]	container uuid.
+ *
+ * \return		0 on success, negative value if failed.
+ */
+int
+vos_cont_upgrade(daos_handle_t poh, uuid_t co_uuid);
+
+/**
  * get commit epoch of the VOS container.
  *
  * \param coh	[IN]	container handle.

@@ -90,9 +90,6 @@ enum vos_gc_type {
  * feature's assigned durable format.  Otherwise, the feature must not be used.
  */
 
-/** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
-
 /** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
  *  version.
  */

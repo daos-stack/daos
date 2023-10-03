@@ -1807,10 +1807,13 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		D_GOTO(out, rc);
 	}
 
-	/* resume pool upgrade if needed */
-	rc = ds_pool_upgrade_if_needed(svc->ps_uuid, NULL, svc, NULL);
-	if (rc != 0)
-		goto out;
+	if (!DAOS_FAIL_CHECK(DAOS_FAIL_POOL_CREATE_VERSION) &&
+	    !DAOS_FAIL_CHECK(DAOS_FORCE_OBJ_UPGRADE)) {
+		/* resume pool upgrade if needed */
+		rc = ds_pool_upgrade_if_needed(svc->ps_uuid, NULL, svc, NULL);
+		if (rc != 0)
+			goto out;
+	}
 
 	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
 	if (rc != 0)
@@ -5129,30 +5132,16 @@ out:
 	return rc1;
 }
 
-/* check and upgrade the object layout if needed. */
+/* Schedule durable format check on all targets. */
 static int
-pool_check_upgrade_object_layout(struct rdb_tx *tx, struct pool_svc *svc,
-				 bool *scheduled_layout_upgrade)
+pool_upgrade_schedule(struct pool_svc *svc)
 {
 	daos_epoch_t	upgrade_eph = d_hlc_get();
-	d_iov_t		value;
-	uint32_t	current_layout_ver = 0;
 	int		rc = 0;
 
-	d_iov_set(&value, &current_layout_ver, sizeof(current_layout_ver));
-	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_obj_version, &value);
-	if (rc && rc != -DER_NONEXIST)
-		return rc;
-	else if (rc == -DER_NONEXIST)
-		current_layout_ver = 0;
-
-	if (current_layout_ver < DS_POOL_OBJ_VERSION) {
-		rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-					 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-					 RB_OP_UPGRADE, 0);
-		if (rc == 0)
-			*scheduled_layout_upgrade = true;
-	}
+	rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
+				 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
+				 RB_OP_UPGRADE, 0);
 	return rc;
 }
 
@@ -5198,9 +5187,7 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 	uint32_t			upgrade_status;
 	uint32_t			upgrade_global_ver;
 	int				rc;
-	bool				scheduled_layout_upgrade = false;
 	bool				dmg_upgrade_cmd = false;
-	bool				request_schedule_upgrade = false;
 
 	if (!svc) {
 		rc = pool_svc_lookup_leader(pool_uuid, &svc, po_hint);
@@ -5303,7 +5290,6 @@ ds_pool_upgrade_if_needed(uuid_t pool_uuid, struct rsvc_hint *po_hint,
 		}
 	}
 out_upgrade:
-	request_schedule_upgrade = true;
 	/**
 	 * Todo: make sure no rebuild/reint/expand are in progress
 	 */
@@ -5311,7 +5297,10 @@ out_upgrade:
 	if (rc)
 		D_GOTO(out_tx, rc);
 
-	rc = pool_check_upgrade_object_layout(&tx, svc, &scheduled_layout_upgrade);
+	if (dmg_upgrade_cmd && DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
+		D_GOTO(out_tx, rc = -DER_AGAIN);
+
+	rc = pool_upgrade_schedule(svc);
 	if (rc < 0)
 		D_GOTO(out_tx, rc);
 
@@ -5319,16 +5308,6 @@ out_tx:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 
-	if (request_schedule_upgrade && !scheduled_layout_upgrade) {
-		int rc1;
-
-		if (rc == 0 && dmg_upgrade_cmd &&
-		    DAOS_FAIL_CHECK(DAOS_POOL_UPGRADE_CONT_ABORT))
-			D_GOTO(out_put_leader, rc = -DER_AGAIN);
-		rc1 = ds_pool_mark_upgrade_completed_internal(svc, rc);
-		if (rc == 0 && rc1)
-			rc = rc1;
-	}
 out_put_leader:
 	if (dmg_upgrade_cmd) {
 		ds_rsvc_set_hint(&svc->ps_rsvc, po_hint);
