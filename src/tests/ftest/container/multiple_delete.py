@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,6 @@ SCM_THRESHOLD = 400000
 
 
 class MultipleContainerDelete(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description:
        Test that multiple container create/delete reclaims the pool space without leak.
 
@@ -33,9 +32,9 @@ class MultipleContainerDelete(IorTestBase):
             Verify both the SCM and NVMe pool spaces are recovered
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,medium
         :avocado: tags=container
-        :avocado: tags=multi_container_delete,test_multiple_container_delete
+        :avocado: tags=MultipleContainerDelete,test_multiple_container_delete
         """
         self.add_pool(connect=False)
 
@@ -46,7 +45,7 @@ class MultipleContainerDelete(IorTestBase):
         for loop in range(50):
             self.log.info("Create-Write-Destroy Iteration %d", loop)
             self.create_cont()
-            self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+            self.ior_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
             # If the transfer size is less than 4K, the objects are
             # inserted into SCM and anything greater goes to SSD
             self.run_ior_with_pool(create_cont=False)

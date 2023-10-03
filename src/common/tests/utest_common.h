@@ -17,12 +17,13 @@ struct utest_context;
  *  \param	name[IN]	The path of the pool
  *  \param	pool_size[IN]	The size of the pool in bytes
  *  \param	root_size[IN]	The size of the root object
+ *  \param	store[IN]	umem store associated with pool
  *  \param	utx[OUT]
  *
  *  \return 0 on success, error otherwise
  */
 int utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
-		      struct utest_context **utx);
+		      struct umem_store *store, struct utest_context **utx);
 
 /** Create vmem context for unit testing.  This allocates a context and
  *  a root object of the specified size.  This isn't wholly necessary but

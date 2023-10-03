@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -42,23 +42,24 @@ enum dtx_grp_flags {
 };
 
 enum dtx_mbs_flags {
-	/* The targets modified via the DTX belong to replicated object
-	 * within single redundancy group.
+	/* The targets being modified via the DTX belong to a replicated
+	 * object within single redundancy group.
 	 */
 	DMF_SRDG_REP			= (1 << 0),
-	/* The MBS contains the leader information, used for distributed
-	 * transaction. For stand-alone modification, leader information
-	 * is not stored inside MBS as optimization.
+	/* The MBS contains the DTX leader information, usually used for
+	 * distributed transaction. In old release (before 2.4), for some
+	 * stand-alone modification, leader information may be not stored
+	 * inside MBS as optimization.
 	 */
 	DMF_CONTAIN_LEADER		= (1 << 1),
-	/* The dtx_memberships::dm_tgts is sorted against target ID. */
+	/* The dtx_memberships::dm_tgts is sorted against target ID. Obsolete. */
 	DMF_SORTED_TGT_ID		= (1 << 2),
 	/* The dtx_memberships::dm_tgts is sorted against shard index.
 	 * For most of cases, shard index matches the shard ID. But during
 	 * shard migration, there may be some temporary shards in related
 	 * object layout. Under such case, related shard ID is not unique
 	 * in the object layout, but the shard index is unique. So we use
-	 * shard index to sort the dtx_memberships::dm_tgts.
+	 * shard index to sort the dtx_memberships::dm_tgts. Obsolete.
 	 */
 	DMF_SORTED_SAD_IDX		= (1 << 3),
 };
@@ -72,8 +73,7 @@ struct dtx_daos_target {
 	union {
 		/* For distributed transaction, see dtx_target_flags. */
 		uint32_t		ddt_flags;
-		/* For standalong modification. */
-		uint32_t		ddt_shard;
+		uint32_t		ddt_padding;
 	};
 };
 
@@ -174,6 +174,7 @@ struct dtx_id {
 
 void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
+void daos_dti_reset(void);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)
@@ -228,6 +229,12 @@ enum dtx_status {
 	DTX_ST_COMMITTABLE	= 4,
 	/** The DTX is aborted. */
 	DTX_ST_ABORTED		= 5,
+	/** The DTX is in aborting, non-persistent status. */
+	DTX_ST_ABORTING		= 6,
+	/** The DTX is in committing, non-persistent status. */
+	DTX_ST_COMMITTING	= 7,
+	/** The DTX is in preparing, non-persistent status. */
+	DTX_ST_PREPARING	= 8,
 };
 
 enum daos_dtx_alb {

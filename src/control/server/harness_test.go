@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -64,8 +64,11 @@ func TestServer_Harness_Start(t *testing.T) {
 	}{
 		"normal startup/shutdown": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -97,8 +100,11 @@ func TestServer_Harness_Start(t *testing.T) {
 		},
 		"startup/shutdown with preset ranks": {
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(testLongTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(testLongTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("ending"),
 					}
@@ -136,8 +142,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout:     30 * testShortTimeout,
 			expStartErr:     context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
@@ -157,8 +166,11 @@ func TestServer_Harness_Start(t *testing.T) {
 			waitTimeout: 100 * testShortTimeout,
 			expStartErr: context.DeadlineExceeded,
 			trc: &engine.TestRunnerConfig{
-				RunnerExitInfoCb: func() *engine.RunnerExitInfo {
-					time.Sleep(delayedFailTimeout)
+				RunnerExitInfoCb: func(ctx context.Context) *engine.RunnerExitInfo {
+					select {
+					case <-ctx.Done():
+					case <-time.After(delayedFailTimeout):
+					}
 					return &engine.RunnerExitInfo{
 						Error: errors.New("oops"),
 					}
@@ -229,8 +241,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				if tc.trc.StartCb == nil {
 					tc.trc.StartCb = func() {
-						atomic.StoreUint32(&instanceStarts,
-							atomic.AddUint32(&instanceStarts, 1))
+						_ = atomic.AddUint32(&instanceStarts, 1)
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
@@ -242,6 +253,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					sysp,
 					scm.NewMockProvider(log, nil, msc),
 					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+					nil,
 				)
 
 				idx := uint32(i)
@@ -291,7 +303,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				}))
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(test.Context(t))
 			if tc.waitTimeout != 0 {
 				ctx, cancel = context.WithTimeout(ctx, tc.waitTimeout)
 			}
@@ -426,7 +438,10 @@ func TestServer_Harness_Start(t *testing.T) {
 				}
 				CmpErr(t, tc.expIoErrs[ei.Index()], ei._lastErr)
 			}
-			members := membership.Members(nil)
+			members, err := membership.Members(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
 			AssertEqual(t, len(tc.expMembers), len(members), "unexpected number in membership")
 			for i, member := range members {
 				if diff := cmp.Diff(fmt.Sprintf("%v", member),
@@ -478,15 +493,16 @@ func (db *mockdb) ResignLeadership(error) error {
 
 func TestServer_Harness_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
-		mics         []*MockInstanceConfig
-		method       drpc.Method
-		body         proto.Message
-		notStarted   bool
-		notLeader    bool
-		resignCause  error
-		expShutdown  bool
-		expNotLeader bool
-		expErr       error
+		mics           []*MockInstanceConfig
+		method         drpc.Method
+		body           proto.Message
+		notStarted     bool
+		notLeader      bool
+		resignCause    error
+		expShutdown    bool
+		expNotLeader   bool
+		expFailHandler bool
+		expErr         error
 	}{
 		"success": {
 			mics: []*MockInstanceConfig{
@@ -506,26 +522,14 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				},
 			},
 		},
-		"one not ready, one fails": {
-			mics: []*MockInstanceConfig{
-				{
-					Ready:       atm.NewBool(true),
-					CallDrpcErr: errDRPCNotReady,
-				},
-				{
-					Ready:       atm.NewBool(true),
-					CallDrpcErr: errors.New("whoops"),
-				},
-			},
-			expErr: errors.New("whoops"),
-		},
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
 				{
-					Started: atm.NewBool(true),
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
 				},
 			},
-			expErr: errInstanceNotReady,
+			expErr: errEngineNotReady,
 		},
 		"harness not started": {
 			mics:       []*MockInstanceConfig{},
@@ -555,8 +559,91 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 					CallDrpcErr: FaultDataPlaneNotStarted,
 				},
 			},
-			expNotLeader: true,
-			expErr:       FaultDataPlaneNotStarted,
+			expNotLeader:   true,
+			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"none available; not leader": {
+			notLeader: true,
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: FaultDataPlaneNotStarted,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         FaultDataPlaneNotStarted,
+			expFailHandler: true,
+		},
+		"none available; no drpc related errors": {
+			mics: []*MockInstanceConfig{
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errors.New("whoops"),
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
+		"none available; one engine not ready, one drpc not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errDRPCNotReady,
+			expFailHandler: true,
+		},
+		"none available; one drpc not ready, one engine not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errEngineNotReady,
+			expFailHandler: true,
+		},
+		"none available; one data-plane not ready, one engine not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					CallDrpcErr: FaultDataPlaneNotStarted,
+				},
+				{
+					Started:     atm.NewBool(true),
+					CallDrpcErr: errEngineNotReady,
+				},
+			},
+			expNotLeader:   true,
+			expErr:         errEngineNotReady,
+			expFailHandler: true,
+		},
+		"context canceled": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: context.Canceled,
+				},
+			},
+			expErr: context.Canceled,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -570,10 +657,17 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 				}
 			}
 
-			ctx, cancel := context.WithCancel(context.Background())
 			db := &mockdb{
 				isLeader: !tc.notLeader,
 			}
+
+			var drpcFailureInvoked atm.Bool
+			h.OnDrpcFailure(func(ctx context.Context, err error) {
+				drpcFailureInvoked.SetTrue()
+				newOnDrpcFailureFn(log, db)(ctx, err)
+			})
+
+			ctx, cancel := context.WithCancel(test.Context(t))
 
 			startErr := make(chan error)
 			go func() {
@@ -604,6 +698,7 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 			test.CmpErr(t, tc.expErr, gotErr)
 			test.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
 			test.AssertEqual(t, db.isLeader, !tc.expNotLeader, "unexpected leader state")
+			test.AssertEqual(t, drpcFailureInvoked.Load(), tc.expFailHandler, "unexpected fail handler invocation")
 		})
 	}
 }

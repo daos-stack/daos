@@ -3,8 +3,8 @@ hosts:
   test_clients: 1
 timeout: 2100
 setup:
-  start_agents_once: False
-  start_servers_once: False
+  start_agents_once: false
+  start_servers_once: false
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -16,14 +16,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -31,14 +24,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 8G
   control_method: dmg

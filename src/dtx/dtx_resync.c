@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -115,7 +115,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j, 0);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -336,9 +336,9 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * related RPC to the new leader, but such DTX is still not
 		 * committable yet. Here, the resync logic will abort it by
 		 * race during the new leader waiting for other replica(s).
-		 * The dtx_abort() logic will abort the local DTX firstly.
-		 * When the leader get replies from other replicas, it will
-		 * check whether local DTX is still valid or not.
+		 *
+		 * So when the leader get replies from other replicas, it
+		 * needs to check whether local DTX is still valid or not.
 		 *
 		 * If we abort multiple non-ready DTXs together, then there
 		 * is race that one DTX may become committable when we abort
@@ -401,11 +401,13 @@ dtx_status_handle(struct dtx_resync_args *dra)
 	d_list_for_each_entry_safe(dre, next, &drh->drh_list, dre_link) {
 		if (dre->dre_dte.dte_ver < dra->discard_version) {
 			err = vos_dtx_abort(cont->sc_hdl, &dre->dre_xid, dre->dre_epoch);
-			dtx_dre_release(drh, dre);
 			if (err == -DER_NONEXIST)
 				err = 0;
 			if (err != 0)
-				goto out;
+				D_ERROR("Failed to discard stale DTX "DF_DTI" with ver %d/%d: "
+					DF_RC"\n", DP_DTI(&dre->dre_xid), dre->dre_dte.dte_ver,
+					dra->discard_version, DP_RC(err));
+			dtx_dre_release(drh, dre);
 			continue;
 		}
 
@@ -424,6 +426,9 @@ dtx_status_handle(struct dtx_resync_args *dra)
 
 		mbs = dre->dre_dte.dte_mbs;
 		D_ASSERT(mbs->dm_tgt_cnt > 0);
+
+		if (mbs->dm_dte_flags & DTE_PARTIAL_COMMITTED)
+			goto commit;
 
 		rc = dtx_is_leader(pool, dra, dre);
 		if (rc <= 0) {
@@ -605,6 +610,9 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 		return rc;
 	}
 
+	D_INFO("Enter DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
+
 	crt_group_rank(NULL, &myrank);
 
 	pool = cont->sc_pool->spc_pool;
@@ -613,12 +621,13 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 					      dss_get_module_info()->dmi_tgt_id, &target);
 	D_ASSERT(rc == 1);
 
-	if (target->ta_comp.co_status == PO_COMP_ST_UP)
+	if (target->ta_comp.co_status == PO_COMP_ST_UP) {
 		dra.discard_version = target->ta_comp.co_in_ver;
-	ABT_rwlock_unlock(pool->sp_lock);
+		D_INFO("DTX resync for "DF_UUID"/"DF_UUID" discard version: %u\n",
+		       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	}
 
-	D_INFO("DTX resync for "DF_UUID"/"DF_UUID" with discard version: %u\n",
-	       DP_UUID(po_uuid), DP_UUID(co_uuid), dra.discard_version);
+	ABT_rwlock_unlock(pool->sp_lock);
 
 	ABT_mutex_lock(cont->sc_mutex);
 
@@ -633,13 +642,11 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	if (myrank == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SRV_RESTART)) {
-		uint64_t	hint = 0;
-
 		dss_set_start_epoch();
 		vos_dtx_cache_reset(cont->sc_hdl, true);
 
 		while (1) {
-			rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+			rc = vos_dtx_cmt_reindex(cont->sc_hdl);
 			if (rc > 0)
 				break;
 
@@ -651,12 +658,11 @@ dtx_resync(daos_handle_t po_hdl, uuid_t po_uuid, uuid_t co_uuid, uint32_t ver, b
 	}
 
 	cont->sc_dtx_resyncing = 1;
-	cont->sc_dtx_resync_ver = ver;
 	ABT_mutex_unlock(cont->sc_mutex);
 
 	dra.cont = cont;
 	dra.resync_version = ver;
-	dra.epoch = crt_hlc_get();
+	dra.epoch = d_hlc_get();
 	D_INIT_LIST_HEAD(&dra.tables.drh_list);
 	dra.tables.drh_count = 0;
 
@@ -700,6 +706,9 @@ fail:
 out:
 	if (!dtx_cont_opened(cont))
 		stop_dtx_reindex_ult(cont);
+
+	D_INFO("Exit DTX resync for "DF_UUID"/"DF_UUID" with version: %u\n",
+	       DP_UUID(po_uuid), DP_UUID(co_uuid), ver);
 
 	ds_cont_child_put(cont);
 	return rc > 0 ? 0 : rc;
@@ -751,12 +760,16 @@ dtx_resync_one(void *data)
 	if (child == NULL)
 		D_GOTO(out, rc = -DER_NONEXIST);
 
+	if (unlikely(child->spc_no_storage))
+		D_GOTO(put, rc = 0);
+
 	cb_arg.arg = *arg;
 	param.ip_hdl = child->spc_hdl;
 	param.ip_flags = VOS_IT_FOR_MIGRATION;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 container_scan_cb, NULL, &cb_arg, NULL);
 
+put:
 	ds_pool_child_put(child);
 out:
 	D_DEBUG(DB_TRACE, DF_UUID" iterate pool done: rc %d\n",

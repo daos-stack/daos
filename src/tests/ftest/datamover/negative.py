@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -53,7 +53,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,mfu,mfu_dcp,dfuse,dfs,ior
-        :avocado: tags=dm_negative,dm_bad_params_dcp,test_dm_bad_params_dcp
+        :avocado: tags=DmvrNegativeTest,test_dm_bad_params_dcp
         """
         self.set_tool("DCP")
 
@@ -192,7 +192,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_negative,dm_negative_error_check_dcp
+        :avocado: tags=DmvrNegativeTest,test_dm_negative_error_check_dcp
         """
         self.set_tool("DCP")
 

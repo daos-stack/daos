@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,9 +56,19 @@ struct dtx_batched_cont_args {
 					 dbca_agg_done:1;
 };
 
-struct dtx_cleanup_stale_cb_args {
-	d_list_t		dcsca_list;
-	int			dcsca_count;
+struct dtx_partial_cmt_item {
+	d_list_t		dpci_link;
+	uint32_t		dpci_inline_mbs:1;
+	struct dtx_entry	dpci_dte;
+};
+
+struct dtx_cleanup_cb_args {
+	/* The list for stale DTX entries. */
+	d_list_t		dcca_st_list;
+	/* The list for partial committed DTX entries. */
+	d_list_t		dcca_pc_list;
+	int			dcca_st_count;
+	int			dcca_pc_count;
 };
 
 static inline void
@@ -153,7 +163,19 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 	}
 
 	D_FREE(dbca);
+	cont->sc_dtx_registered = 0;
 	ds_cont_child_put(cont);
+}
+
+static inline uint64_t
+dtx_sec2age(uint64_t sec)
+{
+	uint64_t	cur = daos_gettime_coarse();
+
+	if (unlikely(cur <= sec))
+		return 0;
+
+	return cur - sec;
 }
 
 static void
@@ -166,11 +188,13 @@ dtx_stat(struct ds_cont_child *cont, struct dtx_stat *stat)
 }
 
 static int
-dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
+dtx_cleanup_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 {
-	struct dtx_cleanup_stale_cb_args	*dcsca = args;
-	struct dtx_memberships			*mbs;
-	struct dtx_share_peer			*dsp;
+	struct dtx_cleanup_cb_args	*dcca = args;
+	struct dtx_share_peer		*dsp = NULL;
+	struct dtx_partial_cmt_item	*dpci = NULL;
+	struct dtx_memberships		*mbs;
+	struct dtx_entry		*dte;
 
 	/* We commit the DTXs periodically, there will be very limited DTXs
 	 * to be checked when cleanup. So we can load all those uncommitted
@@ -180,10 +204,6 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	 */
 
 	D_ASSERT(!(ent->ie_dtx_flags & DTE_INVALID));
-
-	/* Skip the DTX entry which leader resides on current target and may be still alive. */
-	if (ent->ie_dtx_flags & DTE_LEADER)
-		return 0;
 
 	/* Skip corrupted entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
@@ -198,94 +218,170 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 		return 0;
 
 	/* Stop the iteration if current DTX is not too old. */
-	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
-	    DTX_CLEANUP_THD_AGE_LO)
+	if (dtx_sec2age(ent->ie_dtx_start_time) <= DTX_CLEANUP_THD_AGE_LO)
 		return 1;
 
 	D_ASSERT(ent->ie_dtx_mbs_dsize > 0);
 
-	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
-		D_ALLOC_PTR(dsp);
-	else
-		D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+	/*
+	 * NOTE: Usually, the partial committed DTX entries will be handled by batched commit ULT
+	 *	 (if related container is not closed) or DTX resync (after the container re-open).
+	 *	 So here, the left ones are for rare failure cases in these process, they will be
+	 *	 re-committed via dtx_cleanup logic.
+	 */
+	if (unlikely(ent->ie_dtx_flags & DTE_PARTIAL_COMMITTED)) {
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			D_ALLOC_PTR(dpci);
+		else
+			D_ALLOC(dpci, sizeof(*dpci) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+		if (dpci == NULL)
+			return -DER_NOMEM;
 
-	if (dsp == NULL)
-		return -DER_NOMEM;
+		dte = &dpci->dpci_dte;
+		dte->dte_xid = ent->ie_dtx_xid;
+		dte->dte_ver = ent->ie_dtx_ver;
+		dte->dte_refs = 1;
 
-	dsp->dsp_xid = ent->ie_dtx_xid;
-	dsp->dsp_oid = ent->ie_dtx_oid;
-	dsp->dsp_epoch = ent->ie_epoch;
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			goto add;
 
-	if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE) {
-		dsp->dsp_inline_mbs = 0;
-		dsp->dsp_mbs = NULL;
+		mbs = (struct dtx_memberships *)(dte + 1);
+		dpci->dpci_inline_mbs = 1;
+		dte->dte_mbs = mbs;
 	} else {
-		mbs = (struct dtx_memberships *)(dsp + 1);
-		mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
-		mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
-		mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
-		mbs->dm_flags = ent->ie_dtx_mbs_flags;
-		mbs->dm_dte_flags = ent->ie_dtx_flags;
-		memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+		/* Skip the DTX which leader resides on current target and may be still alive. */
+		if (ent->ie_dtx_flags & DTE_LEADER)
+			return 0;
 
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			D_ALLOC_PTR(dsp);
+		else
+			D_ALLOC(dsp, sizeof(*dsp) + sizeof(*mbs) + ent->ie_dtx_mbs_dsize);
+		if (dsp == NULL)
+			return -DER_NOMEM;
+
+		dsp->dsp_xid = ent->ie_dtx_xid;
+		dsp->dsp_oid = ent->ie_dtx_oid;
+		dsp->dsp_epoch = ent->ie_epoch;
+
+		if (ent->ie_dtx_mbs_dsize > DTX_INLINE_MBS_SIZE)
+			goto add;
+
+		mbs = (struct dtx_memberships *)(dsp + 1);
 		dsp->dsp_inline_mbs = 1;
 		dsp->dsp_mbs = mbs;
 	}
 
-	d_list_add_tail(&dsp->dsp_link, &dcsca->dcsca_list);
-	dcsca->dcsca_count++;
+	mbs->dm_tgt_cnt = ent->ie_dtx_tgt_cnt;
+	mbs->dm_grp_cnt = ent->ie_dtx_grp_cnt;
+	mbs->dm_data_size = ent->ie_dtx_mbs_dsize;
+	mbs->dm_flags = ent->ie_dtx_mbs_flags;
+	mbs->dm_dte_flags = ent->ie_dtx_flags;
+	memcpy(mbs->dm_data, ent->ie_dtx_mbs, ent->ie_dtx_mbs_dsize);
+
+add:
+	if (ent->ie_dtx_flags & DTE_PARTIAL_COMMITTED) {
+		d_list_add_tail(&dpci->dpci_link, &dcca->dcca_pc_list);
+		dcca->dcca_pc_count++;
+	} else {
+		d_list_add_tail(&dsp->dsp_link, &dcca->dcca_st_list);
+		dcca->dcca_st_count++;
+	}
 
 	return 0;
 }
 
-static void
-dtx_cleanup_stale(void *arg)
+static inline void
+dtx_dpci_free(struct dtx_partial_cmt_item *dpci)
 {
-	struct dtx_batched_cont_args		*dbca = arg;
-	struct ds_cont_child			*cont = dbca->dbca_cont;
-	struct dtx_share_peer			*dsp;
-	struct dtx_cleanup_stale_cb_args	 dcsca;
-	int					 count;
-	int					 rc;
+	if (dpci->dpci_inline_mbs == 0)
+		D_FREE(dpci->dpci_dte.dte_mbs);
+
+	D_FREE(dpci);
+}
+
+static void
+dtx_cleanup(void *arg)
+{
+	struct dtx_batched_cont_args	*dbca = arg;
+	struct ds_cont_child		*cont = dbca->dbca_cont;
+	struct dtx_share_peer		*dsp;
+	struct dtx_partial_cmt_item	*dpci;
+	struct dtx_entry		*dte;
+	struct dtx_cleanup_cb_args	 dcca;
+	d_list_t			 cmt_list;
+	d_list_t			 abt_list;
+	d_list_t			 act_list;
+	int				 count;
+	int				 rc;
 
 	if (dbca->dbca_cleanup_req == NULL)
 		goto out;
 
-	D_INIT_LIST_HEAD(&dcsca.dcsca_list);
-	dcsca.dcsca_count = 0;
+	D_INIT_LIST_HEAD(&cmt_list);
+	D_INIT_LIST_HEAD(&abt_list);
+	D_INIT_LIST_HEAD(&act_list);
+	D_INIT_LIST_HEAD(&dcca.dcca_st_list);
+	D_INIT_LIST_HEAD(&dcca.dcca_pc_list);
+	dcca.dcca_st_count = 0;
+	dcca.dcca_pc_count = 0;
 	rc = ds_cont_iter(cont->sc_pool->spc_hdl, cont->sc_uuid,
-			  dtx_cleanup_stale_iter_cb, &dcsca, VOS_ITER_DTX, 0);
+			  dtx_cleanup_iter_cb, &dcca, VOS_ITER_DTX, 0);
 	if (rc < 0)
-		D_WARN("Failed to scan stale DTX entry for "
+		D_WARN("Failed to scan DTX entry for cleanup "
 		       DF_UUID": "DF_RC"\n", DP_UUID(cont->sc_uuid), DP_RC(rc));
 
 	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
-	while (!dss_ult_exiting(dbca->dbca_cleanup_req) &&
-	       !d_list_empty(&dcsca.dcsca_list) && dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
-		if (dcsca.dcsca_count > DTX_REFRESH_MAX) {
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_st_list) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+		if (dcca.dcca_st_count > DTX_REFRESH_MAX) {
 			count = DTX_REFRESH_MAX;
-			dcsca.dcsca_count -= DTX_REFRESH_MAX;
+			dcca.dcca_st_count -= DTX_REFRESH_MAX;
 		} else {
-			D_ASSERT(dcsca.dcsca_count > 0);
+			D_ASSERT(dcca.dcca_st_count > 0);
 
-			count = dcsca.dcsca_count;
-			dcsca.dcsca_count = 0;
+			count = dcca.dcca_st_count;
+			dcca.dcca_st_count = 0;
 		}
 
 		/* Use false as the "failout" parameter that should guarantee
 		 * that all the DTX entries in the check list will be handled
 		 * even if some former ones hit failure.
 		 */
-		rc = dtx_refresh_internal(cont, &count, &dcsca.dcsca_list,
-					  NULL, NULL, NULL, false);
+		rc = dtx_refresh_internal(cont, &count, &dcca.dcca_st_list,
+					  &cmt_list, &abt_list, &act_list, false);
 		D_ASSERTF(count == 0, "%d entries are not handled: "DF_RC"\n",
 			  count, DP_RC(rc));
 	}
 
-	while ((dsp = d_list_pop_entry(&dcsca.dcsca_list,
-				       struct dtx_share_peer,
+	D_ASSERT(d_list_empty(&cmt_list));
+	D_ASSERT(d_list_empty(&abt_list));
+	D_ASSERT(d_list_empty(&act_list));
+
+	/* dbca->dbca_reg_gen != cont->sc_dtx_batched_gen means someone reopen the container. */
+	while (!dss_ult_exiting(dbca->dbca_cleanup_req) && !d_list_empty(&dcca.dcca_pc_list) &&
+	       dbca->dbca_reg_gen == cont->sc_dtx_batched_gen) {
+		dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item, dpci_link);
+		dcca.dcca_pc_count--;
+
+		dte = &dpci->dpci_dte;
+		if (dte->dte_mbs == NULL)
+			rc = vos_dtx_load_mbs(cont->sc_hdl, &dte->dte_xid, &dte->dte_mbs);
+		if (dte->dte_mbs != NULL)
+			rc = dtx_commit(cont, &dte, NULL, 1);
+
+		D_DEBUG(DB_IO, "Cleanup partial committed DTX "DF_DTI", left %d: %d\n",
+			DP_DTI(&dte->dte_xid), dcca.dcca_pc_count, rc);
+		dtx_dpci_free(dpci);
+	}
+
+	while ((dsp = d_list_pop_entry(&dcca.dcca_st_list, struct dtx_share_peer,
 				       dsp_link)) != NULL)
 		dtx_dsp_free(dsp);
+
+	while ((dpci = d_list_pop_entry(&dcca.dcca_pc_list, struct dtx_partial_cmt_item,
+					dpci_link)) != NULL)
+		dtx_dpci_free(dpci);
 
 	dbca->dbca_cleanup_done = 1;
 
@@ -325,11 +421,10 @@ dtx_aggregate(void *arg)
 		if (stat.dtx_cont_cmt_count == 0 ||
 		    stat.dtx_first_cmt_blob_time_lo == 0 ||
 		    (stat.dtx_cont_cmt_count <= dtx_agg_thd_cnt_lo &&
-		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
-		     dtx_agg_thd_age_lo))
+		     dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= dtx_agg_thd_age_lo))
 			break;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			break;
 	}
 
@@ -387,14 +482,13 @@ dtx_aggregation_pool(struct dss_module_info *dmi, struct dtx_batched_pool_args *
 		    stat.dtx_first_cmt_blob_time_lo == 0)
 			continue;
 
-		if (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
+		if (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) <= DTX_AGG_AGE_PRESERVE)
 			continue;
 
 		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
 		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
 		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
-		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
-		      dtx_agg_thd_age_up))) {
+		     (dtx_sec2age(stat.dtx_first_cmt_blob_time_lo) >= dtx_agg_thd_age_up))) {
 			D_ASSERT(!dbca->dbca_agg_done);
 			dtx_get_dbca(dbca);
 			dbca->dbca_agg_req = sched_create_ult(&attr, dtx_aggregate, dbca, 0);
@@ -515,7 +609,7 @@ dtx_batched_commit_one(void *arg)
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0) {
 			D_WARN("Fail to batched commit %d entries for "DF_UUID": "DF_RC"\n",
@@ -531,7 +625,7 @@ dtx_batched_commit_one(void *arg)
 
 		if ((stat.dtx_committable_count <= DTX_THRESHOLD_COUNT) &&
 		    (stat.dtx_oldest_committable_time == 0 ||
-		     dtx_hlc_age2sec(stat.dtx_oldest_committable_time) <
+		     d_hlc_age2sec(stat.dtx_oldest_committable_time) <
 		     DTX_COMMIT_THRESHOLD_AGE))
 			break;
 	}
@@ -567,10 +661,12 @@ dtx_batched_commit(void *arg)
 	while (1) {
 		struct ds_cont_child	*cont;
 		struct dtx_stat		 stat = { 0 };
-		int			 sleep_time = 10; /* ms */
+		int			 sleep_time = 50; /* ms */
 
-		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list))
+		if (d_list_empty(&dmi->dmi_dtx_batched_cont_open_list)) {
+			sleep_time = 500;
 			goto check;
+		}
 
 		if (DAOS_FAIL_CHECK(DAOS_DTX_NO_BATCHED_CMT) ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_NO_COMMITTABLE))
@@ -596,7 +692,7 @@ dtx_batched_commit(void *arg)
 		    (dtx_batched_ult_max != 0 && tls->dt_batched_ult_cnt < dtx_batched_ult_max) &&
 		    ((stat.dtx_committable_count > DTX_THRESHOLD_COUNT) ||
 		     (stat.dtx_oldest_committable_time != 0 &&
-		      dtx_hlc_age2sec(stat.dtx_oldest_committable_time) >=
+		      d_hlc_age2sec(stat.dtx_oldest_committable_time) >=
 		      DTX_COMMIT_THRESHOLD_AGE))) {
 			D_ASSERT(!dbca->dbca_commit_done);
 			sleep_time = 0;
@@ -622,16 +718,13 @@ dtx_batched_commit(void *arg)
 		if (dtx_cont_opened(cont) &&
 		    !dbca->dbca_deregister && dbca->dbca_cleanup_req == NULL &&
 		    stat.dtx_oldest_active_time != 0 &&
-		    dtx_hlc_age2sec(stat.dtx_oldest_active_time) >=
-		    DTX_CLEANUP_THD_AGE_UP) {
+		    dtx_sec2age(stat.dtx_oldest_active_time) >= DTX_CLEANUP_THD_AGE_UP) {
 			D_ASSERT(!dbca->dbca_cleanup_done);
-			sleep_time = 0;
 			dtx_get_dbca(dbca);
 
 			D_ASSERT(dbca->dbca_cont);
 			sched_req_attr_init(&attr, SCHED_REQ_GC, &dbca->dbca_cont->sc_pool_uuid);
-			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup_stale,
-								  dbca, 0);
+			dbca->dbca_cleanup_req = sched_create_ult(&attr, dtx_cleanup, dbca, 0);
 			if (dbca->dbca_cleanup_req == NULL) {
 				D_WARN("Fail to start DTX ULT (3) for "DF_UUID"\n",
 				       DP_UUID(cont->sc_uuid));
@@ -666,7 +759,7 @@ dtx_epoch_bound(struct dtx_epoch *epoch)
 		 */
 		return epoch->oe_value;
 
-	limit = crt_hlc_epsilon_get_bound(epoch->oe_first);
+	limit = d_hlc_epsilon_get_bound(epoch->oe_first);
 	if (epoch->oe_value >= limit)
 		/*
 		 * The epoch is already out of the potential uncertainty
@@ -738,7 +831,6 @@ dtx_handle_reinit(struct dtx_handle *dth)
 	dth->dth_touched_leader_oid = 0;
 	dth->dth_local_tx_started = 0;
 	dth->dth_cos_done = 0;
-	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 
 	dth->dth_op_seq = 0;
@@ -792,7 +884,6 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 	dth->dth_prepared = prepared ? 1 : 0;
-	dth->dth_verified = 0;
 	dth->dth_aborted = 0;
 	dth->dth_already = 0;
 	dth->dth_need_validation = 0;
@@ -912,6 +1003,13 @@ out:
 	return 0;
 }
 
+void
+dtx_renew_epoch(struct dtx_epoch *epoch, struct dtx_handle *dth)
+{
+	dth->dth_epoch = epoch->oe_value;
+	dth->dth_epoch_bound = dtx_epoch_bound(epoch);
+}
+
 /**
  * Initialize the DTX handle for per modification based part.
  *
@@ -1002,7 +1100,7 @@ out:
  * \param dti_cos	[IN]	The DTX array to be committed because of shared.
  * \param dti_cos_cnt	[IN]	The @dti_cos array size.
  * \param tgts		[IN]	targets for distribute transaction.
- * \param tgt_cnt	[IN]	number of targets.
+ * \param tgt_cnt	[IN]	number of targets (not count the leader itself).
  * \param flags		[IN]	See dtx_flags.
  * \param mbs		[IN]	DTX participants information.
  * \param p_dlh		[OUT]	Pointer to the DTX handle.
@@ -1018,6 +1116,7 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		 struct dtx_memberships *mbs, struct dtx_leader_handle **p_dlh)
 {
 	struct dtx_leader_handle	*dlh;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_handle		*dth;
 	int				 rc;
 	int				 i;
@@ -1051,14 +1150,16 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 		rc = vos_dtx_attach(dth, false, (flags & DTX_PREPARED) ? true : false);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
-		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
+		DF_UOID", dti_cos_cnt %d, tgt_cnt %d, flags %x: "DF_RC"\n",
 		DP_DTI(dti), sub_modification_cnt, dth->dth_ver,
-		DP_UOID(*leader_oid), dti_cos_cnt, flags, DP_RC(rc));
+		DP_UOID(*leader_oid), dti_cos_cnt, tgt_cnt, flags, DP_RC(rc));
 
-	if (rc != 0)
+	if (rc != 0) {
 		D_FREE(dlh);
-	else
+	} else {
 		*p_dlh = dlh;
+		d_tm_inc_gauge(tls->dt_dtx_leader_total, 1);
+	}
 
 	return rc;
 }
@@ -1082,6 +1183,17 @@ dtx_leader_wait(struct dtx_leader_handle *dlh)
 	return dlh->dlh_result;
 };
 
+void
+dtx_entry_put(struct dtx_entry *dte)
+{
+	if (--(dte->dte_refs) == 0) {
+		struct dtx_tls	*tls = dtx_tls_get();
+
+		d_tm_dec_gauge(tls->dt_dtx_entry_total, 1);
+		D_FREE(dte);
+	}
+}
+
 /**
  * Stop the leader thandle.
  *
@@ -1096,6 +1208,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 {
 	struct ds_cont_child		*cont = coh->sch_cont;
 	struct dtx_handle		*dth = &dlh->dlh_handle;
+	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_entry		*dte;
 	struct dtx_memberships		*mbs;
 	size_t				 size;
@@ -1109,44 +1222,58 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 	dtx_shares_fini(dth);
 
-	if (unlikely(result == -DER_ALREADY))
-		result = 0;
+	if (daos_is_zero_dti(&dth->dth_xid) || unlikely(result == -DER_ALREADY))
+		goto out;
 
-	if (result == 0 && rc == 0 && unlikely(coh->sch_closed)) {
+	if (unlikely(coh->sch_closed)) {
 		D_ERROR("Cont hdl "DF_UUID" is closed/evicted unexpectedly\n",
 			DP_UUID(coh->sch_uuid));
-		result = -DER_IO;
+		if (result == -DER_AGAIN || result == -DER_INPROGRESS || result == -DER_TIMEDOUT ||
+		    result == -DER_STALE || daos_crt_network_error(result))
+			result = -DER_IO;
+		goto abort;
 	}
 
-	if (daos_is_zero_dti(&dth->dth_xid))
-		D_GOTO(out, result = result < 0 ? result : rc);
+	/* For solo transaction, the validation has already been processed inside vos
+	 * when necessary. That is enough, do not need to revalid again.
+	 */
+	if (dth->dth_solo)
+		goto out;
 
 	if (dth->dth_need_validation) {
 		/* During waiting for bulk data transfer or other non-leaders, the DTX
 		 * status may be changes by others (such as DTX resync or DTX refresh)
-		 * by race. Let's check it.
+		 * by race. Let's check it before handling the case of 'result < 0' to
+		 * avoid aborting 'ready' one.
 		 */
 		status = vos_dtx_validation(dth);
-		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE))
-			D_GOTO(out, result = 0);
+		if (unlikely(status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE ||
+			     status == DTX_ST_COMMITTING))
+			D_GOTO(out, result = -DER_ALREADY);
 	}
 
-	if (result < 0 || rc < 0 || dth->dth_solo)
-		D_GOTO(abort, result = result < 0 ? result : rc);
+	if (result < 0)
+		goto abort;
 
 	switch (status) {
 	case -1:
-	case DTX_ST_PREPARED:
 		break;
-	case DTX_ST_INITED:
-		if (dth->dth_modification_cnt == 0 || !dth->dth_active)
+	case DTX_ST_PREPARED:
+		if (likely(!dth->dth_aborted))
 			break;
 		/* Fall through */
-	case DTX_ST_ABORTED:
+	case DTX_ST_INITED:
+	case DTX_ST_PREPARING:
 		aborted = true;
-		D_GOTO(out, result = -DER_INPROGRESS);
+		result = -DER_AGAIN;
+		goto out;
+	case DTX_ST_ABORTED:
+	case DTX_ST_ABORTING:
+		aborted = true;
+		result = -DER_INPROGRESS;
+		goto out;
 	default:
-		D_ASSERT(0);
+		D_ASSERTF(0, "Unexpected DTX "DF_DTI" status %d\n", DP_DTI(&dth->dth_xid), status);
 	}
 
 	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared || dtx_batched_ult_max == 0) {
@@ -1165,46 +1292,6 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	if (!dth->dth_active) {
 		unpin = true;
 		D_GOTO(abort, result = 0);
-	}
-
-	/* If the DTX is started befoe DTX resync (for rebuild), then it is
-	 * possible that the DTX resync ULT may have aborted or committed
-	 * the DTX during current ULT waiting for other non-leaders' reply.
-	 * Let's check DTX status locally before marking as 'committable'.
-	 */
-	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
-		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid, NULL, NULL, NULL, NULL, false);
-		/* Committed by race, do nothing. */
-		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
-			D_GOTO(abort, result = 0);
-
-		/* The DTX is marked as 'corrupted' by DTX resync by race,
-		 * then let's abort it.
-		 */
-		if (rc == DTX_ST_CORRUPTED) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is marked as corrupted "
-			       "by resync because of lost some participants\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid));
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		/* Aborted by race, restart it. */
-		if (rc == -DER_NONEXIST) {
-			D_WARN(DF_UUID": DTX "DF_DTI" is aborted with "
-			       "old epoch "DF_U64" by resync\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid),
-			       dth->dth_epoch);
-			D_GOTO(abort, result = -DER_TX_RESTART);
-		}
-
-		if (rc != DTX_ST_PREPARED) {
-			D_ASSERTF(rc < 0, "Invalid status %d for DTX "DF_DTI"\n",
-				  rc, DP_DTI(&dth->dth_xid));
-
-			D_WARN(DF_UUID": Failed to check local DTX "DF_DTI" status: "DF_RC"\n",
-			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
-			D_GOTO(abort, result = rc);
-		}
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))
@@ -1238,6 +1325,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 	dte->dte_ver = dth->dth_ver;
 	dte->dte_refs = 1;
 	dte->dte_mbs = mbs;
+	d_tm_inc_gauge(tls->dt_dtx_entry_total, 1);
 
 	/* Use the new created @dte instead of dth->dth_dte that will be
 	 * released after dtx_leader_end().
@@ -1269,52 +1357,72 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_hdl *coh, int resul
 
 sync:
 	if (dth->dth_sync) {
+		/*
+		 * TBD: We need to reserve some space to guarantee that the local commit can be
+		 *	done successfully. That is not only for sync commit, but also for async
+		 *	batched commit.
+		 */
+		vos_dtx_mark_committable(dth);
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1, dth->dth_epoch);
+		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0)
-			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
-				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
-				DP_DTI(&dth->dth_xid), DP_RC(rc));
+			D_WARN(DF_UUID": Fail to sync commit DTX "DF_DTI": "DF_RC"\n",
+			       DP_UUID(cont->sc_uuid), DP_DTI(&dth->dth_xid), DP_RC(rc));
 
-		D_GOTO(out, result = rc);
+		/*
+		 * NOTE: The semantics of 'sync' commit does not guarantee that all
+		 *	 participants of the DTX can commit it on each local target
+		 *	 successfully, instead, we try to commit the DTX immediately
+		 *	 after all participants claiming 'prepared'. But even if we
+		 *	 failed to commit it, we will not rollback the commit since
+		 *	 the DTX has been marked as 'committable' and may has been
+		 *	 accessed by others. The subsequent dtx_cleanup logic will
+		 *	 handle (re-commit) current failed commit.
+		 */
+		D_GOTO(out, result = 0);
 	}
 
 abort:
-	/* Some remote replica(s) ask retry. We do not make such replica
-	 * to locally retry for avoiding RPC timeout. The leader replica
-	 * will trigger retry globally without aborting 'prepared' ones.
+	/* If some remote participant ask retry. We do not make such participant
+	 * to locally retry for avoiding related forwarded RPC timeout, instead,
+	 * The leader will trigger retry globally without abort 'prepared' ones.
 	 */
 	if (unpin || (result < 0 && result != -DER_AGAIN && !dth->dth_solo)) {
-		/* Drop partial modification for distributed transaction. */
+		/* 1. Drop partial modification for distributed transaction.
+		 * 2. Remove the pinned DTX entry.
+		 */
 		vos_dtx_cleanup(dth, true);
 		dtx_abort(cont, &dth->dth_dte, dth->dth_epoch);
 		aborted = true;
 	}
 
 out:
+	if (unlikely(result == -DER_ALREADY))
+		result = 0;
+
 	if (!daos_is_zero_dti(&dth->dth_xid)) {
-		if (result < 0 && !aborted)
-			vos_dtx_cleanup(dth, true);
+		if (result < 0) {
+			/* 1. Drop partial modification for distributed transaction.
+			 * 2. Remove the pinned DTX entry.
+			 */
+			if (!aborted)
+				vos_dtx_cleanup(dth, true);
+
+			/* For solo DTX, just let client retry for DER_AGAIN case. */
+			if (result == -DER_AGAIN && dth->dth_solo)
+				result = -DER_INPROGRESS;
+		}
 
 		vos_dtx_rsrvd_fini(dth);
 		vos_dtx_detach(dth);
-
-		D_DEBUG(DB_IO,
-			"Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, "
-			"%s participator(s), cos %d/%d: rc "DF_RC"\n",
-			DP_DTI(&dth->dth_xid), dth->dth_ver,
-			(unsigned long)dth->dth_dkey_hash,
-			dth->dth_sync ? "sync" : "async",
-			dth->dth_solo ? "single" : "multiple",
-			dth->dth_dti_cos_count,
-			dth->dth_cos_done ? dth->dth_dti_cos_count : 0,
-			DP_RC(result));
 	}
 
 	D_ASSERTF(result <= 0, "unexpected return value %d\n", result);
 
-	/* Local modification is done, then need to handle CoS cache. */
-	if (dth->dth_cos_done) {
+	/* If piggyback DTX has been done everywhere, then need to handle CoS cache.
+	 * It is harmless to keep some partially committed DTX entries in CoS cache.
+	 */
+	if (result == 0 && dth->dth_cos_done) {
 		int	i;
 
 		for (i = 0; i < dth->dth_dti_cos_count; i++)
@@ -1322,8 +1430,14 @@ out:
 				    &dth->dth_leader_oid, dth->dth_dkey_hash);
 	}
 
+	D_DEBUG(DB_IO, "Stop the DTX "DF_DTI" ver %u, dkey %lu, %s, cos %d/%d: result "DF_RC"\n",
+		DP_DTI(&dth->dth_xid), dth->dth_ver, (unsigned long)dth->dth_dkey_hash,
+		dth->dth_sync ? "sync" : "async", dth->dth_dti_cos_count,
+		dth->dth_cos_done ? dth->dth_dti_cos_count : 0, DP_RC(result));
+
 	D_FREE(dth->dth_oid_array);
 	D_FREE(dlh);
+	d_tm_dec_gauge(tls->dt_dtx_leader_total, 1);
 
 	return result;
 }
@@ -1397,14 +1511,13 @@ dtx_end(struct dtx_handle *dth, struct ds_cont_child *cont, int result)
 		if (dth->dth_dti_cos_count > 0 && !dth->dth_cos_done) {
 			int	rc;
 
-			/* XXX: For non-leader replica, even if we fail to
-			 *	make related modification for some reason,
-			 *	we still need to commit the DTXs for CoS.
-			 *	Because other replica may have already
-			 *	committed them. For leader case, it is
-			 *	not important even if we fail to commit
-			 *	the CoS DTXs, because they are still in
-			 *	CoS cache, and can be committed next time.
+			/* NOTE: For non-leader participant, even if we fail to make
+			 *	 related modification for some reason, we still need
+			 *	 to commit the piggyback DTXs those may have already
+			 *	 been committed on other participants.
+			 *	 For leader case, it is not important even if we fail
+			 *	 to commit them, because they are still in CoS cache,
+			 *	 and can be committed next time.
 			 */
 			rc = vos_dtx_commit(cont->sc_hdl, dth->dth_dti_cos,
 					    dth->dth_dti_cos_count, NULL);
@@ -1458,26 +1571,27 @@ dtx_flush_on_close(struct dss_module_info *dmi, struct dtx_batched_cont_args *db
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
 					    NULL, DAOS_EPOCH_MAX, &dtes, &dcks);
-		if (cnt <= 0) {
-			rc = cnt;
-			break;
-		}
+		if (cnt <= 0)
+			D_GOTO(out, rc = cnt);
 
 		total += cnt;
 		/* When flush_on_deregister, nobody will add more DTX
 		 * into the CoS cache. So if accumulated commit count
 		 * is more than the total committable ones, then some
 		 * DTX entries cannot be removed from the CoS cache.
+		 * Under such case, have to break the dtx_flush.
 		 */
-		D_ASSERTF(total <= stat.dtx_committable_count,
-			  "Some DTX in CoS may cannot be removed: %lu/%lu\n",
-			  (unsigned long)total,
-			  (unsigned long)stat.dtx_committable_count);
+		if (unlikely(total > stat.dtx_committable_count)) {
+			D_WARN("Some DTX in CoS cannot be committed: %lu/%lu\n",
+			       (unsigned long)total, (unsigned long)stat.dtx_committable_count);
+			D_GOTO(out, rc = -DER_MISC);
+		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
+out:
 	if (rc < 0)
 		D_ERROR(DF_UUID": Fail to flush CoS cache: rc = %d\n",
 			DP_UUID(cont->sc_uuid), rc);
@@ -1490,14 +1604,13 @@ dtx_reindex_ult(void *arg)
 {
 	struct ds_cont_child		*cont	= arg;
 	struct dss_module_info		*dmi	= dss_get_module_info();
-	uint64_t			 hint	= 0;
 	int				 rc	= 0;
 
 	D_INFO(DF_CONT": starting DTX reindex ULT on xstream %d, ver %u\n",
 	       DP_CONT(NULL, cont->sc_uuid), dmi->dmi_tgt_id, dtx_cont2ver(cont));
 
 	while (!cont->sc_dtx_reindex_abort && !dss_xstream_exiting(dmi->dmi_xstream)) {
-		rc = vos_dtx_cmt_reindex(cont->sc_hdl, &hint);
+		rc = vos_dtx_cmt_reindex(cont->sc_hdl);
 		if (rc != 0)
 			break;
 
@@ -1519,7 +1632,11 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 
 	D_ASSERT(cont != NULL);
 
-	if (cont->sc_dtx_reindex || cont->sc_dtx_reindex_abort)
+	/* Someone is trying to stop former DTX reindex ULT, wait until its done. */
+	while (cont->sc_dtx_reindex_abort)
+		ABT_thread_yield();
+
+	if (cont->sc_dtx_reindex)
 		return 0;
 
 	ds_cont_child_get(cont);
@@ -1538,7 +1655,12 @@ start_dtx_reindex_ult(struct ds_cont_child *cont)
 void
 stop_dtx_reindex_ult(struct ds_cont_child *cont)
 {
-	if (!cont->sc_dtx_reindex || dtx_cont_opened(cont))
+	/* DTX reindex has been done or not has not been started. */
+	if (!cont->sc_dtx_reindex)
+		return;
+
+	/* Do not stop DTX reindex if the container is still opened. */
+	if (dtx_cont_opened(cont))
 		return;
 
 	/* Do not stop DTX reindex if DTX resync is still in-progress. */
@@ -1614,7 +1736,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 
 	cont->sc_dtx_committable_count = 0;
 	D_INIT_LIST_HEAD(&cont->sc_dtx_cos_list);
-	cont->sc_dtx_resync_ver = cont->sc_pool->spc_map_version;
 	ds_cont_child_get(cont);
 	dbca->dbca_refs = 0;
 	dbca->dbca_cont = cont;
@@ -1628,6 +1749,7 @@ dtx_cont_register(struct ds_cont_child *cont)
 out:
 	if (rc == 0) {
 		cont->sc_dtx_batched_gen = 1;
+		cont->sc_dtx_registered = 1;
 		dbca->dbca_reg_gen = cont->sc_dtx_batched_gen;
 	} else {
 		D_FREE(dbca);
@@ -1785,30 +1907,43 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 	}
 }
 
+/*
+ * If a large transaction has sub-requests to dispatch to a lot of DTX participants,
+ * then we may have to split the dispatch process to multiple steps; otherwise, the
+ * dispatch process may trigger too many in-flight or in-queued RPCs that will hold
+ * too much resource as to server maybe out of memory.
+ */
+#define DTX_EXEC_STEP_LENGTH	DTX_THRESHOLD_COUNT
+
+struct dtx_ult_arg {
+	dtx_sub_func_t			 func;
+	void				*func_arg;
+	struct dtx_leader_handle	*dlh;
+};
+
 static void
 dtx_comp_cb(void **arg)
 {
-	struct dtx_leader_handle	*dlh;
-	uint32_t			 sub_cnt;
+	struct dtx_leader_handle	*dlh = arg[0];
+	struct dtx_sub_status		*sub;
 	uint32_t			 i;
+	uint32_t			 j;
 
-	dlh = arg[0];
+	if (dlh->dlh_agg_cb != NULL) {
+		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_allow_failure);
+	} else {
+		for (i = dlh->dlh_forward_idx, j = 0; j < dlh->dlh_forward_cnt; i++, j++) {
+			sub = &dlh->dlh_subs[i];
 
-	if (dlh->dlh_agg_cb) {
-		dlh->dlh_result = dlh->dlh_agg_cb(dlh, dlh->dlh_agg_cb_arg);
-		return;
-	}
+			if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE || sub->dss_comp == 0 ||
+			    sub->dss_result == 0 || sub->dss_result == -DER_ALREADY ||
+			    sub->dss_result == dlh->dlh_allow_failure)
+				continue;
 
-	sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	for (i = 0; i < sub_cnt; i++) {
-		struct dtx_sub_status	*sub = &dlh->dlh_subs[i];
-
-		if (sub->dss_result == 0)
-			continue;
-
-		/* Ignore DER_INPROGRESS if there are other failures */
-		if (dlh->dlh_result == 0 || dlh->dlh_result == -DER_INPROGRESS)
-			dlh->dlh_result = sub->dss_result;
+			/* Ignore DER_INPROGRESS if there is other failure. */
+			if (dlh->dlh_result == 0 || dlh->dlh_result == -DER_INPROGRESS)
+				dlh->dlh_result = sub->dss_result;
+		}
 	}
 }
 
@@ -1816,51 +1951,63 @@ static void
 dtx_sub_comp_cb(struct dtx_leader_handle *dlh, int idx, int rc)
 {
 	struct dtx_sub_status	*sub = &dlh->dlh_subs[idx];
-	ABT_future		future = dlh->dlh_future;
+	struct daos_shard_tgt	*tgt = &sub->dss_tgt;
 
-	D_ASSERTF(sub->dss_comp == 0, "Repeat sub completion for idx %d: %d\n", idx, rc);
-	sub->dss_comp = 1;
+	if ((dlh->dlh_normal_sub_done == 0 && !(tgt->st_flags & DTF_DELAY_FORWARD)) ||
+	    (dlh->dlh_normal_sub_done == 1 && tgt->st_flags & DTF_DELAY_FORWARD)) {
+		D_ASSERTF(sub->dss_comp == 0,
+			  "Repeat sub completion for idx %d (%d:%d), flags %x: %d\n",
+			  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+		sub->dss_comp = 1;
+		sub->dss_result = rc;
 
-	sub->dss_result = rc;
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed %d.\n", rc);
+		D_DEBUG(DB_TRACE, "execute from idx %d (%d:%d), flags %x: rc %d\n",
+			idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
+	}
 
-	D_DEBUG(DB_TRACE, "execute from rank %d tag %d, rc %d.\n",
-		sub->dss_tgt.st_rank, sub->dss_tgt.st_tgt_idx,
-		sub->dss_result);
+	rc = ABT_future_set(dlh->dlh_future, dlh);
+	D_ASSERTF(rc == ABT_SUCCESS,
+		  "ABT_future_set failed for idx %d (%d:%d), flags %x: %d\n",
+		  idx, tgt->st_rank, tgt->st_tgt_idx, tgt->st_flags, rc);
 }
 
-struct dtx_ult_arg {
-	dtx_sub_func_t			func;
-	void				*func_arg;
-	struct dtx_leader_handle	*dlh;
-};
-
 static void
-dtx_leader_exec_ops_normal_ult(void *arg)
+dtx_leader_exec_ops_ult(void *arg)
 {
 	struct dtx_ult_arg		*ult_arg = arg;
 	struct dtx_leader_handle	*dlh = ult_arg->dlh;
 	struct dtx_sub_status		*sub;
-	ABT_future			 future = dlh->dlh_future;
-	uint32_t			 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	uint32_t			 i, j;
+	struct daos_shard_tgt		*tgt;
+	uint32_t			 i;
+	uint32_t			 j;
+	uint32_t			 k;
 	int				 rc = 0;
 
-	D_ASSERT(future != ABT_FUTURE_NULL);
-	for (i = 0, j = 0; i < sub_cnt; i++, j++) {
+	for (i = dlh->dlh_forward_idx, j = 0, k = 0; j < dlh->dlh_forward_cnt; i++, j++) {
 		sub = &dlh->dlh_subs[i];
-		sub->dss_result = 0;
-		sub->dss_comp = 0;
+		tgt = &sub->dss_tgt;
 
-		if (unlikely(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
+		if (dlh->dlh_normal_sub_done == 0) {
+			sub->dss_result = 0;
+			sub->dss_comp = 0;
+
+			if (unlikely(tgt->st_flags & DTF_DELAY_FORWARD)) {
+				dtx_sub_comp_cb(dlh, i, 0);
+				continue;
+			}
+		} else {
+			if (!(tgt->st_flags & DTF_DELAY_FORWARD))
+				continue;
+
+			sub->dss_result = 0;
+			sub->dss_comp = 0;
+		}
+
+		if (tgt->st_rank == DAOS_TGT_IGNORE ||
+		    (i == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
+			if (dlh->dlh_normal_sub_done == 0 || tgt->st_flags & DTF_DELAY_FORWARD)
+				dtx_sub_comp_cb(dlh, i, 0);
 			continue;
-
-		if (sub->dss_tgt.st_rank == DAOS_TGT_IGNORE ||
-		    (i == daos_fail_value_get() &&
-		     DAOS_FAIL_CHECK(DAOS_DTX_SKIP_PREPARE))) {
-			dtx_sub_comp_cb(dlh, i, 0);
-			goto next;
 		}
 
 		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
@@ -1870,88 +2017,29 @@ dtx_leader_exec_ops_normal_ult(void *arg)
 			break;
 		}
 
-next:
 		/* Yield to avoid holding CPU for too long time. */
-		if (j >= DTX_RPC_YIELD_THD) {
+		if ((++k) % DTX_RPC_YIELD_THD == 0)
 			ABT_thread_yield();
-			j = 0;
-		}
 	}
 
 	if (rc != 0) {
-		for (i++, j++; i < sub_cnt; i++, j++) {
+		for (i++, j++; j < dlh->dlh_forward_cnt; i++, j++) {
 			sub = &dlh->dlh_subs[i];
-			if (unlikely(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
-				continue;
+			tgt = &sub->dss_tgt;
 
-			dtx_sub_comp_cb(dlh, i, 0);
-			if (j >= DTX_RPC_YIELD_THD) {
-				ABT_thread_yield();
-				j = 0;
+			if (dlh->dlh_normal_sub_done == 0 || tgt->st_flags & DTF_DELAY_FORWARD) {
+				sub->dss_result = 0;
+				sub->dss_comp = 0;
+				dtx_sub_comp_cb(dlh, i, 0);
 			}
 		}
 	}
 
 	/* To indicate that the IO forward ULT itself has done. */
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed (3) %d.\n", rc);
-
-	D_FREE(ult_arg);
-}
-
-static void
-dtx_leader_exec_ops_delay_ult(void *arg)
-{
-	struct dtx_ult_arg		*ult_arg = arg;
-	struct dtx_leader_handle	*dlh = ult_arg->dlh;
-	struct dtx_sub_status		*sub;
-	ABT_future			 future = dlh->dlh_future;
-	uint32_t			 sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
-	uint32_t			 i, j;
-	int				 rc = 0;
-
-	D_ASSERT(future != ABT_FUTURE_NULL);
-	for (i = 0, j = 0; i < sub_cnt; i++, j++) {
-		sub = &dlh->dlh_subs[i];
-		if (!(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
-			continue;
-
-		sub->dss_result = 0;
-		sub->dss_comp = 0;
-
-		rc = ult_arg->func(dlh, ult_arg->func_arg, i, dtx_sub_comp_cb);
-		if (rc != 0) {
-			if (sub->dss_comp == 0)
-				dtx_sub_comp_cb(dlh, i, rc);
-			break;
-		}
-
-		/* Yield to avoid holding CPU for too long time. */
-		if (j >= DTX_RPC_YIELD_THD) {
-			ABT_thread_yield();
-			j = 0;
-		}
-	}
-
-	if (rc != 0) {
-		for (i++, j++; i < sub_cnt; i++, j++) {
-			sub = &dlh->dlh_subs[i];
-			if (!(sub->dss_tgt.st_flags & DTF_DELAY_FORWARD))
-				continue;
-
-			dtx_sub_comp_cb(dlh, i, 0);
-			if (j >= DTX_RPC_YIELD_THD) {
-				ABT_thread_yield();
-				j = 0;
-			}
-		}
-	}
-
-	/* To indicate that the IO forward ULT itself has done. */
-	rc = ABT_future_set(future, dlh);
-	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed (4) %d.\n", rc);
-
-	D_FREE(ult_arg);
+	rc = ABT_future_set(dlh->dlh_future, dlh);
+	D_ASSERTF(rc == ABT_SUCCESS, "ABT_future_set failed [%u, %u), for delay %s: %d\n",
+		  dlh->dlh_forward_idx, dlh->dlh_forward_idx + dlh->dlh_forward_cnt,
+		  dlh->dlh_normal_sub_done == 1 ? "yes" : "no", rc);
 }
 
 /**
@@ -1959,112 +2047,149 @@ dtx_leader_exec_ops_delay_ult(void *arg)
  */
 int
 dtx_leader_exec_ops(struct dtx_leader_handle *dlh, dtx_sub_func_t func,
-		    dtx_agg_cb_t agg_cb, void *agg_cb_arg, void *func_arg)
+		    dtx_agg_cb_t agg_cb, int allow_failure, void *func_arg)
 {
-	struct dtx_ult_arg	*ult_arg;
-	int			 rc;
-	int			 rc1 = 0;
+	struct dtx_ult_arg	ult_arg;
+	int			sub_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+	int			rc = 0;
+	int			local_rc = 0;
+	int			remote_rc = 0;
+
+	ult_arg.func = func;
+	ult_arg.func_arg = func_arg;
+	ult_arg.dlh = dlh;
 
 	dlh->dlh_result = 0;
+	dlh->dlh_allow_failure = allow_failure;
 	dlh->dlh_normal_sub_done = 0;
+	dlh->dlh_drop_cond = 0;
+	dlh->dlh_forward_idx = 0;
+
+	if (sub_cnt > DTX_EXEC_STEP_LENGTH) {
+		dlh->dlh_forward_cnt = DTX_EXEC_STEP_LENGTH;
+		dlh->dlh_agg_cb = NULL;
+	} else {
+		dlh->dlh_forward_cnt = sub_cnt;
+		if (likely(dlh->dlh_delay_sub_cnt == 0))
+			dlh->dlh_agg_cb = agg_cb;
+		else
+			dlh->dlh_agg_cb = NULL;
+	}
 
 	if (dlh->dlh_normal_sub_cnt == 0)
 		goto exec;
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		return -DER_NOMEM;
-
-	ult_arg->func = func;
-	ult_arg->func_arg = func_arg;
-	ult_arg->dlh = dlh;
-
-	if (dlh->dlh_delay_sub_cnt > 0) {
-		dlh->dlh_agg_cb = NULL;
-		dlh->dlh_agg_cb_arg = NULL;
-	} else {
-		dlh->dlh_agg_cb = agg_cb;
-		dlh->dlh_agg_cb_arg = agg_cb_arg;
-	}
-
+again:
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
 	/*
-	 * Create the future with sub_cnt + 1, the additional one is used by the IO forward
-	 * ULT itself to prevent the DTX handle being freed before the IO forward ULT exit.
+	 * Create the future with dlh->dlh_forward_cnt + 1, the additional one is used by the IO
+	 * forward ULT itself to prevent the DTX handle being freed before the IO forward ULT exit.
 	 */
-	rc = ABT_future_create(dlh->dlh_normal_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
+	rc = ABT_future_create(dlh->dlh_forward_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
-		D_ERROR("ABT_future_create failed (1): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
-		return dss_abterr2der(rc);
+		D_ERROR("ABT_future_create failed [%u, %u] (1): "DF_RC"\n",
+			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
+		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
 	/*
-	 * XXX: Ideally, we probably should create ULT for each shard, but for performance
-	 *	reasons, let's only create one for all remote targets for now.
+	 * NOTE: Ideally, we probably should create ULT for each shard, but for performance
+	 *	 reasons, let's only create one for all remote targets for now.
 	 */
-	rc = dss_ult_create(dtx_leader_exec_ops_normal_ult, ult_arg, DSS_XS_IOFW,
+	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
-		D_ERROR("ult create failed (2): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
+		D_ERROR("ult create failed [%u, %u] (2): "DF_RC"\n",
+			dlh->dlh_forward_idx, dlh->dlh_forward_cnt, DP_RC(rc));
 		ABT_future_free(&dlh->dlh_future);
-		return rc;
+		goto out;
 	}
 
 exec:
-	/* Then execute the local operation */
-	rc = func(dlh, func_arg, -1, NULL);
+	/* Execute the local operation only for once. */
+	if (dlh->dlh_forward_idx == 0)
+		local_rc = func(dlh, func_arg, -1, NULL);
 
 	/* Even the local request failure, we still need to wait for remote sub request. */
-	if (dlh->dlh_normal_sub_cnt > 0) {
-		rc1 = dtx_leader_wait(dlh);
-		if (unlikely(rc1 == -DER_ALREADY))
-			rc1 = 0;
+	if (dlh->dlh_normal_sub_cnt > 0)
+		remote_rc = dtx_leader_wait(dlh);
+
+	if (local_rc != 0 && local_rc != allow_failure)
+		D_GOTO(out, rc = local_rc);
+
+	if (remote_rc != 0 && remote_rc != allow_failure)
+		D_GOTO(out, rc = remote_rc);
+
+	sub_cnt -= dlh->dlh_forward_cnt;
+	if (sub_cnt > 0) {
+		dlh->dlh_forward_idx += dlh->dlh_forward_cnt;
+		if (sub_cnt <= DTX_EXEC_STEP_LENGTH) {
+			dlh->dlh_forward_cnt = sub_cnt;
+			if (likely(dlh->dlh_delay_sub_cnt == 0))
+				dlh->dlh_agg_cb = agg_cb;
+		}
+
+		D_DEBUG(DB_IO, "More dispatch sub-requests for "DF_DTI", normal %u, "
+			"delay %u, idx %u, cnt %d, allow_failure %d\n",
+			DP_DTI(&dlh->dlh_handle.dth_xid), dlh->dlh_normal_sub_cnt,
+			dlh->dlh_delay_sub_cnt, dlh->dlh_forward_idx,
+			dlh->dlh_forward_cnt, allow_failure);
+
+		goto again;
 	}
-
-	if (rc != 0)
-		return rc;
-
-	if (rc1 != 0 || likely(dlh->dlh_delay_sub_cnt == 0))
-		return rc1;
-
-	/* For delay forward sub requests. */
 
 	dlh->dlh_normal_sub_done = 1;
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		return -DER_NOMEM;
+	if (likely(dlh->dlh_delay_sub_cnt == 0))
+		goto out;
 
-	ult_arg->func = func;
-	ult_arg->func_arg = func_arg;
-	ult_arg->dlh = dlh;
-	dlh->dlh_agg_cb = agg_cb;
-	dlh->dlh_agg_cb_arg = agg_cb_arg;
+	dlh->dlh_drop_cond = 1;
+
+	if (agg_cb != 0 && allow_failure != 0) {
+		rc = agg_cb(dlh, allow_failure);
+		if (rc == allow_failure)
+			dlh->dlh_drop_cond = 0;
+	}
 
 	D_ASSERT(dlh->dlh_future == ABT_FUTURE_NULL);
 
+	/*
+	 * Delay forward is rare case, the count of targets with delay forward
+	 * will be very limited. So le's handle them via another one cycle dispatch.
+	 */
 	rc = ABT_future_create(dlh->dlh_delay_sub_cnt + 1, dtx_comp_cb, &dlh->dlh_future);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("ABT_future_create failed (3): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
-		return dss_abterr2der(rc);
+		D_GOTO(out, rc = dss_abterr2der(rc));
 	}
 
-	rc = dss_ult_create(dtx_leader_exec_ops_delay_ult, ult_arg, DSS_XS_IOFW,
+	dlh->dlh_agg_cb = agg_cb;
+	dlh->dlh_forward_idx = 0;
+	/* The ones without DELAY flag will be skipped when scan the targets array. */
+	dlh->dlh_forward_cnt = dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt;
+
+	rc = dss_ult_create(dtx_leader_exec_ops_ult, &ult_arg, DSS_XS_IOFW,
 			    dss_get_module_info()->dmi_tgt_id, DSS_DEEP_STACK_SZ, NULL);
 	if (rc != 0) {
 		D_ERROR("ult create failed (4): "DF_RC"\n", DP_RC(rc));
-		D_FREE(ult_arg);
 		ABT_future_free(&dlh->dlh_future);
-		return rc;
+		goto out;
 	}
 
-	rc = dtx_leader_wait(dlh);
-	if (unlikely(rc == -DER_ALREADY))
-		rc = 0;
+	remote_rc = dtx_leader_wait(dlh);
+	if (remote_rc != 0 && remote_rc != allow_failure)
+		rc = remote_rc;
+
+	D_DEBUG(DB_IO, "Delay dispatched sub-requests for "DF_DTI", normal %u, delay %u, cnt %d, "
+		"allow_failure %d, local_rc %d, remote_rc %d\n", DP_DTI(&dlh->dlh_handle.dth_xid),
+		dlh->dlh_normal_sub_cnt, dlh->dlh_delay_sub_cnt, dlh->dlh_forward_cnt,
+		allow_failure, local_rc, remote_rc);
+
+out:
+	if (rc == 0 && local_rc == allow_failure &&
+	    (dlh->dlh_normal_sub_cnt + dlh->dlh_delay_sub_cnt == 0 || remote_rc == allow_failure))
+		rc = allow_failure;
 
 	return rc;
 }
@@ -2090,7 +2215,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt, 0);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));

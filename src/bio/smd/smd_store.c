@@ -83,6 +83,7 @@ smd_db_ready(void)
 void
 smd_db_lock(void)
 {
+	D_ASSERT(smd_db_ready());
 	if (smd_db->sd_lock)
 		smd_db->sd_lock(smd_db);
 }
@@ -90,6 +91,7 @@ smd_db_lock(void)
 void
 smd_db_unlock(void)
 {
+	D_ASSERT(smd_db_ready());
 	if (smd_db->sd_unlock)
 		smd_db->sd_unlock(smd_db);
 }

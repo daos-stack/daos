@@ -23,7 +23,6 @@ pool.connect(1 << 1)
 # query the pool
 pool_info = pool.pool_query()
 print("Pool has {0} storage targets".format(pool_info.pi_ntargets))
-print("Pool created with {0} permissions".format(pool_info.pi_mode))
 
 # create a container in the pool and open it
 container = DaosContainer(context)

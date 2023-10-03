@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -19,57 +20,13 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 const defaultConfigFile = "daos_server.yml"
-
-// helperLogCmd is an embeddable type that extends a command with
-// helper privileged binary logging capabilities.
-type helperLogCmd struct {
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log file location for debug from daos_server_helper binary"`
-}
-
-func (hlc *helperLogCmd) setHelperLogFile() error {
-	filename := hlc.HelperLogFile
-	if filename == "" {
-		return nil
-	}
-
-	return errors.Wrap(os.Setenv(pbin.DaosPrivHelperLogFileEnvVar, filename),
-		"unable to configure privileged helper logging")
-}
-
-type iommuCheckFn func() (bool, error)
-
-type iommuChecker interface {
-	setIOMMUChecker(iommuCheckFn)
-}
-
-type iommuCheckerCmd struct {
-	isIOMMUEnabled iommuCheckFn
-}
-
-func (icc *iommuCheckerCmd) setIOMMUChecker(fn iommuCheckFn) {
-	if icc == nil {
-		return
-	}
-	icc.isIOMMUEnabled = fn
-}
-
-// IsIOMMUEnabled implements hardware.IOMMUDetector interface.
-func (icc *iommuCheckerCmd) IsIOMMUEnabled() (bool, error) {
-	if icc == nil {
-		return false, errors.New("nil pointer receiver")
-	}
-	if icc.isIOMMUEnabled == nil {
-		return false, errors.New("nil isIOMMUEnabled function")
-	}
-
-	return icc.isIOMMUEnabled()
-}
 
 type execTestFn func() error
 
@@ -80,27 +37,40 @@ type mainOpts struct {
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSON    bool `long:"json" short:"j" description:"enable JSON output"`
 	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
 	// Define subcommands
-	SCM           scmCmd                 `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
-	NVMe          nvmeCmd                `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
+	SCM           scmStorageCmd          `command:"scm" description:"Perform tasks related to locally-attached SCM storage"`
+	NVMe          nvmeStorageCmd         `command:"nvme" description:"Perform tasks related to locally-attached NVMe storage"`
 	LegacyStorage legacyStorageCmd       `command:"storage" description:"Perform tasks related to locally-attached storage (deprecated, use scm or nvme instead)"`
 	Start         startCmd               `command:"start" description:"Start daos_server"`
 	Network       networkCmd             `command:"network" description:"Perform network device scan based on fabric provider"`
 	Version       versionCmd             `command:"version" description:"Print daos_server version"`
 	MgmtSvc       msCmdRoot              `command:"ms" description:"Perform tasks related to management service replicas"`
 	DumpTopo      hwprov.DumpTopologyCmd `command:"dump-topology" description:"Dump system topology"`
+	Support       supportCmd             `command:"support" description:"Perform debug tasks to help support team"`
+	Config        configCmd              `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on the local server"`
 
 	// Allow a set of tests to be run before executing commands.
 	preExecTests []execTestFn
 }
 
-type versionCmd struct{}
+type versionCmd struct {
+	cmdutil.JSONOutputCmd
+}
 
 func (cmd *versionCmd) Execute(_ []string) error {
-	fmt.Printf("%s v%s\n", build.ControlPlaneName, build.DaosVersion)
+	if cmd.JSONOutputEnabled() {
+		buf, err := build.MarshalJSON(build.ControlPlaneName)
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
+	fmt.Println(build.String(build.ControlPlaneName))
 	return nil
 }
 
@@ -114,12 +84,19 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
+	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
 		if len(cmdArgs) > 0 {
 			// don't support positional arguments, extra cmdArgs are unexpected
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
+		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
+			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+			// disable output on stdout other than JSON
+			log.ClearLevel(logging.LogLevelInfo)
 		}
 
 		switch cmd.(type) {
@@ -139,7 +116,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 			common.ScrubProxyVariables()
 		}
 		if opts.Debug {
-			log.SetLevel(logging.LogLevelDebug)
+			log.SetLevel(logging.LogLevelTrace)
 		}
 		if opts.JSONLog {
 			log.WithJSONOutput()
@@ -147,6 +124,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 		if opts.Syslog {
 			// Don't log debug stuff to syslog.
 			log.WithInfoLogger((&logging.DefaultInfoLogger{}).WithSyslogOutput())
+			log.WithNoticeLogger((&logging.DefaultNoticeLogger{}).WithSyslogOutput())
 			log.WithErrorLogger((&logging.DefaultErrorLogger{}).WithSyslogOutput())
 		}
 
@@ -177,10 +155,6 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 				"this command will not use it")
 		}
 
-		if iccCmd, ok := cmd.(iommuChecker); ok {
-			iccCmd.setIOMMUChecker(hwprov.DefaultIOMMUDetector(log).IsIOMMUEnabled)
-		}
-
 		if err := cmd.Execute(cmdArgs); err != nil {
 			return err
 		}
@@ -190,11 +164,11 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 	// Parse commandline flags which override options loaded from config.
 	_, err := p.ParseArgs(args)
-	if err != nil {
-		return err
+	if opts.JSON && wroteJSON.IsFalse() {
+		cmdutil.OutputJSON(os.Stdout, nil, err)
 	}
 
-	return nil
+	return err
 }
 
 func main() {

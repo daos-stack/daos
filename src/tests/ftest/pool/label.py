@@ -1,13 +1,13 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import string
 
-from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
+
+from apricot import TestWithServers
 from general_utils import report_errors, get_random_string
 from exception_utils import CommandFailure
 
@@ -35,7 +35,9 @@ class Label(TestWithServers):
 
         try:
             if use_dmg:
+                pool.dmg.server_set_logmasks("DEBUG", raise_exception=False)
                 pool.dmg.pool_destroy(pool=pool.label.value, force=1)
+                pool.dmg.server_set_logmasks(raise_exception=False)
             else:
                 pool.destroy()
             if failure_expected:
@@ -134,6 +136,7 @@ class Label(TestWithServers):
         """Test ID: DAOS-7942
 
         Test Description: Create pool with following invalid labels.
+        * The default string for an unset pool label property.
         * UUID format string: 23ab123e-5296-4f95-be14-641de40b4d5a
         * Long label - 128 random chars.
 
@@ -145,6 +148,7 @@ class Label(TestWithServers):
         self.pool = []
         errors = []
         label_outs = [
+            ("pool_label_not_set", "Invalid parameters"),
             ("23ab123e-5296-4f95-be14-641de40b4d5a", "invalid label"),
             (get_random_string(128), "invalid label")
         ]

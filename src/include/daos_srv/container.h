@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,14 +32,12 @@ int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 void ds_cont_svc_fini(struct cont_svc **svcp);
 int ds_cont_svc_step_up(struct cont_svc *svc);
 void ds_cont_svc_step_down(struct cont_svc *svc);
-
 int ds_cont_svc_set_prop(uuid_t pool_uuid, uuid_t cont_uuid,
 			      d_rank_list_t *ranks, daos_prop_t *prop);
-
-int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts,
-		 uint64_t *ncont);
+int ds_cont_list(uuid_t pool_uuid, struct daos_pool_cont_info **conts, uint64_t *ncont);
+int ds_cont_filter(uuid_t pool_uuid, daos_pool_cont_filter_t *filt,
+		   struct daos_pool_cont_info2 **conts, uint64_t *ncont);
 int ds_cont_upgrade(uuid_t pool_uuid, struct cont_svc *svc);
-
 int ds_cont_tgt_close(uuid_t hdl_uuid);
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
@@ -68,6 +66,7 @@ struct ds_cont_child {
 	uint32_t		 sc_dtx_resyncing:1,
 				 sc_dtx_reindex:1,
 				 sc_dtx_reindex_abort:1,
+				 sc_dtx_registered:1,
 				 sc_props_fetched:1,
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
@@ -105,7 +104,7 @@ struct ds_cont_child {
 	 * not cross this limit. For simplification purpose, all objects
 	 * VOS aggregation will use this boundary. We will optimize it later.
 	 */
-	uint64_t		sc_ec_agg_eph_boundry;
+	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
 	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
@@ -124,8 +123,6 @@ struct ds_cont_child {
 	struct btr_root		 sc_dtx_cos_btr;
 	/* The global list for committable DTXs. */
 	d_list_t		 sc_dtx_cos_list;
-	/* The pool map version for the latest DTX resync on the container. */
-	uint32_t		 sc_dtx_resync_ver;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */
@@ -183,12 +180,12 @@ int ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls,
 			       int n_pool_hdls, crt_context_t ctx);
 int ds_cont_local_close(uuid_t cont_hdl_uuid);
 
+int ds_cont_chk_post(struct ds_pool_child *pool_child);
 int ds_cont_child_start_all(struct ds_pool_child *pool_child);
 void ds_cont_child_stop_all(struct ds_pool_child *pool_child);
 
 int ds_cont_child_lookup(uuid_t pool_uuid, uuid_t cont_uuid,
 			 struct ds_cont_child **ds_cont);
-int ds_cont_rf_check(uuid_t pool_uuid);
 
 /** initialize a csummer based on container properties. Will retrieve the
  * checksum related properties from IV
@@ -257,12 +254,17 @@ int ds_cont_ec_eph_delete(struct ds_pool *pool, uuid_t cont_uuid, int tgt_idx);
 
 void ds_cont_ec_timestamp_update(struct ds_cont_child *cont);
 
+typedef int(*cont_rdb_iter_cb_t)(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *arg);
+int ds_cont_rdb_iterate(struct cont_svc *svc, cont_rdb_iter_cb_t iter_cb, void *cb_arg);
+int ds_cont_rf_check(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx);
+
 int ds_cont_existence_check(struct cont_svc *svc, uuid_t uuid, daos_prop_t **prop);
 
 int ds_cont_destroy_orphan(struct cont_svc *svc, uuid_t uuid);
 
 int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg);
 
-int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in, bool for_svc);
+int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
+		      daos_prop_t *prop_old, bool for_svc);
 
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

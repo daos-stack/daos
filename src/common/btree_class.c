@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -21,13 +21,14 @@ enum {
 };
 
 static int
-btr_check_tx(struct btr_attr *attr)
+btr_check_tx(struct btr_attr *attr, struct umem_instance *umm)
 {
-	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM)
+	if (attr->ba_uma.uma_id != UMEM_CLASS_PMEM &&
+	    attr->ba_uma.uma_id != UMEM_CLASS_ADMEM)
 		return BTR_NO_TX;
 
 #ifdef DAOS_PMEM_BUILD
-	if (pmemobj_tx_stage() == TX_STAGE_WORK)
+	if (umm && umem_tx_inprogress(umm))
 		return BTR_IN_TX;
 #endif
 	return BTR_SUPPORT_TX;
@@ -53,16 +54,18 @@ create_tree(daos_handle_t tree, d_iov_t *key, unsigned int class,
 {
 	struct btr_root		buf;
 	struct btr_attr		attr;
-	d_iov_t		val;
+	d_iov_t			val;
 	daos_handle_t		h;
+	struct umem_instance	*umm;
 	int			rc;
 
 	rc = dbtree_query(tree, &attr, NULL);
 	if (rc != 0)
 		return rc;
 
-	D_ASSERT(btr_check_tx(&attr) == BTR_NO_TX ||
-		 btr_check_tx(&attr) == BTR_IN_TX);
+	umm = btr_hdl2umm(tree);
+	D_ASSERT(btr_check_tx(&attr, umm) == BTR_NO_TX ||
+		 btr_check_tx(&attr, umm) == BTR_IN_TX);
 
 	memset(&buf, 0, sizeof(buf));
 	d_iov_set(&val, &buf, sizeof(buf));
@@ -126,7 +129,9 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 	if (rc != 0)
 		return rc;
 
-	if (btr_check_tx(&attr) == BTR_NO_TX) {
+	umem_class_init(&attr.ba_uma, &umm);
+
+	if (btr_check_tx(&attr, &umm) == BTR_NO_TX) {
 		rc = dbtree_destroy(hdl, NULL);
 		if (rc != 0) {
 			dbtree_close(hdl);
@@ -138,8 +143,6 @@ destroy_tree(daos_handle_t tree, d_iov_t *key)
 	} else {
 		volatile daos_handle_t	hdl_tmp = hdl;
 		volatile int		rc_tmp = 0;
-
-		umem_class_init(&attr.ba_uma, &umm);
 
 		rc_tmp = umem_tx_begin(&umm, NULL);
 		if (rc_tmp != 0 && daos_handle_is_valid(hdl_tmp)) {
@@ -1444,8 +1447,11 @@ iv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf,
 	void              *k;
 	uint64_t	key;
 
-	if (!leaf) {
-		key_rec = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+	if (!leaf && (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY)) {
+		struct btr_node	*nd = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+		char		*addr = (char *)&nd[1];
+
+		key_rec = (struct btr_record *)&addr[0];
 		key_ir  = umem_off2ptr(&tins->ti_umm, key_rec->rec_off);
 	}
 
@@ -1602,8 +1608,11 @@ ifv_rec_string(struct btr_instance *tins, struct btr_record *rec, bool leaf, cha
 	void              *k;
 	uint64_t           key;
 
-	if (!leaf) {
-		key_rec = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+	if (!leaf && (tins->ti_root->tr_feats & BTR_FEAT_DIRECT_KEY)) {
+		struct btr_node	*nd = umem_off2ptr(&tins->ti_umm, rec->rec_node[0]);
+		char		*addr = (char *)&nd[1];
+
+		key_rec = (struct btr_record *)&addr[0];
 		key_ir  = umem_off2ptr(&tins->ti_umm, key_rec->rec_off);
 	}
 

@@ -267,9 +267,6 @@ func (p *Provider) getPCIBridgesPerNUMANode(topo *topology, nodes hardware.NodeM
 				node.AddPCIBus(bus)
 			}
 		case bridgeTypePCI:
-			if bus == nil {
-				return errors.New("unexpected PCI bridge before host bridge")
-			}
 			// TODO: Add secondary buses, if relevant.
 		default:
 			return errors.Errorf("unexpected bridge type %d", bridgeType)
@@ -391,7 +388,7 @@ func (p *Provider) getDeviceNUMANodeID(dev *object, topo *topology) uint {
 		}
 	}
 
-	p.log.Debugf("Unable to determine NUMA socket ID for device %q, using NUMA 0", dev.name())
+	p.log.Tracef("device %q: using NUMA 0", dev.name())
 	return 0
 
 }

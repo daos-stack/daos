@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -64,13 +64,11 @@ class NetworkFailureTest(IorTestBase):
         ior_cmd.get_params(self)
 
         # Standard IOR prep sequence.
-        ior_cmd.set_daos_params(self.server_group, pool, container.uuid)
-        testfile = os.path.join("/", file_name)
-        ior_cmd.test_file.update(testfile)
+        ior_cmd.set_daos_params(self.server_group, pool, container.identifier)
+        ior_cmd.test_file.update(os.path.join(os.sep, file_name))
 
         manager = get_job_manager(
-            test=self, class_name="Mpirun", job=ior_cmd, subprocess=self.subprocess,
-            mpi_type="mpich", timeout=timeout)
+            test=self, job=ior_cmd, subprocess=self.subprocess, timeout=timeout)
         manager.assign_hosts(
             self.hostlist_clients, self.workdir, self.hostfile_clients_slots)
 
@@ -123,7 +121,8 @@ class NetworkFailureTest(IorTestBase):
 
         return ip_to_host
 
-    def create_host_to_ranks(self, ip_to_host, system_query_members):
+    @staticmethod
+    def create_host_to_ranks(ip_to_host, system_query_members):
         """Create a dictionary of hostname to ranks.
 
         Args:
@@ -165,8 +164,7 @@ class NetworkFailureTest(IorTestBase):
         return False
 
     def verify_network_failure(self, ior_namespace, container_namespace):
-        """Verify network failure can be recovered with some user interventions with
-        DAOS.
+        """Verify network failure can be recovered with some user interventions with DAOS.
 
         1. Create a pool and a container. Create a container with or without redundancy
         factor based on container_namespace.
@@ -257,8 +255,8 @@ class NetworkFailureTest(IorTestBase):
         # 7. Call dmg pool reintegrate one rank at a time to enable all ranks.
         for disabled_rank in disabled_ranks:
             self.pool.reintegrate(rank=disabled_rank)
-            self.pool.wait_for_rebuild(to_start=True, interval=5)
-            self.pool.wait_for_rebuild(to_start=False, interval=10)
+            self.pool.wait_for_rebuild_to_start(interval=5)
+            self.pool.wait_for_rebuild_to_end(interval=10)
 
         # 8. Run IOR again. It should work this time.
         job_num = 2
@@ -283,52 +281,52 @@ class NetworkFailureTest(IorTestBase):
         self.log.info("############################")
 
     def test_network_failure_wo_rf(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure without redundancy factor and SX object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_wo_rf
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_wo_rf
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_wo_rf/*",
             container_namespace="/run/container_wo_rf/*")
 
     def test_network_failure_with_rp(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure with redundancy factor and RP_2G1 object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_rp
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_rp
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_rp/*",
             container_namespace="/run/container_with_rf/*")
 
     def test_network_failure_with_ec(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Test rank failure with redundancy factor and EC_2P1G1 object class. See
         verify_rank_failure() for test steps.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_with_ec
+        :avocado: tags=deployment,network_failure,rebuild
+        :avocado: tags=NetworkFailureTest,test_network_failure_with_ec
         """
         self.verify_network_failure(
             ior_namespace="/run/ior_with_ec/*",
             container_namespace="/run/container_with_rf/*")
 
     def test_network_failure_isolation(self):
-        """Jira ID: DAOS-10003
+        """Jira ID: DAOS-10003.
 
         Verify that network failure in a node where pool isn't created doesn't affect the
         connection.
@@ -350,7 +348,7 @@ class NetworkFailureTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=deployment,network_failure
-        :avocado: tags=network_failure_isolation
+        :avocado: tags=NetworkFailureTest,test_network_failure_isolation
         """
         # 1. Determine the four ranks to create the pool and an interface to take down.
         # We'll create a pool on two ranks in hostlist_servers[0] and two ranks in
@@ -414,7 +412,7 @@ class NetworkFailureTest(IorTestBase):
         self.verify_ior_worked(ior_results=ior_results, job_num=job_num, errors=errors)
 
         # 7. Verify that the container Health is HEALTHY.
-        if not self.container[0].verify_health(expected_health="HEALTHY"):
+        if not self.container[0].verify_prop({"status": "HEALTHY"}):
             errors.append(
                 "Container health isn't HEALTHY after taking ib0 down!")
 

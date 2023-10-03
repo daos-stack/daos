@@ -1,7 +1,5 @@
 """Build pydaos client"""
 import sys
-import daos_build
-import compiler_setup
 
 
 def build_shim_module():
@@ -10,7 +8,7 @@ def build_shim_module():
     if GetOption('help'):
         return
 
-    version = "{}.{}".format(sys.version_info.major, sys.version_info.minor)
+    version = f'{sys.version_info.major}.{sys.version_info.minor}'
 
     Import('base_env')
 
@@ -22,19 +20,19 @@ def build_shim_module():
     new_env.AppendUnique(LIBPATH=[Dir('../api')])
 
     new_env['CC'] = 'gcc'
-    new_env.AppendUnique(CCFLAGS='-pthread')
+    new_env.AppendUnique(CCFLAGS=['-pthread', '-Wno-missing-field-initializers'])
 
-    compiler_setup.base_setup(new_env)
+    new_env.compiler_setup()
 
     obj = new_env.SharedObject('pydaos_shim', 'pydaos_shim.c',
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="")
-    base = daos_build.library(new_env, target='pydaos_shim', source=[obj],
-                              install_off="../../../..",
-                              SHLINK='gcc -pthread -shared',
-                              SHLINKFLAGS=[],
-                              SHLIBPREFIX="",
-                              SHLIBSUFFIX='.so')
+    base = new_env.d_library(target='pydaos_shim', source=[obj],
+                             install_off="../../../..",
+                             SHLINK='gcc -pthread -shared',
+                             SHLINKFLAGS=[],
+                             SHLIBPREFIX="",
+                             SHLIBSUFFIX='.so')
     install_path = f'$PREFIX/lib64/python{version}/site-packages/pydaos'
     new_env.Install(install_path, base)
     # install new wrappers too

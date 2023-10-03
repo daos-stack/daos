@@ -65,7 +65,9 @@ public class DaosClient implements ForceCloseable {
           closeAll();
           DaosEventQueue.destroyAll();
           daosSafeFinalize();
-          log.info("daos finalized");
+          if (log.isDebugEnabled()) {
+            log.debug("daos finalized");
+          }
           ShutdownHookManager.removeHook(this);
         } catch (Throwable e) {
           log.error("failed to finalize DAOS", e);
@@ -91,7 +93,9 @@ public class DaosClient implements ForceCloseable {
   private static void loadLib() {
     try {
       System.loadLibrary(LIB_NAME);
-      log.info("lib{}.so loaded from library", LIB_NAME);
+      if (log.isDebugEnabled()) {
+        log.debug("lib{}.so loaded from library", LIB_NAME);
+      }
     } catch (UnsatisfiedLinkError e) {
       loadFromJar();
     }
@@ -111,7 +115,9 @@ public class DaosClient implements ForceCloseable {
       }
       throw new RuntimeException("failed to load lib from jar, " + LIB_NAME, e);
     }
-    log.info(filePath + " loaded from jar");
+    if (log.isDebugEnabled()) {
+      log.debug(filePath + " loaded from jar");
+    }
   }
 
   private static void loadByPath(String path, File tempDir) {
@@ -260,7 +266,9 @@ public class DaosClient implements ForceCloseable {
     inited = true;
     attrMap = retrieveUserDefinedAttrs();
     registerForShutdown(this);
-    log.info("DaosClient for {}, {} initialized", builder.poolId, builder.contId);
+    if (log.isDebugEnabled()) {
+      log.debug("DaosClient for {}, {} initialized", builder.poolId, builder.contId);
+    }
   }
 
   public void setAttributes(Map<String, String> map) throws IOException {
@@ -327,7 +335,9 @@ public class DaosClient implements ForceCloseable {
         container.close();
       }
       pool.close();
-      log.info("DaosClient for {}, {} disconnected", builder.poolId, builder.contId);
+      if (log.isDebugEnabled()) {
+        log.debug("DaosClient for {}, {} disconnected", builder.poolId, builder.contId);
+      }
     }
     inited = false;
   }

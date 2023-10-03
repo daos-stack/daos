@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -44,6 +45,14 @@ const (
 var (
 	errMSConnectionFailure = errors.Errorf("unable to contact the %s", build.ManagementServiceName)
 )
+
+// IsMSConnectionFailure checks whether the error is an MS connection failure.
+func IsMSConnectionFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Cause(err).Error() == errMSConnectionFailure.Error()
+}
 
 type sysRequest struct {
 	Ranks ranklist.RankSet
@@ -129,9 +138,10 @@ func (req *SystemJoinReq) MarshalJSON() ([]byte, error) {
 
 // SystemJoinResp contains the request response.
 type SystemJoinResp struct {
-	Rank      ranklist.Rank
-	State     system.MemberState
-	LocalJoin bool
+	Rank       ranklist.Rank
+	State      system.MemberState
+	LocalJoin  bool
+	MapVersion uint32 `json:"map_version"`
 }
 
 func (resp *SystemJoinResp) UnmarshalJSON(data []byte) error {
@@ -200,7 +210,23 @@ type SystemQueryReq struct {
 	msRequest
 	sysRequest
 	retryableRequest
-	FailOnUnavailable bool // Fail without retrying if the MS is unavailable.
+	FailOnUnavailable bool               // Fail without retrying if the MS is unavailable
+	NotOK             bool               // Only show engines not in a joined state
+	WantedStates      system.MemberState // Bitmask of desired states
+}
+
+func (req *SystemQueryReq) getStateMask() (system.MemberState, error) {
+	switch {
+	case req.NotOK:
+		return system.AllMemberFilter &^ system.MemberStateJoined, nil
+	case req.WantedStates == 0:
+		return system.AllMemberFilter, nil
+	case req.WantedStates > 0 && req.WantedStates <= system.AllMemberFilter:
+		return req.WantedStates, nil
+	default:
+		return system.MemberStateUnknown, errors.Errorf("invalid member states bitmask %x",
+			int(req.WantedStates))
+	}
 }
 
 // SystemQueryResp contains the request response.
@@ -251,6 +277,12 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 	pbReq.Ranks = req.Ranks.String()
 	pbReq.Sys = req.getSystem(rpcClient)
 
+	mask, err := req.getStateMask()
+	if err != nil {
+		return nil, errors.Wrap(err, "calculating member state bitmask")
+	}
+	pbReq.StateMask = uint32(mask)
+
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).SystemQuery(ctx, pbReq)
 	})
@@ -268,8 +300,8 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		}
 		return nil
 	}
-	rpcClient.Debugf("DAOS system query request: %+v", req)
 
+	rpcClient.Debugf("DAOS system query request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -355,7 +387,7 @@ func SystemStart(ctx context.Context, rpcClient UnaryInvoker, req *SystemStartRe
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStart(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system start request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system start request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -427,7 +459,7 @@ func SystemStop(ctx context.Context, rpcClient UnaryInvoker, req *SystemStopReq)
 		return mgmtpb.NewMgmtSvcClient(conn).SystemStop(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system stop request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system stop request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -501,7 +533,7 @@ func SystemExclude(ctx context.Context, rpcClient UnaryInvoker, req *SystemExclu
 		return mgmtpb.NewMgmtSvcClient(conn).SystemExclude(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system exclude request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system exclude request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -588,7 +620,7 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 		return system.ErrRaftUnavail
 	}
 
-	rpcClient.Debugf("DAOS system-erase request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system-erase request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -630,13 +662,15 @@ func SystemErase(ctx context.Context, rpcClient UnaryInvoker, req *SystemEraseRe
 type LeaderQueryReq struct {
 	unaryRequest
 	msRequest
+	sysRequest
 }
 
 // LeaderQueryResp contains the status of the request and, if successful, the
 // MS leader and set of replicas in the system.
 type LeaderQueryResp struct {
-	Leader   string `json:"CurrentLeader"`
-	Replicas []string
+	Leader       string   `json:"current_leader"`
+	Replicas     []string `json:"replicas"`
+	DownReplicas []string `json:"down_replicas"`
 }
 
 // LeaderQuery requests the current Management Service leader and the set of
@@ -647,14 +681,31 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 		return mgmtpb.NewMgmtSvcClient(conn).LeaderQuery(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system leader-query request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system leader-query request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := new(LeaderQueryResp)
-	return resp, convertMSResponse(ur, resp)
+	if err = convertMSResponse(ur, resp); err != nil {
+		return nil, errors.Wrap(err, "converting MS to LeaderQuery resp")
+	}
+
+	req.SetHostList(resp.Replicas)
+	ur, err = rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			resp.DownReplicas = append(resp.DownReplicas, hostResp.Addr)
+			continue
+		}
+	}
+
+	return resp, nil
 }
 
 // RanksReq contains the parameters for a system ranks request.
@@ -751,7 +802,7 @@ func PrepShutdownRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksRe
 		return ctlpb.NewCtlSvcClient(conn).PrepShutdownRanks(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system prep shutdown-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
@@ -772,7 +823,7 @@ func StopRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ran
 		return ctlpb.NewCtlSvcClient(conn).StopRanks(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system stop-ranks request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system stop-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
@@ -793,7 +844,7 @@ func ResetFormatRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq
 		return ctlpb.NewCtlSvcClient(conn).ResetFormatRanks(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system reset-format-ranks request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system reset-format-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
@@ -814,28 +865,7 @@ func StartRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*Ra
 		return ctlpb.NewCtlSvcClient(conn).StartRanks(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system start-ranks request: %s", mgmtpb.Debug(pbReq))
-	return invokeRPCFanout(ctx, rpcClient, req)
-}
-
-// PingRanks concurrently performs ping on ranks across all hosts
-// supplied in the request's hostlist.
-//
-// This is called from SystemQuery in server/ctl_system.go with a
-// populated host list in the request parameter and blocks until all results
-// (successful or otherwise) are received after invoking fan-out.
-// Returns a single response structure containing results generated with
-// request responses from each selected rank.
-func PingRanks(ctx context.Context, rpcClient UnaryInvoker, req *RanksReq) (*RanksResp, error) {
-	pbReq := new(ctlpb.RanksReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, errors.Wrapf(err, "convert request type %T->%T", req, pbReq)
-	}
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).PingRanks(ctx, pbReq)
-	})
-
-	rpcClient.Debugf("DAOS system ping-ranks request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system start-ranks request: %s", pbUtil.Debug(pbReq))
 	return invokeRPCFanout(ctx, rpcClient, req)
 }
 
@@ -895,7 +925,7 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 		return mgmtpb.NewMgmtSvcClient(conn).SystemCleanup(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system cleanup request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system cleanup request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -930,7 +960,7 @@ func SystemSetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetAt
 		return mgmtpb.NewMgmtSvcClient(conn).SystemSetAttr(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS SystemSetAttr request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS SystemSetAttr request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -968,7 +998,7 @@ func SystemGetAttr(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetAt
 		return mgmtpb.NewMgmtSvcClient(conn).SystemGetAttr(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS SystemGetAttr request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS SystemGetAttr request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1006,7 +1036,7 @@ func SystemSetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemSetPr
 		return mgmtpb.NewMgmtSvcClient(conn).SystemSetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS SystemSetProp request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS SystemSetProp request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -1046,7 +1076,7 @@ func SystemGetProp(ctx context.Context, rpcClient UnaryInvoker, req *SystemGetPr
 		return mgmtpb.NewMgmtSvcClient(conn).SystemGetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS SystemGetProp request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS SystemGetProp request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err

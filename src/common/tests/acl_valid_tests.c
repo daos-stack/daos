@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -240,32 +240,6 @@ get_permissions_field(struct daos_ace *ace, enum daos_acl_access_type type)
 	}
 
 	return NULL;
-}
-
-static void
-expect_ace_invalid_with_bad_perms(enum daos_acl_access_type type)
-{
-	struct daos_ace	*ace;
-	uint64_t	*perms;
-
-	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
-	ace->dae_access_types = type;
-
-	perms = get_permissions_field(ace, type);
-	assert_non_null(perms);
-	*perms = (uint64_t)1 << 63;
-
-	assert_false(daos_ace_is_valid(ace));
-
-	daos_ace_free(ace);
-}
-
-static void
-test_ace_is_valid_undefined_perms(void **state)
-{
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_ALLOW);
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_AUDIT);
-	expect_ace_invalid_with_bad_perms(DAOS_ACL_ACCESS_ALARM);
 }
 
 static void
@@ -732,149 +706,6 @@ test_acl_random_buffer(void **state)
 	}
 }
 
-static void
-test_acl_is_valid_for_pool_null(void **state)
-{
-	assert_rc_equal(daos_acl_pool_validate(NULL), -DER_INVAL);
-}
-
-static struct daos_acl *
-create_acl_with_type_perms(enum daos_acl_access_type type, uint64_t perms)
-{
-	struct daos_ace	*ace;
-	uint64_t	*ace_perms;
-	struct daos_acl	*acl;
-
-	ace = daos_ace_create(DAOS_ACL_OWNER, NULL);
-	assert_non_null(ace);
-	ace->dae_access_types = type;
-
-	/* Need flags for audit/alarm types to come back as valid */
-	if (type != DAOS_ACL_ACCESS_ALLOW)
-		ace->dae_access_flags = DAOS_ACL_FLAG_ACCESS_SUCCESS;
-
-	ace_perms = get_permissions_field(ace, type);
-	assert_non_null(ace_perms);
-	*ace_perms = perms;
-
-	acl = daos_acl_create(&ace, 1);
-
-	daos_ace_free(ace);
-	return acl;
-}
-
-static void
-expect_pool_acl_with_type_perms(enum daos_acl_access_type type,
-				uint64_t perms, int exp_result)
-{
-	struct daos_acl	*acl;
-
-	acl = create_acl_with_type_perms(type, perms);
-	assert_non_null(acl);
-
-	assert_rc_equal(daos_acl_pool_validate(acl), exp_result);
-
-	daos_acl_free(acl);
-}
-
-static void
-expect_pool_acl_invalid_with_perms(uint64_t perms)
-{
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_ALLOW, perms,
-					-DER_INVAL);
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_AUDIT, perms,
-					-DER_INVAL);
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_ALARM, perms,
-					-DER_INVAL);
-}
-
-static void
-test_acl_is_valid_for_pool_invalid_perms(void **state)
-{
-	expect_pool_acl_invalid_with_perms((uint64_t)-1);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_GET_ACL);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_ACL);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_PROP);
-	expect_pool_acl_invalid_with_perms(DAOS_ACL_PERM_SET_OWNER);
-}
-
-static void
-expect_pool_acl_valid_with_perms(uint64_t perms)
-{
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_ALLOW, perms, 0);
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_AUDIT, perms, 0);
-	expect_pool_acl_with_type_perms(DAOS_ACL_ACCESS_ALARM, perms, 0);
-}
-
-static void
-test_acl_is_valid_for_pool_good_perms(void **state)
-{
-	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_READ);
-	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_GET_PROP);
-	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_WRITE);
-	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_CREATE_CONT);
-	expect_pool_acl_valid_with_perms(DAOS_ACL_PERM_DEL_CONT);
-}
-
-static void
-test_acl_is_valid_for_cont_null(void **state)
-{
-	assert_rc_equal(daos_acl_cont_validate(NULL), -DER_INVAL);
-}
-
-static void
-expect_cont_acl_with_type_perms(enum daos_acl_access_type type,
-				uint64_t perms, int exp_result)
-{
-	struct daos_acl	*acl;
-
-	acl = create_acl_with_type_perms(type, perms);
-	assert_non_null(acl);
-
-	assert_rc_equal(daos_acl_cont_validate(acl), exp_result);
-
-	daos_acl_free(acl);
-}
-
-static void
-expect_cont_acl_invalid_with_perms(uint64_t perms)
-{
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_ALLOW, perms,
-					-DER_INVAL);
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_AUDIT, perms,
-					-DER_INVAL);
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_ALARM, perms,
-					-DER_INVAL);
-}
-
-static void
-test_acl_is_valid_for_cont_invalid_perms(void **state)
-{
-	expect_cont_acl_invalid_with_perms((uint64_t)-1);
-	expect_cont_acl_invalid_with_perms(DAOS_ACL_PERM_CREATE_CONT);
-}
-
-static void
-expect_cont_acl_valid_with_perms(uint64_t perms)
-{
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_ALLOW, perms, 0);
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_AUDIT, perms, 0);
-	expect_cont_acl_with_type_perms(DAOS_ACL_ACCESS_ALARM, perms, 0);
-}
-
-static void
-test_acl_is_valid_for_cont_good_perms(void **state)
-{
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_READ);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_WRITE);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_DEL_CONT);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_GET_PROP);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_SET_PROP);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_GET_ACL);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_SET_ACL);
-	expect_cont_acl_valid_with_perms(DAOS_ACL_PERM_SET_OWNER);
-}
-
 int
 main(void)
 {
@@ -892,7 +723,6 @@ main(void)
 		cmocka_unit_test(test_ace_is_valid_principal_not_terminated),
 		cmocka_unit_test(test_ace_is_valid_undefined_flags),
 		cmocka_unit_test(test_ace_is_valid_valid_flags),
-		cmocka_unit_test(test_ace_is_valid_undefined_perms),
 		cmocka_unit_test(test_ace_is_valid_valid_perms),
 		cmocka_unit_test(test_ace_is_valid_undefined_access_type),
 		cmocka_unit_test(test_ace_is_valid_no_access_type),
@@ -914,12 +744,6 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_duplicate_group),
 		cmocka_unit_test(test_acl_is_valid_bad_ordering),
 		cmocka_unit_test(test_acl_random_buffer),
-		cmocka_unit_test(test_acl_is_valid_for_pool_null),
-		cmocka_unit_test(test_acl_is_valid_for_pool_invalid_perms),
-		cmocka_unit_test(test_acl_is_valid_for_pool_good_perms),
-		cmocka_unit_test(test_acl_is_valid_for_cont_null),
-		cmocka_unit_test(test_acl_is_valid_for_cont_invalid_perms),
-		cmocka_unit_test(test_acl_is_valid_for_cont_good_perms),
 	};
 
 	return cmocka_run_group_tests_name("acl_valid", tests, NULL, NULL);

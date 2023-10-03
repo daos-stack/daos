@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +7,6 @@ from ior_test_base import IorTestBase
 
 
 class EcodIor(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """EC IOR class to run smoke tests.
 
     Test Class Description: To validate Erasure code object type classes.
@@ -25,10 +23,10 @@ class EcodIor(IorTestBase):
             Create the medium size of pool and run IOR with supported EC object
             type class for sanity purpose.
 
-            :avocado: tags=all,pr,daily_regression
-            :avocado: tags=hw,large
-            :avocado: tags=ec,ec_smoke,ior
-            :avocado: tags=ec_ior
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=ec,ec_smoke,ior
+        :avocado: tags=ec_ior,test_ec
         """
         obj_class = self.params.get("dfs_oclass", '/run/ior/objectclass/*')
 

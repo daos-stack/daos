@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,6 +20,30 @@ extern "C" {
 #include <daos_types.h>
 #include <daos_pool.h>
 
+/**
+ * Get the DAOS system information in a newly allocated structure.
+ *
+ * \param[in]	sys	System name, or NULL for default system
+ * \param[out]	info	Newly allocated system information
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Out of memory
+ *		-DER_AGENT_COMM	Unable to communicate with DAOS agent
+ *		-DER_NO_PERM	No access to agent communications socket
+ *		-DER_MISC	Unexpected error
+ */
+int
+daos_mgmt_get_sys_info(const char *sys, struct daos_sys_info **info);
+
+/**
+ * Free the system info structure.
+ *
+ * \param[in]	info	Structure to be freed
+ */
+void
+daos_mgmt_put_sys_info(struct daos_sys_info *info);
+
 /*
  * DAOS management pool information
  */
@@ -31,6 +55,8 @@ typedef struct {
 	uuid_t				 mgpi_uuid;
 	/** List of current pool service replica ranks */
 	d_rank_list_t			*mgpi_svc;
+	/** Current pool service leader */
+	d_rank_t			 mgpi_ldr;
 } daos_mgmt_pool_info_t;
 
 /**

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
 (C) Copyright 2019-2022 Intel Corporation.
 
@@ -9,7 +8,7 @@ from job_manager_utils import get_job_manager
 
 
 class DaosVol(VolTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
+    # pylint: disable=too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
 
     :avocado: recursive
@@ -34,9 +33,9 @@ class DaosVol(VolTestBase):
               h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volunit,volmpich
-        :avocado: tags=DAOS_5610
+        :avocado: tags=hw,medium
+        :avocado: tags=hdf5,daos_vol,vol,volunit
+        :avocado: tags=DaosVol,test_daos_vol_mpich
         """
         manager = get_job_manager(self, mpi_type="mpich")
         self.run_test(manager, "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")

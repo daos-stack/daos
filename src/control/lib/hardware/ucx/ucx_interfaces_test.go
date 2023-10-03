@@ -14,9 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -28,21 +25,32 @@ func TestUCX_Provider_GetFabricInterfaces_Integrated(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Can't mock the underlying UCX calls, but we can make sure it doesn't crash or
-	// error on the normal happy path.
+	for name, tc := range map[string]struct {
+		provider string
+	}{
+		"all": {},
+		"tcp": {
+			provider: "ucx+tcp",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// Can't mock the underlying UCX calls, but we can make sure it doesn't crash or
+			// error on the normal happy path.
 
-	log, buf := logging.NewTestLogger(t.Name())
-	defer test.ShowBufferOnFailure(t, buf)
+			log, buf := logging.NewTestLogger(t.Name())
+			defer test.ShowBufferOnFailure(t, buf)
 
-	p := NewProvider(log)
+			p := NewProvider(log)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	result, err := p.GetFabricInterfaces(ctx)
+			ctx, cancel := context.WithTimeout(test.Context(t), 10*time.Second)
+			defer cancel()
+			result, err := p.GetFabricInterfaces(ctx, tc.provider)
 
-	if err != nil {
-		t.Fatal(err.Error())
+			if err != nil {
+				t.Fatal(err.Error())
+			}
+
+			fmt.Printf("with %s:\n%s\n", name, result)
+		})
 	}
-
-	fmt.Printf("FabricInterfaceSet:\n%s\n", result)
 }

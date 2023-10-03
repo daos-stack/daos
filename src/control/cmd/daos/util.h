@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/xattr.h>
 #include <fcntl.h>
 #include <daos.h>
 #include <daos/common.h>
@@ -28,6 +29,7 @@
 #include "daos_api.h"
 #include "daos_fs.h"
 #include "daos_uns.h"
+#include "daos_mgmt.h"
 #include "dfuse_ioctl.h"
 
 #include "daos_hdlr.h"

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -16,6 +16,7 @@ import (
 #include <daos_prop.h>
 #include <daos_pool.h>
 #include <daos/object.h>
+#include <daos/pool_map.h>
 #include <daos/cont_props.h>
 #include <daos_srv/policy.h>
 #include <daos_srv/control.h>
@@ -48,6 +49,8 @@ const (
 	PropEntryEncryption = C.DAOS_PROP_ENTRY_ENCRYPT
 	// PropEntryGlobalVersion is the global version property.
 	PropEntryGlobalVersion = C.DAOS_PROP_ENTRY_GLOBAL_VERSION
+	// PropEntryObjectVersion is the object layout version property.
+	PropEntryObjectVersion = C.DAOS_PROP_ENTRY_OBJ_VERSION
 	// PropEntryGroup is the group property.
 	PropEntryGroup = C.DAOS_PROP_ENTRY_GROUP
 	// PropEntryLabel is the label property.
@@ -73,6 +76,8 @@ const (
 )
 
 const (
+	// PoolPropertyMin before any pool property
+	PoolPropertyMin = C.DAOS_PROP_PO_MIN
 	// PoolPropertyLabel is a string that a user can associate with a pool.
 	PoolPropertyLabel = C.DAOS_PROP_PO_LABEL
 	// PoolPropertyACL is the Access Control List for a pool.
@@ -112,6 +117,16 @@ const (
 	PoolPropertySvcRedunFac = C.DAOS_PROP_PO_SVC_REDUN_FAC
 	// PoolPropertySvcList is the list of pool service replicas.
 	PoolPropertySvcList = C.DAOS_PROP_PO_SVC_LIST
+	// PoolPropertyCheckpointMode defines the behavior of WAL checkpoints
+	PoolPropertyCheckpointMode = C.DAOS_PROP_PO_CHECKPOINT_MODE
+	// PoolPropertyCheckpointFreq defines the frequency of timed WAL checkpoints
+	PoolPropertyCheckpointFreq = C.DAOS_PROP_PO_CHECKPOINT_FREQ
+	// PoolPropertyCheckpointThresh defines the size threshold to trigger WAL checkpoints
+	PoolPropertyCheckpointThresh = C.DAOS_PROP_PO_CHECKPOINT_THRESH
+	//PoolPropertyPerfDomain is pool performance domain
+	PoolPropertyPerfDomain = C.DAOS_PROP_PO_PERF_DOMAIN
+	//PoolPropertyReintMode is pool reintegration mode
+	PoolPropertyReintMode = C.DAOS_PROP_PO_REINT_MODE
 )
 
 const (
@@ -241,4 +256,23 @@ const (
 	PoolScrubModeOff   = C.DAOS_SCRUB_MODE_OFF
 	PoolScrubModeLazy  = C.DAOS_SCRUB_MODE_LAZY
 	PoolScrubModeTimed = C.DAOS_SCRUB_MODE_TIMED
+)
+
+const (
+	PoolCheckpointDisabled = C.DAOS_CHECKPOINT_DISABLED
+	PoolCheckpointTimed    = C.DAOS_CHECKPOINT_TIMED
+	PoolCheckpointLazy     = C.DAOS_CHECKPOINT_LAZY
+)
+
+const (
+	PoolPerfDomainRoot   = C.PO_COMP_TP_ROOT
+	PoolPerfDomainGrp    = C.PO_COMP_TP_GRP
+	PoolPerfDomainNode   = C.PO_COMP_TP_NODE
+	PoolPerfDomainRank   = C.PO_COMP_TP_RANK
+	PoolPerfDomainTarget = C.PO_COMP_TP_TARGET
+)
+
+const (
+	PoolReintModeDataSync   = C.DAOS_REINT_MODE_DATA_SYNC
+	PoolReintModeNoDataSync = C.DAOS_REINT_MODE_NO_DATA_SYNC
 )

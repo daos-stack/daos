@@ -87,8 +87,7 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := test.Context(t)
 
 	if err := db.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -133,9 +132,15 @@ func Test_Raft_RegenerateFixtures(t *testing.T) {
 			},
 		}
 
-		if err := db.AddPoolService(ps); err != nil {
+		lock, err := db.TakePoolLock(ctx, ps.PoolUUID)
+		if err != nil {
 			t.Fatal(err)
 		}
+
+		if err := db.AddPoolService(lock.InContext(ctx), ps); err != nil {
+			t.Fatal(err)
+		}
+		lock.Release()
 	}
 	t.Log("waiting for snapshot")
 	waitForSnapshots(ctx, t, log, dbCfg, 2)
@@ -254,7 +259,17 @@ func Test_Raft_RestoreLocalReplica(t *testing.T) {
 			},
 			expErr: errors.New("permission denied"),
 		},
-		"successful restore": {
+		"successful restore from internal snapshot": {
+			setup: func(t *testing.T) (*DatabaseConfig, string) {
+				dbCfg := testDbCfg()
+				srcDir := dbCfg.RaftDir
+				dbCfg.RaftDir = filepath.Join(t.TempDir(), filepath.Base(srcDir))
+				test.CopyDir(t, srcDir, dbCfg.RaftDir)
+
+				return dbCfg, dbCfg.RaftDir
+			},
+		},
+		"successful restore from external snapshot": {
 			setup: func(t *testing.T) (*DatabaseConfig, string) {
 				dbCfg := testDbCfg()
 				srcDir := dbCfg.RaftDir

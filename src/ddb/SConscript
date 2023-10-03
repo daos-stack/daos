@@ -1,5 +1,5 @@
 """Build tests"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -23,19 +23,17 @@ def scons():
     libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
     libs += ['spdk_vmd', 'spdk_event_bdev', 'spdk_init', 'rte_power']
 
-
-    src = ['ddb_cmd_options.c',
+    src = ['ddb.c',
            'ddb_commands.c',
            'ddb_main.c',
            'ddb_parse.c',
+           'ddb_tree_path.c',
            'ddb_printer.c',
            'ddb_vos.c',
            'ddb_spdk.c']
 
-    ddblib = denv.StaticObject(src)
-    Export('ddblib')
-
     # Add runtime paths for daos libraries
+    denv.AppendUnique(LIBPATH=[Dir('.')])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
 
@@ -52,9 +50,8 @@ def scons():
 
     prereqs.require(denv, 'argobots', 'protobufc', 'pmdk', 'spdk')
 
-    ddb = daos_build.program(denv, 'ddb', ['ddb_entry.c', ddblib], LIBS=libs)
-
-    denv.Install('$PREFIX/bin/', ddb)
+    ddblib = denv.d_library('ddb', src, LIBS=libs)
+    denv.Install('$PREFIX/lib64/daos_srv/', ddblib)
 
     # tests
     SConscript('tests/SConscript', exports=['denv'])

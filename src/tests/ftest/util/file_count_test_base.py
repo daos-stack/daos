@@ -1,17 +1,16 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
+
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from avocado.core.exceptions import TestFail
+
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from avocado.core.exceptions import TestFail
 from oclass_utils import extract_redundancy_factor
 
 
-# pylint: disable=attribute-defined-outside-init
 class FileCountTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create specified number of files.
 
     :avocado: recursive
@@ -48,6 +47,10 @@ class FileCountTestBase(IorTestBase, MdtestBase):
         object_class = self.params.get("object_class", '/run/largefilecount/*')
         hdf5_plugin_path = self.params.get("plugin_path", '/run/hdf5_vol/*')
         mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
+        ior_np = self.params.get("np", '/run/ior/client_processes/*', 1)
+        ior_ppn = self.params.get("ppn", '/run/ior/client_processes/*', None)
+        mdtest_np = self.params.get("np", '/run/mdtest/client_processes/*', 1)
+        mdtest_ppn = self.params.get("ppn", '/run/mdtest/client_processes/*', None)
         # create pool
         self.add_pool(connect=False)
 
@@ -74,6 +77,8 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                     self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
                     self.container = self.add_containers(oclass)
                     try:
+                        self.processes = mdtest_np
+                        self.ppn = mdtest_ppn
                         self.execute_mdtest()
                         results.append(["PASS", str(self.mdtest_cmd)])
                     except TestFail:
@@ -86,11 +91,12 @@ class FileCountTestBase(IorTestBase, MdtestBase):
                 self.container = self.add_containers(oclass)
                 self.update_ior_cmd_with_pool(False)
                 try:
+                    self.processes = ior_np
+                    self.ppn = ior_ppn
                     if self.ior_cmd.api.value == 'HDF5-VOL':
                         self.ior_cmd.api.update('HDF5')
-                        self.run_ior_with_pool(create_pool=False,
-                                               plugin_path=hdf5_plugin_path,
-                                               mount_dir=mount_dir)
+                        self.run_ior_with_pool(
+                            create_pool=False, plugin_path=hdf5_plugin_path, mount_dir=mount_dir)
                     else:
                         self.run_ior_with_pool(create_pool=False)
                     results.append(["PASS", str(self.ior_cmd)])

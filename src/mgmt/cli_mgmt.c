@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -160,6 +160,16 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_INVAL;
 	}
 
+	if (strnlen(resp->sys, sizeof(info->system_name)) > 0) {
+		if (copy_str(info->system_name, resp->sys)) {
+			D_ERROR("GetAttachInfo failed: %d. System name string too long\n",
+				resp->status);
+			return -DER_INVAL;
+		}
+	} else {
+		D_NOTE("No system name in GetAttachInfo. Agent may be out of date with libdaos\n");
+	}
+
 	info->crt_ctx_share_addr = hint->crt_ctx_share_addr;
 	info->crt_timeout = hint->crt_timeout;
 	info->srv_srx_set = hint->srv_srx_set;
@@ -316,6 +326,96 @@ dc_get_attach_info(const char *name, bool all_ranks,
 	return get_attach_info(name, all_ranks, info, respp);
 }
 
+static void
+free_rank_uris(struct daos_rank_uri *uris, uint32_t nr_uris)
+{
+	uint32_t i;
+
+	for (i = 0; i < nr_uris; i++)
+		D_FREE(uris[i].dru_uri);
+	D_FREE(uris);
+}
+
+static int
+alloc_rank_uris(Mgmt__GetAttachInfoResp *resp, struct daos_rank_uri **out)
+{
+	struct daos_rank_uri	*uris;
+	uint32_t		i;
+
+	D_ALLOC_ARRAY(uris, resp->n_rank_uris);
+	if (uris == NULL)
+		return -DER_NOMEM;
+
+	for (i = 0; i < resp->n_rank_uris; i++) {
+		uris[i].dru_rank = resp->rank_uris[i]->rank;
+
+		D_STRNDUP(uris[i].dru_uri, resp->rank_uris[i]->uri, CRT_ADDR_STR_MAX_LEN - 1);
+		if (uris[i].dru_uri == NULL) {
+			free_rank_uris(uris, i);
+			return -DER_NOMEM;
+		}
+	}
+
+	*out = uris;
+	return 0;
+}
+
+int
+dc_mgmt_get_sys_info(const char *sys, struct daos_sys_info **out)
+{
+	struct daos_sys_info	*info;
+	struct dc_mgmt_sys_info	internal = {0};
+	Mgmt__GetAttachInfoResp	*resp = NULL;
+	struct daos_rank_uri	*ranks = NULL;
+	int			rc = 0;
+
+	if (out == NULL) {
+		D_ERROR("daos_sys_info must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_get_attach_info(sys, true, &internal, &resp);
+	if (rc != 0) {
+		D_ERROR("dc_get_attach_info failed: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		D_GOTO(out_attach_info, rc = -DER_NOMEM);
+
+	rc = alloc_rank_uris(resp, &ranks);
+	if (rc != 0) {
+		D_ERROR("failed to allocate rank URIs: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_info, rc);
+	}
+
+	info->dsi_nr_ranks = resp->n_ms_ranks;
+	info->dsi_ranks = ranks;
+	copy_str(info->dsi_system_name, internal.system_name);
+	copy_str(info->dsi_fabric_provider, internal.provider);
+
+	*out = info;
+
+	D_GOTO(out_attach_info, rc = 0);
+
+err_info:
+	D_FREE(info);
+out_attach_info:
+	dc_put_attach_info(&internal, resp);
+out:
+	return rc;
+}
+
+void
+dc_mgmt_put_sys_info(struct daos_sys_info *info)
+{
+	if (info == NULL)
+		return;
+	free_rank_uris(info->dsi_ranks, info->dsi_nr_ranks);
+	D_FREE(info);
+}
+
 #define SYS_INFO_BUF_SIZE 16
 
 static int g_num_serv_ranks = 1;
@@ -323,6 +423,24 @@ static int g_num_serv_ranks = 1;
 int dc_mgmt_net_get_num_srv_ranks(void)
 {
 	return g_num_serv_ranks;
+}
+
+static int
+_split_env(char *env, char **name, char **value)
+{
+	char *sep;
+
+	if (strnlen(env, 1024) == 1024)
+		return -DER_INVAL;
+
+	sep = strchr(env, '=');
+	if (sep == NULL)
+		return -DER_INVAL;
+	*sep = '\0';
+	*name = env;
+	*value = sep + 1;
+
+	return 0;
 }
 
 /*
@@ -345,6 +463,30 @@ int dc_mgmt_net_cfg(const char *name)
 	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
 	if (rc != 0)
 		return rc;
+
+	if (resp->client_net_hint != NULL && resp->client_net_hint->n_env_vars > 0) {
+		int i;
+		char *env = NULL;
+		char *v_name = NULL;
+		char *v_value = NULL;
+
+		for (i = 0; i < resp->client_net_hint->n_env_vars; i++) {
+			env = resp->client_net_hint->env_vars[i];
+			if (env == NULL)
+				continue;
+
+			rc = _split_env(env, &v_name, &v_value);
+			if (rc != 0) {
+				D_ERROR("invalid client env var: %s\n", env);
+				continue;
+			}
+
+			rc = setenv(v_name, v_value, 0);
+			if (rc != 0)
+				D_GOTO(cleanup, rc = d_errno2der(errno));
+			D_DEBUG(DB_MGMT, "set server-supplied client env: %s", env);
+		}
+	}
 
 	/* Save number of server ranks */
 	g_num_serv_ranks = resp->n_rank_uris;
@@ -415,17 +557,46 @@ int dc_mgmt_net_cfg(const char *name)
 			D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
 	}
 
+	D_INFO("Network interface: %s, Domain: %s\n", getenv("OFI_INTERFACE"),
+	       getenv("OFI_DOMAIN"));
 	D_DEBUG(DB_MGMT,
 		"CaRT initialization with:\n"
-		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"\tCRT_PHY_ADDR_STR: %s, "
 		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
 		getenv("CRT_PHY_ADDR_STR"),
 		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
 
 cleanup:
 	put_attach_info(&info, resp);
 
+	return rc;
+}
+
+int dc_mgmt_net_cfg_check(const char *name)
+{
+	int rc;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
+	Mgmt__GetAttachInfoResp *resp;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	if (rc != 0)
+		return rc;
+
+	/* Client may not set it if the server hasn't. */
+	if (info.srv_srx_set == -1) {
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			rc = -DER_INVAL;
+			goto out;
+		}
+	}
+
+out:
+	put_attach_info(&info, resp);
 	return rc;
 }
 
@@ -807,7 +978,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 	crt_endpoint_t			srv_ep;
 	crt_rpc_t		       *rpc = NULL;
 	struct mgmt_pool_find_in       *rpc_in;
-	struct mgmt_pool_find_out      *rpc_out;
+	struct mgmt_pool_find_out      *rpc_out = NULL;
 	crt_opcode_t			opc;
 	int				i;
 	int				idx;
@@ -876,9 +1047,34 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 				DF_RC "\n", DP_RC(rc));
 			crt_req_decref(rpc);
 			idx = (idx + 1) % ms_ranks->rl_nr;
+			success = false;
 			continue;
 		}
-		success = true;
+
+		success = true; /* The RPC invocation succeeded. */
+
+		/* Special case: Unpack the response and check for a
+		 * -DER_NONEXIST from the upcall handler; in which
+		 * case we should retry with another replica.
+		 */
+		rpc_out = crt_reply_get(rpc);
+		D_ASSERT(rpc_out != NULL);
+		if (rpc_out->pfo_rc == -DER_NONEXIST) {
+			/* This MS replica may have a stale copy of the DB. */
+			if (label) {
+				D_DEBUG(DB_MGMT, "%s: pool not found on rank %u\n",
+					label, srv_ep.ep_rank);
+			} else {
+				D_DEBUG(DB_MGMT, DF_UUID": pool not found on rank %u\n",
+					DP_UUID(puuid), srv_ep.ep_rank);
+			}
+			if (i + 1 < ms_ranks->rl_nr) {
+				crt_req_decref(rpc);
+				idx = (idx + 1) % ms_ranks->rl_nr;
+			}
+			continue;
+		}
+
 		break;
 	}
 
@@ -894,18 +1090,16 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 		return rc;
 	}
 
-	rpc_out = crt_reply_get(rpc);
 	D_ASSERT(rpc_out != NULL);
 	rc = rpc_out->pfo_rc;
 	if (rc != 0) {
 		if (label) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR,
-				 "%s: MGMT_POOL_FIND rpc failed to %d ranks, " DF_RC "\n", label,
-				 ms_ranks->rl_nr, DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_MGMT, DLOG_ERR, rc,
+				  "%s: MGMT_POOL_FIND rpc failed to %d ranks", label,
+				  ms_ranks->rl_nr);
 		} else {
-			D_ERROR(DF_UUID ": MGMT_POOL_FIND rpc failed to %d "
-					"ranks, " DF_RC "\n",
-				DP_UUID(puuid), ms_ranks->rl_nr, DP_RC(rc));
+			DL_ERROR(rc, DF_UUID ": MGMT_POOL_FIND rpc failed to %d ranks",
+				 DP_UUID(puuid), ms_ranks->rl_nr);
 		}
 		goto decref;
 	}

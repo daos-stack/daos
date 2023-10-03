@@ -295,6 +295,7 @@ int main(int argc, char **argv)
 	pthread_t		progress_thread[NUM_SERVER_CTX];
 	struct test_options	*opts = crtu_get_opts();
 	d_rank_list_t		*mod_ranks;
+	uint64_t		*incarnations;
 	char			*uris[10];
 	d_rank_list_t		*mod_prim_ranks;
 	d_rank_list_t		*mod_sec_ranks;
@@ -315,6 +316,7 @@ int main(int argc, char **argv)
 	int			tag;
 	int			rc;
 	int			num_attach_retries = 20;
+	uint32_t		primary_grp_version = 1;
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
@@ -382,7 +384,7 @@ int main(int argc, char **argv)
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
 
-	rc = crt_rank_self_set(my_rank);
+	rc = crt_rank_self_set(my_rank, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_rank_self_set(%d) failed; rc=%d\n",
 			my_rank, rc);
@@ -675,6 +677,12 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	D_ALLOC_ARRAY(incarnations, mod_ranks->rl_nr);
+	if (!incarnations) {
+		D_ERROR("incarnation list allocation failed\n");
+		assert(0);
+	}
+
 	for (i = 0; i < 10; i++) {
 		rc = asprintf(&uris[i], "ofi+tcp;ofi_rxm://127.0.0.1:%d",
 				10000 + i);
@@ -683,12 +691,13 @@ int main(int argc, char **argv)
 			assert(0);
 		}
 		mod_ranks->rl_ranks[i] = i + 1;
+		incarnations[i] = i + 1;
 	}
 
 	DBG_PRINT("primary modify: Add\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD, 0x0);
+	primary_grp_version++;
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
+				      CRT_GROUP_MOD_OP_ADD, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc = %d\n", rc);
 		assert(0);
@@ -704,9 +713,9 @@ int main(int argc, char **argv)
 	mod_ranks->rl_nr = 5;
 
 	DBG_PRINT("primary modify: Replace\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_REPLACE, 0x0);
+	primary_grp_version++;
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
+				      CRT_GROUP_MOD_OP_REPLACE, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -720,9 +729,9 @@ int main(int argc, char **argv)
 	mod_ranks->rl_nr = 2;
 
 	DBG_PRINT("primary modify: Remove\n");
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, NULL,
-				CRT_GROUP_MOD_OP_REMOVE, 0x0);
+	primary_grp_version++;
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, NULL,
+				      CRT_GROUP_MOD_OP_REMOVE, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -736,9 +745,9 @@ int main(int argc, char **argv)
 	mod_ranks->rl_ranks[2] = 12;
 	mod_ranks->rl_nr = 3;
 
-	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1,
-				mod_ranks, uris,
-				CRT_GROUP_MOD_OP_ADD, 0x0);
+	primary_grp_version++;
+	rc = crt_group_primary_modify(grp, &crt_ctx[1], 1, mod_ranks, incarnations, uris,
+				      CRT_GROUP_MOD_OP_ADD, primary_grp_version);
 	if (rc != 0) {
 		D_ERROR("crt_group_primary_modify() failed; rc=%d\n", rc);
 		assert(0);
@@ -746,6 +755,7 @@ int main(int argc, char **argv)
 
 	VERIFY_RANKS(grp, 0, 1, 2, 11, 12, 18);
 
+	D_FREE(incarnations);
 	d_rank_list_free(mod_ranks);
 
 	/* Allocated above with asprintf */

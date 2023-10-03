@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -52,6 +52,8 @@ enum {
 
 /* Temporarily keep it to minimize change, remove it in the future */
 #define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
+
+#define DAOS_OIT_BUCKET_MAX	1024
 
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
@@ -123,9 +125,13 @@ typedef struct {
 	daos_obj_id_t		id_pub;
 	/** Private section, object shard identifier */
 	uint32_t		id_shard;
-	/** Padding */
-	uint32_t		id_pad_32;
+	/** object layout version */
+	uint16_t		id_layout_ver;
+	uint16_t		id_padding;
 } daos_unit_oid_t;
+
+/* Leave a few extra bits for now */
+#define MAX_OBJ_LAYOUT_VERSION		0xFFF0
 
 /** object metadata stored in the global OI table of container */
 struct daos_obj_md {
@@ -135,6 +141,13 @@ struct daos_obj_md {
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
 	uint32_t		omd_fdom_lvl;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
+	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 */
+	uint32_t		omd_pdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -175,7 +188,9 @@ struct daos_obj_layout {
 enum daos_tgt_flags {
 	/* When leader forward IO RPC to non-leaders, delay the target until the others replied. */
 	DTF_DELAY_FORWARD	= (1 << 0),
-	/* When leader forward IO RPC to non-leaders, reassemble related sub request. */
+	/* When leader forward IO RPC to non-leaders, reassemble related sub requests,
+	 * for 2.2 or older release.
+	 */
 	DTF_REASSEMBLE_REQ	= (1 << 1),
 };
 
@@ -232,11 +247,15 @@ int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
-int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-			enum daos_obj_redun *ord, uint32_t *nr);
+int
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
+		    uint32_t *nr, uint32_t rf_factor);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf);
+
 #define daos_oclass_grp_off_by_shard(oca, shard)				\
 	(rounddown(shard, daos_oclass_grp_size(oca)))
 
@@ -334,7 +353,8 @@ daos_obj_set_oid(daos_obj_id_t *oid, enum daos_otype_t type,
 static inline bool
 daos_oid_is_oit(daos_obj_id_t oid)
 {
-	return daos_obj_id2type(oid) == DAOS_OT_OIT;
+	return daos_obj_id2type(oid) == DAOS_OT_OIT ||
+	       daos_obj_id2type(oid) == DAOS_OT_OIT_V2;
 }
 
 static inline int
@@ -370,16 +390,10 @@ is_daos_obj_type_set(enum daos_otype_t type, enum daos_otype_t sub_type)
 	return is_type_set;
 }
 
-/*
- * generate ID for Object ID Table which is just an object, caller should
- * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
- * or it possibly assert it internally
- */
-static inline daos_obj_id_t
-daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+static inline int
+daos_cont_rf2oit_ord(uint32_t cont_rf)
 {
 	enum daos_obj_redun	ord;
-	daos_obj_id_t		oid = {0};
 
 	switch (cont_rf) {
 	case DAOS_PROP_CO_REDUN_RF0:
@@ -398,9 +412,26 @@ daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
 		ord = OR_RP_5;
 		break;
 	default:
-		D_ASSERTF(0, "bad cont_rf %d\n", cont_rf);
-		break;
+		D_ERROR("bad cont_rf %d\n", cont_rf);
+		return -DER_INVAL;
 	};
+
+	return ord;
+}
+
+/*
+ * generate ID for Object ID Table which is just an object, caller should
+ * provide valid cont_rf value (DAOS_PROP_CO_REDUN_RF0 ~ DAOS_PROP_CO_REDUN_RF4)
+ * or it possibly assert it internally
+ */
+static inline daos_obj_id_t
+daos_oit_gen_id(daos_epoch_t epoch, uint32_t cont_rf)
+{
+	daos_obj_id_t		oid = {0};
+	int			ord;
+
+	ord = daos_cont_rf2oit_ord(cont_rf);
+	D_ASSERT(ord >= 0);
 
 	/** use 1 group for simplicity, it should be more scalable */
 	daos_obj_set_oid(&oid, DAOS_OT_OIT, ord, 1, 0);
@@ -455,6 +486,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);
@@ -467,12 +499,18 @@ int dc_obj_list_dkey(tse_task_t *task);
 int dc_obj_list_akey(tse_task_t *task);
 int dc_obj_list_rec(tse_task_t *task);
 int dc_obj_list_obj(tse_task_t *task);
+int dc_obj_key2anchor(tse_task_t *task);
 int dc_obj_fetch_md(daos_obj_id_t oid, struct daos_obj_md *md);
 int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
+int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
+uint32_t dc_obj_hdl2redun_lvl(daos_handle_t oh);
+uint32_t dc_obj_hdl2pda(daos_handle_t oh);
+uint32_t dc_obj_hdl2pdom(daos_handle_t oh);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);
@@ -491,6 +529,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void
@@ -522,6 +562,8 @@ enum daos_io_flags {
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
+	/* reverse enumeration for recx */
+	DIOF_RECX_REVERSE = 0x800,
 };
 
 /**
@@ -742,16 +784,14 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
-			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
-		D_ERROR("\n");
 	}
 }
 

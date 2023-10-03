@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,11 +13,16 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/lib/ranklist"
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const maxHelperStreamCount = 2
+const (
+	maxHelperStreamCount = 2
+	envLogMasks          = "D_LOG_MASK"
+	envLogDbgStreams     = "DD_MASK"
+	envLogSubsystems     = "DD_SUBSYS"
+)
 
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
@@ -29,6 +34,7 @@ type FabricConfig struct {
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 	DisableSRX      bool   `yaml:"disable_srx,omitempty" cmdEnv:"FI_OFI_RXM_USE_SRX,invertBool,intBool"`
+	AuthKey         string `yaml:"fabric_auth_key,omitempty" cmdEnv:"D_PROVIDER_AUTH_KEY"`
 }
 
 // Update fills in any missing fields from the provided FabricConfig.
@@ -55,6 +61,9 @@ func (fc *FabricConfig) Update(other FabricConfig) {
 	if fc.DisableSRX == false {
 		fc.DisableSRX = other.DisableSRX
 	}
+	if fc.AuthKey == "" {
+		fc.AuthKey = other.AuthKey
+	}
 }
 
 // Validate ensures that the configuration meets minimum standards.
@@ -71,6 +80,11 @@ func (fc *FabricConfig) Validate() error {
 	default:
 		return nil
 	}
+}
+
+// GetAuthKeyEnv returns the environment variable string for the auth key.
+func (fc *FabricConfig) GetAuthKeyEnv() string {
+	return fmt.Sprintf("D_PROVIDER_AUTH_KEY=%s", fc.AuthKey)
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -96,49 +110,8 @@ func cleanEnvVars(in, allowed []string) (out []string) {
 	return
 }
 
-// mergeEnvVars merges and deduplicates two slices of environment
-// variables. Conflicts are resolved by taking the value from the
-// second list.
-func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
-	mergeMap := make(map[string]string)
-	for _, pair := range curVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in curVars; shouldn't be any
-		// but this will ensure it.
-		if _, found := mergeMap[kv[0]]; found {
-			continue
-		}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	mergedKeys := make(map[string]struct{})
-	for _, pair := range newVars {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) != 2 || kv[0] == "" || kv[1] == "" {
-			continue
-		}
-		// strip duplicates in newVars
-		if _, found := mergedKeys[kv[0]]; found {
-			continue
-		}
-		mergedKeys[kv[0]] = struct{}{}
-		mergeMap[kv[0]] = kv[1]
-	}
-
-	merged = make([]string, 0, len(mergeMap))
-	for key, val := range mergeMap {
-		merged = append(merged, strings.Join([]string{key, val}, "="))
-	}
-
-	return
-}
-
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *ranklist.Rank `yaml:"rank,omitempty"`
 	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
 	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
 	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
@@ -155,7 +128,7 @@ type Config struct {
 	PinnedNumaNode    *uint          `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
 	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
 	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
-	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
+	HugepageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 	CheckerEnabled    bool           `yaml:"-" cmdLongFlag:"--checker" cmdShortFlag:"-C"`
 }
 
@@ -166,10 +139,53 @@ func NewConfig() *Config {
 	}
 }
 
+// ReadLogDbgStreams extracts the value of DD_MASK from engine config env_vars.
+func (c *Config) ReadLogDbgStreams() (string, error) {
+	val, err := c.GetEnvVar(envLogDbgStreams)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
+// ReadLogSubsystems extracts the value of DD_SUBSYS from engine config env_vars.
+func (c *Config) ReadLogSubsystems() (string, error) {
+	val, err := c.GetEnvVar(envLogSubsystems)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+
+	return val, nil
+}
+
 // Validate ensures that the configuration meets minimum standards.
 func (c *Config) Validate() error {
 	if c.PinnedNumaNode != nil && c.ServiceThreadCore != 0 {
 		return errors.New("cannot specify both pinned_numa_node and first_core")
+	}
+
+	errNegative := func(s string) error {
+		return errors.Errorf("%s must not be negative", s)
+	}
+	if c.TargetCount < 0 {
+		return errNegative("target count")
+	}
+	if c.HelperStreamCount < 0 {
+		return errNegative("helper stream count")
+	}
+	if c.ServiceThreadCore < 0 {
+		return errNegative("service thread core index")
+	}
+	if c.MemSize < 0 {
+		return errNegative("mem size")
+	}
+	if c.HugepageSz < 0 {
+		return errNegative("hugepage size")
+	}
+
+	if c.TargetCount == 0 {
+		return errors.New("target count must be nonzero")
 	}
 
 	if err := c.Fabric.Validate(); err != nil {
@@ -177,11 +193,27 @@ func (c *Config) Validate() error {
 	}
 
 	if err := c.Storage.Validate(); err != nil {
-		return errors.Wrap(err, "storage config validation failed")
+		return err
 	}
 
 	if err := ValidateLogMasks(c.LogMask); err != nil {
 		return errors.Wrap(err, "validate engine log masks")
+	}
+
+	streams, err := c.ReadLogDbgStreams()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogStreams(streams); err != nil {
+		return errors.Wrap(err, "validate engine log debug streams")
+	}
+
+	subsystems, err := c.ReadLogSubsystems()
+	if err != nil {
+		return errors.Wrap(err, "reading environment variable")
+	}
+	if err := ValidateLogSubsystems(subsystems); err != nil {
+		return errors.Wrap(err, "validate engine log subsystems")
 	}
 
 	return nil
@@ -262,10 +294,10 @@ func (c *Config) CmdLineEnv() ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		env = mergeEnvVars(env, sEnv)
+		env = common.MergeKeyValues(env, sEnv)
 	}
 
-	return mergeEnvVars(c.EnvVars, env), nil
+	return common.MergeKeyValues(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -287,23 +319,16 @@ func (c *Config) GetEnvVar(name string) (string, error) {
 		return "", err
 	}
 
-	env = mergeEnvVars(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
+	env = common.MergeKeyValues(cleanEnvVars(os.Environ(), c.EnvPassThrough), env)
 
-	for _, keyPair := range c.EnvVars {
-		keyValue := strings.SplitN(keyPair, "=", 2)
-		if keyValue[0] == name {
-			return keyValue[1], nil
-		}
-	}
-
-	return "", errors.Errorf("Undefined environment variable %q", name)
+	return common.FindKeyValue(env, name)
 }
 
 // WithEnvVars applies the supplied list of environment
 // variables to any existing variables, with new values
 // overwriting existing values.
 func (c *Config) WithEnvVars(newVars ...string) *Config {
-	c.EnvVars = mergeEnvVars(c.EnvVars, newVars)
+	c.EnvVars = common.MergeKeyValues(c.EnvVars, newVars)
 
 	return c
 }
@@ -313,12 +338,6 @@ func (c *Config) WithEnvVars(newVars ...string) *Config {
 // engine subprocess environment.
 func (c *Config) WithEnvPassThrough(allowList ...string) *Config {
 	c.EnvPassThrough = allowList
-	return c
-}
-
-// WithRank sets the instance rank.
-func (c *Config) WithRank(r uint32) *Config {
-	c.Rank = ranklist.NewRankPtr(r)
 	return c
 }
 
@@ -332,7 +351,7 @@ func (c *Config) WithSystemName(name string) *Config {
 // Note that this method replaces any existing configs. To append,
 // use AppendStorage().
 func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
-	c.Storage.Tiers = c.Storage.Tiers[:]
+	c.Storage.Tiers = storage.TierConfigs{}
 	c.AppendStorage(cfgs...)
 	return c
 }
@@ -373,6 +392,18 @@ func (c *Config) WithStorageNumaNodeIndex(nodeIndex uint) *Config {
 	return c
 }
 
+// WithStorageControlMetadataPath sets the metadata path to be used by this instance.
+func (c *Config) WithStorageControlMetadataPath(path string) *Config {
+	c.Storage.ControlMetadata.Path = path
+	return c
+}
+
+// WithStorageControlMetadataDevice sets the metadata device to be used by this instance.
+func (c *Config) WithStorageControlMetadataDevice(device string) *Config {
+	c.Storage.ControlMetadata.DevicePath = device
+	return c
+}
+
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
@@ -400,6 +431,12 @@ func (c *Config) WithFabricInterface(iface string) *Config {
 // WithFabricInterfacePort sets the numeric interface port to be used by this instance.
 func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 	c.Fabric.InterfacePort = ifacePort
+	return c
+}
+
+// WithFabricAuthKey sets the fabric authorization key.
+func (c *Config) WithFabricAuthKey(key string) *Config {
+	c.Fabric.AuthKey = key
 	return c
 }
 
@@ -463,15 +500,27 @@ func (c *Config) WithLogMask(logMask string) *Config {
 	return c
 }
 
+// WithLogStreams sets the DAOS logging debug streams to be used by this instance.
+func (c *Config) WithLogStreams(streams string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogDbgStreams, streams))
+	return c
+}
+
+// WithLogSubsystems sets the DAOS logging subsystems to be used by this instance.
+func (c *Config) WithLogSubsystems(subsystems string) *Config {
+	c.EnvVars = append(c.EnvVars, fmt.Sprintf("%s=%s", envLogSubsystems, subsystems))
+	return c
+}
+
 // WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
 func (c *Config) WithMemSize(memsize int) *Config {
 	c.MemSize = memsize
 	return c
 }
 
-// WithHugePageSize sets the configured hugepage size on this instance.
-func (c *Config) WithHugePageSize(hugepagesz int) *Config {
-	c.HugePageSz = hugepagesz
+// WithHugepageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugepageSize(hugepagesz int) *Config {
+	c.HugepageSz = hugepagesz
 	return c
 }
 
@@ -488,8 +537,21 @@ func (c *Config) WithStorageAccelProps(name string, mask storage.AccelOptionBits
 	return c
 }
 
+// WithStorageSpdkRpcSrvProps specifies whether a SPDK JSON-RPC server will run in the I/O Engine.
+func (c *Config) WithStorageSpdkRpcSrvProps(enable bool, sockAddr string) *Config {
+	c.Storage.SpdkRpcSrvProps.Enable = enable
+	c.Storage.SpdkRpcSrvProps.SockAddr = sockAddr
+	return c
+}
+
 // WithIndex sets the I/O Engine instance index.
 func (c *Config) WithIndex(i uint32) *Config {
 	c.Index = i
+	return c.WithStorageIndex(i)
+}
+
+// WithStorageIndex sets the I/O Engine instance index in the storage struct.
+func (c *Config) WithStorageIndex(i uint32) *Config {
+	c.Storage.EngineIdx = uint(i)
 	return c
 }

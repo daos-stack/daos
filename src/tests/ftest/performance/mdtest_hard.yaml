@@ -1,7 +1,7 @@
 hosts:
-  test_servers: 3
-  test_clients: 5
-timeout: 300
+  test_servers: 2
+  test_clients: 2
+timeout: 480
 server_config:
   name: daos_server
   control_log_mask: INFO
@@ -14,14 +14,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -29,14 +22,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   size: 95%
   control_method: dmg
@@ -52,20 +38,33 @@ mdtest: &mdtest_base
   test_dir: "/"
   manager: "MPICH"
   flags: "-C -T -r -F -P -G 27 -N 1 -Y -v -t -X -E"
-  api: "DFS"
   read_bytes: 3901
   write_bytes: 3901
   num_of_files_dirs: 100000000
   stonewall_timer: 30
   stonewall_statusfile: "/var/tmp/daos_testing/stoneWallingStatusFile"
-  dfs_destroy: False
+  dfs_destroy: false
 mdtest_dfs_s1:
   <<: *mdtest_base
+  api: "DFS"
   dfs_oclass: S1
   dfs_dir_oclass: SX
   dfs_chunk: 1MiB
 mdtest_dfs_ec_16p2g1:
   <<: *mdtest_base
+  api: "DFS"
+  dfs_oclass: EC_16P2G1
+  dfs_dir_oclass: RP_3GX
+  dfs_chunk: 16MiB
+mdtest_pil4dfs_s1:
+  <<: *mdtest_base
+  api: "POSIX"
+  dfs_oclass: S1
+  dfs_dir_oclass: SX
+  dfs_chunk: 1MiB
+mdtest_pil4dfs_ec_16p2g1:
+  <<: *mdtest_base
+  api: "POSIX"
   dfs_oclass: EC_16P2G1
   dfs_dir_oclass: RP_3GX
   dfs_chunk: 16MiB
@@ -73,4 +72,5 @@ client:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: socket
+  bind_to: hwthread
+  map_by: socket

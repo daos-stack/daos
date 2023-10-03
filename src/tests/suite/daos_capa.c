@@ -310,7 +310,7 @@ io_invalid_poh(void **state)
 	if (arg->myrank == 1) {
 		/** open object */
 		oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
-		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+		rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 		assert_rc_equal(rc, 0);
 
 		/** init I/O */
@@ -398,7 +398,7 @@ io_invalid_coh(void **state)
 	if (arg->myrank == 1) {
 		/** open object */
 		oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
-		rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+		rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 		assert_rc_equal(rc, 0);
 
 		/** init I/O */
@@ -474,7 +474,7 @@ update_ro(void **state)
 
 	/** open object */
 	oid = daos_test_oid_gen(coh, OC_RP_XSF, 0, 0, arg->myrank);
-	rc = daos_obj_open(coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** init I/O */
@@ -500,6 +500,8 @@ update_ro(void **state)
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
+
+	par_barrier(PAR_COMM_WORLD);
 
 	/** close container handle */
 	rc = daos_cont_close(coh, NULL);

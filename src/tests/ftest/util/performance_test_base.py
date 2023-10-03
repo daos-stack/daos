@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,7 +18,6 @@ from exception_utils import CommandFailure
 
 
 class PerformanceTestBase(IorTestBase, MdtestBase):
-    # pylint: disable=too-many-ancestors
     """Base performance class.
 
     Optional yaml config values:
@@ -32,10 +31,10 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
     class PerfParams():
         # pylint: disable=too-few-public-methods
-        '''Data class for performance params'''
+        """Data class for performance params"""
 
         def __init__(self):
-            '''Init performance params'''
+            """Init performance params"""
             self.num_servers = 0
             self.num_engines = 0
             self.num_targets = 0
@@ -298,9 +297,9 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             ior_metrics = self.ior_cmd.get_ior_metrics(ior_output)
             for metrics in ior_metrics:
                 if metrics[0] == "write":
-                    self.log_performance("Max Write: {}".format(metrics[IorMetrics.Max_MiB]))
+                    self.log_performance("Max Write: {}".format(metrics[IorMetrics.MAX_MIB]))
                 elif metrics[0] == "read":
-                    self.log_performance("Max Read: {}".format(metrics[IorMetrics.Max_MiB]))
+                    self.log_performance("Max Read: {}".format(metrics[IorMetrics.MAX_MIB]))
         except (CommandFailure, TestFail):
             try:
                 self._log_daos_metrics()
@@ -406,7 +405,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_write_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
             # Wait between write and read
             self.phase_barrier()
@@ -420,7 +419,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
             # Wait for rebuild if we stopped a rank
             if stop_rank_read_s:
-                self.pool.wait_for_rebuild(False)
+                self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()
 
@@ -472,6 +471,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         params = {}
         if self.mdtest_cmd.dfs_oclass.value:
             params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
         if self.mdtest_cmd.dfs_chunk.value:
             params['chunk_size'] = self.mdtest_cmd.dfs_chunk.value
         self.container = self.get_container(self.pool, create=False, **params)
@@ -488,7 +489,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         self.subprocess = True
 
         self.log.info("Running MDTEST")
-        self.execute_mdtest()
+        self.execute_mdtest(display_space=False)
         if stop_rank_s:
             time.sleep(stop_rank_s)
             self.server_managers[0].stop_random_rank(self.d_log, force=True, exclude_ranks=[0])
@@ -525,6 +526,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
 
         # Wait for rebuild if we stopped a rank
         if stop_rank_s:
-            self.pool.wait_for_rebuild(False)
+            self.pool.wait_for_rebuild_to_end()
 
         self._log_daos_metrics()

@@ -1,11 +1,10 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <string.h>
-#include <libpmemobj/types.h>
 #include <daos_srv/vos.h>
 #include <gurt/debug.h>
 #include <vos_internal.h>
@@ -37,7 +36,8 @@ dv_pool_open(char *path, daos_handle_t *poh)
 
 	rc = vos_self_init(path_parts.vf_db_path, true, path_parts.vf_target_idx);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Failed to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to initialize VOS with path '%s': "DF_RC"\n",
+			path_parts.vf_db_path, DP_RC(rc));
 		return rc;
 	}
 
@@ -46,6 +46,17 @@ dv_pool_open(char *path, daos_handle_t *poh)
 		D_ERROR("Failed to open pool: "DF_RC"\n", DP_RC(rc));
 		vos_self_fini();
 	}
+
+	return rc;
+}
+
+int
+dv_pool_close(daos_handle_t poh)
+{
+	int rc;
+
+	rc = vos_pool_close(poh);
+	vos_self_fini();
 
 	return rc;
 }
@@ -68,17 +79,6 @@ dv_cont_close(daos_handle_t *coh)
 	rc = vos_cont_close(*coh);
 
 	*coh = DAOS_HDL_INVAL;
-
-	return rc;
-}
-
-int
-dv_pool_close(daos_handle_t poh)
-{
-	int rc;
-
-	rc = vos_pool_close(poh);
-	vos_self_fini();
 
 	return rc;
 }
@@ -135,9 +135,10 @@ static int
 get_by_idx(daos_handle_t hdl, uint32_t idx, struct search_args *args, daos_unit_oid_t *uoid,
 	   daos_key_t *dkey, daos_key_t *akey, vos_iter_type_t type)
 {
-	vos_iter_param_t param = {0};
+	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors anchors = {0};
-	int found;
+	int			rc;
+	bool			found;
 
 	args->sa_idx = idx;
 
@@ -149,8 +150,11 @@ get_by_idx(daos_handle_t hdl, uint32_t idx, struct search_args *args, daos_unit_
 		param.ip_dkey = *dkey;
 	if (akey)
 		param.ip_akey = *akey;
-	found = vos_iterate(&param, type, false, &anchors, get_by_idx_cb, NULL, args, NULL);
+	rc = vos_iterate(&param, type, false, &anchors, get_by_idx_cb, NULL, args, NULL);
+	if (rc < 0)
+		return rc;
 
+	found = rc == 1;
 	if (!found)
 		return -DER_NONEXIST;
 
@@ -167,6 +171,40 @@ dv_get_cont_uuid(daos_handle_t poh, uint32_t idx, uuid_t uuid)
 	if (SUCCESS(rc))
 		uuid_copy(uuid, args.sa_uuid);
 	return rc;
+}
+
+static int
+get_cont_idx_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
+		vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
+{
+	struct search_args *args = cb_arg;
+
+	D_ASSERT(type == VOS_ITER_COUUID);
+	if (uuid_compare(args->sa_uuid, entry->ie_couuid) == 0) {
+		/* found */
+		return 1;
+	}
+	args->sa_idx++;
+
+	return 0;
+}
+
+int
+dv_get_cont_idx(daos_handle_t poh, uuid_t uuid)
+{
+	struct search_args args = {0};
+	vos_iter_param_t param = {0};
+	struct vos_iter_anchors anchors = {0};
+	int found;
+
+	uuid_copy(args.sa_uuid, uuid);
+	param.ip_hdl = poh;
+	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	found = vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, get_cont_idx_cb, NULL,
+			    &args, NULL);
+	if (found)
+		return args.sa_idx;
+	return -DDBER_INVALID_CONT;
 }
 
 int
@@ -198,7 +236,7 @@ dv_get_dkey(daos_handle_t coh, daos_unit_oid_t uoid, uint32_t idx, daos_key_t *d
 
 	rc = get_by_idx(coh, idx, &args, &uoid, NULL, NULL, VOS_ITER_DKEY);
 	if (SUCCESS(rc))
-		*dkey = args.sa_key;
+		daos_iov_copy(dkey, &args.sa_key);
 
 	return rc;
 }
@@ -217,7 +255,7 @@ dv_get_akey(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, uint32_t 
 
 	rc = get_by_idx(coh, idx, &args, &uoid, dkey, NULL, VOS_ITER_AKEY);
 	if (SUCCESS(rc))
-		*akey = args.sa_key;
+		daos_iov_copy(akey, &args.sa_key);
 
 	return rc;
 }
@@ -242,95 +280,174 @@ dv_get_recx(daos_handle_t coh, daos_unit_oid_t uoid, daos_key_t *dkey, daos_key_
 	return rc;
 }
 
-#define is_path_idx_set(idx) ((idx) != DDB_IDX_UNSET)
 #define daos_recx_match(a, b) ((a).rx_idx == (b.rx_idx) && (a).rx_nr == (b).rx_nr)
 
+struct path_verify_args {
+	struct dv_indexed_tree_path	*pva_itp;
+	uint32_t                         pva_current_idx;
+	uint32_t                         pva_current_idxs[PATH_PART_END];
+};
+
 static bool
-found_idx(struct dv_tree_path_builder *vt_path, uint32_t *p_idx)
+compare_oid(vos_iter_entry_t *entry, union itp_part_type *part)
 {
-	if (!is_path_idx_set(*p_idx))
-		return false;
-	if (*p_idx == vt_path->vtp_current_idx) {
-		/* found it ... reset and return true */
-		*p_idx = DDB_IDX_UNSET;
-		vt_path->vtp_current_idx = 0;
-		return true;
-	}
-	/* looking for index, but not found yet */
-	vt_path->vtp_current_idx++;
-	return false;
+	return daos_unit_oid_compare(part->itp_oid, entry->ie_oid) == 0;
+}
+
+static bool
+compare_key(vos_iter_entry_t *entry, union itp_part_type *part)
+{
+	return daos_key_match(&part->itp_key, &entry->ie_key);
+}
+
+static bool
+compare_recx(vos_iter_entry_t *entry, union itp_part_type *part)
+{
+	return daos_recx_match(part->itp_recx, entry->ie_orig_recx);
+}
+
+static bool
+vos_vtp_compare(struct dv_indexed_tree_path *vtp, vos_iter_entry_t *entry, enum path_parts part_key)
+{
+	bool (*cmp_fn[PATH_PART_END])(vos_iter_entry_t *entry, union itp_part_type *part) = {
+	    NULL, /* Won't be comparing containers */
+	    compare_oid,
+	    compare_key,
+	    compare_key,
+	    compare_recx,
+	};
+
+	D_ASSERT(part_key < PATH_PART_END);
+	D_ASSERT(cmp_fn[part_key] != NULL);
+
+	return cmp_fn[part_key](entry, &vtp->itp_parts[part_key].itp_part_value);
+}
+
+static void
+set_oid(vos_iter_entry_t *entry, union itp_part_type *part)
+{
+	itp_part_set_obj(part, &entry->ie_oid);
+}
+
+static void
+set_key(vos_iter_entry_t *entry, union itp_part_type *part)
+{
+	itp_part_set_key(part, &entry->ie_key);
+}
+
+static void
+set_recx(vos_iter_entry_t *entry, union itp_part_type *part)
+{
+	itp_part_set_recx(part, &entry->ie_orig_recx);
+}
+
+static void
+vos_itp_set(struct dv_indexed_tree_path *itp, vos_iter_entry_t *entry, enum path_parts part_key)
+{
+	void (*set_fn[PATH_PART_END])(vos_iter_entry_t *entry, union itp_part_type *part) = {
+	    NULL, /* Won't set containers */
+	    set_oid,
+	    set_key,
+	    set_key,
+	    set_recx,
+	};
+
+	D_ASSERT(part_key < PATH_PART_END);
+	D_ASSERT(set_fn[part_key] != NULL);
+
+	set_fn[part_key](entry, &itp->itp_parts[part_key].itp_part_value);
+	itp->itp_parts[part_key].itp_has_part_value = true;
+}
+
+#define VOS_ITER_LARGEST VOS_ITER_DTX
+
+static enum path_parts
+vos_iterator_type_to_path_part(vos_iter_type_t type)
+{
+	int map[VOS_ITER_LARGEST] = {0};
+
+	map[VOS_ITER_COUUID] = PATH_PART_CONT;
+	map[VOS_ITER_OBJ] = PATH_PART_OBJ;
+	map[VOS_ITER_DKEY] = PATH_PART_DKEY;
+	map[VOS_ITER_AKEY] = PATH_PART_AKEY;
+	map[VOS_ITER_RECX] = PATH_PART_RECX;
+	map[VOS_ITER_SINGLE] = PATH_PART_SV;
+
+	return map[type];
+}
+
+static enum path_parts
+vos_enum_to_path_part(vos_iter_type_t t)
+{
+	enum path_parts map[VOS_ITER_LARGEST];
+
+	map[VOS_ITER_OBJ] = PATH_PART_OBJ;
+	map[VOS_ITER_DKEY] = PATH_PART_DKEY;
+	map[VOS_ITER_AKEY] = PATH_PART_AKEY;
+	map[VOS_ITER_RECX] = PATH_PART_RECX;
+	map[VOS_ITER_SINGLE] = PATH_PART_END; /* nothing for single value */
+
+	return map[t];
+}
+
+static enum path_parts
+vos_enum_to_parent_path_part(vos_iter_type_t t)
+{
+	int map[VOS_ITER_LARGEST];
+
+	map[VOS_ITER_OBJ] = PATH_PART_CONT;
+	map[VOS_ITER_DKEY] = PATH_PART_OBJ;
+	map[VOS_ITER_AKEY] = PATH_PART_DKEY;
+	map[VOS_ITER_RECX] = PATH_PART_AKEY;
+	map[VOS_ITER_SINGLE] = PATH_PART_AKEY;
+
+	return map[t];
 }
 
 static int
 verify_path_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		   vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
-	struct dv_tree_path_builder *pb = cb_arg;
-	struct dv_tree_path *vp = &pb->vtp_path;
+	struct path_verify_args *args = cb_arg;
+	struct dv_indexed_tree_path *itp = args->pva_itp;
 
-	switch (type) {
-	case VOS_ITER_OBJ:
-		if (dv_has_cont(vp)) {
-			if (found_idx(pb, &pb->vtp_oid_idx)) {
-				pb->vtp_path.vtp_oid = entry->ie_oid;
-				pb->vtp_oid_verified = true;
-			} else if (dv_has_obj(vp) &&
-				   daos_unit_oid_compare(vp->vtp_oid, entry->ie_oid) == 0) {
-				pb->vtp_oid_verified = true;
+	if (!(type == VOS_ITER_OBJ ||
+	      type == VOS_ITER_DKEY ||
+	      type == VOS_ITER_AKEY ||
+	      type == VOS_ITER_RECX))
+		return 0; /* these are the only parts of the path */
+
+	if (itp_has_complete(itp, vos_enum_to_parent_path_part(type))) {
+		enum path_parts part_key = vos_enum_to_path_part(type);
+
+		if (itp_has_idx(itp, part_key)) {
+			if (itp_idx(itp, part_key) == args->pva_current_idxs[part_key]) {
+				/* set the part */
+				vos_itp_set(itp, entry, part_key);
+				itp->itp_child_type =
+				    vos_iterator_type_to_path_part(entry->ie_child_type);
+
+				args->pva_current_idx = 0;
 			} else {
+				/* looking for index, but not found yet */
+				args->pva_current_idxs[part_key]++;
+				args->pva_current_idx++;
 				*acts = VOS_ITER_CB_SKIP;
 			}
-		}
-			break;
-	case VOS_ITER_DKEY:
-		if (dv_has_obj(vp)) {
-			if (found_idx(pb, &pb->vtp_dkey_idx)) {
-				pb->vtp_path.vtp_dkey = entry->ie_key;
-				pb->vtp_dkey_verified = true;
-			} else if (dv_has_dkey(vp) &&
-				   daos_key_match(&vp->vtp_dkey, &entry->ie_key)) {
-				pb->vtp_dkey_verified = true;
+		} else if (itp_has_part_value(itp, part_key)) {
+			if (vos_vtp_compare(itp, entry, part_key)) {
+				/* need to verify part and capture index */
+				itp_idx_set(itp, part_key, args->pva_current_idxs[part_key]);
+				itp->itp_child_type =
+				    vos_iterator_type_to_path_part(entry->ie_child_type);
+				args->pva_current_idx = 0;
+
 			} else {
 				*acts = VOS_ITER_CB_SKIP;
+				args->pva_current_idx++;
+				args->pva_current_idxs[part_key]++;
 			}
 		}
-		break;
-	case VOS_ITER_AKEY:
-		if (dv_has_dkey(vp)) {
-			if (found_idx(pb, &pb->vtp_akey_idx)) {
-				pb->vtp_path.vtp_akey = entry->ie_key;
-				pb->vtp_path.vtp_is_recx = (entry->ie_child_type == VOS_ITER_RECX);
-				pb->vtp_akey_verified = true;
-			} else if (dv_has_akey(vp) &&
-				   daos_key_match(&vp->vtp_akey, &entry->ie_key)) {
-				pb->vtp_akey_verified = true;
-				pb->vtp_path.vtp_is_recx = (entry->ie_child_type == VOS_ITER_RECX);
-			} else {
-				*acts = VOS_ITER_CB_SKIP;
-			}
-		}
-		break;
-	case VOS_ITER_SINGLE:
-		/* nothing to do here */
-		break;
-	case VOS_ITER_RECX:
-		if (dv_has_akey(vp)) {
-			if (found_idx(pb, &pb->vtp_recx_idx)) {
-				pb->vtp_path.vtp_recx = entry->ie_orig_recx;
-				pb->vtp_recx_verified = true;
-			} else if (dv_has_recx(vp) &&
-				   daos_recx_match(pb->vtp_path.vtp_recx, entry->ie_orig_recx)) {
-				pb->vtp_recx_verified = true;
-			} else {
-				*acts = VOS_ITER_CB_SKIP;
-			}
-		}
-		break;
-	case VOS_ITER_DTX:
-	case VOS_ITER_NONE:
-	case VOS_ITER_COUUID:
-		D_ASSERTF(true, "These types aren't supported for this operation.\n");
-		break;
 	}
 	return 0;
 }
@@ -339,7 +456,8 @@ static int
 verify_path_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 		    vos_iter_param_t *param, void *cb_arg, unsigned int *acts)
 {
-	struct dv_tree_path_builder *vt_path = cb_arg;
+	struct path_verify_args		*args = cb_arg;
+	struct dv_indexed_tree_path	*itp = args->pva_itp;
 
 	switch (type) {
 	case VOS_ITER_NONE:
@@ -347,21 +465,21 @@ verify_path_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t t
 	case VOS_ITER_COUUID:
 		break;
 	case VOS_ITER_OBJ:
-		if (dv_has_obj(&vt_path->vtp_path))
+		if (itp_has_obj_complete(itp))
 			*acts = VOS_ITER_CB_ABORT;
 		break;
 	case VOS_ITER_DKEY:
-		if (dv_has_dkey(&vt_path->vtp_path))
+		if (itp_has_dkey_complete(itp))
 			*acts = VOS_ITER_CB_ABORT;
 		break;
 	case VOS_ITER_AKEY:
-		if (dv_has_akey(&vt_path->vtp_path))
+		if (itp_has_akey_complete(itp))
 			*acts = VOS_ITER_CB_ABORT;
 		break;
 	case VOS_ITER_SINGLE:
 		break;
 	case VOS_ITER_RECX:
-		if (dv_has_recx(&vt_path->vtp_path))
+		if (itp_has_recx_complete(itp))
 			*acts = VOS_ITER_CB_ABORT;
 		break;
 	case VOS_ITER_DTX:
@@ -370,82 +488,65 @@ verify_path_post_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t t
 	return 0;
 }
 
-static bool
-has_cont_part(struct dv_tree_path_builder *vt_path)
-{
-	return (!uuid_is_null(vt_path->vtp_path.vtp_cont) ||
-		is_path_idx_set(vt_path->vtp_cont_idx));
-}
-
 int
-dv_path_verify(struct dv_tree_path_builder *pb)
+dv_path_verify(daos_handle_t poh, struct dv_indexed_tree_path *itp)
 {
 	vos_iter_param_t	 param = {0};
 	struct vos_iter_anchors	 anchors = {0};
-	daos_handle_t		 poh = pb->vtp_poh;
+	struct path_verify_args	 args = {0};
 	daos_handle_t		 coh = {0};
-	struct dv_tree_path	*vp = &pb->vtp_path;
 	int			 rc = 0;
 
-	if (!has_cont_part(pb))
+	/* empty path is fine */
+	if (!itp_has_cont(itp))
 		return 0;
 
-	if (is_path_idx_set(pb->vtp_cont_idx)) {
-		rc = dv_get_cont_uuid(poh, pb->vtp_cont_idx, vp->vtp_cont);
+	if (itp_has_idx(itp, PATH_PART_CONT)) {
+		uuid_t uuid;
+
+		rc = dv_get_cont_uuid(poh, itp_idx(itp, PATH_PART_CONT), uuid);
 		if (!SUCCESS(rc)) {
-			D_ERROR("Unable to get container index %d\n", pb->vtp_cont_idx);
+			D_ERROR("Unable to get container index %d\n", itp_idx(itp, PATH_PART_CONT));
+			if (rc == -DER_NONEXIST)
+				rc = -DDBER_INVALID_CONT;
 			return rc;
 		}
-		pb->vtp_cont_idx = DDB_IDX_UNSET;
+		itp_set_cont_part_value(itp, uuid);
+	} else {
+		rc = dv_get_cont_idx(poh, itp_cont(itp));
+		if (rc < 0)
+			return rc;
+		itp_set_cont_idx(itp, rc);
 	}
 
-	rc = dv_cont_open(poh, vp->vtp_cont, &coh);
+	rc = dv_cont_open(poh, itp_cont(itp), &coh);
 	if (!SUCCESS(rc)) {
-		D_ERROR("Unable to open container "DF_UUIDF"\n", vp->vtp_cont);
+		D_ERROR("Unable to open container "DF_UUIDF"\n",
+			itp->itp_parts[PATH_PART_CONT].itp_part_value.itp_uuid);
+		if (rc == -DER_NONEXIST)
+			rc = -DDBER_INVALID_CONT;
 		return rc;
 	}
 
-	pb->vtp_cont_verified = true;
+	args.pva_current_idx = 0;
+	args.pva_itp = itp;
 
 	param.ip_hdl = coh;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchors,
-			 verify_path_pre_cb, verify_path_post_cb, pb, NULL);
+			 verify_path_pre_cb, verify_path_post_cb, &args, NULL);
 	dv_cont_close(&coh);
 	if (!SUCCESS(rc)) {
 		D_ERROR("Issue verifying path: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	/* If any of the indexes are still set then the idx wasn't found */
-	if (is_path_idx_set(pb->vtp_cont_idx) ||
-	    is_path_idx_set(pb->vtp_oid_idx) ||
-	    is_path_idx_set(pb->vtp_dkey_idx) ||
-	    is_path_idx_set(pb->vtp_akey_idx) ||
-	    is_path_idx_set(pb->vtp_recx_idx))
-		return -DER_NONEXIST;
-	if (dv_has_obj(vp) && !pb->vtp_oid_verified) {
-		D_ERROR("Obj ID not valid: "DF_UOID"\n", DP_UOID(vp->vtp_oid));
-		return -DER_NONEXIST;
-	}
-	if (dv_has_dkey(vp) && !pb->vtp_dkey_verified) {
-		D_ERROR("dkey not valid: "DF_KEY"\n", DP_KEY(&vp->vtp_dkey));
-		return -DER_NONEXIST;
-	}
-	if (dv_has_akey(vp) && !pb->vtp_akey_verified) {
-		D_ERROR("akey not valid: "DF_KEY"\n", DP_KEY(&vp->vtp_akey));
-		return -DER_NONEXIST;
-	}
-	if (dv_has_recx(vp) && !pb->vtp_recx_verified) {
-		D_ERROR("recx not valid: "DF_RECX"\n", DP_RECX(vp->vtp_recx));
-		return -DER_NONEXIST;
-	}
-
-	return 0;
+	return itp_verify(itp);
 }
 
 struct ddb_iter_ctx {
+	struct dv_indexed_tree_path	 itp;
 	daos_handle_t			 poh;
 	struct vos_tree_handlers	*handlers;
 	void				*handler_args;
@@ -466,6 +567,10 @@ handle_cont(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry, vos_iter_param_t 
 	struct ddb_cont	cont = {0};
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_cont_handler);
+
+	itp_set_cont(&ctx->itp, entry->ie_couuid, ctx->cont_seen);
+	cont.ddbc_path = &ctx->itp;
+	itp_unset_obj(&ctx->itp);
 
 	uuid_copy(ctx->current_cont, entry->ie_couuid);
 	uuid_copy(cont.ddbc_cont_uuid, entry->ie_couuid);
@@ -561,6 +666,9 @@ handle_obj(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_obj_handler);
 
 	dv_oid_to_obj(entry->ie_oid.id_pub, &obj);
+	itp_set_obj(&ctx->itp, entry->ie_oid, ctx->obj_seen);
+	itp_unset_dkey(&ctx->itp);
+	obj.ddbo_path = &ctx->itp;
 
 	obj.ddbo_idx = ctx->obj_seen++;
 
@@ -568,6 +676,7 @@ handle_obj(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 
 	/* Restart dkey count for the object */
 	ctx->dkey_seen = 0;
+	itp_unset_dkey(&ctx->itp);
 
 	return ctx->handlers->ddb_obj_handler(&obj, ctx->handler_args);
 }
@@ -575,34 +684,51 @@ handle_obj(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 static int
 handle_dkey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 {
-	struct ddb_key dkey = {0};
+	struct ddb_key	dkey = {0};
+	int		rc;
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_dkey_handler);
+	itp_unset_dkey(&ctx->itp); /* make sure dkey is freed from any previous handle */
+	itp_set_dkey(&ctx->itp, &entry->ie_key, ctx->dkey_seen);
+
+	dkey.ddbk_path = &ctx->itp;
 	dkey.ddbk_idx = ctx->dkey_seen++;
 	dkey.ddbk_key = entry->ie_key;
+	dkey.ddbk_child_type = entry->ie_child_type;
+
 	ctx->current_dkey = entry->ie_key;
 
 	/* Restart the akey count for the dkey */
 	ctx->akey_seen = 0;
+	itp_unset_akey(&ctx->itp);
 
-	return ctx->handlers->ddb_dkey_handler(&dkey, ctx->handler_args);
+	rc = ctx->handlers->ddb_dkey_handler(&dkey, ctx->handler_args);
+	return rc;
 }
 
 static int
 handle_akey(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 {
-	struct ddb_key akey = {0};
+	struct ddb_key	akey = {0};
+	int		rc;
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_akey_handler);
+	itp_unset_akey(&ctx->itp); /* make sure akey is freed from any previous handle */
+	itp_set_akey(&ctx->itp, &entry->ie_key, ctx->akey_seen);
+	itp_unset_recx(&ctx->itp);
+
+	akey.ddbk_path = &ctx->itp;
 	akey.ddbk_idx = ctx->akey_seen++;
 	akey.ddbk_key = entry->ie_key;
-	ctx->current_akey = entry->ie_key;
+	akey.ddbk_child_type = entry->ie_child_type;
 
+	ctx->current_akey = entry->ie_key;
 
 	/* Restart the values seen for the akey */
 	ctx->value_seen = 0;
 
-	return ctx->handlers->ddb_akey_handler(&akey, ctx->handler_args);
+	rc = ctx->handlers->ddb_akey_handler(&akey, ctx->handler_args);
+	return rc;
 }
 
 static int
@@ -613,7 +739,7 @@ handle_sv(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_sv_handler);
 	value.ddbs_record_size = entry->ie_rsize;
 	value.ddbs_idx = ctx->value_seen++;
-
+	value.ddbs_path = &ctx->itp;
 
 	return ctx->handlers->ddb_sv_handler(&value, ctx->handler_args);
 }
@@ -624,6 +750,8 @@ handle_array(struct ddb_iter_ctx *ctx, vos_iter_entry_t *entry)
 	struct ddb_array value = {0};
 
 	D_ASSERT(ctx && ctx->handlers && ctx->handlers->ddb_array_handler);
+	itp_set_recx(&ctx->itp, &entry->ie_orig_recx, ctx->value_seen);
+	value.ddba_path = &ctx->itp;
 	value.ddba_record_size = entry->ie_rsize;
 	value.ddba_recx = entry->ie_orig_recx;
 	value.ddba_idx = ctx->value_seen++;
@@ -649,7 +777,7 @@ handle_iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 	case VOS_ITER_RECX:
 		return handle_array(cb_arg, entry);
 	case VOS_ITER_DTX:
-		printf("dtx\n");
+		D_ASSERT(1); /* shouldn't get here */
 		break;
 	case VOS_ITER_NONE:
 		break;
@@ -700,7 +828,8 @@ iter_cont_recurse(vos_iter_param_t *param, struct ddb_iter_ctx *ctx)
 
 int
 dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
-	   struct vos_tree_handlers *handlers, void *handler_args)
+	   struct vos_tree_handlers *handlers, void *handler_args,
+	   struct dv_indexed_tree_path *itp)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchors = {0};
@@ -712,25 +841,33 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 	ctx.handlers = handlers;
 	ctx.handler_args = handler_args;
 	ctx.poh = poh;
+	itp_copy(&ctx.itp, itp);
 
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 
 	if (uuid_is_null(path->vtp_cont)) {
 		param.ip_hdl = poh;
 
-		if (recursive)
+		if (recursive) {
 			/*
 			 * currently vos_iterate doesn't handle recursive iteration starting with a
 			 * container. This works around that limitation.
 			 */
-			return iter_cont_recurse(&param, &ctx);
-		return ddb_vos_iterate(&param, VOS_ITER_COUUID, false, &anchors,
-				       handle_iter_cb, &ctx);
+			rc = iter_cont_recurse(&param, &ctx);
+			itp_free(&ctx.itp);
+			return rc;
+		}
+		rc =
+		    ddb_vos_iterate(&param, VOS_ITER_COUUID, false, &anchors, handle_iter_cb, &ctx);
+		itp_free(&ctx.itp);
+		return rc;
 	}
 
 	rc = vos_cont_open(poh, path->vtp_cont, &coh);
-	if (!SUCCESS(rc))
+	if (!SUCCESS(rc)) {
+		itp_free(&ctx.itp);
 		return rc;
+	}
 
 	param.ip_hdl = coh;
 	param.ip_oid = path->vtp_oid;
@@ -749,7 +886,7 @@ dv_iterate(daos_handle_t poh, struct dv_tree_path *path, bool recursive,
 		type = VOS_ITER_SINGLE;
 
 	rc = ddb_vos_iterate(&param, type, recursive, &anchors, handle_iter_cb, &ctx);
-
+	itp_free(&ctx.itp);
 	if (!daos_handle_is_inval(coh))
 		vos_cont_close(coh);
 
@@ -922,7 +1059,7 @@ dv_get_obj_ilog_entries(daos_handle_t coh, daos_unit_oid_t oid, dv_dump_ilog_ent
 	umm = vos_cont2umm(cont);
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
-	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &obj_df->vo_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (rc == -DER_NONEXIST) /* no entries exist ... not an error */
 		return 0;
 	if (!SUCCESS(rc))
@@ -945,7 +1082,7 @@ process_ilog_entries(daos_handle_t coh, struct umem_instance *umm, struct ilog_d
 	vos_ilog_desc_cbs_init(&cbs, coh);
 	ilog_fetch_init(&entries);
 
-	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -1047,7 +1184,7 @@ key_ilog_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type,
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
 
-	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, &entries);
+	rc = ilog_fetch(umm, &krec->kr_ilog, &cbs, DAOS_INTENT_DEFAULT, false, &entries);
 	if (!SUCCESS(rc))
 		return rc;
 
@@ -1201,7 +1338,6 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	struct vos_container		*cont;
 	int				 rc;
 	struct committed_dtx_cb_arg	 cb_arg = {0};
-	uint64_t			 hint = 0;
 
 	if (daos_handle_is_inval(coh))
 		return -DER_INVAL;
@@ -1216,7 +1352,7 @@ dv_dtx_get_cmt_table(daos_handle_t coh, dv_dtx_cmt_handler handler_cb, void *han
 	 * within one block, so must loop until all are done (rc == 1)
 	 */
 	do {
-		rc = vos_dtx_cmt_reindex(coh, &hint);
+		rc = vos_dtx_cmt_reindex(coh);
 	} while (rc >= 0 && rc != 1);
 	if (rc < 0)
 		return rc;
@@ -1298,7 +1434,7 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 	d_sg_list_t	sgl = {0};
 	uint64_t	flags = 0;
 	daos_handle_t	coh;
-	daos_epoch_t	epoch;
+	daos_epoch_t	epoch = 0;
 	uint32_t	pool_ver = 0;
 	int		rc;
 
@@ -1324,7 +1460,7 @@ dv_update(daos_handle_t poh, struct dv_tree_path *vtp, d_iov_t *iov)
 		iod.iod_size = 1;
 	}
 
-	epoch = crt_hlc_get();
+	epoch = d_hlc_get();
 	rc = vos_obj_update(coh, vtp->vtp_oid, epoch, pool_ver, flags,
 			    &vtp->vtp_dkey, 1, &iod, NULL, &sgl);
 	if (rc == -DER_NO_PERM)
@@ -1570,6 +1706,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 	struct smd_pool_info	*pool_info = NULL;
 	daos_size_t		 blob_size;
 	struct dv_sync_cb_args	*args = cb_args;
+	enum smd_dev_type	 st = SMD_DEV_TYPE_DATA; /* FIXME: support other types? */
 	int			 rc;
 
 	D_ASSERT(args != NULL);
@@ -1579,7 +1716,7 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		args->sync_rc = -DER_UNKNOWN;
 		return;
 	}
-	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id);
+	rc = smd_dev_add_tgt(info->dsi_dev_id, info->dsi_hdr->bbh_vos_id, st);
 	smd_dev_set_state(info->dsi_dev_id, SMD_DEV_NORMAL);
 	if (rc == -DER_EXIST)
 		D_INFO("tgt_id(%d) already mapped to dev_id("DF_UUID")",
@@ -1598,19 +1735,20 @@ sync_cb(struct ddbs_sync_info *info, void *cb_args)
 		 */
 		blob_size = info->dsi_cluster_nr * info->dsi_cluster_size;
 	} else {
-		blob_size = pool_info->spi_blob_sz;
+		blob_size = pool_info->spi_blob_sz[st];
 		smd_pool_free_info(pool_info);
 	}
 
 	/* Try to delete the target first */
-	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id);
+	rc = smd_pool_del_tgt(pool_id, info->dsi_hdr->bbh_vos_id, st);
 	if (!SUCCESS(rc)) {
 		/* Ignore error for now ... might not exist*/
 		D_WARN("delete target failed: "DF_RC"\n", DP_RC(rc));
 		rc = 0;
 	}
 
-	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id, info->dsi_hdr->bbh_blob_id, blob_size);
+	rc = smd_pool_add_tgt(pool_id, info->dsi_hdr->bbh_vos_id,
+			      info->dsi_hdr->bbh_blob_id, st, blob_size);
 	if (!SUCCESS(rc)) {
 		D_ERROR("add target failed: "DF_RC"\n", DP_RC(rc));
 		args->sync_rc = rc;

@@ -64,33 +64,37 @@ severity, message, description, and cause.
 ## System Logging
 
 Engine logging is initially configured by setting the `log_file` and `log_mask`
-parameters in the server config file. Logging is described in detail in the
-[`Debugging System`](https://docs.daos.io/v2.2/admin/troubleshooting/#debugging-system)
-section.
+parameters in the server config file.
+The 'DD_MASK' and 'DD_SUBSYS' environment variables can also be defined within the "env\_vars"
+list parameter of the engine section of the server config file to tune log output.
 
-Engine log levels can be changed dynamically (at runtime) by setting log masks
-for a set of facilities to a given level.
-Settings will be applied to all running DAOS I/O Engines present in the configured
-dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
-The command accepts 0-1 positional arguments.
-If no args are passed, then the log masks for each running engine will be reset
-to the value of engine "log\_mask" parameter in the server config file (as set
-at the time of daos\_server startup).
+Engine log levels can be changed dynamically (at runtime) by setting log masks for a set of
+facilities to a given level.
+Settings will be applied to all running DAOS I/O Engines present in the configured dmg hostlist
+using the command `dmg server set-logmasks [-m <masks>]`.
+The command accepts named arguments for masks ('D_LOG_MASK'), streams ('DD_MASK') and subsystems
+('DD_SUBSYS).
+If no args are passed, then the log masks for each running engine will be reset to the values of
+engine "log\_mask" parameter and "env\_vars" 'DD_MASK' and 'DD_SUBSYS' assignments in the server
+config file (as set at the time of daos\_server startup).
 If a single arg is passed, then this will be used as the log masks setting.
 
 Example usage:
 ```
-dmg server set-logmasks ERR,mgmt=DEBUG
+dmg server set-logmasks -m ERR,mgmt=DEBUG
 ```
 
-The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the
-syntax is identical to what is expected by the 'D_LOG_MASK' environment variable.
-If the 'PREFIX=' part is omitted, then the level applies to all defined
-facilities (e.g., a value of 'WARN' sets everything to WARN).
+The masks input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the syntax is
+identical to what is expected by the 'D_LOG_MASK' environment variable.
+If the 'PREFIX=' part is omitted, then the level applies to all defined facilities (e.g., a value
+of 'WARN' sets everything to WARN).
 
-Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE,
-INFO, DEBUG.
+Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE, INFO, DEBUG.
 
+For usage of streams ('DD_MASK') and subsystems ('DD_SUBSYS') parameters, logging is described in
+detail in the
+[`Debugging System`](https://docs.daos.io/v2.6/admin/troubleshooting/#debugging-system)
+section.
 
 ## System Monitoring
 
@@ -192,8 +196,8 @@ To install and configure Prometheus on the local machine:
 dmg telemetry config [-i <install-dir>]
 ```
 
-If no `install-dir` is provided, DMG will attempt to install Prometheus in the
-first writable directory found in the user's `PATH`.
+DMG will install Prometheus in the directory given with option -i `install-dir`.
+Prometheus install path needs to be add to the default system $PATH environment if required.
 
 The Prometheus configuration file will be populated based on the DAOS server
 list in your `dmg` configuration file. The Prometheus configuration will be
@@ -237,7 +241,6 @@ Available commands:
   device-health  Query the device health
   list-devices   List storage devices on the server
   list-pools     List pools on the server
-  target-health  Query the target health
   usage          Show SCM & NVMe storage space utilization per storage server
 ```
 
@@ -269,7 +272,7 @@ wolf-72 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
 
 Note that the table values are per-host (storage server) and SCM/NVMe capacity
 pool component values specified in
-[`dmg pool create`](https://docs.daos.io/v2.2/admin/pool_operations/#pool-creationdestroy)
+[`dmg pool create`](https://docs.daos.io/v2.6/admin/pool_operations/#pool-creationdestroy)
 are per rank.
 If multiple ranks (I/O processes) have been configured per host in the server
 configuration file
@@ -358,15 +361,15 @@ boro-11
 -------
   Devices
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
-      Targets:[0 2] Rank:0 State:NORMAL
+      Targets:[0 2] Rank:0 State:NORMAL LED:OFF
     UUID:80c9f1be-84b9-4318-a1be-c416c96ca48b [TrAddr:0000:8b:00.0]
-      Targets:[1 3] Rank:0 State:NORMAL
+      Targets:[1 3] Rank:0 State:NORMAL LED:OFF
     UUID:051b77e4-1524-4662-9f32-f8e4d2542c2d [TrAddr:0000:8c:00.0]
-      Targets:[] Rank:0 State:NEW
+      Targets:[] Rank:0 State:NEW LED:OFF
     UUID:81905b24-be44-4106-8ff9-03002e9dd86a [TrAddr:5d0505:01:00.0]
-      Targets:[0 2] Rank:1 State:EVICTED
+      Targets:[0 2] Rank:1 State:EVICTED LED:ON
     UUID:2ccb8afb-5d32-454e-86e3-762ec5dca7be [TrAddr:5d0505:03:00.0]
-      Targets:[1 3] Rank:1 State:NORMAL
+      Targets:[1 3] Rank:1 State:NORMAL LED:OFF
 ```
 ```bash
 $ dmg -l boro-11,boro-13 storage query list-pools
@@ -398,18 +401,7 @@ Usage:
 ...
 
 [device-health command options]
-      -u, --uuid=     Device UUID
-```
-```bash
-$ dmg storage query target-health --help
-Usage:
-  dmg [OPTIONS] storage query target-health [target-health-OPTIONS]
-
-...
-
-[target-health command options]
-      -r, --rank=     Server rank hosting target
-      -t, --tgtid=    VOS target ID to query
+      -u, --uuid=     Device UUID. All devices queried if arg not set
 ```
 ```bash
 $ dmg storage scan --nvme-health --help
@@ -424,19 +416,16 @@ Usage:
       -m, --nvme-meta    Display server meta data held on NVMe storage
 ```
 
-The NVMe storage query device-health and target-health commands query the device
-health data, including NVMe SSD health stats and in-memory I/O error and checksum
-error counters. The server rank and device state are also listed. The device health
-data can either be queried by device UUID (device-health command) or by VOS target ID
-along with the server rank (target-health command). The same device health information
-is displayed with both command options. Additionally, vendor-specific SMART stats are
-displayed, currently for Intel devices only. Note: A reasonable timed workload > 60 min
-must be ran for the SMART stats to register (Raw values are 65535). Media wear percentage
-can be calculated by dividing by 1024 to find the percentage of the maximum rated cycles.
+The NVMe storage query device-health command queries the device health data, including
+NVMe SSD health stats and in-memory I/O error and checksum error counters.
+The server rank and device state are also listed.
+Additionally, vendor-specific SMART stats are displayed, currently for Intel devices only.
+Note: A reasonable timed workload > 60 min must be ran for the SMART stats to register
+(Raw values are 65535).
+Media wear percentage can be calculated by dividing by 1024 to find the percentage of the
+maximum rated cycles.
 ```bash
 $ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
-or
-$ dmg -l boro-11 storage query target-health --rank=0 --tgtid=0
 -------
 boro-11
 -------
@@ -516,12 +505,18 @@ boro-11
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:]
             Targets:[] Rank:0 State:EVICTED LED:ON
 ```
-The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
-trigger the faulty device reaction (all targets on the SSD will be rebuilt, and the SSD
-will remain evicted until device replacement occurs).
+The device state will transition from "NORMAL" to "EVICTED" (shown above), during which time the
+faulty device reaction will have been triggered (all targets on the SSD will be rebuilt).
+The SSD will remain evicted until device replacement occurs.
+
+If an NVMe SSD is faulty, the status LED on the VMD device will be set to an ON state,
+represented by a solidly ON amber light.
+This LED activity visually indicates a fault and that the device needs to be replaced and is no
+longer in use by DAOS.
+The LED of the VMD device will remain in this state until replaced by a new device.
 
 !!! note
-    Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
+    Full NVMe hot plug capability will be available and supported in DAOS 2.6 release.
     Use is currently intended for testing only and is not supported for production.
 
 - To use a newly added (hot-inserted) SSD it needs to be unbound from the kernel driver
@@ -624,10 +619,10 @@ Usage:
 
 [identify command arguments]
   ids:                Comma-separated list of identifiers which could be either VMD backing device
-                      (NVMe SSD) PCI addresses or device
+                      (NVMe SSD) PCI addresses or device. All SSDs selected if arg not provided.
 ```
 
-To identify a single SSDs, any of the Device-UUIDs can be used which can be found from
+To identify a single SSD, any of the Device-UUIDs can be used which can be found from
 output of the `dmg storage query list-devices` command:
 ```bash
 $ dmg -l boro-11 storage led identify 6fccb374-413b-441a-bfbe-860099ac5e8d
@@ -650,10 +645,10 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
 ```
 
-To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI
-addresses:
+To identify multiple SSDs, supply a comma separated list of Device-UUIDs and/or PCI addresses,
+adding custom timeout of 5 minutes for LED identification (time to flash LED for):
 ```bash
-$ dmg -l boro-11 storage led identify 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
+$ dmg -l boro-11 storage led identify --timeout 5 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
 boro-11
 ---------
@@ -672,15 +667,23 @@ Mappings of Device-UUIDs to PCI address can be found in the output of the
 An error will be returned if the Device-UUID or PCI address of a non-VMD enabled SSD is specified
 in the command.
 
-After issuing the identify command, the status LED on the VMD device is now set to an "QUICK_BLINK"
+Upon issuing a device identify command with specified device IDs and optional custom timeout value,
+an admin now can quickly identify a device in question.
+
+After issuing the identify command, the status LED on the VMD device is now set to a "QUICK_BLINK"
 state, representing a quick, 4Hz blinking amber light.
-The device will quickly blink by default for about 2 minutes and then return to the default "OFF" state.
-The LED event duration can be customized by setting the VMD_LED_PERIOD environment variable if a duration
-other than the default value is desired.
+
+The device will quickly blink for the specified timeout (in minutes) or the default (2 minutes) if
+no value is specified on the command line, after which the LED state will return to the previous
+state (faulty "ON" or default "OFF").
+
+The led identify command will set (or --reset) the state of all devices on the specified host(s) if
+no positional arguments are supplied.
 
 - Check LED state of SSDs:
 
-To verify the LED state of SSDs the following command can be used in a similar way to the identify command:
+To verify the LED state of SSDs the following command can be used in a similar way to the identify
+command:
 ```bash
 $ dmg -l boro-11 storage led check 850505:0a:00.0,6fccb374-413b-441a-bfbe-860099ac5e8d,850505:11:00.0
 ---------
@@ -691,6 +694,9 @@ boro-11
     TrAddr:850505:0b:00.0 LED:QUICK_BLINK
     TrAddr:850505:11:00.0 LED:QUICK_BLINK
 ```
+
+The led check command will return the state of all devices on the specified host(s) if no positional
+arguments are supplied.
 
 - Locate an Evicted SSD:
 
@@ -949,3 +955,8 @@ required that all engines in the same system run the same DAOS version.
 
 !!! warning
     Rolling upgrade is not supporting at this time.
+
+DAOS v2.2 client connections to pools which were created by DAOS v2.4
+will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
+server. To upgrade all pools to latest format after software upgrade, run
+`dmg pool upgrade <pool>`

@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -34,14 +33,16 @@ class DmvrCopyProcs(DataMoverTestBase):
         Test Description:
             Tests POSIX copy with multiple processes.
             DAOS-5659: Verify multi-process (rank) copying.
+
         Use Cases:
             Create pool.
             Create POSIX cont1 and cont2 in pool.
             Create a single 100M file in cont1 using ior.
+
         :avocado: tags=all,daily_regression
-        :avocado: tags=small,hw
+        :avocado: tags=hw,medium
         :avocado: tags=datamover,mfu,mfu_dcp,dfs,ior
-        :avocado: tags=dm_copy_procs
+        :avocado: tags=DmvrCopyProcs,test_copy_procs
         """
         # Create pool and containers
         pool1 = self.create_pool()

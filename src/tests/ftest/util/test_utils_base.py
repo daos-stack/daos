@@ -1,15 +1,16 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 from time import sleep
 from threading import Lock
+from collections import defaultdict
+
+from pydaos.raw import DaosApiError
 
 from command_utils_base import ObjectWithParameters, BasicParameter
-from pydaos.raw import DaosApiError
 
 
 class CallbackHandler():
@@ -67,16 +68,13 @@ class TestDaosApiBase(ObjectWithParameters):
     USE_DMG = "dmg"
     USE_DAOS = "daos"
 
-    def __init__(self, namespace, cb_handler=None):
+    def __init__(self, namespace):
         """Create a TestDaosApi object.
 
         Args:
             namespace (str): yaml namespace (path to parameters)
-            cb_handler (CallbackHandler, optional): callback object to use with
-                the API methods. Defaults to None.
         """
         super().__init__(namespace)
-        self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
         self.silent = BasicParameter(None, False)
 
@@ -103,11 +101,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         Args:
             method (object): method to call
-            kwargs (dict): keyworded arguments for the method
+            kwargs (dict): named arguments for the method
         """
-        if self.cb_handler:
-            kwargs["cb_func"] = self.cb_handler.callback
-
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
             "{}.{}".format(
@@ -127,10 +122,6 @@ class TestDaosApiBase(ObjectWithParameters):
                     exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
-
-        if self.cb_handler:
-            # Wait for the call back if one is provided
-            self.cb_handler.wait()
 
     def _check_info(self, check_list):
         """Verify each info attribute value matches an expected value.
@@ -205,19 +196,22 @@ class LabelGenerator():
 
         """
         self.base_label = base_label
-        self.value = value
+        self._values = defaultdict(lambda: value)
         self._lock = Lock()
 
-    def _next_value(self):
+    def _next_value(self, base_label):
         """Get the next value. Thread-safe.
 
+        Args:
+            base_label (str): Label prefix to get next value of
+
         Returns:
-            int: the next value.
+            int: the next value
 
         """
         with self._lock:
-            value = self.value
-            self.value += 1
+            value = self._values[base_label]
+            self._values[base_label] += 1
             return value
 
     def get_label(self, base_label=None):
@@ -232,6 +226,7 @@ class LabelGenerator():
 
         """
         base_label = base_label or self.base_label
+        value = str(self._next_value(base_label))
         if base_label is None:
-            return None
-        return "_".join([base_label, str(self._next_value())])
+            return value
+        return "_".join([base_label, value])

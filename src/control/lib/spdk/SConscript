@@ -1,7 +1,5 @@
-#!/bin/env python
 """Build DAOS SPDK Go bindings"""
 from os.path import join
-import daos_build
 
 
 def scons():
@@ -11,7 +9,7 @@ def scons():
     denv.AppendUnique(LIBPATH=[Dir('.')])
 
     senv = denv.Clone()
-    prereqs.require(senv, 'pmdk', 'spdk', 'ofi', 'hwloc')
+    senv.require('pmdk', 'spdk', 'ofi')
     if senv["CC"] == 'icx':
         # Avoid need to link Intel libraries in go build
         senv["CC"] = "gcc"
@@ -26,12 +24,12 @@ def scons():
     # Other libs
     libs += ['numa', 'dl']
 
-    senv.nc = senv.Object("src/nvme_control.c")
-    senv.ncc = senv.Object("src/nvme_control_common.c")
-    daos_build.static_library(senv, "nvme_control", [senv.nc, senv.ncc] + control_tgts, LIBS=libs)
+    nc_obj = senv.Object("src/nvme_control.c")
+    ncc_obj = senv.Object("src/nvme_control_common.c")
+    senv.d_static_library("nvme_control", [nc_obj, ncc_obj, control_tgts], LIBS=libs)
 
     if prereqs.test_requested():
-        SConscript('ctests/SConscript', exports='senv')
+        SConscript('ctests/SConscript', exports=['senv', 'nc_obj', 'ncc_obj'])
 
 
 if __name__ == "SCons.Script":

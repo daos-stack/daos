@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -30,14 +30,14 @@ type EngineRunner interface {
 	GetConfig() *engine.Config
 }
 
-func (ei *EngineInstance) format(ctx context.Context, recreateSBs bool) error {
+func (ei *EngineInstance) format(ctx context.Context) error {
 	idx := ei.Index()
 
 	ei.log.Debugf("instance %d: checking if storage is formatted", idx)
-	if err := ei.awaitStorageReady(ctx, recreateSBs); err != nil {
+	if err := ei.awaitStorageReady(ctx); err != nil {
 		return err
 	}
-	if err := ei.createSuperblock(recreateSBs); err != nil {
+	if err := ei.createSuperblock(); err != nil {
 		return err
 	}
 
@@ -90,12 +90,6 @@ func (ei *EngineInstance) finishStartup(ctx context.Context, ready *srvpb.Notify
 	if err := ei.handleReady(ctx, ready); err != nil {
 		return err
 	}
-	// update engine target count to reflect allocated number of targets, not number requested
-	// when starting
-	// NOTE: Engine mem_size passed on engine invocation is based on the number of targets
-	//       requested in config so if number of targets allocated doesn't match the number of
-	//       targets requested the mem_size value may be inappropriate.
-	ei.setTargetCount(int(ready.GetNtgts()))
 
 	ei.ready.SetTrue()
 
@@ -164,7 +158,7 @@ func (ei *EngineInstance) handleExit(ctx context.Context, exitPid int, exitErr e
 // will only return (if no errors are returned during setup) on I/O Engine
 // process exit (triggered by harness shutdown through context cancellation
 // or abnormal I/O Engine process termination).
-func (ei *EngineInstance) startRunner(parent context.Context, recreateSBs bool) (_ chan *engine.RunnerExitInfo, err error) {
+func (ei *EngineInstance) startRunner(parent context.Context) (_ chan *engine.RunnerExitInfo, err error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer func() {
 		if err != nil {
@@ -174,7 +168,7 @@ func (ei *EngineInstance) startRunner(parent context.Context, recreateSBs bool) 
 		}
 	}()
 
-	if err = ei.format(ctx, recreateSBs); err != nil {
+	if err = ei.format(ctx); err != nil {
 		return
 	}
 
@@ -198,7 +192,7 @@ func (ei *EngineInstance) requestStart(ctx context.Context) {
 
 // Run starts the control loop for an EngineInstance. Engine starts are triggered by
 // calling requestStart() on the instance.
-func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
+func (ei *EngineInstance) Run(ctx context.Context) {
 	// Start the instance control loop.
 	go func() {
 		var runnerExitCh engine.RunnerExitChan
@@ -218,7 +212,7 @@ func (ei *EngineInstance) Run(ctx context.Context, recreateSBs bool) {
 					continue
 				}
 
-				runnerExitCh, err = ei.startRunner(ctx, recreateSBs)
+				runnerExitCh, err = ei.startRunner(ctx)
 				if err != nil {
 					ei.log.Errorf("runner exited without starting process: %s", err)
 					ei.handleExit(ctx, 0, err)

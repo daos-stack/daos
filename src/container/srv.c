@@ -96,7 +96,7 @@ static struct daos_rpc_handler cont_handlers_v6[] = {
 #undef X
 
 static void *
-dsm_tls_init(int xs_id, int tgt_id)
+dsm_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct dsm_tls *tls;
 	int		rc;
@@ -126,7 +126,7 @@ dsm_tls_init(int xs_id, int tgt_id)
 }
 
 static void
-dsm_tls_fini(void *data)
+dsm_tls_fini(int tags, void *data)
 {
 	struct dsm_tls *tls = data;
 

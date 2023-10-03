@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,7 +8,7 @@ from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 
 
-class DaosRacerTest(TestWithServers):
+class DaosRacerSimpleTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
@@ -29,11 +28,10 @@ class DaosRacerTest(TestWithServers):
         Use Cases:
             Running simultaneous, conflicting I/O requests.
 
-        :avocado: tags=all,daily_regression,pr
-        :avocado: tags=hw,large
-        :avocado: tags=io,daosracer
-        :avocado: tags=daosracer_simple
-
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=io,daos_racer
+        :avocado: tags=DaosRacerSimpleTest,test_daos_racer_simple
         """
         dmg = self.get_dmg_command()
         self.assertGreater(

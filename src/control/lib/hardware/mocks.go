@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,11 @@ package hardware
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
 )
 
@@ -101,7 +105,7 @@ func (n *NUMANode) WithBlockDevices(devices []*BlockDevice) *NUMANode {
 // GetMockFabricScannerConfig gets a FabricScannerConfig for testing.
 func GetMockFabricScannerConfig() *FabricScannerConfig {
 	return &FabricScannerConfig{
-		TopologyProvider: &MockTopologyProvider{},
+		TopologyProvider: &MockTopologyProvider{GetTopoReturn: &Topology{}},
 		FabricInterfaceProviders: []FabricInterfaceProvider{
 			&MockFabricInterfaceProvider{},
 		},
@@ -125,8 +129,41 @@ type MockFabricInterfaceProvider struct {
 	GetFabricErr    error
 }
 
-func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context) (*FabricInterfaceSet, error) {
+func (m *MockFabricInterfaceProvider) GetFabricInterfaces(_ context.Context, _ string) (*FabricInterfaceSet, error) {
 	return m.GetFabricReturn, m.GetFabricErr
+}
+
+type multiCallFabricInterfaceProvider struct {
+	called int
+	prefix string
+}
+
+func testFabricDevName(prefix string, i int) string {
+	return fmt.Sprintf("%s%02d", prefix, i)
+}
+
+func (p *multiCallFabricInterfaceProvider) GetFabricInterfaces(_ context.Context, provider string) (*FabricInterfaceSet, error) {
+	p.called++
+	name := testFabricDevName(p.prefix, p.called)
+	return NewFabricInterfaceSet(&FabricInterface{
+		Name:          name,
+		NetInterfaces: common.NewStringSet(name),
+		Providers:     NewFabricProviderSet(&FabricProvider{Name: provider}),
+	}), nil
+}
+
+func expectedMultiCallFIProviderResult(prefix string, ndc NetDevClass, providers ...string) *FabricInterfaceSet {
+	set := NewFabricInterfaceSet()
+	for i, p := range providers {
+		name := testFabricDevName(prefix, i+1)
+		set.Update(&FabricInterface{
+			Name:          name,
+			NetInterfaces: common.NewStringSet(name),
+			Providers:     NewFabricProviderSet(&FabricProvider{Name: p}),
+			DeviceClass:   ndc,
+		})
+	}
+	return set
 }
 
 // MockGetNetDevClassResult is used to set up a MockNetDevClassProvider's results for GetNetDevClass.
@@ -138,6 +175,7 @@ type MockGetNetDevClassResult struct {
 
 // MockNetDevClassProvider is a NetDevClassProvider for testing.
 type MockNetDevClassProvider struct {
+	mutex                sync.Mutex
 	GetNetDevClassReturn []MockGetNetDevClassResult
 	GetNetDevClassCalled int
 }
@@ -147,22 +185,29 @@ func (m *MockNetDevClassProvider) GetNetDevClass(in string) (NetDevClass, error)
 		return 0, nil
 	}
 
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	result := m.GetNetDevClassReturn[m.GetNetDevClassCalled%len(m.GetNetDevClassReturn)]
-	if in != result.ExpInput {
+	if result.ExpInput != "" && in != result.ExpInput {
 		return 0, errors.Errorf("MOCK: unexpected input %q != %q", in, result.ExpInput)
 	}
 	m.GetNetDevClassCalled++
 	return result.NDC, result.Err
 }
 
-type mockFabricInterfaceSetBuilder struct {
-	buildPartCalled int
-	buildPartReturn error
+// MockFabricInterfaceSetBuilder is a FabricInterfaceSetBuilder for testing.
+type MockFabricInterfaceSetBuilder struct {
+	BuildPartCalled    int
+	BuildPartUpdateFis func(*FabricInterfaceSet)
+	BuildPartReturn    error
 }
 
-func (m *mockFabricInterfaceSetBuilder) BuildPart(_ context.Context, _ *FabricInterfaceSet) error {
-	m.buildPartCalled++
-	return m.buildPartReturn
+func (m *MockFabricInterfaceSetBuilder) BuildPart(_ context.Context, fis *FabricInterfaceSet) error {
+	m.BuildPartCalled++
+	if m.BuildPartUpdateFis != nil {
+		m.BuildPartUpdateFis(fis)
+	}
+	return m.BuildPartReturn
 }
 
 // MockNetDevStateResult is a structure for injecting results into MockNetDevStateProvider.
@@ -173,11 +218,14 @@ type MockNetDevStateResult struct {
 
 // MockNetDevStateProvider is a fake NetDevStateProvider for testing.
 type MockNetDevStateProvider struct {
+	sync.Mutex
 	GetStateReturn []MockNetDevStateResult
 	GetStateCalled []string
 }
 
 func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, error) {
+	m.Lock()
+	defer m.Unlock()
 	m.GetStateCalled = append(m.GetStateCalled, iface)
 
 	if len(m.GetStateReturn) == 0 {
@@ -189,4 +237,35 @@ func (m *MockNetDevStateProvider) GetNetDevState(iface string) (NetDevState, err
 		idx = len(m.GetStateReturn) - 1
 	}
 	return m.GetStateReturn[idx].State, m.GetStateReturn[idx].Err
+}
+
+// MockFabricScannerConfig provides parameters for constructing a mock fabric scanner.
+type MockFabricScannerConfig struct {
+	ScanResult *FabricInterfaceSet
+}
+
+// MockFabricScanner generates a mock FabricScanner for testing.
+func MockFabricScanner(log logging.Logger, cfg *MockFabricScannerConfig) *FabricScanner {
+	config := GetMockFabricScannerConfig()
+	providers := make([]string, 0)
+	fiList := make([]*FabricInterface, 0)
+	for _, fi := range cfg.ScanResult.byName {
+		providers = append(providers, fi.Providers.byName.keys()...)
+		fiList = append(fiList, fi)
+	}
+	builders := []FabricInterfaceSetBuilder{
+		&MockFabricInterfaceSetBuilder{
+			BuildPartUpdateFis: func(fis *FabricInterfaceSet) {
+				for _, fi := range fiList {
+					fis.Update(fi)
+				}
+			},
+		},
+	}
+	return &FabricScanner{
+		log:       log,
+		config:    config,
+		builders:  builders,
+		providers: common.NewStringSet(providers...),
+	}
 }

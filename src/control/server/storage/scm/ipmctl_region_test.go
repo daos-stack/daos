@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2022 Intel Corporation.
+// (C) Copyright 2022-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,7 +8,6 @@ package scm
 
 import (
 	"encoding/xml"
-	"math"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -51,7 +50,7 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(_ string) (string, error) {
+			mockRun := func(_ logging.Logger, _ pmemCmd) (string, error) {
 				return preTxt + tc.verOut, nil
 			}
 
@@ -62,77 +61,6 @@ func TestIpmctl_checkIpmctl(t *testing.T) {
 			test.CmpErr(t, tc.expErr, cr.checkIpmctl(tc.badVers))
 		})
 	}
-}
-
-const testXMLRegions = `<?xml version="1.0"?>
- <RegionList>
-  <Region>
-   <SocketID>0x0000</SocketID>
-   <PersistentMemoryType>AppDirect</PersistentMemoryType>
-   <Capacity>1008.000 GiB</Capacity>
-   <FreeCapacity>0.000 GiB</FreeCapacity>
-   <HealthState>Healthy</HealthState>
-   <DimmID>0x0001, 0x0011, 0x0101, 0x0111, 0x0201, 0x0211, 0x0301, 0x0311</DimmID>
-   <RegionID>0x0001</RegionID>
-   <ISetID>0xb8c12120c7bd1110</ISetID>
-  </Region>
- </RegionList>
-`
-
-func mockXMLRegions(t *testing.T, variant string) string {
-	t.Helper()
-
-	var rl RegionList
-	if err := xml.Unmarshal([]byte(testXMLRegions), &rl); err != nil {
-		t.Fatal(err)
-	}
-
-	switch variant {
-	case "sock-zero", "no-free":
-	case "sock-one":
-		rl.Regions[0].ID = 2
-		rl.Regions[0].SocketID = 1
-	case "unhealthy":
-		rl.Regions[0].Health = regionHealth(ipmctl.RegionHealthError)
-	case "not-interleaved":
-		rl.Regions[0].PersistentMemoryType = regionType(ipmctl.RegionTypeNotInterleaved)
-	case "unknown-memtype":
-		rl.Regions[0].PersistentMemoryType = regionType(math.MaxInt32)
-	case "part-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity / 2
-	case "full-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-	case "dual-sock", "dual-sock-no-free":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-	case "dual-sock-full-free":
-		rl.Regions[0].FreeCapacity = rl.Regions[0].Capacity
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-	case "same-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-	case "unhealthy-2nd-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].Health = regionHealth(ipmctl.RegionHealthError)
-	case "full-free-2nd-sock":
-		rl.Regions = append(rl.Regions, rl.Regions[0])
-		rl.Regions[1].ID = 2
-		rl.Regions[1].SocketID = 1
-		rl.Regions[1].FreeCapacity = rl.Regions[1].Capacity
-	default:
-		t.Fatalf("unknown variant %q", variant)
-	}
-
-	out, err := xml.Marshal(&rl)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return string(out)
 }
 
 func TestIpmctl_getRegions(t *testing.T) {
@@ -147,6 +75,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
 			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			ISetID:               13312958398157623568,
 		},
 		1: {
 			XMLName: xml.Name{
@@ -158,6 +87,7 @@ func TestIpmctl_getRegions(t *testing.T) {
 			Capacity:             humanize.GiByte * 1008,
 			FreeCapacity:         0,
 			Health:               regionHealth(ipmctl.RegionHealthNormal),
+			ISetID:               13312958398157623569,
 		},
 	}
 
@@ -209,8 +139,8 @@ func TestIpmctl_getRegions(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			mockRun := func(inCmd string) (string, error) {
-				if inCmd == cmdShowIpmctlVersion {
+			mockRun := func(_ logging.Logger, cmd pmemCmd) (string, error) {
+				if diff := cmp.Diff(cmdShowIpmctlVersion, cmd); diff == "" {
 					return verStr, nil
 				}
 				return tc.cmdOut, tc.cmdErr
@@ -354,7 +284,7 @@ func TestIpmctl_getPMemState(t *testing.T) {
 
 			callIdx := 0
 
-			mockRun := func(in string) (string, error) {
+			mockRun := func(_ logging.Logger, _ pmemCmd) (string, error) {
 				out := ""
 				if len(tc.runOut) > callIdx {
 					out = tc.runOut[callIdx]

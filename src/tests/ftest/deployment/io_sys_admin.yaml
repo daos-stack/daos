@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 5
-  test_clients: 2
+  test_servers: 3
+  test_clients: 1
 timeout: 700
 server_config:
   name: daos_server
@@ -12,28 +12,14 @@ server_config:
       fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
       fabric_iface: ib1
       fabric_iface_port: 31417
       log_file: daos_server1.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 dmg:
   dmg_sub_command: storage
   storage:
@@ -48,8 +34,7 @@ pool_2:
   nvme_size: 50GiB
 pool_3:
   control_method: dmg
-  scm_size: 90%
-  nvme_size: 90%
+  size: 90%
 container_1:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
@@ -65,9 +50,7 @@ container_3:
   oclass: EC_2P2GX
 
 pool:
-  scm_size: 40%
-  nvme_size: 40%
-  control_method: dmg
+  size: 40%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -97,7 +80,6 @@ ior:
   transfer_size: '1Mib'
   block_size: '1Mib'
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
 
 mdtest:

@@ -1,13 +1,12 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeMdtest
 
+
 class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
-    # pylint: disable=too-many-ancestors
     """EC MDtest on-line rebuild test class.
 
     Test Class Description: To validate Erasure code object type classes works
@@ -35,6 +34,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         :avocado: tags=hw,large
         :avocado: tags=ec,ec_array,mdtest,ec_online_rebuild
         :avocado: tags=ec_online_rebuild_array,ec_online_rebuild_mdtest
+        :avocado: tags=test_ec_online_rebuild_mdtest
         """
         # Kill last server rank
         self.rank_to_kill = self.server_count - 1

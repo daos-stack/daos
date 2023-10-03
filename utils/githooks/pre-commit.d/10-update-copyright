@@ -2,9 +2,9 @@
 
 # A git hook to validate and correct the copyright date in source files.
 
-if [ -e .git/MERGE_HEAD ]
-then
-    echo Merge commit
+echo "Copyright update:"
+if [ -e .git/MERGE_HEAD ]; then
+    echo "  Merge commit"
     exit 0
 fi
 
@@ -41,26 +41,41 @@ targets=(
 
 os=$(uname -s)
 
-files=${files:-$(git diff --diff-filter=AM --name-only --cached -- "${targets[@]}")}
-for file in $files; do
-	if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]] || \
-	   [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]]; then
-		continue
-	fi
-	read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
-	if [[ -z $y1 ]] ; then
-		echo "Copyright Information not found in: $file"
-		errors=$((errors + 1))
-	elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
-		git reset "$file" || (echo "Unable to un-stage $file" && exit 1)
-		if [ "$os" == 'Linux' ]
-		then
-			sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
-		else
-			sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
-		fi
+. utils/githooks/git-version.sh
 
-		git add "$file" || (echo "Unable to re-stage $file" && exit 1)
-	fi
+. utils/githooks/find_base.sh
+
+if [ -z "$files" ]; then
+    if [ "$TARGET" = "HEAD" ]; then
+        echo "  Checking against HEAD"
+        files=$(git diff HEAD  --diff-filter=AM --name-only -- "${targets[@]}")
+    else
+        echo "  Checking against branch ${TARGET}"
+        files=$(git diff "$TARGET"... --diff-filter=AM --name-only -- "${targets[@]}")
+    fi
+fi
+
+for file in $files; do
+    if [[ "$file" == *vendor* ]] || [[ "$file" == *pb.go ]]    ||
+       [[ "$file" == *_string.go ]] || [[ "$file" == *pb-c* ]] ||
+       { [ "$git_vercode" -ge 2030000 ] &&
+         [ "$(git diff --cached -I Copyright "$file")" = '' ]; }; then
+        continue
+    fi
+    read -r y1 y2 <<< "$(sed -nre "s/^.*$regex.*$/\4 \6/p" "$file")"
+    if [[ -z $y1 ]] ; then
+        echo "  Copyright Information not found in: $file"
+        errors=$((errors + 1))
+    elif [[ $y1 -ne $year && $year -ne $y2 ]] ; then
+        git reset "$file" || (echo "  Unable to un-stage $file" && exit 1)
+        if [ "$os" == 'Linux' ]
+        then
+            sed -i -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+        else
+            sed -i '' -re "s/$regex/\1Copyright $y1-$year \8/" "$file"
+        fi
+
+        git add "$file" || (echo "  Unable to re-stage $file" && exit 1)
+    fi
 done
-[[ $errors = 0 ]] || (echo "$errors errors while checking/fixing copyrights.")
+[[ $errors = 0 ]] || (echo "  $errors errors while checking/fixing copyrights.")

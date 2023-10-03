@@ -1,34 +1,26 @@
-# (C) Copyright 2021-2022 Intel Corporation.
+# (C) Copyright 2021-2023 Intel Corporation.
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 #
 """Build crt_utils component"""
 
-import daos_build
-
-LIB_SRC = ['crt_utils.c']
-
-
-####################################
-# Create cart utility share objects
-####################################
-def build_utility_shared_obj(env):
-    """Build cart utility library"""
-    cart_utils_objs = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
-    Export('cart_utils_objs')
-
 
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs', 'conf_dir')
+    Import('env', 'conf_dir')
 
-    prereqs.require(env, 'protobufc')
+    env.d_add_build_rpath()
 
-    daos_build.add_build_rpath(env)
+    cenv = env.Clone()
+
+    cenv.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
+
+    cenv.require('protobufc', 'mercury')
 
     # Generate cart utility shared objects
-    build_utility_shared_obj(env)
+    cart_utils_objs = cenv.SharedObject(['crt_utils.c'], SHOBJPREFIX='s_')
+    Export('cart_utils_objs')
 
     env.Install(conf_dir, ['memcheck-cart.supp', 'fault-inject-cart.yaml'])
 

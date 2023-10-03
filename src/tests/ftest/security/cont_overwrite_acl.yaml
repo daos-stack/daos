@@ -7,6 +7,7 @@ timeout: 120
 server_config:
   name: daos_server
   engines_per_host: 1
+  system_ram_reserved: 6
   engines:
     0:
       targets: 4
@@ -29,11 +30,11 @@ invalid_acl_filename:
   - 1ab2@3c4$%(
 
 invalid_acl_file_content:
+  - []
   - ["@$%656672!7", "987654321", "A::OWNER@:dtTaAo"]
   - ["B::OWNER@:dtTaAo", "C::GROUP@:dtTaAo"]
   - ["A::OWNER@:NOTPERMISSIONS", "A::OWNER@:123456"]
   - ["A::OWNER:dtTaAo", "A:G:GROUP:dtTaAo"]
 
 valid_acl_file:
-  - []
   - ["A::OWNER@:dtTaAo", "A:G:my_great_test@:rw", "A::person@:r"]

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -35,6 +35,27 @@ extern "C" {
 /** @addtogroup CART
  * @{
  */
+
+/**
+ * Get information on protocols that are supported by underlying mercury plugins. If
+ * \info_string is NULL, a list of all supported protocols by all plugins will
+ * be returned. The returned list must be freed using crt_protocol_info_free().
+ * 
+ * \param[in]  info_string     NULL or "<protocol>" or "<plugin+protocol>"
+ * \param[out] protocol_info_p linked-list of protocol infos
+ * 
+ * \return                     DER_SUCCESS on success, negative value if error
+*/
+int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p);
+
+/**
+ * Free protocol_info from crt_protocol_info_get().
+ * 
+ * \param[in,out] protocol_info linked-list of protocol infos
+*/
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info);
 
 /**
  * Initialize CRT transport layer. Must be called on both the server side and
@@ -173,6 +194,17 @@ crt_context_idx(crt_context_t crt_ctx, int *ctx_idx);
  */
 int
 crt_context_num(int *ctx_num);
+
+/**
+ * Return URI associated with the context.
+ *
+ * \param[in] crt_ctx         CRT transport context
+ * \param[out] uri            Returned uri.
+ *
+ * \return                    DER_SUCCESS on success, negative value in error.
+ */
+int
+crt_context_uri_get(crt_context_t crt_ctx, char **uri);
 
 /**
  * Finalize CRT transport layer. Must be called on both the server side and
@@ -315,9 +347,8 @@ crt_req_get_timeout(crt_rpc_t *req, uint32_t *timeout_sec);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_addref(crt_rpc_t *req);
 
 /**
@@ -325,9 +356,8 @@ crt_req_addref(crt_rpc_t *req);
  *
  * \param[in] req              pointer to RPC request
  *
- * \return                     DER_SUCCESS on success, negative value if error
  */
-int
+void
 crt_req_decref(crt_rpc_t *req);
 
 /**
@@ -419,6 +449,18 @@ int
 crt_req_dst_tag_get(crt_rpc_t *req, uint32_t *tag);
 
 /**
+ * Return source timeout in seconds
+ *
+ * \param[in] req              Pointer to RPC request
+ * \param[out] timeout         Returned timeout
+ *
+ * \return                     DER_SUCCESS on success or error
+ *                             on failure
+ */
+int
+crt_req_src_timeout_get(crt_rpc_t *rpc, uint16_t *timeout);
+
+/**
  * Return reply buffer
  *
  * \param[in] req              pointer to RPC request
@@ -430,173 +472,6 @@ crt_reply_get(crt_rpc_t *rpc)
 {
 	return rpc->cr_output;
 }
-
-/**
- * Return current HLC timestamp
- *
- * HLC timestamps are synchronized between nodes. They sends with each RPC for
- * different nodes and updated when received from different node. The HLC
- * timestamps synchronization will be called transparently at sending/receiving
- * RPC into the wire (when Mercury will encode/decode the packet). So, with
- * each call of this function you will get from it always last HLC timestamp
- * synchronized across all nodes involved in current communication.
- *
- * \return                     HLC timestamp
- */
-uint64_t
-crt_hlc_get(void);
-
-/**
- * Sync HLC with remote message and get current HLC timestamp.
- *
- * \param[in] msg              remote HLC timestamp
- * \param[out] hlc_out         HLC timestamp
- * \param[out] offset          Returned observed clock offset.
- *
- * \return                     DER_SUCCESS on success or error
- *                             on failure
- * \retval -DER_HLC_SYNC       \a msg is too much higher than the local
- *                             physical clock
- */
-int
-crt_hlc_get_msg(uint64_t msg, uint64_t *hlc_out, uint64_t *offset);
-
-/**
- * Return the nanosecond timestamp of hlc.
- *
- * \param[in] hlc              HLC timestamp
- *
- * \return                     Nanosecond timestamp
- */
-uint64_t
-crt_hlc2nsec(uint64_t hlc);
-
-/** See crt_hlc2nsec. */
-static inline uint64_t
-crt_hlc2usec(uint64_t hlc)
-{
-	return crt_hlc2nsec(hlc) / 1000;
-}
-
-/** See crt_hlc2nsec. */
-static inline uint64_t
-crt_hlc2msec(uint64_t hlc)
-{
-	return crt_hlc2nsec(hlc) / (1000 * 1000);
-}
-
-/** See crt_hlc2nsec. */
-static inline uint64_t
-crt_hlc2sec(uint64_t hlc)
-{
-	return crt_hlc2nsec(hlc) / (1000 * 1000 * 1000);
-}
-
-/**
- * Return the HLC timestamp from nsec.
- *
- * \param[in] nsec             Nanosecond timestamp
- *
- * \return                     HLC timestamp
- */
-uint64_t
-crt_nsec2hlc(uint64_t nsec);
-
-/** See crt_nsec2hlc. */
-static inline uint64_t
-crt_usec2hlc(uint64_t usec)
-{
-	return crt_nsec2hlc(usec * 1000);
-}
-
-/** See crt_nsec2hlc. */
-static inline uint64_t
-crt_msec2hlc(uint64_t msec)
-{
-	return crt_nsec2hlc(msec * 1000 * 1000);
-}
-
-/** See crt_nsec2hlc. */
-static inline uint64_t
-crt_sec2hlc(uint64_t sec)
-{
-	return crt_nsec2hlc(sec * 1000 * 1000 * 1000);
-}
-
-/**
- * Return the Unix nanosecond timestamp of hlc.
- *
- * \param[in] hlc              HLC timestamp
- *
- * \return                     Unix nanosecond timestamp
- */
-uint64_t
-crt_hlc2unixnsec(uint64_t hlc);
-
-/**
- * Return timespec from HLC
- *
- * \param[in]	hlc	HLC timestamp
- * \param[out]	ts	timespec struct
- *
- * \return		DER_SUCCESS on success, negative value if error
- */
-int
-crt_hlc2timespec(uint64_t hlc, struct timespec *ts);
-
-/**
- * Return HLC from timespec
- *
- * \param[in]	ts	timespec struct
- * \param[out]	hlc	HLC timestamp
- *
- * \return		DER_SUCCESS on success, negative value if error
- */
-int
-crt_timespec2hlc(struct timespec ts, uint64_t *hlc);
-
-/**
- * Return the HLC timestamp of unixnsec in hlc.
- *
- * \param[in] unixnsec         Unix nanosecond timestamp
- *
- * \return                     HLC timestamp on success, or 0 when it is
- *                             impossible to convert unixnsec to hlc
- */
-uint64_t
-crt_unixnsec2hlc(uint64_t unixnsec);
-
-/**
- * Set the maximum system clock offset.
- *
- * This is the maximum offset believed to be observable between the physical
- * clocks behind any two HLCs in the system. The format of the value represent
- * a nonnegative diff between two HLC timestamps. The value is rounded up to
- * the HLC physical resolution.
- *
- * \param[in] epsilon          Nonnegative HLC duration
- */
-void
-crt_hlc_epsilon_set(uint64_t epsilon);
-
-/**
- * Get the maximum system clock offset. See crt_hlc_set_epsilon's API doc.
- *
- * \return                     Nonnegative HLC duration
- */
-uint64_t
-crt_hlc_epsilon_get(void);
-
-/**
- * Get the upper bound of the HLC timestamp of an event happened before
- * (through out of band communication) the event at \a hlc.
- *
- * \param[in] hlc              HLC timestamp
- *
- * \return                     Upper bound HLC timestamp
- */
-uint64_t
-crt_hlc_epsilon_get_bound(uint64_t hlc);
 
 /**
  * Abort an RPC request.
@@ -1755,6 +1630,54 @@ crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
 int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
+/**
+ * Create the processor object.
+ *
+ * \param[in] crt_ctx		Associated cart context
+ * \param[in] buf		Pointer to buffer used by the processor
+ * \param[in] buf_sie		The buffer size
+ * \param[in] proc_op		Proc operation type
+ * \param[out] proc		Abstract processor object
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_create(crt_context_t crt_ctx, void *buf, size_t buf_size,
+		crt_proc_op_t proc_op, crt_proc_t *proc);
+
+/**
+ * Destroy the processor object.
+ *
+ * \param[in] proc		Abstract processor object
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_destroy(crt_proc_t proc);
+
+/**
+ * Reset the processor object with specified operation type.
+ *
+ * \param[in] proc		Abstract processor object
+ * \param[in] buf		Pointer to buffer used by the processor
+ * \param[in] buf_sie		The buffer size
+ * \param[in] proc_op		Proc operation type
+ *
+ * \return			DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_reset(crt_proc_t proc, void *buf, size_t buf_size, crt_proc_op_t proc_op);
+
+/**
+ * Get amount of buffer space that has actually been consumed by the processor object.
+ *
+ * \param[in] proc		Abstract processor object
+ *
+ * \return			Non-negative size value
+ */
+size_t
+crp_proc_get_size_used(crt_proc_t proc);
+
 typedef int64_t
 (*crt_progress_cb) (crt_context_t ctx, int64_t timeout, void *arg);
 
@@ -1980,12 +1903,14 @@ crt_proto_query_with_ctx(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc, uint32_t
  * Set self rank.
  *
  * \param[in] rank              Rank to set on self.
+ * \param[in] group_version_min Minimum group version, that is, the version in
+ *                              which we join the system.
  *
  * \return                      DER_SUCCESS on success, negative value on
  *                              failure.
  */
 int
-crt_rank_self_set(d_rank_t rank);
+crt_rank_self_set(d_rank_t rank, uint32_t group_version_min);
 
 /**
  * Retrieve URI of the requested rank:tag pair.
@@ -2228,6 +2153,8 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * \param[in] ctxs               Array of contexts
  * \param[in] num_ctxs           Number of contexts
  * \param[in] ranks              Modification rank list
+ * \param[in] incarnations       Array of incarnations corresponding to rank
+ *                               list
  * \param[in] uris               Array of URIs corresponding to contexts and
  *                               rank list
  * \param[in] op                 Modification operation.
@@ -2252,9 +2179,9 @@ int crt_group_secondary_destroy(crt_group_t *grp);
  * [uri0 for provider2 identified by ctx2]
  * etc...
  */
-int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs,
-			int num_ctxs, d_rank_list_t *ranks, char **uris,
-			crt_group_mod_op_t op, uint32_t version);
+int crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
+			     d_rank_list_t *ranks, uint64_t *incarnations, char **uris,
+			     crt_group_mod_op_t op, uint32_t version);
 
 /**
  * Perform a secondary group modification in an atomic fashion based on the

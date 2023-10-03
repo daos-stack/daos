@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -124,7 +125,7 @@ func fd2FILE(fd uintptr, modeStr string) (out *C.FILE, err error) {
 	defer freeString(cModeStr)
 	out = C.fdopen(C.int(fd), cModeStr)
 	if out == nil {
-		return nil, errors.New("fdopen() failed")
+		return nil, errors.Errorf("fdopen() failed (fd: %d, mode: %s)", fd, modeStr)
 	}
 	return
 }
@@ -136,44 +137,45 @@ func freeString(str *C.char) {
 	C.free(unsafe.Pointer(str))
 }
 
-func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(), error) {
-	// Create a FILE object for the handler to use for
-	// printing output or errors, and call the callback
-	// for each line.
+func createWriteStream(ctx context.Context, printLn func(line string)) (*C.FILE, func(), error) {
+	// Create a FILE object for the handler to use for printing output or errors, and call the
+	// callback for each line.
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err
 	}
+	done := make(chan bool, 1)
 
 	stream, err := fd2FILE(w.Fd(), "w")
 	if err != nil {
 		return nil, nil, err
 	}
 
-	go func(prefix string) {
-		defer r.Close()
-		defer w.Close()
-
-		if prefix != "" {
-			prefix = ": "
-		}
+	go func(ctx context.Context) {
+		defer close(done)
 
 		rdr := bufio.NewReader(r)
 		for {
-			line, err := rdr.ReadString('\n')
-			if err != nil {
-				if err != io.EOF {
-					printLn(fmt.Sprintf("read err: %s", err))
-				}
+			select {
+			case <-ctx.Done():
 				return
+			default:
+				line, err := rdr.ReadString('\n')
+				if err != nil {
+					if !errors.Is(err, io.EOF) {
+						printLn(fmt.Sprintf("read err: %s", err))
+					}
+					return
+				}
+				printLn(line)
 			}
-			printLn(fmt.Sprintf("%s%s", prefix, line))
 		}
-	}(prefix)
+	}(ctx)
 
 	return stream, func() {
-		C.fflush(stream)
 		C.fclose(stream)
+		w.Close()
+		<-done
 	}, nil
 }
 
@@ -190,8 +192,21 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
 	}
+	if ap.dm_args != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.dm_args))
+	}
+	if ap.fs_copy_stats != nil {
+		C.free_daos_alloc(unsafe.Pointer(ap.fs_copy_stats))
+	}
 
 	C.free(unsafe.Pointer(ap))
+}
+
+func freeDaosStr(str *C.char) {
+	if str == nil {
+		return
+	}
+	C.free_daos_alloc(unsafe.Pointer(str))
 }
 
 func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), err error) {
@@ -200,17 +215,20 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 	C.init_op_vals(ap)
 	ap.sysname = C.CString(build.DefaultSystemName)
 
-	outStream, outCleanup, err := createWriteStream("", log.Info)
+	ctx, cancel := context.WithCancel(context.Background())
+	outStream, outCleanup, err := createWriteStream(ctx, log.Info)
 	if err != nil {
 		freeCmdArgs(ap)
+		cancel()
 		return nil, nil, err
 	}
 	ap.outstream = outStream
 
-	errStream, errCleanup, err := createWriteStream("handler", log.Error)
+	errStream, errCleanup, err := createWriteStream(ctx, log.Error)
 	if err != nil {
 		outCleanup()
 		freeCmdArgs(ap)
+		cancel()
 		return nil, nil, err
 	}
 	ap.errstream = errStream
@@ -219,6 +237,7 @@ func allocCmdArgs(log logging.Logger) (ap *C.struct_cmd_args_s, cleanFn func(), 
 		outCleanup()
 		errCleanup()
 		freeCmdArgs(ap)
+		cancel()
 	}, nil
 }
 
@@ -228,7 +247,7 @@ type daosCaller interface {
 
 type daosCmd struct {
 	cmdutil.NoArgsCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	cmdutil.LogCmd
 }
 
@@ -270,6 +289,23 @@ func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
 	rc := C.resolve_duns_path(ap)
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err, "failed to resolve path %s", path)
+	}
+
+	return nil
+}
+
+// _writeDunsPath is a test helper for creating a DUNS EA on a path.
+func _writeDunsPath(path, ct string, poolUUID uuid.UUID, contUUID uuid.UUID) error {
+	attrStr := fmt.Sprintf(C.DUNS_XATTR_FMT, ct, poolUUID.String(), contUUID.String())
+
+	cPath := C.CString(path)
+	defer freeString(cPath)
+	cAttrStr := C.CString(attrStr)
+	defer freeString(cAttrStr)
+	cAttrName := C.CString(C.DUNS_XATTR_NAME)
+	defer freeString(cAttrName)
+	if err := dfsError(C.lsetxattr(cPath, cAttrName, unsafe.Pointer(cAttrStr), C.size_t(len(attrStr)+1), 0)); err != nil {
+		return errors.Wrapf(err, "failed to set xattr on %s", path)
 	}
 
 	return nil

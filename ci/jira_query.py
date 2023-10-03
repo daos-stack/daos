@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import time
 import urllib
 import random
 import string
@@ -26,7 +27,8 @@ import jira
 # Expected components from the commit message, and directory in src/, src/client or utils/ is also
 # valid.  We've never checked/enforced these before so there have been a lot of values used in the
 # past.
-VALID_COMPONENTS = ('build', 'ci', 'doc', 'gha', 'il', 'mercury', 'test', 'md', 'agent')
+VALID_COMPONENTS = ('agent', 'build', 'ci', 'csum', 'doc', 'gha', 'il', 'md', 'mercury',
+                    'packaging', 'pil4dfs', 'swim', 'test', 'tools')
 
 # Expected ticket prefix.
 VALID_TICKET_PREFIX = ('DAOS', 'CORCI', 'SRE')
@@ -40,8 +42,7 @@ MANAGED_LABELS = ('release-2.2', 'release-2.4', 'priority')
 
 
 def set_output(key, value):
-    """ Set a key-value pair in GitHub actions metadata"""
-
+    """Set a key-value pair in GitHub actions metadata"""
     env_file = os.getenv('GITHUB_OUTPUT')
     if not env_file:
         clean_value = value.replace('\n', '%0A')
@@ -53,45 +54,77 @@ def set_output(key, value):
         file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
-# pylint: disable=too-many-branches
+def valid_comp_from_dir(component):
+    """Checks is a component is valid based on src tree"""
+    return os.path.isdir(os.path.join('src', component)) \
+        or os.path.isdir(os.path.join('src', 'client', component)) \
+        or os.path.isdir(os.path.join('utils', component))
+
+
+def fetch_pr_data():
+    """Query GibHub API and return PR metadata"""
+    pr_data = None
+    if len(sys.argv) == 2:
+        try:
+            pr_number = int(sys.argv[1])
+        except ValueError:
+            print('argument must be a value')
+            sys.exit(1)
+
+        github_repo = os.environ.get('GITHUB_REPOSITORY', 'daos-stack/daos')
+        gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+
+        # We occasionally see this fail with rate-limit-exceeded, if that happens then wait for a
+        # while and re-try once.
+        try:
+            with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                pr_data = json.loads(raw_pr_data.read())
+        except urllib.error.HTTPError as error:
+            if error.code == 403:
+                time.sleep(60 * 10)
+                with urllib.request.urlopen(gh_url) as raw_pr_data:  # nosec
+                    pr_data = json.loads(raw_pr_data.read())
+            else:
+                raise
+    else:
+        print('Pass PR number on command line')
+        sys.exit(1)
+
+    assert pr_data is not None
+    return pr_data
+
+
 def main():
     """Run the script"""
+    # pylint: disable=too-many-branches
+    pr_data = fetch_pr_data()
 
     priority = None
     errors = []
-    gh_label = []
+    gh_label = set()
+    pr_title = pr_data['title']
 
-    options = {'server': 'https://daosio.atlassian.net/'}
+    # Revert PRs can be auto-generated, detect and handle this, as well as
+    # marking them a priority.
+    if pr_title.startswith('Revert "'):
+        pr_title = pr_title[8:-1]
+        priority = 2
 
-    server = jira.JIRA(options)
-
-    # Find the ticket number, either from the environment if possible or the command line.
-    pr_title = os.getenv('PR_TITLE')
-    if pr_title:
-        # GitHub actions (or similar), perform some checks on the title of the PR.
-        parts = pr_title.split(' ')
-        ticket_number = parts[0]
-        component = parts[1]
-        if component.endswith(':'):
-            component = component[:-1]
-            col = component.lower()
-            if col != component:
-                errors.append('Component should be lower-case')
-            if col not in VALID_COMPONENTS and not os.path.isdir(os.path.join('src', col)) \
-               and not os.path.isdir(os.path.join('src', 'client', col)) \
-               and not os.path.isdir(os.path.join('utils', col)):
-
-                errors.append('Unknown component')
-        else:
-            errors.append('component not formatted correctly')
-        if len(pr_title) > 80:
-            errors.append('Title of PR is too long')
+    parts = pr_title.split(' ')
+    ticket_number = parts[0]
+    component = parts[1]
+    if component.endswith(':'):
+        component = component[:-1]
+        col = component.lower()
+        if col != component:
+            errors.append('Component should be lower-case')
+        if col not in VALID_COMPONENTS and not valid_comp_from_dir(col):
+            errors.append('Unknown component')
+            print('Either amend PR title or add to ci/jira_query.py')
     else:
-        if len(sys.argv) > 1:
-            ticket_number = sys.argv[1]
-        else:
-            print('Set PR_TITLE or pass on command line')
-            return
+        errors.append('component not formatted correctly')
+    if len(pr_title) > 80:
+        errors.append('Title of PR is too long')
 
     # Check format of ticket_number.
     parts = ticket_number.split('-', maxsplit=1)
@@ -106,15 +139,17 @@ def main():
         errors.append(f'PR title is malformatted. See {link}')
 
     try:
+        server = jira.JIRA({'server': 'https://daosio.atlassian.net/'})
         ticket = server.issue(ticket_number, fields=FIELDS)
     except jira.exceptions.JIRAError:
-        output = [f"Unable to load ticket data for '{ticket_number}'"]
-        output.append(f'https://daosio.atlassian.net/browse/{ticket_number}')
+        errors.append('Unable to load ticket data')
+        output = [f'Errors are {",".join(errors)}',
+                  f'https://daosio.atlassian.net/browse/{ticket_number}']
         set_output('message', '\n'.join(output))
         print('Unable to load ticket data.  Ticket may be private, or may not exist')
         return
-    print(ticket.fields.summary)
-    print(ticket.fields.status)
+    print(f'Ticket summary: {ticket.fields.summary}')
+    print(f'Ticket status: {ticket.fields.status}')
 
     # Highest priority, tickets with "Approved to Merge" set.
     if ticket.fields.customfield_10044:
@@ -126,27 +161,22 @@ def main():
         # Check the target branch here.  Can not be done from a ticket number alone, so only perform
         # this check if we can.
 
-        set_rv_priority = True
-        target_branch = os.getenv('GITHUB_BASE_REF')
-        if target_branch:
-            if target_branch.startswith('release/'):
-                set_rv_priority = False
-
         rv_priority = None
 
         for version in ticket.fields.customfield_10045:
             if str(version) in ('2.0.3 Community Release', '2.0.3 Community Release',
                                 '2.2 Community Release'):
                 rv_priority = 2
-            if rv_priority is None and str(version) in ('2.4 Community Release'):
+            elif str(version) in ('2.4 Community Release'):
                 rv_priority = 3
 
             if str(version) in ('2.2 Community Release'):
-                gh_label.append('release-2.2')
+                gh_label.add('release-2.2')
             if str(version) in ('2.4 Community Release'):
-                gh_label.append('release-2.4')
+                gh_label.add('release-2.4')
 
-        if set_rv_priority and priority is None:
+        # If a PR does not otherwise have priority then use custom values from above.
+        if priority is None and not pr_data['base']['ref'].startswith('release'):
             priority = rv_priority
 
     output = []
@@ -160,7 +190,7 @@ def main():
 
     if priority is not None:
         output.append(f'Job should run at elevated priority ({priority})')
-        gh_label.append('priority')
+        gh_label.add('priority')
 
     if errors:
         output.append(f'Errors are {",".join(errors)}')
@@ -170,30 +200,16 @@ def main():
     set_output('message', '\n'.join(output))
 
     if gh_label:
-        set_output('label', '\n'.join(gh_label))
+        set_output('label', '\n'.join(sorted(gh_label)))
 
-    github_repo = os.getenv('GITHUB_REPOSITORY')
-
-    if github_repo:
-
-        pr_number = os.getenv('PR_NUMBER')
-
-        gh_url = f'https://api.github.com/repos/{github_repo}/issues/{pr_number}/labels'
-        print(gh_url)
-        with urllib.request.urlopen(gh_url) as gh_label_data:  # nosec
-            gh_labels = json.loads(gh_label_data.read())
-
-        # Remove all managed labels which are not to be set.
-        to_remove = []
-        for label in gh_labels:
-            name = label['name']
-            if name in MANAGED_LABELS and name not in gh_label:
-                to_remove.append(name)
-        if to_remove:
-            set_output('label-clear', '\n'.join(to_remove))
-
-        # Could possibly query/verify more data using this URL however no use-case for this yet.
-        # gh_url = f'https://api.github.com/repos/{github_repo}/pulls/{pr_number}'
+    # Remove all managed labels which are not to be set.
+    to_remove = []
+    for label in pr_data['labels']:
+        name = label['name']
+        if name in MANAGED_LABELS and name not in gh_label:
+            to_remove.append(name)
+    if to_remove:
+        set_output('label-clear', '\n'.join(to_remove))
 
     if errors:
         sys.exit(1)

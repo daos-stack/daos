@@ -67,10 +67,10 @@ disable_gpg_check() {
 }
 
 dump_repos() {
-        for file in "$REPOS_DIR"/*.repo; do
-            echo "---- $file ----"
-            cat "$file"
-        done
+    for file in "$REPOS_DIR"/*.repo; do
+        echo "---- $file ----"
+        cat "$file"
+    done
 }
 
 env > /root/last_run-env.txt
@@ -101,8 +101,8 @@ echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 # defined in ci/functional/post_provision_config_nodes_<distro>.sh
 # and catted to the remote node along with this script
 if ! post_provision_config_nodes; then
-    rc=${PIPESTATUS[0]}
-    exit "$rc"
+  rc=${PIPESTATUS[0]}
+  exit "$rc"
 fi
 
 # Workaround to enable binding devices back to nvme or vfio-pci after they are unbound from vfio-pci
@@ -110,6 +110,7 @@ fi
 # for that device and future bindings to the device do not work, resulting in messages like, "NVMe
 # SSD [xxxx:xx:xx.x] not found" when starting daos engines.
 if lspci | grep -i nvme; then
+  export COVFILE=/tmp/test.cov
   daos_server nvme reset && rmmod vfio_pci && modprobe vfio_pci
 fi
 

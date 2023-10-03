@@ -8,7 +8,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -21,37 +20,31 @@ import (
 
 type netScanCmd struct {
 	cmdutil.LogCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	FabricProvider string `short:"p" long:"provider" description:"Filter device list to those that support the given OFI provider or 'all' for all available (default is all local providers)"`
 }
 
-func (cmd *netScanCmd) printUnlessJson(fmtStr string, args ...interface{}) {
-	if cmd.jsonOutputEnabled() {
-		return
-	}
-	cmd.Infof(fmtStr, args...)
-}
-
 func (cmd *netScanCmd) Execute(_ []string) error {
+	var prov string
+	if !strings.EqualFold(cmd.FabricProvider, "all") {
+		prov = cmd.FabricProvider
+	}
+
 	fabricScanner := hwprov.DefaultFabricScanner(cmd.Logger)
 
-	results, err := fabricScanner.Scan(context.Background())
+	results, err := fabricScanner.Scan(context.Background(), prov)
 	if err != nil {
 		return nil
 	}
 
-	if cmd.FabricProvider == "" {
-		cmd.FabricProvider = "all"
-	}
-
-	hf := fabricInterfaceSetToHostFabric(results, cmd.FabricProvider)
+	hf := fabricInterfaceSetToHostFabric(results, prov)
 	hfm := make(control.HostFabricMap)
 	if err := hfm.Add("localhost", hf); err != nil {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(os.Stdout, hfm)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(hfm, nil)
 	}
 
 	var bld strings.Builder
@@ -81,14 +74,15 @@ func fabricInterfaceSetToHostFabric(fis *hardware.FabricInterfaceSet, filterProv
 			netIFs.Add(fi.Name)
 		}
 
-		for _, name := range netIFs.ToSlice() {
+		for _, devName := range netIFs.ToSlice() {
 			for _, provider := range fi.Providers.ToSlice() {
-				if filterProvider == "all" || strings.HasPrefix(provider, filterProvider) {
+				if filterProvider == "all" || strings.HasPrefix(provider.Name, filterProvider) {
 					hf.AddInterface(&control.HostFabricInterface{
-						Provider:    provider,
-						Device:      name,
+						Provider:    provider.Name,
+						Device:      devName,
 						NumaNode:    uint32(fi.NUMANode),
 						NetDevClass: fi.DeviceClass,
+						Priority:    uint32(provider.Priority),
 					})
 				}
 			}

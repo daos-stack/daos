@@ -7,7 +7,6 @@
 package hardware
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -1171,7 +1170,7 @@ func TestHardware_TopologyFactory_GetTopology(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			result, err := tc.tf.GetTopology(context.Background())
+			result, err := tc.tf.GetTopology(test.Context(t))
 
 			test.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {

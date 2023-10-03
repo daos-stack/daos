@@ -22,7 +22,18 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-var errSmdManageMultiOpsInReq = errors.New("multiple operations requested in smd-manage request")
+// SmdManageOpcode defines an SmdManage operation.
+type SmdManageOpcode uint8
+
+// SmdManageOpcode definitions
+const (
+	_ SmdManageOpcode = iota
+	SetFaultyOp
+	DevReplaceOp
+	LedCheckOp
+	LedBlinkOp
+	LedResetOp
+)
 
 type (
 	// SmdPool contains the per-server components of a DAOS pool.
@@ -50,21 +61,18 @@ type (
 		IncludeBioHealth bool          `json:"include_bio_health"`
 		UUID             string        `json:"uuid"`
 		Rank             ranklist.Rank `json:"rank"`
-		Target           string        `json:"target"`
 		FaultyDevsOnly   bool          `json:"-"` // only show faulty devices
 	}
 
 	// SmdManageReq contains the request parameters for a SMD query operation.
 	SmdManageReq struct {
 		unaryRequest
-		SetFaulty   bool          `json:"set_faulty"`
-		IDs         string        `json:"uuid"` // comma separated list of IDs
-		Rank        ranklist.Rank `json:"rank"`
-		ReplaceUUID string        `json:"replace_uuid"` // UUID of new device to replace storage
-		NoReint     bool          `json:"no_reint"`     // for device replacement
-		Identify    bool          `json:"identify"`     // for VMD LED device identification
-		ResetLED    bool          `json:"reset_led"`    // for resetting VMD LED, debug only
-		GetLED      bool          `json:"get_led"`      // get LED state of VMD devices
+		IDs             string // comma separated list of IDs
+		Rank            ranklist.Rank
+		ReplaceUUID     string // For device replacement, UUID of new device
+		ReplaceNoReint  bool   // For device replacement, indicate no reintegration
+		IdentifyTimeout uint32 // For LED identify, blink duration in minutes
+		Operation       SmdManageOpcode
 	}
 
 	// SmdResp represents the results of performing SMD query or manage operations across
@@ -254,10 +262,8 @@ func (sr *SmdResp) getHostManageRespErr(hr *HostResponse) error {
 
 // Pack SmdManage proto request oneof field.
 func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
-	var optParsed bool
-
-	if req.SetFaulty {
-		optParsed = true
+	switch req.Operation {
+	case SetFaultyOp:
 		// Expect single UUID in request IDs field.
 		if err := checkUUID(req.IDs); err != nil {
 			return errors.Wrap(err, "bad device UUID to set-faulty")
@@ -267,13 +273,7 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 				Uuid: req.IDs,
 			},
 		}
-	}
-
-	if req.ReplaceUUID != "" {
-		if optParsed {
-			return errSmdManageMultiOpsInReq
-		}
-		optParsed = true
+	case DevReplaceOp:
 		// Expect single UUID in request IDs field.
 		if err := checkUUID(req.IDs); err != nil {
 			return errors.Wrap(err, "bad old device UUID for replacement")
@@ -285,16 +285,10 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 			Replace: &ctlpb.DevReplaceReq{
 				OldDevUuid: req.IDs,
 				NewDevUuid: req.ReplaceUUID,
-				NoReint:    req.NoReint,
+				NoReint:    req.ReplaceNoReint,
 			},
 		}
-	}
-
-	if req.GetLED {
-		if optParsed {
-			return errSmdManageMultiOpsInReq
-		}
-		optParsed = true
+	case LedCheckOp:
 		pbReq.Op = &ctlpb.SmdManageReq_Led{
 			Led: &ctlpb.LedManageReq{
 				Ids:       req.IDs,
@@ -302,27 +296,16 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 				LedAction: ctlpb.LedAction_GET,
 			},
 		}
-	}
-
-	if req.Identify {
-		if optParsed {
-			return errSmdManageMultiOpsInReq
-		}
-		optParsed = true
+	case LedBlinkOp:
 		pbReq.Op = &ctlpb.SmdManageReq_Led{
 			Led: &ctlpb.LedManageReq{
-				Ids:       req.IDs,
-				LedState:  ctlpb.LedState_QUICK_BLINK,
-				LedAction: ctlpb.LedAction_SET,
+				Ids:             req.IDs,
+				LedState:        ctlpb.LedState_QUICK_BLINK,
+				LedAction:       ctlpb.LedAction_SET,
+				LedDurationMins: req.IdentifyTimeout,
 			},
 		}
-	}
-
-	if req.ResetLED {
-		if optParsed {
-			return errSmdManageMultiOpsInReq
-		}
-		optParsed = true
+	case LedResetOp:
 		pbReq.Op = &ctlpb.SmdManageReq_Led{
 			Led: &ctlpb.LedManageReq{
 				Ids:       req.IDs,
@@ -330,10 +313,8 @@ func packPBSmdManageReq(req *SmdManageReq, pbReq *ctlpb.SmdManageReq) error {
 				LedAction: ctlpb.LedAction_RESET,
 			},
 		}
-	}
-
-	if !optParsed {
-		return errors.New("smd manage called but no operation requested")
+	default:
+		return errors.New("smd manage called but unrecognized operation requested")
 	}
 
 	return nil
@@ -359,7 +340,7 @@ func SmdManage(ctx context.Context, rpcClient UnaryInvoker, req *SmdManageReq) (
 		return ctlpb.NewCtlSvcClient(conn).SmdManage(ctx, pbReq)
 	})
 
-	if req.SetFaulty {
+	if req.Operation == SetFaultyOp {
 		reqHosts, err := getRequestHosts(DefaultConfig(), req)
 		if err != nil {
 			return nil, err

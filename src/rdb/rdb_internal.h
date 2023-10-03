@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -32,6 +32,8 @@ struct rdb_raft_event {
 	uint64_t			dre_term;
 };
 
+#define RDB_NOSPC_ERR_INTVL_USEC (1000000)	/* 1 second */
+
 /* rdb.c **********************************************************************/
 
 static inline struct rdb *
@@ -45,6 +47,23 @@ rdb_to_storage(struct rdb *db)
 {
 	return (struct rdb_storage *)db;
 }
+
+enum {
+	CHKPT_NONE = 0,
+	CHKPT_MUTEX,
+	CHKPT_MAIN_CV,
+	CHKPT_COMMIT_CV,
+	CHKPT_ULT,
+};
+
+struct rdb_chkpt_record {
+	uint32_t dcr_state : 4, dcr_init : 1, dcr_enabled : 1, dcr_waiting : 1, dcr_needed : 1,
+	    dcr_idle : 1, dcr_stop : 1;
+	uint32_t dcr_thresh;
+	uint64_t dcr_commit_id;
+	uint64_t dcr_wait_id;
+	struct umem_store *dcr_store;
+};
 
 /* multi-ULT locking in struct rdb:
  *  d_mutex: for RPC mgmt and ref count:
@@ -65,7 +84,15 @@ struct rdb {
 	void		       *d_arg;		/* for d_cbs callbacks */
 	struct daos_lru_cache  *d_kvss;		/* rdb_kvs cache */
 	daos_handle_t		d_pool;		/* VOS pool */
+	struct rdb_chkpt_record d_chkpt_record; /* pool checkpoint information */
+	ABT_thread              d_chkptd;       /* thread handle for pool checkpoint daemon */
+	ABT_mutex               d_chkpt_mutex;  /* mutex for checkpoint synchronization */
+	ABT_cond                d_chkpt_cv;     /* for triggering pool checkpointing */
+	ABT_cond                d_commit_cv;    /* for waking active pool checkpoint */
 	daos_handle_t		d_mc;		/* metadata container */
+	uint64_t		d_nospc_ts;	/* last time commit observed low/no space (usec) */
+	bool			d_new;		/* for skipping lease recovery */
+	bool			d_use_leases;	/* when verifying leadership */
 
 	/* rdb_raft fields */
 	raft_server_t	       *d_raft;
@@ -74,7 +101,7 @@ struct rdb {
 	daos_handle_t		d_lc;		/* log container */
 	struct rdb_lc_record	d_lc_record;	/* of d_lc */
 	daos_handle_t		d_slc;		/* staging log container */
-	struct rdb_lc_record	d_slc_record;	/* of d_slc */
+	struct rdb_lc_record    d_slc_record;   /* of d_slc */
 	uint64_t		d_applied;	/* last applied index */
 	uint64_t		d_debut;	/* first entry in a term */
 	ABT_cond		d_applied_cv;	/* for d_applied updates */
@@ -86,21 +113,22 @@ struct rdb {
 	int			d_nevents;	/* d_events queue len from 0 */
 	ABT_cond		d_events_cv;	/* for d_events enqueues */
 	uint64_t		d_compact_thres;/* of compactable entries */
-	ABT_cond		d_compact_cv;	/* for base updates */
+	ABT_cond		d_compact_cv;	/* for triggering base updates */
+	ABT_cond                d_compacted_cv; /* for d_lc_record.dlr_aggregated updates */
 	bool			d_stop;		/* for rdb_stop() */
 	ABT_thread		d_timerd;
-	ABT_thread		d_callbackd;
+	ABT_thread              d_callbackd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
 	size_t			d_ae_max_size;
 	unsigned int		d_ae_max_entries;
 };
 
-/* thresholds of free space for a leader to avoid appending new log entries
- * and follower to warn if the situation is really dire.
+/* thresholds of free space for a leader to avoid appending new log entries (512 KiB)
+ * and follower to warn if the situation is really dire (16KiB)
  */
-#define RDB_NOAPPEND_FREE_SPACE (262144)
-#define RDB_CRITICAL_FREE_SPACE (16384)
+#define RDB_NOAPPEND_FREE_SPACE (1ULL << 19)
+#define RDB_CRITICAL_FREE_SPACE (1ULL << 14)
 
 /* Current rank */
 #define DF_RANK "%u"
@@ -172,6 +200,7 @@ void rdb_appendentries_handler(crt_rpc_t *rpc);
 void rdb_installsnapshot_handler(crt_rpc_t *rpc);
 void rdb_raft_process_reply(struct rdb *db, crt_rpc_t *rpc);
 void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
+int rdb_raft_trigger_compaction(struct rdb *db, bool compact_all, uint64_t *idx);
 
 /* rdb_rpc.c ******************************************************************/
 
@@ -181,7 +210,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 3
+#define DAOS_RDB_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */

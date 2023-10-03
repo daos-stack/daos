@@ -30,8 +30,7 @@ uint64_t	ts_flags;
 
 char		ts_pmem_path[PATH_MAX - 32];
 char		ts_pmem_file[PATH_MAX];
-bool		ts_zero_copy;	/* use zero-copy API for VOS */
-bool		ts_nest_iterator;
+bool                    ts_zero_copy; /* use zero-copy API for VOS */
 
 daos_unit_oid_t	*ts_uoids;	/* object shard IDs */
 
@@ -225,7 +224,7 @@ vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 static int
 objects_query(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	char		*akey = "0";
 	d_iov_t		dkey_iov;
 	d_iov_t		akey_iov;
@@ -367,7 +366,7 @@ punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
 static int
 objects_punch(struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	int		i;
 	int		rc = 0;
 	uint64_t	start = 0;
@@ -469,7 +468,7 @@ pf_fetch(struct pf_test *ts, struct pf_param *param)
 static int
 pf_aggregate(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -491,7 +490,7 @@ pf_aggregate(struct pf_test *ts, struct pf_param *param)
 static int
 pf_discard(struct pf_test *ts, struct pf_param *param)
 {
-	daos_epoch_t epoch = crt_hlc_get();
+	daos_epoch_t epoch = d_hlc_get();
 	daos_epoch_range_t	epr = {0, ++epoch};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -546,7 +545,6 @@ pf_verify(struct pf_test *ts, struct pf_param *param)
 static int
 pf_iterate(struct pf_test *pf, struct pf_param *param)
 {
-	ts_nest_iterator = param->pa_iter.nested;
 	return obj_iter_records(ts_uoids[0], param);
 }
 
@@ -602,10 +600,6 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 {
 	switch (*str) {
 	default:
-		str++;
-		break;
-	case 'n':
-		pa->pa_iter.nested = true;
 		str++;
 		break;
 	case 'V':

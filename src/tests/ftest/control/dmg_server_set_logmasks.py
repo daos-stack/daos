@@ -4,25 +4,26 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-
 from control_test_base import ControlTestBase
 
 
 class DmgServerSetLogmasksTest(ControlTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
+
     Verify the server set-logmasks function of the dmg tool.
+
     :avocado: recursive
     """
 
     def test_dmg_server_set_logmasks(self):
-        """
-        JIRA ID: DAOS-10900
+        """JIRA ID: DAOS-10900.
+
         Test Description: Test that server set-logmasks command completes successfully.
+
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
         :avocado: tags=basic,control,dmg
-        :avocado: tags=test_dmg_server_set_logmasks
+        :avocado: tags=DmgServerSetLogmasksTest,test_dmg_server_set_logmasks
         """
         result = self.dmg.server_set_logmasks()
 

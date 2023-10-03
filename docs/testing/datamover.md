@@ -6,16 +6,15 @@ Create Second container:
 
 ```sh
 # Create Second container
-$ daos container create --pool $DAOS_POOL --type POSIX --label cont2
+$ export DAOS_CONT2=cont2
+$ daos container create --type POSIX $DAOS_CONT2 $DAOS_POOL
 Successfully created container 158469db-70d2-4a5d-aac9-3c06cbfa7459
 ```
-
-export DAOS_CONT2=<cont uuid>
 
 Pool Query before copy:
 
 ```sh
-$ dmg pool query --pool $DAOS_POOL
+$ dmg pool query $DAOS_POOL
 
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
 Pool space info:
@@ -31,8 +30,6 @@ Rebuild idle, 0 objs, 0 recs
 
 Move data from POSIX directory into a DAOS container:
 
-Daos 1.2 only supports directory copy if using `daos filesystem copy`
-
 ```sh
 # moving everything under /tmp/daos_dfuse to new cont $DAOS_CONT2
 $ daos filesystem copy --src /tmp/daos_dfuse/ --dst daos://$DAOS_POOL/$DAOS_CONT2
@@ -43,7 +40,7 @@ Pool Query to confirm data got copied (Free space has reduced from last
 pool query):
 
 ```sh
-dmg pool query --pool $DAOS_POOL
+dmg pool query $DAOS_POOL
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
 Pool space info:
 - Target(VOS) count:64
@@ -70,7 +67,7 @@ Successfully copied to POSIX: /tmp/daos_dfuse/daos_cont_copy/
 Pool Query to confirm data got copied:
 
 ```sh
-$ dmg pool query --pool $DAOS_POOL
+$ dmg pool query $DAOS_POOL
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
 Pool space info:
 - Target(VOS) count:64
@@ -159,7 +156,7 @@ $ export PATH=<mpifileutils/bin/path>:$PATH
 Create Second container:
 
 ```sh
-$ daos container create --pool $DAOS_POOL --type POSIX
+$ daos container create --type POSIX $DAOS_POOL
 Successfully created container caf0135c-def8-45a5-bac3-d0b969e67c8b
 
 $ export DAOS_CONT2=<cont uuid>
@@ -209,7 +206,7 @@ $ mpirun -hostfile /path/to/hostfile -np 16 /path/to/mpifileutils/install/bin/dc
 Pool Query to verify data was copied (free space should reduce):
 
 ```sh
-$ dmg pool query --pool $DAOS_POOL
+$ dmg pool query $DAOS_POOL
 
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
 Pool space info:
@@ -272,7 +269,7 @@ $ mpirun -hostfile /path/to/hostfile -np 16 dcp --bufsize 64MB --chunksize 128MB
 Pool Query to very data was copied:
 
 ```
-$ dmg pool query --pool $DAOS_POOL
+$ dmg pool query $DAOS_POOL
 
 Pool b22220ea-740d-46bc-84ad-35ed3a28aa31, ntarget=64, disabled=0, leader=1, version=1
 Pool space info:
@@ -303,8 +300,9 @@ drwxr-xr-x 1 standan standan 64 Apr 30 01:26 daos_dfuse
 ```
 
 
-* *For more details on datamover reference:
-<https://github.com/hpc/mpifileutils/blob/master/DAOS-Support.md>
+For more details on datamover, reference
+[DAOS Support](https://github.com/hpc/mpifileutils/blob/main/DAOS-Support.md)
+on the mpifileutils website.
 
 
 ## Clean Up
@@ -329,7 +327,7 @@ List containers to be destroyed:
 
 ```sh
 # list containers
-$ daos pool list-containers --pool $DAOS_POOL  # sample output
+$ daos pool list-containers $DAOS_POOL  # sample output
 
 # sample output
 cd46cf6e-f886-4682-8077-e3cbcd09b43a
@@ -340,10 +338,10 @@ Destroy Containers:
 
 ```sh
 # destroy container1
-$ daos container destroy --pool $DAOS_POOL --cont $DAOS_CONT
+$ daos container destroy $DAOS_POOL $DAOS_CONT
 
 # destroy container2
-$ daos container destroy --pool $DAOS_POOL --cont $DAOS_CONT2
+$ daos container destroy $DAOS_POOL $DAOS_CONT2
 ```
 
 List Pools to be destroyed:
@@ -363,7 +361,7 @@ Destroy Pool:
 
 ```sh
 # destroy pool
-$ dmg pool destroy --pool $DAOS_POOL
+$ dmg pool destroy $DAOS_POOL
 ```
 
 

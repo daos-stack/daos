@@ -1,6 +1,6 @@
 hosts:
-  test_servers: 3
-  test_clients: 5
+  test_servers: 2
+  test_clients: 2
 timeout: 240
 server_config:
   name: daos_server
@@ -14,14 +14,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -29,17 +22,9 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   size: 95%
-  control_method: dmg
   properties: ec_cell_sz:128KiB
 container:
   type: POSIX
@@ -82,10 +67,10 @@ ior_dfuse_ec_16p2gx:
   dfs_chunk: 2115360 ## Multiple of 47008 and at least 128KiB * 16
   transfer_size: 47008
 dfuse:
-  mount_dir: "/tmp/daos_dfuse"
   disable_caching: True
 client:
   env_vars:
     - D_LOG_MASK=INFO
 mpirun:
-  bind_to: socket
+  bind_to: hwthread
+  map_by: socket

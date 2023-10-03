@@ -37,7 +37,7 @@ func TestTelemetry_GetGauge(t *testing.T) {
 		expErr     error
 	}{
 		"non-handle ctx": {
-			ctx:        context.TODO(),
+			ctx:        test.Context(t),
 			metricName: gaugeName,
 			expErr:     errors.New("no handle"),
 		},
@@ -95,7 +95,7 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 		expErr     error
 	}{
 		"non-handle ctx": {
-			ctx:        context.TODO(),
+			ctx:        test.Context(t),
 			metricName: gaugeName,
 			expErr:     errors.New("no handle"),
 		},

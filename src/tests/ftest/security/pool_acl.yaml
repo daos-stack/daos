@@ -15,18 +15,20 @@ server_config:
           class: ram
           scm_mount: /mnt/daos
           scm_size: 4
-pool:
-  control_method: dmg
+  system_ram_reserved: 1
 # Uncomment following to force the use of certificates
 # regardless of the launch.py --insecure setting.
+# pool:
 #   transport_config:
 #     allow_insecure: False
-#agent_config:
+# agent_config:
 #   transport_config:
 #     allow_insecure: False
-#dmg:
+# dmg:
 #   transport_config:
 #     allow_insecure: False
+container:
+  control_method: daos
 pool_acl:
   scm_size: 134217728
   user_prefix: daos_ci
@@ -35,37 +37,37 @@ pool_acl:
   test_users: !mux
     user_type1:
       user:
-         - owner
+        - owner
     user_type2:
       user:
-         - user
+        - user
     user_type3:
       user:
-         - ownergroup
+        - ownergroup
     user_type4:
       user:
-         - group
+        - group
     user_type5:
       user:
-         - everyone
+        - everyone
   permissions: !mux
     permission_none:
       name:
-         - none
-         - deny   #read
-         - deny   #write
+        - none
+        - deny   # read
+        - deny   # write
     permission_r:
       name:
-         - r
-         - pass
-         - deny
+        - r
+        - pass
+        - deny
     permission_w:
       name:
-         - w
-         - deny
-         - deny
+        - w
+        - deny
+        - deny
     permission_rw:
       name:
-         - rw
-         - pass
-         - pass
+        - rw
+        - pass
+        - pass

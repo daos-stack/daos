@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -74,10 +74,11 @@ struct dss_thread_local_storage {
 };
 
 enum dss_module_tag {
-	DAOS_SYS_TAG	= 1 << 0, /** only run on system xstream */
-	DAOS_TGT_TAG	= 1 << 1, /** only run on target xstream */
-	DAOS_OFF_TAG	= 1 << 2, /** only run on offload/helper xstream */
-	DAOS_SERVER_TAG	= 0xff,	  /** run on all xstream */
+	DAOS_SYS_TAG    = 1 << 0, /** only run on system xstream */
+	DAOS_TGT_TAG    = 1 << 1, /** only run on target xstream */
+	DAOS_RDB_TAG    = 1 << 2, /** only run on rdb xstream */
+	DAOS_OFF_TAG    = 1 << 3, /** only run on offload/helper xstream */
+	DAOS_SERVER_TAG = 0xff,   /** run on all xstream */
 };
 
 /* The module key descriptor for each xstream */
@@ -88,10 +89,10 @@ struct dss_module_key {
 	/* The position inside the dss_module_keys */
 	int dmk_index;
 	/* init keys for context */
-	void  *(*dmk_init)(int xs_id, int tgt_id);
+	void *(*dmk_init)(int tags, int xs_id, int tgt_id);
 
 	/* fini keys for context */
-	void  (*dmk_fini)(void *data);
+	void (*dmk_fini)(int tags, void *data);
 };
 
 extern pthread_key_t dss_tls_key;
@@ -191,11 +192,8 @@ dss_current_xstream(void)
  * finish entering shutdown mode (i.e., any dss_srv_set_shutting_down call
  * won't return).
  */
-static inline bool
-dss_srv_shutting_down(void)
-{
-	return dss_get_module_info()->dmi_srv_shutting_down;
-}
+bool
+dss_srv_shutting_down(void);
 
 /**
  * Module facility feature bits
@@ -516,6 +514,7 @@ int dss_ult_execute(int (*func)(void *), void *arg, void (*user_cb)(void *),
 		    void *cb_args, int xs_type, int tgt_id, size_t stack_size);
 int dss_ult_create_all(void (*func)(void *), void *arg, bool main);
 int __attribute__((weak)) dss_offload_exec(int (*func)(void *), void *arg);
+int __attribute__((weak)) dss_main_exec(void (*func)(void *), void *arg);
 
 /*
  * If server wants to create ULTs periodically, it should call this special
@@ -662,13 +661,13 @@ int dss_rpc_reply(crt_rpc_t *rpc, unsigned int fail_loc);
 
 enum {
 	/** Min Value */
-	DSS_OFFLOAD_MIN		= -1,
+	DSS_OFFLOAD_MIN = -1,
 	/** Does computation on same ULT */
-	DSS_OFFLOAD_ULT		= 1,
-	/** Offload to an accelarator */
-	DSS_OFFLOAD_ACC		= 2,
+	DSS_OFFLOAD_ULT = 1,
+	/** Offload to an accelerator */
+	DSS_OFFLOAD_ACC = 2,
 	/** Max value */
-	DSS_OFFLOAD_MAX		= 7
+	DSS_OFFLOAD_MAX = 7
 };
 
 struct dss_acc_task {
@@ -762,16 +761,25 @@ struct ds_migrate_status {
 };
 
 int
-ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver,
+ds_migrate_query_status(uuid_t pool_uuid, uint32_t ver, uint32_t generation,
 			struct ds_migrate_status *dms);
 int
-ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
-		  uuid_t cont_hdl_uuid, int tgt_id, uint32_t version,
-		  uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
-		  daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
-		  unsigned int migrate_opc);
+ds_object_migrate_send(struct ds_pool *pool, uuid_t pool_hdl_uuid, uuid_t cont_uuid,
+		       uuid_t cont_hdl_uuid, int tgt_id, uint32_t version, unsigned int generation,
+		       uint64_t max_eph, daos_unit_oid_t *oids, daos_epoch_t *ephs,
+		       daos_epoch_t *punched_ephs, unsigned int *shards, int cnt,
+		       uint32_t new_gl_ver, unsigned int migrate_opc);
+int
+ds_migrate_object(struct ds_pool *pool, uuid_t po_hdl, uuid_t co_hdl, uuid_t co_uuid,
+		  uint32_t version, uint32_t generation, uint64_t max_eph, uint32_t opc,
+		  daos_unit_oid_t *oids, daos_epoch_t *epochs, daos_epoch_t *punched_epochs,
+		  unsigned int *shards, uint32_t count, unsigned int tgt_idx, uint32_t new_gl_ver);
 void
-ds_migrate_stop(struct ds_pool *pool, uint32_t ver);
+ds_migrate_stop(struct ds_pool *pool, uint32_t ver, unsigned int generation);
+
+int
+obj_layout_diff(struct pl_map *map, daos_unit_oid_t oid, uint32_t new_ver, uint32_t old_ver,
+		struct daos_obj_md *md, uint32_t *tgts, uint32_t *shards, int array_size);
 
 /** Server init state (see server_init) */
 enum dss_init_state {
@@ -788,45 +796,15 @@ enum dss_media_error_type {
 
 void dss_init_state_set(enum dss_init_state state);
 
-/* Notify control-plane of a bio error. */
-int
-ds_notify_bio_error(int media_err_type, int tgt_id);
+/** Call module setup from drpc setup call handler. */
+int dss_module_setup_all(void);
+
+/** Notify control-plane of a bio error. */
+int ds_notify_bio_error(int media_err_type, int tgt_id);
 
 int ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks);
 int ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 			 d_rank_list_t **svc_ranks);
-
-struct sys_db;
-typedef int (*sys_db_trav_cb_t)(struct sys_db *db, char *table, d_iov_t *key,
-				void *args);
-
-#define SYS_DB_NAME_SZ		32
-
-/** system database is a simple local KV store */
-struct sys_db {
-	char	 sd_name[SYS_DB_NAME_SZ];
-	/** look up the provided key in \a table and return its value */
-	int	(*sd_fetch)(struct sys_db *db, char *table,
-			    d_iov_t *key, d_iov_t *val);
-	/** update or insert a KV pair to \a table */
-	int	(*sd_upsert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_insert)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** reserved */
-	int	(*sd_update)(struct sys_db *db, char *table,
-			     d_iov_t *key, d_iov_t *val);
-	/** delete provided key and its value from the \a table */
-	int	(*sd_delete)(struct sys_db *db, char *table, d_iov_t *key);
-	/** traverse all keys in the \a table */
-	int	(*sd_traverse)(struct sys_db *db, char *table,
-			       sys_db_trav_cb_t cb, void *args);
-	int	(*sd_tx_begin)(struct sys_db *db);
-	int	(*sd_tx_end)(struct sys_db *db, int rc);
-	void	(*sd_lock)(struct sys_db *db);
-	void	(*sd_unlock)(struct sys_db *db);
-};
 
 /** Flags for dss_drpc_call */
 enum dss_drpc_call_flag {

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -84,7 +84,9 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 	}
 
 	rc = ds_pool_svc_load(&tx, uuid, &root, &global_version, &map_buf, &clue.psc_map_version);
-	if (rc == DER_UNINIT) {
+	if (rc == 0) {
+		D_FREE(map_buf);
+	} else if (rc == DER_UNINIT) {
 		clue.psc_map_version = 0;
 		rc = 0;
 	} else if (rc != 0) {
@@ -92,7 +94,6 @@ pool_glance(uuid_t uuid, char *path, struct ds_pool_clue *clue_out)
 	}
 
 	memcpy(clue_out->pc_svc_clue, &clue, sizeof(clue));
-	D_FREE(map_buf);
 out_label:
 	if (rc != 0) {
 		D_FREE(clue_out->pc_label);
@@ -143,6 +144,52 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 		goto out;
 	}
 
+	/* "pc_tgt_nr < 0" means failed to load some vos target. */
+	clue->pc_tgt_nr = -1;
+
+	if (dss_self_rank() == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_CHK_FAIL_REPORT_POOL1))
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	D_ALLOC_ARRAY(clue->pc_tgt_status, dss_tgt_nr);
+	if (clue->pc_tgt_status == NULL) {
+		D_ERROR(DF_UUIDF": failed to allocate service clue for shards status\n",
+			DP_UUID(uuid));
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	for (i = 0; i < dss_tgt_nr; i++) {
+		rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &i, &file);
+		if (file == NULL) {
+			D_ERROR(DF_UUIDF": failed to allocate file name for shards status %d\n",
+				DP_UUID(uuid), i);
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+
+		rc = stat(file, &st);
+		D_FREE(file);
+		if (rc != 0) {
+			if (errno == ENOENT) {
+				clue->pc_tgt_status[i] = DS_POOL_TGT_NONEXIST;
+			}  else {
+				rc = daos_errno2der(errno);
+				D_ERROR(DF_UUIDF": failed to stat target %d: %d\n",
+					DP_UUID(uuid), i, rc);
+				D_GOTO(out, rc);
+			}
+		} else {
+			if (st.st_size > 0)
+				clue->pc_tgt_status[i] = DS_POOL_TGT_NORMAL;
+			else
+				clue->pc_tgt_status[i] = DS_POOL_TGT_EMPTY;
+		}
+	}
+
+	/* Set pc_tgt_nr as the right value if all vos targets are loaded successfully. */
+	clue->pc_tgt_nr = dss_tgt_nr;
+
+	if (dss_self_rank() == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_CHK_FAIL_REPORT_POOL2))
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	path = ds_pool_svc_rdb_path(uuid);
 	if (path == NULL) {
 		D_ERROR(DF_UUID": failed to allocate RDB path\n", DP_UUID(uuid));
@@ -162,41 +209,6 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 		}
 		goto out_path;
 	}
-
-	D_ALLOC_ARRAY(clue->pc_tgt_status, dss_tgt_nr);
-	if (clue->pc_tgt_status == NULL) {
-		D_ERROR(DF_UUIDF": failed to allocate service clue for shards status\n",
-			DP_UUID(uuid));
-		D_GOTO(out_path, rc = -DER_NOMEM);
-	}
-
-	for (i = 0; i < dss_tgt_nr; i++) {
-		rc = ds_mgmt_tgt_file(uuid, VOS_FILE, &i, &file);
-		if (file == NULL) {
-			D_ERROR(DF_UUIDF": failed to allocate file name for shards status %d\n",
-				DP_UUID(uuid), i);
-			D_GOTO(out_path, rc = -DER_NOMEM);
-		}
-
-		rc = stat(file, &st);
-		D_FREE(file);
-		if (rc != 0) {
-			if (errno == ENOENT) {
-				clue->pc_tgt_status[i] = DS_POOL_TGT_NONEXIST;
-			}  else {
-				rc = daos_errno2der(errno);
-				D_ERROR(DF_UUIDF": failed to stat target %d: %d\n",
-					DP_UUID(uuid), i, rc);
-				D_GOTO(out_path, rc);
-			}
-		} else {
-			if (st.st_size > 0)
-				clue->pc_tgt_status[i] = DS_POOL_TGT_NORMAL;
-			else
-				clue->pc_tgt_status[i] = DS_POOL_TGT_EMPTY;
-		}
-	}
-	clue->pc_tgt_nr = dss_tgt_nr;
 
 	D_ALLOC(clue->pc_svc_clue, sizeof(*clue->pc_svc_clue));
 	if (clue->pc_svc_clue == NULL) {
@@ -219,7 +231,8 @@ out:
 		rc = 1;
 	} else {
 		D_ASSERT(rc <= 0);
-		D_FREE(clue->pc_tgt_status);
+		if (rc < 0 && clue->pc_tgt_nr < 0)
+			D_FREE(clue->pc_tgt_status);
 	}
 
 	clue->pc_rc = rc;
@@ -300,10 +313,12 @@ ds_pool_clues_fini(struct ds_pool_clues *clues)
 {
 	int i;
 
-	for (i = 0; i < clues->pcs_len; i++)
-		ds_pool_clue_fini(&clues->pcs_array[i]);
-	if (clues->pcs_array != NULL)
+	if (clues != NULL && clues->pcs_array != NULL) {
+		for (i = 0; i < clues->pcs_len; i++)
+			ds_pool_clue_fini(&clues->pcs_array[i]);
+
 		D_FREE(clues->pcs_array);
+	}
 }
 
 /**

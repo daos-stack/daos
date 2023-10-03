@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -45,6 +45,8 @@ message JoinReq {
 }
 
 message JoinResp {
+	reserved 5;
+	reserved "localJoin";
 	int32 status = 1;	// DAOS error code
 	uint32 rank = 2;	// Server rank assigned.
 	enum State {
@@ -54,16 +56,18 @@ message JoinResp {
 	}
 	State state = 3;	// Server state in the system map.
 	string faultDomain = 4; // Fault domain for the instance
-	bool localJoin = 5;	// Join processed locally.
+	uint32 map_version = 6; // Join processed in this version of the system map.
 }
 
 message LeaderQueryReq {
 	string sys = 1;		// System name.
+	string hosts = 2;	// hostset to query
 }
 
 message LeaderQueryResp {
-	string currentLeader = 1;
+	string current_leader = 1;
 	repeated string replicas = 2;
+	repeated string DownReplicas = 3;
 }
 
 message GetAttachInfoReq {
@@ -80,6 +84,7 @@ message ClientNetHint {
 	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
 					// I/O Engine network interface
 	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+	repeated string env_vars = 8;	// Client-side environment variables to set
 }
 
 message GetAttachInfoResp {
@@ -93,6 +98,8 @@ message GetAttachInfoResp {
 					// libdaos client to aid in CaRT initialization.
 	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
 	ClientNetHint client_net_hint = 4;
+	uint64 data_version = 5;	// Version of the system database.
+	string sys = 6;			// Name of the DAOS system
 }
 
 message PrepShutdownReq {
@@ -109,6 +116,7 @@ message PingRankReq {
 
 message SetRankReq {
 	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
+	uint32 map_version = 2;	// System map version in which the rank joined the system.
 }
 
 // SetRankResp is identical to DaosResp.

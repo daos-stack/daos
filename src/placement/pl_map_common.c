@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -27,26 +27,30 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 		f_new->fs_tgt_id, f_new->fs_fseq, f_new->fs_status);
 
 	/* All failed shards are sorted by fseq in ascending order */
-	d_list_for_each_prev(tmp, remap_list) {
+	d_list_for_each(tmp, remap_list) {
 		f_shard = d_list_entry(tmp, struct failed_shard, fs_list);
 		/*
 		* Since we can only rebuild one target at a time, the
 		* target fseq should be assigned uniquely, even if all
 		* the targets of the same domain failed at same time.
 		*/
-		D_DEBUG(DB_PL, "fnew: %u, fshard: %u", f_new->fs_shard_idx,
-			f_shard->fs_shard_idx);
+		D_DEBUG(DB_PL, "fnew: %u/%u, fshard: %u/%u", f_new->fs_shard_idx,
+			f_new->fs_fseq, f_shard->fs_shard_idx, f_shard->fs_fseq);
 
-		D_ASSERTF(f_new->fs_fseq != f_shard->fs_fseq,
-			  "same fseq %u!\n", f_new->fs_fseq);
+		D_ASSERTF(f_new->fs_shard_idx != f_shard->fs_shard_idx,
+			  "same shard_idx %u!\n", f_new->fs_shard_idx);
 
-		if (f_new->fs_fseq < f_shard->fs_fseq)
+		if (f_new->fs_fseq > f_shard->fs_fseq)
 			continue;
 
-		d_list_add(&f_new->fs_list, tmp);
+		if (f_new->fs_fseq == f_shard->fs_fseq &&
+		    f_new->fs_shard_idx > f_shard->fs_shard_idx)
+			continue;
+
+		d_list_add_tail(&f_new->fs_list, tmp);
 		return;
 	}
-	d_list_add(&f_new->fs_list, remap_list);
+	d_list_add_tail(&f_new->fs_list, remap_list);
 }
 
 /**
@@ -233,51 +237,31 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 }
 
 bool
-need_remap_target(struct pool_target *tgt, uint32_t allow_status, uint32_t allow_version)
+need_remap_comp(struct pool_component *comp, uint32_t allow_status)
 {
-	if (!pool_target_avail(tgt, allow_status))
-		return true;
-
-	if (tgt->ta_comp.co_status == PO_COMP_ST_UPIN || allow_version == (uint32_t)(-1))
-		return false;
-
-	if (tgt->ta_comp.co_status == PO_COMP_ST_DRAIN) {
-		/* If Drain happenes later, let's ignore it for current rebuild/reintegration */
-		if (tgt->ta_comp.co_fseq > allow_version)
-			return false;
-		else
-			return true;
-	}
-
-	/* For other cases, let's ignore all future pool map changes for current rebuild. */
-	if (allow_version != 0 && tgt->ta_comp.co_in_ver > allow_version)
-		return true;
-
-	return false;
+	return !(comp->co_status & allow_status);
 }
 
-void
+/**
+ * return 1 means the shard is resolved, i.e. either successfully remapped or
+ * no available spare target.
+ * return 0 means the spare target for this shard is not available, try next
+ * spare target.
+ */
+int
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
-		bool spare_avail, d_list_t **current, d_list_t *remap_list,
-		uint32_t allow_status, uint32_t allow_version,
-		struct failed_shard *f_shard, struct pl_obj_shard *l_shard,
-		bool *is_extending)
+		       bool spare_avail, d_list_t *remap_list, uint32_t allow_status,
+		       struct failed_shard *f_shard, struct pl_obj_shard *l_shard,
+		       bool *is_extending)
 {
-	struct failed_shard *f_tmp;
-
 	if (!spare_avail)
 		goto next_fail;
 
-	if (is_extending != NULL &&
-	    (spare_tgt->ta_comp.co_status == PO_COMP_ST_UP ||
-	     spare_tgt->ta_comp.co_status == PO_COMP_ST_DRAIN))
+	if (is_extending != NULL && pool_target_is_up_or_drain(spare_tgt))
 		*is_extending = true;
 
 	/* The selected spare target is down as well */
-	if (need_remap_target(spare_tgt, allow_status, allow_version)) {
-		D_ASSERTF(spare_tgt->ta_comp.co_fseq !=
-			  f_shard->fs_fseq, "same fseq %u!\n",
-			  f_shard->fs_fseq);
+	if (need_remap_comp(&spare_tgt->ta_comp, allow_status)) {
 		D_DEBUG(DB_PL, "Spare target is also unavailable " DF_TARGET
 			".\n", DP_TARGET(spare_tgt));
 
@@ -287,8 +271,7 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 */
 		if (spare_tgt->ta_comp.co_fseq > md->omd_ver) {
 			D_DEBUG(DB_PL, DF_OID", "DF_TARGET", ver: %d\n",
-				DP_OID(md->omd_id),
-				DP_TARGET(spare_tgt),
+				DP_OID(md->omd_id), DP_TARGET(spare_tgt),
 				md->omd_ver);
 			spare_avail = false;
 			goto next_fail;
@@ -299,12 +282,11 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		 * one, then it can't be a valid spare, let's skip it
 		 * and try next spare in the placement.
 		 */
-		if (spare_tgt->ta_comp.co_fseq < f_shard->fs_fseq) {
-			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u"
-				" shard f_seq %u\n", spare_tgt->ta_comp.co_id,
-				spare_tgt->ta_comp.co_fseq,
+		if (spare_tgt->ta_comp.co_fseq <= f_shard->fs_fseq) {
+			D_DEBUG(DB_PL, "spare tgt %u co fs_seq %u shard f_seq %u\n",
+				spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_fseq,
 				f_shard->fs_fseq);
-			return; /* try next spare */
+			return 0; /* try next spare */
 		}
 		/*
 		 * If both failed target and spare target are down, then
@@ -322,26 +304,16 @@ determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		f_shard->fs_fseq = spare_tgt->ta_comp.co_fseq;
 		f_shard->fs_status = spare_tgt->ta_comp.co_status;
 
-		(*current) = (*current)->next;
 		d_list_del_init(&f_shard->fs_list);
-		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to "
-			       "remamp_list\n", DP_FAILEDSHARD(*f_shard));
 		remap_add_one(remap_list, f_shard);
 
-		/* Continue with the failed shard has minimal fseq */
-		if ((*current) == remap_list) {
-			(*current) = &f_shard->fs_list;
-		} else {
-			f_tmp = d_list_entry((*current),
-					     struct failed_shard,
-					     fs_list);
-			if (f_shard->fs_fseq < f_tmp->fs_fseq)
-				(*current) = &f_shard->fs_list;
-		}
+		D_DEBUG(DB_PL, "failed shard ("DF_FAILEDSHARD") added to remamp_list\n",
+			DP_FAILEDSHARD(*f_shard));
+
 		D_DEBUG(DB_PL, "spare_tgt %u status %u f_seq %u try next.\n",
 			spare_tgt->ta_comp.co_id, spare_tgt->ta_comp.co_status,
 			spare_tgt->ta_comp.co_fseq);
-		return; /* try next spare */
+		return 0; /* try next spare */
 	}
 
 next_fail:
@@ -355,13 +327,15 @@ next_fail:
 		 * skip this shard.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
+		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    pool_target_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
 	} else {
 		l_shard->po_shard = -1;
 		l_shard->po_target = -1;
 	}
-	(*current) = (*current)->next;
+
+	return 1; /* try next shard */
 }
 
 #define STACK_TGTS_SIZE	32
@@ -378,36 +352,12 @@ grp_map_is_set(uint32_t *grp_map, uint32_t grp_map_size, uint32_t tgt_id)
 	return false;
 }
 
-uint32_t*
-grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
-{
-	uint32_t *new_grp_map;
-	uint32_t new_grp_size = *grp_map_size + STACK_TGTS_SIZE;
-	int	 i;
-
-	if (*grp_map_size > STACK_TGTS_SIZE)
-		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
-				new_grp_size);
-	else
-		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
-
-	for (i = *grp_map_size; i < new_grp_size; i++)
-		grp_map[i] = -1;
-
-	*grp_map_size = new_grp_size;
-	return new_grp_map;
-}
-
 int
 pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 {
 	struct pl_obj_shard	*new_shards;
 	struct failed_shard	*f_shard;
 	struct failed_shard	*tmp;
-	uint32_t                *grp_map = NULL;
-	uint32_t		 grp_map_idx = 0;
-	uint32_t		 grp_map_size;
-	uint32_t		 grp_map_array[STACK_TGTS_SIZE] = {-1};
 	/* holds number of "extra" shards for the group in the new_shards */
 	uint32_t                *grp_count = NULL;
 	uint32_t		 grp_cnt_array[STACK_TGTS_SIZE] = {0};
@@ -423,8 +373,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	if (d_list_empty(extended_list))
 		goto out;
 
-	grp_map = grp_map_array;
-	grp_map_size = STACK_TGTS_SIZE;
 	if (layout->ol_grp_nr <= STACK_TGTS_SIZE) {
 		grp_count = grp_cnt_array;
 	} else {
@@ -438,21 +386,6 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 
 	/* Eliminate duplicate targets and calculate the grp number. */
 	d_list_for_each_entry_safe(f_shard, tmp, extended_list, fs_list) {
-		if (grp_map_is_set(grp_map, grp_map_idx, f_shard->fs_tgt_id)) {
-			d_list_del_init(&f_shard->fs_list);
-			D_FREE(f_shard);
-			continue;
-		}
-
-		if (grp_map_idx >= grp_map_size) {
-			uint32_t *new_grp_map;
-
-			new_grp_map = grp_map_extend(grp_map, &grp_map_size);
-			if (new_grp_map == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			grp_map = new_grp_map;
-		}
-		grp_map[grp_map_idx++] = f_shard->fs_tgt_id;
 		grp = f_shard->fs_shard_idx / layout->ol_grp_size;
 		grp_count[grp]++;
 		if (max_fail_grp < grp_count[grp])
@@ -502,30 +435,8 @@ pl_map_extend(struct pl_obj_layout *layout, d_list_t *extended_list)
 	layout->ol_shards = new_shards;
 
 out:
-	if (grp_map != grp_map_array && grp_map != NULL)
-		D_FREE(grp_map);
 	if (grp_count != grp_cnt_array && grp_count != NULL)
 		D_FREE(grp_count);
 	return rc;
 }
 
-bool
-is_pool_adding(struct pool_domain *dom)
-{
-	uint32_t child_nr;
-
-	while (dom->do_children &&
-	       dom->do_comp.co_status != PO_COMP_ST_NEW) {
-		child_nr = dom->do_child_nr;
-		dom = &dom->do_children[child_nr - 1];
-	}
-
-	if (dom->do_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	child_nr = dom->do_target_nr;
-	if (dom->do_targets[child_nr - 1].ta_comp.co_status == PO_COMP_ST_NEW)
-		return true;
-
-	return false;
-}

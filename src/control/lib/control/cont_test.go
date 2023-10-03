@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/uuid"
@@ -127,7 +126,7 @@ func TestControl_ContSetOwner(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotErr := ContSetOwner(ctx, mi, tc.req)

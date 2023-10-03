@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -94,6 +94,7 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 	struct crt_grp_gdata	*grp_gdata;
 	struct crt_grp_priv	*grp_priv;
 	struct crt_corpc_hdr	*co_hdr;
+	int			 src_timeout;
 	bool			 grp_ref_taken = false;
 	int			 rc = 0;
 
@@ -120,6 +121,12 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 			D_GOTO(out, rc = -DER_GRPVER);
 		}
 	}
+
+	/* Inherit a timeout from a source */
+	src_timeout = rpc_priv->crp_req_hdr.cch_src_timeout;
+
+	if (src_timeout != 0)
+		rpc_priv->crp_timeout_sec = src_timeout;
 
 	rc = crt_corpc_info_init(rpc_priv, grp_priv, grp_ref_taken,
 				 co_hdr->coh_filter_ranks,
@@ -237,13 +244,12 @@ crt_corpc_free_chained_bulk(crt_bulk_t bulk_hdl)
 		D_GOTO(out, rc);
 	}
 
-	for (i = 0; i < seg_num; i++)
-		D_FREE(iovs[i].iov_buf);
-
 	rc = crt_bulk_free(bulk_hdl);
 	if (rc != 0)
 		D_ERROR("crt_bulk_free failed: "DF_RC"\n", DP_RC(rc));
 
+	for (i = 0; i < seg_num; i++)
+		D_FREE(iovs[i].iov_buf);
 out:
 	D_FREE(iovs);
 	return rc;
@@ -379,12 +385,7 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 	}
 
 	D_ASSERT(rpc_priv != NULL);
-	rc = crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
-	if (rc != 0) {
-		D_ERROR("crt_rpc_priv_init(opc: %#x) failed: "DF_RC"\n", opc,
-			DP_RC(rc));
-		D_GOTO(out, rc);
-	}
+	crt_rpc_priv_init(rpc_priv, crt_ctx, false /* srv_flag */);
 
 	rpc_priv->crp_grp_priv = grp_priv;
 
@@ -544,7 +545,8 @@ crt_corpc_complete(struct crt_rpc_priv *rpc_priv)
 	myrank = co_info->co_grp_priv->gp_self;
 	am_root = (myrank == co_info->co_root);
 	if (am_root) {
-		crt_rpc_complete(rpc_priv, co_info->co_rc);
+		crt_rpc_lock(rpc_priv);
+		crt_rpc_complete_and_unlock(rpc_priv, co_info->co_rc);
 	} else {
 		if (co_info->co_rc != 0)
 			crt_corpc_fail_parent_rpc(rpc_priv, co_info->co_rc);
@@ -679,7 +681,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 				D_ERROR("co_ops->co_aggregate(opc: %#x) "
 					"failed: "DF_RC"\n",
 					child_req->cr_opc, DP_RC(rc));
-				rc = 0;
+				if (co_info->co_rc == 0)
+					co_info->co_rc = rc;
 			}
 			co_info->co_child_ack_num++;
 			D_DEBUG(DB_NET, "parent rpc %p, child rpc %p, "
@@ -717,7 +720,8 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 					D_ERROR("co_ops->co_aggregate(opc: %#x)"
 						" failed: "DF_RC"\n",
 						child_req->cr_opc, DP_RC(rc));
-					rc = 0;
+					if (co_info->co_rc == 0)
+						co_info->co_rc = rc;
 				}
 			}
 		}
@@ -876,6 +880,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		child_rpc_priv = container_of(child_rpc, struct crt_rpc_priv,
 					      crp_pub);
 
+		child_rpc_priv->crp_timeout_sec = rpc_priv->crp_timeout_sec;
 		corpc_add_child_rpc(rpc_priv, child_rpc_priv);
 
 		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;

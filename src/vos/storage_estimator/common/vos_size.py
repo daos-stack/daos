@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2019-2021 Intel Corporation.
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -11,7 +10,7 @@ import math
 def convert(stat):
     """Convert byte value to pretty string"""
     size = 1024 * 1024 * 1024 * 1024 * 1024
-    for mag in ['P', 'T', 'G', 'M', 'K']:
+    for mag in ['PiB', 'TiB', 'GiB', 'MiB', 'KiB', '  B']:
         if stat > size:
             return "%10.2f %s" % (float(stat) / size, mag)
         size = size / 1024
@@ -267,19 +266,22 @@ class MetaOverhead():
 
     def get_dynamic(self, key, num_values):
         """Handle dynamic tree ordering.  Retrieve number of nodes and size"""
+        if num_values == 0:
+            return 0, 0, 0
         order = self.meta["trees"][key]["order"]
         max_dyn = 0
-
         if self.meta["trees"][key]["num_dynamic"] != 0:
             max_dyn = self.meta["trees"][key]["dynamic"][-1]["order"]
         if num_values > max_dyn:
             leaf_node_size = self.meta["trees"][key]["leaf_node_size"]
             int_node_size = self.meta["trees"][key]["int_node_size"]
-            tree_nodes = (num_values * 2 + order - 1) // order
+            mult = 1
+            if num_values > order:
+                mult = 2  # assume 50% capacity
+            tree_nodes = (num_values * mult + order - 1) // order
             return leaf_node_size, int_node_size, tree_nodes
 
-        if self.meta["trees"][key]["num_dynamic"] == 0:
-            return 0, 0, 0
+        assert self.meta["trees"][key]["num_dynamic"] != 0
 
         for item in self.meta["trees"][key]["dynamic"]:
             if item["order"] >= num_values:
@@ -302,10 +304,13 @@ class MetaOverhead():
             overhead = tree_nodes * leaf_size + rec_overhead
         if key in ("akey", "single_value", "array"):
             # key refers to child tree
+            parent = "akey"
+            if key == "akey":
+                parent = "dkey"
             if tree["overhead"] == "user":
                 tree_stats.add_user_meta(num_values * tree["size"])
             else:
-                tree_stats.add_meta(key, num_values * tree["size"])
+                tree_stats.add_meta(parent, num_values * tree["size"])
             overhead += self.csum_size * num_values
         tree_stats.add_meta(key, overhead)
         if key in ("array", "single_value"):

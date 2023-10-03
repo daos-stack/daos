@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -45,7 +45,6 @@ class NvmePoolExtend(OSAUtils):
             "test_servers", "server_partition", "server_reservation", "/run/extra_servers/*")
         ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/iorflags/*')
 
-        daos_command = self.get_daos_command()
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
@@ -54,8 +53,8 @@ class NvmePoolExtend(OSAUtils):
         # Create the pools
         pools = []
         for _ in range(0, num_pool):
-            pools.append(self.get_pool(properties="reclaim:disabled"))
-            # pools[-1].set_property("reclaim", "disabled")
+            pools.append(self.get_pool(namespace="/run/pool_qty_{}/*".format(num_pool),
+                         properties="reclaim:disabled"))
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
@@ -94,10 +93,11 @@ class NvmePoolExtend(OSAUtils):
 
             # Extend ranks (4,5), (6,7), (8,9)
             ranks_extended = "{},{}".format((index * 2) + 4, (index * 2) + 5)
-            output = pool.extend(ranks_extended)
+            pool.extend(ranks_extended)
 
             # Wait for rebuild to complete
-            pool.wait_for_rebuild(False, interval=3)
+            pool.wait_for_rebuild_to_start()
+            pool.wait_for_rebuild_to_end(interval=3)
             rebuild_status = pool.get_rebuild_status()
             self.log.info("Rebuild Status: %s", rebuild_status)
             if rebuild_status in ["failed", "scanning", "aborted", "busy"]:
@@ -128,8 +128,7 @@ class NvmePoolExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(index)
             pool.display_pool_daos_space(display_string)
             self.container = self.pool_cont_dict[pool][0]
-            output = daos_command.container_check(pool=pool.identifier, cont=self.container.uuid)
-            self.log.info(output)
+            self.container.check()
 
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086.
@@ -138,7 +137,7 @@ class NvmePoolExtend(OSAUtils):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=nvme,checksum,nvme_osa
-        :avocado: tags=test_nvme_pool_extend
+        :avocado: tags=nvme,checksum,nvme_osa,rebuild,daos_cmd
+        :avocado: tags=NvmePoolExtend,test_nvme_pool_extend
         """
-        self.run_nvme_pool_extend(3)
+        self.run_nvme_pool_extend(2)

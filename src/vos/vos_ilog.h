@@ -94,6 +94,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
  * \param	intent[IN]	Intent of the operation
  * \param	ilog[IN]	The incarnation log root
  * \param	epoch[IN]	Epoch to fetch
+ * \param	has_cond[IN]	Whether for conditional operation or not
  * \param	bound[IN]	Epoch uncertainty bound
  * \param	punched[IN]	Punched epoch.  Ignored if parent is passed.
  * \param	parent[IN]	parent incarnation log info (NULL if no parent
@@ -110,7 +111,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
 int
 vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t bound,
-		const struct vos_punch_record *punched,
+		bool has_cond, const struct vos_punch_record *punched,
 		const struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /**
@@ -232,17 +233,17 @@ vos_ilog_is_punched(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_ra
 /* Useful for debugging the incarnation log but too much information for
  * normal debugging.
  */
-#define vos_ilog_fetch(umm, coh, intent, ilog, epoch, bound, punched,	\
-		       parent, info)					\
+#define vos_ilog_fetch(umm, coh, intent, ilog, epoch, bound, has_cond,	\
+		       punched, parent, info)				\
 ({									\
 	int __rc;							\
 									\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: log="DF_X64" intent=%d"	\
-		" epoch="DF_X64" bound="DF_X64" punched="DF_X64"\n",	\
-		umem_ptr2off(umm, ilog), intent, epoch, (bound),	\
-		(uint64_t)punched);					\
+		" epoch="DF_X64" bound="DF_X64" punched="DF_X64"(%s)\n",\
+		umem_ptr2off(umm, ilog), intent, epoch, bound,		\
+		(uint64_t)punched, has_cond ? "cond" : "non-cond");	\
 	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, bound,	\
-			       punched,	parent, info);			\
+			       has_cond, punched, parent, info);	\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
 		DF_X64" pp="DF_PUNCH" pap="DF_PUNCH" np="DF_X64	\
 		" %s\n", DP_RC(__rc), (info)->ii_create,		\
@@ -317,7 +318,7 @@ vos_ilog_ts_ignore(struct umem_instance *umm, struct ilog_df *ilog)
 		return;
 
 	umem_tx_xadd_ptr(umm, ilog_ts_idx_get(ilog), sizeof(int),
-			 POBJ_XADD_NO_SNAPSHOT);
+			 UMEM_XADD_NO_SNAPSHOT);
 }
 
 
@@ -346,11 +347,13 @@ vos_ilog_ts_mark(struct vos_ts_set *ts_set, struct ilog_df *ilog);
  *
  *  \param	ilog[in]	The incarnation log
  *  \param	type[in]	The timestamp type
+ *  \param	standalone[in]	standloane TLS or not
  */
 void
-vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type);
+vos_ilog_ts_evict(struct ilog_df *ilog, uint32_t type, bool standalone);
 
 void
-vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc);
+vos_ilog_last_update(struct ilog_df *ilog, uint32_t type, daos_epoch_t *epc,
+		     bool standalone);
 
 #endif /* __VOS_ILOG_H__ */

@@ -19,7 +19,7 @@ type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
-		Reset(storage.BdevPrepareRequest) error
+		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		UpdateFirmware(pciAddr string, path string, slot int32) error
@@ -51,6 +51,7 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
+	p.log.Debug("run bdev storage provider scan")
 	return p.backend.Scan(req)
 }
 
@@ -61,7 +62,7 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	if req.Reset_ {
 		p.log.Debug("run bdev storage provider prepare reset")
-		return &storage.BdevPrepareResponse{}, p.backend.Reset(req)
+		return p.backend.Reset(req)
 	}
 
 	p.log.Debug("run bdev storage provider prepare setup")

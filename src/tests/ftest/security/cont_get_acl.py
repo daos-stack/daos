@@ -1,20 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
+
+from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import read_acl_file
 from exception_utils import CommandFailure
-from avocado import fail_on
 
 
 class GetContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify container ACL get command..
@@ -40,8 +38,8 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_get_acl_inputs,test_get_acl_valid
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=GetContainerACLTest,test_get_acl_valid
         """
         test_errs = []
         for verbose in [True, False]:
@@ -77,7 +75,7 @@ class GetContainerACLTest(ContSecurityTestBase):
             self.fail("container get-acl command expected to fail: \
                 {}".format("\n".join(test_errs)))
 
-    def test_no_user_permissions(self):
+    def test_cont_get_acl_no_perm(self):
         """
         JIRA ID: DAOS-3705
 
@@ -86,8 +84,8 @@ class GetContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_get_acl_noperms,test_no_user_permissions
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=GetContainerACLTest,test_cont_get_acl_no_perm
         """
         # Let's give access to the pool to the root user
         self.get_dmg_command().pool_update_acl(

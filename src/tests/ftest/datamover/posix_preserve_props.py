@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -9,6 +9,7 @@ from pydaos.raw import DaosApiError
 import avocado
 
 from data_mover_test_base import DataMoverTestBase
+from duns_utils import format_path
 
 
 class DmvrPreserveProps(DataMoverTestBase):
@@ -73,16 +74,16 @@ class DmvrPreserveProps(DataMoverTestBase):
         # move data from DAOS to POSIX path and record container properties in hdf5 file
         self.run_datamover(
             self.test_id + " cont1 to posix",
-            "DAOS", "/", pool1, cont1,
-            "POSIX", posix_path, None, None)
+            src_path=format_path(pool1, cont1),
+            dst_path=posix_path)
 
         # move data from POSIX path to DAOS and read container properties in hdf5 file to cont2
         # don't copy test directory back to DAOS, only test file needs to be verified with ior
         posix_file_path = join(posix_path, self.test_file)
         result = self.run_datamover(
             self.test_id + " posix to cont2 (empty cont)",
-            "POSIX", posix_file_path, None, None,
-            "DAOS", "/", pool1, None)
+            src_path=posix_file_path,
+            dst_path=format_path(pool1))
 
         cont2_label = self.parse_create_cont_label(result.stdout_text)
         cont2 = self.get_cont(pool1, cont2_label)
@@ -115,7 +116,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         cont.close()
 
         # Return existing cont properties
-        return self.get_cont_prop(cont)
+        return cont.get_prop()["response"]
 
     def verify_cont(self, cont, api, check_attr_prop=True, prop_list=None):
         """Read-verify test data using either ior or the obj API.
@@ -124,12 +125,12 @@ class DmvrPreserveProps(DataMoverTestBase):
             cont (TestContainer): the container to verify.
             check_attr_prop (bool, optional): whether to verify user
                 attributes and cont properties. Defaults to False.
-            prop_list (list, optional): list of properties from get_cont_prop.
+            prop_list (list, optional): list of properties from container get-prop.
                 Required when check_attr_prop is True.
 
         """
         # It's important to check the properties first, since when ior
-        # mounts DFS the alloc'ed OID might be incremented.
+        # mounts DFS the allocated OID might be incremented.
         if check_attr_prop:
             cont.open()
             self.verify_cont_prop(cont, prop_list, api)
@@ -145,50 +146,35 @@ class DmvrPreserveProps(DataMoverTestBase):
             # Verify non-POSIX containers copied with the Object API
             self.dataset_verify(self.obj_list, cont, 1, 1, 1, 0, [1024], [])
 
-    def get_cont_prop(self, cont):
-        """Get all container properties with daos command.
-
-        Args:
-            cont (TestContainer): the container to get props of.
-
-        Returns:
-            list: list of dictionaries that contain properties and values from daos
-                command.
-
-        """
-        prop_result = self.daos_cmd.container_get_prop(cont.pool.uuid, cont.uuid)
-        return prop_result["response"]
-
     def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
         Expects the container to be open.
 
         Args:
             cont (TestContainer): the container to verify.
-            prop_list (list): list of properties from get_cont_prop.
+            prop_list (list): list of properties from container get-prop.
 
         """
-        actual_list = self.get_cont_prop(cont)
+        actual_list = cont.get_prop()["response"]
 
         # Make sure sizes match
         if len(prop_list) != len(actual_list):
-            self.log.info("Expected\n%s\nbut got\n%s\n",
-                          prop_list, actual_list)
+            self.log.info("Expected\n%s\nbut got\n%s\n", prop_list, actual_list)
             self.fail("Container property verification failed.")
 
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if (api == "DFS") and ("OID" in str(prop["description"]) or "ROOTS" in str(
-                    prop["description"])):
+            if (api == "DFS") and ("OID" in prop["description"] or "ROOTS" in prop["description"]):
+                continue
+            # Labels are unique, so can be different
+            if prop["name"] == "label":
                 continue
             if prop != actual_list[prop_idx]:
-                self.log.info("Expected\n%s\nbut got\n%s\n",
-                              prop_list, actual_list)
+                self.log.info("Expected\n%s\nbut got\n%s\n", prop_list, actual_list)
                 self.fail("Container property verification failed.")
 
-        self.log.info("Verified %d container properties:\n%s",
-                      len(actual_list), actual_list)
+        self.log.info("Verified %d container properties:\n%s", len(actual_list), actual_list)
 
     @staticmethod
     def get_cont_usr_attr():
@@ -237,7 +223,7 @@ class DmvrPreserveProps(DataMoverTestBase):
 
         :avocado: tags=all,pr
         :avocado: tags=vm
-        :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5
+        :avocado: tags=datamover,daos_fs_copy,dfs,ior,hdf5,daos_cmd
         :avocado: tags=dm_preserve_props,dm_preserve_props_fs_copy_posix_dfs
         :avocado: tags=test_dm_preserve_props_fs_copy_posix_dfs
         """

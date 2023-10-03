@@ -7,7 +7,6 @@
 package pretty
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -390,7 +389,7 @@ host[2,4] 3.2 TB (2 namespaces) 2.0 TB (1 controller)
 
 			mi := control.NewMockInvoker(log, tc.mic)
 
-			resp, err := control.StorageScan(context.TODO(), mi, &control.StorageScanReq{})
+			resp, err := control.StorageScan(test.Context(t), mi, &control.StorageScanReq{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -477,7 +476,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -590,7 +589,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -616,7 +615,7 @@ pmem0         0         1.0 TB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -646,7 +645,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -684,7 +683,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -706,7 +705,7 @@ SCM Module ID Socket ID Memory Ctrlr ID Channel ID Channel Slot Capacity
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -742,7 +741,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -778,7 +777,7 @@ HugePage Size: 2048 KB
 
 NVMe PCI     Model   FW Revision Socket ID Capacity 
 --------     -----   ----------- --------- -------- 
-0000:80:00.1 model-1 fwRev-1     1         2.0 TB   
+0000:01:00.0 model-1 fwRev-1     1         2.0 TB   
 
 `,
 		},
@@ -817,8 +816,8 @@ pmem1         1         2.0 TB
 
 NVMe PCI     Model FW Revision Socket ID Capacity 
 --------     ----- ----------- --------- -------- 
-0000:80:00.1                   1         2.0 TB   
-0000:80:00.4                   0         2.0 TB   
+0000:01:00.0                   1         2.0 TB   
+0000:04:00.0                   0         2.0 TB   
 
 ---------
 host[2,4]
@@ -831,8 +830,8 @@ pmem1         1         2.0 TB
 
 NVMe PCI     Model FW Revision Socket ID Capacity 
 --------     ----- ----------- --------- -------- 
-0000:80:00.1                   1         2.1 TB   
-0000:80:00.4                   0         2.1 TB   
+0000:01:00.0                   1         2.1 TB   
+0000:04:00.0                   0         2.1 TB   
 
 `,
 		},
@@ -841,7 +840,7 @@ NVMe PCI     Model FW Revision Socket ID Capacity
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := control.NewMockInvoker(log, tc.mic)
 
 			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
@@ -965,7 +964,7 @@ host1 3.0 TB    750 GB   75 %     36 TB      27 TB     25 %
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := control.NewMockInvoker(log, tc.mic)
 
 			resp, err := control.StorageScan(ctx, mi, &control.StorageScanReq{})
@@ -1393,6 +1392,8 @@ host1
 									Rank:      0,
 									NvmeState: storage.NvmeStateNew,
 									LedState:  storage.LedStateNormal,
+									HasSysXS:  true,
+									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
 								},
 								{
 									UUID:      test.MockUUID(1),
@@ -1401,14 +1402,16 @@ host1
 									Rank:      0,
 									NvmeState: storage.NvmeStateFaulty,
 									LedState:  storage.LedStateFaulty,
+									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
 								},
 								{
 									UUID:      test.MockUUID(2),
 									TrAddr:    "0000:da:00.0",
 									TargetIDs: []int32{0, 1, 2},
 									Rank:      1,
-									NvmeState: storage.NvmeDevState(99),
 									LedState:  storage.LedStateUnknown,
+									HasSysXS:  true,
+									Roles:     storage.BdevRoles{storage.BdevRoleWAL},
 								},
 								{
 									UUID:      test.MockUUID(3),
@@ -1417,6 +1420,7 @@ host1
 									Rank:      1,
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateIdentify,
+									Roles:     storage.BdevRoles{storage.BdevRoleMeta | storage.BdevRoleData},
 								},
 							},
 						},
@@ -1429,13 +1433,13 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:0000:8a:00.0]
-      Targets:[0 1 2] Rank:0 State:NEW LED:OFF
+      Roles:wal SysXS Targets:[0 1 2] Rank:0 State:NEW LED:OFF
     UUID:00000001-0001-0001-0001-000000000001 [TrAddr:0000:8b:00.0]
-      Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
+      Roles:data,meta Targets:[3 4 5] Rank:0 State:EVICTED LED:ON
     UUID:00000002-0002-0002-0002-000000000002 [TrAddr:0000:da:00.0]
-      Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
+      Roles:wal SysXS Targets:[0 1 2] Rank:1 State:UNKNOWN LED:NA
     UUID:00000003-0003-0003-0003-000000000003 [TrAddr:0000:db:00.0]
-      Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
+      Roles:data,meta Targets:[3 4 5] Rank:1 State:NORMAL LED:QUICK_BLINK
 `,
 		},
 		"list-devices (none found)": {
@@ -1470,6 +1474,7 @@ host1
 									NvmeState: storage.NvmeStateNormal,
 									LedState:  storage.LedStateNormal,
 									Health:    mockController.HealthStats,
+									Roles:     storage.BdevRoles{storage.BdevRoleAll},
 								},
 							},
 						},
@@ -1482,7 +1487,7 @@ host1
 -----
   Devices
     UUID:00000000-0000-0000-0000-000000000000 [TrAddr:]
-      Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
+      Roles:data,meta,wal Targets:[0 1 2] Rank:0 State:NORMAL LED:OFF
       Health Stats:
         Temperature:%dK(%.02fC)
         Temperature Warning Duration:%dm0s

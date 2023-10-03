@@ -5,8 +5,8 @@ customENV:
   MY_CUSTOM_ENV: "pineapple"
 ENV:
   default:
-    #!filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
-    #!filter-only : /run/tests/proto_np
+    # !filter-only : /run/env_CRT_CTX_SHARE_ADDR/sep
+    # !filter-only : /run/tests/proto_np
     - D_LOG_MASK: "WARN,RPC=DEBUG,HG=DEBUG"
     - OFI_INTERFACE: "eth0"
     - test_servers_CRT_CTX_NUM: "16"
@@ -25,7 +25,7 @@ hosts: !mux
     config: one_node
     test_servers: server-1
     test_clients: server-1
-#timeout: 600
+# timeout: 600
 tests: !mux
   proto_np_1:
     name: proto_np_1

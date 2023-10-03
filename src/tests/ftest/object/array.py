@@ -1,17 +1,15 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2017-2022 Intel Corporation.
+  (C) Copyright 2017-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import time
 import traceback
 import logging
 
-from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError, c_uuid_to_str
+
+from apricot import TestWithServers
 
 
 class ArrayObjTest(TestWithServers):
@@ -68,15 +66,15 @@ class ArrayObjTest(TestWithServers):
 
             # read the data back and make sure its correct
             length = len(thedata[0])
-            thedata2 = container.read_an_array(len(thedata), length+1,
+            thedata2 = container.read_an_array(len(thedata), length + 1,
                                                dkey, akey, oid)
-            if thedata[0][0:length-1] != thedata2[0][0:length-1]:
+            if thedata[0][0:length - 1] != thedata2[0][0:length - 1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[0])
                 self.plog.error("Read: >%s<", thedata2[0])
                 self.fail("Write data, read it back, didn't match\n")
 
-            if thedata[2][0:length-1] != thedata2[2][0:length-1]:
+            if thedata[2][0:length - 1] != thedata2[2][0:length - 1]:
                 self.plog.error("Data mismatch")
                 self.plog.error("Wrote: >%s<", thedata[2])
                 self.plog.error("Read: >%s<", thedata2[2])

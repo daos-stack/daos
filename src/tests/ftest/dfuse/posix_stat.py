@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +10,6 @@ from general_utils import get_remote_file_size, run_pcmd
 
 
 class POSIXStatTest(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class description:
 
     Requirement: SRS-10-0303
@@ -24,6 +23,7 @@ class POSIXStatTest(IorTestBase):
 
     :avocado: recursive
     """
+
     def test_stat_parameters(self):
         """JIRA ID: DAOS-3769
 
@@ -31,7 +31,7 @@ class POSIXStatTest(IorTestBase):
         time.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,medium
         :avocado: tags=dfuse
         :avocado: tags=stat_parameters,test_stat_parameters
         """

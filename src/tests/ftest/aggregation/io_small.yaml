@@ -1,6 +1,6 @@
 hosts:
   test_servers: 2
-  test_clients: 6
+  test_clients: 2
 timeout: 600
 server_config:
   name: daos_server
@@ -8,14 +8,7 @@ server_config:
   engines:
     0:
       log_mask: INFO
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 10000000000
   nvme_size: 10000000000
@@ -26,11 +19,10 @@ container:
   control_method: daos
 ior:
   client_processes:
-    np_12:
-      np: 12
+    np: 12
   test_file: daos:/testFile
   repetitions: 1
-  dfs_destroy: False
+  dfs_destroy: false
   iorflags:
     flags: "-v -w -W -k"
   api: DFS

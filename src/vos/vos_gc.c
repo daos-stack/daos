@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,9 +69,6 @@ struct vos_gc {
 					   umem_off_t addr);
 };
 
-static int gc_reclaim_pool(struct vos_pool *pool, int *credits,
-			   bool *empty_ret);
-
 /**
  * drain items stored in btree, this function returns when the btree is empty,
  * or all credits are consumed (releasing a leaf record consumes one credit)
@@ -103,7 +100,7 @@ gc_drain_btr(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain %s btree: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain %s btree: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -139,7 +136,7 @@ gc_drain_evt(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	D_DEBUG(DB_TRACE, "empty=%d, remainded creds=%d\n", *empty, *credits);
 	return 0;
  failed:
-	D_ERROR("Failed to drain evtree %s: %s\n", gc->gc_name, d_errstr(rc));
+	D_ERROR("Failed to drain evtree %s: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 	return rc;
 }
 
@@ -463,8 +460,8 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
 	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, it, sizeof(*it), POBJ_XADD_NO_SNAPSHOT);
-	pmemobj_memcpy_persist(umm->umm_pool, it, item, sizeof(*it));
+		umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	umem_atomic_copy(umm, it, item, sizeof(*it), UMEM_COMMIT_DEFER);
 
 	last = bag->bag_item_last + 1;
 	if (last == bin->bin_bag_size)
@@ -562,6 +559,8 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 		D_ASSERT(bag->bag_item_nr == 1);
 		rc = gc_bin_free_bag(&pool->vp_umm, cont, bin,
 				     bin->bin_bag_first);
+		if (rc)
+			goto failed;
 	} else {
 		rc = umem_tx_add_ptr(&pool->vp_umm, bag, sizeof(*bag));
 		if (rc)
@@ -612,9 +611,10 @@ int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	    enum vos_gc_type type, umem_off_t item_off, uint64_t args)
 {
-	struct vos_container *cont = vos_hdl2cont(coh);
-	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, type);
-	struct vos_gc_item    item;
+	struct vos_container	*cont = vos_hdl2cont(coh);
+	struct vos_gc_bin_df	*bin = gc_type2bin(pool, cont, type);
+	struct vos_gc_item	 item;
+	int			 rc;
 
 	D_DEBUG(DB_TRACE, "Add %s addr="DF_X64"\n",
 		gc_type2name(type), item_off);
@@ -624,53 +624,21 @@ gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 
 	item.it_addr = item_off;
 	item.it_args = args;
-	while (1) {
-		int	  creds = GC_CREDS_TIGHT;
-		int	  rc;
-		bool	  empty;
-
-		rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
-		if (rc == 0) {
-			if (!gc_have_pool(pool))
-				gc_add_pool(pool);
-			if (cont != NULL && d_list_empty(&cont->vc_gc_link)) {
-				/** New item to remove from the container */
-				d_list_add_tail(&cont->vc_gc_link,
-						&pool->vp_gc_cont);
-			}
-			return 0;
-		}
-
-		/* this is unlikely, but if we cannot even queue more items
-		 * for GC, it means we should reclaim space for this pool
-		 * immediately.
-		 */
-		if (rc != -DER_NOSPACE) {
-			D_CRIT("Failed to add item, pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
-			return rc;
-		}
-
-		if (d_list_empty(&pool->vp_gc_link) &&
-		    d_list_empty(&pool->vp_gc_cont)) {
-			D_CRIT("Pool="DF_UUID" is full but nothing for GC\n",
-			       DP_UUID(pool->vp_id));
-			return rc;
-		}
-
-		rc = gc_reclaim_pool(pool, &creds, &empty);
-		if (rc) {
-			D_CRIT("Cannot run RC for pool="DF_UUID", rc=%s\n",
-			       DP_UUID(pool->vp_id), d_errstr(rc));
-			return rc;
-		}
-
-		if (creds == GC_CREDS_TIGHT) { /* recliamed nothing? */
-			D_CRIT("Failed to recliam space for pool="DF_UUID"\n",
-			       DP_UUID(pool->vp_id));
-			return -DER_NOSPACE;
-		}
+	rc = gc_bin_add_item(&pool->vp_umm, bin, &item);
+	if (rc) {
+		D_ERROR("Failed to add item, pool=" DF_UUID ", rc=" DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
+		return rc;
 	}
+
+	if (!gc_have_pool(pool))
+		gc_add_pool(pool);
+
+	/** New item to remove from the container */
+	if (cont != NULL && d_list_empty(&cont->vc_gc_link))
+		d_list_add_tail(&cont->vc_gc_link, &pool->vp_gc_cont);
+
+	return rc;
 }
 
 struct vos_container *
@@ -712,8 +680,8 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc) {
-		D_ERROR("Failed to start transacton for "DF_UUID": %s\n",
-			DP_UUID(pool->vp_id), d_errstr(rc));
+		D_ERROR("Failed to start transacton for " DF_UUID ": " DF_RC "\n",
+			DP_UUID(pool->vp_id), DP_RC(rc));
 		if (cont != NULL)
 			vos_cont_decref(cont);
 		return rc;
@@ -758,13 +726,17 @@ gc_reclaim_pool(struct vos_pool *pool, int *credits, bool *empty_ret)
 		rc = gc_drain_item(gc, pool, vos_cont2hdl(cont), item, &creds,
 				   &empty);
 		if (rc < 0) {
-			D_ERROR("GC=%s error=%s\n", gc->gc_name, d_errstr(rc));
+			D_ERROR("GC=%s error: " DF_RC "\n", gc->gc_name, DP_RC(rc));
 			break;
 		}
 
 		if (empty && creds) {
 			/* item can be released and removed from bin */
-			gc_free_item(gc, pool, cont, item);
+			rc = gc_free_item(gc, pool, cont, item);
+			if (rc) {
+				D_ERROR("GC=%s free item error: "DF_RC"\n", gc->gc_name, DP_RC(rc));
+				break;
+			}
 			creds--;
 		}
 
@@ -903,7 +875,7 @@ gc_check_cont(struct vos_container *cont)
 int
 gc_add_pool(struct vos_pool *pool)
 {
-	struct vos_tls	   *tls = vos_tls_get();
+	struct vos_tls	   *tls = vos_tls_get(pool->vp_sysdb);
 
 	D_DEBUG(DB_TRACE, "Register pool="DF_UUID" for GC\n",
 		DP_UUID(pool->vp_id));
@@ -969,7 +941,7 @@ gc_log_pool(struct vos_pool *pool)
 static int
 vos_gc_run(int *credits)
 {
-	struct vos_tls	*tls	 = vos_tls_get();
+	struct vos_tls	*tls	 = vos_tls_get(true);
 	d_list_t	*pools	 = &tls->vtl_gc_pools;
 	int		 rc	 = 0;
 	int		 checked = 0;
@@ -1078,7 +1050,7 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 	total = *credits;
 	rc = gc_reclaim_pool(pool, credits, &empty);
 	if (rc) {
-		D_CRIT("GC failed %s\n", d_errstr(rc));
+		D_CRIT("gc_reclaim_pool failed " DF_RC "\n", DP_RC(rc));
 		return 0; /* caller can't do anything for it */
 	}
 	total -= *credits; /* subtract the remained credits */
@@ -1098,9 +1070,10 @@ vos_gc_pool_tight(daos_handle_t poh, int *credits)
 }
 
 struct vos_gc_param {
-	int		(*vgc_yield_func)(void *arg);
-	void		*vgc_yield_arg;
-	uint32_t	 vgc_credits;
+	struct umem_instance	*vgc_umm;
+	int			(*vgc_yield_func)(void *arg);
+	void			*vgc_yield_arg;
+	uint32_t		 vgc_credits;
 };
 
 static inline bool
@@ -1110,11 +1083,11 @@ vos_gc_yield(void *arg)
 	int			 rc;
 
 	/* Current DTX handle must be NULL, since GC runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get() == NULL);
+	D_ASSERT(vos_dth_get(false) == NULL);
 
 	if (param->vgc_yield_func == NULL) {
 		param->vgc_credits = GC_CREDS_TIGHT;
-		bio_yield();
+		bio_yield(param->vgc_umm);
 		return false;
 	}
 
@@ -1134,13 +1107,17 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	    void *yield_arg)
 {
 	struct vos_pool		*pool = vos_hdl2pool(poh);
-	struct vos_tls		*tls  = vos_tls_get();
+	struct vos_tls		*tls  = vos_tls_get(pool->vp_sysdb);
 	struct vos_gc_param	 param;
 	uint32_t		 nr_flushed = 0;
 	int			 rc = 0, total = 0;
 
 	D_ASSERT(daos_handle_is_valid(poh));
+	D_ASSERT(pool->vp_sysdb == false);
 
+	vos_space_update_metrics(pool);
+
+	param.vgc_umm		= &pool->vp_umm;
 	param.vgc_yield_func	= yield_func;
 	param.vgc_yield_arg	= yield_arg;
 	param.vgc_credits	= GC_CREDS_TIGHT;
@@ -1163,7 +1140,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 		total += creds;
 		rc = vos_gc_pool_tight(poh, &creds);
 		if (rc) {
-			D_ERROR("GC pool failed: %s\n", d_errstr(rc));
+			D_ERROR("GC pool failed: " DF_RC "\n", DP_RC(rc));
 			break;
 		}
 		total -= creds; /* subtract the remainded credits */

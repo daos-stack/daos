@@ -71,7 +71,9 @@ public class DaosFileSystem extends FileSystem {
     }
     DunsInfo info = searchUnsPath(name);
     if (info != null) {
-      LOG.info("initializing from uns path, " + name);
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("initializing from uns path, " + name);
+      }
       initializeFromUns(name, conf, info);
       return;
     }
@@ -102,9 +104,6 @@ public class DaosFileSystem extends FileSystem {
     }
     unsPrefix = unsInfo.getPrefix();
     withUnsPrefix = conf.getBoolean(Constants.DAOS_WITH_UNS_PREFIX, Constants.DEFAULT_DAOS_WITH_UNS_PREFIX);
-    if (!withUnsPrefix) {
-      LOG.warn("withUnsPrefix is set to false from Hadoop configuration. You may not be able to connect to DAOS");
-    }
     conf.set(Constants.DAOS_POOL_ID, unsInfo.getPoolId());
     conf.set(Constants.DAOS_CONTAINER_ID, unsInfo.getContId());
     super.initialize(name, conf);
@@ -135,7 +134,9 @@ public class DaosFileSystem extends FileSystem {
       daos.mkdir(workPath, true);
       getAndValidateDaosAttrs(name, conf);
       setConf(conf);
-      LOG.info("DaosFileSystem initialized");
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("DaosFileSystem initialized");
+      }
     } catch (Exception e) {
       throw new IOException("failed to initialize " + this.getClass().getName(), e);
     }
@@ -278,7 +279,8 @@ public class DaosFileSystem extends FileSystem {
   private String removeUnsPrefix(URI puri) {
     String path = puri.getPath();
     if (!path.startsWith(unsPrefix)) {
-      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) : (qualifiedUnsWorkPath + "/" + path);
+      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) :
+              (qualifiedUnsWorkPath + (path.isEmpty() ? "" : ("/" + path)));
     }
     boolean truncated = false;
     if (path.length() > unsPrefix.length()) {
@@ -316,6 +318,12 @@ public class DaosFileSystem extends FileSystem {
       p = workPath + "/" + p;
     }
     return p;
+  }
+
+  @Override
+  public Path makeQualified(Path path) {
+    checkPath(path);
+    return resolvePath(path);
   }
 
   @Override
@@ -380,7 +388,7 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, false, async),
         statistics);
   }
 
@@ -388,7 +396,14 @@ public class DaosFileSystem extends FileSystem {
   public FSDataOutputStream append(Path f,
                                    int bufferSize,
                                    Progressable progress) throws IOException {
-    throw new IOException("Append is not supported");
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("DaosFileSystem append file , path= " + f.toUri().toString() + ", buffer size = " + bufferSize);
+    }
+    String key = getDaosRelativePath(f);
+
+    DaosFile daosFile = this.daos.getFile(key);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, true, async),
+        statistics);
   }
 
   /**

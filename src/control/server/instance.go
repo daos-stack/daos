@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -184,10 +184,10 @@ func (ei *EngineInstance) removeSocket() error {
 	return nil
 }
 
-func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, bool, error) {
+func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (ranklist.Rank, uint32, error) {
 	superblock := ei.getSuperblock()
 	if superblock == nil {
-		return ranklist.NilRank, false, errors.New("nil superblock while determining rank")
+		return ranklist.NilRank, 0, errors.New("nil superblock while determining rank")
 	}
 
 	r := ranklist.NilRank
@@ -207,11 +207,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	})
 	if err != nil {
 		ei.log.Errorf("join failed: %s", err)
-		return ranklist.NilRank, false, err
+		return ranklist.NilRank, 0, err
 	}
 	switch resp.State {
 	case system.MemberStateAdminExcluded, system.MemberStateExcluded:
-		return ranklist.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+		return ranklist.NilRank, 0, errors.Errorf("rank %d excluded", resp.Rank)
 	case system.MemberStateCheckerStarted:
 		// If the system is in checker mode but the rank was not started in
 		// checker mode, we need to restart it in order to get the correct
@@ -220,7 +220,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 			ei.log.Noticef("restarting rank %d in checker mode", resp.Rank)
 			go ei.requestStart(context.Background())
 			ei.SetCheckerMode(true)
-			return ranklist.NilRank, resp.LocalJoin, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
+			return ranklist.NilRank, 0, errors.Errorf("rank %d restarting to enable checker", resp.Rank)
 		}
 	}
 	r = ranklist.Rank(resp.Rank)
@@ -235,11 +235,11 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		superblock.URI = ready.GetUri()
 		ei.setSuperblock(superblock)
 		if err := ei.WriteSuperblock(); err != nil {
-			return ranklist.NilRank, resp.LocalJoin, err
+			return ranklist.NilRank, 0, err
 		}
 	}
 
-	return r, resp.LocalJoin, nil
+	return r, resp.MapVersion, nil
 }
 
 func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
@@ -276,22 +276,21 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		ei.log.Error(err.Error()) // nonfatal
 	}
 
-	r, localJoin, err := ei.determineRank(ctx, ready)
+	r, mapVersion, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
 	}
 
-	// If the join was already processed because it ran on the same server,
-	// skip the rest of these steps.
-	if localJoin {
+	return ei.SetupRank(ctx, r, mapVersion)
+}
+
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	if ei.IsReady() {
+		ei.log.Errorf("SetupRank called on an already set-up instance %d", ei.Index())
 		return nil
 	}
 
-	return ei.SetupRank(ctx, r)
-}
-
-func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank) error {
-	if err := ei.callSetRank(ctx, rank); err != nil {
+	if err := ei.callSetRank(ctx, rank, map_version); err != nil {
 		return errors.Wrap(err, "SetRank failed")
 	}
 
@@ -303,8 +302,8 @@ func (ei *EngineInstance) SetupRank(ctx context.Context, rank ranklist.Rank) err
 	return nil
 }
 
-func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (ei *EngineInstance) callSetRank(ctx context.Context, rank ranklist.Rank, map_version uint32) error {
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32(), MapVersion: map_version})
 	if err != nil {
 		return err
 	}
@@ -347,20 +346,12 @@ func (ei *EngineInstance) setMemSize(memSizeMb int) {
 	ei.runner.GetConfig().MemSize = memSizeMb
 }
 
-// setHugePageSz updates hugepage size in engine config.
-func (ei *EngineInstance) setHugePageSz(hpSizeMb int) {
+// setHugepageSz updates hugepage size in engine config.
+func (ei *EngineInstance) setHugepageSz(hpSizeMb int) {
 	ei.Lock()
 	defer ei.Unlock()
 
-	ei.runner.GetConfig().HugePageSz = hpSizeMb
-}
-
-// setTargetCount updates target count in engine config.
-func (ei *EngineInstance) setTargetCount(numTargets int) {
-	ei.Lock()
-	defer ei.Unlock()
-
-	ei.runner.GetConfig().TargetCount = numTargets
+	ei.runner.GetConfig().HugepageSz = hpSizeMb
 }
 
 // GetTargetCount returns the target count set for this instance.
@@ -372,7 +363,7 @@ func (ei *EngineInstance) GetTargetCount() int {
 }
 
 func (ei *EngineInstance) callSetUp(ctx context.Context) error {
-	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
+	dresp, err := ei.callDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}

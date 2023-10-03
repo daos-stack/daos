@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -183,12 +182,14 @@ class CartIvTwoNodeTest(CartTest):
                         'Error code {!s} running command "{!s}"'.format(
                             cli_rtn, command))
 
-    def test_cart_iv(self):
+    def test_cart_iv_two_node(self):
         """
         Test CaRT IV
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,iv,two_node,memcheck
+        :avocado: tags=CartIvTwoNodeTest,test_cart_iv_two_node
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
@@ -239,7 +240,7 @@ class CartIvTwoNodeTest(CartTest):
             self.print("TEST FAILED: {}".format(exception))
 
         # Shutdown Servers
-        num_servers = self.get_srv_cnt("test_servers")
+        num_servers = 2
 
         srv_ppn = self.params.get("test_servers_ppn", '/run/tests/*/')
 

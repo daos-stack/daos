@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +12,7 @@ from exception_utils import CommandFailure
 class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
-    def __init__(self, value, default=None, yaml_key=None, position=None):
+    def __init__(self, value, default=None, yaml_key=None, position=None, mapped_values=None):
         """Create a BasicParameter object.
 
         Normal use includes assigning this object to an attribute name that
@@ -27,11 +27,15 @@ class BasicParameter():
             yaml_key (str, optional): the yaml key name to use when finding the
                 value to assign from the test yaml file. Default is None which
                 will use the object's variable name as the yaml key.
+            position (int, optional): position of the parameter for sorting. Default is None
+            mapped_values (dict, optional): dict of values to replace. Default is None,
+                which uses the direct value.
         """
         self._value = value if value is not None else default
         self._default = default
         self._yaml_key = yaml_key
         self._position = position
+        self._mapped_values = mapped_values
         self.log = getLogger(__name__)
 
         # Flag used to indicate if a parameter value has or has not been updated
@@ -63,6 +67,8 @@ class BasicParameter():
             object: value currently assigned to the setting
 
         """
+        if self._mapped_values:
+            return self._mapped_values.get(self._value, self._value)
         return self._value
 
     @value.setter
@@ -197,6 +203,25 @@ class BasicParameter():
         """
         self._default = value
 
+    def copy(self):
+        """Get a copy of this object.
+
+        Returns:
+            BasicParameter: a copy of this BasicParameter
+        """
+        new = self._get_new()
+        new.updated = self.updated
+        return new
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            FormattedParameter: a new FormattedParameter object
+        """
+        return BasicParameter(
+            self._value, self._default, self._yaml_key, self._position, self._mapped_values)
+
 
 class FormattedParameter(BasicParameter):
     # pylint: disable=too-few-public-methods
@@ -246,6 +271,14 @@ class FormattedParameter(BasicParameter):
                 parameter = self._str_format.format(self.value)
 
         return parameter
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            FormattedParameter: a new FormattedParameter object
+        """
+        return FormattedParameter(self._str_format, self._value, self._yaml_key)
 
 
 class LogParameter(FormattedParameter):
@@ -308,38 +341,13 @@ class LogParameter(FormattedParameter):
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
-
-class MappedParameter(BasicParameter):
-    """A class for parameters whose values are read from a yaml file."""
-
-    def __init__(self, value, default=None, yaml_key=None, mapping=None):
-        """Create a MappedParameter object.
-
-        In addition to BasicParameter usage, a mapping can be supplied to replace
-        values from the yaml. This is useful, for example, when the value is a python reference.
-
-        Args:
-            value (object): initial value for the parameter
-            default (object, optional): default value. Defaults to None.
-            yaml_key (str, optional): the yaml key name to use when finding the
-                value to assign from the test yaml file. Default is None which
-                will use the object's variable name as the yaml key.
-            mapping (dict, optional): dict of values to replace. Default is None,
-                which replaces nothing.
-        """
-        super().__init__(value, default, yaml_key)
-        self._mapping = mapping or {}
-
-    @BasicParameter.value.getter
-    def value(self):
-        # pylint: disable=invalid-overridden-method
-        """Get the value of this parameter.
+    def _get_new(self):
+        """Get a new object based upon this one.
 
         Returns:
-            object: mapped value currently assigned to the parameter
-
+            LogParameter: a new LogParameter object
         """
-        return self._mapping.get(self._value, super().value)
+        return LogParameter(self._directory, self._str_format, self._value)
 
 
 class ObjectWithParameters():
@@ -414,6 +422,43 @@ class ObjectWithParameters():
             except AttributeError as error:
                 raise CommandFailure("Unknown parameter: {}".format(name)) from error
 
+    def copy(self):
+        """Get a copy of this object.
+
+        Returns:
+            ObjectWithParameters: a copy of this ObjectWithParameters object
+        """
+        new = self._get_new()
+        self._copy_params(new)
+        return new
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            ObjectWithParameters: a new ObjectWithParameters object
+        """
+        return ObjectWithParameters(self.namespace)
+
+    def _copy_params(self, other):
+        """Copy the parameter values from this ObjectWithParameters to another ObjectWithParameters.
+
+        Args:
+            other (ObjectWithParameters): the object whose parameters will be updated to match this
+                ObjectWithParameters parameter values
+        """
+        for name in self.get_attribute_names():
+            attr = getattr(self, name)
+            if isinstance(attr, list):
+                list_copy = []
+                for item in attr:
+                    list_copy.append(item.copy() if hasattr(item, "copy") else item)
+                setattr(other, name, list_copy)
+            elif hasattr(attr, "copy"):
+                setattr(other, name, attr.copy())
+            else:
+                setattr(other, name, attr)
+
 
 class CommandWithParameters(ObjectWithParameters):
     """A class for command with parameters."""
@@ -432,7 +477,6 @@ class CommandWithParameters(ObjectWithParameters):
         super().__init__(namespace)
         self._command = command
         self._path = path
-        self._pre_command = None
 
     @property
     def command(self):
@@ -444,6 +488,25 @@ class CommandWithParameters(ObjectWithParameters):
         """Get the path used for the command."""
         return self._path
 
+    @property
+    def command_with_params(self):
+        """Get the command with all of its defined parameters as a string.
+
+        Returns:
+            str: the command with all the defined parameters
+
+        """
+        # Join all the parameters that have been assigned a value with the
+        # path and the command to create the command string
+        command = [os.path.join(self._path, self._command)]
+        for name in self.get_str_param_names():
+            value = str(getattr(self, name))
+            if value != "":
+                command.append(value)
+
+        # Return the command and its parameters
+        return " ".join(command)
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -451,21 +514,7 @@ class CommandWithParameters(ObjectWithParameters):
             str: the command with all the defined parameters
 
         """
-        # Join all the parameters that have been assigned a value with the
-        # command to create the command string
-        params = []
-        for name in self.get_str_param_names():
-            value = str(getattr(self, name))
-            if value != "":
-                params.append(value)
-
-        # Append the path to the command and prepend it with any other
-        # specified commands
-        command_list = [] if self._pre_command is None else [self._pre_command]
-        command_list.append(os.path.join(self._path, self._command))
-
-        # Return the command and its parameters
-        return " ".join(command_list + params)
+        return self.command_with_params
 
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
@@ -476,6 +525,14 @@ class CommandWithParameters(ObjectWithParameters):
 
         """
         return self.get_param_names()
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommandWithParameters: a new CommandWithParameters object
+        """
+        return CommandWithParameters(self.namespace, self._command, self._path)
 
 
 class YamlParameters(ObjectWithParameters):
@@ -537,8 +594,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         yaml_data_updated = False
-        if (self.other_params is not None and
-                hasattr(self.other_params, "is_yaml_data_updated")):
+        if (self.other_params is not None and hasattr(self.other_params, "is_yaml_data_updated")):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():
@@ -635,6 +691,14 @@ class YamlParameters(ObjectWithParameters):
             value = None
         return value
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            YamlParameters: a new YamlParameters object
+        """
+        return YamlParameters(self.namespace, self.filename, self.title, None)
+
 
 class TransportCredentials(YamlParameters):
     """Transport credentials listing certificates for secure communication."""
@@ -646,11 +710,13 @@ class TransportCredentials(YamlParameters):
             namespace (str): yaml namespace (path to parameters)
             title (str, optional): namespace under which to place the
                 parameters when creating the yaml file. Defaults to None.
+            log_dir (str): location of the certificate files
         """
         super().__init__(namespace, None, title)
+        self._log_dir = log_dir
         default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
         default_insecure = default_insecure.lower() == "true"
-        self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
+        self.ca_cert = LogParameter(self._log_dir, None, "daosCA.crt")
         self.allow_insecure = BasicParameter(None, default_insecure)
 
     def get_yaml_data(self):
@@ -693,6 +759,14 @@ class TransportCredentials(YamlParameters):
                         data[dir_name].append(file_name)
         return data
 
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            TransportCredentials: a new TransportCredentials object
+        """
+        return TransportCredentials(self.namespace, self.title, self._log_dir)
+
 
 class CommonConfig(YamlParameters):
     """Defines common daos_agent and daos_server configuration file parameters.
@@ -711,8 +785,7 @@ class CommonConfig(YamlParameters):
             name (str): default value for the name configuration parameter
             transport (TransportCredentials): transport credentials
         """
-        super().__init__(
-            "/run/common_config/*", None, None, transport)
+        super().__init__("/run/common_config/*", None, None, transport)
 
         # Common configuration parameters
         #   - name: <str>, e.g. "daos_server"
@@ -731,6 +804,14 @@ class CommonConfig(YamlParameters):
         self.name = BasicParameter(None, name)
         self.access_points = BasicParameter(None, ["localhost"])
         self.port = BasicParameter(None, 10001)
+
+    def _get_new(self):
+        """Get a new object based upon this one.
+
+        Returns:
+            CommonConfig: a new CommonConfig object
+        """
+        return CommonConfig(self.name.value, None)
 
 
 class EnvironmentVariables(dict):
@@ -770,7 +851,7 @@ class EnvironmentVariables(dict):
             kv_list (list):  list of environment variable assignment (key=value) strings
         """
         for kv in kv_list:
-            key, *value = kv.split('=')
+            key, *value = kv.split('=', maxsplit=1)
             self[key] = value[0] if value else None
 
     def to_export_str(self, separator=";"):

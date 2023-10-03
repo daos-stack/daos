@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,7 +9,6 @@ package hardware
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +21,170 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+type (
+	// FabricProvider includes information about a fabric provider.
+	FabricProvider struct {
+		Name     string
+		Priority int
+	}
+
+	fabricProviderMap         map[string]*FabricProvider
+	fabricProviderPriorityMap map[int]fabricProviderMap
+
+	// FabricProviderSet is a non-duplicated set of FabricProviders.
+	FabricProviderSet struct {
+		byName     fabricProviderMap
+		byPriority fabricProviderPriorityMap
+	}
+)
+
+func (pm fabricProviderMap) add(p *FabricProvider) {
+	if _, exists := pm[p.Name]; !exists {
+		pm[p.Name] = p
+	}
+}
+
+func (pm fabricProviderMap) del(p *FabricProvider) {
+	delete(pm, p.Name)
+}
+
+func (pm fabricProviderMap) keys() []string {
+	keys := []string{}
+	for k := range pm {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (ppm fabricProviderPriorityMap) add(p *FabricProvider) {
+	if _, exists := ppm[p.Priority]; !exists {
+		ppm[p.Priority] = make(fabricProviderMap)
+	}
+
+	ppm[p.Priority].add(p)
+}
+
+func (ppm fabricProviderPriorityMap) del(p *FabricProvider) {
+	if provs, exists := ppm[p.Priority]; exists {
+		provs.del(p)
+	}
+}
+
+func (ppm fabricProviderPriorityMap) keys() []int {
+	keys := []int{}
+	for i := range ppm {
+		keys = append(keys, i)
+	}
+	sort.Ints(keys)
+	return keys
+}
+
+func (p *FabricProvider) String() string {
+	if p == nil {
+		return "<nil>"
+	}
+	if p.Name == "" {
+		return "<no name>"
+	}
+	return p.Name
+}
+
+func (ps *FabricProviderSet) String() string {
+	if ps == nil {
+		return "<nil>"
+	}
+
+	if ps.Len() == 0 {
+		return "<empty>"
+	}
+
+	sorted := ps.ToSlice()
+	strSlice := make([]string, 0, len(sorted))
+	for _, p := range sorted {
+		strSlice = append(strSlice, p.String())
+	}
+	return strings.Join(strSlice, ", ")
+}
+
+// Len returns the number of providers in the set.
+func (ps *FabricProviderSet) Len() int {
+	if ps == nil {
+		return 0
+	}
+	return len(ps.byName)
+}
+
+// Has detects whether a provider is in the set.
+func (ps *FabricProviderSet) Has(provider string) bool {
+	if ps == nil {
+		return false
+	}
+
+	_, exists := ps.byName[provider]
+	return exists
+}
+
+// Add adds fabric providers to the set.
+func (ps *FabricProviderSet) Add(providers ...*FabricProvider) {
+	if ps == nil {
+		return
+	}
+
+	if ps.byName == nil {
+		ps.byName = make(fabricProviderMap)
+	}
+
+	if ps.byPriority == nil {
+		ps.byPriority = make(fabricProviderPriorityMap)
+	}
+
+	for _, prov := range providers {
+		if prov == nil || prov.Name == "" {
+			continue
+		}
+
+		if old, exists := ps.byName[prov.Name]; exists {
+			if prov.Priority > old.Priority {
+				// lower value == higher priority
+				// old has higher priority, leave it alone
+				continue
+			}
+
+			ps.byPriority.del(old)
+			ps.byName.del(old)
+		}
+		ps.byName.add(prov)
+		ps.byPriority.add(prov)
+	}
+}
+
+// ToSlice returns a list of FabricProviders sorted by priority.
+func (ps *FabricProviderSet) ToSlice() []*FabricProvider {
+	if ps == nil {
+		return []*FabricProvider{}
+	}
+
+	slice := make([]*FabricProvider, 0, ps.Len())
+	for _, priority := range ps.byPriority.keys() {
+		provs := ps.byPriority[priority]
+		for _, prov := range provs.keys() {
+			slice = append(slice, provs[prov])
+		}
+	}
+	return slice
+}
+
+// NewFabricProviderSet creates a new set of FabricProviders.
+func NewFabricProviderSet(providers ...*FabricProvider) *FabricProviderSet {
+	set := new(FabricProviderSet)
+	for _, p := range providers {
+		set.Add(p)
+	}
+
+	return set
+}
+
 // FabricInterface represents basic information about a fabric interface.
 type FabricInterface struct {
 	// Name is the fabric device name.
@@ -31,7 +194,7 @@ type FabricInterface struct {
 	// NetInterface is the set of corresponding OS-level network interface device.
 	NetInterfaces common.StringSet `json:"net_interface"`
 	// Providers is the set of supported providers.
-	Providers common.StringSet `json:"providers"`
+	Providers *FabricProviderSet `json:"providers"`
 	// DeviceClass is the type of the network interface.
 	DeviceClass NetDevClass `json:"device_class"`
 	// NUMANode is the NUMA affinity of the network interface.
@@ -59,7 +222,7 @@ func (fi *FabricInterface) String() string {
 	}
 
 	providers := "none"
-	if len(fi.Providers) > 0 {
+	if fi.Providers.Len() > 0 {
 		providers = fi.Providers.String()
 	}
 
@@ -136,7 +299,7 @@ func (s fabricInterfaceMap) update(name string, fi *FabricInterface) {
 		// always possible to add to providers or net interfaces
 		if fi.Providers != nil {
 			if cur.Providers == nil {
-				cur.Providers = common.NewStringSet()
+				cur.Providers = NewFabricProviderSet()
 			}
 			cur.Providers.Add(fi.Providers.ToSlice()...)
 		}
@@ -350,9 +513,6 @@ const (
 	Eui64      NetDevClass = 27
 	Infiniband NetDevClass = 32
 	Loopback   NetDevClass = 772
-
-	// NetDevAny matches any network device class
-	NetDevAny NetDevClass = math.MaxUint32
 )
 
 func (c NetDevClass) String() string {
@@ -389,8 +549,6 @@ func (c NetDevClass) String() string {
 		return "INFINIBAND"
 	case Loopback:
 		return "LOOPBACK"
-	case NetDevAny:
-		return "ANY"
 	default:
 		return fmt.Sprintf("UNKNOWN (0x%x)", uint32(c))
 	}
@@ -398,7 +556,7 @@ func (c NetDevClass) String() string {
 
 // FabricInterfaceProvider is an interface that returns a new set of fabric interfaces.
 type FabricInterfaceProvider interface {
-	GetFabricInterfaces(ctx context.Context) (*FabricInterfaceSet, error)
+	GetFabricInterfaces(ctx context.Context, provider string) (*FabricInterfaceSet, error)
 }
 
 // NetDevClassProvider is an interface that returns the NetDevClass associated with a device.
@@ -415,6 +573,7 @@ type FabricInterfaceSetBuilder interface {
 // FabricInterfaceBuilder is a builder that adds new FabricInterface objects to the FabricInterfaceSet.
 type FabricInterfaceBuilder struct {
 	log         logging.Logger
+	providers   []string
 	fiProviders []FabricInterfaceProvider
 }
 
@@ -432,21 +591,30 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 		return errors.New("FabricInterfaceBuilder is uninitialized")
 	}
 
+	// If no providers were requested, we should scan once for all providers. Empty string
+	// indicates all providers.
+	provs := f.providers
+	if len(f.providers) == 0 {
+		provs = []string{""}
+	}
+
 	fiSets := make([]*FabricInterfaceSet, 0)
 	for _, fiProv := range f.fiProviders {
-		set, err := fiProv.GetFabricInterfaces(ctx)
-		if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
-			// A runtime library wasn't installed. This is okay - we'll still detect
-			// what we can.
-			f.log.Debug(err.Error())
-			continue
-		}
+		for _, prov := range provs {
+			set, err := fiProv.GetFabricInterfaces(ctx, prov)
+			if errors.Is(errors.Cause(err), dlopen.ErrSoNotFound) || IsUnsupportedFabric(err) {
+				// A runtime library wasn't installed. This is okay - we'll still detect
+				// what we can.
+				f.log.Debug(err.Error())
+				continue
+			}
 
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 
-		fiSets = append(fiSets, set)
+			fiSets = append(fiSets, set)
+		}
 	}
 
 	for _, set := range fiSets {
@@ -463,9 +631,10 @@ func (f *FabricInterfaceBuilder) BuildPart(ctx context.Context, fis *FabricInter
 	return nil
 }
 
-func newFabricInterfaceBuilder(log logging.Logger, fiProviders ...FabricInterfaceProvider) *FabricInterfaceBuilder {
+func newFabricInterfaceBuilder(log logging.Logger, providers []string, fiProviders ...FabricInterfaceProvider) *FabricInterfaceBuilder {
 	return &FabricInterfaceBuilder{
 		log:         log,
+		providers:   providers,
 		fiProviders: fiProviders,
 	}
 }
@@ -508,7 +677,7 @@ func (o *NetworkDeviceBuilder) BuildPart(ctx context.Context, fis *FabricInterfa
 
 		dev, exists := devsByName[topoName]
 		if !exists {
-			o.log.Debugf("ignoring fabric interface %q (%s) not found in topology", name, topoName)
+			o.log.Tracef("ignoring fabric interface %q (%s) not found in topology", name, topoName)
 			fis.Remove(name)
 			continue
 		}
@@ -612,7 +781,7 @@ func (n *NUMAAffinityBuilder) BuildPart(ctx context.Context, fis *FabricInterfac
 
 		dev, exists := devsByName[topoName]
 		if !exists {
-			n.log.Debugf("fabric interface %q (%s) not found in topology", name, topoName)
+			n.log.Tracef("fabric interface %q (%s) not found in topology", name, topoName)
 			continue
 		}
 
@@ -659,13 +828,13 @@ func (n *NetDevClassBuilder) BuildPart(ctx context.Context, fis *FabricInterface
 		}
 
 		if len(fi.NetInterfaces) == 0 {
-			n.log.Debugf("fabric interface %q has no corresponding OS-level device", name)
+			n.log.Tracef("fabric interface %q has no corresponding OS-level device", name)
 			continue
 		}
 
 		ndc, err := n.provider.GetNetDevClass(fi.NetInterfaces.ToSlice()[0])
 		if err != nil {
-			n.log.Debugf("failed to get device class for %q: %s", name, err.Error())
+			n.log.Tracef("failed to get device class for %q: %s", name, err.Error())
 		}
 
 		fi.DeviceClass = ndc
@@ -683,13 +852,14 @@ func newNetDevClassBuilder(log logging.Logger, provider NetDevClassProvider) *Ne
 // FabricInterfaceSetBuilderConfig contains the configuration used by FabricInterfaceSetBuilders.
 type FabricInterfaceSetBuilderConfig struct {
 	Topology                 *Topology
+	Providers                []string
 	FabricInterfaceProviders []FabricInterfaceProvider
 	NetDevClassProvider      NetDevClassProvider
 }
 
 func defaultFabricInterfaceSetBuilders(log logging.Logger, config *FabricInterfaceSetBuilderConfig) []FabricInterfaceSetBuilder {
 	return []FabricInterfaceSetBuilder{
-		newFabricInterfaceBuilder(log, config.FabricInterfaceProviders...),
+		newFabricInterfaceBuilder(log, config.Providers, config.FabricInterfaceProviders...),
 		newNetworkDeviceBuilder(log, config.Topology),
 		newNetDevClassBuilder(log, config.NetDevClassProvider),
 		newNUMAAffinityBuilder(log, config.Topology),
@@ -726,11 +896,12 @@ func (c *FabricScannerConfig) Validate() error {
 
 // FabricScanner is a type that scans the system for fabric interfaces.
 type FabricScanner struct {
-	log      logging.Logger
-	mutex    sync.Mutex
-	config   *FabricScannerConfig
-	builders []FabricInterfaceSetBuilder
-	topo     *Topology
+	log       logging.Logger
+	mutex     sync.Mutex
+	config    *FabricScannerConfig
+	providers common.StringSet
+	builders  []FabricInterfaceSetBuilder
+	topo      *Topology
 }
 
 // NewFabricScanner creates a new FabricScanner with the given configuration.
@@ -745,7 +916,7 @@ func NewFabricScanner(log logging.Logger, config *FabricScannerConfig) (*FabricS
 	}, nil
 }
 
-func (s *FabricScanner) init(ctx context.Context) error {
+func (s *FabricScanner) init(ctx context.Context, providers []string) error {
 	if err := s.config.Validate(); err != nil {
 		return errors.Wrap(err, "invalid FabricScannerConfig")
 	}
@@ -759,9 +930,11 @@ func (s *FabricScanner) init(ctx context.Context) error {
 		}
 	}
 
+	s.providers = common.NewStringSet(providers...)
 	s.builders = defaultFabricInterfaceSetBuilders(s.log,
 		&FabricInterfaceSetBuilderConfig{
 			Topology:                 topo,
+			Providers:                providers,
 			FabricInterfaceProviders: s.config.FabricInterfaceProviders,
 			NetDevClassProvider:      s.config.NetDevClassProvider,
 		})
@@ -769,7 +942,7 @@ func (s *FabricScanner) init(ctx context.Context) error {
 }
 
 // Scan discovers fabric interfaces in the system.
-func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
+func (s *FabricScanner) Scan(ctx context.Context, providers ...string) (*FabricInterfaceSet, error) {
 	if s == nil {
 		return nil, errors.New("FabricScanner is nil")
 	}
@@ -777,8 +950,8 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if !s.isInitialized() {
-		if err := s.init(ctx); err != nil {
+	if !s.isInitialized(providers) {
+		if err := s.init(ctx, providers); err != nil {
 			return nil, err
 		}
 	}
@@ -793,11 +966,31 @@ func (s *FabricScanner) Scan(ctx context.Context) (*FabricInterfaceSet, error) {
 	s.log.Debugf("discovered %d fabric interfaces:\n%s",
 		result.NumFabricInterfaces(), result.String())
 
+	if result.NumFabricInterfaces() == 0 {
+		if len(providers) == 0 {
+			return nil, errors.New("no fabric interfaces found")
+		}
+		return nil, fmt.Errorf("no fabric interfaces found with providers: %s", strings.Join(providers, ", "))
+	}
 	return result, nil
 }
 
-func (s *FabricScanner) isInitialized() bool {
-	return len(s.builders) > 0
+func (s *FabricScanner) isInitialized(providers []string) bool {
+	if len(s.builders) == 0 {
+		return false
+	}
+
+	if len(s.providers) != len(providers) {
+		return false
+	}
+
+	for _, prov := range providers {
+		if !s.providers.Has(prov) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // CacheTopology caches a specific HW topology for use with the fabric scan.
@@ -872,7 +1065,7 @@ func WaitFabricReady(ctx context.Context, log logging.Logger, params WaitFabricR
 func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan error) {
 	readySet := common.NewStringSet()
 	unusableSet := common.NewStringSet()
-	log.Debug("waiting for fabric interfaces to become ready...")
+	log.Trace("waiting for fabric interfaces to become ready...")
 	for {
 		for _, iface := range params.FabricIfaces {
 			// No need to check again if we marked it ready or unusable
@@ -894,7 +1087,7 @@ func loopFabricReady(log logging.Logger, params WaitFabricReadyParams, ch chan e
 			case NetDevStateDown, NetDevStateUnknown:
 				// Down or unknown can be interpreted as disabled/unusable
 				if params.IgnoreUnusable {
-					log.Debugf("ignoring unusable fabric interface %q", iface)
+					log.Tracef("ignoring unusable fabric interface %q", iface)
 					unusableSet.Add(iface)
 				} else {
 					ch <- errors.Errorf("requested fabric interface %q is unusable", iface)

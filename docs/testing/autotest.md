@@ -24,7 +24,7 @@ Pool created with 6.00% SCM/NVMe ratio
 Then run autotest via the daos utility:
 
 ```sh
-$ daos pool autotest --pool autotest_pool
+$ daos pool autotest autotest_pool
 
 # Sample output
 Step Operation               Status Time(sec) Comment

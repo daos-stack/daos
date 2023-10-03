@@ -8,37 +8,26 @@ server_config:
   engines:
     0:
       log_mask: INFO
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
-  scm_size: 20%
-  nvme_size: 40%
+  size: 50%
   control_method: dmg
 container:
   type: POSIX
   control_method: daos
 ior:
   client_processes:
-    np_16:
-      np: 16
+    ppn: 32
   test_file: testFile
-  repetitions: 1
   api: POSIX
   dfs_destroy: false
-  transfer_size: '1M'
-  block_size: '64M'
+  transfer_size: 1M
+  block_size: 1G
   dfs_oclass: "EC_2P1G1"
-  read_x: 5  # 500%
+  read_x: 3  # 300%
   iorflags:
-    - "-v -w -k"
-    - "-v -r -k"
+    - "-v -w -k -G 3"
+    - "-v -r -k -G 3"
 dfuse:
-  mount_dir: "/tmp/daos_dfuse/"
   disable_caching: true
   disable_wb_caching: true

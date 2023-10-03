@@ -1,10 +1,9 @@
 hosts:
   test_servers: 1
   test_clients: 1
-timeout: 90
+timeout: 120
 pool:
   scm_size: 1G
-  control_method: dmg
 server_config:
   name: daos_server
   engines_per_host: 1
@@ -16,7 +15,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 container:
   type: POSIX
   control_method: daos
@@ -24,18 +23,14 @@ dfuse: !mux
   writeback:
     # File metadata is incorrect after write with writeback caching and IL.
     !filter-only : "/run/intercept/off"  # yamllint disable-line rule:colons
-    mount_dir: "/tmp/daos_dfuse/"
     name: "writeback"
   writethrough:
-    mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     name: "writethrough"
   metadata:
-    mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     name: "metadata"
   nocache:
-    mount_dir: "/tmp/daos_dfuse/"
     disable_wb_cache: true
     disable_caching: true
     name: "nocache"

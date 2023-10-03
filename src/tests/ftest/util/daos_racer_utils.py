@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -46,6 +46,9 @@ class DaosRacerCommand(ExecutableCommand):
         # of None will result in no timeout being used.
         self.clush_timeout = BasicParameter(None)
 
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+
     def get_str_param_names(self):
         """Get a sorted list of the names of the command attributes.
 
@@ -86,23 +89,28 @@ class DaosRacerCommand(ExecutableCommand):
 
         self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
-        # Include exports prior to the daos_racer command
-        self._pre_command = self.env.to_export_str()
-
-    def run(self):
+    def run(self, raise_exception=None):
         """Run the daos_racer command remotely.
+
+        Args:
+            raise_exception (bool, optional): whether or not to raise an exception if the command
+                fails. This overrides the self.exit_status_exception
+                setting if defined. Defaults to None.
 
         Raises:
             CommandFailure: if there is an error running the command
 
         """
+        if raise_exception is None:
+            raise_exception = self.exit_status_exception
+
         # Run daos_racer on the specified host
         self.log.info(
             "Running %s on %s with %s timeout",
             str(self), self.host,
             "no" if self.clush_timeout.value is None else
             "a {}s".format(self.clush_timeout.value))
-        return_codes = pcmd(self.host, str(self), True, self.clush_timeout.value)
+        return_codes = pcmd(self.host, self.with_exports, True, self.clush_timeout.value)
         if 0 not in return_codes or len(return_codes) > 1:
             # Kill the daos_racer process if the remote command timed out
             if 255 in return_codes:
@@ -110,6 +118,7 @@ class DaosRacerCommand(ExecutableCommand):
                     "Stopping timed out daos_racer process on %s", self.host)
                 pcmd(self.host, "pkill daos_racer", True)
 
-            raise CommandFailure("Error running '{}'".format(self._command))
+            if raise_exception:
+                raise CommandFailure("Error running '{}'".format(self._command))
 
         self.log.info("Test passed!")

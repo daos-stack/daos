@@ -1,16 +1,13 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import traceback
-import logging
+
+from pydaos.raw import DaosContainer, DaosApiError
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
 
 
 class ObjUpdateBadParam(TestWithServers):
@@ -22,21 +19,20 @@ class ObjUpdateBadParam(TestWithServers):
 
     def setUp(self):
         super().setUp()
-        self.plog = logging.getLogger("progress")
         try:
             self.prepare_pool()
             # create a container
             self.container = DaosContainer(self.context)
             self.container.create(self.pool.pool.handle)
-            self.plog.info("Container %s created.", self.container.get_uuid_str())
+            self.log.info("Container %s created.", self.container.get_uuid_str())
             # now open it
             self.container.open()
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
             self.fail("Test failed during setup .\n")
 
-    def test_bad_handle(self):
+    def test_obj_update_bad_handle(self):
         """
         Test ID: DAOS-1376
 
@@ -45,7 +41,7 @@ class ObjUpdateBadParam(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objbadhand,objupdatebadparam,test_bad_handle
+        :avocado: tags=ObjUpdateBadParam,test_obj_update_bad_handle
         """
         try:
             # create an object and write some data into it
@@ -66,10 +62,10 @@ class ObjUpdateBadParam(TestWithServers):
             self.fail("Test was expected to return a -1002 but it has not.\n")
         except DaosApiError as excep:
             self.container.oh = saved_oh
-            self.plog.info("Test Complete")
+            self.log.info("Test Complete")
             if '-1002' not in str(excep):
-                print(excep)
-                print(traceback.format_exc())
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
                 self.fail("Test was expected to get -1002 but it has not.\n")
 
     def test_null_values(self):
@@ -81,7 +77,7 @@ class ObjUpdateBadParam(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=objupdatenull,objupdatebadparam,test_null_values
+        :avocado: tags=ObjUpdateBadParam,test_null_values
         """
         # data used in the test
         thedata = b"a string that I want to stuff into an object"
@@ -94,14 +90,14 @@ class ObjUpdateBadParam(TestWithServers):
 
             self.container.write_an_obj(
                 thedata, thedatasize, dkey, akey, None, None, 2)
-            self.plog.error("Didn't get expected return code.")
+            self.log.error("Didn't get expected return code.")
             self.fail("Test was expected to return a -1003 but it has not.\n")
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):
-                self.plog.error("Didn't get expected return code.")
-                print(excep)
-                print(traceback.format_exc())
+                self.log.error("Didn't get expected return code.")
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
@@ -114,9 +110,9 @@ class ObjUpdateBadParam(TestWithServers):
 
         except DaosApiError as excep:
             if '-1003' not in str(excep):
-                self.plog.error("Didn't get expected return code.")
-                print(excep)
-                print(traceback.format_exc())
+                self.log.error("Didn't get expected return code.")
+                self.log.info(excep)
+                self.log.info(traceback.format_exc())
                 self.fail("Test was expected to get -1003 but it has not.\n")
 
         try:
@@ -128,12 +124,12 @@ class ObjUpdateBadParam(TestWithServers):
 
             self.container.write_an_obj(
                 thedata, thedatasize, dkey, akey, None, None, 2)
-            self.plog.info("Update with no data worked")
+            self.log.info("Update with no data worked")
 
         except DaosApiError as excep:
-            print(excep)
-            print(traceback.format_exc())
-            self.plog.error("Update with no data failed")
+            self.log.info(excep)
+            self.log.info(traceback.format_exc())
+            self.log.error("Update with no data failed")
             self.fail("Update with no data failed.\n")
 
-        self.plog.info("Test Complete")
+        self.log.info("Test Complete")

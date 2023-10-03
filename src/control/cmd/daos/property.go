@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -116,7 +116,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return labelNotSetStr
+				return ""
 			}
 			return strValStringer(e, name)
 		},
@@ -542,8 +542,10 @@ var propHdlrs = propHdlrMap{
 			return vh(e, v)
 		},
 		valHdlrMap{
-			"1": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
-			"2": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"1":    setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"2":    setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
+			"rank": setDpeVal(C.DAOS_PROP_CO_REDUN_RANK),
+			"node": setDpeVal(C.DAOS_PROP_CO_REDUN_NODE),
 		},
 		func(e *C.struct_daos_prop_entry, name string) string {
 			if e == nil {
@@ -556,6 +558,38 @@ var propHdlrs = propHdlrMap{
 				return fmt.Sprintf("rank (%d)", lvl)
 			case C.DAOS_PROP_CO_REDUN_NODE:
 				return fmt.Sprintf("node (%d)", lvl)
+			default:
+				return fmt.Sprintf("(%d)", lvl)
+			}
+		},
+		false,
+	},
+	C.DAOS_PROP_ENTRY_PERF_DOMAIN: {
+		C.DAOS_PROP_CO_PERF_DOMAIN,
+		"Performance domain level",
+		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			vh, err := h.valHdlrs.get("perf_domain", v)
+			if err != nil {
+				return err
+			}
+
+			return vh(e, v)
+		},
+		valHdlrMap{
+			"root":  setDpeVal(C.DAOS_PROP_PERF_DOMAIN_ROOT),
+			"group": setDpeVal(C.DAOS_PROP_PERF_DOMAIN_GROUP),
+		},
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+
+			lvl := C.get_dpe_val(e)
+			switch lvl {
+			case C.DAOS_PROP_PERF_DOMAIN_ROOT:
+				return fmt.Sprintf("root (%d)", lvl)
+			case C.DAOS_PROP_PERF_DOMAIN_GROUP:
+				return fmt.Sprintf("group (%d)", lvl)
 			default:
 				return fmt.Sprintf("(%d)", lvl)
 			}
@@ -607,6 +641,23 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
+	C.DAOS_PROP_ENTRY_OBJ_VERSION: {
+		C.DAOS_PROP_CO_OBJ_VERSION,
+		"Object Version",
+		nil, nil,
+		func(e *C.struct_daos_prop_entry, name string) string {
+			if e == nil {
+				return propNotFound(name)
+			}
+			if C.dpe_is_negative(e) {
+				return fmt.Sprintf("not set")
+			}
+
+			value := C.get_dpe_val(e)
+			return fmt.Sprintf("%d", value)
+		},
+		true,
+	},
 }
 
 var contDeprProps = map[string]string{
@@ -618,9 +669,8 @@ var contDeprProps = map[string]string{
 // below.
 
 const (
-	maxNameLen     = 20 // arbitrary; came from C code
-	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
-	labelNotSetStr = "container_label_not_set"
+	maxNameLen  = 20 // arbitrary; came from C code
+	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
@@ -734,7 +784,7 @@ func propInvalidValue(e *C.struct_daos_prop_entry, name string) string {
 
 func propError(fs string, args ...interface{}) *flags.Error {
 	return &flags.Error{
-		Message: fmt.Sprintf("--properties: "+fs, args...),
+		Message: fmt.Sprintf("properties: "+fs, args...),
 	}
 }
 
@@ -1012,7 +1062,7 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 	// Accept a list of property names to fetch, if specified,
 	// otherwise just fetch all known properties.
 	f.names = strings.Split(fv, ",")
-	if len(f.names) == 0 || f.names[0] == "all" {
+	if fv == "" || len(f.names) == 0 || f.names[0] == "all" {
 		f.names = propHdlrs.keys()
 	}
 
@@ -1022,8 +1072,8 @@ func (f *GetPropertiesFlag) UnmarshalFlag(fv string) error {
 			return propError("name must not be empty")
 		}
 		if len(key) > maxNameLen {
-			return propError("name too long (%d > %d)",
-				len(name), maxNameLen)
+			return propError("%q: name too long (%d > %d)",
+				key, len(key), maxNameLen)
 		}
 		if newKey, found := contDeprProps[key]; found {
 			key = newKey
@@ -1124,7 +1174,7 @@ func printProperties(out io.Writer, header string, props ...*property) {
 	table := []txtfmt.TableRow{}
 	for _, prop := range props {
 		row := txtfmt.TableRow{}
-		row[nameTitle] = prop.Description
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Name)
 		if prop.String() != "" {
 			row[valueTitle] = prop.String()
 			if len(titles) == 1 {

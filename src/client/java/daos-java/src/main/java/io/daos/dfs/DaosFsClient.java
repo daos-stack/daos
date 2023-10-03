@@ -101,7 +101,9 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     }
     client.registerForShutdown(this);
     setInited(true);
-    log.info("DaosFsClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
+    if (log.isDebugEnabled()) {
+      log.debug("DaosFsClient for {}, {} initialized", builder.getPoolId(), builder.getContId());
+    }
   }
 
   public long getDfsPtr() {
@@ -172,7 +174,9 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
         } else {
           getClient().close();
         }
-        log.info("DaosFsClient for {}, {} disconnected", builder.getPoolId(), builder.getContId());
+        if (log.isDebugEnabled()) {
+          log.debug("DaosFsClient for {}, {} disconnected", builder.getPoolId(), builder.getContId());
+        }
       }
       setInited(false);
       pcFsMap.remove(builder.getPoolId() + builder.getContId());

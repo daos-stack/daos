@@ -1,9 +1,8 @@
-#!/usr/bin/python3
-'''
-  (C) Copyright 2019-2022 Intel Corporation.
+"""
+  (C) Copyright 2019-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 
 import os
 import yaml
@@ -240,6 +239,7 @@ class FaultInjection():
 
     :avocado: recursive
     """
+
     def __init__(self):
         super().__init__()
         self._hosts = []
@@ -248,7 +248,7 @@ class FaultInjection():
         self._fault_list = []
 
     def write_fault_file(self, on_the_fly_fault=None):
-        """ Write out a fault injection config file.
+        """Write out a fault injection config file.
 
         Args:
             on_the_fly_fault --a fault dictionary that isn't predefined
@@ -283,7 +283,7 @@ class FaultInjection():
         self._fault_list = fault_list
         self._test_dir = test_dir
         if self._fault_list:
-            # not using workdir because the huge path was messing up
+            # not using "workdir" because the huge path was messing up
             # orterun or something, could re-evaluate this later
             self.write_fault_file(None)
 
@@ -299,16 +299,21 @@ class FaultInjection():
 
     def stop(self):
         """Remove the fault injection file created during testing.
+
         Returns:
            error_list (list) : Errors during removing fault files (if any).
         """
+        if not self.fault_file:
+            return []
+
         # Remove the fault injection files on the hosts.
         error_list = []
-        commands = ["rm -f {}".format(self.fault_file)]
+        command = "rm -f {}".format(self.fault_file)
         if self._hosts:
-            commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
+            command = get_clush_command(
+                self._hosts, args="-S -v", command=command, command_sudo=True)
         try:
-            run_command(" ".join(commands), verbose=True, raise_exception=False)
+            run_command(command, verbose=True, raise_exception=False)
         except DaosTestError as error:
             error_list.append(error)
         return error_list

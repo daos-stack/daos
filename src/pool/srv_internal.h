@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,9 +11,13 @@
 #define __POOL_SRV_INTERNAL_H__
 
 #include <gurt/list.h>
+#include <daos/pool_map.h>
 #include <daos_srv/daos_engine.h>
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
+
+/* Map status of ranks that make up the pool group */
+#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
 
 /**
  * Global pool metrics
@@ -69,10 +73,16 @@ struct pool_iv_prop {
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
 	uint64_t	pip_svc_redun_fac;
+	uint32_t	pip_checkpoint_mode;
+	uint32_t	pip_checkpoint_freq;
+	uint32_t	pip_checkpoint_thresh;
+	uint32_t	pip_obj_version;
 	struct daos_acl	*pip_acl;
 	d_rank_list_t   pip_svc_list;
 	uint32_t	pip_acl_offset;
 	uint32_t	pip_svc_list_offset;
+	uint32_t	pip_perf_domain;
+	uint32_t	pip_reint_mode;
 	char		pip_iv_buf[0];
 };
 
@@ -82,6 +92,7 @@ struct pool_iv_conn {
 	uint64_t	pic_capas;
 	uint32_t	pic_cred_size;
 	uint32_t	pic_global_ver;
+	uint32_t	pic_obj_ver;
 	char		pic_creds[0];
 };
 
@@ -95,6 +106,7 @@ struct pool_iv_key {
 	uuid_t		pik_uuid;
 	uint32_t	pik_entry_size; /* IV entry size */
 	daos_epoch_t	pik_eph;
+	uint64_t	pik_term;
 };
 
 struct pool_iv_hdl {
@@ -147,6 +159,7 @@ void ds_pool_attr_get_handler(crt_rpc_t *rpc);
 void ds_pool_attr_set_handler(crt_rpc_t *rpc);
 void ds_pool_attr_del_handler(crt_rpc_t *rpc);
 void ds_pool_list_cont_handler(crt_rpc_t *rpc);
+void ds_pool_filter_cont_handler(crt_rpc_t *rpc);
 void ds_pool_query_info_handler(crt_rpc_t *rpc);
 void ds_pool_ranks_get_handler(crt_rpc_t *rpc);
 void ds_pool_upgrade_handler(crt_rpc_t *rpc);
@@ -174,6 +187,7 @@ void ds_pool_tgt_discard_handler(crt_rpc_t *rpc);
 /*
  * srv_util.c
  */
+bool ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank);
 int ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas,
 			     d_rank_t self, d_rank_list_t **to_add_out,
 			     d_rank_list_t **to_remove_out);
@@ -192,7 +206,7 @@ void ds_pool_map_refresh_ult(void *arg);
 
 int ds_pool_iv_conn_hdl_update(struct ds_pool *pool, uuid_t hdl_uuid,
 			       uint64_t flags, uint64_t capas, d_iov_t *cred,
-			       uint32_t global_ver);
+			       uint32_t global_ver, uint32_t obj_layout_ver);
 
 int ds_pool_iv_srv_hdl_update(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 			      uuid_t cont_hdl_uuid);

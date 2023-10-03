@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/container.h>
 #include <daos/pool.h>
 #include <daos/task.h>
+#include "obj_rpc.h"
 #include "obj_internal.h"
 
 int
@@ -376,6 +377,30 @@ dc_obj_list_obj_task_create(daos_handle_t oh, daos_handle_t th,
 	args->akey_anchor = akey_anchor;
 	args->incr_order = incr_order;
 	args->csum	= csum;
+
+	return 0;
+}
+
+int
+dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dkey,
+			      daos_key_t *akey, daos_anchor_t *anchor, daos_event_t *ev,
+			      tse_sched_t *tse, tse_task_t **task)
+{
+	daos_obj_key2anchor_t	*args;
+	int			rc;
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_KEY2ANCHOR);
+	rc = dc_task_create(dc_obj_key2anchor, tse, ev, task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(*task);
+	args->oh	= oh;
+	args->th        = th;
+	args->dkey	= dkey;
+	args->akey	= akey;
+	args->anchor	= anchor;
+	args->nr	= NULL;
 
 	return 0;
 }

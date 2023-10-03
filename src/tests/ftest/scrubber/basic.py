@@ -1,15 +1,12 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from scrubber_test_base import TestWithScrubber
-from apricot import skipForTicket
 
 
 class TestWithScrubberBasic(TestWithScrubber):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-nested-blocks
     """Basic Scrubber Test
 
@@ -44,7 +41,6 @@ class TestWithScrubberBasic(TestWithScrubber):
             self.fail("------Test Failed-----")
         self.log.info("------Test passed------")
 
-    @skipForTicket("DAOS-8906")
     def test_scrubber_disabled_during_pool_creation(self):
         """JIRA ID: DAOS-7371
 
@@ -56,7 +52,7 @@ class TestWithScrubberBasic(TestWithScrubber):
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=test_scrubber_disabled_during_pool_creation
 
@@ -73,7 +69,7 @@ class TestWithScrubberBasic(TestWithScrubber):
             3. Disable checksum on a container and run
                IOR. Gather scrubber statistics.
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=scrubber
         :avocado: tags=test_scrubber_enabled_during_pool_creation
 

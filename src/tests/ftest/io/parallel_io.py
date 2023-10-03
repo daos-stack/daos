@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,15 +8,15 @@ import threading
 import subprocess  # nosec
 import time
 from getpass import getuser
-import general_utils
+import os
 
-from ClusterShell.NodeSet import NodeSet
+
 from exception_utils import CommandFailure
 from fio_test_base import FioBase
 from ior_test_base import IorTestBase
+from run_utils import run_remote
 
 
-# pylint: disable=too-many-ancestors
 class ParallelIo(FioBase, IorTestBase):
     """Base Parallel IO test class.
 
@@ -40,8 +39,8 @@ class ParallelIo(FioBase, IorTestBase):
         """Create a TestPool object to use with ior."""
         self.pool.append(self.get_pool(connect=False))
 
-    def stat_bfree(self, path):
-        """Get stat bfree.
+    def _stat_free_blocks(self, path):
+        """Get stat free blocks.
 
         Args:
             path (str): path to get free block size of.
@@ -72,7 +71,7 @@ class ParallelIo(FioBase, IorTestBase):
         statvfs_list = []
         for _, pool in enumerate(self.pool):
             dfuse_pool_dir = str(path + "/" + pool.uuid)
-            statvfs_info = self.stat_bfree(dfuse_pool_dir)
+            statvfs_info = self._stat_free_blocks(dfuse_pool_dir)
             statvfs_list.append(statvfs_info)
             self.log.info("Statvfs List Output: %s", statvfs_list)
 
@@ -124,9 +123,9 @@ class ParallelIo(FioBase, IorTestBase):
             This should fail.
             Check dfuse again.
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
-        :avocado: tags=daosio,tx,dfuse
-        :avocado: tags=parallelio
+        :avocado: tags=hw,medium
+        :avocado: tags=daosio,tx,dfuse,fio
+        :avocado: tags=ParallelIo,test_parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -144,24 +143,11 @@ class ParallelIo(FioBase, IorTestBase):
         for _, cont in enumerate(self.container):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
             cmd = "ls -a {}".format(dfuse_cont_dir)
-            try:
-                # execute bash cmds
-                ret_code = general_utils.pcmd(
-                    self.hostlist_clients, cmd, timeout=30)
-                if 0 not in ret_code:
-                    error_hosts = NodeSet(
-                        ",".join(
-                            [str(node_set) for code, node_set in
-                             list(ret_code.items()) if code != 0]))
-                    raise CommandFailure(
-                        "Error running '{}' on the following "
-                        "hosts: {}".format(cmd, error_hosts))
-            # report error if any command fails
-            except CommandFailure as error:
-                self.log.error("ParallelIo Test Failed: %s",
-                               str(error))
-                self.fail("Test was expected to pass but "
-                          "it failed.\n")
+            # execute bash cmds
+            result = run_remote(self.log, self.hostlist_clients, cmd, timeout=30)
+            if result.failed_hosts:
+                self.fail("Error running '{}' on the following hosts: {}".format(
+                    cmd, result.failed_hosts))
             # run fio on all containers
             thread = threading.Thread(target=self.execute_fio, args=(
                 self.dfuse.mount_dir.value + "/" + cont.uuid, False))
@@ -187,10 +173,8 @@ class ParallelIo(FioBase, IorTestBase):
                 "Fio was able to access destroyed container: {}".format(
                     self.container[0].uuid))
         except CommandFailure:
-            self.log.info("This run is expected to fail")
-
-        # check dfuse is still running after attempting to access deleted
-        # container.
+            self.log.info("fio failed as expected")
+            # check dfuse is still running after attempting to access deleted container
             self.dfuse.check_running()
 
     def test_multipool_parallelio(self):
@@ -215,9 +199,9 @@ class ParallelIo(FioBase, IorTestBase):
             fail the test.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,dfuse
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=ParallelIo,test_multipool_parallelio
         """
         # test params
         threads = []
@@ -240,13 +224,12 @@ class ParallelIo(FioBase, IorTestBase):
         self.start_dfuse(self.hostlist_clients, None, None)
 
         # record free space using statvfs before any data is written.
-        self.statvfs_info_initial = self.statvfs_pool(
-            self.dfuse.mount_dir.value)
+        self.statvfs_info_initial = self.statvfs_pool(self.dfuse.mount_dir.value)
 
         # Create 10 containers for each pool. Container create process cannot
-        # be parallelised as different container create could complete at
+        # be parallelized as different container create could complete at
         # different times and get appended in the self.container variable in
-        # unorderly manner, causing problems during the write process.
+        # unordered manner, causing problems during the write process.
         for _, pool in enumerate(self.pool):
             self.add_container_qty(self.cont_count, pool)
 
@@ -259,14 +242,14 @@ class ParallelIo(FioBase, IorTestBase):
             for counter in range(self.cont_count):
                 cont_num = (pool_count * self.cont_count) + counter
                 dfuse_cont_dir = str(dfuse_pool_dir + "/" + self.container[cont_num].uuid)
-                cmd = "###ls -a {}".format(dfuse_cont_dir)
-                self.execute_cmd(cmd)
+                cmd = "ls -a {}".format(dfuse_cont_dir)
+                if not run_remote(self.log, self.hostlist_clients, cmd).passed:
+                    self.fail("Failed to {}".format(cmd))
 
                 # run ior on all containers
-                test_file = dfuse_cont_dir + "/testfile"
-                self.ior_cmd.test_file.update(test_file)
+                self.ior_cmd.test_file.update(os.path.join(dfuse_cont_dir, 'testfile'))
                 self.ior_cmd.set_daos_params(
-                    self.server_group, pool, self.container[cont_num].uuid)
+                    self.server_group, pool, self.container[cont_num].identifier)
                 thread = threading.Thread(
                     target=self.run_ior,
                     args=(self.get_ior_job_manager_command(), processes, None,

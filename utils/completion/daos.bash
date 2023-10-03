@@ -1,6 +1,6 @@
-#!/bin/bash
+# shellcheck disable=SC1113
 # /*
-#  * (C) Copyright 2016-2022 Intel Corporation.
+#  * (C) Copyright 2016-2023 Intel Corporation.
 #  *
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
@@ -25,5 +25,6 @@ _daos_control_comp()
 # these commands take advantage of automatic completion
 complete -F _daos_control_comp dmg -o nospace
 complete -F _daos_control_comp daos -o nospace
+complete -F _daos_control_comp ddb -o nospace
 complete -F _daos_control_comp daos_agent
 complete -F _daos_control_comp daos_server

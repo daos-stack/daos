@@ -1,18 +1,13 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from dfuse_test_base import DfuseTestBase
-from exception_utils import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_container import TestContainer
-from general_utils import pcmd
-from ClusterShell.NodeSet import NodeSet
+from run_utils import run_remote
 
 
 class RootContainerTest(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base Dfuse Container check test class.
 
     :avocado: recursive
@@ -23,14 +18,10 @@ class RootContainerTest(DfuseTestBase):
         super().__init__(*args, **kwargs)
         self.pool = []
         self.container = []
-        self.tmp_file_count = self.params.get(
-            "tmp_file_count", '/run/container/*')
-        self.cont_count = self.params.get(
-            "cont_count", '/run/container/*')
-        self.tmp_file_size = self.params.get(
-            "tmp_file_size", '/run/container/*')
-        self.tmp_file_name = self.params.get(
-            "tmp_file_name", '/run/container/*')
+        self.tmp_file_count = self.params.get("tmp_file_count", '/run/container/*')
+        self.cont_count = self.params.get("cont_count", '/run/container/*')
+        self.tmp_file_size = self.params.get("tmp_file_size", '/run/container/*')
+        self.tmp_file_name = self.params.get("tmp_file_name", '/run/container/*')
         # device where the pools and containers are created
         self.device = "scm"
 
@@ -50,45 +41,39 @@ class RootContainerTest(DfuseTestBase):
         self.pool.append(self.get_pool(connect=False))
         return self.pool[-1]
 
-    def _create_cont(self, pool, path=None):
+    def _create_cont(self, pool, **params):
         """Add a new TestContainer object to the list of containers.
 
         Args:
             pool (TestPool): pool object
-            path (str): Unified namespace path for container
+            params (dict, optional): name/value of container attributes to update
 
         Returns:
             TestContainer: the newly added container
 
         """
-        # Get container params
-        container = TestContainer(pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-        if path is not None:
-            container.path.update(path)
-
-        # create container
-        container.create()
+        container = self.get_container(pool, **params)
         self.container.append(container)
         return container
 
-    def test_rootcontainer(self):
+    def test_dfuse_root_container(self):
         """Jira ID: DAOS-3782.
 
         Test Description:
             Purpose of this test is to try and create a container and
             mount it over dfuse and use it as a root container and create
-            subcontainers underneath it and insert several files and see
+            sub containers underneath it and insert several files and see
             if they can be accessed using ls and cd. Verify the pool size
             reflects the space occupied by container. Try to remove the
             files and containers and see the space is reclaimed.
             Test the above procedure with 100 sub containers.
             Test the above procedure with 5 pools and 50 containers
             spread across the pools.
+
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=container,dfuse
-        :avocado: tags=rootcontainer
+        :avocado: tags=RootContainerTest,test_dfuse_root_container
         """
         # Create a pool and start dfuse.
         pool = self._create_pool()
@@ -104,7 +89,7 @@ class RootContainerTest(DfuseTestBase):
         self.insert_files_and_verify("")
         # Insert files into sub container
         self.insert_files_and_verify("cont0")
-        # Create 100 subcontainer and verify the temp files
+        # Create 100 sub containers and verify the temp files
         self.verify_create_delete_containers(pool, 100)
         self.verify_multi_pool_containers()
 
@@ -199,26 +184,9 @@ class RootContainerTest(DfuseTestBase):
         Args:
             cmd (str): Command to run
 
-        Returns:
-            dict: a dictionary of return codes keys and accompanying NodeSet
-                values indicating which hosts yielded the return code.
-
         """
-        try:
-            # execute bash cmds
-            ret = pcmd(
-                self.dfuse_hosts, cmd, verbose=True, timeout=30)
-            if 0 not in ret:
-                error_hosts = NodeSet(
-                    ",".join(
-                        [str(node_set) for code, node_set in
-                         list(ret.items()) if code != 0]))
-                raise CommandFailure(
-                    "Error running '{}' on the following "
-                    "hosts: {}".format(cmd, error_hosts))
-
-        # report error if any command fails
-        except CommandFailure as error:
-            self.log.error("DfuseSparseFile Test Failed: %s", str(error))
+        result = run_remote(self.log, self.dfuse_hosts, cmd, timeout=30)
+        if not result.passed:
+            self.log.error(
+                "Error running '%s' on the following hosts: %s", cmd, result.failed_hosts)
             self.fail("Test was expected to pass but it failed.\n")
-        return ret

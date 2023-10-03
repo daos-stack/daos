@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -44,23 +44,33 @@
 #define DAOS_PO_QUERY_PROP_SCRUB_FREQ		(1ULL << (PROP_BIT_START + 16))
 #define DAOS_PO_QUERY_PROP_SCRUB_THRESH		(1ULL << (PROP_BIT_START + 17))
 #define DAOS_PO_QUERY_PROP_SVC_REDUN_FAC	(1ULL << (PROP_BIT_START + 18))
-#define DAOS_PO_QUERY_PROP_BIT_END		34
+#define DAOS_PO_QUERY_PROP_OBJ_VERSION		(1ULL << (PROP_BIT_START + 19))
+#define DAOS_PO_QUERY_PROP_PERF_DOMAIN		(1ULL << (PROP_BIT_START + 20))
+#define DAOS_PO_QUERY_PROP_CHECKPOINT_MODE      (1ULL << (PROP_BIT_START + 21))
+#define DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ      (1ULL << (PROP_BIT_START + 22))
+#define DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH    (1ULL << (PROP_BIT_START + 23))
+#define DAOS_PO_QUERY_PROP_REINT_MODE		(1ULL << (PROP_BIT_START + 24))
+#define DAOS_PO_QUERY_PROP_BIT_END              40
 
-#define DAOS_PO_QUERY_PROP_ALL									\
-	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |				\
-	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM | DAOS_PO_QUERY_PROP_ACL |	\
-	 DAOS_PO_QUERY_PROP_OWNER | DAOS_PO_QUERY_PROP_OWNER_GROUP |				\
-	 DAOS_PO_QUERY_PROP_SVC_LIST | DAOS_PO_QUERY_PROP_EC_CELL_SZ |				\
-	 DAOS_PO_QUERY_PROP_EC_PDA | DAOS_PO_QUERY_PROP_RP_PDA | DAOS_PO_QUERY_PROP_REDUN_FAC |	\
-	 DAOS_PO_QUERY_PROP_POLICY | DAOS_PO_QUERY_PROP_GLOBAL_VERSION |			\
-	 DAOS_PO_QUERY_PROP_UPGRADE_STATUS | DAOS_PO_QUERY_PROP_SCRUB_MODE |			\
-	 DAOS_PO_QUERY_PROP_SCRUB_FREQ | DAOS_PO_QUERY_PROP_SCRUB_THRESH |			\
-	 DAOS_PO_QUERY_PROP_SVC_REDUN_FAC)
+#define DAOS_PO_QUERY_PROP_ALL                                                                     \
+	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB | DAOS_PO_QUERY_PROP_SELF_HEAL |   \
+	 DAOS_PO_QUERY_PROP_RECLAIM | DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |          \
+	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST |                            \
+	 DAOS_PO_QUERY_PROP_EC_CELL_SZ | DAOS_PO_QUERY_PROP_EC_PDA | DAOS_PO_QUERY_PROP_RP_PDA |   \
+	 DAOS_PO_QUERY_PROP_REDUN_FAC | DAOS_PO_QUERY_PROP_POLICY |                                \
+	 DAOS_PO_QUERY_PROP_GLOBAL_VERSION | DAOS_PO_QUERY_PROP_UPGRADE_STATUS |                   \
+	 DAOS_PO_QUERY_PROP_SCRUB_MODE | DAOS_PO_QUERY_PROP_SCRUB_FREQ |                           \
+	 DAOS_PO_QUERY_PROP_SCRUB_THRESH | DAOS_PO_QUERY_PROP_SVC_REDUN_FAC |                      \
+	 DAOS_PO_QUERY_PROP_OBJ_VERSION | DAOS_PO_QUERY_PROP_PERF_DOMAIN |                         \
+	 DAOS_PO_QUERY_PROP_CHECKPOINT_MODE | DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ |                 \
+	 DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH | DAOS_PO_QUERY_PROP_REINT_MODE)
 
 /*
- * Aggregation of pool/container/object/keys disk format change.
+ * Version 1 corresponds to 2.2 (aggregation optimizations)
+ * Version 2 corresponds to 2.4 (dynamic evtree, checksum scrubbing)
+ * Version 3 corresponds to 2.6 (root embedded values)
  */
-#define DAOS_POOL_GLOBAL_VERSION		2
+#define DAOS_POOL_GLOBAL_VERSION 3
 
 int dc_pool_init(void);
 void dc_pool_fini(void);
@@ -83,7 +93,6 @@ struct dc_pool {
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
 	tse_task_t	       *dp_map_task;
-	uint32_t		dp_rebuild_version;
 	/* highest known pool map version */
 	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,
@@ -141,6 +150,7 @@ int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
+int dc_pool_filter_cont(tse_task_t *task);
 int dc_pool_tgt_idx2ptr(struct dc_pool *pool, uint32_t tgt_idx,
 			struct pool_target **tgt);
 

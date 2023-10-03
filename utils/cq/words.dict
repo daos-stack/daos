@@ -63,6 +63,7 @@ Uncomment
 VMD
 XUnitResult
 acl
+adminexcluded
 akey
 akeys
 allocator
@@ -148,6 +149,7 @@ dev
 dfs
 dfuse
 dir
+dirname
 distro
 dkey
 dkeys
@@ -163,12 +165,14 @@ dst
 dsync
 dtx
 eg
+enablement
 endswith
 enospace
 enum
 env
 environ
 epcrange
+epilog
 errored
 ethernet
 fallocate
@@ -176,10 +180,10 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
-fnctl
 formattable
 fpp
 fs
@@ -191,9 +195,11 @@ fusermount
 gcc
 gdb
 getattr
+getent
 getfattr
 getxattr
 gid
+groupadd
 groupname
 grp
 hackery
@@ -202,6 +208,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -213,6 +220,7 @@ iface
 indata
 infiniband
 init
+interoperability
 io
 iod
 iodepth
@@ -251,6 +259,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -287,6 +296,7 @@ namespace
 namespaces
 natively
 nfs
+nodesperjob
 nosec
 num
 numa
@@ -311,6 +321,7 @@ pci
 pda
 pdesc
 perf
+performant
 pgrep
 pid
 pids
@@ -319,6 +330,7 @@ pkill
 pmdk
 pmem
 poh
+Popen
 posix
 postfix
 pparent
@@ -336,12 +348,14 @@ preprocessor
 prereqs
 proc
 procs
+profiler
 protoc
 ps
 puuid
 py
 pydaos
 ramdisk
+randrw
 ranklist
 rc
 rdb
@@ -350,6 +364,8 @@ readdir
 readlink
 realloc
 rebase
+relink
+relinked
 recurse
 redistributions
 refactor
@@ -363,7 +379,9 @@ rpaths
 rpc
 rpms
 rsvc
+rsync
 runtime
+runuser
 rw
 sandybridge
 sbatch
@@ -376,8 +394,11 @@ scontrol
 sharedctypes
 shlex
 simul
+sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src
@@ -389,6 +410,7 @@ statfs
 statvfs
 stddev
 stderr
+stdin
 stdout
 str
 stripesize
@@ -403,6 +425,7 @@ sublicense
 submodules
 subprocess
 substring
+substrings
 subtest
 sudo
 superblock
@@ -411,6 +434,7 @@ svc
 symlink
 symlinks
 sys
+syslog
 systemctl
 systemd
 taskset
@@ -420,6 +444,7 @@ teardowns
 testcase
 testcases
 testdata
+testFile
 testname
 testrunner
 tgt
@@ -450,6 +475,8 @@ unmount
 unwritable
 uri
 url
+useradd
+userdel
 username
 ushort
 usr
@@ -464,7 +491,9 @@ ver
 versioned
 vm
 vos
+wildcard
 wipefs
+xargs
 xattr
 xattrs
 xfer

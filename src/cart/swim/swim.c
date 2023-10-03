@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 UChicago Argonne, LLC
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -413,8 +413,17 @@ swim_member_suspect(struct swim_context *ctx, swim_id_t from, swim_id_t id, uint
 search:
 	/* determine if this member is already suspected */
 	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
-		if (item->si_id == id)
+		if (item->si_id == id) {
+			/*
+			 * if the new suspicion is of a newer incarnation,
+			 * reset the existing one
+			 */
+			if (nr > id_state.sms_incarnation) {
+				item->si_from = from;
+				item->u.si_deadline = swim_now_ms() + swim_suspect_timeout_get();
+			}
 			goto update;
+		}
 	}
 
 	/* add to end of suspect list */
@@ -1163,4 +1172,90 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id, swim_id_t id,
 	swim_ctx_unlock(ctx);
 out:
 	return rc;
+}
+
+int
+swim_updates_short(struct swim_context *ctx, swim_id_t self_id, uint64_t self_incarnation,
+		   swim_id_t from_id, swim_id_t id, struct swim_member_update *upds_in,
+		   size_t nupds_in, struct swim_member_update **upds_out, size_t *nupds_out)
+{
+	struct swim_member_state	 self_state = {
+		.sms_incarnation	= self_incarnation,
+		.sms_status		= SWIM_MEMBER_ALIVE,
+		.sms_delay		= 0
+	};
+	struct swim_member_update	*id_upd = NULL;
+	struct swim_member_update	*upds;
+	size_t				 nupds;
+	size_t				 i;
+
+	swim_dump_updates(self_id, from_id, self_id, upds_in, nupds_in);
+
+	swim_ctx_lock(ctx);
+	for (i = 0; i < nupds_in; i++) {
+		if (upds_in[i].smu_id == self_id) {
+			if (upds_in[i].smu_state.sms_incarnation < self_incarnation ||
+			    (upds_in[i].smu_state.sms_status != SWIM_MEMBER_SUSPECT &&
+			     upds_in[i].smu_state.sms_status != SWIM_MEMBER_DEAD))
+				continue;
+
+			SWIM_ERROR("{%lu %c %lu} self %s received {%lu %c %lu} from %lu\n",
+				   self_id, 'A', self_incarnation,
+				   SWIM_STATUS_STR[upds_in[i].smu_state.sms_status],
+				   upds_in[i].smu_id,
+				   SWIM_STATUS_CHARS[upds_in[i].smu_state.sms_status],
+				   upds_in[i].smu_state.sms_incarnation, from_id);
+
+			ctx->sc_ops->new_incarnation(ctx, self_id, &self_state);
+		} else if (upds_in[i].smu_id == id) {
+			id_upd = &upds_in[i];
+		}
+	}
+	swim_ctx_unlock(ctx);
+
+	nupds = 1 /* self_id */;
+	if (id != self_id && id_upd != NULL)
+		nupds++; /* id */
+
+	D_ALLOC_ARRAY(upds, nupds);
+	if (upds == NULL)
+		return -DER_NOMEM;
+
+	i = 0;
+
+	upds[i].smu_state.sms_incarnation = self_state.sms_incarnation;
+	upds[i].smu_state.sms_status = SWIM_MEMBER_ALIVE;
+	upds[i].smu_state.sms_delay = 0;
+	upds[i++].smu_id = self_id;
+
+	if (id != self_id && id_upd != NULL) {
+		upds[i].smu_state.sms_incarnation = id_upd->smu_state.sms_incarnation;
+		upds[i].smu_state.sms_status = SWIM_MEMBER_ALIVE;
+		upds[i].smu_state.sms_delay = 0;
+		upds[i++].smu_id = id;
+	}
+
+	D_ASSERTF(i == nupds, "%zu == %zu\n", i, nupds);
+
+	swim_dump_updates(self_id, self_id, from_id, upds, nupds);
+
+	*upds_out = upds;
+	*nupds_out = nupds;
+	return 0;
+}
+
+void
+swim_member_del(struct swim_context *ctx, swim_id_t id)
+{
+	struct swim_item *item;
+
+	swim_ctx_lock(ctx);
+	TAILQ_FOREACH(item, &ctx->sc_suspects, si_link) {
+		if (item->si_id == id) {
+			TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
+			D_FREE(item);
+			break;
+		}
+	}
+	swim_ctx_unlock(ctx);
 }

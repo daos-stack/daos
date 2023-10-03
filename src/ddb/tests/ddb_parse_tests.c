@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -178,148 +178,6 @@ do { \
 		assert_rc_equal(-DER_INVAL, ddb_vtp_init(poh, path, &__vt)); \
 } while (0)
 
-#define assert_path(path, expected) \
-do { \
-	struct dv_tree_path_builder __vt = {0}; \
-	daos_handle_t poh = {0}; \
-	assert_success(ddb_vtp_init(poh, path, &__vt)); \
-	assert_vtp_eq(expected, __vt); \
-	ddb_vtp_fini(&__vt); \
-} while (0)
-
-
-/** easily setup an iov and allocate */
-static void
-iov_alloc(d_iov_t *iov, size_t len)
-{
-	D_ALLOC(iov->iov_buf, len);
-	assert_non_null(iov->iov_buf);
-	iov->iov_buf_len = iov->iov_len = len;
-}
-
-static void
-iov_alloc_str(d_iov_t *iov, const char *str)
-{
-	iov_alloc(iov, strlen(str));
-	memcpy(iov->iov_buf, str, strlen(str));
-}
-
-static void
-vos_path_parse_tests(void **state)
-{
-	struct dv_tree_path_builder expected_vt = {0};
-
-	ddb_vos_tree_path_setup(&expected_vt);
-
-	/* empty paths are valid */
-	assert_path("", expected_vt);
-
-	/* first part must be a valid uuid */
-	assert_invalid_path("12345678");
-
-	uuid_parse("12345678-1234-1234-1234-123456789012", expected_vt.vtp_path.vtp_cont);
-
-	/* handle just container */
-	assert_path("12345678-1234-1234-1234-123456789012", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012", expected_vt);
-	assert_path("12345678-1234-1234-1234-123456789012/", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/", expected_vt);
-
-	/* handle container and object id */
-	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.");
-	expected_vt.vtp_path.vtp_oid.id_pub.lo = 1234;
-	expected_vt.vtp_path.vtp_oid.id_pub.hi = 4321;
-
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234", expected_vt);
-
-	/* handle dkey */
-	iov_alloc_str(&expected_vt.vtp_path.vtp_dkey, "dkey");
-	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/dkey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/", expected_vt);
-
-	iov_alloc_str(&expected_vt.vtp_path.vtp_akey, "akey");
-	assert_invalid_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/akey");
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'", expected_vt);
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/", expected_vt);
-
-	expected_vt.vtp_path.vtp_recx.rx_idx = 1;
-	expected_vt.vtp_path.vtp_recx.rx_nr = 5;
-	assert_path("/12345678-1234-1234-1234-123456789012/4321.1234/'dkey'/'akey'/{1-6}",
-		    expected_vt);
-
-	daos_iov_free(&expected_vt.vtp_path.vtp_dkey);
-	daos_iov_free(&expected_vt.vtp_path.vtp_akey);
-}
-
-static void
-vos_path_parse_and_print_tests(void **state)
-{
-	struct dv_tree_path_builder	 vt = {0};
-	daos_handle_t			 poh = {0};
-	struct ddb_ctx			 ctx = {0};
-	char				*path;
-
-	path = "/12435678-1234-1234-1234-124356789012/1234.4321.0/'akey'/'dkey'";
-
-	ctx.dc_io_ft.ddb_print_message = dvt_fake_print;
-
-	assert_success(ddb_vtp_init(poh, path, &vt));
-
-	vtp_print(&ctx, &vt.vtp_path, false);
-
-	assert_string_equal(path, dvt_fake_print_buffer);
-
-	ddb_vtp_fini(&vt);
-}
-
-static void
-parse_idx_tests(void **state)
-{
-	struct dv_tree_path_builder expected_vt = {0};
-
-	ddb_vos_tree_path_setup(&expected_vt);
-
-	expected_vt.vtp_cont_idx = 1;
-	assert_path("[1]", expected_vt);
-
-	expected_vt.vtp_cont_idx = 11;
-	assert_path("[11]", expected_vt);
-
-	expected_vt.vtp_cont_idx = 1234;
-	assert_path("[1234]", expected_vt);
-
-	expected_vt.vtp_cont_idx = 1;
-	expected_vt.vtp_oid_idx = 2;
-	expected_vt.vtp_dkey_idx = 3;
-	expected_vt.vtp_akey_idx = 4;
-
-	expected_vt.vtp_recx_idx = 5;
-	assert_path("[1]/[2]/[3]/[4]/[5]", expected_vt);
-}
-
-static void
-has_parts_tests(void **state)
-{
-	struct dv_tree_path vtp = {0};
-
-	assert_false(dv_has_cont(&vtp));
-	uuid_copy(vtp.vtp_cont, g_uuids[0]);
-	assert_true(dv_has_cont(&vtp));
-
-	assert_false(dv_has_obj(&vtp));
-	vtp.vtp_oid = g_oids[0];
-	assert_true(dv_has_obj(&vtp));
-
-	assert_false(dv_has_dkey(&vtp));
-	vtp.vtp_dkey = g_dkeys[0];
-	assert_true(dv_has_dkey(&vtp));
-
-	assert_false(dv_has_akey(&vtp));
-	vtp.vtp_akey = g_akeys[0];
-	assert_true(dv_has_akey(&vtp));
-}
-
 #define assert_invalid_parse_dtx_id(str) \
 	do { \
 		struct dtx_id __dtx_id = {0}; \
@@ -344,6 +202,129 @@ parse_dtx_id_tests(void **state)
 	assert_int_equal(0x123456890, id.dti_hlc);
 }
 
+#define assert_parsed_key(str, e) do {\
+	daos_key_t __key = {0}; \
+	assert_int_equal(strlen(str), ddb_parse_key(str, &__key)); \
+	assert_key_equal(e, __key);  \
+	daos_iov_free(&__key); \
+} while (0)
+
+#define set_expected_str(key, str) do { \
+	sprintf(key.iov_buf, str); \
+	d_iov_set(&key, key.iov_buf, strlen(str)); \
+} while (0)
+
+#define set_expected_str_len(key, str, len) do { \
+	memset(key.iov_buf, 0, len); \
+	sprintf(key.iov_buf, str); \
+	d_iov_set(&key, key.iov_buf, len); \
+} while (0)
+
+#define set_expected(key, val) d_iov_set(&key, &val, sizeof(val))
+#define set_expected_len(key, val, len) d_iov_set(&key, &val, len)
+
+static void
+keys_are_parsed_correctly(void **state)
+{
+	daos_key_t	key = {0};
+	daos_key_t	expected_key = {0};
+	char		buf[128] = {0};
+
+	d_iov_set(&expected_key, buf, ARRAY_SIZE(buf));
+
+	/*
+	 * Invalid key path parts
+	 */
+	/* key should not be an empty string or NULL */
+	assert_invalid(ddb_parse_key("", &key));
+	assert_invalid(ddb_parse_key(NULL, &key));
+	/* invalid syntax */
+	assert_invalid(ddb_parse_key("{}", &key));
+	assert_invalid(ddb_parse_key("{", &key));
+	assert_invalid(ddb_parse_key("}", &key));
+	assert_invalid(ddb_parse_key("string_key{{64}", &key));
+	assert_invalid(ddb_parse_key("string_key{1{64}", &key));
+	assert_invalid(ddb_parse_key("string_key{64}}", &key));
+	assert_invalid(ddb_parse_key("string_key{64", &key));
+	assert_invalid(ddb_parse_key("string_key}64", &key));
+	/* must actually have a string value before size, or a type */
+	assert_invalid(ddb_parse_key("{64}", &key));
+	/* invalid size */
+	assert_invalid(ddb_parse_key("string_key{a}", &key));
+	/* shouldn't have anything after the size */
+	assert_invalid(ddb_parse_key("string_key{5}more", &key));
+	/* length is too small */
+	assert_invalid(ddb_parse_key("string_key{0}", &key));
+	assert_invalid(ddb_parse_key("string_key{3}", &key));
+	/* invalid type */
+	assert_invalid(ddb_parse_key("{uint:3}", &key));
+	/* value is too big for type */
+
+	/* String keys ... some with length specified */
+	/* Note that length of key does NOT include a NULL terminator */
+	set_expected_str(expected_key, "string_key");
+	assert_parsed_key("string_key", expected_key);
+
+	set_expected_str_len(expected_key, "string_key", 64);
+	assert_parsed_key("string_key{64}", expected_key);
+
+	/* able to escape curly brace */
+	set_expected_str_len(expected_key, "string_{key", 64);
+	assert_parsed_key("string_\\{key{64}", expected_key);
+
+	set_expected_str(expected_key, "string_{key");
+	assert_parsed_key("string_\\{key", expected_key);
+
+	set_expected_str_len(expected_key, "{{{{", 64);
+	assert_parsed_key("\\{\\{\\{\\{{64}", expected_key);
+
+	set_expected_str(expected_key, "{{{{");
+	assert_parsed_key("\\{\\{\\{\\{", expected_key);
+
+	set_expected_str(expected_key, "}}}}");
+	assert_parsed_key("\\}\\}\\}\\}", expected_key);
+
+	set_expected_str(expected_key, "string_value{24}");
+	assert_parsed_key("string_value\\{24\\}", expected_key);
+
+	/* Number strings */
+	uint8_t key_val_8 = 9;
+
+	set_expected(expected_key, key_val_8);
+	assert_parsed_key("{uint8:9}", expected_key);
+
+	uint16_t key_val_16 = 17;
+
+	set_expected(expected_key, key_val_16);
+	assert_parsed_key("{uint16:17}", expected_key);
+
+	uint32_t key_val_32 = 33;
+
+	set_expected(expected_key, key_val_32);
+	assert_parsed_key("{uint32:33}", expected_key);
+
+	uint64_t key_val_64 = 99999999;
+
+	set_expected(expected_key, key_val_64);
+	assert_parsed_key("{uint64:99999999}", expected_key);
+
+	uint64_t key_val_hex = 0x12345678;
+
+	set_expected(expected_key, key_val_hex);
+	assert_parsed_key("{uint64:0x12345678}", expected_key);
+
+	uint8_t bin_buf[10] = {0};
+
+	memset(bin_buf, 0xAB, ARRAY_SIZE(bin_buf));
+	set_expected_len(expected_key, bin_buf, ARRAY_SIZE(bin_buf));
+	assert_parsed_key("{bin:0xABABABABABABABABABAB}", expected_key);
+	assert_parsed_key("{bin(5):0xABABABABABABABABABAB}", expected_key);
+
+	/* Currently don't check for value that's too big */
+	assert_true(ddb_parse_key("{uint8:3000000000}", &key) > 0);
+	daos_iov_free(&key);
+}
+
 /*
  * -----------------------------------------------
  * Execute
@@ -357,11 +338,8 @@ ddb_parse_tests_run()
 		TEST(vos_file_parts_tests),
 		TEST(string_to_argv_tests),
 		TEST(parse_args_tests),
-		TEST(vos_path_parse_tests),
-		TEST(vos_path_parse_and_print_tests),
-		TEST(parse_idx_tests),
-		TEST(has_parts_tests),
-		TEST(parse_dtx_id_tests)
+		TEST(parse_dtx_id_tests),
+		TEST(keys_are_parsed_correctly),
 	};
 	return cmocka_run_group_tests_name("DDB helper parsing function tests", tests,
 					   NULL, NULL);

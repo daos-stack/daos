@@ -21,6 +21,7 @@ struct ds_iv_ns {
 	d_rank_t	iv_master_rank;
 	/* Different pool will use different ns id */
 	unsigned int	iv_ns_id;
+	uint64_t	iv_master_term;
 	/* Link to global ns list (ds_iv_list) */
 	d_list_t	iv_ns_link;
 	/* all of entries under the ns links here */
@@ -163,9 +164,8 @@ typedef int (*ds_iv_ent_get_t)(struct ds_iv_entry *ent, void **priv);
  * \param ent [IN]	iv class entry to get.
  * \param priv [IN]	private ptr from crt IV callback.
  *
- * \return		0 if succeeds, error code otherwise.
  */
-typedef int (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
+typedef void (*ds_iv_ent_put_t)(struct ds_iv_entry *ent, void *priv);
 
 /**
  * Destroy the data attached to the entry.
@@ -304,14 +304,13 @@ int ds_iv_invalidate(struct ds_iv_ns *ns, struct ds_iv_key *key,
 int ds_iv_ns_create(crt_context_t ctx, uuid_t pool_uuid, crt_group_t *grp,
 		    unsigned int *ns_id, struct ds_iv_ns **p_iv_ns);
 
-void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank);
+void ds_iv_ns_update(struct ds_iv_ns *ns, unsigned int master_rank, uint64_t term);
 void ds_iv_ns_cleanup(struct ds_iv_ns *ns);
 void ds_iv_ns_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_leader_stop(struct ds_iv_ns *ns);
 void ds_iv_ns_start(struct ds_iv_ns *ns);
 void ds_iv_ns_put(struct ds_iv_ns *ns);
 void ds_iv_ns_get(struct ds_iv_ns *ns);
-void ds_iv_ns_destroy(void *ns);
 
 unsigned int ds_iv_ns_id_get(void *ns);
 

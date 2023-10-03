@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This is a post test processing script for post processing the
-# run_test.sh stage CI run
+# NLT stage CI run
 
 set -uex
 
@@ -20,6 +20,7 @@ rsync -v -dprt -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
 
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":build/ \
       --filter="include nlt*.json" --filter="include dnt*.xml" \
+      --filter="include nltir.xml" --filter="include nltr.json" \
       --filter="include nlt-junit.xml" --filter="exclude *" ./
 mkdir -p vm_test
 mv nlt-errors.json vm_test/

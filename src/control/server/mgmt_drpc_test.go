@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,12 +11,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/daos"
+	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 func getTestNotifyReadyReqBytes(t *testing.T, sockPath string, idx uint32) []byte {
@@ -347,4 +353,188 @@ func TestSrvModule_HandleClusterEvent_Invalid(t *testing.T) {
 	}
 
 	test.CmpErr(t, expectedErr, err)
+}
+
+func getTestBytes(t *testing.T, msg proto.Message) []byte {
+	t.Helper()
+
+	testBytes, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return testBytes
+}
+
+func TestSrvModule_handleGetPoolServiceRanks(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	for name, tc := range map[string]struct {
+		reqBytes []byte
+		testPool *system.PoolService
+		expResp  []byte
+		expErr   error
+	}{
+		"bad request bytes": {
+			reqBytes: []byte("bad bytes"),
+			expErr:   drpc.UnmarshalingPayloadFailure(),
+		},
+		"bad pool uuid in request": {
+			reqBytes: getTestBytes(t, &srvpb.GetPoolSvcReq{
+				Uuid: "bad-uuid",
+			}),
+			expErr: errors.New("invalid pool uuid"),
+		},
+		"not found": {
+			reqBytes: getTestBytes(t, &srvpb.GetPoolSvcReq{
+				Uuid: test.MockUUID(),
+			}),
+			expResp: getTestBytes(t, &srvpb.GetPoolSvcResp{
+				Status: int32(daos.Nonexistent),
+			}),
+		},
+		"found, but not Ready": {
+			reqBytes: getTestBytes(t, &srvpb.GetPoolSvcReq{
+				Uuid: test.MockUUID(),
+			}),
+			testPool: &system.PoolService{
+				PoolUUID:  test.MockPoolUUID(),
+				PoolLabel: "testlabel",
+				State:     system.PoolServiceStateCreating,
+				Replicas:  []ranklist.Rank{0, 1, 2},
+			},
+			expResp: getTestBytes(t, &srvpb.GetPoolSvcResp{
+				Status: int32(daos.Nonexistent),
+			}),
+		},
+		"success": {
+			reqBytes: getTestBytes(t, &srvpb.GetPoolSvcReq{
+				Uuid: test.MockUUID(),
+			}),
+			testPool: &system.PoolService{
+				PoolUUID:  test.MockPoolUUID(),
+				PoolLabel: "testlabel",
+				State:     system.PoolServiceStateReady,
+				Replicas:  []ranklist.Rank{0, 1, 2},
+			},
+			expResp: getTestBytes(t, &srvpb.GetPoolSvcResp{
+				Svcreps: []uint32{0, 1, 2},
+			}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			db := raft.MockDatabase(t, log)
+			mod := &srvModule{
+				log:    log,
+				poolDB: db,
+			}
+			if tc.testPool != nil {
+				lock, err := db.TakePoolLock(ctx, tc.testPool.PoolUUID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer lock.Release()
+				if err := db.AddPoolService(lock.InContext(ctx), tc.testPool); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			resp, err := mod.handleGetPoolServiceRanks(tc.reqBytes)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSrvModule_handlePoolFindByLabel(t *testing.T) {
+	log, buf := logging.NewTestLogger(t.Name())
+	defer test.ShowBufferOnFailure(t, buf)
+
+	for name, tc := range map[string]struct {
+		reqBytes []byte
+		testPool *system.PoolService
+		expResp  []byte
+		expErr   error
+	}{
+		"bad request bytes": {
+			reqBytes: []byte("bad bytes"),
+			expErr:   drpc.UnmarshalingPayloadFailure(),
+		},
+		"not found": {
+			reqBytes: getTestBytes(t, &srvpb.PoolFindByLabelReq{
+				Label: "testlabel",
+			}),
+			expResp: getTestBytes(t, &srvpb.PoolFindByLabelResp{
+				Status: int32(daos.Nonexistent),
+			}),
+		},
+		"found, but not Ready": {
+			reqBytes: getTestBytes(t, &srvpb.PoolFindByLabelReq{
+				Label: "testlabel",
+			}),
+			testPool: &system.PoolService{
+				PoolUUID:  test.MockPoolUUID(),
+				PoolLabel: "testlabel",
+				State:     system.PoolServiceStateCreating,
+				Replicas:  []ranklist.Rank{0, 1, 2},
+			},
+			expResp: getTestBytes(t, &srvpb.PoolFindByLabelResp{
+				Status: int32(daos.Nonexistent),
+			}),
+		},
+		"success": {
+			reqBytes: getTestBytes(t, &srvpb.PoolFindByLabelReq{
+				Label: "testlabel",
+			}),
+			testPool: &system.PoolService{
+				PoolUUID:  test.MockPoolUUID(),
+				PoolLabel: "testlabel",
+				State:     system.PoolServiceStateReady,
+				Replicas:  []ranklist.Rank{0, 1, 2},
+			},
+			expResp: getTestBytes(t, &srvpb.PoolFindByLabelResp{
+				Uuid:    test.MockPoolUUID().String(),
+				Svcreps: []uint32{0, 1, 2},
+			}),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := test.Context(t)
+
+			db := raft.MockDatabase(t, log)
+			mod := &srvModule{
+				log:    log,
+				poolDB: db,
+			}
+			if tc.testPool != nil {
+				lock, err := db.TakePoolLock(ctx, tc.testPool.PoolUUID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer lock.Release()
+				if err := db.AddPoolService(lock.InContext(ctx), tc.testPool); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			resp, err := mod.handlePoolFindByLabel(tc.reqBytes)
+			test.CmpErr(t, tc.expErr, err)
+			if err != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
 }

@@ -34,13 +34,8 @@ class DdbCommandBase(CommandWithParameters):
         # Write mode that's necessary for the commands that alters the data such as load.
         self.write_mode = FormattedParameter("-w", default=False)
 
-        # Run ddb with single mode with -R. i.e., non-interactive mode.
-        self.run_cmd = FormattedParameter("-R", default=True)
-
         # Command to run on the VOS file that contains container, object info, etc.
-        # Specify double quotes in str_format because the command needs to be wrapped
-        # with them.
-        self.single_command = FormattedParameter("\"{}\"")
+        self.single_command = BasicParameter(None, position=2)
 
         # VOS file path.
         self.vos_path = BasicParameter(None, position=1)
@@ -141,8 +136,8 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_value(self, component_path, out_file_path):
-        """Call ddb -R "dump_value <component_path> <out_file_path>"
+    def value_dump(self, component_path, out_file_path):
+        """Call ddb -R "value_dump <component_path> <out_file_path>"
 
         dump_value writes the contents to the file. e.g., if akey is specified, its data
         will be dumped.
@@ -161,12 +156,12 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = False
         self.single_command.value = " ".join(
-            ["dump_value", component_path, out_file_path])
+            ["value_dump", component_path, out_file_path])
 
         return self.run()
 
-    def load(self, component_path, load_file_path):
-        """Call ddb -w -R "load <load_file_path> <component_path>"
+    def value_load(self, component_path, load_file_path):
+        """Call ddb -w -R "value_load <load_file_path> <component_path>"
 
         load writes the given data into the container. e.g.,
         load new_data.txt [0]/[1]/[1]/[0]
@@ -184,7 +179,7 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = True
         self.single_command.value = " ".join(
-            ["load", load_file_path, component_path])
+            ["value_load", load_file_path, component_path])
 
         return self.run()
 
@@ -205,8 +200,8 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def dump_ilog(self, component_path):
-        """Call ddb -R "dump_ilog <component_path>"
+    def ilog_dump(self, component_path):
+        """Call ddb -R "ilog_dump <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -218,12 +213,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["dump_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_dump", component_path])
 
         return self.run()
 
-    def commit_ilog(self, component_path):
-        """Call ddb -R "commit_ilog <component_path>"
+    def ilog_commit(self, component_path):
+        """Call ddb -R "ilog_commit <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -235,12 +230,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["commit_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_commit", component_path])
 
         return self.run()
 
-    def rm_ilog(self, component_path):
-        """Call ddb -R "rm_ilog <component_path>"
+    def ilog_clear(self, component_path):
+        """Call ddb -R "ilog_clear <component_path>"
 
         Args:
             component_path (str): Component that comes after rm. e.g., [0]/[1]/[1] for
@@ -252,12 +247,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["rm_ilog", component_path])
+        self.single_command.value = " ".join(["ilog_clear", component_path])
 
         return self.run()
 
-    def dump_superblock(self, component_path):
-        """Call ddb -R "dump_superblock <component_path>"
+    def superblock_dump(self, component_path):
+        """Call ddb -R "superblock_dump <component_path>"
 
         Args:
             component_path (str): Component that comes after dump_superblock.
@@ -269,12 +264,12 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = False
-        self.single_command.value = " ".join(["dump_superblock", component_path])
+        self.single_command.value = " ".join(["superblock_dump", component_path])
 
         return self.run()
 
-    def dump_dtx(self, component_path="[0]", committed=False, active=False):
-        """Call ddb -R "dump_dtx <component_path>"
+    def dtx_dump(self, component_path="[0]", committed=False, active=False):
+        """Call ddb -R "dtx_dump <component_path>"
 
         committed and active can't be set at the same time.
 
@@ -291,7 +286,7 @@ class DdbCommand(DdbCommandBase):
         """
         self.write_mode.value = False
 
-        commands = ["dump_dtx"]
+        commands = ["dtx_dump"]
         if committed:
             commands.append("-c")
         if active:
@@ -302,8 +297,8 @@ class DdbCommand(DdbCommandBase):
 
         return self.run()
 
-    def clear_cmt_dtx(self, component_path="[0]"):
-        """Call ddb -R "clear_cmt_dtx <component_path>"
+    def dtx_cmt_clear(self, component_path="[0]"):
+        """Call ddb -R "dtx_cmt_clear <component_path>"
 
         Args:
             component_path (str): Component that comes after clear_cmt_dtx. It doesn't
@@ -315,6 +310,6 @@ class DdbCommand(DdbCommandBase):
 
         """
         self.write_mode.value = True
-        self.single_command.value = " ".join(["clear_cmt_dtx", component_path])
+        self.single_command.value = " ".join(["dtx_cmt_clear", component_path])
 
         return self.run()

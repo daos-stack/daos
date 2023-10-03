@@ -22,9 +22,9 @@ fi
 : "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
-: "${CHROOT_NAME:='centos+epel-7-x86_64'}"
-: "${TARGET:='centos7'}"
-: "${REPO_SPEC:='el-7'}"
+: "${CHROOT_NAME:='rocky+epel-8-x86_64'}"
+: "${TARGET:='el8'}"
+: "${REPO_SPEC:='el-8'}"
 
 : "${COVFN_DISABLED:=true}"
 : "${JOB_REPOS:=}"

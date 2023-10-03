@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -22,7 +22,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_DTX_VERSION	2
+#define DAOS_DTX_VERSION	3
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -45,7 +45,8 @@ enum dtx_operation {
 	((uuid_t)		(di_po_uuid)		CRT_VAR)	\
 	((uuid_t)		(di_co_uuid)		CRT_VAR)	\
 	((uint64_t)		(di_epoch)		CRT_VAR)	\
-	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)
+	((struct dtx_id)	(di_dtx_array)		CRT_ARRAY)	\
+	((uint32_t)		(di_flags)		CRT_ARRAY)
 
 /* DTX RPC output fields */
 #define DAOS_OSEQ_DTX							\
@@ -61,12 +62,12 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
-#define DTX_CLEANUP_THD_AGE_UP	60
+#define DTX_CLEANUP_THD_AGE_UP	90
 
 /* If DTX cleanup for stale entries is triggered, then the DTXs with
  * older ages than this threshold will be cleanup.
  */
-#define DTX_CLEANUP_THD_AGE_LO	45
+#define DTX_CLEANUP_THD_AGE_LO	75
 
 /* The count threshold (per pool) for triggering DTX aggregation. */
 #define DTX_AGG_THD_CNT_MAX	(1 << 24)
@@ -141,18 +142,12 @@ extern uint32_t dtx_agg_thd_age_lo;
  */
 extern uint32_t dtx_batched_ult_max;
 
-/* The threshold for using helper ULT when handle DTX RPC. */
-#define DTX_RPC_HELPER_THD_MIN	18
-#define DTX_RPC_HELPER_THD_DEF	(DTX_THRESHOLD_COUNT + 1)
-
 /*
  * If the size of dtx_memberships exceeds DTX_INLINE_MBS_SIZE, then load it (DTX mbs)
  * dynamically when use it to avoid holding a lot of DRAM resource for long time that
  * may happen on some very large system.
  */
 #define DTX_INLINE_MBS_SIZE		512
-
-extern uint32_t dtx_rpc_helper_thd;
 
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_batched_degree;
@@ -165,6 +160,8 @@ struct dtx_pool_metrics {
  */
 struct dtx_tls {
 	struct d_tm_node_t	*dt_committable;
+	struct d_tm_node_t	*dt_dtx_leader_total;
+	struct d_tm_node_t	*dt_dtx_entry_total;
 	uint64_t		 dt_agg_gen;
 	uint32_t		 dt_batched_ult_cnt;
 };
@@ -213,13 +210,12 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count, daos_epoch_t epoch);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 
-int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count,
-			 d_list_t *check_list, d_list_t *cmt_list,
-			 d_list_t *abt_list, d_list_t *act_list, bool failout);
+int dtx_refresh_internal(struct ds_cont_child *cont, int *check_count, d_list_t *check_list,
+			 d_list_t *cmt_list, d_list_t *abt_list, d_list_t *act_list, bool for_io);
 int dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 			  daos_epoch_t epoch, int *tgt_array, int *err);
 
@@ -232,6 +228,10 @@ enum dtx_status_handle_result {
 	DSHR_IGNORE		= 3,
 	DSHR_ABORT_FAILED	= 4,
 	DSHR_CORRUPT		= 5,
+};
+
+enum dtx_rpc_flags {
+	DRF_INITIAL_LEADER	= (1 << 0),
 };
 
 #endif /* __DTX_INTERNAL_H__ */

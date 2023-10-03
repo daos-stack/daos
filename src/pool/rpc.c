@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,17 @@
 #include <daos/pool.h>
 #include <daos_pool.h>
 #include "rpc.h"
+
+char *
+dc_pool_op_str(enum pool_operation op)
+{
+#define X(a, b, c, d, e) case a: return #a;
+	switch (op) {
+	POOL_PROTO_RPC_LIST
+	default: return "POOL_UNKNOWN_OPERATION";
+	}
+#undef X
+}
 
 #define crt_proc_daos_target_state_t crt_proc_uint32_t
 
@@ -116,12 +127,88 @@ CRT_RPC_DEFINE(pool_upgrade, DAOS_ISEQ_POOL_UPGRADE,
 		DAOS_OSEQ_POOL_UPGRADE)
 CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
-CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
-		DAOS_OSEQ_POOL_QUERY_INFO)
-CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
-		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
-CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
-	       DAOS_OSEQ_POOL_TGT_DISCARD)
+
+static int
+pool_cont_filter_t_proc_parts(crt_proc_t proc, crt_proc_op_t proc_op,
+			      uint32_t n_parts, daos_pool_cont_filter_part_t ***parts)
+{
+	int				rc = 0;
+	uint32_t			p = 0;
+	uint32_t			j;
+	daos_pool_cont_filter_part_t   *part;
+
+	if (DECODING(proc_op)) {
+		D_ALLOC_ARRAY(*parts, n_parts);
+		if (*parts == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+	}
+
+	while (p < n_parts) {
+		if (DECODING(proc_op)) {
+			D_ALLOC((*parts)[p], sizeof(daos_pool_cont_filter_part_t));
+			if ((*parts)[p] == NULL)
+				D_GOTO(out_free, rc = -DER_NOMEM);
+		}
+		part = (*parts)[p++];
+
+		rc = crt_proc_uint32_t(proc, proc_op, &part->pcfp_func);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+
+		rc = crt_proc_uint32_t(proc, proc_op, &part->pcfp_key);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+
+		/* all keys have uint64_t values for now */
+		rc = crt_proc_uint64_t(proc, proc_op, &part->pcfp_val64);
+		if (unlikely(rc)) {
+			if (DECODING(proc_op))
+				goto out_free;
+			goto out;
+		}
+	}
+
+	if (FREEING(proc_op)) {
+out_free:
+		for (j = 0; j < p; j++)
+			D_FREE((*parts)[j]);
+		D_FREE(*parts);
+	}
+out:
+	return rc;
+}
+
+static int
+crt_proc_daos_pool_cont_filter_t(crt_proc_t proc, crt_proc_op_t proc_op,
+				 daos_pool_cont_filter_t *filt)
+{
+	int	rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &filt->pcf_combine_func);
+	if (unlikely(rc))
+		return rc;
+
+	rc = crt_proc_uint32_t(proc, proc_op, &filt->pcf_nparts);
+	if (unlikely(rc))
+		return rc;
+
+	rc = pool_cont_filter_t_proc_parts(proc, proc_op, filt->pcf_nparts, &filt->pcf_parts);
+	if (unlikely(rc))
+		return rc;
+
+	return 0;
+}
+
+CRT_RPC_DEFINE(pool_filter_cont, DAOS_ISEQ_POOL_FILTER_CONT, DAOS_OSEQ_POOL_FILTER_CONT)
+CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO, DAOS_OSEQ_POOL_QUERY_INFO)
+CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP, DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_DISCARD)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -132,16 +219,16 @@ CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD,
 	.prf_req_fmt = c,	\
 	.prf_hdlr    = NULL,	\
 	.prf_co_ops  = NULL,	\
-}
+},
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(4)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5),
-	POOL_PROTO_SRV_RPC_LIST,
+	POOL_PROTO_CLI_RPC_LIST(5)
+	POOL_PROTO_SRV_RPC_LIST
 };
 
 #undef X
@@ -209,6 +296,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_RP_PDA:
 			bits |= DAOS_PO_QUERY_PROP_RP_PDA;
 			break;
+		case DAOS_PROP_PO_PERF_DOMAIN:
+			bits |= DAOS_PO_QUERY_PROP_PERF_DOMAIN;
+			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;
 			break;
@@ -241,6 +331,21 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			bits |= DAOS_PO_QUERY_PROP_SVC_LIST;
+			break;
+		case DAOS_PROP_PO_OBJ_VERSION:
+			bits |= DAOS_PO_QUERY_PROP_OBJ_VERSION;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_MODE:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_MODE;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_FREQ;
+			break;
+		case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_CHECKPOINT_THRESH;
+			break;
+		case DAOS_PROP_PO_REINT_MODE:
+			bits |= DAOS_PO_QUERY_PROP_REINT_MODE;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);
@@ -287,12 +392,12 @@ pool_query_reply_to_info(uuid_t pool_uuid, struct pool_buf *map_buf,
 
 int
 list_cont_bulk_create(crt_context_t ctx, crt_bulk_t *bulk,
-		      struct daos_pool_cont_info *buf, daos_size_t ncont)
+		      void *buf, daos_size_t buf_nbytes)
 {
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
-	d_iov_set(&iov, buf, ncont * sizeof(struct daos_pool_cont_info));
+	d_iov_set(&iov, buf, buf_nbytes);
 	sgl.sg_nr = 1;
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;

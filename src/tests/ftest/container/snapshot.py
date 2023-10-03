@@ -1,15 +1,13 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import traceback
-import random
+
+from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError, c_uuid_to_str
+
 from apricot import TestWithServers
-from pydaos.raw import (DaosContainer, DaosSnapshot, DaosApiError,
-                        c_uuid_to_str)
 from general_utils import get_random_bytes
 
 
@@ -143,7 +141,7 @@ class Snapshot(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke,snap,snapshot
-        :avocado: tags=snapshot_negative,snapshotcreate_negative,test_snapshot_negativecases
+        :avocado: tags=Snapshot,test_snapshot_negativecases
         """
 
         # DAOS-1322 Create a new container, verify snapshot state as expected
@@ -167,7 +165,7 @@ class Snapshot(TestWithServers):
         data_size = self.params.get("test_datasize",
                                     '/run/snapshot/*', default=150)
         thedata = b"--->>>Happy Daos Snapshot-Create Negative Testing " + \
-                  b"<<<---" + get_random_bytes(random.randint(1, data_size))  # nosec
+                  b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
         try:
             obj = self.container.write_an_obj(thedata,
                                               len(thedata) + 1,
@@ -195,8 +193,8 @@ class Snapshot(TestWithServers):
                 " {}".format(str(error)))
         self.log.info("==(2)snapshot_list[ind]=%s", snapshot)
         self.log.info("==snapshot.epoch=  %s", snapshot.epoch)
-        self.log.info("==written thedata=%s", thedata)
-        self.log.info("==thedata2.value= %s", thedata2.value)
+        self.log.info("==written thedata[:200]=%s", thedata[:200])
+        self.log.info("==thedata2.value[:200] =%s", thedata2.value[:200])
         if thedata2.value != thedata:
             self.fail("##(2)The data in the snapshot is not the same as the original data")
         self.log.info("==Snapshot data matches the data originally written.")
@@ -284,8 +282,7 @@ class Snapshot(TestWithServers):
                           test_data[ind]["tst_obj"])
             self.log.info("  ==snapshot tst_data_size= %s",
                           len(test_data[ind]["tst_data"]) + 1)
-            self.log.info("  ==original tst_data =%s",
-                          test_data[ind]["tst_data"])
+            self.log.info("  ==original tst_data[:200] =%s", test_data[ind]["tst_data"][:200])
 
     def test_snapshots(self):
         # pylint: disable=no-member,too-many-locals
@@ -318,7 +315,7 @@ class Snapshot(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=container,smoke,snap,snapshot
-        :avocado: tags=snapshots,test_snapshots
+        :avocado: tags=Snapshot,test_snapshots
         """
 
         test_data = []
@@ -340,7 +337,7 @@ class Snapshot(TestWithServers):
             ss_number += 1
             thedata = b"--->>>Happy Daos Snapshot Testing " + \
                 str(ss_number).encode("utf-8") + \
-                b"<<<---" + get_random_bytes(random.randint(1, data_size))  # nosec
+                b"<<<---" + get_random_bytes(self.random.randint(1, data_size))
             datasize = len(thedata) + 1
             try:
                 obj = self.container.write_an_obj(thedata,
@@ -375,7 +372,7 @@ class Snapshot(TestWithServers):
             self.log.info("=(2.%s)Committing %d additional transactions to "
                           "the same KV.", ss_number, more_transactions)
             while more_transactions:
-                size = random.randint(1, 250) + 1  # nosec
+                size = self.random.randint(1, 250) + 1
                 new_data = get_random_bytes(size)
                 try:
                     new_obj = self.container.write_an_obj(
@@ -401,12 +398,10 @@ class Snapshot(TestWithServers):
                 self.fail("##(3.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
             self.display_snapshot_test_data(test_data, ss_number)
-            self.log.info("  ==thedata3.value= %s", thedata3.value)
+            self.log.info("  ==thedata3.value[:200]= %s", thedata3.value[:200])
             if thedata3.value != thedata:
-                raise Exception("##(3.2)The data in the snapshot is not the "
-                                "same as the original data")
-            self.log.info("  ==The snapshot data matches the data originally"
-                          " written.")
+                self.fail("##(3.2)The data in the snapshot is not the same as the original data")
+            self.log.info("  ==The snapshot data matches the data originally written.")
 
             # (4)List the snapshot and make sure it reflects the original epoch
             try:
@@ -443,10 +438,10 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(5.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
-            self.log.info("  ==snapshot tst_data =%s", thedata5.value)
+            self.log.info("  ==snapshot tst_data[:200] =%s", thedata5.value[:200])
             if thedata5.value != tst_data:
-                raise Exception("##(5.2)Snapshot #{}, test data Mis-matches"
-                                "the original data written.".format(ss_number))
+                self.fail("##(5.2)Snapshot #{}, test data Mis-matches"
+                          "the original data written.".format(ss_number))
             self.log.info("  snapshot test number %s, test data matches"
                           " the original data written.", ss_number)
 
@@ -473,8 +468,8 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(7)Error when retrieving the snapshot data: {}"
                       .format(str(error)))
-        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s",
-                      thedata7.value)
+        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value[:200]= %s",
+                      thedata7.value[:200])
         self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
 
         # Still able to open the snapshot and read data after destroyed.

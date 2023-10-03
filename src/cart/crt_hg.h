@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -31,51 +31,54 @@ struct crt_rpc_priv;
 struct crt_common_hdr;
 struct crt_corpc_hdr;
 
-/** type of NA plugin */
-enum crt_na_type {
-	CRT_NA_SM		= 0,
-	CRT_NA_OFI_SOCKETS	= 1,
-	CRT_NA_OFI_VERBS_RXM	= 2,
-	CRT_NA_OFI_GNI		= 3,
-	CRT_NA_OFI_PSM2		= 4,
-	CRT_NA_OFI_TCP_RXM	= 5,
-	CRT_NA_OFI_CXI		= 6,
-	CRT_NA_OFI_LAST         = CRT_NA_OFI_CXI,
-	CRT_NA_UCX_RC		= 7,
-	CRT_NA_UCX_UD		= 8,
-	CRT_NA_UCX_RC_UD	= 9,
-	CRT_NA_UCX_RC_O		= 10,
-	CRT_NA_UCX_UD_O		= 11,
-	CRT_NA_UCX_RC_UD_O	= 12,
-	CRT_NA_UCX_RC_X		= 13,
-	CRT_NA_UCX_UD_X		= 14,
-	CRT_NA_UCX_RC_UD_X      = 15,
-	CRT_NA_UCX_DC_X         = 16,
-	CRT_NA_UCX_TCP		= 17,
-
+/**
+ * Enumeration specifying providers supported by the library
+ */
+typedef enum {
+	CRT_PROV_SM		= 0,
+	CRT_PROV_OFI_SOCKETS,
+	CRT_PROV_OFI_VERBS_RXM,
+	CRT_PROV_OFI_GNI,
+	CRT_PROV_OFI_TCP,
+	CRT_PROV_OFI_TCP_RXM,
+	CRT_PROV_OFI_CXI,
+	CRT_PROV_OFI_OPX,
+	CRT_PROV_OFI_LAST	= CRT_PROV_OFI_OPX,
+	CRT_PROV_UCX_RC,
+	CRT_PROV_UCX_UD,
+	CRT_PROV_UCX_RC_UD,
+	CRT_PROV_UCX_RC_O,
+	CRT_PROV_UCX_UD_O,
+	CRT_PROV_UCX_RC_UD_O,
+	CRT_PROV_UCX_RC_X,
+	CRT_PROV_UCX_UD_X,
+	CRT_PROV_UCX_RC_UD_X,
+	CRT_PROV_UCX_DC_X,
+	CRT_PROV_UCX_TCP,
+	CRT_PROV_UCX_LAST	= CRT_PROV_UCX_TCP,
 	/* Note: This entry should be the last valid one in enum */
-	CRT_NA_COUNT,
-	CRT_NA_UNKNOWN = -1,
-};
+	CRT_PROV_COUNT,
+	CRT_PROV_UNKNOWN = -1,
+} crt_provider_t;
 
-enum crt_na_type
-crt_prov_str_to_na_type(const char *prov_str);
+crt_provider_t
+crt_prov_str_to_prov(const char *prov_str);
 
 int
-crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr);
+crt_hg_parse_uri(const char *uri, crt_provider_t *prov, char *addr);
 
 static inline bool
-crt_na_type_is_ucx(int na_type)
+crt_provider_is_ucx(crt_provider_t prov)
 {
-	return (na_type >= CRT_NA_UCX_RC) &&
-	       (na_type < CRT_NA_COUNT);
+	return (prov >= CRT_PROV_UCX_RC) &&
+	       (prov <= CRT_PROV_UCX_LAST);
 }
 
 static inline bool
-crt_na_type_is_ofi(int na_type)
+crt_provider_is_ofi(crt_provider_t prov)
 {
-	return (na_type >= CRT_NA_OFI_SOCKETS) &&
-	       (na_type <= CRT_NA_OFI_LAST);
+	return (prov >= CRT_PROV_OFI_SOCKETS) &&
+	       (prov <= CRT_PROV_OFI_LAST);
 }
 
 struct crt_na_dict {
@@ -123,14 +126,16 @@ struct crt_hg_context {
 };
 
 /* crt_hg.c */
+int crt_hg_get_protocol_info(const char *info_string, struct na_protocol_info **na_protocol_info_p);
+void crt_hg_free_protocol_info(struct na_protocol_info *na_protocol_info);
 int crt_hg_init(void);
 int crt_hg_fini(void);
-int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx);
+int crt_hg_ctx_init(struct crt_hg_context *hg_ctx, int provider, int idx, bool primary);
 int crt_hg_ctx_fini(struct crt_hg_context *hg_ctx);
 int crt_hg_req_create(struct crt_hg_context *hg_ctx,
 		      struct crt_rpc_priv *rpc_priv);
 void crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv);
-int crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
+void crt_hg_req_send(struct crt_rpc_priv *rpc_priv);
 int crt_hg_reply_send(struct crt_rpc_priv *rpc_priv);
 void crt_hg_reply_error_send(struct crt_rpc_priv *rpc_priv, int error_code);
 int crt_hg_req_cancel(struct crt_rpc_priv *rpc_priv);
@@ -151,15 +156,18 @@ int crt_proc_out_common(crt_proc_t proc, crt_rpc_output_t *data);
 
 bool crt_provider_is_contig_ep(int provider);
 bool crt_provider_is_port_based(int provider);
-bool crt_provider_is_sep(int provider);
-void crt_provider_set_sep(int provider, bool enable);
-int crt_provider_get_cur_ctx_num(int provider);
-void crt_provider_inc_cur_ctx_num(int provider);
-void crt_provider_dec_cur_ctx_num(int provider);
 char *crt_provider_name_get(int provider);
+bool crt_provider_is_sep(bool primary, int provider);
+void crt_provider_set_sep(bool primary, int provider, bool enable);
+int crt_provider_get_cur_ctx_num(bool primary, int provider);
+int crt_provider_get_ctx_idx(bool primary, int provider);
+void crt_provider_put_ctx_idx(bool primary, int provider, int idx);
+int crt_provider_get_max_ctx_num(bool primary, int provider);
+d_list_t *crt_provider_get_ctx_list(bool primary, int provider);
+void crt_provider_get_ctx_list_and_num(bool primary, int provider, d_list_t **list, int *num);
+struct crt_na_config*
+crt_provider_get_na_config(bool primary, int provider);
 
-int crt_provider_get_max_ctx_num(int provider);
-d_list_t *crt_provider_get_ctx_list(int provider);
 
 static inline int
 crt_hgret_2_der(int hg_ret)
@@ -180,8 +188,9 @@ crt_hgret_2_der(int hg_ret)
 		return -DER_CANCELED;
 	case HG_BUSY:
 		return -DER_BUSY;
+	case HG_FAULT:
 	case HG_PROTOCOL_ERROR:
-		return -DER_PROTO;
+		return -DER_HG_FATAL;
 	case HG_PERMISSION:
 	case HG_ACCESS:
 		return -DER_NO_PERM;

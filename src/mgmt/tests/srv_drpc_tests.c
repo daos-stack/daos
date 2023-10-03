@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -260,7 +260,8 @@ expect_drpc_acl_resp_with_error(Drpc__Response *resp, int expected_err)
 					 resp->body.data);
 	assert_non_null(acl_resp);
 	assert_int_equal(acl_resp->status, expected_err);
-	assert_int_equal(acl_resp->n_acl, 0);
+	if (acl_resp->acl != NULL)
+		assert_int_equal(acl_resp->acl->n_entries, 0);
 
 	mgmt__aclresp__free_unpacked(acl_resp, NULL);
 }
@@ -339,10 +340,10 @@ expect_drpc_acl_resp_success(Drpc__Response *resp, const char **expected_acl,
 					 resp->body.data);
 	assert_non_null(acl_resp);
 	assert_int_equal(acl_resp->status, 0);
-	assert_int_equal(acl_resp->n_acl, expected_acl_nr);
+	assert_int_equal(acl_resp->acl->n_entries, expected_acl_nr);
 
 	for (i = 0; i < expected_acl_nr; i++) {
-		assert_string_equal(acl_resp->acl[i], expected_acl[i]);
+		assert_string_equal(acl_resp->acl->entries[i], expected_acl[i]);
 	}
 
 	mgmt__aclresp__free_unpacked(acl_resp, NULL);
@@ -392,8 +393,8 @@ setup_modify_acl_drpc_call(Drpc__Call *call, char *uuid, const char **acl,
 	Mgmt__ModifyACLReq req = MGMT__MODIFY_ACLREQ__INIT;
 
 	req.id = uuid;
-	req.acl = (char **)acl;
-	req.n_acl = acl_nr;
+	req.entries = (char **)acl;
+	req.n_entries = acl_nr;
 
 	pack_modify_acl_req(call, &req);
 }
@@ -2667,6 +2668,7 @@ setup_led_manage_drpc_call(Drpc__Call *call, char *tr_addr)
 	req.ids = tr_addr;
 	req.led_action = CTL__LED_ACTION__SET;
 	req.led_state = CTL__LED_STATE__QUICK_BLINK;
+	req.led_duration_mins = 2;
 	pack_led_manage_req(call, &req);
 }
 

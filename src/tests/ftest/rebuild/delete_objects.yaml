@@ -13,13 +13,14 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 1073741824
   svcn: 2
-  debug: True
+  debug: true
   control_method: dmg
   pool_query_timeout: 30
+  properties: rd_fac:2
 container:
   akey_size: 5
   dkey_size: 5
@@ -32,7 +33,7 @@ container:
       data_size: 8
       object_qty: 30
       record_qty: 1
-  debug: True
+  debug: true
 rebuild:
   rank: 4
   object_class: OC_RP_3G1

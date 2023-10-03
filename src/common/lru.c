@@ -117,8 +117,7 @@ daos_lru_cache_create(int bits, uint32_t feats,
 	*lcache_pp = lcache;
 	lcache = NULL;
 out:
-	if (lcache != NULL)
-		D_FREE(lcache);
+	D_FREE(lcache);
 	return rc;
 }
 

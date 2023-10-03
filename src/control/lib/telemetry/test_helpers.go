@@ -198,7 +198,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 	id := NextTestID()
 	InitTestMetricsProducer(t, id, 2048)
 
-	ctx, err := Init(context.Background(), uint32(id))
+	ctx, err := Init(test.Context(t), uint32(id))
 	if err != nil {
 		t.Fatal(err)
 	}

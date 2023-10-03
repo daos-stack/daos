@@ -1,6 +1,6 @@
 hosts:
   test_servers: 2
-#JIRA-3132 tmp update timeout from 2400 to 4800
+# JIRA-3132 tmp update timeout from 2400 to 4800
 timeout: 4800
 server_config:
   name: daos_server
@@ -13,7 +13,7 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 3G
   control_method: dmg
@@ -22,17 +22,17 @@ array_size:
 dkeys: !mux
   single:
     no_of_dkeys:
-    - 1
+      - 1
   multiple:
     no_of_dkeys:
-    - 50
+      - 50
 akeys: !mux
   single:
     no_of_akeys:
-    - 1
+      - 1
   multiple:
     no_of_akeys:
-    - 500
+      - 500
 record: !mux
   1Byte:
     length:

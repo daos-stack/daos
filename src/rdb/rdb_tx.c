@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -164,6 +164,9 @@ struct rdb_tx_op {
 	struct rdb_kvs_attr    *dto_attr;
 };
 
+/* TX header to indicate if the transaction is critical and must bypass SCM space checks.
+ * If more protocol needed (e.g., to convey log compaction), could make this a bit flag.
+ */
 struct rdb_tx_hdr {
 	uint32_t	critical;	/* use VOS_OF_CRIT for all ops in TX? */
 };
@@ -411,26 +414,60 @@ rdb_tx_commit(struct rdb_tx *tx)
 		goto out_lock;
 	}
 
-	/* If tx is not critical, and almost out of space, do not append.
-	 * TODO: decide if an official free space amount should be in lc
-	 *       and possibly adjusted based on differences across replicas.
-	 */
+	/* If tx is not critical, and out of space (even after log compaction), do not append. */
 	if (!rdb_tx_is_critical(tx)) {
 		daos_size_t	scm_remaining = 0;
+		uint32_t	nchecks = 0;
 
+check_space:
 		rc = rdb_scm_left(tx->dt_db, &scm_remaining);
 		if (rc != 0) {
-			D_ERROR(DF_DB": failed to query free space\n",
-				DP_DB(tx->dt_db));
+			D_ERROR(DF_DB": failed to query free space\n", DP_DB(tx->dt_db));
 			goto out_lock;
 		}
+		nchecks++;
 
 		if (scm_remaining < RDB_NOAPPEND_FREE_SPACE) {
-			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not "
-			       "append! scm_left="DF_U64"\n", DP_DB(tx->dt_db),
-			       scm_remaining);
-			D_GOTO(out_lock, rc = -DER_NOSPACE);
+			uint64_t		idx = 0;
+
+			if (nchecks > 1) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, do not append! "
+				       "scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+
+			/* Compact applied entries (not too often). May recover enough space. */
+			if ((daos_getutime() - tx->dt_db->d_nospc_ts) < RDB_NOSPC_ERR_INTVL_USEC) {
+				D_DEBUG(DB_TRACE, DF_DB": nearly out of space, but too "
+					"early to trigger compaction\n", DP_DB(tx->dt_db));
+				goto check_space;	/* will return via nchecks test above */
+			}
+			D_DEBUG(DB_TRACE, DF_DB": nearly out of space, compact log before retry! "
+				"scm_left="DF_U64"\n", DP_DB(tx->dt_db), scm_remaining);
+			rc = rdb_raft_trigger_compaction(tx->dt_db, true /* compact_all */, &idx);
+			if (rc != 0) {
+				D_WARN(DF_DB": failed to trigger compaction!\n", DP_DB(tx->dt_db));
+				D_GOTO(out_lock, rc = -DER_NOSPACE);
+			}
+			while ((idx != 0) && (tx->dt_db->d_lc_record.dlr_aggregated < idx)) {
+				sched_cond_wait(tx->dt_db->d_compacted_cv, tx->dt_db->d_raft_mutex);
+				D_DEBUG(DB_TRACE, DF_DB": compacted to "DF_U64", need "DF_U64"\n",
+					DP_DB(tx->dt_db), tx->dt_db->d_lc_record.dlr_aggregated,
+					idx);
+			}
+			tx->dt_db->d_nospc_ts = daos_getutime();
+
+			/* Do not append if we lost leadership while waiting for log compaction. */
+			rc = rdb_tx_leader_check(tx);
+			if (rc != 0)
+				goto out_lock;
+
+			goto check_space;
 		}
+
+		D_DEBUG(DB_TRACE, DF_DB": %s append tx entry to raft log, scm_left="DF_U64"\n",
+			DP_DB(tx->dt_db), (nchecks > 1) ? "(after log compaction)" : "",
+			scm_remaining);
 	}
 
 	rc = rdb_raft_append_apply(tx->dt_db, tx->dt_entry, tx->dt_entry_len,
@@ -740,11 +777,10 @@ rdb_tx_apply_update(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 {
 	int rc;
 
-	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */,
-			   key, value);
+	rc = rdb_lc_update(db->d_lc, index, kvs, crit, 1 /* n */, key, value);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		D_ERROR(DF_DB ": failed to update KVS " DF_X64 ": " DF_RC "\n", DP_DB(db), kvs,
+			DP_RC(rc));
 	return rc;
 }
 
@@ -756,8 +792,7 @@ rdb_tx_apply_delete(struct rdb *db, uint64_t index, rdb_oid_t kvs,
 
 	rc = rdb_lc_punch(db->d_lc, index, kvs, 1 /* n */, key);
 	if (rc != 0)
-		D_ERROR(DF_DB": failed to update KVS "DF_X64": %d\n", DP_DB(db),
-			kvs, rc);
+		DL_ERROR(rc, DF_DB ": failed to update KVS " DF_X64, DP_DB(db), kvs);
 	return rc;
 }
 
@@ -935,9 +970,9 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		rc = rdb_tx_apply_op(db, index, &op, crit);
 		if (rc != 0) {
 			if (!rdb_tx_deterministic_error(rc))
-				D_ERROR(DF_DB": failed to apply entry "DF_U64
-					" op %u <%td, %zd>: %d\n", DP_DB(db),
-					index, op.dto_opc, p - buf, n, rc);
+				D_ERROR(DF_DB ": failed to apply entry " DF_U64
+					      " op %u <%td, %zd>: " DF_RC "\n",
+					DP_DB(db), index, op.dto_opc, p - buf, n, DP_RC(rc));
 			break;
 		}
 		p += n;
@@ -957,8 +992,8 @@ rdb_tx_apply(struct rdb *db, uint64_t index, const void *buf, size_t len,
 		rdb_kvs_cache_evict(db->d_kvss);
 		rc_tmp = rdb_lc_discard(db->d_lc, index, index);
 		if (rc_tmp != 0) {
-			D_ERROR(DF_DB": failed to discard entry "DF_U64": %d\n",
-				DP_DB(db), index, rc_tmp);
+			D_ERROR(DF_DB ": failed to discard entry " DF_U64 ": " DF_RC "\n",
+				DP_DB(db), index, DP_RC(rc_tmp));
 			if (rdb_tx_deterministic_error(rc))
 				return rc_tmp;
 			else

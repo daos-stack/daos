@@ -23,11 +23,35 @@ import (
 const (
 	FsTypeNone    = "none"
 	FsTypeExt4    = "ext4"
+	FsTypeBtrfs   = "btrfs"
+	FsTypeXfs     = "xfs"
+	FsTypeZfs     = "zfs"
+	FsTypeNtfs    = "ntfs"
 	FsTypeTmpfs   = "tmpfs"
+	FsTypeNfs     = "nfs"
 	FsTypeUnknown = "unknown"
 
 	parseFsUnformatted = "data"
+
+	// magic numbers harvested from statfs man page
+	MagicTmpfs = 0x01021994
+	MagicExt4  = 0xEF53
+	MagicBtrfs = 0x9123683E
+	MagicXfs   = 0x58465342
+	MagicZfs   = 0x2FC12FC1
+	MagicNtfs  = 0x5346544e
+	MagicNfs   = 0x6969
 )
+
+var magicToStr = map[int64]string{
+	MagicBtrfs: FsTypeBtrfs,
+	MagicExt4:  FsTypeExt4,
+	MagicNfs:   FsTypeNfs,
+	MagicNtfs:  FsTypeNtfs,
+	MagicTmpfs: FsTypeTmpfs,
+	MagicXfs:   FsTypeXfs,
+	MagicZfs:   FsTypeZfs,
+}
 
 // DefaultProvider returns the package-default provider implementation.
 func DefaultProvider() *LinuxProvider {
@@ -176,6 +200,35 @@ func (s LinuxProvider) GetfsUsage(target string) (uint64, uint64, error) {
 	return frSize * stBuf.Blocks, frSize * stBuf.Bavail, nil
 }
 
+type FsType struct {
+	Name   string
+	NoSUID bool
+}
+
+// GetFsType retrieves the filesystem type for a path.
+func (s LinuxProvider) GetFsType(path string) (*FsType, error) {
+	stBuf := new(unix.Statfs_t)
+
+	if err := unix.Statfs(path, stBuf); err != nil {
+		return nil, err
+	}
+
+	fsType := &FsType{
+		Name:   fsStrFromMagic(stBuf.Type),
+		NoSUID: (stBuf.Flags&unix.ST_NOSUID != 0),
+	}
+
+	return fsType, nil
+}
+
+func fsStrFromMagic(typeMagic int64) string {
+	str, found := magicToStr[typeMagic]
+	if !found {
+		return FsTypeUnknown
+	}
+	return str
+}
+
 func (s LinuxProvider) checkDevice(device string) error {
 	st, err := s.Stat(device)
 	if err != nil {
@@ -189,80 +242,35 @@ func (s LinuxProvider) checkDevice(device string) error {
 	return nil
 }
 
-func getDistroArgs() []string {
-	distro := GetDistribution()
-
-	// use stride option for SCM interleaved mode
-	// disable lazy initialization (hurts perf)
-	// discard is not needed/supported on SCM
-	opts := "stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard"
-
-	// enable flex_bg to allow larger contiguous block allocation
-	// disable uninit_bg to initialize everything upfront
-	// disable resize to avoid GDT block allocations
-	// disable extra isize since we really have no use for this
-	feat := "flex_bg,^uninit_bg,^resize_inode,^extra_isize"
-
-	switch {
-	case distro.ID == "centos" && distro.Version.Major < 8:
-		// use strict minimum listed above here since that's
-		// the oldest distribution we support
-	default:
-		// packed_meta_blocks allows to group all data blocks together
-		opts += ",packed_meta_blocks=1"
-		// enable sparse_super2 since 2x superblock copies are enough
-		// disable csum since we have ECC already for SCM
-		// bigalloc is intentionally not used since some kernels don't support it
-		feat += ",sparse_super2,^metadata_csum"
-	}
-
-	return []string{
-		"-E", opts,
-		"-O", feat,
-		// each ext4 group is of size 32767 x 4KB = 128M
-		// pack 128 groups together to increase ability to use huge
-		// pages for a total virtual group size of 16G
-		"-G", "128",
-	}
+// MkfsReq defines the input parameters for a Mkfs call.
+type MkfsReq struct {
+	Device     string
+	Filesystem string
+	Options    []string
+	Force      bool
 }
 
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
-func (s LinuxProvider) Mkfs(fsType, device string, force bool) error {
-	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", fsType))
+func (s LinuxProvider) Mkfs(req MkfsReq) error {
+	cmdPath, err := exec.LookPath(fmt.Sprintf("mkfs.%s", req.Filesystem))
 	if err != nil {
-		return errors.Wrapf(err, "unable to find mkfs.%s", fsType)
+		return errors.Wrapf(err, "unable to find mkfs.%s", req.Filesystem)
 	}
 
-	if err := s.checkDevice(device); err != nil {
+	if err := s.checkDevice(req.Device); err != nil {
 		return err
 	}
 
+	args := make([]string, 0, len(req.Options))
+	_ = copy(args, req.Options)
 	// TODO: Think about a way to allow for some kind of progress
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
-	args := []string{
-		// use quiet mode
-		"-q",
-		// use direct i/o to avoid polluting page cache
-		"-D",
-		// use DAOS label
-		"-L", "daos",
-		// don't reserve blocks for super-user
-		"-m", "0",
-		// use largest possible block size
-		"-b", "4096",
-		// don't need large inode, 128B is enough
-		// since we don't use xattr
-		"-I", "128",
-		// reduce the inode per bytes ratio
-		// one inode for 64M is more than enough
-		"-i", "67108864",
-	}
-	args = append(args, getDistroArgs()...)
+
 	// string always comes last
-	args = append(args, []string{device}...)
-	if force {
+	args = append(args, []string{req.Device}...)
+	if req.Force {
 		args = append([]string{"-F"}, args...)
 	}
 	out, err := exec.Command(cmdPath, args...).Output()

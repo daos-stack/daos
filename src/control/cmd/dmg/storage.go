@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -33,7 +34,7 @@ type storageScanCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose    bool `short:"v" long:"verbose" description:"List SCM & NVMe device details"`
 	NvmeHealth bool `short:"n" long:"nvme-health" description:"Display NVMe device health statistics"`
 	NvmeMeta   bool `short:"m" long:"nvme-meta" description:"Display server meta data held on NVMe storage"`
@@ -56,7 +57,7 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 		// don't strip nvme details if verbose or health or meta set
 		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
 	}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 
 	cmd.Debugf("storage scan request: %+v", req)
 
@@ -67,8 +68,8 @@ func (cmd *storageScanCmd) Execute(_ []string) error {
 
 	cmd.Debugf("storage scan response: %+v", resp.HostStorage)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder
@@ -105,7 +106,7 @@ type storageFormatCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	Verbose bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
 	Force   bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 }
@@ -117,15 +118,15 @@ func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
 	req := &control.StorageFormatReq{Reformat: cmd.Force}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	return cmd.printFormatResp(resp)
@@ -155,7 +156,7 @@ type nvmeRebindCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	PCIAddr string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to rebind."`
 }
 
@@ -165,20 +166,20 @@ type nvmeRebindCmd struct {
 func (cmd *nvmeRebindCmd) Execute(args []string) error {
 	ctx := context.Background()
 
-	if len(cmd.hostlist) != 1 {
+	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
 	}
 
 	req := &control.NvmeRebindReq{PCIAddr: cmd.PCIAddr}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 
 	resp, err := control.StorageNvmeRebind(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder
@@ -202,7 +203,7 @@ type nvmeAddDeviceCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 	PCIAddr          string `short:"a" long:"pci-address" required:"1" description:"NVMe SSD PCI address to add."`
 	EngineIndex      uint32 `short:"e" long:"engine-index" required:"1" description:"Index of DAOS engine to add NVMe device to."`
 	StorageTierIndex int32  `short:"t" long:"tier-index" default:"-1" description:"Index of storage tier on DAOS engine to add NVMe device to."`
@@ -214,7 +215,7 @@ type nvmeAddDeviceCmd struct {
 func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 	ctx := context.Background()
 
-	if len(cmd.hostlist) != 1 {
+	if len(cmd.getHostList()) != 1 {
 		return errors.New("command expects a single host in hostlist")
 	}
 
@@ -223,7 +224,7 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		EngineIndex:      cmd.EngineIndex,
 		StorageTierIndex: cmd.StorageTierIndex,
 	}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 
 	cmd.Debugf("nvme add device req: %+v", req)
 	resp, err := control.StorageNvmeAddDevice(ctx, cmd.ctlInvoker, req)
@@ -231,8 +232,8 @@ func (cmd *nvmeAddDeviceCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, resp.Errors())
 	}
 
 	var outErr strings.Builder

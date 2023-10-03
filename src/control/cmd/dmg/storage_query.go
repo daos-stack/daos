@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,13 +8,13 @@ package main
 
 import (
 	"context"
-	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
@@ -34,15 +34,15 @@ type smdQueryCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -63,7 +63,6 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	TargetHealth tgtHealthQueryCmd   `command:"target-health" description:"Query the target health"`
 	DeviceHealth devHealthQueryCmd   `command:"device-health" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" description:"List storage devices on the server"`
@@ -72,7 +71,7 @@ type storageQueryCmd struct {
 
 type devHealthQueryCmd struct {
 	smdQueryCmd
-	UUID string `short:"u" long:"uuid" required:"1" description:"Device UUID"`
+	UUID string `short:"u" long:"uuid" description:"Device UUID. All devices queried if arg not set"`
 }
 
 func (cmd *devHealthQueryCmd) Execute(_ []string) error {
@@ -82,23 +81,6 @@ func (cmd *devHealthQueryCmd) Execute(_ []string) error {
 		IncludeBioHealth: true,
 		Rank:             ranklist.NilRank,
 		UUID:             cmd.UUID,
-	}
-	return cmd.makeRequest(ctx, req)
-}
-
-type tgtHealthQueryCmd struct {
-	smdQueryCmd
-	Rank  uint32 `short:"r" long:"rank" required:"1" description:"Server rank hosting target"`
-	TgtId uint32 `short:"t" long:"tgtid" required:"1" description:"VOS target ID to query"`
-}
-
-func (cmd *tgtHealthQueryCmd) Execute(_ []string) error {
-	ctx := context.Background()
-	req := &control.SmdQueryReq{
-		OmitPools:        true,
-		IncludeBioHealth: true,
-		Rank:             ranklist.Rank(cmd.Rank),
-		Target:           strconv.Itoa(int(cmd.TgtId)),
 	}
 	return cmd.makeRequest(ctx, req)
 }
@@ -146,7 +128,7 @@ type usageQueryCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 // Execute is run when usageQueryCmd activates.
@@ -155,11 +137,11 @@ type usageQueryCmd struct {
 func (cmd *usageQueryCmd) Execute(_ []string) error {
 	ctx := context.Background()
 	req := &control.StorageScanReq{Usage: true}
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -184,15 +166,15 @@ type smdManageCmd struct {
 	baseCmd
 	ctlInvokerCmd
 	hostListCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 }
 
 func (cmd *smdManageCmd) makeRequest(ctx context.Context, req *control.SmdManageReq, opts ...pretty.PrintConfigOption) error {
-	req.SetHostList(cmd.hostlist)
+	req.SetHostList(cmd.getHostList())
 	resp, err := control.SmdManage(ctx, cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -225,15 +207,15 @@ type nvmeSetFaultyCmd struct {
 // Set the SMD device state of the given device to "FAULTY"
 func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 	cmd.Notice("This command will permanently mark the device as unusable!")
-	if !cmd.Force && !cmd.jsonOutputEnabled() {
+	if !cmd.Force && !cmd.JSONOutputEnabled() {
 		if !common.GetConsent(cmd.Logger) {
 			return errors.New("consent not given")
 		}
 	}
 
 	req := &control.SmdManageReq{
+		Operation: control.SetFaultyOp,
 		IDs:       cmd.UUID,
-		SetFaulty: true,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }
@@ -264,9 +246,10 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 	}
 
 	req := &control.SmdManageReq{
-		IDs:         cmd.OldDevUUID,
-		ReplaceUUID: cmd.NewDevUUID,
-		NoReint:     cmd.NoReint,
+		Operation:      control.DevReplaceOp,
+		IDs:            cmd.OldDevUUID,
+		ReplaceUUID:    cmd.NewDevUUID,
+		ReplaceNoReint: cmd.NoReint,
 	}
 	return cmd.makeRequest(context.Background(), req)
 }
@@ -275,7 +258,7 @@ type ledCmd struct {
 	smdManageCmd
 
 	Args struct {
-		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs"`
+		IDs string `positional-arg-name:"ids" description:"Comma-separated list of identifiers which could be either VMD backing device (NVMe SSD) PCI addresses or device UUIDs. All SSDs selected if arg not provided."`
 	} `positional-args:"yes"`
 }
 
@@ -286,7 +269,8 @@ type ledManageCmd struct {
 
 type ledIdentifyCmd struct {
 	ledCmd
-	Reset bool `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
+	Timeout uint32 `long:"timeout" description:"Number of minutes to blink the status LED for"`
+	Reset   bool   `long:"reset" description:"Reset blinking LED on specified VMD device back to previous state"`
 }
 
 // Execute is run when ledIdentifyCmd activates.
@@ -294,15 +278,18 @@ type ledIdentifyCmd struct {
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY" (4Hz blink).
 func (cmd *ledIdentifyCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
-		IDs: cmd.Args.IDs,
+		Operation:       control.LedBlinkOp,
+		IDs:             cmd.Args.IDs,
+		IdentifyTimeout: cmd.Timeout,
 	}
 	if cmd.Reset {
-		req.ResetLED = true
-	} else {
-		req.Identify = true
+		if cmd.Timeout != 0 {
+			return errors.New("timeout option can not be set at the same time as reset")
+		}
+		req.Operation = control.LedResetOp
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }
@@ -316,11 +303,11 @@ type ledCheckCmd struct {
 // Runs SPDK VMD API commands to query the LED state on VMD devices
 func (cmd *ledCheckCmd) Execute(_ []string) error {
 	if cmd.Args.IDs == "" {
-		return errors.New("neither a pci address or a uuid has been supplied")
+		cmd.Debugf("neither a pci address or a uuid has been supplied so select all")
 	}
 	req := &control.SmdManageReq{
-		IDs:    cmd.Args.IDs,
-		GetLED: true,
+		Operation: control.LedCheckOp,
+		IDs:       cmd.Args.IDs,
 	}
 	return cmd.makeRequest(context.Background(), req, pretty.PrintOnlyLEDInfo())
 }

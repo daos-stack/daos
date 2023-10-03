@@ -122,37 +122,29 @@ func (ll *LeveledLogger) WithJSONOutput() *LeveledLogger {
 	var errorLoggers []ErrorLogger
 
 	for _, l := range ll.debugLoggers {
-		if jsonLogger, ok := l.(jsonDebug); ok {
-			if dl, ok := jsonLogger.WithJSONOutput().(DebugLogger); ok {
-				debugLoggers = append(debugLoggers, dl)
-			}
+		if dl, ok := l.(jsonDebug); ok {
+			debugLoggers = append(debugLoggers, dl.WithJSONOutput())
 		}
 	}
 	ll.debugLoggers = debugLoggers
 
 	for _, l := range ll.infoLoggers {
-		if jsonLogger, ok := l.(jsonInfo); ok {
-			if il, ok := jsonLogger.WithJSONOutput().(InfoLogger); ok {
-				infoLoggers = append(infoLoggers, il)
-			}
+		if il, ok := l.(jsonInfo); ok {
+			infoLoggers = append(infoLoggers, il.WithJSONOutput())
 		}
 	}
 	ll.infoLoggers = infoLoggers
 
 	for _, l := range ll.noticeLoggers {
-		if jsonLogger, ok := l.(jsonNotice); ok {
-			if nl, ok := jsonLogger.WithJSONOutput().(NoticeLogger); ok {
-				noticeLoggers = append(noticeLoggers, nl)
-			}
+		if nl, ok := l.(jsonNotice); ok {
+			noticeLoggers = append(noticeLoggers, nl.WithJSONOutput())
 		}
 	}
 	ll.noticeLoggers = noticeLoggers
 
 	for _, l := range ll.errorLoggers {
-		if jsonLogger, ok := l.(jsonError); ok {
-			if el, ok := jsonLogger.WithJSONOutput().(ErrorLogger); ok {
-				errorLoggers = append(errorLoggers, el)
-			}
+		if el, ok := l.(jsonError); ok {
+			errorLoggers = append(errorLoggers, el.WithJSONOutput())
 		}
 	}
 	ll.errorLoggers = errorLoggers

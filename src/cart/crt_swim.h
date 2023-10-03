@@ -60,7 +60,7 @@ crt_swim_csm_lock(struct crt_swim_membs *csm)
 
 	rc = D_SPIN_LOCK(&csm->csm_lock);
 	if (rc != 0)
-		D_ERROR("D_SPIN_LOCK(): %s\n", strerror(rc));
+		DS_ERROR(rc, "D_SPIN_LOCK()");
 }
 
 static inline void
@@ -70,7 +70,7 @@ crt_swim_csm_unlock(struct crt_swim_membs *csm)
 
 	rc = D_SPIN_UNLOCK(&csm->csm_lock);
 	if (rc != 0)
-		D_ERROR("D_SPIN_UNLOCK(): %s\n", strerror(rc));
+		DS_ERROR(rc, "D_SPIN_UNLOCK()");
 }
 
 static inline uint32_t
@@ -93,9 +93,10 @@ int  crt_swim_disable(struct crt_grp_priv *grp_priv, int crt_ctx_idx);
 void crt_swim_disable_all(void);
 void crt_swim_suspend_all(void);
 void crt_swim_accommodate(void);
-int  crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank);
+int  crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
 int  crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank);
 void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv);
 void crt_swim_rank_shuffle(struct crt_grp_priv *grp_priv);
+int crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
 
 #endif /* __CRT_SWIM_H__ */

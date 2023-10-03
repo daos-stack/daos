@@ -1,9 +1,10 @@
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import os
 from dfuse_test_base import DfuseTestBase
 from mdtest_utils import MdtestCommand
 from exception_utils import CommandFailure
@@ -11,7 +12,6 @@ from job_manager_utils import get_job_manager
 
 
 class MdtestBase(DfuseTestBase):
-    # pylint: disable=too-many-ancestors
     """Base mdtest class.
 
     :avocado: recursive
@@ -44,19 +44,37 @@ class MdtestBase(DfuseTestBase):
         self.log.info('Clients %s', self.hostlist_clients)
         self.log.info('Servers %s', self.hostlist_servers)
 
-    def execute_mdtest(self, out_queue=None):
+    def get_mdtest_container(self, pool):
+        """Create a container to use with mdtest.
+
+        Args:
+            pool (TestPool): pool to create container in
+
+        Returns:
+            TestContainer: the new container
+        """
+        params = {}
+        if self.mdtest_cmd.dfs_oclass.value:
+            params['oclass'] = self.mdtest_cmd.dfs_oclass.value
+        if self.mdtest_cmd.dfs_dir_oclass.value:
+            params['dir_oclass'] = self.mdtest_cmd.dfs_dir_oclass.value
+        return self.get_container(pool, **params)
+
+    def execute_mdtest(self, out_queue=None, display_space=True):
         """Runner method for Mdtest.
+
         Args:
             out_queue (queue, optional): Pass any exceptions in a queue. Defaults to None.
+            display_space (bool, optional): Whether to display the pool space. Defaults to True.
         """
         # Create a pool if one does not already exist
         if self.pool is None:
             self.add_pool(connect=False)
         # create container
         if self.container is None:
-            self.add_container(self.pool)
+            self.container = self.get_mdtest_container(self.pool)
         # set Mdtest params
-        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.uuid)
+        self.mdtest_cmd.set_daos_params(self.server_group, self.pool, self.container.identifier)
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
@@ -65,7 +83,7 @@ class MdtestBase(DfuseTestBase):
 
         # Run Mdtest
         self.run_mdtest(self.get_mdtest_job_manager_command(self.manager),
-                        self.processes, out_queue=out_queue)
+                        self.processes, display_space=display_space, out_queue=out_queue)
 
         if self.subprocess:
             return
@@ -82,11 +100,10 @@ class MdtestBase(DfuseTestBase):
             JobManager: the object for the mpi job manager command
 
         """
-        # pylint: disable=redefined-variable-type
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
             manager = get_job_manager(
-                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
+                self, "Mpirun", self.mdtest_cmd, self.subprocess)
         else:
             manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
         return manager
@@ -140,8 +157,7 @@ class MdtestBase(DfuseTestBase):
         """Running mdtest different variants of mdtest with
            different values.
         Args:
-            mdtest_params(list): List comprising of different set of
-                                 mdtest parameters.
+            mdtest_params(list): List comprising of different set of mdtest parameters.
         """
 
         # Running mdtest for different variants
@@ -159,7 +175,12 @@ class MdtestBase(DfuseTestBase):
                 self.mdtest_cmd.items.update(params[4])
             self.mdtest_cmd.depth.update(params[5])
             self.mdtest_cmd.flags.update(params[6])
+            if len(params) == 8 and params[7]:
+                self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(
+                    self.prefix, 'lib64', 'libpil4dfs.so')
             # run mdtest
             self.execute_mdtest()
+            if len(params) == 8 and params[7]:
+                del self.mdtest_cmd.env['LD_PRELOAD']
             # re-set mdtest params before next iteration
             self.mdtest_cmd.get_params(self)

@@ -78,6 +78,7 @@ func TestProto_AnnotateError(t *testing.T) {
 		LeaderHint: "foo.bar.baz",
 		Replicas:   []string{"a", "b", "c"},
 	}
+	testPoolNotFound := system.ErrPoolLabelNotFound("foo")
 
 	for name, tc := range map[string]struct {
 		err      error
@@ -109,6 +110,10 @@ func TestProto_AnnotateError(t *testing.T) {
 		"wrap/unwrap ErrNotLeader": {
 			err:    testNotLeader,
 			expErr: testNotLeader,
+		},
+		"wrap/unwrap ErrPoolNotFound": {
+			err:    testPoolNotFound,
+			expErr: testPoolNotFound,
 		},
 		"non-fault err": {
 			err:    errors.New("not a fault"),

@@ -14,9 +14,11 @@ type ControlLogLevel logging.LogLevel
 // TODO(mjmac): Evaluate whether or not this layer of indirection
 // adds any value.
 const (
-	ControlLogLevelDebug = ControlLogLevel(logging.LogLevelDebug)
-	ControlLogLevelInfo  = ControlLogLevel(logging.LogLevelInfo)
-	ControlLogLevelError = ControlLogLevel(logging.LogLevelError)
+	ControlLogLevelTrace  = ControlLogLevel(logging.LogLevelTrace)
+	ControlLogLevelDebug  = ControlLogLevel(logging.LogLevelDebug)
+	ControlLogLevelInfo   = ControlLogLevel(logging.LogLevelInfo)
+	ControlLogLevelNotice = ControlLogLevel(logging.LogLevelNotice)
+	ControlLogLevelError  = ControlLogLevel(logging.LogLevelError)
 
 	DefaultControlLogLevel = ControlLogLevel(logging.DefaultLogLevel)
 )

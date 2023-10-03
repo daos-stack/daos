@@ -6,31 +6,17 @@
 
 set -ue
 
-if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
-        echo "Failed to determine branch with git rev-parse"
-        exit 1
-fi
+echo "Pylint:"
+# shellcheck disable=SC1091
+. utils/githooks/find_base.sh
 
-# Try and use the gh command to work out the target branch, or if not installed
-# then assume master.
-if command -v gh > /dev/null 2>&1
-then
-        # If there is no PR created yet then do not check anything.
-        if ! TARGET=origin/$(gh pr view "$BRANCH" --json baseRefName -t "{{.baseRefName}}")
-        then
-                TARGET=HEAD
-        fi
-else
-        # With no 'gh' command installed then check against master.
-        echo "Install gh command to auto-detect target branch, assuming master."
-        TARGET=origin/master
-fi
 
-if [ $TARGET = "HEAD" ]
-then
-        echo "Checking against HEAD"
-        git diff HEAD^ -U10 | ./utils/cq/daos_pylint.py --diff
-else
-        echo "Checking against branch ${TARGET}"
-        git diff $TARGET... -U10 | ./utils/cq/daos_pylint.py --diff
+if [ -f utils/cq/daos_pylint.py ]; then
+    if [ "$TARGET" = "HEAD" ]; then
+            echo "  Checking against HEAD"
+            git diff HEAD --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+    else
+            echo "  Checking against branch ${TARGET}"
+            git diff "$TARGET"... --name-only | ./utils/cq/daos_pylint.py --files-from-stdin
+    fi
 fi

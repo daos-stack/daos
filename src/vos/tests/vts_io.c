@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -224,7 +224,7 @@ setup_io(void **state)
 	srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
 
-	table = vos_ts_table_get();
+	table = vos_ts_table_get(true);
 	if (table == NULL)
 		return -1;
 
@@ -236,12 +236,12 @@ int
 teardown_io(void **state)
 {
 	struct io_test_args	*arg = *state;
-	struct vos_ts_table	*table = vos_ts_table_get();
+	struct vos_ts_table	*table = vos_ts_table_get(true);
 	int			 rc;
 
 	if (table) {
-		vos_ts_table_free(&table);
-		rc = vos_ts_table_alloc(&table);
+		vos_ts_table_free(&table, NULL);
+		rc = vos_ts_table_alloc(&table, NULL);
 		if (rc != 0) {
 			printf("Fatal error, table couldn't be reallocated\n");
 			exit(rc);
@@ -959,16 +959,22 @@ io_obj_cache_test(void **state)
 	char			*po_name;
 	uuid_t			 pool_uuid;
 	daos_handle_t		 l_poh, l_coh;
+	struct daos_lru_cache   *old_cache;
 	int			 i, rc;
+	struct vos_tls          *tls;
 
 	rc = vos_obj_cache_create(10, &occ);
 	assert_rc_equal(rc, 0);
+
+	tls             = vos_tls_get(true);
+	old_cache       = tls->vtl_ocache;
+	tls->vtl_ocache = occ;
 
 	rc = vts_alloc_gen_fname(&po_name);
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0, 0, &l_poh);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_256M, 0, 0, &l_poh);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
@@ -992,7 +998,7 @@ io_obj_cache_test(void **state)
 
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj1);
 	assert_rc_equal(rc, 0);
-	/** Should be prevented because object olready held for discard */
+	/** Should be prevented because object already held for discard */
 	rc = vos_obj_discard_hold(occ, vos_hdl2cont(ctx->tc_co_hdl), oids[0], &obj2);
 	assert_rc_equal(rc, -DER_UPDATE_AGAIN);
 	/** Should prevent simultaneous hold for create as well */
@@ -1065,6 +1071,7 @@ io_obj_cache_test(void **state)
 	rc = vos_pool_destroy(po_name, pool_uuid);
 	assert_rc_equal(rc, 0);
 	vos_obj_cache_destroy(occ);
+	tls->vtl_ocache = old_cache;
 	free(po_name);
 }
 
@@ -1851,7 +1858,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0, 0, &poh);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_256M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -2902,17 +2909,82 @@ io_query_key_negative(void **state)
 	assert_rc_equal(rc, -DER_INVAL);
 }
 
-static const struct CMUnitTest io_tests[] = {
-    {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
-    {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
-    {"VOS203: Simple update/fetch/verify test", io_simple_one_key, NULL, NULL},
-    {"VOS204: Simple Punch test", io_simple_punch, NULL, NULL},
-    {"VOS205: Simple near-epoch retrieval test", io_simple_near_epoch, NULL, NULL},
-    {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
-    {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
-    {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+static inline int
+dummy_bulk_create(void *ctxt, d_sg_list_t *sgl, unsigned int perm, void **bulk_hdl)
+{
+	return 0;
+}
+
+static inline int
+dummy_bulk_free(void *bulk_hdl)
+{
+	return 0;
+}
+
+/* Verify the fix of DAOS-10748 */
+static void
+io_allocbuf_failure(void **state)
+{
+	struct io_test_args	*arg = *state;
+	char			 dkey_buf[UPDATE_DKEY_SIZE] = { 0 };
+	char			 akey_buf[UPDATE_AKEY_SIZE] = { 0 };
+	daos_iod_t		 iod = { 0 };
+	d_sg_list_t		 sgl = { 0 };
+	daos_key_t		 dkey_iov, akey_iov;
+	daos_epoch_t		 epoch = 1;
+	char			*buf;
+	daos_handle_t		 ioh;
+	int			 fake_ctxt;
+	daos_size_t		 buf_len = (40UL << 20); /* 40MB, larger than DMA chunk size */
+	int			 rc;
+
+	FAULT_INJECTION_REQUIRED();
+
+	vts_key_gen(&dkey_buf[0], arg->dkey_size, true, arg);
+	vts_key_gen(&akey_buf[0], arg->akey_size, false, arg);
+	set_iov(&dkey_iov, &dkey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_DKEY_UINT64));
+	set_iov(&akey_iov, &akey_buf[0], is_daos_obj_type_set(arg->otype, DAOS_OT_AKEY_UINT64));
+
+	rc = d_sgl_init(&sgl, 1);
+	assert_rc_equal(rc, 0);
+
+	D_ALLOC(buf, buf_len);
+	assert_non_null(buf);
+
+	sgl.sg_iovs[0].iov_buf = buf;
+	sgl.sg_iovs[0].iov_buf_len = buf_len;
+	sgl.sg_iovs[0].iov_len = buf_len;
+
+	iod.iod_name = akey_iov;
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_SINGLE;
+	iod.iod_size = buf_len;
+	iod.iod_recxs = NULL;
+
+	arg->ta_flags |= TF_ZERO_COPY;
+
+	bio_register_bulk_ops(dummy_bulk_create, dummy_bulk_free);
+	daos_fail_loc_set(DAOS_NVME_ALLOCBUF_ERR | DAOS_FAIL_ONCE);
+
+	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, 0, &dkey_iov,
+			      1, &iod, NULL, 0, &ioh, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, (void *)&fake_ctxt, 0);
+	assert_rc_equal(rc, -DER_NOMEM);
+	daos_fail_loc_set(0);
+	bio_register_bulk_ops(NULL, NULL);
+
+	rc = vos_update_end(ioh, 0, &dkey_iov, rc, NULL, NULL);
+	assert_rc_equal(rc, -DER_NOMEM);
+
+	d_sgl_fini(&sgl, false);
+	D_FREE(buf);
+	arg->ta_flags &= ~TF_ZERO_COPY;
+}
+
+static const struct CMUnitTest iterator_tests[] = {
     {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
-    {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
     {"VOS240.0: KV Iter tests (for dkey)", io_iter_test, NULL, NULL},
     {"VOS240.1: KV Iter tests with anchor (for dkey)", io_iter_test_with_anchor, NULL, NULL},
     {"VOS240.7: key2anchor iterator test", io_iter_test_key2anchor, NULL, NULL},
@@ -2921,6 +2993,17 @@ static const struct CMUnitTest io_tests[] = {
     {"VOS240.5 KV range iteration tests (for recx)", io_obj_forward_recx_iter_test, NULL, NULL},
     {"VOS240.6 KV reverse range iteration tests (for recx)", io_obj_reverse_recx_iter_test, NULL,
      NULL},
+};
+
+static const struct CMUnitTest io_tests[] = {
+    {"VOS203: Simple update/fetch/verify test", io_simple_one_key, NULL, NULL},
+    {"VOS204: Simple Punch test", io_simple_punch, NULL, NULL},
+    {"VOS205: Simple near-epoch retrieval test", io_simple_near_epoch, NULL, NULL},
+    {"VOS206: Simple scatter-gather list test, multiple update buffers", io_sgl_update, NULL, NULL},
+    {"VOS207: Simple scatter-gather list test, multiple fetch buffers", io_sgl_fetch, NULL, NULL},
+    {"VOS208: Extent hole test", io_fetch_hole, NULL, NULL},
+    {"VOS220: 100K update/fetch/verify test", io_multiple_dkey, NULL, NULL},
+    {"VOS222: overwrite test", io_idx_overwrite, NULL, NULL},
     {"VOS245.0: Object iter test (for oid)", oid_iter_test, oid_iter_test_setup, NULL},
     {"VOS245.1: Object iter test with anchor (for oid)", oid_iter_test_with_anchor,
      oid_iter_test_setup, NULL},
@@ -2939,45 +3022,84 @@ static const struct CMUnitTest io_tests[] = {
 };
 
 static const struct CMUnitTest int_tests[] = {
-	{ "VOS300.1: Test key query punch with subsequent update",
-		io_query_key_punch_update, NULL, NULL},
-	{ "VOS300.2: Key query test", io_query_key, NULL, NULL},
-	{ "VOS300.3: Key query negative test",
-		io_query_key_negative, NULL, NULL},
+    {"VOS201: VOS object IO index", io_oi_test, NULL, NULL},
+    {"VOS202: VOS object cache test", io_obj_cache_test, NULL, NULL},
+    {"VOS300.1: Test key query punch with subsequent update", io_query_key_punch_update, NULL,
+     NULL},
+    {"VOS300.2: Key query test", io_query_key, NULL, NULL},
+    {"VOS300.3: Key query negative test", io_query_key_negative, NULL, NULL},
+    {"VOS300.4: Return error on DMA buffer allocation failure", io_allocbuf_failure, NULL, NULL},
 };
 
-int
-run_io_test(enum daos_otype_t type, int keys, bool nest_iterators, const char *cfg)
+static int
+run_oclass_tests(const char *cfg)
 {
-	char buf[VTS_BUF_SIZE];
+	char        test_name[DTS_CFG_MAX];
 	const char *akey = "hashed";
 	const char *dkey = "hashed";
-	vts_nest_iterators = nest_iterators;
-	int rc = 0;
+	int         rc;
 
-	init_num_keys = VTS_IO_KEYS;
+	vts_nest_iterators = false;
 
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_UINT64))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_UINT64))
 		dkey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_DKEY_LEXICAL))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_DKEY_LEXICAL))
 		dkey = "lex";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_UINT64))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_UINT64))
 		akey = "uint";
-	if (is_daos_obj_type_set(type, DAOS_OT_AKEY_LEXICAL))
+	if (is_daos_obj_type_set(init_type, DAOS_OT_AKEY_LEXICAL))
 		akey = "lex";
 
-	snprintf(buf, VTS_BUF_SIZE, "IO# tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
-	init_type = type;
+	dts_create_config(test_name, "IO_oclass tests (dkey=%-6s akey=%s) %s", dkey, akey, cfg);
+	D_PRINT("Running %s\n", test_name);
+
+	rc = cmocka_run_group_tests_name(test_name, io_tests, setup_io, teardown_io);
+
+	dts_create_config(test_name, "IO_iterator tests (nested=false dkey=%-6s akey=%s) %s", dkey,
+			  akey, cfg);
+
+	rc += cmocka_run_group_tests_name(test_name, iterator_tests, setup_io, teardown_io);
+
+	dts_create_config(test_name, "IO_iterator tests (nested=true dkey=%-6s akey=%s) %s", dkey,
+			  akey, cfg);
+
+	vts_nest_iterators = true;
+
+	rc += cmocka_run_group_tests_name(test_name, iterator_tests, setup_io, teardown_io);
+
+	return rc;
+}
+
+static int
+run_single_class_tests(const char *cfg)
+{
+	char test_name[DTS_CFG_MAX];
+
+	dts_create_config(test_name, "IO single oclass tests %s", cfg);
+	D_PRINT("Running %s\n", test_name);
+
+	return cmocka_run_group_tests_name(test_name, int_tests, setup_io, teardown_io);
+}
+
+int
+run_io_test(int *types, int num_types, int keys, const char *cfg)
+{
+	int rc = 0;
+	int i;
+
+	init_num_keys = VTS_IO_KEYS;
 	if (keys)
 		init_num_keys = keys;
-	D_PRINT("Running %s\n", buf);
-	if (type == DAOS_OT_MULTI_UINT64) {
-		buf[2] = '2';
-		rc = cmocka_run_group_tests_name(buf, int_tests, setup_io,
-						 teardown_io);
-	}
-	buf[2] = '1';
 
-	return rc + cmocka_run_group_tests_name(buf, io_tests,
-						setup_io, teardown_io);
+	/** key query tests require integer classes, other general tests don't care */
+	init_type = DAOS_OT_MULTI_UINT64;
+
+	rc = run_single_class_tests(cfg);
+
+	for (i = 0; i < num_types; i++) {
+		init_type = types[i];
+		rc += run_oclass_tests(cfg);
+	}
+
+	return rc;
 }

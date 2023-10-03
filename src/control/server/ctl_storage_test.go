@@ -206,8 +206,8 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 			defer test.ShowBufferOnFailure(t, buf)
 
 			var engineCfgs []*engine.Config
-			for i, sc := range tc.storageCfgs {
-				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...).WithRank(uint32(i)))
+			for _, sc := range tc.storageCfgs {
+				engineCfgs = append(engineCfgs, engine.MockConfig().WithStorage(sc...))
 			}
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, nil, nil, tc.smsc)

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -51,19 +51,23 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					switch {
-					case n&PoolSelfHealingAutoExclude > 0:
+					switch n {
+					case PoolSelfHealingAutoExclude:
 						return "exclude"
-					case n&PoolSelfHealingAutoRebuild > 0:
+					case PoolSelfHealingAutoRebuild:
 						return "rebuild"
+					case PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild:
+						return "exclude,rebuild"
 					default:
 						return "unknown"
 					}
 				},
 			},
 			values: map[string]uint64{
-				"exclude": PoolSelfHealingAutoExclude,
-				"rebuild": PoolSelfHealingAutoRebuild,
+				"exclude":         PoolSelfHealingAutoExclude,
+				"rebuild":         PoolSelfHealingAutoRebuild,
+				"exclude,rebuild": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
+				"rebuild,exclude": PoolSelfHealingAutoExclude | PoolSelfHealingAutoRebuild,
 			},
 		},
 		"space_rb": {
@@ -279,7 +283,7 @@ func PoolProperties() PoolPropertyMap {
 				Number:      PoolPropertyScrubThresh,
 				Description: "Checksum scrubbing threshold",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					rbErr := errors.Errorf("invalid Scrubbing Threshold value %s", s)
+					rbErr := errors.Errorf("invalid Scrubbing Threshold value %q", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
 					if err != nil {
 						return nil, rbErr
@@ -294,6 +298,16 @@ func PoolProperties() PoolPropertyMap {
 					return fmt.Sprintf("%d", n)
 				},
 				valueMarshaler: numericMarshaler,
+			},
+		},
+		"perf_domain": {
+			Property: PoolProperty{
+				Number:      PoolPropertyPerfDomain,
+				Description: "Pool performance domain",
+			},
+			values: map[string]uint64{
+				"root":  PoolPerfDomainRoot,
+				"group": PoolPerfDomainGrp,
 			},
 		},
 		"svc_rf": {
@@ -338,6 +352,71 @@ func PoolProperties() PoolPropertyMap {
 					}
 					return json.Marshal(rs.Ranks())
 				},
+			},
+		},
+		"checkpoint": {
+			Property: PoolProperty{
+				Number:      PoolPropertyCheckpointMode,
+				Description: "WAL Checkpointing behavior",
+			},
+			values: map[string]uint64{
+				"disabled": PoolCheckpointDisabled,
+				"timed":    PoolCheckpointTimed,
+				"lazy":     PoolCheckpointLazy,
+			},
+		},
+		"checkpoint_freq": {
+			Property: PoolProperty{
+				Number:      PoolPropertyCheckpointFreq,
+				Description: "WAL Checkpointing frequency, in seconds",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Checkpointing Frequency value %s", s)
+					rsPct, err := strconv.ParseUint(s, 10, 64)
+					if err != nil {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
+		"checkpoint_thresh": {
+			Property: PoolProperty{
+				Number:      PoolPropertyCheckpointThresh,
+				Description: "Usage of WAL before checkpoint is triggered, as a percentage",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					rbErr := errors.Errorf("invalid Checkpointing threshold value %s", s)
+					rsPct, err := strconv.ParseUint(s, 10, 32)
+					if err != nil {
+						return nil, rbErr
+					}
+					return &PoolPropertyValue{rsPct}, nil
+				},
+				valueStringer: func(v *PoolPropertyValue) string {
+					n, err := v.GetNumber()
+					if err != nil {
+						return "not set"
+					}
+					return fmt.Sprintf("%d", n)
+				},
+				valueMarshaler: numericMarshaler,
+			},
+		},
+		"reintegration": {
+			Property: PoolProperty{
+				Number:      PoolPropertyReintMode,
+				Description: "Reintegration mode",
+			},
+			values: map[string]uint64{
+				"data_sync":    PoolReintModeDataSync,
+				"no_data_sync": PoolReintModeNoDataSync,
 			},
 		},
 	}

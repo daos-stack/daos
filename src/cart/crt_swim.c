@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
 
 #include <ctype.h>
 #include "crt_internal.h"
+#include "crt_internal_fns.h"
 
 #define CRT_OPC_SWIM_VERSION	2
 #define CRT_SWIM_FAIL_BASE	((CRT_OPC_SWIM_BASE >> 16) | \
@@ -31,9 +32,29 @@
 	((swim_id_t)		     (swim_id)		CRT_VAR) \
 	((struct swim_member_update) (upds)		CRT_ARRAY)
 
+/*
+ * The excl_grp_ver field belongs to an exclusion detection protocol being
+ * piggybacked on SWIM RPCs. This protocol enables a member to detect that it
+ * has been excluded (due to inevitable false positive SWIM DEAD events) from
+ * the primary group.
+ *
+ *   - When replying a SWIM RPC, each member sets excl_grp_ver to 0 if the
+ *     sender belongs to the local primary group or to the local primary group
+ *     version otherwise.
+ *
+ *   - When processing a SWIM RPC reply, each member compares nonzero
+ *     excl_grp_ver values to its local primary group version (see TODO in
+ *     crt_swim_cli_cb). If the former is greater than the latter, then this
+ *     member has been excluded.
+ *
+ * (This exclusion detection protocol could be piggybacked on all RPCs, after
+ * optimizing away the rank lookup when group versions match and speeding up
+ * the rank lookup when group versions differ. The main difficulty is that we
+ * would need to expand crt_common_hdr.)
+ */
 #define CRT_OSEQ_RPC_SWIM	/* output fields */		 \
 	((int32_t)		     (rc)		CRT_VAR) \
-	((int32_t)		     (pad)		CRT_VAR) \
+	((uint32_t)		     (excl_grp_ver)	CRT_VAR) \
 	((struct swim_member_update) (upds)		CRT_ARRAY)
 
 static inline int
@@ -317,13 +338,42 @@ crt_swim_update_delays(struct crt_swim_membs *csm, uint64_t hlc,
 		if (crt_swim_fail_delay && crt_swim_fail_id == id) {
 			uint64_t d = crt_swim_fail_delay;
 
-			crt_swim_fail_hlc = hlc - crt_msec2hlc(l) + crt_sec2hlc(d);
+			crt_swim_fail_hlc = hlc - d_msec2hlc(l) + d_sec2hlc(d);
 			crt_swim_fail_delay = 0;
 		}
 	}
 	crt_swim_csm_unlock(csm);
 
 	return snd_delay;
+}
+
+/*
+ * If id belongs to the primary group, this function returns 0; otherwise, this
+ * function returns the group version. Note that if the group version is 0,
+ * that is, the primary group has not been initialized yet, this function
+ * always returns 0.
+ */
+static uint32_t
+crt_swim_lookup_id(swim_id_t id)
+{
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	d_rank_list_t		*membs;
+	uint32_t		 grp_ver;
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	grp_ver = grp_priv->gp_membs_ver;
+	membs = grp_priv_get_membs(grp_priv);
+	if (membs) {
+		/*
+		 * TODO: See if there's a better way. This is okay for now
+		 * since we should be performing this linear search only one or
+		 * a few times per period.
+		 */
+		if (d_rank_in_rank_list(membs, id))
+			grp_ver = 0;
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+	return grp_ver;
 }
 
 static void crt_swim_srv_cb(crt_rpc_t *rpc)
@@ -339,7 +389,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	swim_id_t		 from_id;
 	swim_id_t		 to_id;
 	uint64_t		 max_delay = swim_ping_timeout_get() * 2 / 3;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	uint32_t		 rcv_delay = 0;
 	uint32_t		 snd_delay = 0;
 	int			 rc;
@@ -371,15 +421,37 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 	 * this request.
 	 */
 	if (hlc > rpc_priv->crp_req_hdr.cch_hlc)
-		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_req_hdr.cch_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "incoming %s with %zu updates with %u ms delay. %lu: %lu <= %lu\n",
 		  SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count, rcv_delay,
 		  self_id, to_id, from_id);
 
-	if (self_id == SWIM_ID_INVALID)
-		D_GOTO(out_reply, rc = -DER_UNINIT);
+	if (self_id == SWIM_ID_INVALID) {
+		uint64_t incarnation;
+
+		if (ctx == NULL)
+			D_GOTO(out_reply, rc = -DER_UNINIT);
+
+		crt_swim_csm_lock(csm);
+		incarnation = csm->csm_incarnation;
+		crt_swim_csm_unlock(csm);
+
+		/*
+		 * Infer my rank from rpc->cr_ep.ep_rank, and simulate a reply,
+		 * shorting the local swim state. If there is a suspicion on me
+		 * in rpc_in->upds, this call will clarify it and bump my
+		 * incarnation.
+		 */
+		rc = swim_updates_short(ctx, rpc->cr_ep.ep_rank, incarnation, from_id, to_id,
+					rpc_in->upds.ca_arrays, rpc_in->upds.ca_count,
+					&rpc_out->upds.ca_arrays, &rpc_out->upds.ca_count);
+		if (rc != 0)
+			RPC_ERROR(rpc_priv, "updates short: %lu: %lu <= %lu failed: "DF_RC"\n",
+				  self_id, to_id, from_id, DP_RC(rc));
+		D_GOTO(out_reply, rc);
+	}
 
 	snd_delay = crt_swim_update_delays(csm, hlc, from_id, rcv_delay,
 					   rpc_in->upds.ca_arrays,
@@ -468,8 +540,8 @@ out_reply:
 		  SWIM_RPC_TYPE_STR[rpc_type], rpc_out->upds.ca_count,
 		  self_id, to_id, from_id, DP_RC(rc));
 
-	rpc_out->rc  = rc;
-	rpc_out->pad = 0;
+	rpc_out->rc = rc;
+	rpc_out->excl_grp_ver = crt_swim_lookup_id(from_id);
 	rc = crt_reply_send(rpc);
 	D_FREE(rpc_out->upds.ca_arrays);
 	if (rc)
@@ -495,7 +567,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 from_id;
 	swim_id_t		 to_id = rpc->cr_ep.ep_rank;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	uint32_t		 rcv_delay = 0;
 	int			 reply_rc;
 	int			 rc;
@@ -516,7 +588,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	}
 
 	if (hlc > rpc_priv->crp_reply_hdr.cch_hlc)
-		rcv_delay = crt_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
+		rcv_delay = d_hlc2msec(hlc - rpc_priv->crp_reply_hdr.cch_hlc);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu/%zu updates with %u ms delay. %lu: %lu => %lu "
@@ -546,6 +618,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 
 			/* Simulate ALIVE answer */
 			D_FREE(rpc_out->upds.ca_arrays);
+			rpc_out->upds.ca_count = 0;
 			rc = swim_updates_prepare(ctx, to_id, to_id,
 						  &rpc_out->upds.ca_arrays,
 						  &rpc_out->upds.ca_count);
@@ -584,8 +657,29 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 			  DP_RC(rpc_out->rc), DP_RC(rc));
 
 out:
+	if (rpc_out->excl_grp_ver > 0) {
+		D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+		if (grp_priv->gp_membs_ver_min > 0 &&
+		    rpc_out->excl_grp_ver > grp_priv->gp_membs_ver_min) {
+			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+			struct crt_swim_target	*cst;
+			uint64_t		 incarnation = 0;
+
+			/* I'm excluded. */
+			D_WARN("excluded in group version %u (self %u)\n", rpc_out->excl_grp_ver,
+			       grp_priv->gp_membs_ver);
+			crt_swim_csm_lock(csm);
+			cst = crt_swim_membs_find(csm, self_id);
+			if (cst != NULL)
+				incarnation = cst->cst_state.sms_incarnation;
+			crt_swim_csm_unlock(csm);
+			crt_trigger_event_cbs(self_id, incarnation, CRT_EVS_GRPMOD, CRT_EVT_DEAD);
+		}
+		D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+	}
+
 	if (crt_swim_fail_delay && crt_swim_fail_id == self_id) {
-		crt_swim_fail_hlc = crt_hlc_get() + crt_sec2hlc(crt_swim_fail_delay);
+		crt_swim_fail_hlc = d_hlc_get() + d_sec2hlc(crt_swim_fail_delay);
 		crt_swim_fail_delay = 0;
 	}
 }
@@ -698,7 +792,7 @@ static int crt_swim_send_reply(struct swim_context *ctx, swim_id_t from,
 				  &rpc_out->upds.ca_arrays,
 				  &rpc_out->upds.ca_count);
 	rpc_out->rc = rc ? rc : ret_rc;
-	rpc_out->pad = 0;
+	rpc_out->excl_grp_ver = crt_swim_lookup_id(to);
 
 	RPC_TRACE(DB_NET, rpc_priv,
 		  "complete %s with %zu updates. %lu: %lu => %lu "DF_RC"\n",
@@ -780,7 +874,8 @@ out:
 }
 
 static void
-crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
+crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state_prev,
+			   struct swim_member_state *state)
 {
 	struct crt_event_cb_priv *cbs_event;
 	crt_event_cb		 cb_func;
@@ -788,7 +883,13 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 	enum crt_event_type	 cb_type;
 	size_t			 i, cbs_size;
 
+	D_ASSERT(state_prev != NULL);
 	D_ASSERT(state != NULL);
+
+	D_DEBUG(DB_TRACE, "rank=%u: status=%c->%c incarnation="DF_X64"->"DF_X64"\n", rank,
+		SWIM_STATUS_CHARS[state_prev->sms_status], SWIM_STATUS_CHARS[state->sms_status],
+		state_prev->sms_incarnation, state->sms_incarnation);
+
 	switch (state->sms_status) {
 	case SWIM_MEMBER_ALIVE:
 		cb_type = CRT_EVT_ALIVE;
@@ -841,6 +942,7 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst;
+	struct swim_member_state state_prev = {0};
 	int			 rc = -DER_NONEXIST;
 
 	D_ASSERT(state != NULL);
@@ -849,20 +951,21 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 
 	crt_swim_csm_lock(csm);
 	cst = crt_swim_membs_find(csm, id);
-	if (cst != NULL) {
+	if (cst != NULL && state->sms_incarnation >= cst->cst_state.sms_incarnation) {
 		if (cst->cst_state.sms_status != SWIM_MEMBER_ALIVE &&
 		    state->sms_status == SWIM_MEMBER_ALIVE)
 			csm->csm_alive_count++;
 		else if (cst->cst_state.sms_status == SWIM_MEMBER_ALIVE &&
 			 state->sms_status != SWIM_MEMBER_ALIVE)
 			csm->csm_alive_count--;
+		state_prev = cst->cst_state;
 		cst->cst_state = *state;
 		rc = 0;
 	}
 	crt_swim_csm_unlock(csm);
 
 	if (rc == 0)
-		crt_swim_notify_rank_state((d_rank_t)id, state);
+		crt_swim_notify_rank_state((d_rank_t)id, &state_prev, state);
 
 	return rc;
 }
@@ -873,11 +976,11 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
-	uint64_t		 incarnation = crt_hlc_get();
+	swim_id_t		 self_id = swim_self_get(ctx);
+	uint64_t		 incarnation = d_hlc_get();
 
 	D_ASSERT(state != NULL);
-	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
-		  id, swim_self_get(ctx));
+	D_ASSERTF(self_id == SWIM_ID_INVALID || id == self_id, DF_U64" == "DF_U64"\n", id, self_id);
 	crt_swim_csm_lock(csm);
 	csm->csm_incarnation = incarnation;
 	crt_swim_csm_unlock(csm);
@@ -891,7 +994,7 @@ static void crt_swim_update_last_unpack_hlc(struct crt_swim_membs *csm)
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	ctx_list = crt_provider_get_ctx_list(true, crt_gdata.cg_primary_prov);
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		uint64_t hlc = ctx->cc_last_unpack_hlc;
 
@@ -913,7 +1016,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 	if (self_id == SWIM_ID_INVALID)
 		return timeout_us;
 
-	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
+	if (crt_swim_fail_hlc && d_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
 		crt_swim_fail_hlc = 0;
 		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
@@ -938,8 +1041,8 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout_us, v
 		 */
 		if (csm->csm_alive_count > 2) {
 			uint64_t hlc1 = csm->csm_last_unpack_hlc;
-			uint64_t hlc2 = crt_hlc_get();
-			uint64_t delay = crt_hlc2msec(hlc2 - hlc1);
+			uint64_t hlc2 = d_hlc_get();
+			uint64_t delay = d_hlc2msec(hlc2 - hlc1);
 			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
 
 			if (delay > max_delay) {
@@ -1004,7 +1107,7 @@ int crt_swim_init(int crt_ctx_idx)
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	d_rank_list_t		*grp_membs;
 	d_rank_t		 self = grp_priv->gp_self;
-	uint64_t		 hlc = crt_hlc_get();
+	uint64_t		 hlc = d_hlc_get();
 	int			 i;
 	int			 rc;
 	int			 rc_tmp;
@@ -1051,8 +1154,8 @@ int crt_swim_init(int crt_ctx_idx)
 		}
 
 		for (i = 0; i < grp_priv->gp_size; i++) {
-			rc = crt_swim_rank_add(grp_priv,
-					       grp_membs->rl_ranks[i]);
+			rc = crt_swim_rank_add(grp_priv, grp_membs->rl_ranks[i],
+					       CRT_NO_INCARNATION);
 			if (rc && rc != -DER_ALREADY) {
 				D_ERROR("crt_swim_rank_add(): "DF_RC"\n",
 					DP_RC(rc));
@@ -1319,7 +1422,7 @@ void crt_swim_accommodate(void)
 	}
 }
 
-int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
+int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation)
 {
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct crt_swim_target	*cst = NULL;
@@ -1344,7 +1447,8 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	crt_swim_csm_lock(csm);
 	if (csm->csm_list_len == 0) {
 		cst->cst_id = (swim_id_t)self;
-		cst->cst_state.sms_incarnation = csm->csm_incarnation;
+		cst->cst_state.sms_incarnation = incarnation == CRT_NO_INCARNATION ?
+						 csm->csm_incarnation : incarnation;
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		rc = crt_swim_membs_add(csm, cst);
 		if (rc != 0)
@@ -1371,7 +1475,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 				D_GOTO(out_unlock, rc = -DER_NOMEM);
 		}
 		cst->cst_id = rank;
-		cst->cst_state.sms_incarnation = 0;
+		cst->cst_state.sms_incarnation = incarnation;
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		rc = crt_swim_membs_add(csm, cst);
 		if (rc != 0)
@@ -1424,8 +1528,10 @@ int crt_swim_rank_del(struct crt_grp_priv *grp_priv, d_rank_t rank)
 		swim_self_set(csm->csm_ctx, SWIM_ID_INVALID);
 	crt_swim_csm_unlock(csm);
 
-	if (rc == 0)
+	if (rc == 0) {
 		D_FREE(cst);
+		swim_member_del(csm->csm_ctx, rank);
+	}
 
 	return rc;
 }
@@ -1449,6 +1555,10 @@ void crt_swim_rank_del_all(struct crt_grp_priv *grp_priv)
 			SWIM_STATUS_CHARS[cst->cst_state.sms_status],
 			cst->cst_state.sms_incarnation);
 		D_FREE(cst);
+
+		crt_swim_csm_unlock(csm);
+		swim_member_del(csm->csm_ctx, rank);
+		crt_swim_csm_lock(csm);
 	}
 	crt_swim_csm_unlock(csm);
 }
@@ -1468,6 +1578,44 @@ crt_swim_rank_shuffle(struct crt_grp_priv *grp_priv)
 	crt_swim_csm_lock(csm);
 	crt_swim_membs_shuffle(csm);
 	crt_swim_csm_unlock(csm);
+}
+
+/**
+ * If \a incarnation is greater than the incarnation of \a rank, then set the
+ * status of \a rank to ALIVE. This function only returns an error
+ * (-DER_NONEXIST) when \a rank cannot be found.
+ */
+int
+crt_swim_rank_check(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation)
+{
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	struct crt_swim_target	*cst;
+	struct swim_member_state state_prev;
+	struct swim_member_state state;
+	bool			 updated = false;
+	int			 rc = -DER_NONEXIST;
+
+	if (!crt_gdata.cg_swim_inited)
+		return 0;
+
+	crt_swim_csm_lock(csm);
+	cst = crt_swim_membs_find(csm, rank);
+	if (cst != NULL) {
+		if (cst->cst_state.sms_incarnation < incarnation) {
+			state_prev = cst->cst_state;
+			cst->cst_state.sms_incarnation = incarnation;
+			cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
+			state = cst->cst_state;
+			updated = true;
+		}
+		rc = 0;
+	}
+	crt_swim_csm_unlock(csm);
+
+	if (updated)
+		crt_swim_notify_rank_state(rank, &state_prev, &state);
+
+	return rc;
 }
 
 int

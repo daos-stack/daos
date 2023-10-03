@@ -7,6 +7,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -231,6 +232,37 @@ type ErrPoolNotFound struct {
 	byRank  *ranklist.Rank
 	byUUID  *uuid.UUID
 	byLabel *string
+}
+
+func (err *ErrPoolNotFound) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Rank  *ranklist.Rank
+		UUID  *uuid.UUID
+		Label *string
+	}{
+		Rank:  err.byRank,
+		UUID:  err.byUUID,
+		Label: err.byLabel,
+	})
+}
+
+func (err *ErrPoolNotFound) UnmarshalJSON(data []byte) error {
+	if err == nil {
+		return nil
+	}
+
+	var tmp struct {
+		Rank  *ranklist.Rank
+		UUID  *uuid.UUID
+		Label *string
+	}
+	if err := json.Unmarshal(data, &tmp); err != nil {
+		return err
+	}
+	err.byRank = tmp.Rank
+	err.byUUID = tmp.UUID
+	err.byLabel = tmp.Label
+	return nil
 }
 
 func (err *ErrPoolNotFound) Error() string {

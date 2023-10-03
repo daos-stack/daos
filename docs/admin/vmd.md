@@ -26,14 +26,13 @@ DAOS 2.2 did enable VMD-managed devices in the `daos_server.yml` configuration f
 (and as arguments to some DAOS management commands), but did 
 _not_ yet provide any additional functionality over non-VMD devices.
 
-DAOS 2.4 introduces the **LED management** feature that requires VMD.
+DAOS 2.4 introduced the **LED management** feature that requires VMD.
 
-The following function is targeted for a future DAOS release:
-* **Surprise hot-plug management** through VMD is a DAOS 2.6 roadmap item.
+**Surprise hot-plug management** through VMD is roadmap item for DAOS 2.6.
 
-This document explains how to enable VMD in DAOS 2.4 environments.
+This document explains how to enable VMD.
 Customers who intend to utilize DAOS capabilities that depend on VMD
-are encouraged to enable VMD with DAOS 2.4, because changing from a
+are encouraged to enable VMD when setting up the DAOS cluster, because changing from a
 non-VMD setup to VMD is not possible without reformatting the DAOS storage.
 
 
@@ -136,7 +135,7 @@ e20005:07:00.0 SSDPF2KX038T9L 2CV1L028    1         3.8 TB
 
 The recommended setup to use VMD devices within the DAOS server configuration file
 is to list the PCIe IDs of the _VMD controllers_ in the storage engines' `bdev_list`.
-This ensures that all NVMe disks that are members of a VMD domain are always 
+This ensures that all NVMe disks that are members of a VMD domain are always
 managed together, and assigned to the same DAOS storage engine.
 The `daos_server.yml` file for the above example would have one VMD domain per engine:
 
@@ -163,48 +162,3 @@ storage: # engine 1
     bdev_list:
     - "0000:e2:00.5"
 ```
-
-As an alternative, the server configuration file could list the PCIe IDs of the 
-_individual NVMe backing devices_:
-
-```yaml
- storage: # engine 0
-  -
-    class: dcpm
-    scm_mount: /var/daos/pmem0
-    scm_list:
-    - /dev/pmem0
-  -
-    class: nvme
-    bdev_list:
-    - "640005:81:00.0"
-    - "640005:83:00.0"
-    - "640005:85:00.0"
-    - "640005:87:00.0"
-
- storage: # engine 1
-  -
-    class: dcpm
-    scm_mount: /var/daos/pmem1
-    scm_list:
-    - /dev/pmem1
-  -
-    class: nvme
-    bdev_list:
-    - "e20005:01:00.0"
-    - "e20005:03:00.0"
-    - "e20005:05:00.0"
-    - "e20005:07:00.0"
-```
-
-While this configuration _should_ work, this code path has not been fully validated with DAOS 2.2.
-It should also be noted that listing less than all four NVMe disks can lead to unexpected
-behavior. For example, the `dmg storage format` command in DAOS 2.2 will still format
-all four NVMe disks that are part of the VMD domain, even if only one NVMe disk is listed
-in the `bdev_list`.
-
-!!! note TODO - validate if fixes for this issue have landed for 2.4.
-
-!!! warning It is **not** supported in DAOS 2.2 to assign NVMe disks of a single VMD domain to different
-            DAOS engines. All NVMe disks of a VMD domain must be assigned to the same storage engine.
-

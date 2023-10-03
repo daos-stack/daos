@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -434,7 +434,6 @@ add_purge_list(struct dss_xstream *dx, struct sched_pool_info *spi)
 
 	D_ALLOC_PTR(pi);
 	if (pi == NULL) {
-		D_ERROR("Alloc purge item failed.\n");
 		return;
 	}
 	D_INIT_LIST_HEAD(&pi->pi_link);
@@ -475,7 +474,6 @@ prealloc_requests(struct sched_info *info, int cnt)
 	for (i = 0; i < cnt; i++) {
 		D_ALLOC_PTR(req);
 		if (req == NULL) {
-			D_ERROR("Alloc req failed.\n");
 			return -DER_NOMEM;
 		}
 		D_INIT_LIST_HEAD(&req->sr_link);
@@ -554,7 +552,7 @@ sched_info_init(struct dss_xstream *dx)
 				 NULL, &sched_pool_hash_ops,
 				 &info->si_pool_hash);
 	if (rc) {
-		D_ERROR("Create sched pool hash failed. "DF_RC".\n", DP_RC(rc));
+		D_ERROR("Create sched pool hash failed. " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -588,7 +586,6 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 
 	D_ALLOC_PTR(spi);
 	if (spi == NULL) {
-		D_ERROR("Failed to allocate spi\n");
 		return NULL;
 	}
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
@@ -1059,13 +1056,14 @@ process_pool_cb(d_list_t *rlink, void *arg)
 
 	/* Update stats window no matter if any pending ULT or not */
 	sw_window_update(&spi->spi_stats_window);
+	/* check_space_pressure() can't be skipped, otherwise, destroyed pool won't be detected */
+	press = check_space_pressure(dx, spi);
 	if (spi->spi_req_cnt == 0)
 		return 0;
 
 	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
 		kick[i] = pool2req_cnt(spi, i);
 
-	press = check_space_pressure(dx, spi);
 	pr = &pressure_gauge[press];
 
 	if (press == SCHED_SPACE_PRESS_NONE)
@@ -1286,9 +1284,8 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 static void
 req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 {
-	D_ASSERT(req != NULL);
 	/* The request is not in sleep */
-	if (req->sr_wakeup_time == 0)
+	if (req == NULL || req->sr_wakeup_time == 0)
 		return;
 
 	D_ASSERT(!d_list_empty(&req->sr_link));
@@ -1670,8 +1667,8 @@ sched_pop_nvme_poll(struct sched_data *data, ABT_pool pool)
 	if (cycle->sc_ults_tot == 0)
 		cycle->sc_cycle_started = 0;
 
-	/* Only main xstream (VOS xstream) has NVMe poll ULT */
-	if (!dx->dx_main_xs)
+	/* main and system xstream (VOS xstream) have NVMe poll ULT */
+	if (!dss_xstream_has_nvme(dx))
 		return ABT_UNIT_NULL;
 
 	ret = ABT_pool_pop(pool, &unit);
@@ -1980,7 +1977,7 @@ sched_watchdog_post(struct dss_xstream *dx)
 	info->si_stats.ss_watchdog_ts = cur;
 
 	strings = backtrace_symbols(&info->si_ult_func, 1);
-	D_ERROR("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
+	D_WARN("WATCHDOG: Thread %p took %u ms. symbol:%s\n",
 		info->si_ult_func, elapsed, strings != NULL ? strings[0] : NULL);
 
 	free(strings);

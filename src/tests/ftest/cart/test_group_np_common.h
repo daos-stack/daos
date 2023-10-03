@@ -171,7 +171,7 @@ struct rank_status {
 };
 
 /**
- * As we want to catch swim status flickering (sequenes of dead, alive, dead);
+ * As we want to catch swim status flickering (sequences of dead, alive, dead);
  * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank .
  */
 static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = { { 0 } };

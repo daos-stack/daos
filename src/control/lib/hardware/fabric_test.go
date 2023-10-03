@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package hardware
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -19,6 +20,360 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func fabricCmpOpts() []cmp.Option {
+	return []cmp.Option{
+		cmp.AllowUnexported(FabricInterfaceSet{}, FabricProviderSet{}),
+	}
+}
+
+func ignoreFabricProviderPriorityCmpOpts() []cmp.Option {
+	return []cmp.Option{
+		cmp.FilterPath(
+			func(p cmp.Path) bool {
+				return p.Last().String() == ".Priority"
+			},
+			cmp.Ignore(),
+		),
+		cmp.FilterPath(
+			func(p cmp.Path) bool {
+				return p.Last().String() == ".byPriority"
+			},
+			cmp.Ignore(),
+		),
+	}
+}
+
+// newTestFabricProviderSet creates a new set of FabricProviders. The priority is derived from the order
+// of the provider strings.
+func newTestFabricProviderSet(providers ...string) *FabricProviderSet {
+	set := new(FabricProviderSet)
+	for i, p := range providers {
+		set.Add(&FabricProvider{
+			Name:     p,
+			Priority: i,
+		})
+	}
+
+	return set
+}
+
+func TestHardware_FabricProvider_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		p         *FabricProvider
+		expResult string
+	}{
+		"nil": {
+			expResult: "<nil>",
+		},
+		"no name": {
+			p:         &FabricProvider{},
+			expResult: "<no name>",
+		},
+		"name": {
+			p: &FabricProvider{
+				Name: "p1",
+			},
+			expResult: "p1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.p.String(), "")
+		})
+	}
+}
+
+func TestHardware_FabricProviderSet_String(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ps        *FabricProviderSet
+		expResult string
+	}{
+		"nil": {
+			expResult: "<nil>",
+		},
+		"empty": {
+			ps:        newTestFabricProviderSet(),
+			expResult: "<empty>",
+		},
+		"one provider": {
+			ps:        newTestFabricProviderSet("p1"),
+			expResult: "p1",
+		},
+		"multiple providers": {
+			ps:        newTestFabricProviderSet("p3", "p2", "p1"),
+			expResult: "p3, p2, p1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.ps.String(), "")
+		})
+	}
+}
+
+func TestHardware_FabricProviderSet_Len(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ps        *FabricProviderSet
+		expResult int
+	}{
+		"nil": {},
+		"empty": {
+			ps: newTestFabricProviderSet(),
+		},
+		"one provider": {
+			ps:        newTestFabricProviderSet("p1"),
+			expResult: 1,
+		},
+		"multiple providers": {
+			ps:        newTestFabricProviderSet("p3", "p2", "p1"),
+			expResult: 3,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.ps.Len(), "")
+		})
+	}
+}
+
+func TestHardware_FabricProviderSet_Has(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ps        *FabricProviderSet
+		prov      string
+		expResult bool
+	}{
+		"nil": {
+			prov: "p3",
+		},
+		"empty": {
+			ps:   newTestFabricProviderSet(),
+			prov: "p3",
+		},
+		"only provider": {
+			ps:        newTestFabricProviderSet("p1"),
+			prov:      "p1",
+			expResult: true,
+		},
+		"single provider doesn't have": {
+			ps:   newTestFabricProviderSet("p1"),
+			prov: "p2",
+		},
+		"multiple providers has": {
+			ps:        newTestFabricProviderSet("p3", "p2", "p1"),
+			prov:      "p1",
+			expResult: true,
+		},
+		"multiple providers doesn't have": {
+			ps:   newTestFabricProviderSet("p3", "p2", "p1"),
+			prov: "p6",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			test.AssertEqual(t, tc.expResult, tc.ps.Has(tc.prov), "")
+		})
+	}
+}
+
+func TestHardware_FabricProviderSet_Add(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ps       *FabricProviderSet
+		toAdd    []*FabricProvider
+		expOrder []string
+	}{
+		"nil set": {
+			toAdd: []*FabricProvider{
+				{
+					Name: "p1",
+				},
+			},
+		},
+		"no input": {
+			ps: newTestFabricProviderSet(),
+		},
+		"nil in list": {
+			ps: newTestFabricProviderSet(),
+			toAdd: []*FabricProvider{
+				nil,
+				{
+					Name: "p1",
+				},
+			},
+			expOrder: []string{"p1"},
+		},
+		"empty in list": {
+			ps: newTestFabricProviderSet(),
+			toAdd: []*FabricProvider{
+				{},
+				{
+					Name: "p1",
+				},
+			},
+			expOrder: []string{"p1"},
+		},
+		"add one to empty set": {
+			ps: newTestFabricProviderSet(),
+			toAdd: []*FabricProvider{
+				{
+					Name: "p1",
+				},
+			},
+			expOrder: []string{"p1"},
+		},
+		"add multi to empty set": {
+			ps: newTestFabricProviderSet(),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p1",
+					Priority: 1,
+				},
+				{
+					Name:     "p2",
+					Priority: 2,
+				},
+				{
+					Name:     "p3",
+					Priority: 3,
+				},
+			},
+			expOrder: []string{"p1", "p2", "p3"},
+		},
+		"add to existing set": {
+			ps: NewFabricProviderSet(
+				&FabricProvider{
+					Name: "p0",
+				}, &FabricProvider{
+					Name:     "p4",
+					Priority: 4,
+				},
+			),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p1",
+					Priority: 1,
+				},
+				{
+					Name:     "p2",
+					Priority: 2,
+				},
+				{
+					Name:     "p3",
+					Priority: 3,
+				},
+			},
+			expOrder: []string{"p0", "p1", "p2", "p3", "p4"},
+		},
+		"add duplicate": {
+			ps: newTestFabricProviderSet("p0", "p1"),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p1",
+					Priority: 1,
+				},
+				{
+					Name:     "p2",
+					Priority: 2,
+				},
+				{
+					Name:     "p3",
+					Priority: 3,
+				},
+			},
+			expOrder: []string{"p0", "p1", "p2", "p3"},
+		},
+		"duplicates in input": {
+			ps: newTestFabricProviderSet("p0"),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p1",
+					Priority: 2,
+				},
+				{
+					Name:     "p2",
+					Priority: 3,
+				},
+				{
+					Name:     "p1",
+					Priority: 1,
+				},
+			},
+			expOrder: []string{"p0", "p1", "p2"},
+		},
+		"add duplicate lower priority": {
+			ps: newTestFabricProviderSet("p0", "p1", "p2"),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p1",
+					Priority: 4,
+				},
+			},
+			expOrder: []string{"p0", "p1", "p2"},
+		},
+		"add duplicate higher priority": {
+			ps: newTestFabricProviderSet("p0", "p1", "p2"),
+			toAdd: []*FabricProvider{
+				{
+					Name:     "p2",
+					Priority: 0,
+				},
+			},
+			expOrder: []string{"p0", "p2", "p1"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tc.ps.Add(tc.toAdd...)
+
+			orderedSlice := tc.ps.ToSlice()
+			test.AssertEqual(t, len(tc.expOrder), len(orderedSlice), "")
+			for i, provName := range tc.expOrder {
+				test.AssertEqual(t, provName, orderedSlice[i].Name, "")
+			}
+		})
+	}
+}
+
+func TestHardware_FabricProviderSet_ToSlice(t *testing.T) {
+	longList := []string{}
+	expLongSlice := []*FabricProvider{}
+	for i := 0; i < 25; i++ {
+		name := fmt.Sprintf("prov%d", i)
+		longList = append(longList, name)
+		expLongSlice = append(expLongSlice, &FabricProvider{
+			Name:     name,
+			Priority: i,
+		})
+	}
+
+	for name, tc := range map[string]struct {
+		ps        *FabricProviderSet
+		expResult []*FabricProvider
+	}{
+		"nil": {
+			expResult: []*FabricProvider{},
+		},
+		"empty set": {
+			ps:        newTestFabricProviderSet(),
+			expResult: []*FabricProvider{},
+		},
+		"single member": {
+			ps: newTestFabricProviderSet("p1"),
+			expResult: []*FabricProvider{
+				{
+					Name: "p1",
+				},
+			},
+		},
+		"long list in order": {
+			ps:        newTestFabricProviderSet(longList...),
+			expResult: expLongSlice,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := tc.ps.ToSlice()
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
 
 func TestHardware_FabricInterface_String(t *testing.T) {
 	for name, tc := range map[string]struct {
@@ -35,7 +390,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 		"no OS name": {
 			fi: &FabricInterface{
 				Name:      "test0",
-				Providers: common.NewStringSet("p1", "p2"),
+				Providers: newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: "test0 (providers: p1, p2)",
 		},
@@ -43,7 +398,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 			fi: &FabricInterface{
 				Name:          "test0",
 				NetInterfaces: common.NewStringSet("os_test0"),
-				Providers:     common.NewStringSet("p1", "p2"),
+				Providers:     newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
@@ -52,7 +407,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 				Name:          "test0:1",
 				OSName:        "test0",
 				NetInterfaces: common.NewStringSet("os_test0"),
-				Providers:     common.NewStringSet("p1", "p2"),
+				Providers:     newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: "test0:1 (OS name: test0) (interface: os_test0) (providers: p1, p2)",
 		},
@@ -61,7 +416,7 @@ func TestHardware_FabricInterface_String(t *testing.T) {
 				Name:          "test0",
 				OSName:        "test0",
 				NetInterfaces: common.NewStringSet("os_test0"),
-				Providers:     common.NewStringSet("p1", "p2"),
+				Providers:     newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: "test0 (interface: os_test0) (providers: p1, p2)",
 		},
@@ -83,40 +438,40 @@ func TestHardware_FabricInterface_SupportsProvider(t *testing.T) {
 		},
 		"single not found": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("lib+p1", "lib+p3"),
+				Providers: newTestFabricProviderSet("lib+p1", "lib+p3"),
 			},
 			in: "lib+p2",
 		},
 		"single match": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("lib+p1", "lib+p2", "lib+p3"),
+				Providers: newTestFabricProviderSet("lib+p1", "lib+p2", "lib+p3"),
 			},
 			in:        "lib+p1",
 			expResult: true,
 		},
 		"no prefix": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("p1", "p2", "p3"),
+				Providers: newTestFabricProviderSet("p1", "p2", "p3"),
 			},
 			in:        "p3",
 			expResult: true,
 		},
 		"no prefix not found": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("p1", "p2", "lib+p3"),
+				Providers: newTestFabricProviderSet("p1", "p2", "lib+p3"),
 			},
 			in: "p3",
 		},
 		"multi match": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("lib+p1", "lib+p2", "lib+p3"),
+				Providers: newTestFabricProviderSet("lib+p1", "lib+p2", "lib+p3"),
 			},
 			in:        "lib+p1,p2",
 			expResult: true,
 		},
 		"partial match": {
 			fi: &FabricInterface{
-				Providers: common.NewStringSet("lib+p1", "lib+p3"),
+				Providers: newTestFabricProviderSet("lib+p1", "lib+p3"),
 			},
 			in: "lib+p1,p2",
 		},
@@ -230,9 +585,7 @@ func TestHardware_NewFabricInterfaceSet(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := NewFabricInterfaceSet(tc.input...)
 
-			if diff := cmp.Diff(tc.expResult, result,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -428,7 +781,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 				NetInterfaces: common.NewStringSet("dev2"),
 				DeviceClass:   Ether,
 				NUMANode:      1,
-				Providers:     common.NewStringSet("p1", "p2"),
+				Providers:     newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -440,7 +793,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 					NetInterfaces: common.NewStringSet("dev2"),
 					DeviceClass:   Ether,
 					NUMANode:      1,
-					Providers:     common.NewStringSet("p1", "p2"),
+					Providers:     newTestFabricProviderSet("p1", "p2"),
 				},
 			),
 		},
@@ -472,7 +825,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 					NetInterfaces: common.NewStringSet("dev1"),
 					DeviceClass:   Ether,
 					NUMANode:      2,
-					Providers:     common.NewStringSet("p0", "p1"),
+					Providers:     newTestFabricProviderSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
@@ -480,7 +833,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 				NetInterfaces: common.NewStringSet("dev1"),
 				DeviceClass:   Ether,
 				NUMANode:      2,
-				Providers:     common.NewStringSet("p2", "p3"),
+				Providers:     newTestFabricProviderSet("p2", "p3"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -488,7 +841,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 					NetInterfaces: common.NewStringSet("dev1"),
 					DeviceClass:   Ether,
 					NUMANode:      2,
-					Providers:     common.NewStringSet("p0", "p1", "p2", "p3"),
+					Providers:     newTestFabricProviderSet("p0", "p1", "p2", "p3"),
 				},
 			),
 		},
@@ -499,7 +852,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 					NetInterfaces: common.NewStringSet("dev1"),
 					DeviceClass:   Ether,
 					NUMANode:      2,
-					Providers:     common.NewStringSet("p0", "p1"),
+					Providers:     newTestFabricProviderSet("p0", "p1"),
 				},
 			),
 			input: &FabricInterface{
@@ -507,7 +860,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 				NetInterfaces: common.NewStringSet("dev1"),
 				DeviceClass:   Ether,
 				NUMANode:      2,
-				Providers:     common.NewStringSet("p1", "p2"),
+				Providers:     newTestFabricProviderSet("p1", "p2"),
 			},
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
@@ -515,7 +868,7 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 					NetInterfaces: common.NewStringSet("dev1"),
 					DeviceClass:   Ether,
 					NUMANode:      2,
-					Providers:     common.NewStringSet("p0", "p1", "p2"),
+					Providers:     newTestFabricProviderSet("p0", "p1", "p2"),
 				},
 			),
 		},
@@ -523,9 +876,8 @@ func TestHardware_FabricInterfaceSet_Update(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tc.fis.Update(tc.input)
 
-			if diff := cmp.Diff(tc.expResult, tc.fis,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			cmpOpts := append(fabricCmpOpts(), ignoreFabricProviderPriorityCmpOpts()...)
+			if diff := cmp.Diff(tc.expResult, tc.fis, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -594,9 +946,7 @@ func TestHardware_FabricInterfaceSet_Remove(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tc.fis.Remove(tc.input)
 
-			if diff := cmp.Diff(tc.expResult, tc.fis,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			if diff := cmp.Diff(tc.expResult, tc.fis, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -667,7 +1017,7 @@ func TestHardware_FabricInterfaceSet_GetInterface(t *testing.T) {
 			result, err := tc.fis.GetInterface(tc.name)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -717,17 +1067,17 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 				&FabricInterface{
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p1", "p2"),
+					Providers:     newTestFabricProviderSet("p1", "p2"),
 				},
 				&FabricInterface{
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p3"),
+					Providers:     newTestFabricProviderSet("p3"),
 				},
 				&FabricInterface{
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
-					Providers:     common.NewStringSet("p4"),
+					Providers:     newTestFabricProviderSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -739,17 +1089,17 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 				&FabricInterface{
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p1", "p2"),
+					Providers:     newTestFabricProviderSet("p1", "p2"),
 				},
 				&FabricInterface{
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p3"),
+					Providers:     newTestFabricProviderSet("p3"),
 				},
 				&FabricInterface{
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
-					Providers:     common.NewStringSet("p4"),
+					Providers:     newTestFabricProviderSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -757,7 +1107,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 			expResult: &FabricInterface{
 				Name:          "test1",
 				NetInterfaces: common.NewStringSet("os_test0"),
-				Providers:     common.NewStringSet("p3"),
+				Providers:     newTestFabricProviderSet("p3"),
 			},
 		},
 		"provider helper specified, success": {
@@ -765,17 +1115,17 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 				&FabricInterface{
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p1", "p2", "p3"),
+					Providers:     newTestFabricProviderSet("p1", "p2", "p3"),
 				},
 				&FabricInterface{
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p3;h1"),
+					Providers:     newTestFabricProviderSet("p3;h1"),
 				},
 				&FabricInterface{
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
-					Providers:     common.NewStringSet("p4"),
+					Providers:     newTestFabricProviderSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -783,7 +1133,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 			expResult: &FabricInterface{
 				Name:          "test1",
 				NetInterfaces: common.NewStringSet("os_test0"),
-				Providers:     common.NewStringSet("p3;h1"),
+				Providers:     newTestFabricProviderSet("p3;h1"),
 			},
 		},
 		"provider helper specified, not found": {
@@ -791,17 +1141,17 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 				&FabricInterface{
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p1", "p2"),
+					Providers:     newTestFabricProviderSet("p1", "p2"),
 				},
 				&FabricInterface{
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test0"),
-					Providers:     common.NewStringSet("p3;h1", "p3"),
+					Providers:     newTestFabricProviderSet("p3;h1", "p3"),
 				},
 				&FabricInterface{
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
-					Providers:     common.NewStringSet("p4"),
+					Providers:     newTestFabricProviderSet("p4"),
 				},
 			),
 			netDev:   "os_test0",
@@ -813,7 +1163,7 @@ func TestHardware_FabricInterfaceSet_GetInterfaceOnNetDevice(t *testing.T) {
 			result, err := tc.fis.GetInterfaceOnNetDevice(tc.netDev, tc.provider)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -892,10 +1242,6 @@ func TestHardware_NetDevClass_String(t *testing.T) {
 		"unknown": {
 			ndc:       NetDevClass(0xFFFFFFFE),
 			expResult: "UNKNOWN (0xfffffffe)",
-		},
-		"any": {
-			ndc:       NetDevClass(0xFFFFFFFF),
-			expResult: "ANY",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -998,6 +1344,7 @@ func TestHardware_NewFabricScanner(t *testing.T) {
 				),
 				test.CmpOptIgnoreFieldAnyType("log"),
 				cmpopts.IgnoreFields(FabricScanner{}, "mutex"),
+				cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 			); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
@@ -1012,6 +1359,7 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				WithDevices([]*PCIDevice{
 					mockPCIDevice("test", 1, 2, 3, 4).withType(DeviceTypeOFIDomain),
 					mockPCIDevice("os_test", 1, 2, 3, 4).withType(DeviceTypeNetInterface),
+					mockPCIDevice("os_test", 2, 2, 3, 4).withType(DeviceTypeNetInterface),
 				}),
 		},
 	}
@@ -1020,16 +1368,30 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 		&FabricInterface{
 			Name:          "test01",
 			NetInterfaces: common.NewStringSet("os_test01"),
+			Providers:     newTestFabricProviderSet("ofi+verbs"),
+		},
+		&FabricInterface{
+			Name:          "os_test01",
+			NetInterfaces: common.NewStringSet("os_test01"),
+			Providers:     newTestFabricProviderSet("ofi+tcp"),
+		},
+
+		&FabricInterface{
+			Name:          "os_test02",
+			NetInterfaces: common.NewStringSet("os_test02"),
+			Providers:     newTestFabricProviderSet("ofi+sockets"),
 		},
 	)
 
 	for name, tc := range map[string]struct {
-		config        *FabricScannerConfig
-		cacheTopology *Topology
-		nilScanner    bool
-		builders      []FabricInterfaceSetBuilder
-		expResult     *FabricInterfaceSet
-		expErr        error
+		config             *FabricScannerConfig
+		providers          []string
+		cacheTopology      *Topology
+		nilScanner         bool
+		builders           []FabricInterfaceSetBuilder
+		expBuildersChanged bool
+		expResult          *FabricInterfaceSet
+		expErr             error
 	}{
 		"nil": {
 			nilScanner: true,
@@ -1039,14 +1401,55 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 			config: &FabricScannerConfig{},
 			expErr: errors.New("invalid"),
 		},
+		"nothing found": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&MockFabricInterfaceProvider{
+						GetFabricReturn: NewFabricInterfaceSet(),
+					},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC: Infiniband,
+						},
+					},
+				},
+			},
+			expErr: errors.New("no fabric interfaces found"),
+		},
+		"nothing found with provider": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&MockFabricInterfaceProvider{
+						GetFabricReturn: NewFabricInterfaceSet(),
+					},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC: Infiniband,
+						},
+					},
+				},
+			},
+			providers: []string{"ofi+tcp"},
+			expErr:    errors.New("no fabric interfaces found with providers: ofi+tcp"),
+		},
 		"already initialized": {
 			config: GetMockFabricScannerConfig(),
 			builders: []FabricInterfaceSetBuilder{
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
-				&mockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
 			},
-			expResult: NewFabricInterfaceSet(),
+			expErr: errors.New("no fabric interfaces found"),
 		},
 		"topology fails": {
 			config: &FabricScannerConfig{
@@ -1111,14 +1514,50 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				},
 			},
 			// we ignore the error in this case
+			expResult: testFis,
+		},
+		"re-init with different provider": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&MockFabricInterfaceProvider{
+						GetFabricReturn: NewFabricInterfaceSet(
+							&FabricInterface{
+								Name:          "os_test01",
+								NetInterfaces: common.NewStringSet("os_test01"),
+								Providers:     newTestFabricProviderSet("ofi+tcp"),
+							},
+						),
+					},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC:      Infiniband,
+							ExpInput: "os_test01",
+						},
+					},
+				},
+			},
+			providers: []string{"ofi+tcp"},
+			builders: []FabricInterfaceSetBuilder{
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+				&MockFabricInterfaceSetBuilder{},
+			},
+			expBuildersChanged: true,
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
-					Name:          "test01",
+					Name:          "os_test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+tcp"),
 				},
 			),
 		},
-		"success": {
+		"success for all providers": {
 			config: &FabricScannerConfig{
 				TopologyProvider: &MockTopologyProvider{
 					GetTopoReturn: testTopo,
@@ -1131,7 +1570,15 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
+							NDC:      Infiniband,
+							ExpInput: "os_test01",
+						},
+						{
 							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+						{
+							NDC:      Infiniband,
 							ExpInput: "os_test01",
 						},
 					},
@@ -1141,9 +1588,46 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				&FabricInterface{
 					Name:          "test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+verbs"),
+				},
+				&FabricInterface{
+					Name:          "os_test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+tcp"),
+				},
+				&FabricInterface{
+					Name:          "os_test02",
+					NetInterfaces: common.NewStringSet("os_test02"),
 					DeviceClass:   Ether,
+					Providers:     newTestFabricProviderSet("ofi+sockets"),
 				},
 			),
+		},
+		"request multiple providers": {
+			config: &FabricScannerConfig{
+				TopologyProvider: &MockTopologyProvider{
+					GetTopoReturn: testTopo,
+				},
+				FabricInterfaceProviders: []FabricInterfaceProvider{
+					&multiCallFabricInterfaceProvider{prefix: "os_test"},
+				},
+				NetDevClassProvider: &MockNetDevClassProvider{
+					GetNetDevClassReturn: []MockGetNetDevClassResult{
+						{
+							NDC:      Ether,
+							ExpInput: "os_test01",
+						},
+						{
+							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+					},
+				},
+			},
+			providers: []string{"ofi+verbs", "ofi+tcp"},
+			expResult: expectedMultiCallFIProviderResult("os_test", Ether, "ofi+verbs", "ofi+tcp"),
 		},
 		"topology cached": {
 			config: &FabricScannerConfig{
@@ -1158,7 +1642,15 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				NetDevClassProvider: &MockNetDevClassProvider{
 					GetNetDevClassReturn: []MockGetNetDevClassResult{
 						{
+							NDC:      Infiniband,
+							ExpInput: "os_test01",
+						},
+						{
 							NDC:      Ether,
+							ExpInput: "os_test02",
+						},
+						{
+							NDC:      Infiniband,
 							ExpInput: "os_test01",
 						},
 					},
@@ -1169,7 +1661,20 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				&FabricInterface{
 					Name:          "test01",
 					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+verbs"),
+				},
+				&FabricInterface{
+					Name:          "os_test01",
+					NetInterfaces: common.NewStringSet("os_test01"),
+					DeviceClass:   Infiniband,
+					Providers:     newTestFabricProviderSet("ofi+tcp"),
+				},
+				&FabricInterface{
+					Name:          "os_test02",
+					NetInterfaces: common.NewStringSet("os_test02"),
 					DeviceClass:   Ether,
+					Providers:     newTestFabricProviderSet("ofi+sockets"),
 				},
 			),
 		},
@@ -1193,19 +1698,21 @@ func TestHardware_FabricScanner_Scan(t *testing.T) {
 				}
 			}
 
-			result, err := scanner.Scan(context.TODO())
+			result, err := scanner.Scan(test.Context(t), tc.providers...)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result, cmp.AllowUnexported(FabricInterfaceSet{})); diff != "" {
+			if diff := cmp.Diff(tc.expResult, result, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 
-			for _, b := range tc.builders {
-				mock, ok := b.(*mockFabricInterfaceSetBuilder)
-				if !ok {
-					t.Fatalf("bad test setup: test builders aren't mocks")
+			if !tc.expBuildersChanged {
+				for _, b := range tc.builders {
+					mock, ok := b.(*MockFabricInterfaceSetBuilder)
+					if !ok {
+						t.Fatalf("bad test setup: test builders aren't mocks")
+					}
+					test.AssertEqual(t, 1, mock.BuildPartCalled, "")
 				}
-				test.AssertEqual(t, 1, mock.buildPartCalled, "")
 			}
 		})
 	}
@@ -1267,7 +1774,8 @@ func TestHardware_FabricScanner_CacheTopology(t *testing.T) {
 
 func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	config := &FabricInterfaceSetBuilderConfig{
-		Topology: &Topology{},
+		Providers: []string{"testprovider"},
+		Topology:  &Topology{},
 		FabricInterfaceProviders: []FabricInterfaceProvider{
 			&MockFabricInterfaceProvider{},
 			&MockFabricInterfaceProvider{},
@@ -1276,6 +1784,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 	}
 	expResult := []FabricInterfaceSetBuilder{
 		newFabricInterfaceBuilder(nil,
+			[]string{"testprovider"},
 			&MockFabricInterfaceProvider{},
 			&MockFabricInterfaceProvider{}),
 		newNetworkDeviceBuilder(nil, &Topology{}),
@@ -1296,6 +1805,7 @@ func TestHardware_defaultFabricInterfaceSetBuilders(t *testing.T) {
 		cmp.AllowUnexported(MockFabricInterfaceProvider{}),
 		cmp.AllowUnexported(MockNetDevClassProvider{}),
 		test.CmpOptIgnoreFieldAnyType("log"),
+		cmpopts.IgnoreFields(MockNetDevClassProvider{}, "mutex"),
 	); diff != "" {
 		t.Fatalf("(-want, +got)\n%s\n", diff)
 	}
@@ -1314,7 +1824,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			expResult: NewFabricInterfaceSet(),
 		},
 		"nil set": {
-			builder: newFabricInterfaceBuilder(nil),
+			builder: newFabricInterfaceBuilder(nil, []string{}),
 			expErr:  errors.New("FabricInterfaceSet is nil"),
 		},
 		"uninit": {
@@ -1324,7 +1834,7 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			expResult: NewFabricInterfaceSet(),
 		},
 		"success": {
-			builder: newFabricInterfaceBuilder(nil,
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
@@ -1347,16 +1857,16 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			),
 		},
 		"merge success": {
-			builder: newFabricInterfaceBuilder(nil,
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
 							Name:      "test0",
-							Providers: common.NewStringSet("p2", "p3"),
+							Providers: newTestFabricProviderSet("p2", "p3"),
 						},
 						&FabricInterface{
 							Name:      "test1",
-							Providers: common.NewStringSet("p2"),
+							Providers: newTestFabricProviderSet("p2"),
 						},
 					),
 				},
@@ -1364,15 +1874,15 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
 							Name:      "test2",
-							Providers: common.NewStringSet("p1"),
+							Providers: newTestFabricProviderSet("p1"),
 						},
 						&FabricInterface{
 							Name:      "test3",
-							Providers: common.NewStringSet("p1"),
+							Providers: newTestFabricProviderSet("p1"),
 						},
 						&FabricInterface{
 							Name:      "test0",
-							Providers: common.NewStringSet("p1"),
+							Providers: newTestFabricProviderSet("p1"),
 						},
 					),
 				},
@@ -1381,24 +1891,24 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 			expResult: NewFabricInterfaceSet(
 				&FabricInterface{
 					Name:      "test0",
-					Providers: common.NewStringSet("p1", "p2", "p3"),
+					Providers: newTestFabricProviderSet("p1", "p2", "p3"),
 				},
 				&FabricInterface{
 					Name:      "test1",
-					Providers: common.NewStringSet("p2"),
+					Providers: newTestFabricProviderSet("p2"),
 				},
 				&FabricInterface{
 					Name:      "test2",
-					Providers: common.NewStringSet("p1"),
+					Providers: newTestFabricProviderSet("p1"),
 				},
 				&FabricInterface{
 					Name:      "test3",
-					Providers: common.NewStringSet("p1"),
+					Providers: newTestFabricProviderSet("p1"),
 				},
 			),
 		},
 		"get FI fails": {
-			builder: newFabricInterfaceBuilder(nil,
+			builder: newFabricInterfaceBuilder(nil, []string{},
 				&MockFabricInterfaceProvider{
 					GetFabricReturn: NewFabricInterfaceSet(
 						&FabricInterface{
@@ -1426,12 +1936,12 @@ func TestHardware_FabricInterfaceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, tc.set,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+
+			cmpOpts := append(fabricCmpOpts(), ignoreFabricProviderPriorityCmpOpts()...)
+			if diff := cmp.Diff(tc.expResult, tc.set, cmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1687,12 +2197,10 @@ func TestHardware_NetDeviceBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, tc.set,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1841,12 +2349,10 @@ func TestHardware_NUMAAffinityBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, tc.set,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -1990,12 +2496,10 @@ func TestHardware_NetDevClassBuilder_BuildPart(t *testing.T) {
 				tc.builder.log = log
 			}
 
-			err := tc.builder.BuildPart(context.Background(), tc.set)
+			err := tc.builder.BuildPart(test.Context(t), tc.set)
 
 			test.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, tc.set,
-				cmp.AllowUnexported(FabricInterfaceSet{}),
-			); diff != "" {
+			if diff := cmp.Diff(tc.expResult, tc.set, fabricCmpOpts()...); diff != "" {
 				t.Fatalf("(-want, +got)\n%s\n", diff)
 			}
 		})
@@ -2133,10 +2637,10 @@ func TestHardware_WaitFabricReady(t *testing.T) {
 			var ctx context.Context
 
 			if tc.timeout == 0 {
-				ctx = context.Background()
+				ctx = test.Context(t)
 			} else {
 				var cancel context.CancelFunc
-				ctx, cancel = context.WithTimeout(context.Background(), tc.timeout)
+				ctx, cancel = context.WithTimeout(test.Context(t), tc.timeout)
 				defer cancel()
 			}
 

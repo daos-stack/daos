@@ -1,4 +1,3 @@
-#!/usr/bin/python
 """
   (C) Copyright 2020-2022 Intel Corporation.
 
@@ -11,7 +10,7 @@ from general_utils import human_to_bytes
 
 
 class DaosAggregationIOSmall(IorTestBase):
-    # pylint: disable=too-many-ancestors,too-few-public-methods
+    # pylint: disable=too-few-public-methods
     """Test class for testing aggregation with small I/O.
 
     Test class Description:
@@ -30,8 +29,10 @@ class DaosAggregationIOSmall(IorTestBase):
             and verify the data is initially written into SCM and later
             moved to SSD NV DIMMs.
 
-        :avocado: tags=all,full_regression,hw,large,aggregate,daosio
-        :avocado: tags=aggregateiosmall
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=aggregation,daosio
+        :avocado: tags=DaosAggregationIOSmall,test_aggregation_io_small
         """
         # Create pool and container
         self.update_ior_cmd_with_pool()
@@ -47,10 +48,8 @@ class DaosAggregationIOSmall(IorTestBase):
         pool_info = self.pool.get_pool_daos_space()
         initial_scm_free_space = pool_info["s_free"][scm_index]
         initial_ssd_free_space = pool_info["s_free"][ssd_index]
-        self.log.info(
-            "Initial SCM Free Space = {}".format(initial_scm_free_space))
-        self.log.info(
-            "Initial SSD Free Space = {}".format(initial_ssd_free_space))
+        self.log.info("Initial SCM Free Space = %s", initial_scm_free_space)
+        self.log.info("Initial SSD Free Space = %s", initial_ssd_free_space)
 
         # Disable the aggregation
         self.log.info("Disabling the aggregation")
@@ -61,15 +60,12 @@ class DaosAggregationIOSmall(IorTestBase):
         pool_info = self.pool.get_pool_daos_space()
         scm_free_space_after_ior = pool_info["s_free"][scm_index]
         ssd_free_space_after_ior = pool_info["s_free"][ssd_index]
-        self.log.info(
-            "SCM Free Space after ior = {}".format(scm_free_space_after_ior))
-        self.log.info(
-            "SSD Free Space after ior = {}".format(ssd_free_space_after_ior))
+        self.log.info("SCM Free Space after ior = %s", scm_free_space_after_ior)
+        self.log.info("SSD Free Space after ior = %s", ssd_free_space_after_ior)
 
         self.log.info(
-            "Comparing if scm space after ior - {} is less than initial free "
-            "space - {}".format(
-                scm_free_space_after_ior, initial_scm_free_space))
+            "Comparing if scm space after ior - %s is less than initial free space - %s",
+            scm_free_space_after_ior, initial_scm_free_space)
         self.assertLessEqual(
             scm_free_space_after_ior, (initial_scm_free_space - total_ior),
             "SCM free space after IOR > the initial SCM free space")
@@ -85,7 +81,7 @@ class DaosAggregationIOSmall(IorTestBase):
         # wait 90 seconds for files to get old enough for aggregation +
         # 90 seconds for aggregation to start and finish
         wait_time = 180
-        self.log.info("Waiting for {} seconds".format(wait_time))
+        self.log.info("Waiting for %s seconds", wait_time)
         time.sleep(wait_time)
 
         pool_info = self.pool.get_pool_daos_space()
@@ -94,17 +90,13 @@ class DaosAggregationIOSmall(IorTestBase):
 
         self.log.info("Checking the data is moved to SSD after aggregation")
         self.log.info(
-            "{} == {}".format(
-                (initial_ssd_free_space - total_ior),
-                ssd_free_space_after_aggregate))
+            "%s == %s", (initial_ssd_free_space - total_ior), ssd_free_space_after_aggregate)
         self.assertEqual(
             (initial_ssd_free_space - total_ior),
             ssd_free_space_after_aggregate,
             "No data detected in SSD after aggregation")
         self.log.info("Checking the SCM space is reclaimed")
-        self.log.info(
-            "{} > {}".format(
-                scm_free_space_after_aggregate, scm_free_space_after_ior))
+        self.log.info("%s > %s", scm_free_space_after_aggregate, scm_free_space_after_ior)
         self.assertGreater(
             scm_free_space_after_aggregate, scm_free_space_after_ior,
             "SCM space has not been reclaimed")

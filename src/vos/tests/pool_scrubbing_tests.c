@@ -334,7 +334,8 @@ static void
 set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
 {
 	oid->id_shard	= 1;
-	oid->id_pad_32	= 0;
+	oid->id_layout_ver = 0;
+	oid->id_padding = 0;
 	oid->id_pub.lo = oid_lo;
 	daos_obj_set_oid(&oid->id_pub, 0, OR_RP_1, MAX_NUM_GROUPS, 0);
 }
@@ -422,22 +423,19 @@ sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 		((char *)sgl.sg_iovs[0].iov_buf)[idx_to_corrupt] += 2;
 
 		/* confirm corruption */
-		rc = daos_csummer_verify_iod(ctx->tsc_csummer, &iod, &sgl,
-					     iod_csum, NULL, 0, NULL);
+		rc = daos_csummer_verify_iod(ctx->tsc_csummer, &iod, &sgl, iod_csum, NULL, 0, NULL);
 		assert_csum_error(rc);
 	}
 
 	iov_alloc_str(&dkey, dkey_str);
-	rc = vos_obj_update(ctx->tsc_coh, oid, epoch, 0, 0, &dkey, 1, &iod,
-			    iod_csum, &sgl);
+	rc = vos_obj_update(ctx->tsc_coh, oid, epoch, 0, 0, &dkey, 1, &iod, iod_csum, &sgl);
 	assert_success(rc);
 
 	/**
 	 * make sure can fetch right after update. Even if data was corrupted,
 	 * it should still fetch fine
 	 */
-	rc = sts_ctx_fetch(ctx, oid_lo, iod_type,
-			   dkey_str, akey_str, epoch);
+	rc = sts_ctx_fetch(ctx, oid_lo, iod_type, dkey_str, akey_str, epoch);
 	assert_success(rc);
 
 	daos_csummer_free_ic(ctx->tsc_csummer, &iod_csum);
@@ -499,6 +497,7 @@ sts_ctx_setup_scrub_ctx(struct sts_context *ctx)
 	ctx->tsc_scrub_ctx.sc_drain_pool_tgt_fn = fake_target_drain;
 	ctx->tsc_scrub_ctx.sc_pool = &ctx->tsc_pool;
 	ctx->tsc_scrub_ctx.sc_dmi = &ctx->tsc_dmi;
+	ctx->tsc_scrub_ctx.sc_cont.scs_props_fetched = true;
 }
 
 static void
@@ -508,8 +507,7 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 
 	clear_ctx(&ctx->tsc_scrub_ctx);
 
-	assert_rc_equal(ctx->tsc_expected_rc,
-			vos_scrub_pool(&ctx->tsc_scrub_ctx));
+	assert_rc_equal(ctx->tsc_expected_rc, vos_scrub_pool(&ctx->tsc_scrub_ctx));
 }
 
 /**
@@ -690,7 +688,7 @@ test_yield_deletes_extent(void *arg)
 	daos_unit_oid_t		 oid = {0};
 
 	oid.id_shard	= 0;
-	oid.id_pad_32	= 0;
+	oid.id_layout_ver = 0;
 	oid.id_pub.lo = 1;
 	daos_obj_set_oid(&oid.id_pub, 0, OR_RP_1, MAX_NUM_GROUPS, 0);
 
@@ -986,7 +984,7 @@ main(int argc, char *argv[])
 	int rc;
 
 	assert_success(daos_debug_init(DAOS_LOG_DEFAULT));
-	rc = vos_self_init("/mnt/daos", false, 0);
+	rc = vos_self_init("/mnt/daos", false, BIO_STANDALONE_TGT_ID);
 	if (rc != 0) {
 		print_error("Error initializing VOS instance: "DF_RC"\n",
 			    DP_RC(rc));

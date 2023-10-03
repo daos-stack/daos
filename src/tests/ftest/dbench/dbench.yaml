@@ -15,14 +15,11 @@ server_config:
 pool:
   scm_size: 16G
   svcn: 1
-  control_method: dmg
 container:
   type: POSIX
   control_method: daos
 dbench:
-  loadfile: /usr/share/dbench/client.txt # writes about 25M and perform 500 thousand operations
+  loadfile: /usr/share/dbench/client.txt  # writes about 25M and perform 500 thousand operations
   timelimit: 10
   clients_per_process: 10
   num_of_procs: 10
-dfuse:
-  mount_dir: "/tmp/daos_dfuse/"

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -8,6 +8,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -25,7 +27,7 @@ type StorageControlService struct {
 	log             logging.Logger
 	storage         *storage.Provider
 	instanceStorage map[uint32]*storage.Config
-	getHugePageInfo common.GetHugePageInfoFn
+	getMemInfo      common.GetMemInfoFn
 }
 
 // ScmPrepare preps locally attached modules.
@@ -54,41 +56,25 @@ func (scs *StorageControlService) WithVMDEnabled() *StorageControlService {
 	return scs
 }
 
-func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider, hpiFn common.GetHugePageInfoFn) *StorageControlService {
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, ecs []*engine.Config) *StorageControlService {
+	topCfg := &storage.Config{
+		Tiers: nil,
+	}
+	if len(ecs) > 0 {
+		topCfg.ControlMetadata = ecs[0].Storage.ControlMetadata
+	}
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, c := range ecs {
 		instanceStorage[uint32(i)] = &c.Storage
 	}
 
 	return &StorageControlService{
-		log:             l,
-		storage:         sp,
+		log:             log,
 		instanceStorage: instanceStorage,
-		getHugePageInfo: hpiFn,
+		storage:         storage.DefaultProvider(log, 0, topCfg),
+		getMemInfo:      common.GetMemInfo,
 	}
-}
-
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
-		common.GetHugePageInfo,
-	)
-}
-
-// NewMockStorageControlService returns a StorageControlService with a mocked
-// storage provider consisting of the given sys, scm and bdev providers.
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	return newStorageControlService(log, engineCfgs,
-		storage.MockProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}, sys, scm, bdev),
-		func() (*common.HugePageInfo, error) {
-			return nil, nil
-		},
-	)
 }
 
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
@@ -171,30 +157,14 @@ func (cs *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Sc
 	return &storage.ScmScanResponse{Namespaces: nss}, nil
 }
 
-// mapCtrlrs maps each controller to it's PCI address.
-func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
-	ctrlrMap := make(map[string]*storage.NvmeController)
-
-	for _, ctrlr := range ctrlrs {
-		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s",
-				ctrlr.PciAddr)
-		}
-
-		ctrlrMap[ctrlr.PciAddr] = ctrlr
-	}
-
-	return ctrlrMap, nil
-}
-
 // scanAssignedBdevs retrieves up-to-date NVMe controller info including
 // health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
-func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
+func (cs *ControlService) scanAssignedBdevs(ctx context.Context, nsps []*ctl.ScmNamespace, statsReq bool) (*storage.BdevScanResponse, error) {
 	instances := cs.harness.Instances()
-	ctrlrs := storage.NvmeControllers{}
+	ctrlrs := new(storage.NvmeControllers)
 
 	for _, ei := range instances {
 		if !ei.GetStorage().HasBlockDevices() {
@@ -206,32 +176,73 @@ func (cs *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) 
 			return nil, err
 		}
 
-		// If the engine is not running or we aren't interested in temporal
-		// statistics for the bdev devices then continue to next.
-		if !ei.IsReady() || !statsReq {
-			for _, tsr := range tsrs {
-				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
+		// Build slice of controllers in all tiers.
+		tierCtrlrs := make([]storage.NvmeController, 0)
+		msg := fmt.Sprintf("NVMe tiers for engine-%d:", ei.Index())
+		for _, tsr := range tsrs {
+			msg += fmt.Sprintf("\n\tTier-%d: %s", tsr.Tier, tsr.Result.Controllers)
+			for _, c := range tsr.Result.Controllers {
+				tierCtrlrs = append(tierCtrlrs, *c)
 			}
+		}
+		cs.log.Info(msg)
+
+		// If the engine is not running or we aren't interested in temporal
+		// statistics for the bdev devices then continue to next engine.
+		if !ei.IsReady() || !statsReq {
+			ctrlrs.Update(tierCtrlrs...)
 			continue
+		}
+
+		cs.log.Debugf("updating stats for %d bdev(s) on instance %d", len(tierCtrlrs),
+			ei.Index())
+
+		// DAOS-12750 Compute the maximal size of the metadata to allow the engine to fill
+		// the WallMeta field response.  The maximal metadata (i.e. VOS index file) size
+		// should be equal to the SCM available size divided by the number of targets of the
+		// engine.
+		var md_size uint64
+		var rdb_size uint64
+		for _, nsp := range nsps {
+			mp := nsp.GetMount()
+			if mp == nil {
+				continue
+			}
+			if r, err := ei.GetRank(); err != nil || uint32(r) != mp.GetRank() {
+				continue
+			}
+
+			// NOTE DAOS-14223: This metadata size calculation won't necessarily match
+			//                  the meta blob size on SSD if --meta-size is specified in
+			//                  pool create command.
+			md_size = mp.GetUsableBytes() / uint64(ei.GetTargetCount())
+
+			engineCfg, err := cs.getEngineCfgFromScmNsp(nsp)
+			if err != nil {
+				return nil, errors.Wrap(err, "Engine with invalid configuration")
+			}
+			rdb_size, err = cs.getRdbSize(engineCfg)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+
+		if md_size == 0 {
+			cs.log.Noticef("instance %d: no SCM space available for metadata", ei.Index)
 		}
 
 		// If engine is running and has claimed the assigned devices for
 		// each tier, iterate over scan results for each tier and send query
 		// over drpc to update controller details with current health stats
 		// and smd info.
-		for _, tsr := range tsrs {
-			ctrlrMap, err := mapCtrlrs(tsr.Result.Controllers)
-			if err != nil {
-				return nil, errors.Wrap(err, "create controller map")
-			}
-
-			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
-				return nil, err
-			}
-
-			ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
+		updatedCtrlrs, err := ei.updateInUseBdevs(ctx, tierCtrlrs, md_size, rdb_size)
+		if err != nil {
+			return nil, errors.Wrapf(err, "instance %d: update online bdevs", ei.Index())
 		}
+
+		ctrlrs.Update(updatedCtrlrs...)
 	}
 
-	return &storage.BdevScanResponse{Controllers: ctrlrs}, nil
+	return &storage.BdevScanResponse{Controllers: *ctrlrs}, nil
 }

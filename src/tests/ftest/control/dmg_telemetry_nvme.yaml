@@ -5,14 +5,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 16
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 telemetry_metrics:
   nvme_crit_warn_metrics_valid: [0, 1]
   nvme_temp_metrics_valid: [280, 350]

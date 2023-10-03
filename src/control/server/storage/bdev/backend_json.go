@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2021-2022 Intel Corporation.
+// (C) Copyright 2021-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -97,6 +97,11 @@ func (hbrp HotplugBusidRangeParams) isDaosConfigParams() {}
 type AccelPropsParams storage.AccelProps
 
 func (app AccelPropsParams) isDaosConfigParams() {}
+
+// SpdkRpcServerParams specifies details for a storage.ConfSetSpdkRpcServer method.
+type SpdkRpcServerParams storage.SpdkRpcServer
+
+func (srsp SpdkRpcServerParams) isDaosConfigParams() {}
 
 // SpdkSubsystemConfig entries apply to any SpdkSubsystem.
 type SpdkSubsystemConfig struct {
@@ -217,7 +222,9 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 		}
 
 		for index, dev := range tier.DeviceList.Devices() {
-			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
+			// Encode bdev tier info in RPC name field.
+			name := fmt.Sprintf("%s_%d_%d_%d", req.Hostname, index, tier.Tier,
+				tier.DeviceRoles.OptionBits)
 			sscs = append(sscs, f(name, dev))
 		}
 	}
@@ -282,6 +289,18 @@ func accelPropSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
 	}
 }
 
+// Add SPDK JSON-RPC server settings to DAOS config data.
+func rpcSrvSet(req *storage.BdevWriteConfigRequest, data *DaosData) {
+	props := req.SpdkRpcSrvProps
+	// Add config if RPC server options have been selected.
+	if props.Enable {
+		data.Configs = append(data.Configs, &DaosConfig{
+			Method: storage.ConfSetSpdkRpcServer,
+			Params: SpdkRpcServerParams(props),
+		})
+	}
+}
+
 func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
@@ -318,6 +337,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 	}
 
 	accelPropSet(req, sc.DaosData)
+	rpcSrvSet(req, sc.DaosData)
 
 	return sc.WithBdevConfigs(log, req), nil
 }

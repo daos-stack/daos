@@ -9,14 +9,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 pool:
   scm_size: 30G
   nvme_size: 40G

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -30,15 +30,18 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
+#if BUILD_PIPELINE
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
+#else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
-#define MODS_LIST_CHK	"vos,rdb,rsvc,chk,security,mgmt,dtx,pool,cont,obj,rebuild"
+#endif
+#define MODS_LIST_CHK	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,chk"
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
 
 /**
- * Number of target threads the user would like to start
- * 0 means default value, see dss_tgt_nr_get();
+ * Number of target threads the user would like to start.
  */
 static unsigned int	nr_threads;
 
@@ -123,7 +126,7 @@ get_module_info(void)
 static uint64_t
 hlc_recovery_begin(void)
 {
-	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+	return d_hlc_epsilon_get_bound(d_hlc_get());
 }
 
 /* See the comment near where this function is called. */
@@ -132,12 +135,12 @@ hlc_recovery_end(uint64_t bound)
 {
 	int64_t	diff;
 
-	diff = bound - crt_hlc_get();
+	diff = bound - d_hlc_get();
 	if (diff > 0) {
 		struct timespec	tv;
 
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+		tv.tv_sec = d_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = d_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -256,54 +259,51 @@ modules_load(void)
 	return rc;
 }
 
+static unsigned int
+ncores_needed(unsigned int tgt_nr, unsigned int nr_helpers)
+{
+	return DAOS_TGT0_OFFSET + tgt_nr + nr_helpers;
+}
+
 /**
- * Get the appropriate number of main XS based on the number of cores and
- * passed in preferred number of threads.
+ * Check if the #targets and #nr_xs_helpers is valid to start server, the #nr_xs_helpers possibly
+ * be reduced.
  */
 static int
-dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
+dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 {
-	int tgt_nr;
-
 	D_ASSERT(ncores >= 1);
 
 	/* at most 2 helper XS per target */
-	if (dss_tgt_offload_xs_nr > 2 * nr)
-		dss_tgt_offload_xs_nr = 2 * nr;
-
-	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
-	 * offload XS. Calculate the tgt_nr as the number of main XS based
-	 * on number of cores.
-	 */
-retry:
-	tgt_nr = ncores - DAOS_TGT0_OFFSET - dss_tgt_offload_xs_nr;
-	if (tgt_nr <= 0)
-		tgt_nr = 1;
-
-	/* If user requires less target threads then set it as dss_tgt_nr,
-	 * if user oversubscribes, then:
-	 *      . if oversubscribe is enabled, use the required number
-	 *      . if oversubscribe is disabled(default),
-	 *        use the number calculated above
-	 * Note: oversubscribing  may hurt performance.
-	 */
-	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
-		tgt_nr = nr;
-		if (dss_tgt_offload_xs_nr > 2 * tgt_nr)
-			dss_tgt_offload_xs_nr = 2 * tgt_nr;
-	} else if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
-		dss_tgt_offload_xs_nr--;
-		goto retry;
+	if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
+		D_PRINT("#nr_xs_helpers(%d) cannot exceed 2 times #targets (2 x %d = %d).\n",
+			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
+		dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr == 0) {
+		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
 	}
 
-	if (tgt_nr != nr)
-		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, tgt_nr);
+	if (oversubscribe) {
+		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores)
+			D_PRINT("Force to start engine with %d targets %d xs_helpers on %d cores("
+				"%d cores reserved for system service).\n",
+				tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		goto out;
+	}
 
+	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
+		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
+			"%d cores reserved for system service).\n",
+			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		return -DER_INVAL;
+	}
+
+out:
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
 		dss_helper_pool = true;
 
-	return tgt_nr;
+	return 0;
 }
 
 static int
@@ -325,35 +325,30 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	dss_tgt_nr = nr_threads;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
-					    tgt_oversub);
-
 		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
-				"(set by \"-f\" option),"
-				" should within range [0, %u]",
+			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+				"range [0, %u]\n",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
-		return 0;
+
+		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. "
-			"Must be no larger than %d\n",
-			numa_node_nr);
+		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
 		return -DER_INVAL;
 	}
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -385,17 +380,15 @@ dss_topo_init()
 	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
 	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    tgt_oversub);
 	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
+			"[0, %d]\n",
+			dss_core_offset, dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
-
 	D_PRINT("Using NUMA core allocation algorithm\n");
-	return 0;
+
+	return dss_tgt_nr_check(dss_num_cores_numa_node, dss_tgt_nr, tgt_oversub);
 }
 
 static ABT_mutex		server_init_state_mutex;
@@ -568,24 +561,40 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
-	struct engine_metrics	*metrics;
+	struct engine_metrics	*metrics = &dss_engine_metrics;
 
 	/* We only care about dead ranks for now */
-	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
-		D_DEBUG(DB_MGMT, "ignore src/type/evict %u/%u\n",
-			src, type);
+	if (type != CRT_EVT_DEAD) {
+		D_DEBUG(DB_MGMT, "ignore: src=%d type=%d\n", src, type);
 		return;
 	}
 
-	metrics = &dss_engine_metrics;
-
-	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank, incarnation);
-	if (rc)
-		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
-			src, type, DP_RC(rc));
+	if (src == CRT_EVS_SWIM) {
+		d_tm_inc_counter(metrics->dead_rank_events, 1);
+		rc = ds_notify_swim_rank_dead(rank, incarnation);
+		if (rc)
+			D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
+				src, type, DP_RC(rc));
+	} else if (src == CRT_EVS_GRPMOD) {
+		d_rank_t self_rank = dss_self_rank();
+
+		if (rank == dss_self_rank()) {
+			D_WARN("raising SIGKILL: exclusion of this engine (rank %u) detected\n",
+			       self_rank);
+			/*
+			 * For now, we just raise a SIGKILL to ourselves; we could
+			 * inform daos_server, who would initiate a termination and
+			 * decide whether to restart us.
+			 */
+			rc = kill(getpid(), SIGKILL);
+			if (rc != 0)
+				D_ERROR("failed to raise SIGKILL: %d\n", errno);
+			return;
+		}
+
+	}
 }
 
 static void
@@ -634,6 +643,15 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	}
 }
 
+static uint64_t
+metrics_region_size(int num_tgts)
+{
+	const uint64_t	est_std_metrics = 1024; /* high estimate to allow for pool links */
+	const uint64_t	est_tgt_metrics = 128; /* high estimate */
+
+	return (est_std_metrics + est_tgt_metrics * num_tgts) * D_TM_METRIC_SIZE;
+}
+
 static int
 server_init(int argc, char *argv[])
 {
@@ -655,8 +673,12 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		return rc;
 
-	rc = d_tm_init(dss_instance_idx, D_TM_SHARED_MEMORY_SIZE,
-		       D_TM_SERVER_PROCESS);
+	/** initialize server topology data - this is needed to set up the number of targets */
+	rc = dss_topo_init();
+	if (rc != 0)
+		D_GOTO(exit_debug_init, rc);
+
+	rc = d_tm_init(dss_instance_idx, metrics_region_size(dss_tgt_nr), D_TM_SERVER_PROCESS);
 	if (rc != 0)
 		goto exit_debug_init;
 
@@ -666,7 +688,6 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 
@@ -677,11 +698,6 @@ server_init(int argc, char *argv[])
 	}
 
 	rc = register_dbtree_classes();
-	if (rc != 0)
-		D_GOTO(exit_drpc_fini, rc);
-
-	/** initialize server topology data */
-	rc = dss_topo_init();
 	if (rc != 0)
 		D_GOTO(exit_drpc_fini, rc);
 
@@ -740,22 +756,23 @@ server_init(int argc, char *argv[])
 	hlc_recovery_end(bound);
 	dss_set_start_epoch();
 
+	/* init nvme */
+	rc = bio_nvme_init(dss_nvme_conf, dss_numa_node, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, dss_nvme_bypass_health_check);
+	if (rc)
+		D_GOTO(exit_mod_loaded, rc);
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
 		/* Some modules may have been loaded successfully. */
-		D_GOTO(exit_mod_loaded, rc);
+		D_GOTO(exit_nvme_init, rc);
 	D_INFO("Module %s successfully initialized\n", modules);
 
 	/* initialize service */
 	rc = dss_srv_init();
-	if (rc) {
-		D_ERROR("DAOS cannot be initialized using the configured "
-			"path (%s).   Please ensure it is on a PMDK compatible "
-			"file system and writeable by the current user\n",
-			dss_storage_path);
+	if (rc)
 		D_GOTO(exit_mod_loaded, rc);
-	}
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -772,11 +789,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	rc = dss_module_setup_all();
-	if (rc != 0)
-		goto exit_init_state;
-	D_INFO("Modules successfully set up\n");
 
 	if (!dss_check_mode) {
 		rc = crt_register_event_cb(dss_crt_event_cb, NULL);
@@ -811,6 +823,8 @@ exit_init_state:
 	server_init_state_fini();
 exit_srv_init:
 	dss_srv_fini(true);
+exit_nvme_init:
+	bio_nvme_fini();
 exit_mod_loaded:
 	ds_iv_fini();
 	dss_module_unload_all();
@@ -864,6 +878,8 @@ server_fini(bool force)
 	 */
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
+	bio_nvme_fini();
+	D_INFO("bio_nvme_fini() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
 	dss_module_unload_all();
@@ -1055,8 +1071,8 @@ parse(int argc, char **argv)
 			break;
 		case 'T':
 			rc = arg_strtoul(optarg, &dss_storage_tiers, "\"-T\"");
-			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
-				printf("Requires 1 or 2 tiers\n");
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 4) {
+				printf("Requires 1 to 4 tiers\n");
 				rc = -DER_INVAL;
 			}
 			break;

@@ -1,15 +1,12 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from ior_test_base import IorTestBase
 
 
-# pylint: disable=too-few-public-methods,too-many-ancestors
+# pylint: disable=too-few-public-methods
 class RbldPoolDestroyWithIO(IorTestBase):
     """Rebuild test cases featuring IOR.
 
@@ -33,10 +30,10 @@ class RbldPoolDestroyWithIO(IorTestBase):
           Destroy Pool during rebuild.
           Re-create pool on remaining ranks.
 
-        :avocado: tags=all,pr,hw
-        :avocado: tags=medium,ib2
+        :avocado: tags=all,pr
+        :avocado: tags=hw,medium
         :avocado: tags=pool,rebuild,ior
-        :avocado: tags=pooldestroywithio
+        :avocado: tags=pooldestroywithio,test_pool_destroy_with_io
         """
         # set params
         targets = self.server_managers[0].get_config_value("targets")
@@ -49,8 +46,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
         # make sure pool looks good before we start
         checks = {
             "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
-            "pi_ntargets": len(
-                self.hostlist_servers) * targets * engines_per_host,
+            "pi_ntargets": len(self.hostlist_servers) * targets * engines_per_host,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -58,8 +54,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1, rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
         # perform first set of io using IOR
@@ -71,25 +66,18 @@ class RbldPoolDestroyWithIO(IorTestBase):
         self.log.info("Starting rebuild by killing rank %s", rank)
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
-        # Wait for rebuild to start. If True just wait for rebuild to start,
-        # if False, wait for rebuild to complete.
+        # Wait for rebuild to start.
         self.log.info("Wait for rebuild to start")
-        self.pool.wait_for_rebuild(True, interval=1)
+        self.pool.wait_for_rebuild_to_start(interval=1)
 
-        # self.log.info("Wait for rebuild to finish")
-        # self.pool.wait_for_rebuild(False, interval=1)
+        rebuild_state = self.pool.get_rebuild_state(True)
+        self.log.info("Pool %s rebuild status:%s", self.pool.uuid, rebuild_state)
 
-        self.pool.set_query_data()
-        rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]
-        self.log.info("Pool %s rebuild status:%s", self.pool.uuid,
-                      rebuild_status)
-
-        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid,
-                      rebuild_status)
+        self.log.info("Destroy pool %s while rebuild is %s", self.pool.uuid, rebuild_state)
         self.pool.destroy()
         self.container = None
 
         # re-create the pool of full size to verify the space was reclaimed,
         # after re-starting the server on excluded rank
         self.create_pool()
-        self.pool.set_query_data()
+        self.pool.query()

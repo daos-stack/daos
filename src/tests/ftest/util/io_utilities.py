@@ -1,9 +1,8 @@
-#!/usr/bin/python
-'''
-  (C) Copyright 2018-2022 Intel Corporation.
+"""
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
-'''
+"""
 from logging import getLogger
 import os
 import random
@@ -11,8 +10,9 @@ import shutil
 import tempfile
 import time
 
-from general_utils import get_random_bytes, DaosTestError
 from pydaos.raw import DaosApiError
+
+from general_utils import get_random_bytes, DaosTestError
 
 
 class DirTree():

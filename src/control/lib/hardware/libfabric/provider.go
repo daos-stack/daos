@@ -12,7 +12,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hardware"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -30,9 +29,9 @@ type Provider struct {
 }
 
 // GetFabricInterfaces harvests the collection of fabric interfaces from libfabric.
-func (p *Provider) GetFabricInterfaces(ctx context.Context) (*hardware.FabricInterfaceSet, error) {
+func (p *Provider) GetFabricInterfaces(ctx context.Context, provider string) (*hardware.FabricInterfaceSet, error) {
 	ch := make(chan *fabricResult)
-	go p.getFabricInterfaces(ch)
+	go p.getFabricInterfaces(provider, ch)
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -46,7 +45,7 @@ type fabricResult struct {
 	err   error
 }
 
-func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
+func (p *Provider) getFabricInterfaces(provider string, ch chan *fabricResult) {
 	hdl, err := openLib()
 	if err != nil {
 		ch <- &fabricResult{
@@ -56,7 +55,7 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 	}
 	defer hdl.Close()
 
-	fiInfo, cleanup, err := fiGetInfo(hdl)
+	fiInfo, cleanup, err := fiGetInfo(p.log, hdl, extProviderToLibFabric(provider))
 	if err != nil {
 		ch <- &fabricResult{
 			err: err,
@@ -71,8 +70,8 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 
 	fis := hardware.NewFabricInterfaceSet()
 
-	for _, info := range fiInfo {
-		newFI, err := p.infoToFabricInterface(info)
+	for i, info := range fiInfo {
+		newFI, err := p.infoToFabricInterface(info, i)
 		if err != nil {
 			p.log.Error(err.Error())
 			continue
@@ -80,7 +79,7 @@ func (p *Provider) getFabricInterfaces(ch chan *fabricResult) {
 		fis.Update(newFI)
 	}
 
-	p.log.Debugf("found fabric interfaces:\n%s", fis)
+	p.log.Tracef("found fabric interfaces:\n%s", fis)
 
 	ch <- &fabricResult{
 		fiSet: fis,
@@ -92,7 +91,7 @@ type info interface {
 	fabricProvider() string
 }
 
-func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, error) {
+func (p *Provider) infoToFabricInterface(fi info, priority int) (*hardware.FabricInterface, error) {
 	if fi == nil {
 		return nil, errors.New("nil FI info")
 	}
@@ -109,21 +108,26 @@ func (p *Provider) infoToFabricInterface(fi info) (*hardware.FabricInterface, er
 	}
 
 	newFI := &hardware.FabricInterface{
-		Name:      name,
-		OSName:    name,
-		Providers: common.NewStringSet(extProvider),
+		Name:   name,
+		OSName: name,
+		Providers: hardware.NewFabricProviderSet(&hardware.FabricProvider{
+			Name:     extProvider,
+			Priority: priority,
+		}),
 	}
 	return newFI, nil
 }
 
+func extProviderToLibFabric(provider string) string {
+	return strings.TrimPrefix(provider, "ofi+")
+}
+
 // libFabricProviderToExt converts a single libfabric provider string into a DAOS provider string
 func libFabricProviderToExt(provider string) string {
-	switch provider {
-	case "sockets", "tcp", "verbs", "psm2", "gni", "cxi":
-		return "ofi+" + provider
-	default:
+	if provider == "ofi_rxm" {
 		return provider
 	}
+	return "ofi+" + provider
 }
 
 // libFabricProviderListToExt converts a libfabric provider string containing one or more providers

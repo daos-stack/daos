@@ -36,14 +36,13 @@ class MacsioTestBase(TestWithServers):
         path = self.params.get("macsio_path", "/run/job_manager/*", default="")
         macsio = MacsioCommand(path)
         macsio.get_params(self)
-        # Create all the macsio output files in the same directory as the other
-        # test log files
+
+        # Create all the macsio output files in the same directory as the other test log files
         macsio.set_output_file_path()
 
         return macsio
 
-    def run_macsio(self, pool_uuid, pool_svcl, cont_uuid=None, plugin=None,
-                   slots=None):
+    def run_macsio(self, pool_uuid, pool_svcl, processes, cont_uuid=None, plugin=None, slots=None):
         """Run the macsio test.
 
         Parameters for the macsio command are obtained from the test yaml file,
@@ -52,6 +51,7 @@ class MacsioTestBase(TestWithServers):
         Args:
             pool_uuid (str): pool uuid
             pool_svcl (str): pool service replica
+            processes (int): total number of processes to use to run macsio
             cont_uuid (str, optional): container uuid. Defaults to None.
             plugin (str, optional): plugin path to use with DAOS VOL connector
             slots (int, optional): slots per host to specify in the hostfile.
@@ -78,13 +78,16 @@ class MacsioTestBase(TestWithServers):
             env["HDF5_PLUGIN_PATH"] = str(plugin)
         self.job_manager.job = self.macsio
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, slots)
-        self.job_manager.assign_processes(len(self.hostlist_clients))
+        self.job_manager.assign_processes(processes)
         self.job_manager.assign_environment(env)
 
         # Run MACSio
+        result = None
         try:
-            return self.job_manager.run()
+            result = self.job_manager.run()
 
         except CommandFailure as error:
             self.log.error("MACSio Failed: %s", str(error))
             self.fail("MACSio Failed.\n")
+
+        return result

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -31,6 +31,10 @@ import (
 const (
 	// CurrentSchemaVersion indicates the current db schema version.
 	CurrentSchemaVersion = 0
+)
+
+var (
+	dbgUuidStr = logging.ShortUUID
 )
 
 type (
@@ -93,12 +97,9 @@ type (
 		onRaftShutdown     []onRaftShutdownFn
 		shutdownCb         context.CancelFunc
 		shutdownErrCh      chan error
+		poolLocks          poolLockMap
 
-		// FIXME: Remove this in favor of raft-aware checker state store.
-		// Using it for scaffolding at the moment.
-		InMemCheckerDatabase
-
-		data *dbData
+		data *dbData // raft-backed system data
 	}
 
 	// DatabaseConfig defines the configuration for the system database.
@@ -268,6 +269,8 @@ func NewDatabase(log logging.Logger, cfg *DatabaseConfig) (*Database, error) {
 			SchemaVersion: CurrentSchemaVersion,
 		},
 	}
+	// NB: We may remove this once the locking stuff is solid.
+	db.poolLocks.log = log
 
 	return db, nil
 }
@@ -354,6 +357,15 @@ func (db *Database) CheckReplica() error {
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
+// errNotSysLeader returns an error indicating that the node is not
+// the current system leader.
+func errNotSysLeader(svc raftService, db *Database) error {
+	return &system.ErrNotLeader{
+		LeaderHint: string(svc.Leader()),
+		Replicas:   db.cfg.stringReplicas(db.replicaAddr),
+	}
+}
+
 // CheckLeader returns an error if the node is not a replica
 // or is not the current system leader. The error can be inspected
 // for hints about where to find the current leader.
@@ -362,15 +374,18 @@ func (db *Database) CheckLeader() error {
 		return err
 	}
 
-	return db.raft.withReadLock(func(svc raftService) error {
+	if err := db.raft.withReadLock(func(svc raftService) error {
 		if svc.State() != raft.Leader {
-			return &system.ErrNotLeader{
-				LeaderHint: db.leaderHint(),
-				Replicas:   db.cfg.stringReplicas(db.replicaAddr),
-			}
+			return errNotSysLeader(svc, db)
 		}
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Block any leadership-dependent logic until the leader
+	// has applied any outstanding logs.
+	return db.Barrier()
 }
 
 // leaderHint returns a string representation of the current raft
@@ -477,6 +492,8 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 
 	for {
+		db.log.Debug("(re-)starting leadership monitoring loop")
+
 		select {
 		case <-parent.Done():
 			if cancelGainedCtx != nil {
@@ -484,7 +501,10 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 			}
 			runOnLeadershipLost()
 
-			db.shutdownErrCh <- db.ShutdownRaft()
+			select {
+			case <-parent.Done():
+			case db.shutdownErrCh <- db.ShutdownRaft():
+			}
 			close(db.shutdownErrCh)
 			return
 		case isLeader := <-db.raftLeaderNotifyCh:
@@ -494,19 +514,17 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					cancelGainedCtx()
 				}
 				runOnLeadershipLost()
-				break
+				continue // restart the monitoring loop
 			}
 
 			db.log.Debugf("node %s gained MS leader state", db.replicaAddr)
-			barrierStart := time.Now()
 			if err := db.Barrier(); err != nil {
 				db.log.Errorf("raft Barrier() failed: %s", err)
 				if err = db.ResignLeadership(err); err != nil {
 					db.log.Errorf("raft ResignLeadership() failed: %s", err)
 				}
-				break
+				continue // restart the monitoring loop
 			}
-			db.log.Debugf("raft Barrier() complete after %s", time.Since(barrierStart))
 
 			var gainedCtx context.Context
 			gainedCtx, cancelGainedCtx = context.WithCancel(parent)
@@ -517,7 +535,7 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 					if err = db.ResignLeadership(err); err != nil {
 						db.log.Errorf("raft ResignLeadership() failed: %s", err)
 					}
-					break
+					break // break out of the inner loop; restart the monitoring loop
 				}
 			}
 		}
@@ -584,6 +602,17 @@ func copyMember(in *system.Member) *system.Member {
 	return out
 }
 
+// DataVersion returns the current version of the system database.
+func (db *Database) DataVersion() (uint64, error) {
+	if err := db.CheckReplica(); err != nil {
+		return 0, err
+	}
+
+	db.data.RLock()
+	defer db.data.RUnlock()
+	return db.data.Version, nil
+}
+
 // AllMembers returns a copy of the system membership.
 func (db *Database) AllMembers() ([]*system.Member, error) {
 	if err := db.CheckReplica(); err != nil {
@@ -615,23 +644,10 @@ func (db *Database) AllMembers() ([]*system.Member, error) {
 func (db *Database) filterMembers(desiredStates ...system.MemberState) (result []*system.Member) {
 	// NB: Must be done under a lock!
 
-	var includeUnknown bool
-	stateMask := system.AllMemberFilter
-	if len(desiredStates) > 0 {
-		stateMask = 0
-		for _, s := range desiredStates {
-			if s == system.MemberStateUnknown {
-				includeUnknown = true
-			}
-			stateMask |= s
-		}
-	}
-	if stateMask == system.AllMemberFilter {
-		includeUnknown = true
-	}
+	stateMask, includeUnknown := system.MemberStates2Mask(desiredStates...)
 
 	for _, m := range db.data.Members.Ranks {
-		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask > 0 {
+		if m.State == system.MemberStateUnknown && includeUnknown || m.State&stateMask != 0 {
 			result = append(result, m)
 		}
 	}
@@ -774,6 +790,8 @@ func (db *Database) UpdateMember(m *system.Member) error {
 	db.Lock()
 	defer db.Unlock()
 
+	db.log.Tracef("updating member: %+v", m)
+
 	_, err := db.FindMemberByUUID(m.UUID)
 	if err != nil {
 		return err
@@ -906,13 +924,50 @@ func (db *Database) FindPoolServiceByLabel(label string) (*system.PoolService, e
 	return nil, system.ErrPoolLabelNotFound(label)
 }
 
+// TakePoolLock attempts to take a lock on the pool with the given UUID,
+// if the supplied context does not already contain a valid lock for that
+// pool.
+func (db *Database) TakePoolLock(ctx context.Context, poolUUID uuid.UUID) (*PoolLock, error) {
+	if err := db.CheckLeader(); err != nil {
+		return nil, err
+	}
+	db.Lock()
+	defer db.Unlock()
+
+	lock, err := getCtxLock(ctx)
+	if err != nil {
+		if err != errNoCtxLock {
+			return nil, err
+		}
+		// No lock in context, so create a new one.
+		return db.poolLocks.take(poolUUID)
+	}
+
+	// Lock already exists in context, so verify that it's valid and for the same pool.
+	if err := db.poolLocks.checkLock(lock); err != nil {
+		return nil, err
+	}
+	if lock.poolUUID != poolUUID {
+		return nil, errors.Errorf("context lock is for a different pool (%s != %s)", lock.poolUUID, poolUUID)
+	}
+
+	// Now that we've verified that the lock is still valid, we can just
+	// increment its reference count and return it.
+	lock.addRef()
+	return lock, nil
+}
+
 // AddPoolService creates an entry for a new pool service in the pool database.
-func (db *Database) AddPoolService(ps *system.PoolService) error {
+func (db *Database) AddPoolService(ctx context.Context, ps *system.PoolService) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	if err := db.poolLocks.checkLockCtx(ctx); err != nil {
+		return err
+	}
 
 	if p, err := db.FindPoolServiceByUUID(ps.PoolUUID); err == nil {
 		return errors.Errorf("pool %s already exists", p.PoolUUID)
@@ -926,16 +981,20 @@ func (db *Database) AddPoolService(ps *system.PoolService) error {
 }
 
 // RemovePoolService removes a pool database entry.
-func (db *Database) RemovePoolService(uuid uuid.UUID) error {
+func (db *Database) RemovePoolService(ctx context.Context, poolUUID uuid.UUID) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
 	db.Lock()
 	defer db.Unlock()
 
-	ps, err := db.FindPoolServiceByUUID(uuid)
+	if err := db.poolLocks.checkLockCtx(ctx); err != nil {
+		return err
+	}
+
+	ps, err := db.FindPoolServiceByUUID(poolUUID)
 	if err != nil {
-		return errors.Wrapf(err, "failed to retrieve pool %s", uuid)
+		return errors.Wrapf(err, "failed to retrieve pool %s", poolUUID)
 	}
 
 	if err := db.submitPoolUpdate(raftOpRemovePoolService, ps); err != nil {
@@ -946,12 +1005,16 @@ func (db *Database) RemovePoolService(uuid uuid.UUID) error {
 }
 
 // UpdatePoolService updates an existing pool database entry.
-func (db *Database) UpdatePoolService(ps *system.PoolService) error {
+func (db *Database) UpdatePoolService(ctx context.Context, ps *system.PoolService) error {
 	if err := db.CheckLeader(); err != nil {
 		return err
 	}
 	db.Lock()
 	defer db.Unlock()
+
+	if err := db.poolLocks.checkLockCtx(ctx); err != nil {
+		return err
+	}
 
 	p, err := db.FindPoolServiceByUUID(ps.PoolUUID)
 	if err != nil {
@@ -987,29 +1050,53 @@ func (db *Database) handlePoolRepsUpdate(evt *events.RASEvent) {
 		db.log.Error("no extended info in PoolSvcReplicasUpdate event received")
 		return
 	}
-	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
-		evt.Msg, evt.PoolUUID, ei, evt.Hostname)
 
-	uuid, err := uuid.Parse(evt.PoolUUID)
+	poolUUID, err := uuid.Parse(evt.PoolUUID)
 	if err != nil {
 		db.log.Errorf("failed to parse pool UUID %q: %s", evt.PoolUUID, err)
 		return
 	}
 
-	ps, err := db.FindPoolServiceByUUID(uuid)
+	// Attempt to take the lock first, to cut down on log spam.
+	ctx := context.Background()
+	lock, err := db.TakePoolLock(ctx, poolUUID)
+	if err != nil {
+		db.log.Errorf("failed to take lock for pool svc update: %s", err)
+		return
+	}
+	defer lock.Release()
+
+	ps, err := db.FindPoolServiceByUUID(poolUUID)
 	if err != nil {
 		db.log.Errorf("failed to find pool with UUID %q: %s", evt.PoolUUID, err)
 		return
 	}
 
+	// If the pool service is in the Creating state, set it to Ready, as
+	// we know that it's ready if it's sending us a RAS event. The pool
+	// create may have completed on a previous MS leader.
+	if ps.State == system.PoolServiceStateCreating {
+		db.log.Debugf("automatically moving pool %s from Creating to Ready due to svc update", dbgUuidStr(ps.PoolUUID))
+		ps.State = system.PoolServiceStateReady
+	} else if ps.State == system.PoolServiceStateDestroying {
+		// Don't update the pool service if it's being destroyed.
+		return
+	}
+
+	db.log.Debugf("processing RAS event %q for pool %s with info %+v on host %q",
+		evt.Msg, dbgUuidStr(poolUUID), ei, evt.Hostname)
+
 	db.log.Debugf("update pool %s (state=%s) svc ranks %v->%v",
-		ps.PoolUUID, ps.State, ps.Replicas, ei.SvcReplicas)
+		dbgUuidStr(ps.PoolUUID), ps.State, ps.Replicas, ei.SvcReplicas)
 
 	ps.Replicas = ranklist.RanksFromUint32(ei.SvcReplicas)
 
-	if err := db.UpdatePoolService(ps); err != nil {
+	if err := db.UpdatePoolService(lock.InContext(ctx), ps); err != nil {
 		db.log.Errorf("failed to apply pool service update: %s", err)
 	}
+
+	newRanks := ranklist.RankSetFromRanks(ps.Replicas)
+	db.log.Infof("pool %s: service ranks set to %s", ps.PoolLabel, newRanks)
 }
 
 // OnEvent handles events and updates system database accordingly.

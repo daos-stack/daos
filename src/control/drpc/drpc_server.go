@@ -24,13 +24,14 @@ import (
 // we need to restrict the maximum message size so we can preallocate a
 // buffer to put all of the information in. Corresponding C definition is
 // found in include/daos/drpc.h
-const MaxMsgSize = 1 << 17
+const MaxMsgSize = 1 << 20
 
 // DomainSocketServer is the object that listens for incoming dRPC connections,
 // maintains the connections for sessions, and manages the message processing.
 type DomainSocketServer struct {
 	log           logging.Logger
 	sockFile      string
+	sockFileMode  os.FileMode
 	listener      net.Listener
 	service       *ModuleService
 	sessions      map[net.Conn]*Session
@@ -98,9 +99,9 @@ func (d *DomainSocketServer) Start(ctx context.Context) error {
 	}
 	d.listener = lis
 
-	// TODO: Should we set more granular permissions? The only writer should
-	// be the I/O Engine and we should know which user is running it.
-	if err := os.Chmod(d.sockFile, 0777); err != nil {
+	// The only writer should be the I/O Engines which should be running as the same user as
+	// daos_server process.
+	if err := os.Chmod(d.sockFile, d.sockFileMode); err != nil {
 		return errors.Wrapf(err, "Unable to set permissions on %s", d.sockFile)
 	}
 
@@ -116,17 +117,21 @@ func (d *DomainSocketServer) RegisterRPCModule(mod Module) {
 
 // NewDomainSocketServer returns a new unstarted instance of a
 // DomainSocketServer for the specified unix domain socket path.
-func NewDomainSocketServer(log logging.Logger, sock string) (*DomainSocketServer, error) {
+func NewDomainSocketServer(log logging.Logger, sock string, sockMode os.FileMode) (*DomainSocketServer, error) {
 	if sock == "" {
 		return nil, errors.New("Missing Argument: sockFile")
+	}
+	if sockMode == 0 {
+		return nil, errors.New("Missing Argument: sockFileMode")
 	}
 	service := NewModuleService(log)
 	sessions := make(map[net.Conn]*Session)
 	return &DomainSocketServer{
-		log:      log,
-		sockFile: sock,
-		service:  service,
-		sessions: sessions}, nil
+		log:          log,
+		sockFile:     sock,
+		sockFileMode: sockMode,
+		service:      service,
+		sessions:     sessions}, nil
 }
 
 // Session represents an individual client connection to the Domain Socket Server.

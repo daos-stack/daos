@@ -5,8 +5,12 @@ timeout: 1800
 
 server_config:
   name: daos_server
-  servers:
-    targets: 1
+  engines_per_host: 1
+  engines:
+    0:
+      targets: 1
+      storage: auto
+  system_ram_reserved: 1
 
 # In CI, all tests in ddb.py are ran in a single launch.py execution. In that case, the
 # test_dir (/var/tmp/daos_testing/<test_method>) in the server node will not be created

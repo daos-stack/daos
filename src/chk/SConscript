@@ -1,7 +1,7 @@
 # pylint: disable=consider-using-f-string
 # pylint: disable-next=wrong-spelling-in-comment
 """Build check library"""
-import daos_build
+
 
 def scons():
     """Execute build"""
@@ -20,11 +20,12 @@ def scons():
         return
 
     # chk
-    chk = daos_build.library(denv, 'chk',
-                             [chk_pb, 'chk_srv.c', 'chk_common.c', 'chk_vos.c',
-                              'chk_rpc.c', 'chk_upcall.c', 'chk_iv.c', 'chk_leader.c',
-                              'chk_engine.c'], install_off="../..")
+    chk = denv.d_library('chk',
+                         [chk_pb, 'chk_srv.c', 'chk_common.c', 'chk_vos.c',
+                          'chk_rpc.c', 'chk_upcall.c', 'chk_iv.c', 'chk_leader.c',
+                          'chk_engine.c'], install_off="../..")
     denv.Install('$PREFIX/lib64/daos_srv', chk)
+
 
 if __name__ == "SCons.Script":
     scons()

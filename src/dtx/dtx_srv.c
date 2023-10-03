@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -18,7 +18,7 @@
 #include "dtx_internal.h"
 
 static void *
-dtx_tls_init(int xs_id, int tgt_id)
+dtx_tls_init(int tags, int xs_id, int tgt_id)
 {
 	struct dtx_tls  *tls;
 	int              rc;
@@ -39,11 +39,27 @@ dtx_tls_init(int xs_id, int tgt_id)
 		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
 		       DP_RC(rc));
 
+	rc = d_tm_add_metric(&tls->dt_dtx_leader_total, D_TM_GAUGE,
+			     "total number of leader dtx in cache", "entry",
+			     "mem/dtx/dtx_leader_handle_%u/tgt_%u",
+			     sizeof(struct dtx_leader_handle), tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX leader metric: " DF_RC"\n",
+		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&tls->dt_dtx_entry_total, D_TM_GAUGE,
+			     "total number of dtx entry in cache", "entry",
+			     "mem/dtx/dtx_entry_%u/tgt_%u",
+			     sizeof(struct dtx_entry), tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX entry metric: " DF_RC"\n",
+		       DP_RC(rc));
+
 	return tls;
 }
 
 static void
-dtx_tls_fini(void *data)
+dtx_tls_fini(int tags, void *data)
 {
 	D_FREE(data);
 }
@@ -105,7 +121,6 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
-
 	return metrics;
 }
 
@@ -141,6 +156,7 @@ dtx_handler(crt_rpc_t *rpc)
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	uint32_t		 committed = 0;
+	uint32_t		*flags;
 	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
@@ -199,18 +215,19 @@ dtx_handler(crt_rpc_t *rpc)
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
 
-		/* Currently, only support to abort single DTX. */
-		if (din->di_dtx_array.ca_count != 1)
-			D_GOTO(out, rc = -DER_PROTO);
+		if (din->di_epoch != 0) {
+			/* Currently, only support to abort single DTX. */
+			if (din->di_dtx_array.ca_count != 1)
+				D_GOTO(out, rc = -DER_PROTO);
 
-		if (din->di_epoch != 0)
 			rc = vos_dtx_abort(cont->sc_hdl,
 					   (struct dtx_id *)din->di_dtx_array.ca_arrays,
 					   din->di_epoch);
-		else
+		} else {
 			rc = vos_dtx_set_flags(cont->sc_hdl,
 					       (struct dtx_id *)din->di_dtx_array.ca_arrays,
-					       DTE_CORRUPTED);
+					       din->di_dtx_array.ca_count, DTE_CORRUPTED);
+		}
 		break;
 	case DTX_CHECK:
 		/* Currently, only support to check single DTX state. */
@@ -257,12 +274,14 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = 0);
 		}
 
+		flags = din->di_flags.ca_arrays;
+
 		for (i = 0, rc1 = 0; i < count; i++) {
 			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i], &mbs[i], &dcks[i],
 					     true);
-			if (*ptr == -DER_NONEXIST) {
+			if (*ptr == -DER_NONEXIST && !(flags[i] & DRF_INITIAL_LEADER)) {
 				struct dtx_stat		stat = { 0 };
 
 				/* dtx_id::dti_hlc is client side time stamp. If it is
@@ -339,7 +358,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, dcks, j, 0);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -370,7 +389,7 @@ dtx_init(void)
 		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
 	}
 
-	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 6 / 7;
+	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 19 / 20;
 	D_INFO("Set DTX aggregation count threshold as %u (entries)\n", dtx_agg_thd_cnt_up);
 
 	dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
@@ -382,18 +401,8 @@ dtx_init(void)
 		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
 	}
 
-	dtx_agg_thd_age_lo = dtx_agg_thd_age_up - 30;
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 19 / 20;
 	D_INFO("Set DTX aggregation time threshold as %u (seconds)\n", dtx_agg_thd_age_up);
-
-	dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
-	d_getenv_int("DAOS_DTX_RPC_HELPER_THD", &dtx_rpc_helper_thd);
-	if (dtx_rpc_helper_thd < DTX_RPC_HELPER_THD_MIN) {
-		D_WARN("Invalid DTX RPC helper threshold %u, the valid range is [%u, unlimited), "
-		       "use the default value %u\n",
-		       dtx_rpc_helper_thd, DTX_RPC_HELPER_THD_MIN, DTX_RPC_HELPER_THD_DEF);
-		dtx_rpc_helper_thd = DTX_RPC_HELPER_THD_DEF;
-	}
-	D_INFO("Set DTX RPC helper threshold as %u\n", dtx_rpc_helper_thd);
 
 	dtx_batched_ult_max = DTX_BATCHED_ULT_DEF;
 	d_getenv_int("DAOS_DTX_BATCHED_ULT_MAX", &dtx_batched_ult_max);
@@ -419,9 +428,6 @@ static int
 dtx_setup(void)
 {
 	int	rc;
-
-	if (engine_in_check())
-		return 0;
 
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0) {
@@ -449,17 +455,17 @@ static struct daos_rpc_handler dtx_handlers[] = {
 
 #undef X
 
-struct dss_module dtx_module =  {
-	.sm_name	= "dtx",
-	.sm_mod_id	= DAOS_DTX_MODULE,
-	.sm_ver		= DAOS_DTX_VERSION,
-	.sm_proto_count	= 1,
-	.sm_init	= dtx_init,
-	.sm_fini	= dtx_fini,
-	.sm_setup	= dtx_setup,
-	.sm_proto_fmt	= &dtx_proto_fmt,
-	.sm_cli_count	= 0,
-	.sm_handlers	= dtx_handlers,
-	.sm_key		= &dtx_module_key,
-	.sm_metrics	= &dtx_metrics,
+struct dss_module dtx_module = {
+    .sm_name        = "dtx",
+    .sm_mod_id      = DAOS_DTX_MODULE,
+    .sm_ver         = DAOS_DTX_VERSION,
+    .sm_proto_count = 1,
+    .sm_init        = dtx_init,
+    .sm_fini        = dtx_fini,
+    .sm_setup       = dtx_setup,
+    .sm_proto_fmt   = {&dtx_proto_fmt},
+    .sm_cli_count   = {0},
+    .sm_handlers    = {dtx_handlers},
+    .sm_key         = &dtx_module_key,
+    .sm_metrics     = &dtx_metrics,
 };

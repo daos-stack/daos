@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -68,6 +68,8 @@ struct d_log_state {
 	int		 log_old_fd;
 	/** current size of log file */
 	uint64_t	 log_size;
+	/** log size of last time check */
+	uint64_t	 log_last_check_size;
 	/** max size of log file */
 	uint64_t	 log_size_max;
 	/** Callback to get thread id and ULT id */
@@ -358,6 +360,97 @@ static __thread uint64_t pre_err_time;
 
 #define LOG_BUF_SIZE	(16 << 10)
 
+static bool
+log_exceed_threshold(void)
+{
+	struct stat	st;
+	int		rc;
+
+	if (!merge_stderr)
+		goto out;
+
+	/**
+	 * if we merge stderr to log file which is not
+	 * calculated by log_size, to avoid exceeding threshold
+	 * too much, log_size will be updated with fstat if log
+	 * size increased by 2% of max size every time.
+	 */
+	if ((mst.log_size - mst.log_last_check_size) < (mst.log_size_max / 50))
+		goto out;
+
+	rc = fstat(mst.log_fd, &st);
+	if (!rc)
+		mst.log_size = st.st_size;
+
+	mst.log_last_check_size = mst.log_size;
+out:
+	return mst.log_size + mst.log_buf_nob >= mst.log_size_max;
+}
+
+/* exceeds the size threshold, rename the current log file
+ * as backup, create a new log file.
+ */
+static int
+log_rotate(void)
+{
+	int rc = 0;
+
+	if (!mst.log_old) {
+		rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
+		if (rc < 0) {
+			dlog_print_err(errno, "failed to alloc name\n");
+			return -1;
+		}
+	}
+
+	if (mst.log_old_fd >= 0) {
+		close(mst.log_old_fd);
+		mst.log_old_fd = -1;
+	}
+
+	/* rename the current log file as a backup */
+	rc = rename(mst.log_file, mst.log_old);
+	if (rc) {
+		dlog_print_err(errno, "failed to rename log file\n");
+		return -1;
+	}
+	mst.log_old_fd = mst.log_fd;
+
+	/* create a new log file */
+	if (merge_stderr) {
+		if (freopen(mst.log_file, "w", stderr) == NULL) {
+			fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
+				mst.log_file, strerror(errno));
+			return -1;
+		}
+
+		mst.log_fd = fileno(stderr);
+	} else {
+		mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
+		if (mst.log_fd < 0) {
+			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				mst.log_file, strerror(errno));
+			return -1;
+		}
+		rc = fcntl(mst.log_fd, F_DUPFD, 128);
+		if (rc < 0) {
+			fprintf(stderr,
+				"d_log_write(): failed to recreate log file %s: %s\n",
+				mst.log_file, strerror(errno));
+			close(mst.log_fd);
+			return -1;
+		}
+		close(mst.log_fd);
+		mst.log_fd = rc;
+	}
+
+	mst.log_size = 0;
+	mst.log_last_check_size = 0;
+
+	return rc;
+}
+
+
 /**
  * This function can do a few things:
  * - copy log message @msg to log buffer
@@ -405,65 +498,11 @@ d_log_write(char *msg, int len, bool flush)
 	if (mst.log_buf_nob == 0)
 		return 0; /* nothing to write */
 
-	if (mst.log_size + mst.log_buf_nob >= mst.log_size_max) {
-		/* exceeds the size threshold, rename the current log file
-		 * as backup, create a new log file.
-		 */
-		if (!mst.log_old) {
-			rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
-			if (rc < 0) {
-				dlog_print_err(errno, "failed to alloc name\n");
-				return -1;
-			}
-		}
-
-		if (mst.log_old_fd >= 0) {
-			close(mst.log_old_fd);
-			mst.log_old_fd = -1;
-		}
-
-		/* remove the backup log file */
-		rc = unlink(mst.log_old);
-		if (rc && errno != ENOENT) {
-			dlog_print_err(errno, "failed to unlink old file\n");
-			return -1;
-		}
-
-		/* rename the current log file as a backup */
-		rc = rename(mst.log_file, mst.log_old);
-		if (rc) {
-			dlog_print_err(errno, "failed to rename log file\n");
-			return -1;
-		}
-		mst.log_old_fd = mst.log_fd;
-
-		/* create a new log file */
-		if (merge_stderr) {
-			if (freopen(mst.log_file, "w", stderr) == NULL) {
-				fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
-					mst.log_file, strerror(errno));
-				return -1;
-			}
-		} else {
-			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
-			if (mst.log_fd < 0) {
-				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
-					mst.log_file, strerror(errno));
-				return -1;
-			}
-			rc = fcntl(mst.log_fd, F_DUPFD, 128);
-			if (rc < 0) {
-				fprintf(stderr,
-					"d_log_write(): failed to recreate log file %s: %s\n",
-					mst.log_file, strerror(errno));
-				close(mst.log_fd);
-				return -1;
-			}
-			close(mst.log_fd);
-			mst.log_fd = rc;
-		}
-
-		mst.log_size = 0;
+	/* rotate the log if it exceeds the threshold */
+	if (log_exceed_threshold()) {
+		rc = log_rotate();
+		if (rc != 0)
+			return rc;
 	}
 
 	/* flush the cached log messages */
@@ -490,7 +529,7 @@ d_log_sync(void)
 	int rc = 0;
 
 	clog_lock();
-	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
+	if (mst.log_buf_nob > 0) /* write back the in-flight buffer */
 		rc = d_log_write(NULL, 0, true);
 
 	/* Skip flush if there was a problem on write */
@@ -1147,9 +1186,9 @@ int d_log_setlogmask(int facility, int mask)
  * if the "PREFIX=" part is omitted, then the level applies to all defined
  * facilities (e.g. d_log_setmasks("WARN") sets everything to WARN).
  */
-int d_log_setmasks(char *mstr, int mlen0)
+int d_log_setmasks(const char *mstr, int mlen0)
 {
-	char *m, *current, *fac, *pri;
+	const char *m, *current, *fac, *pri;
 	int          mlen, facno, length, elen, prino, rv, tmp;
 	unsigned int faclen, prilen;
 	int log_flags;
@@ -1170,8 +1209,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 		return -1;		/* nothing doing */
 	facno = 0;		/* make sure it gets init'd */
 	rv = 0;
-	tmp = 0;
-	reset_caches(false);
+	tmp   = 0;
 	while (m) {
 		/* note current chunk, and advance m to the next one */
 		current = m;
@@ -1272,6 +1310,7 @@ int d_log_setmasks(char *mstr, int mlen0)
 			}
 		}
 	}
+	reset_caches(false);
 	return rv;
 }
 

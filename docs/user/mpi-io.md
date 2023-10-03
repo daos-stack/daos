@@ -17,33 +17,48 @@ section in the MPICH git repository for details.
 ### MPICH
 
 The DAOS ROMIO ADIO driver has been accepted into [MPICH](https://www.mpich.org/).
-It is included in mpich-3.4.1 (released Jan 2021) and in
-[mpich-3.4.2 (released May 2021)](https://www.mpich.org/downloads/).
+It is included in
+mpich-3.4.1 (released Jan 2021),
+mpich-3.4.2 (released May 2021),
+[mpich-3.4.3 (released Dec 2021)](https://www.mpich.org/downloads/)
+as well as the MPICH 4.x releases.
+
+!!! note
+    Support for container labels has been added with MPICH 3.4.3.
+    Older MPICH releases only support container UUIDs.
 
 !!! note
     Starting with DAOS 1.2, the `--svc` parameter (number of service replicas)
     is no longer needed, and the DAOS API has been changed accordingly.
     Patches have been contributed to MPICH that detect the DAOS API version
-    to gracefully handle this change. MPICH 3.4.2 includes those changes,
-    and works out of the box with DAOS 2.0.
-    MPICH 3.4.1 does not include those changes. Please check the latest commits
-    [here](https://github.com/pmodels/mpich/commits/main?author=mchaarawi)
-    for information on how to apply those changes to MPICH 3.4.1.
+    to gracefully handle this change. MPICH 3.4.2 and later includes those changes.
 
 To build MPICH, including ROMIO with the DAOS ADIO driver:
 
 ```bash
 export MPI_LIB=""
 
+# to clone the latest development snapshot:
 git clone https://github.com/pmodels/mpich
-
 cd mpich
+
+# to clone a specific tagged version:
+git clone -b v3.4.3 https://github.com/pmodels/mpich mpich-3.4.3
+cd mpich-3.4.3
+
+git submodule update --init
 
 ./autogen.sh
 
-./configure --prefix=dir --enable-fortran=all --enable-romio \
+PREFIX=$HOME/software/mpich
+# or PREFIX=$HOME/software/mpich-3.4.3 for a specific tagged version
+mkdir -p $PREFIX
+
+./configure --prefix=$PREFIX --enable-fortran=all --enable-romio \
  --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis \
  --with-file-system=ufs+daos --with-daos=/usr
+
+# compiling 3.4.3 may need FFLAGS=-fallow-argument-mismatch on the configure command line
 
 make -j8; make install
 ```
@@ -53,8 +68,15 @@ the DAOS RPM installation. Other configure options can be added, modified, or
 removed as needed, like the network communicatio device, fortran support,
 etc. For those, please consule the mpich user guide.
 
-Set the `PATH` and `LD_LIBRARY_PATH` to where you want to build your client
-apps or libs that use MPI to the path of the installed MPICH.
+Set the `PATH` and `LD_LIBRARY_PATH` and `INCLUDE` to the path of the installed MPICH
+before building your applications that use MPI:
+
+```bash
+export PATH="$PREFIX/bin:$PATH"
+export LD_LIBRARY_PATH="$PREFIX/lib:$LD_LIBRARY_PATH"
+export INCLUDE="$PREFIX/include:$INCLUDE"
+```
+
 
 ### Intel MPI
 
@@ -140,7 +162,9 @@ for the file:
 export DAOS_UNS_PREFIX="path"
 ```
 That prefix path can be:
+
 1. The UNS prefix if that exists (similar to the UNS mode above): /mnt/dfuse
+
 2. A direct path using the pool and container label (or uuid): daos://pool/container/
 
 Then one can specify the path to the file relative to the root of the container being set in the

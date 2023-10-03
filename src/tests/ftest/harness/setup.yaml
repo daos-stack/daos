@@ -7,11 +7,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      storage:
-        0:
-          class: ram
-          scm_mount: /mnt/daos
-          scm_size: 20
+      storage: auto
 server_manager:
   storage_prepare_timeout: 60
   storage_format_timeout: 60

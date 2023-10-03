@@ -1,4 +1,3 @@
-#!/usr/bin/python
 '''
   (C) Copyright 2022 Intel Corporation.
 
@@ -8,14 +7,14 @@ from ior_test_base import IorTestBase
 
 
 class PoolRedunFacProperty(IorTestBase):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
-    """run tests with different pool redundancy factor.
+    """Run tests with different pool redundancy factor.
 
     Test Class Description: To validate pool rf works properly
 
     :avocado: recursive
     """
+
     def verify_cont_rf(self, expected_value):
         """
         Verify the container rf property.
@@ -44,7 +43,8 @@ class PoolRedunFacProperty(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=pool_rf_property
+        :avocado: tags=pool,redundancy,redundancy_factor,rf
+        :avocado: tags=PoolRedunFacProperty,test_rf_pool_property
         """
         cont_rfs = self.params.get("cont_rf", '/run/container/*')
 
@@ -53,8 +53,7 @@ class PoolRedunFacProperty(IorTestBase):
 
         # Verify pool rf.
         pool_prop_expected = int(self.pool.properties.value.split(":")[1])
-        self.assertEqual(pool_prop_expected,
-                         self.pool.get_property("rd_fac"))
+        self.assertEqual(pool_prop_expected, self.pool.get_property("rd_fac"))
 
         for cont_rf in cont_rfs:
             # Initial container
@@ -62,8 +61,7 @@ class PoolRedunFacProperty(IorTestBase):
 
             # Use the default pool property for container and do not update
             if cont_rf != pool_prop_expected:
-                self.container.properties.update("rd_fac:{}"
-                                                 .format(cont_rf))
+                self.container.properties.update("rd_fac:{}".format(cont_rf))
 
             # Create the container and open handle
             self.container.create()

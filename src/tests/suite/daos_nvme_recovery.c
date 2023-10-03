@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -648,7 +648,7 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Get the Initial write error
 	 */
-	write_errors = strdup("bio_write_errs");
+	D_STRNDUP_S(write_errors, "bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     write_errors,
@@ -659,7 +659,7 @@ nvme_test_simulate_IO_error(void **state)
 	/*
 	 * Get the Initial read error
 	 */
-	read_errors = strdup("bio_read_errs");
+	D_STRNDUP_S(read_errors, "bio_read_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     read_errors,
@@ -675,9 +675,9 @@ nvme_test_simulate_IO_error(void **state)
 
 	/*
 	 * Read the data which will induce the READ Error and expected to fail
-	 * with DER_IO Error.
+	 * with DER_NVME_IO Error (no replica for retry).
 	 */
-	arg->expect_result = -DER_IO;
+	arg->expect_result = -DER_NVME_IO;
 	lookup_single_with_rxnr(dkey, akey, /*idx*/0, fbuf,
 				OW_IOD_SIZE, size, DAOS_TX_NONE, &req);
 
@@ -689,9 +689,10 @@ nvme_test_simulate_IO_error(void **state)
 
 	/*
 	 * Insert the 4K record again which will induce WRITE Error and
-	 * expected to fail with DER_IO Error.
+	 * expected write succeeded (on retry).
 	 */
 	rx_nr = size / OW_IOD_SIZE;
+	arg->expect_result = -DER_SUCCESS;
 	insert_single_with_rxnr(dkey, akey, /*idx*/0, ow_buf, OW_IOD_SIZE,
 				rx_nr, DAOS_TX_NONE, &req);
 
@@ -700,7 +701,7 @@ nvme_test_simulate_IO_error(void **state)
 	 * Verify the recent write err count is > the initial err count.
 	 */
 	arg->expect_result = 0;
-	check_errors = strdup("bio_write_errs");
+	D_STRNDUP_S(check_errors, "bio_write_errs");
 	rc = dmg_storage_query_device_health(dmg_config_file,
 					     devices[rank_pos].host,
 					     check_errors,

@@ -13,6 +13,7 @@ pool:
 server_config:
   name: daos_server
   engines_per_host: 2
+  crt_timeout: 60
   engines:
     0:
       pinned_numa_node: 0
@@ -65,3 +66,7 @@ daos_tests:
     test_daos_dfs_unit: 2
     test_daos_dfs_parallel: 2
     test_daos_dfs_sys: 1
+  test_log_mask:
+    test_daos_dfs_unit: INFO
+    test_daos_dfs_parallel: INFO,IO=DEBUG
+    test_daos_dfs_sys: INFO

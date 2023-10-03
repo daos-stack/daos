@@ -1,13 +1,8 @@
 name: Flake
 
-# Run flake on all PRs.  This ignores many pre-existing errors however should catch
-# regressions and allows us to remove ignores and results issues iteratively.
-
+# Always run on Pull Requests as then this check can be marked as required.
 on:
   pull_request:
-    paths:
-      - '**/*.py'
-      - .github/workflows/flake.yml
 
 jobs:
   flake8-lint:
@@ -31,11 +26,14 @@ jobs:
       - name: flake8 Lint
         uses: py-actions/flake8@v2
         with:
-          # W503 and W504 are related as they conflict.  W503 is the preferred style, however we
-          # have code that matches W504 so accept either at this point.  The commit hook is setup to
-          # ignore W503.
-          ignore: 'F841,W503,W504,E126,E128,E226,E261,E265,E302,E402'
+          # W503 and W504 are related as they conflict.  W503 is the preferred style and all code
+          # should be using it now.
+          ignore: 'W503'
           exclude: 'src/control/vendor,src/client/pydaos/raw'
-          # Max line length is 100, and pylint will warn about lines longer than this, but some
-          # existing lines are longer so allow them here.
-          max-line-length: '133'
+          max-line-length: '100'
+      - name: flake8 Lint on SCons files.
+        uses: py-actions/flake8@v2
+        with:
+          ignore: 'F821,W503,F841'
+          max-line-length: '100'
+          args: '--filename */SConscript, SConstruct'

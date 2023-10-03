@@ -38,14 +38,11 @@ server_config:
           scm_list: ["/dev/pmem1"]
           scm_mount: /mnt/daos1
 pool:
-  control_method: dmg
   scm_size: 200G
   nvme_size: 200G
 container:
   type: POSIX
   control_method: daos
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"
 daos_vol_tests:
   testname: h5_partest_t_bigio
   client_processes: 6

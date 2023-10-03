@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -727,6 +727,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_dir_oclass_id = attrp->da_dir_oclass_id;
+		dfs_attr.da_file_oclass_id = attrp->da_file_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
 		if (attrp->da_hints[0] != 0)
@@ -756,7 +757,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label
 
 		prop = daos_prop_alloc(nr);
 		if (prop == NULL) {
-			D_ERROR("Failed to allocate container prop.");
+			D_ERROR("Failed to allocate container prop.\n");
 			return ENOMEM;
 		}
 		if (attrp->da_props != NULL) {
@@ -851,6 +852,51 @@ err_cont:
 err:
 	return rc;
 }
+
+static int
+duns_link_lustre_path(const char *pool, const char *cont, daos_cont_layout_t type,
+		      const char *path, mode_t mode)
+{
+	char			str[DUNS_MAX_XATTR_LEN + 1];
+	int			len;
+	int			rc;
+
+	/* XXX if liblustreapi is not binded, do it now ! */
+	if (liblustre_binded == false && liblustre_notfound == false) {
+		rc = bind_liblustre();
+		if (rc)
+			return EINVAL;
+	}
+
+	/** create file/dir and store the daos attributes in the path LOV/LMV */
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_LUSTRE_XATTR_FMT, pool, cont);
+	if (len < 0) {
+		D_ERROR("Failed to create foreign LOV/LMV value\n");
+		return EINVAL;
+	}
+
+	if (type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		rc = (*dir_create_foreign)(path, mode, LU_FOREIGN_TYPE_SYMLINK, (__u32)type, str);
+		if (rc) {
+			D_ERROR("Failed to create Lustre dir '%s' with foreign "
+				"LMV '%s' (rc = %d).\n", path, str, rc);
+			return EINVAL;
+		}
+	} else {
+		rc = (*file_create_foreign)(path, mode, LU_FOREIGN_TYPE_SYMLINK, (__u32)type, str);
+		if (rc < 0) {
+			/* llapi_file_crate_foreign() returns fd upon success but
+			 * -errno upon error
+			 */
+			D_ERROR("Failed to create Lustre file '%s' with foreign "
+				"LOV '%s' (rc = %d).\n", path, str, rc);
+			return EINVAL;
+		}
+		rc = 0;
+	}
+
+	return rc;
+}
 #endif
 
 int
@@ -914,9 +960,23 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	}
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		struct statfs fs;
-		char         *dir, *dirp;
-		mode_t        mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+		struct statfs	fs;
+		char		*dir, *dirp;
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL)
+			return ENOMEM;
+
+		dirp = dirname(dir);
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
+			D_FREE(dir);
+			return err;
+		}
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
@@ -927,28 +987,14 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 #endif
 
-		D_STRNDUP(dir, path, path_len);
-		if (dir == NULL)
-			return ENOMEM;
-
-		dirp = dirname(dir);
-
 		/** create a new directory if POSIX/MPI-IO container */
 		rc = mkdir(path, mode);
 		if (rc == -1) {
 			rc = errno;
 
 			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
-			return rc;
-		}
-
-		rc = statfs(dirp, &fs);
-		if (rc == -1) {
-			int err = errno;
-
-			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
 			D_FREE(dir);
-			return err;
+			return rc;
 		}
 
 		/* Open the parent directory for the new container so we can call a dfuse iotcl
@@ -979,9 +1025,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			}
 			backend_dfuse = true;
 		}
-
 		D_FREE(dir);
-
 	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		/** create a new file for other container types */
 		int fd;
@@ -1082,6 +1126,196 @@ err_link:
 	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
 		unlink(path);
 	return rc;
+}
+
+int
+duns_link_cont(daos_handle_t poh, const char *cont, const char *path)
+{
+	daos_handle_t		coh;
+	daos_prop_t		*prop;
+	struct daos_prop_entry	*entry;
+	daos_pool_info_t	pinfo = {0};
+	daos_cont_info_t	cinfo = {0};
+	daos_cont_layout_t	type;
+	char			pool_str[DAOS_UUID_STR_SIZE];
+	char			cont_str[DAOS_UUID_STR_SIZE];
+	int			len;
+	char			str[DUNS_MAX_XATTR_LEN];
+	char			type_str[10];
+	int			rc, rc2;
+
+	if (path == NULL) {
+		D_ERROR("Invalid path\n");
+		return EINVAL;
+	}
+
+	rc = daos_pool_query(poh, NULL, &pinfo, NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to query pool info" DF_RC "\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	rc = daos_cont_open(poh, cont, DAOS_COO_RO, &coh, &cinfo, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
+		return daos_der2errno(rc);
+	}
+
+	prop = daos_prop_alloc(1);
+	if (prop == NULL)
+		D_GOTO(out_cont, rc = ENOMEM);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc) {
+		daos_prop_free(prop);
+		D_ERROR("daos_cont_query() failed, "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out_cont, rc = daos_der2errno(rc));
+	}
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL) {
+		daos_prop_free(prop);
+		D_ERROR("Invalid container type\n");
+		D_GOTO(out_cont, rc = EINVAL);
+	}
+	type = entry->dpe_val;
+	daos_prop_free(prop);
+
+	uuid_unparse(pinfo.pi_uuid, pool_str);
+	uuid_unparse(cinfo.ci_uuid, cont_str);
+
+	if (type == DAOS_PROP_CO_LAYOUT_POSIX) {
+		struct statfs	fs;
+		char		*dir, *dirp;
+		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+		size_t		path_len;
+
+		path_len = strnlen(path, PATH_MAX);
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL)
+			D_GOTO(out_cont, rc = ENOMEM);
+		dirp = dirname(dir);
+
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
+			D_FREE(dir);
+			D_GOTO(out_cont, rc = err);
+		}
+		D_FREE(dir);
+#ifdef LUSTRE_INCLUDE
+		if (fs.f_type == LL_SUPER_MAGIC) {
+			rc = duns_link_lustre_path(pool_str, cont_str, type, path, mode);
+			if (rc == 0)
+				return 0;
+			/* if Lustre specific method fails, fallback to try the normal way... */
+		}
+#endif
+
+		/** create a new directory if POSIX container */
+		rc = mkdir(path, mode);
+		if (rc == -1) {
+			rc = errno;
+			D_ERROR("Failed to create dir %s: %d (%s)\n", path, rc, strerror(rc));
+			D_GOTO(out_cont, rc);
+		}
+
+		/* Open the parent directory for the new container so we can call a dfuse iotcl
+		 * to discover the user running dfuse.
+		 */
+		if (fs.f_type == FUSE_SUPER_MAGIC) {
+			struct stat finfo;
+			/*
+			 * This next stat will cause dfuse to lookup the entry point and perform a
+			 * container connect, therefore this data will be read from root of the new
+			 * container, not the directory.
+			 *
+			 * TODO: This could call getxattr to verify success.
+			 */
+			rc = stat(path, &finfo);
+			if (rc) {
+				rc = errno;
+				D_ERROR("Failed to access container: %d (%s)\n", rc, strerror(rc));
+				D_GOTO(err_link, rc);
+			}
+		}
+	} else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+		/** create a new file for other container types */
+		int fd;
+		mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH;
+#ifdef LUSTRE_INCLUDE
+		struct statfs   fs;
+		char            *dir, *dirp;
+		size_t          path_len;
+
+		path_len = strnlen(path, PATH_MAX);
+		D_STRNDUP(dir, path, path_len);
+		if (dir == NULL)
+			D_GOTO(out_cont, rc = ENOMEM);
+
+		dirp = dirname(dir);
+		rc = statfs(dirp, &fs);
+		if (rc == -1) {
+			int err = errno;
+
+			D_ERROR("Failed to statfs dir %s: %d (%s)\n", dirp, err, strerror(err));
+			D_FREE(dir);
+			D_GOTO(out_cont, rc = err);
+			return err;
+		}
+		D_FREE(dir);
+
+		if (fs.f_type == LL_SUPER_MAGIC) {
+			rc = duns_link_lustre_path(pool_str, cont_str, type, path, mode);
+			if (rc == 0)
+				return 0;
+			/* if Lustre specific method fails, fallback to try the normal way... */
+		}
+#endif
+
+		fd = open(path, O_CREAT | O_EXCL, mode);
+		if (fd == -1) {
+			rc = errno;
+			D_ERROR("Failed to create file %s: %d (%s)\n", path, rc, strerror(rc));
+			D_GOTO(out_cont, rc);
+		}
+		close(fd);
+	} else {
+		D_ERROR("Invalid container layout.\n");
+		D_GOTO(out_cont, rc = EINVAL);
+	}
+
+	/** store the daos attributes in the path xattr */
+	daos_unparse_ctype(type, type_str);
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type_str, pool_str, cont_str);
+	if (len < 0) {
+		D_ERROR("Failed to create xattr value\n");
+		D_GOTO(err_link, rc = EINVAL);
+	}
+	rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, 0);
+	if (rc) {
+		rc = errno;
+		if (rc == ENOTSUP) {
+			D_INFO("Path is not in a filesystem that supports the DAOS unified "
+			       "namespace\n");
+		} else {
+			D_ERROR("Failed to set DAOS xattr: %d (%s)\n", rc, strerror(rc));
+		}
+		D_GOTO(err_link, rc);
+	}
+
+out_cont:
+	rc2 = daos_cont_close(coh, NULL);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
+err_link:
+	if (type == DAOS_PROP_CO_LAYOUT_POSIX)
+		rmdir(path);
+	else if (type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
+		unlink(path);
+	goto out_cont;
 }
 
 int

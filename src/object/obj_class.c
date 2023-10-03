@@ -1,11 +1,12 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(object)
 
 #include "obj_class.h"
+#include "obj_internal.h"
 #include <isa-l.h>
 
 /** indirect indices for binary search by ID */
@@ -19,6 +20,18 @@ static int oc_resil_array_sz;
 static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id,
 					       uint32_t *nr_grps);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
+
+int
+daos_oclass_cid2allowedfailures(daos_oclass_id_t oc_id, uint32_t *tf)
+{
+	struct daos_obj_class *oc;
+
+	oc = oclass_ident2cl(oc_id, NULL);
+	if (oc == NULL)
+		return -DER_INVAL;
+	*tf = oc->oc_resil_degree;
+	return 0;
+}
 
 /**
  * Find the object class attributes for the provided @oid.
@@ -221,21 +234,40 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 	return oc_attr->ca_grp_nr;
 }
 
+/**
+ * To honor RF setting during failure cases, let's reserve RF
+ * groups, so if some targets fail, there will be enough replacement
+ * targets to rebuild, so to avoid putting multiple shards in the same
+ * domain, which may break the RF setting.
+ *
+ * Though let's keep reserve targets to be less than 30% of the total
+ * targets.
+ */
+static uint32_t
+reserve_grp_by_rf(uint32_t target_nr, uint32_t grp_size, uint32_t rf)
+{
+	return min(((target_nr * 3) / 10) / grp_size, rf);
+}
+
 int
-daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-		    enum daos_obj_redun *ord, uint32_t *nr)
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
+		    uint32_t *nr, uint32_t rf_factor)
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
 	uint32_t grp_size;
 	uint32_t nr_grps;
+	int rc;
 
 	D_ASSERT(target_nr > 0);
 	D_ASSERT(domain_nr > 0);
 
 	oc = oclass_ident2cl(oc_id, &nr_grps);
-	if (!oc)
-		return -DER_INVAL;
+	if (!oc) {
+		rc = -DER_INVAL;
+		D_ERROR("oclass_ident2cl(oc_id %d), failed "DF_RC"\n", oc_id, DP_RC(rc));
+		return rc;
+	}
 
 	memcpy(&ca, &oc->oc_attr, sizeof(ca));
 	ca.ca_grp_nr = nr_grps;
@@ -253,9 +285,14 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 	}
 
 	grp_size = daos_oclass_grp_size(&ca);
-	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX)
+	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX) {
+		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf_factor);
+
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 
+		if (ca.ca_grp_nr > reserve_grp)
+			ca.ca_grp_nr -= reserve_grp;
+	}
 	if (grp_size > domain_nr) {
 		D_ERROR("grp size (%u) (%u) is larger than domain nr (%u)\n",
 			grp_size, DAOS_OBJ_REPL_MAX, domain_nr);
@@ -684,6 +721,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	uint16_t rdd;
 	uint32_t grp_size;
 	uint32_t grp_nr;
+	int      rc;
 
 	rdd = hints & DAOS_OCH_RDD_MASK;
 	shd = hints & DAOS_OCH_SHD_MASK;
@@ -692,7 +730,7 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	switch (rf) {
 	default:
 	case DAOS_PROP_CO_REDUN_RF0:
-		if (rdd == DAOS_OCH_RDD_RP) {
+		if (rdd == DAOS_OCH_RDD_RP && domain_nr >= 2) {
 			*ord =  OR_RP_2;
 			grp_size = 2;
 		} else if (rdd == DAOS_OCH_RDD_EC) {
@@ -715,7 +753,8 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
+		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
+		    domain_nr >= 3) {
 			if (domain_nr >= 18) {
 				*ord = OR_RS_16P1;
 				grp_size = 17;
@@ -735,7 +774,8 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 		}
 		break;
 	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) {
+		if ((rdd == DAOS_OCH_RDD_EC || (rdd == 0 && daos_is_array_type(otype))) &&
+		    domain_nr >= 4) {
 			if (domain_nr >= 20) {
 				*ord = OR_RS_16P2;
 				grp_size = 18;
@@ -768,7 +808,9 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 
 	if (unlikely(grp_size > domain_nr)) {
 		/** cannot meet redundancy requirement */
-		return -DER_INVAL;
+		rc = -DER_INVAL;
+		D_ERROR("grp_size %d > domain_nr %d, "DF_RC"\n", grp_size, domain_nr, DP_RC(rc));
+		return rc;
 	}
 
 	/** adjust the group size based on the sharding hint */
@@ -801,8 +843,13 @@ dc_set_oclass(uint32_t rf, int domain_nr, int target_nr, enum daos_otype_t otype
 	}
 
 	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
+		uint32_t max_grp     = target_nr / grp_size;
+		uint32_t reserve_grp = reserve_grp_by_rf(target_nr, grp_size, rf);
+
 		/* search for the highest scalability in the allowed range */
-		*nr = max(1, (target_nr / grp_size));
+		if (max_grp > reserve_grp)
+			max_grp = max_grp - reserve_grp;
+		*nr = max(1, max_grp);
 	} else {
 		*nr = grp_nr;
 	}

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -20,29 +20,41 @@ ds_chk_start_hdlr(crt_rpc_t *rpc)
 	struct chk_start_in	*csi = crt_req_get(rpc);
 	struct chk_start_out	*cso = crt_reply_get(rpc);
 	struct ds_pool_clues	 clues = { 0 };
+	d_rank_t		*rank;
 	int			 rc;
 
 	rc = chk_engine_start(csi->csi_gen, csi->csi_ranks.ca_count, csi->csi_ranks.ca_arrays,
 			      csi->csi_policies.ca_count, csi->csi_policies.ca_arrays,
 			      csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays, csi->csi_api_flags,
-			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags, &clues);
+			      csi->csi_phase, csi->csi_leader_rank, csi->csi_flags,
+			      csi->csi_iv_uuid, &clues);
+	if (rc > 0) {
+		D_ALLOC_PTR(rank);
+		if (rank == NULL) {
+			rc = -DER_NOMEM;
+			cso->cso_cmp_ranks.ca_count = 0;
+			cso->cso_cmp_ranks.ca_arrays = NULL;
+		} else {
+			*rank = dss_self_rank();
+			cso->cso_cmp_ranks.ca_count = 1;
+			cso->cso_cmp_ranks.ca_arrays = rank;
+		}
+	} else {
+		cso->cso_cmp_ranks.ca_count = 0;
+		cso->cso_cmp_ranks.ca_arrays = NULL;
+	}
 
 	cso->cso_status = rc;
-	cso->cso_rank = dss_self_rank();
 	cso->cso_clues.ca_count = clues.pcs_len;
 	cso->cso_clues.ca_arrays = clues.pcs_array;
+	cso->cso_rank_cap = cso->cso_cmp_ranks.ca_count;
+	cso->cso_clue_cap = cso->cso_clues.ca_count;
+
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check start: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the leader are on the same rank, we will not go through
-	 * CRT proc function that will copy the clues into related RPC reply buffer. Then
-	 * has to keep the clues for a while until the check leader completed aggregating
-	 * the result for this local engine. And then the check leader will release it.
-	 */
-	if (cso->cso_status < 0 || !chk_is_on_leader(csi->csi_gen, csi->csi_leader_rank, true))
-		ds_pool_clues_fini(&clues);
+	/* @clues will be freed via chk_start_post_reply. Do not free it here. */
 }
 
 static void
@@ -50,12 +62,30 @@ ds_chk_stop_hdlr(crt_rpc_t *rpc)
 {
 	struct chk_stop_in	*csi = crt_req_get(rpc);
 	struct chk_stop_out	*cso = crt_reply_get(rpc);
+	d_rank_t		*rank;
 	int			 rc;
 
-	rc = chk_engine_stop(csi->csi_gen, csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays);
+	rc = chk_engine_stop(csi->csi_gen, csi->csi_uuids.ca_count, csi->csi_uuids.ca_arrays,
+			     &cso->cso_flags);
+	if (rc > 0) {
+		D_ALLOC_PTR(rank);
+		if (rank == NULL) {
+			rc = -DER_NOMEM;
+			cso->cso_ranks.ca_count = 0;
+			cso->cso_ranks.ca_arrays = NULL;
+		} else {
+			*rank = dss_self_rank();
+			cso->cso_ranks.ca_count = 1;
+			cso->cso_ranks.ca_arrays = rank;
+		}
+	} else {
+		cso->cso_ranks.ca_count = 0;
+		cso->cso_ranks.ca_arrays = NULL;
+	}
+
 
 	cso->cso_status = rc;
-	cso->cso_rank = dss_self_rank();
+	cso->cso_cap = cso->cso_ranks.ca_count;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
 		D_ERROR("Failed to reply check stop: "DF_RC"\n", DP_RC(rc));
@@ -71,13 +101,16 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	int				 rc;
 
 	rc = chk_engine_query(cqi->cqi_gen, cqi->cqi_uuids.ca_count, cqi->cqi_uuids.ca_arrays,
-			      &shard_nr, &shards);
+			      &cqo->cqo_ins_status, &cqo->cqo_ins_phase, &shard_nr, &shards,
+			      &cqo->cqo_gen);
 	if (rc != 0) {
 		cqo->cqo_status = rc;
+		cqo->cqo_cap = 0;
 		cqo->cqo_shards.ca_count = 0;
 		cqo->cqo_shards.ca_arrays = NULL;
 	} else {
 		cqo->cqo_status = 0;
+		cqo->cqo_cap = shard_nr;
 		cqo->cqo_shards.ca_count = shard_nr;
 		cqo->cqo_shards.ca_arrays = shards;
 	}
@@ -86,14 +119,7 @@ ds_chk_query_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check query: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the leader are on the same rank, we will not go through
-	 * CRT proc function that will copy the shards into related RPC reply buffer. Then
-	 * has to keep the shards for a while until the check leader completed aggregating
-	 * the result for this local engine. And then the check leader will release it.
-	 */
-	if (cqo->cqo_status < 0 || !chk_is_on_leader(cqi->cqi_gen, -1, false))
-		chk_query_free(shards, shard_nr);
+	/* @shards will be freed via chk_query_post_reply. Do not free it here. */
 }
 
 static void
@@ -138,7 +164,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	rc = chk_engine_cont_list(ccli->ccli_gen, ccli->ccli_pool, &conts, &count);
 
 	cclo->cclo_status = rc;
-	cclo->cclo_rank = dss_self_rank();
+	cclo->cclo_cap = count;
 	cclo->cclo_conts.ca_arrays = conts;
 	cclo->cclo_conts.ca_count = count;
 
@@ -146,15 +172,7 @@ ds_chk_cont_list_hdlr(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_ERROR("Failed to reply check cont list: "DF_RC"\n", DP_RC(rc));
 
-	/*
-	 * If the check engine and the PS leader are on the same rank, we will not go
-	 * through CRT proc function that will copy the containers' uuids into related
-	 * RPC reply buffer. Then has to keep the containers' uuids for a while until
-	 * the PS leader completed aggregating the result for the local shard. And then
-	 * the PS leader will release the buffer.
-	 */
-	if (cclo->cclo_status < 0 || !chk_is_on_leader(ccli->ccli_gen, -1, false))
-		D_FREE(conts);
+	/* @conts will be freed via chk_cont_list_post_reply. Do not free it here. */
 }
 
 static void
@@ -164,7 +182,8 @@ ds_chk_pool_start_hdlr(crt_rpc_t *rpc)
 	struct chk_pool_start_out	*cpso = crt_reply_get(rpc);
 	int				 rc;
 
-	rc = chk_engine_pool_start(cpsi->cpsi_gen, cpsi->cpsi_pool, cpsi->cpsi_phase);
+	rc = chk_engine_pool_start(cpsi->cpsi_gen, cpsi->cpsi_pool, cpsi->cpsi_phase,
+				   cpsi->cpsi_flags);
 
 	cpso->cpso_status = rc;
 	cpso->cpso_rank = dss_self_rank();
@@ -181,8 +200,9 @@ ds_chk_pool_mbs_hdlr(crt_rpc_t *rpc)
 	int			 rc;
 
 	rc = chk_engine_pool_mbs(cpmi->cpmi_gen, cpmi->cpmi_pool, cpmi->cpmi_phase,
-				 cpmi->cpmi_label, cpmi->cpmi_flags, cpmi->cpmi_targets.ca_count,
-				 cpmi->cpmi_targets.ca_arrays, &cpmo->cpmo_hint);
+				 cpmi->cpmi_label, cpmi->cpmi_label_seq, cpmi->cpmi_flags,
+				 cpmi->cpmi_targets.ca_count, cpmi->cpmi_targets.ca_arrays,
+				 &cpmo->cpmo_hint);
 
 	cpmo->cpmo_status = rc;
 	rc = crt_reply_send(rpc);
@@ -206,7 +226,9 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_option_nr = cri->cri_options.ca_count;
 	cru.cru_detail_nr = cri->cri_details.ca_count;
 	cru.cru_pool = &cri->cri_pool;
+	cru.cru_pool_label = cri->cri_pool_label;
 	cru.cru_cont = &cri->cri_cont;
+	cru.cru_cont_label = cri->cri_cont_label;
 	cru.cru_obj = &cri->cri_obj;
 	cru.cru_dkey = &cri->cri_dkey;
 	cru.cru_akey = &cri->cri_akey;
@@ -215,7 +237,7 @@ ds_chk_report_hdlr(crt_rpc_t *rpc)
 	cru.cru_details = cri->cri_details.ca_arrays;
 	cru.cru_result = cri->cri_ics_result;
 
-	rc = chk_leader_report(&cru, &cro->cro_seq, NULL);
+	rc = chk_leader_report(&cru, &cri->cri_seq, NULL);
 
 	cro->cro_status = rc;
 	rc = crt_reply_send(rpc);
@@ -232,7 +254,8 @@ ds_chk_rejoin_hdlr(crt_rpc_t *rpc)
 	int			 pool_nr = 0;
 	int			 rc;
 
-	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, &pool_nr, &pools);
+	rc = chk_leader_rejoin(cri->cri_gen, cri->cri_rank, cri->cri_iv_uuid, &cro->cro_flags,
+			       &pool_nr, &pools);
 
 	cro->cro_status = rc;
 	if (rc == 0) {
@@ -303,7 +326,8 @@ ds_chk_setup(void)
 	 * the check explicitly.
 	 */
 
-	chk_engine_rejoin();
+	rc = dss_ult_create(chk_engine_rejoin, NULL, DSS_XS_SYS, 0, 0, NULL);
+	D_ASSERT(rc == 0);
 
 	goto out_done;
 
@@ -349,7 +373,7 @@ struct dss_module chk_module = {
 	.sm_setup		= ds_chk_setup,
 	.sm_cleanup		= ds_chk_cleanup,
 	.sm_proto_count		= 1,
-	.sm_proto_fmt		= &chk_proto_fmt,
-	.sm_cli_count		= 0,
-	.sm_handlers		= chk_handlers,
+	.sm_proto_fmt		= {&chk_proto_fmt},
+	.sm_cli_count		= {0},
+	.sm_handlers		= {chk_handlers},
 };

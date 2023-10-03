@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -73,6 +73,24 @@ map_ranks_fini(d_rank_list_t *ranks)
 	} else {
 		D_ASSERT(ranks->rl_nr == 0);
 	}
+}
+
+/**
+ * Is \a rank considered up in \a map? Note that when \a rank does not exist in
+ * \a map, false is returned.
+ */
+bool
+ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
+{
+	struct pool_domain     *node;
+	int			rc;
+
+	rc = pool_map_find_nodes(map, rank, &node);
+	if (rc == 0)
+		return false;
+	D_ASSERTF(rc == 1, "%d\n", rc);
+
+	return node->do_comp.co_status & POOL_GROUP_MAP_STATUS;
 }
 
 int
@@ -908,7 +926,7 @@ ds_pool_get_failed_tgt_idx(const uuid_t pool_uuid, int **failed_tgts, unsigned i
 {
 	unsigned int status;
 
-	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_DRAIN;
+	status = PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT;
 	return ds_pool_get_tgt_idx_by_state(pool_uuid, status, failed_tgts, failed_tgts_cnt);
 }
 

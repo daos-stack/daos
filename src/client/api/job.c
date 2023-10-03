@@ -21,7 +21,7 @@ craft_default_jobid(char **jobid)
 
 	ret = uname(&name);
 	if (ret) {
-		D_ERROR("Uname to get uname for creating default jobid");
+		D_ERROR("Uname to get uname for creating default jobid\n");
 		return daos_errno2der(errno);
 	}
 

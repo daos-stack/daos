@@ -11,7 +11,7 @@ This guide will also describe how to use dfuse in order to take advantage of DAO
 For setup instructions on RHEL and RHEL clones, refer to the [RHEL setup](setup_rhel.md) section.
 
 For more details, including the prerequisite steps before installing DAOS,
-reference the [DAOS administration guide](../admin/hardware/).
+reference the [DAOS administration guide](https://docs.daos.io/v2.6/admin/hardware/).
 
 
 ## Requirements
@@ -36,7 +36,7 @@ admin and client node.  All nodes must have:
   commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](../admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.6/admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -80,9 +80,9 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.6/):
 
-		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.4/Leap15/packages/x86_64/ daos_packages'
+		pdsh -w $ALL_NODES 'sudo zypper ar https://packages.daos.io/v2.6/Leap15/packages/x86_64/daos_packages.repo'
 
 2. Import GPG key on all nodes:
 
@@ -106,8 +106,8 @@ daos-server RPM.
 
 ## Hardware Provisioning
 
-In this section, PMem (Intel(R) Optane(TM) persistent memory) and NVME
-SSDs will be prepared and configured to be used by DAOS.
+In this section, PMem (Intel(R) Optane(TM) persistent memory) will be prepared and configured to be
+used by DAOS and NVME SSDs will be identified.
 
 !!! note
 	For OpenSUSE 15.3 installation, update ipmctl to the latest package available from
@@ -148,12 +148,7 @@ SSDs will be prepared and configured to be used by DAOS.
 		pmem0			0 			3.2 TB
 		pmem1 			0 			3.2 TB
 
-4. Prepare the NVME devices on Server nodes:
-
-		daos_server nvme prepare -u root
-		Preparing locally-attached NVMe storage\...
-
-5. Scan the available storage on the Server nodes:
+4. Scan the available storage on the Server nodes:
 
 		daos_server storage scan
 		Scanning locally-attached storage\...
@@ -200,7 +195,7 @@ Server nodes require the following certificate files:
 - A copy of the Client certificate (client.crt) owned by the
   daos\_server user
 
-See [Certificate Configuration](../admin/deployment/#certificate-configuration)
+See [Certificate Configuration](https://docs.daos.io/v2.6/admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
@@ -291,7 +286,7 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 2.  Create a server configuration file by modifying the default
     `/etc/daos/daos_server.yml` file on the server nodes.
 
-	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml.
+	An example of the daos_server.yml is presented below.  Copy the modified server yaml file to all the server nodes at `/etc/daos/daos_server.yml`.
 
 		name: daos_server
 		access_points:
@@ -396,10 +391,10 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $SERVER_NODES "sudo systemctl status daos_server"
 
 		# if you see following format messages (depending on number of servers), proceed to storage format
-		node-4: May 05 22:21:03 node-1.test.hpdd.intel.com daos_server[37431]: Metadata format required on instance 0
+		node-4: node-1.test.hpdd.intel.com INFO 2023/04/11 23:14:06 SCM format required on instance 0
 
 		# format storage
-		dmg storage format -l $SERVER_NODES --force
+		dmg storage format -l $SERVER_NODES # can use --force if needed
 
 3. Verify that all servers have started:
 
@@ -427,6 +422,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
 
 		# Sample output depending on number of client nodes
-		node-2: agent INFO 2023/02/05 22:38:46 DAOS Agent v2.4 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		node-3: agent INFO 2023/02/05 22:38:53 DAOS Agent v2.4 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+		node-2: agent INFO 2023/02/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
+		node-3: agent INFO 2023/02/05 22:38:53 DAOS Agent v2.6 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
 

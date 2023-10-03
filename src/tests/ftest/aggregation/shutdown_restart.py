@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-   (C) Copyright 2020-2021 Intel Corporation.
+   (C) Copyright 2020-2023 Intel Corporation.
 
    SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -11,7 +10,6 @@ from dmg_utils import check_system_query_status
 
 
 class IoAggregation(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class Description: Verify Aggregation across system shutdown.
 
     :avocado: recursive
@@ -47,8 +45,9 @@ class IoAggregation(IorTestBase):
             for 4 attempts.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,ioaggregation,tx
+        :avocado: tags=IoAggregation,test_ioaggregation
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")
@@ -83,8 +82,7 @@ class IoAggregation(IorTestBase):
 
         # Now check if the space is returned back.
         counter = 1
-        returned_space = (self.get_nvme_free_space() -
-                          free_space_before_snap_destroy)
+        returned_space = self.get_nvme_free_space() - free_space_before_snap_destroy
 
         while returned_space < int(self.ior_cmd.block_size.value):
             # try to wait for 4 x 60 secs for aggregation to be completed or
@@ -97,6 +95,5 @@ class IoAggregation(IorTestBase):
                 self.fail("Aggregation did not complete as expected")
 
             time.sleep(60)
-            returned_space = (self.get_nvme_free_space() -
-                              free_space_before_snap_destroy)
+            returned_space = self.get_nvme_free_space() - free_space_before_snap_destroy
             counter += 1

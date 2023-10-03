@@ -1,6 +1,5 @@
-#!/usr/bin/env python
 '''
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -37,19 +36,6 @@ array_akey: &file_data
   value_type: array
   values: [{'count': 1, 'size': 4096, 'aligned': 'Yes'}]
 
-array_meta: &file_meta
-  count: 1
-  type: integer
-  overhead: meta
-  value_type: single_value
-  values: [{'count': 3, 'size': 64, 'aligned': 'Yes'}]
-
-file_dkey_key0: &file_dkey0
-  count: 1
-  type: integer
-  overhead: user
-  akeys: [*file_data, *file_meta]
-
 file_dkey_key: &file_dkey
   count: 1
   type: integer
@@ -58,7 +44,7 @@ file_dkey_key: &file_dkey
 
 file_key: &file
   count: 1000000
-  dkeys: [*file_dkey0, *file_dkey]
+  dkeys: [*file_dkey]
 
 posix_key: &posix
   objects: [*sb, *file, *dir]
@@ -202,13 +188,11 @@ def _parse_dfs_sb_dkey(dkey_raw, iods, akey_count):
 
 def _parse_dfs_akey_inode(dfs_entry_key_size, dfs_entry_size):
     key = 'x' * dfs_entry_key_size
-    overhead = Overhead.META
-    value_type = ValType.ARRAY
+    value = VosValue(size=dfs_entry_size)
     akey = AKey(
         key=key,
-        overhead=overhead,
-        value_type=value_type)
-    value = VosValue(size=dfs_entry_size)
+        overhead=Overhead.META,
+        value_type=ValType.ARRAY)
     akey.add_value(value)
 
     return akey

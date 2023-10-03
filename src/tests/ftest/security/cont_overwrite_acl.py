@@ -1,20 +1,18 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
+
+from avocado import fail_on
 
 from cont_security_test_base import ContSecurityTestBase
 from security_test_base import create_acl_file
 from exception_utils import CommandFailure
-from avocado import fail_on
 
 
 class OverwriteContainerACLTest(ContSecurityTestBase):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Test to verify ACL entry overwrite.
@@ -44,8 +42,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_overwrite_acl_inputs,test_acl_overwrite_invalid_inputs
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=OverwriteContainerACLTest,test_acl_overwrite_invalid_inputs
         """
         # Get list of invalid ACL principal values
         invalid_acl_filename = self.params.get("invalid_acl_filename", "/run/*")
@@ -63,7 +61,7 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
                 self.container.uuid,
                 acl_file)
             test_errs.extend(self.error_handling(
-                self.daos_cmd.result, "No such file or directory"))
+                self.daos_cmd.result, "no such file or directory"))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -82,8 +80,8 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl
-        :avocado: tags=cont_overwrite_acl_file,test_overwrite_invalid_acl_file
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=OverwriteContainerACLTest,test_overwrite_invalid_acl_file
         """
         invalid_file_content = self.params.get(
             "invalid_acl_file_content", "/run/*")
@@ -95,13 +93,16 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
+            exp_err = "-1003"
+            if content == []:
+                exp_err = "no entries"
 
             # Run overwrite command
             self.daos_cmd.container_overwrite_acl(
                 self.pool.uuid,
                 self.container.uuid,
                 path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+            test_errs.extend(self.error_handling(self.daos_cmd.result, exp_err))
 
             # Check that the acl file was unchanged
             self.acl_file_diff(self.cont_acl)
@@ -118,8 +119,10 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
         Test Description: Test that container overwrite command performs as
             expected with valid ACL file provided.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_overwrite_acl_file
+        :avocado: tags=all,daily_regression,
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=OverwriteContainerACLTest,test_overwrite_valid_acl_file
         """
         valid_file_acl = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
@@ -138,15 +141,17 @@ class OverwriteContainerACLTest(ContSecurityTestBase):
             # Check that the acl file was unchanged
             self.acl_file_diff(content)
 
-    def test_no_user_permissions(self):
+    def test_cont_overwrite_acl_no_perm(self):
         """
         JIRA ID: DAOS-3708
 
         Test Description: Test that container overwrite command fails with
             no permission -1001 when user doesn't have the right permissions.
 
-        :avocado: tags=all,daily_regression,security,container_acl
-        :avocado: tags=cont_overwrite_acl_noperms
+        :avocado: tags=all,daily_regression,
+        :avocado: tags=vm
+        :avocado: tags=security,container,container_acl,daos_cmd
+        :avocado: tags=OverwriteContainerACLTest,test_cont_overwrite_acl_no_perm
         """
         valid_file_content = self.params.get("valid_acl_file", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)

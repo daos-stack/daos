@@ -74,7 +74,7 @@ dss_thread_local_storage_init(struct dss_thread_local_storage *dtls,
 
 		if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
 			D_ASSERT(dmk->dmk_init != NULL);
-			dtls->dtls_values[i] = dmk->dmk_init(xs_id, tgt_id);
+			dtls->dtls_values[i] = dmk->dmk_init(dtls->dtls_tag, xs_id, tgt_id);
 			if (dtls->dtls_values[i] == NULL) {
 				rc = -DER_NOMEM;
 				break;
@@ -102,7 +102,7 @@ dss_thread_local_storage_fini(struct dss_thread_local_storage *dtls)
 			if (dmk != NULL && dtls->dtls_tag & dmk->dmk_tags) {
 				D_ASSERT(dtls->dtls_values[i] != NULL);
 				D_ASSERT(dmk->dmk_fini != NULL);
-				dmk->dmk_fini(dtls->dtls_values[i]);
+				dmk->dmk_fini(dtls->dtls_tag, dtls->dtls_values[i]);
 			}
 		}
 	}

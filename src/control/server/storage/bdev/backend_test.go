@@ -28,12 +28,6 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const (
-	vmdAddr         = "0000:5d:05.5"
-	vmdBackingAddr1 = "5d0505:01:00.0"
-	vmdBackingAddr2 = "5d0505:03:00.0"
-)
-
 func addrListFromStrings(addrs ...string) *hardware.PCIAddressSet {
 	return hardware.MustNewPCIAddressSet(addrs...)
 }
@@ -775,7 +769,7 @@ type testWalkInput struct {
 	expErr error
 }
 
-func TestBackend_hugePageWalkFn(t *testing.T) {
+func TestBackend_hugepageWalkFn(t *testing.T) {
 	testDir := "/wherever"
 
 	for name, tc := range map[string]struct {
@@ -874,7 +868,7 @@ func TestBackend_hugePageWalkFn(t *testing.T) {
 			}
 
 			var count uint = 0
-			testFn := createHugePageWalkFunc(log, testDir, stat, remove, &count)
+			testFn := createHugepageWalkFunc(log, testDir, stat, remove, &count)
 			for _, ti := range tc.testInputs {
 				gotErr := testFn(ti.path, ti.info, ti.err)
 				test.CmpErr(t, ti.expErr, gotErr)
@@ -898,7 +892,7 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 
-	defaultHpCleanCall := hugePageDir
+	defaultHpCleanCall := hugepageDir
 
 	for name, tc := range map[string]struct {
 		reset          bool
@@ -930,7 +924,7 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare reset; user-specified values": {
 			reset: true,
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
 				PCIBlockList:  mockAddrListStr(4, 3),
@@ -950,7 +944,7 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare reset; vmd enabled": {
 			reset: true,
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
 				PCIBlockList:  mockAddrListStr(4, 3),
@@ -966,6 +960,9 @@ func TestBackend_Prepare(t *testing.T) {
 					},
 					Args: []string{"reset"},
 				},
+			},
+			expResp: &storage.BdevPrepareResponse{
+				VMDPrepared: true,
 			},
 		},
 		"prepare setup; defaults": {
@@ -990,7 +987,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; user-specified values": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
 				DisableVFIO:   true,
@@ -1016,7 +1013,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; blocklist": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(4, 3),
 			},
@@ -1040,7 +1037,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; blocklist allowlist": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(4, 3),
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
@@ -1092,7 +1089,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
@@ -1119,7 +1116,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd detect failed": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
@@ -1129,7 +1126,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; no vmd devices; vmd disabled in req": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				EnableVMD:     true,
 			},
@@ -1152,7 +1149,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd device allowed": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
 				EnableVMD:     true,
@@ -1180,7 +1177,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd device blocked": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(4, 3),
 				EnableVMD:     true,
@@ -1210,7 +1207,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd devices all blocked; vmd disabled in req": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(4, 3),
 				EnableVMD:     true,
@@ -1236,7 +1233,7 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; vmd enabled; vmd devices allowed and blocked": {
 			req: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugepages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2, 3),
 				PCIBlockList:  mockAddrListStr(4, 3),
@@ -1267,17 +1264,17 @@ func TestBackend_Prepare(t *testing.T) {
 		},
 		"prepare setup; huge page clean only": {
 			req: storage.BdevPrepareRequest{
-				CleanHugePagesOnly: true,
+				CleanHugepagesOnly: true,
 			},
 			hpRemCount: 555,
 			expResp: &storage.BdevPrepareResponse{
-				NrHugePagesRemoved: 555,
+				NrHugepagesRemoved: 555,
 			},
 			expHpCleanCall: defaultHpCleanCall,
 		},
 		"prepare setup; huge page clean fail": {
 			req: storage.BdevPrepareRequest{
-				CleanHugePagesOnly: true,
+				CleanHugepagesOnly: true,
 			},
 			hpCleanErr:     errors.New("clean failed"),
 			expErr:         errors.New("clean failed"),
@@ -1304,14 +1301,14 @@ func TestBackend_Prepare(t *testing.T) {
 			}
 
 			var gotErr error
+			var gotResp *storage.BdevPrepareResponse
 			if tc.reset {
-				gotErr = b.reset(tc.req, mockVmdDetect)
+				gotResp, gotErr = b.reset(tc.req, mockVmdDetect)
 			} else {
-				var gotResp *storage.BdevPrepareResponse
 				gotResp, gotErr = b.prepare(tc.req, mockVmdDetect, mockHpClean)
-				if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-					t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
-				}
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+				t.Fatalf("\nunexpected prepare response (-want, +got):\n%s\n", diff)
 			}
 			test.CmpErr(t, tc.expErr, gotErr)
 

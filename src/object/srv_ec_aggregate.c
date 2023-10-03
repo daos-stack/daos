@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2022 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,7 +57,7 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
-#define EC_AGG_ITERATION_MAX	2048
+#define EC_AGG_ITERATION_MAX	1024
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -114,7 +114,6 @@ struct ec_agg_entry {
 	struct pl_obj_layout	*ae_obj_layout;
 	struct daos_shard_loc	 ae_peer_pshards[OBJ_EC_MAX_P];
 	uint32_t		 ae_grp_idx;
-	uint32_t		 ae_rotate_parity:1; /* ec parity rotation or not */
 };
 
 /* Parameters used to drive iterate all.
@@ -213,8 +212,10 @@ ec_age2pidx(struct ec_agg_entry *entry)
 
 	shard = ec_age2shard(entry) % obj_ec_tgt_nr(&entry->ae_oca);
 
-	D_ASSERT(is_ec_parity_shard(shard, entry->ae_dkey_hash, &entry->ae_oca));
-	return (obj_ec_shard_off(entry->ae_dkey_hash, &entry->ae_oca, shard) -
+	D_ASSERT(is_ec_parity_shard_by_layout_ver(entry->ae_oid.id_layout_ver, entry->ae_dkey_hash,
+						  &entry->ae_oca, shard));
+	return (obj_ec_shard_off_by_layout_ver(entry->ae_oid.id_layout_ver, entry->ae_dkey_hash,
+					       &entry->ae_oca, shard) -
 		obj_ec_data_tgt_nr(&entry->ae_oca));
 }
 
@@ -305,12 +306,23 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			carry_is_hole = true;
 
 		d_list_del(&extent->ae_link);
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt > 0);
 		entry->ae_cur_stripe.as_extent_cnt--;
 		D_FREE(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
-	D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	if (entry->ae_cur_stripe.as_extent_cnt > 0) {
+		D_ERROR(DF_UOID" extent cnt %u\n", DP_UOID(entry->ae_oid),
+			entry->ae_cur_stripe.as_extent_cnt);
+		d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
+				      ae_link) {
+			D_ERROR("recx "DF_RECX" eph "DF_X64"\n", DP_RECX(extent->ae_recx),
+				extent->ae_epoch);
+		}
+
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt == 0);
+	}
 	entry->ae_cur_stripe.as_hi_epoch = 0UL;
 	entry->ae_cur_stripe.as_stripe_fill = 0;
 	entry->ae_cur_stripe.as_has_holes = carry_is_hole ? true : false;
@@ -359,7 +371,7 @@ agg_alloc_buf(d_sg_list_t *sgl, size_t ent_buf_len, unsigned int iov_entry,
 	int	 rc = 0;
 
 	if (align_data) {
-		D_ALIGNED_ALLOC(buf, 32, ent_buf_len);
+		D_ALIGNED_ALLOC_NZ(buf, 32, ent_buf_len);
 		if (buf == NULL) {
 			rc = -DER_NOMEM;
 			goto out;
@@ -490,6 +502,7 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 	struct ec_agg_param	*agg_param;
 	uint32_t		grp_start;
 	uint32_t		tgt_ec_idx;
+	struct dc_object	*obj;
 	int			i;
 	int			rc;
 
@@ -507,7 +520,8 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 		D_GOTO(out, rc = 0);
 
 	grp_start = entry->ae_grp_idx * entry->ae_obj_layout->ol_grp_size;
-	tgt_ec_idx = obj_ec_parity_start(entry->ae_dkey_hash, &entry->ae_oca);
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
+	tgt_ec_idx = obj_ec_parity_start(obj, entry->ae_dkey_hash);
 	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++,
 	     tgt_ec_idx = (tgt_ec_idx + 1) % entry->ae_obj_layout->ol_grp_size) {
 		struct pl_obj_shard	*p_shard;
@@ -524,6 +538,8 @@ agg_get_obj_handle(struct ec_agg_entry *entry)
 			rc = 0;
 		}
 	}
+	obj_decref(obj);
+
 out:
 	/* NB: entry::ae_obj_hdl will be closed externally */
 	return rc;
@@ -925,6 +941,7 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	uint64_t	 cell_b = ec_age2cs_b(entry);
 	uint32_t	 shard  = ec_age2shard(entry);
 	uint32_t	 pidx, peer_shard;
+	struct dc_object *obj;
 	int		 i, rc = 0;
 
 	/* Only called when p > 1. */
@@ -943,26 +960,27 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 	buf = entry->ae_sgl.sg_iovs[AGG_IOV_PARITY].iov_buf;
 	sgl.sg_nr = 1;
 	sgl.sg_iovs = &iov;
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (i = 0; i < obj_ec_parity_tgt_nr(&entry->ae_oca); i++) {
 		if (i == pidx)
 			continue;
 		d_iov_set(&iov, &buf[i * cell_b], cell_b);
-		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
-						 &entry->ae_oca,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), i);
 		rc = dsc_obj_fetch(entry->ae_obj_hdl,
 				   entry->ae_par_extent.ape_epoch,
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, DF_UOID
-			 " fetch parity from peer shard %d, "DF_RC".\n",
-			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
+			  DF_UOID " fetch parity from peer shard %d", DP_UOID(entry->ae_oid),
+			  peer_shard);
 		if (rc)
 			goto out;
 	}
 
 out:
+	obj_decref(obj);
 	return rc;
 }
 
@@ -1268,6 +1286,7 @@ agg_peer_update_ult(void *arg)
 	uint64_t		 cell_b = ec_age2cs_b(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint32_t		 peer, peer_shard;
+	struct dc_object	*obj = NULL;
 	crt_rpc_t		*rpc = NULL;
 	int			 rc = 0;
 
@@ -1279,6 +1298,7 @@ agg_peer_update_ult(void *arg)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	iod.iod_name = entry->ae_akey;
 	iod.iod_size = entry->ae_rsize;
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	for (peer = 0; peer < p; peer++) {
 		/* Only update the available parities */
 		if (peer == pidx || entry->ae_peer_pshards[peer].sd_rank == DAOS_TGT_IGNORE)
@@ -1303,8 +1323,7 @@ agg_peer_update_ult(void *arg)
 		uuid_copy(ec_agg_in->ea_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_agg_in->ea_oid = entry->ae_oid;
-		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
-						 &entry->ae_oca,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 						 shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
 		ec_agg_in->ea_oid.id_shard = peer_shard;
 		ec_agg_in->ea_dkey = entry->ae_dkey;
@@ -1392,6 +1411,8 @@ out_rpc:
 	if (rpc)
 		crt_req_decref(rpc);
 out:
+	if (obj)
+		obj_decref(obj);
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
 
@@ -1494,6 +1515,7 @@ agg_process_holes_ult(void *arg)
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
 	crt_rpc_t		*rpc = NULL;
 	crt_bulk_t		 bulk_hdl = NULL;
+	struct dc_object	*obj = NULL;
 	uint32_t		 len = ec_age2cs(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
 	uint64_t		 k = ec_age2k(entry);
@@ -1535,6 +1557,7 @@ agg_process_holes_ult(void *arg)
 	if (!valid_hole)
 		goto out;
 
+	obj = obj_hdl2ptr(entry->ae_obj_hdl);
 	if (last_ext_end < k * len) {
 		stripe_ud->asu_recxs[ext_cnt].rx_idx = ss + last_ext_end;
 		stripe_ud->asu_recxs[ext_cnt].rx_nr = k * len - last_ext_end;
@@ -1629,8 +1652,7 @@ agg_process_holes_ult(void *arg)
 		uuid_copy(ec_rep_in->er_coh_uuid,
 			  agg_param->ap_pool_info.api_coh_uuid);
 		ec_rep_in->er_oid = entry->ae_oid;
-		peer_shard = obj_ec_parity_shard(entry->ae_dkey_hash,
-						 &entry->ae_oca,
+		peer_shard = obj_ec_parity_shard(obj, entry->ae_dkey_hash,
 				entry->ae_oid.id_shard / obj_ec_tgt_nr(&entry->ae_oca), peer);
 		ec_rep_in->er_oid.id_shard = peer_shard;
 		ec_rep_in->er_dkey = entry->ae_dkey;
@@ -1665,6 +1687,8 @@ out:
 		crt_req_decref(rpc);
 	if (bulk_hdl)
 		crt_bulk_free(bulk_hdl);
+	if (obj)
+		obj_decref(obj);
 	entry->ae_sgl.sg_nr = AGG_IOV_CNT;
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
 }
@@ -1773,7 +1797,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_hdl		= agg_param->ap_cont_handle;
 	/* set epr_lo as zero to pass-through possibly existed snapshot
 	 * between agg_param->ap_epr.epr_lo and .epr_hi.
 	 */
@@ -2041,9 +2065,9 @@ agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 	oca = &agg_entry->ae_oca;
 	grp_idx = agg_entry->ae_oid.id_shard / daos_oclass_grp_size(oca);
 	grp_start = grp_idx * daos_oclass_grp_size(oca);
-	ec_tgt_idx = obj_ec_shard_idx(agg_entry->ae_dkey_hash, oca,
-				      daos_oclass_grp_size(oca) - 1);
-
+	ec_tgt_idx = obj_ec_shard_idx_by_layout_ver(agg_entry->ae_oid.id_layout_ver,
+						    agg_entry->ae_dkey_hash, oca,
+						    daos_oclass_grp_size(oca) - 1);
 	/**
 	 * FIXME: only the last parity shard can be the EC agg leader. What about
 	 * Degraded mode?
@@ -2066,11 +2090,13 @@ agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 static void
 agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
 {
+	agg_clear_extents(agg_entry);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 
 	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_has_holes = false;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
@@ -2081,8 +2107,7 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 	 struct ec_agg_param *agg_param, struct ec_agg_entry *agg_entry,
 	 unsigned int *acts)
 {
-	uint64_t	dkey_hash;
-	int		rc;
+	int	rc;
 
 	if (!agg_key_compare(agg_entry->ae_dkey, entry->ie_key)) {
 		D_DEBUG(DB_EPC, "Skip dkey: "DF_KEY" ec agg on re-probe\n",
@@ -2090,17 +2115,12 @@ agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts |= VOS_ITER_CB_SKIP;
 		return 0;
 	}
-	agg_entry->ae_rotate_parity = 1;
+
 	agg_entry->ae_dkey = entry->ie_key;
 	agg_entry->ae_grp_idx = agg_entry->ae_oid.id_shard /
 				daos_oclass_grp_size(&agg_entry->ae_oca);
-
-	dkey_hash = obj_dkey2hash(agg_entry->ae_oid.id_pub, &agg_entry->ae_dkey);
-	if (agg_entry->ae_rotate_parity)
-		agg_entry->ae_dkey_hash = dkey_hash;
-	else
-		agg_entry->ae_dkey_hash = 0;
-
+	agg_entry->ae_dkey_hash = obj_dkey2hash(agg_entry->ae_oid.id_pub,
+						&agg_entry->ae_dkey);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 	rc = agg_shard_is_leader(agg_param->ap_pool_info.api_pool, agg_entry);
 	if (rc == 1) {
@@ -2306,7 +2326,10 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
-	rc = pl_obj_place(map, &md, DAOS_OO_RO, -1, NULL, &agg_entry->ae_obj_layout);
+	md.omd_pdom_lvl = props.dcp_perf_domain;
+	md.omd_pda = props.dcp_ec_pda;
+	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
+			  &agg_entry->ae_obj_layout);
 
 out:
 	return rc;
@@ -2563,6 +2586,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
+	rc = vos_aggregate_enter(cont->sc_hdl, epr);
+	if (rc)
+		goto update_hae;
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
@@ -2596,6 +2623,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
 
+	vos_aggregate_exit(cont->sc_hdl);
+
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
@@ -2620,13 +2649,11 @@ ds_obj_ec_aggregate(void *arg)
 	param.ap_cont = cont;
 	rc = ec_agg_param_init(cont, &param);
 	if (rc) {
-		/* To make sure the EC aggregation can be run on this xstream,
-		 * let's do not exit here, and in cont_ec_aggregate_cb(), it will
-		 * keep retrying parameter init.
+		/* To make sure the EC aggregation can be run on this xstream, let's do not exit
+		 * here, and in cont_ec_aggregate_cb(), it will keep retrying parameter init.
 		 */
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR,
-			 DF_UUID" EC aggregation failed: "DF_RC"\n",
-			 DP_UUID(cont->sc_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR, rc,
+			  DF_UUID " EC aggregation failed", DP_UUID(cont->sc_uuid));
 	}
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);

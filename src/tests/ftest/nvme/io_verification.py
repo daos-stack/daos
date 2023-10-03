@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,11 +8,9 @@ import avocado
 from pydaos.raw import DaosApiError
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
-from test_utils_base import LabelGenerator
 
 
 class NvmeIoVerification(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """Test class for NVMe with IO tests.
 
     Test Class Description:
@@ -31,7 +28,6 @@ class NvmeIoVerification(IorTestBase):
         self.ior_seq_pool_qty = self.params.get("ior_sequence_pool_qty", '/run/pool/*')
         self.ior_flag_write = self.params.get("write", '/run/ior/*/')
         self.ior_flag_read = self.params.get("read", '/run/ior/*/')
-        self.ior_cont_label_generator = LabelGenerator('cont')
         self.job_manager = self.get_ior_job_manager_command()
 
     @avocado.fail_on(DaosApiError)
@@ -57,8 +53,9 @@ class NvmeIoVerification(IorTestBase):
             created.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=daosio,nvme_io_verification
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,daosio
+        :avocado: tags=NvmeIoVerification,test_nvme_io_verification
         """
         # Loop for every pool size
         for index in range(self.ior_seq_pool_qty):
@@ -80,12 +77,16 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
+                container = self.get_container(self.pool)
+                container.open()  # Workaround for pydaos handles
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Verify IOR consumed the expected amount from the pool
                 self.verify_pool_size(size_before_ior, self.processes)
+
+                # Destroy the container
+                container.destroy()
 
             # destroy pool
             self.pool.destroy()
@@ -111,7 +112,11 @@ class NvmeIoVerification(IorTestBase):
             servers are restarted.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_server_restart
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,daosio
+        :avocado: tags=NvmeIoVerification,test_nvme_server_restart
         """
         # Loop for every pool size
         for index in range(self.ior_seq_pool_qty):
@@ -131,8 +136,8 @@ class NvmeIoVerification(IorTestBase):
                     self.ior_cmd.block_size.update(32000)
                 else:
                     self.ior_cmd.block_size.update(self.ior_block_size)
-                self.ior_cmd.set_daos_params(self.server_group, self.pool)
-                self.job_manager.job.dfs_cont.update(self.ior_cont_label_generator.get_label())
+                container = self.get_container(self.pool)
+                self.ior_cmd.set_daos_params(self.server_group, self.pool, container.identifier)
                 self.run_ior(self.job_manager, self.ior_processes)
 
                 # Stop all servers
@@ -149,6 +154,9 @@ class NvmeIoVerification(IorTestBase):
                 # read all the data written before server restart
                 self.ior_cmd.flags.update(self.ior_flag_read)
                 self.run_ior(self.job_manager, self.ior_processes)
+
+                # destroy the container
+                container.destroy()
 
             # destroy pool
             self.pool.destroy()

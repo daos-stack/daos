@@ -68,8 +68,8 @@ public class DaosInputStream extends FSInputStream {
     this.bufferCapacity = readSize > bufferCap ? readSize : bufferCap;
     this.readSize = readSize;
     this.fileLen = daosFile.length();
-    this.source = async ? new DaosFileSourceAsync(daosFile, bufferCapacity, fileLen, true, stats) :
-        new DaosFileSourceSync(daosFile, bufferCapacity, fileLen, stats);
+    this.source = async ? new DaosFileSourceAsync(daosFile, bufferCapacity, fileLen, true, false, stats) :
+        new DaosFileSourceSync(daosFile, bufferCapacity, fileLen, false, stats);
     source.setReadSize(readSize);
     buffer = null;
   }
@@ -82,8 +82,8 @@ public class DaosInputStream extends FSInputStream {
     }
     this.stats = stats;
     this.fileLen = daosFile.length();
-    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, fileLen, true, stats) :
-        new DaosFileSourceSync(daosFile, buffer, fileLen, stats);
+    this.source = async ? new DaosFileSourceAsync(daosFile, buffer, fileLen, true, false, stats) :
+        new DaosFileSourceSync(daosFile, buffer, fileLen, false, stats);
     source.setReadSize(readSize);
     this.buffer = selfBuffer ? buffer : null;
     this.bufferCapacity = buffer.capacity();

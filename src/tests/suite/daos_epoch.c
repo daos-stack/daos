@@ -11,7 +11,7 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 
-#define MUST(rc)	assert_int_equal(rc, 0)
+#define MUST(rc)        assert_success(rc)
 #define VAL_FMT		"VALUE-%lu"
 #define REC_MAX_LEN	32
 
@@ -220,7 +220,7 @@ test_snapshots(void **argp)
 	MUST(cont_create(arg, &co_uuid));
 	print_message("Initial container open after create, nsnapshots=0 lsnapshot=0\n");
 	uuid_unparse(co_uuid, uuid_str);
-	MUST(cont_open(arg, uuid_str, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	MUST(cont_open(arg, uuid_str, DAOS_COO_RW, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, 0);
 	assert_int_equal(arg->co_info.ci_lsnapshot, 0);
 
@@ -326,10 +326,10 @@ test_snapshots(void **argp)
 	epr.epr_hi = epr.epr_lo = 42;
 	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
 	if (arg->async) {
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
 	} else {
-		assert_int_equal(rc, -DER_NONEXIST);
+		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 
 	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
@@ -351,7 +351,7 @@ test_snapshots(void **argp)
 	/* Reopen container, verify number of snapshots */
 	print_message("Container (re)open nsnapshots=%d lsnapshot="DF_X64"\n", (snap_count-1),
 		      snaps[snap_count-1]);
-	MUST(cont_open(arg, uuid_str, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	MUST(cont_open(arg, uuid_str, DAOS_COO_RW, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, (snap_count-1));
 	assert_int_equal(arg->co_info.ci_lsnapshot, snaps[snap_count-1]);
 	MUST(cont_close(arg, coh));

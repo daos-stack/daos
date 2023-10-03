@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2021-2022 Intel Corporation.
+ * (C) Copyright 2021-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,7 +69,6 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
 		   tm->tm_min, tm->tm_sec, tv.tv_usec, zone);
 	if (evt->timestamp == NULL) {
-		D_ERROR("failed to generate timestamp string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -79,7 +78,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->proc_id = (uint64_t)getpid();
 
 	if (dmi == NULL) {
-		D_ERROR("failed to retrieve xstream id");
+		D_ERROR("failed to retrieve xstream id\n");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	evt->thread_id = (uint64_t)dmi->dmi_xs_id;
@@ -89,6 +88,8 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	D_STRNDUP(evt->hostname, dss_hostname, DSS_HOSTNAME_MAX_LEN);
+	if (evt->hostname == NULL)
+		D_GOTO(out_ts, rc = -DER_NOMEM);
 
 	if ((msg == NULL) || strnlen(msg, DAOS_RAS_STR_FIELD_SIZE) == 0) {
 		D_ERROR("missing msg parameter\n");
@@ -457,6 +458,9 @@ ds_chk_regpool_upcall(uint64_t seq, uuid_t uuid, char *label, d_rank_list_t *svc
 	uint8_t			*reqb = NULL;
 	size_t			 size;
 	int			 rc;
+
+	if (DAOS_FAIL_CHECK(DAOS_CHK_LEADER_FAIL_REGPOOL))
+		return -DER_IO;
 
 	req.seq = seq;
 	D_ASPRINTF(req.uuid, DF_UUIDF, DP_UUID(uuid));

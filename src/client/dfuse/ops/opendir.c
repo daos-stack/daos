@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,7 +10,8 @@
 void
 dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh     = NULL;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh;
 	struct fuse_file_info fi_out = {0};
 	int                   rc;
 
@@ -20,12 +21,7 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 
 	DFUSE_TRA_UP(oh, ie, "open handle");
 
-	dfuse_open_handle_init(oh, ie);
-
-	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
-	if (rc)
-		D_GOTO(err, rc);
+	dfuse_open_handle_init(dfuse_info, oh, ie);
 
 	fi_out.fh = (uint64_t)oh;
 
@@ -36,14 +32,14 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie, struct fuse_file_
 	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
 		fi_out.cache_readdir = 1;
 
-		if (dfuse_cache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout, NULL))
+		if (dfuse_dcache_get_valid(ie, ie->ie_dfs->dfc_dentry_timeout))
 			fi_out.keep_cache = 1;
 	}
 #endif
 
 	atomic_fetch_add_relaxed(&ie->ie_open_count, 1);
 
-	DFUSE_REPLY_OPEN(oh, req, &fi_out);
+	DFUSE_REPLY_OPEN_DIR(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);
@@ -53,8 +49,8 @@ err:
 void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl *oh = (struct dfuse_obj_hdl *)fi->fh;
-	int                   rc;
+	struct dfuse_info    *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_obj_hdl *oh         = (struct dfuse_obj_hdl *)fi->fh;
 
 	/* Perform the opposite of what the ioctl call does, always change the open handle count
 	 * but the inode only tracks number of open handles with non-zero ioctl counts
@@ -70,14 +66,21 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 
 	if ((!oh->doh_kreaddir_invalid) && oh->doh_kreaddir_finished) {
 		DFUSE_TRA_DEBUG(oh, "Directory handle may have populated cache, saving");
-		dfuse_cache_set_time(oh->doh_ie);
+		dfuse_dcache_set_time(oh->doh_ie);
 	}
 
-	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
-		DFUSE_REPLY_ZERO(oh, req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
-	D_FREE(oh->doh_dre);
-	D_FREE(oh);
+	DFUSE_REPLY_ZERO(oh, req);
+	dfuse_dre_drop(dfuse_info, oh);
+	if (oh->doh_evict_on_close) {
+		int rc;
+
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, oh->doh_ie->ie_parent,
+						      oh->doh_ie->ie_name,
+						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
+
+		if (rc != 0)
+			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
+					strerror(-rc));
+	}
+	dfuse_oh_free(dfuse_info, oh);
 };

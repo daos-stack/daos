@@ -11,6 +11,7 @@ on:
       - .github/workflows/landing-builds.yml
       - 'utils/docker/Dockerfile.*'
       - 'utils/scripts/install-*.sh'
+      - 'utils/scripts/helpers/*'
       - utils/ci
       - ci
       - requirements.txt
@@ -45,7 +46,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -62,7 +63,7 @@ jobs:
         run: ./ci/gha_helper.py --single
         id: commit-hash
       - name: Setup docker cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
+        uses: jpribyl/action-docker-layer-caching@v0.1.1
         with:
           key: ${{ steps.commit-hash.outputs.key }}
           restore-keys: ${{ steps.commit-hash.outputs.restore }}
@@ -105,7 +106,7 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -155,7 +156,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -173,7 +174,7 @@ jobs:
       - name: Setup git hash
         run: ./ci/gha_helper.py --single
         id: commit-hash
-      - uses: satackey/action-docker-layer-caching@v0.0.11
+      - uses: jpribyl/action-docker-layer-caching@v0.1.1
         continue-on-error: true
         with:
           key: ${{ steps.commit-hash.outputs.key }}
@@ -294,10 +295,9 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
@@ -381,7 +381,6 @@ jobs:
                             --build-arg DAOS_BUILD_TYPE=dev
                             --build-arg COMPILER=gcc
       - name: Run NLT
-        if: matrix.distro != 'alma.9'
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 6

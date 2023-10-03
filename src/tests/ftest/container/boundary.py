@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -41,6 +41,7 @@ class BoundaryTest(TestWithServers):
         self.io_run_time = self.params.get("run_time", '/run/container/execute_io/*')
         self.io_rank = self.params.get("rank", '/run/container/execute_io/*')
         self.io_obj_classs = self.params.get("obj_classs", '/run/container/execute_io/*')
+        self.dmg = self.get_dmg_command()
 
     def create_pool(self):
         """Get a test pool object and append to list.
@@ -49,7 +50,7 @@ class BoundaryTest(TestWithServers):
             TestPool: the created test pool object.
 
         """
-        pool = self.get_pool()
+        pool = self.get_pool(dmg=self.dmg.copy())
         self.pool.append(pool)
         return pool
 
@@ -94,7 +95,11 @@ class BoundaryTest(TestWithServers):
         for _ in range(num_pools):
             pool_manager.add()
         self.log.info('Creating %d pools', num_pools)
+        # Explicitly elevate log mask to DEBUG for multiple pool create scenario and
+        # restore it after.
+        self.dmg.server_set_logmasks("DEBUG", raise_exception=False)
         result = pool_manager.run()
+        self.dmg.server_set_logmasks(raise_exception=False)
         num_failed = len(list(filter(lambda r: not r.passed, result)))
         if num_failed > 0:
             self.fail('{} pool create threads failed'.format(num_failed))

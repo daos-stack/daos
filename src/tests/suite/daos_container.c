@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,6 +12,8 @@
 #include "daos_test.h"
 #include "daos_iotest.h"
 #include <daos/placement.h>
+#include <pwd.h>
+#include <grp.h>
 
 #define TEST_MAX_ATTR_LEN	(128)
 
@@ -22,6 +24,7 @@ co_create(void **state)
 	test_arg_t	*arg = *state;
 	uuid_t		 uuid;
 	daos_handle_t	 coh;
+	daos_handle_t	 poh_inval = DAOS_HDL_INVAL;
 	daos_cont_info_t info;
 	daos_event_t	 ev;
 	char		 str[37];
@@ -52,12 +55,26 @@ co_create(void **state)
 				    &info, arg->async ? &ev : NULL);
 		assert_rc_equal(rc, 0);
 		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
 		print_message("container opened\n");
 	}
 
 	if (arg->hdl_share)
 		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 1);
 
+	/** query container */
+	print_message("querying container %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(uuid_compare(uuid, info.ci_uuid), 0);
+	print_message("container queried\n");
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** close container */
 	print_message("closing container %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
@@ -84,6 +101,50 @@ co_create(void **state)
 		}
 		print_message("container destroyed\n");
 	}
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - create container */
+	if (arg->myrank == 0) {
+		print_message("creating container with invalid pool %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = daos_cont_create(poh_inval, &uuid, NULL, arg->async ? &ev : NULL);
+		if (arg->async)
+			assert_rc_equal(rc, 0);
+		else
+			assert_rc_equal(rc, -DER_NO_HDL);
+		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
+	}
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - query container */
+	print_message("querying stale container handle %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_query(coh, &info, NULL, arg->async ? &ev : NULL);
+	if (arg->async)
+		assert_rc_equal(rc, 0);
+	else
+		assert_rc_equal(rc, -DER_NO_HDL);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	if (arg->hdl_share)
+		par_barrier(PAR_COMM_WORLD);
+
+	/** negative - close container */
+	print_message("closing stale container handle %ssynchronously ...\n",
+		      arg->async ? "a" : "");
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	if (arg->async)
+		assert_rc_equal(rc, 0);
+	else
+		assert_rc_equal(rc, -DER_NO_HDL);
+	WAIT_ON_ASYNC_ERR(arg, ev, -DER_NO_HDL);
 }
 
 #define BUFSIZE 10
@@ -318,19 +379,23 @@ co_properties(void **state)
 	uuid_t			 cuuid3;
 	daos_handle_t		 coh3;
 	uuid_t			 cuuid4;
+	daos_handle_t		 coh4;
+	uuid_t			 cuuid5;
 	uint64_t		 snapshot_max = 128;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
+	daos_prop_t		*prop_query2;
 	struct daos_prop_entry	*entry;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
 	char			*exp_owner;
 	char			*exp_owner_grp;
+	char			 str[37];
 
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	prop = daos_prop_alloc(2);
 	assert_non_null(prop);
@@ -349,7 +414,7 @@ co_properties(void **state)
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
@@ -368,42 +433,35 @@ co_properties(void **state)
 	/* set properties should get the value user set */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_LABEL);
 	if (entry == NULL || strcmp(entry->dpe_str, label) != 0) {
-		print_message("label verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("label verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SNAPSHOT_MAX);
 	if (entry == NULL || entry->dpe_val != snapshot_max) {
-		print_message("snapshot_max verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("snapshot_max verification failed.\n");
 	}
 	/* not set properties should get default value */
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_OFF) {
-		print_message("csum verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("csum verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
 	if (entry == NULL || entry->dpe_val != 32 * 1024) {
-		print_message("csum chunk size verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("csum chunk size verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query,
 				    DAOS_PROP_CO_CSUM_SERVER_VERIFY);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_CSUM_SV_OFF) {
-		print_message("csum server verify verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("csum server verify verification failed.\n");
 	}
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ENCRYPT);
 	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_ENCRYPT_OFF) {
-		print_message("encrypt verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("encrypt verification failed.\n");
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_ACL);
 	if (entry == NULL || entry->dpe_val_ptr == NULL ||
 	    !is_acl_prop_default((struct daos_acl *)entry->dpe_val_ptr)) {
-		print_message("ACL prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("ACL prop verification failed.\n");
 	}
 
 	/* default owner */
@@ -412,8 +470,7 @@ co_properties(void **state)
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_OWNER);
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, exp_owner, DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner prop verification failed.\n");
 	}
 	D_FREE(exp_owner);
 
@@ -425,18 +482,19 @@ co_properties(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, exp_owner_grp,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner-group prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner-group prop verification failed.\n");
 	}
 	D_FREE(exp_owner_grp);
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_CO_SCRUBBER_DISABLED);
 	if (entry == NULL || entry->dpe_val == true) {
-		print_message("scrubber disabled failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("scrubber disabled failed.\n");
 	}
 
 	if (arg->myrank == 0) {
+		uuid_t		 uuid;
+		daos_prop_t	*prop2;
+
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
 
@@ -515,6 +573,43 @@ co_properties(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("destroyed container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
+
+		/* Create a container without label*/
+		print_message("Checking querying a container without a label\n");
+		rc = daos_cont_create(arg->pool.poh, &cuuid5, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		uuid_unparse(cuuid5, str);
+		print_message("step1: created a container without a label. UUID: %s\n", str);
+		rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh4, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("step2: opened a container without a label\n");
+		prop_query2 = get_query_prop_all();
+		assert(prop_query2 != NULL);
+		rc = daos_cont_query(coh4, NULL, prop_query2, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("step3: queried container properties\n");
+		entry = daos_prop_entry_get(prop_query2, DAOS_PROP_CO_LABEL);
+		/* get_query_prop_all() queries all properties, so entry must be not NULL. */
+		assert(entry != NULL);
+		/* entry->dpe_str == NULL means container label is not set. */
+		assert(entry->dpe_str == NULL);
+		print_message("step4: checked container has a label not set\n");
+		daos_prop_free(prop_query2);
+		rc = daos_cont_close(coh4, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("destroyed container UUID: %s\n", str);
+
+		print_message("SUBTEST: checking creation with owner other than current user\n");
+		prop2 = daos_prop_alloc(1);
+		assert_non_null(prop2);
+		prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
+		D_STRNDUP(prop2->dpp_entries->dpe_str, "fakeuser@", 10);
+		assert_non_null(prop2->dpp_entries->dpe_str);
+		rc = daos_cont_create(arg->pool.poh, &uuid, prop2, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+		daos_prop_free(prop2);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
@@ -675,7 +770,7 @@ co_acl(void **state)
 	daos_prop_t		*prop_in;
 	daos_pool_info_t	 info = {0};
 	int			 rc;
-	const char		 exp_owner[] = "fictionaluser@";
+	char			 exp_owner[] = "fictionaluser@";
 	char			 exp_owner_grp[] = "admins@";
 	struct daos_acl		*exp_acl;
 	struct daos_acl		*update_acl = NULL;
@@ -687,11 +782,10 @@ co_acl(void **state)
 	print_message("create container with access props, and verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
-	print_message("CONTACL1: initial non-default ACL/ownership\n");
+	print_message("CONTACL1: initial non-default ACL\n");
 	/*
-	 * Want to set up with a non-default ACL and owner/group.
 	 * This ACL gives the effective user permissions to interact
 	 * with the ACL. This is the bare minimum required to run the tests.
 	 */
@@ -702,27 +796,40 @@ co_acl(void **state)
 	exp_acl = daos_acl_create(NULL, 0);
 	assert_non_null(exp_acl);
 
+	add_ace_with_perms(&exp_acl, DAOS_ACL_OWNER, NULL, DAOS_ACL_PERM_SET_OWNER);
 	add_ace_with_perms(&exp_acl, DAOS_ACL_USER, user,
 			   DAOS_ACL_PERM_GET_ACL | DAOS_ACL_PERM_SET_ACL);
 	add_ace_with_perms(&exp_acl, DAOS_ACL_EVERYONE, NULL,
 			   DAOS_ACL_PERM_READ);
-	assert_rc_equal(daos_acl_cont_validate(exp_acl), 0);
+	assert_rc_equal(daos_acl_validate(exp_acl), 0);
 
 	/*
-	 * Set up the container with non-default owner/group and ACL values
+	 * Set up the container with non-default ACL
 	 */
-	prop_in = daos_prop_alloc(3);
+	prop_in = daos_prop_alloc(1);
 	assert_non_null(prop_in);
-	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP_S(prop_in->dpp_entries[0].dpe_str, exp_owner);
-	prop_in->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-	D_STRNDUP_S(prop_in->dpp_entries[1].dpe_str, exp_owner_grp);
-	prop_in->dpp_entries[2].dpe_type = DAOS_PROP_CO_ACL;
-	prop_in->dpp_entries[2].dpe_val_ptr = daos_acl_dup(exp_acl);
+	prop_in->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	prop_in->dpp_entries[0].dpe_val_ptr = daos_acl_dup(exp_acl);
 
+	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop_in);
+	assert_success(rc);
+
+	/* Update ownership for the rest of the test */
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_set_owner(arg->coh, exp_owner, exp_owner_grp, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_close(arg->coh, NULL);
+	arg->coh = DAOS_HDL_INVAL;
+	assert_rc_equal(rc, 0);
+
+	/* reconnect with the new permissions */
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop_in);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
@@ -764,7 +871,7 @@ co_acl(void **state)
 	assert_rc_equal(rc, 0);
 	ace->dae_allow_perms |= DAOS_ACL_PERM_SET_OWNER;
 
-	assert_rc_equal(daos_acl_cont_validate(exp_acl), 0);
+	assert_rc_equal(daos_acl_validate(exp_acl), 0);
 
 	rc = daos_cont_overwrite_acl(arg->coh, exp_acl, NULL);
 	assert_rc_equal(rc, 0);
@@ -785,7 +892,7 @@ co_acl(void **state)
 	add_ace_with_perms(&update_acl, DAOS_ACL_GROUP, "testgroup2@",
 			   DAOS_ACL_PERM_READ);
 
-	assert_rc_equal(daos_acl_cont_validate(update_acl), 0);
+	assert_rc_equal(daos_acl_validate(update_acl), 0);
 
 	/* Update expected ACL to include changes */
 	ace = daos_acl_get_next_ace(update_acl, NULL);
@@ -857,11 +964,11 @@ co_set_prop(void **state)
 	print_message("create container with default props and modify them.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	par_barrier(PAR_COMM_WORLD);
 
@@ -893,8 +1000,7 @@ co_set_prop(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, exp_label,
 		    DAOS_PROP_LABEL_MAX_LEN)) {
-		print_message("Label prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Label prop verification failed.\n");
 	}
 
 	print_message("Checking owner\n");
@@ -902,8 +1008,7 @@ co_set_prop(void **state)
 	if (entry == NULL || entry->dpe_str == NULL ||
 	    strncmp(entry->dpe_str, exp_owner,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
-		print_message("Owner prop verification failed.\n");
-		assert_int_equal(rc, 1); /* fail the test */
+		fail_msg("Owner prop verification failed.\n");
 	}
 
 	par_barrier(PAR_COMM_WORLD);
@@ -923,7 +1028,7 @@ co_create_access_denied(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Try to create container on pool with no create perms\n");
 
@@ -961,7 +1066,7 @@ co_destroy_access_denied(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/*
 	 * Pool doesn't give the owner delete cont privs. For the pool, write
@@ -980,7 +1085,7 @@ co_destroy_access_denied(void **state)
 	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
 		rc = test_setup_next_step((void **)&arg, NULL, pool_prop,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		print_message("Try to delete container where pool and cont "
@@ -1036,7 +1141,7 @@ co_destroy_allowed_by_pool(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* pool gives the owner all privs, including delete cont */
 	pool_prop = get_daos_prop_with_owner_acl_perms(DAOS_ACL_PERM_POOL_ALL,
@@ -1050,7 +1155,7 @@ co_destroy_allowed_by_pool(void **state)
 	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
 		rc = test_setup_next_step((void **)&arg, NULL, pool_prop,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		print_message("Deleting container with only pool-level "
@@ -1068,28 +1173,52 @@ co_destroy_allowed_by_pool(void **state)
 }
 
 static void
+create_cont_with_user_perms(test_arg_t *arg, uint64_t perms)
+{
+	struct daos_acl	*acl = NULL;
+	daos_handle_t	 coh;
+	int		 rc = 0;
+
+	while (!rc && arg->setup_state != SETUP_CONT_CREATE)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/* remove current user's ownership, so they don't have owner perms */
+	rc = daos_cont_set_owner(coh, "nobody@", NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	acl = get_daos_acl_with_user_perms(perms);
+	rc = daos_cont_overwrite_acl(coh, acl, NULL);
+	assert_rc_equal(rc, 0);
+	daos_acl_free(acl);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static void
 expect_cont_open_access(test_arg_t *arg, uint64_t perms, uint64_t flags,
 			int exp_result)
 {
-	daos_prop_t	*prop;
-	int		 rc = 0;
+	int	rc = 0;
+
+	create_cont_with_user_perms(arg, perms);
 
 	arg->cont_open_flags = flags;
-	prop = get_daos_prop_with_user_acl_perms(perms);
-
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
 
 	if (arg->myrank == 0) {
 		/* Make sure we actually got to the container open step */
 		assert_int_equal(arg->setup_state, SETUP_CONT_CONNECT);
-		assert_int_equal(rc, exp_result);
+		assert_rc_equal(rc, exp_result);
 	}
 
 	/* Cleanup */
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
-	daos_prop_free(prop);
 }
 
 static void
@@ -1101,13 +1230,17 @@ co_open_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("cont ACL gives the user no permissions\n");
 	expect_cont_open_access(arg, 0, DAOS_COO_RO, -DER_NO_PERM);
 
 	print_message("cont ACL gives the user RO, they want RW\n");
 	expect_cont_open_access(arg, DAOS_ACL_PERM_READ, DAOS_COO_RW,
+				-DER_NO_PERM);
+
+	print_message("cont ACL gives the user RO + DEL, they want RW\n");
+	expect_cont_open_access(arg, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_DEL_CONT, DAOS_COO_RW,
 				-DER_NO_PERM);
 
 	print_message("cont ACL gives the user RO, they want RO\n");
@@ -1133,24 +1266,21 @@ static void
 expect_co_query_access(test_arg_t *arg, daos_prop_t *query_prop,
 		       uint64_t perms, int exp_result)
 {
-	daos_prop_t		*cont_prop;
 	daos_cont_info_t	 info;
 	int			 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	arg->cont_open_flags = DAOS_COO_RO;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_query(arg->coh, &info, query_prop, NULL);
 		assert_rc_equal(rc, exp_result);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1178,7 +1308,7 @@ co_query_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Not asking for any props\n");
 	expect_co_query_access(arg, NULL,
@@ -1320,17 +1450,15 @@ co_query_access(void **state)
 static void
 expect_co_get_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 {
-	daos_prop_t		*cont_prop;
-	daos_prop_t		*acl_prop;
-	int			 rc = 0;
+	daos_prop_t	*acl_prop;
+	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	arg->cont_open_flags = DAOS_COO_RO;
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_get_acl(arg->coh, &acl_prop, NULL);
@@ -1340,7 +1468,6 @@ expect_co_get_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 			daos_prop_free(acl_prop);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1354,7 +1481,7 @@ co_get_acl_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("No get-ACL permissions\n");
 	expect_co_get_acl_access(arg,
@@ -1372,22 +1499,19 @@ static void
 expect_co_set_prop_access(test_arg_t *arg, daos_prop_t *prop, uint64_t perms,
 			  int exp_result)
 {
-	daos_prop_t	*cont_prop;
-	int		 rc = 0;
+	int	rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_set_prop(arg->coh, prop, NULL);
 		assert_rc_equal(rc, exp_result);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1479,7 +1603,7 @@ co_set_prop_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/*
 	 * ACL modification through set-prop only works if you have set-ACL
@@ -1599,16 +1723,14 @@ co_set_prop_access(void **state)
 static void
 expect_co_overwrite_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 {
-	daos_prop_t	*cont_prop;
 	struct daos_acl	*acl = NULL;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		acl = get_daos_acl_with_owner_perms(DAOS_ACL_PERM_CONT_ALL);
@@ -1619,7 +1741,6 @@ expect_co_overwrite_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 		daos_acl_free(acl);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1627,16 +1748,14 @@ expect_co_overwrite_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 static void
 expect_co_update_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 {
-	daos_prop_t	*cont_prop;
 	struct daos_acl	*acl = NULL;
 	int		 rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		acl = get_daos_acl_with_owner_perms(DAOS_ACL_PERM_CONT_ALL);
@@ -1647,7 +1766,6 @@ expect_co_update_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 		daos_acl_free(acl);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1655,22 +1773,19 @@ expect_co_update_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 static void
 expect_co_delete_acl_access(test_arg_t *arg, uint64_t perms, int exp_result)
 {
-	daos_prop_t	*cont_prop;
-	int		 rc = 0;
+	int	rc = 0;
 
-	cont_prop = get_daos_prop_with_user_acl_perms(perms);
+	create_cont_with_user_perms(arg, perms);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL,
-					  cont_prop);
-	assert_int_equal(rc, 0);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, NULL);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_delete_acl(arg->coh, DAOS_ACL_OWNER, NULL, NULL);
 		assert_rc_equal(rc, exp_result);
 	}
 
-	daos_prop_free(cont_prop);
 	test_teardown_cont_hdl(arg);
 	test_teardown_cont(arg);
 }
@@ -1688,7 +1803,7 @@ co_modify_acl_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Overwrite ACL denied with no set-ACL perm\n");
 	expect_co_overwrite_acl_access(arg, no_set_acl_perm,
@@ -1765,7 +1880,7 @@ co_set_owner(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/*
 	 * To start with, the euid/egid are the owner user/group.
@@ -1834,7 +1949,7 @@ expect_co_set_owner_access(test_arg_t *arg, d_string_t user, d_string_t grp,
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_set_owner(arg->coh, user, grp, NULL);
@@ -1857,7 +1972,7 @@ co_set_owner_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Set owner user denied with no set-owner perm\n");
 	expect_co_set_owner_access(arg, "user@", NULL, no_perm,
@@ -1938,12 +2053,12 @@ co_owner_implicit_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
 					  owner_deny_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Owner has no permissions for non-ACL access\n");
 
@@ -2014,7 +2129,7 @@ expect_co_set_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
@@ -2047,7 +2162,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
@@ -2085,7 +2200,7 @@ expect_co_list_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL,
 					  cont_prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	if (arg->myrank == 0) {
 		rc = daos_cont_list_attr(arg->coh, buf, &bufsize, NULL);
@@ -2106,7 +2221,7 @@ co_attribute_access(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	print_message("Set attr denied with no write-data perms\n");
 	expect_co_set_attr_access(arg,
@@ -2226,7 +2341,7 @@ co_rf_simple(void **state)
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	prop = daos_prop_alloc(1);
 	assert_non_null(prop);
@@ -2235,34 +2350,41 @@ co_rf_simple(void **state)
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
 	if (arg->myrank == 0) {
-		rc = daos_cont_query(arg->coh, &info, NULL, NULL);
+		daos_prop_t	*prop_out = daos_prop_alloc(1);
+
+		assert_non_null(prop_out);
+		prop_out->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+
+		rc = daos_cont_query(arg->coh, &info, prop_out, NULL);
 		assert_rc_equal(rc, 0);
-		assert_int_equal(info.ci_redun_fac, DAOS_PROP_CO_REDUN_RF2);
+		assert_int_equal(prop_out->dpp_entries[0].dpe_val, DAOS_PROP_CO_REDUN_RF2);
+
+		daos_prop_free(prop_out);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2280,10 +2402,12 @@ co_rf_simple(void **state)
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 5);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 4);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 5, -1);
+		assert_success(rc);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 4, -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2299,7 +2423,7 @@ co_rf_simple(void **state)
 
 	/* IO testing */
 	io_oid = daos_test_oid_gen(arg->coh, OC_RP_4G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	d_iov_set(&dkey, "dkey", strlen("dkey"));
@@ -2320,9 +2444,11 @@ co_rf_simple(void **state)
 			     NULL);
 	assert_rc_equal(rc, 0);
 
-	if (arg->myrank == 0)
-		daos_exclude_server(arg->pool.pool_uuid, arg->group,
-				    arg->dmg_config, 3);
+	if (arg->myrank == 0) {
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, 3, -1);
+		assert_success(rc);
+	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2344,20 +2470,23 @@ co_rf_simple(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		test_rebuild_wait(&arg, 1);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 3);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 4);
-		daos_reint_server(arg->pool.pool_uuid, arg->group,
-				  arg->dmg_config, 5);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  3, -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  4, -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  5, -1);
+		assert_success(rc);
 		test_rebuild_wait(&arg, 1);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	print_message("obj update should success after re-integrate\n");
+	print_message("obj update should still fail with DER_RF after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
 			     NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, -DER_RF);
 
 	/* clear the UNCLEAN status */
 	rc = daos_cont_status_clear(arg->coh, NULL);
@@ -2383,7 +2512,7 @@ co_rf_simple(void **state)
 	rc = daos_cont_global2local(arg->pool.poh, ghdl, &coh_g2l);
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_close(coh_g2l, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	free(ghdl.iov_buf);
 
 	rc = daos_obj_close(io_oh, NULL);
@@ -2409,7 +2538,7 @@ co_global2local_fail_test(void **state)
 
 	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank, SMALL_POOL_SIZE, 0,
 			NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	rc = daos_cont_local2global(arg->coh, &ghdl);
 	assert_rc_equal(rc, 0);
@@ -2625,7 +2754,7 @@ co_redun_lvl(void **state)
 	print_message("create container with properties, and query/verify.\n");
 	rc = test_setup((void **)&arg, SETUP_POOL_CONNECT, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	prop = daos_prop_alloc(2);
 	assert_non_null(prop);
@@ -2636,7 +2765,7 @@ co_redun_lvl(void **state)
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	/* test 1 - cont rf and obj redundancy */
 	print_message("verify cont rf is set and can be queried ...\n");
@@ -2676,15 +2805,15 @@ co_redun_lvl(void **state)
 
 	print_message("verify cont rf and obj open ...\n");
 	oid = daos_test_oid_gen(arg->coh, OC_SX, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, -DER_INVAL);
 
 	oid = daos_test_oid_gen(arg->coh, OC_EC_2P1G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_3G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	rc = daos_obj_open(arg->coh, oid, DAOS_OO_RW, &oh, NULL);
 	assert_rc_equal(rc, 0);
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2704,8 +2833,12 @@ co_redun_lvl(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS, 0, NULL);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      ranks[0], -1);
+		assert_success(rc);
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+				      ranks[1], -1);
+		assert_success(rc);
 	}
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
@@ -2738,13 +2871,13 @@ co_redun_lvl(void **state)
 		print_message("OC_EC_4P1G1 obj layout create should fail if ndom < 5\n");
 		io_oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
 		/* grp_size > ndom, should fail in dc_obj_open()->obj_layout_create */
-		rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+		rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 	}
 
 	print_message("obj update should success before RF broken\n");
 	io_oid = daos_test_oid_gen(arg->coh, OC_EC_2P2G1, 0, 0, arg->myrank);
-	rc = daos_obj_open(arg->coh, io_oid, 0, &io_oh, NULL);
+	rc = daos_obj_open(arg->coh, io_oid, DAOS_OO_RW, &io_oh, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
@@ -2752,8 +2885,12 @@ co_redun_lvl(void **state)
 	assert_rc_equal(rc, 0);
 
 	/* exclude one more rank on another NODE dom */
-	if (arg->myrank == 0)
-		daos_exclude_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
+	if (arg->myrank == 0) {
+		rc = dmg_pool_exclude(arg->dmg_config, arg->pool.pool_uuid,
+				      arg->group, ranks[2], -1);
+		assert_success(rc);
+	}
+
 	par_barrier(PAR_COMM_WORLD);
 	rc = daos_cont_query(arg->coh, NULL, prop, NULL);
 	assert_rc_equal(rc, 0);
@@ -2772,16 +2909,22 @@ co_redun_lvl(void **state)
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
 		test_rebuild_wait(&arg, 1);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[2]);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[1]);
-		daos_reint_server(arg->pool.pool_uuid, arg->group, arg->dmg_config, ranks[0]);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[2], -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[1], -1);
+		assert_success(rc);
+		rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid, arg->group,
+					  ranks[0], -1);
+		assert_success(rc);
 		test_rebuild_wait(&arg, 1);
 	}
 	par_barrier(PAR_COMM_WORLD);
 
-	print_message("obj update should success after re-integrate\n");
+	print_message("obj update should still fail with DER_RF after re-integrate\n");
 	rc = daos_obj_update(io_oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
-	assert_rc_equal(rc, 0);
+	assert_rc_equal(rc, -DER_RF);
 
 	rc = daos_obj_close(io_oh, NULL);
 	assert_rc_equal(rc, 0);
@@ -2825,7 +2968,7 @@ out:
 	}
 
 	rc = daos_cont_close(coh_g2l, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	free(ghdl.iov_buf);
 
 	rc = daos_cont_close(coh, NULL);
@@ -2842,8 +2985,9 @@ static void
 co_mdtimes(void **state)
 {
 	test_arg_t	       *arg = *state;
+	daos_prop_t	       *prop = NULL;
+	d_string_t		label;
 	daos_event_t		ev;
-	char			str[37];
 	uint64_t		prev_otime;
 	uint64_t		prev_mtime;
 	daos_handle_t		coh;
@@ -2860,9 +3004,9 @@ co_mdtimes(void **state)
 		assert_rc_equal(rc, 0);
 	}
 
-	print_message("open container (RO_MDSTATS flag)\n");
-	uuid_unparse(arg->co_uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+	D_ASSERT(arg->co_str != NULL);
+	print_message("open container %s (RO_MDSTATS flag)\n", arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -2878,7 +3022,7 @@ co_mdtimes(void **state)
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("open container again (RO_MDSTATS), verify metadata times unchanged\n");
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RO | DAOS_COO_RO_MDSTATS, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -2886,49 +3030,58 @@ co_mdtimes(void **state)
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
 
 	print_message("query container, verify metadata times unchanged\n");
-	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	/* Query for the container label, then open by label from this point */
+	prop = daos_prop_alloc(1);
+	assert_ptr_not_equal(prop, NULL);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	rc = daos_cont_query(coh, &cinfo, prop, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	label = prop->dpp_entries[0].dpe_str;
 
 	print_message("close container\n");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	/* open updates the otime, visible upon subsequent query */
-	print_message("open container again (no special flags), query to see updated otime\n");
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RO, &coh, &cinfo, arg->async ? &ev : NULL);
-	assert_rc_equal(rc, 0);
-	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime == prev_otime);
-	assert_true(cinfo.ci_md_mtime == prev_mtime);
-
-	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	/* open updates the otime and returns updated time in daos_cont_info_t */
+	print_message("open container %s (%s) again (no special flags), confirm updated otime\n",
+		      label, arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh, &cinfo,
+			    arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime == prev_mtime);
 	prev_otime = cinfo.ci_md_otime;
-	print_message("query returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
+
+	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_mtime == prev_mtime);
+	print_message("query also returned updated otime (0x"DF_X64")\n", cinfo.ci_md_otime);
 
 	print_message("close container\n");
 	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
-	print_message("open container again (RW), verify mtime updated (from close)\n");
+	print_message("open container %s (%s) again (RW), verify otime (open) and mtime (close) "
+		      "updated\n", label, arg->co_str);
 	cinfo.ci_md_otime = cinfo.ci_md_mtime = 0;
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh,
 			    &cinfo, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	/* NOTE: otime was updated by cont_open(), visible in next query */
-	assert_true(cinfo.ci_md_otime == prev_otime);
+	assert_true(cinfo.ci_md_otime > prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
+	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("open returned updated mtime (0x"DF_X64")\n", cinfo.ci_md_mtime);
+	print_message("open returned updated otime (0x"DF_X64"), mtime (0x"DF_X64")\n",
+		      cinfo.ci_md_otime, cinfo.ci_md_mtime);
 
 	print_message("create container snapshot, query and verify updated mtime\n");
 	rc = daos_cont_create_snap(coh, &epc, NULL /* name */, arg->async ? &ev : NULL);
@@ -2938,12 +3091,11 @@ co_mdtimes(void **state)
 	rc = daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
-	assert_true(cinfo.ci_md_otime > prev_otime);
+	assert_true(cinfo.ci_md_otime == prev_otime);
 	assert_true(cinfo.ci_md_mtime > prev_mtime);
-	prev_otime = cinfo.ci_md_otime;
 	prev_mtime = cinfo.ci_md_mtime;
-	print_message("created snapshot 0x"DF_X64", query returned updated otime (0x"DF_X64"), "
-		      "updated mtime (0x"DF_X64")\n", epc, cinfo.ci_md_otime, cinfo.ci_md_mtime);
+	print_message("created snapshot 0x"DF_X64", query returned updated mtime (0x"DF_X64")\n",
+		      epc, cinfo.ci_md_mtime);
 
 	print_message("destroy container snapshot, query and verify updated mtime\n");
 	epr.epr_lo = epr.epr_hi = epc;
@@ -2972,6 +3124,435 @@ co_mdtimes(void **state)
 	/* TODO: perform other metadata RW operations, verify mtime updated.
 	 * (attr-set/del, set-prop, update/overwrite/delete-acl)
 	 */
+
+	daos_prop_free(prop);
+}
+
+static void
+co_nhandles(void **state)
+{
+	test_arg_t	       *arg = *state;
+	daos_event_t		ev;
+	const char	       *clbl =  "nhandles_test_cont";
+	uuid_t			cuuid;
+	daos_handle_t		coh;		/* opened on 0, shared to all ranks (nhandles=1) */
+	daos_handle_t		coh2;		/* opened by all ranks (nhandles=num_ranks) */
+	daos_cont_info_t	cinfo;
+	uint32_t		expect_nhandles;
+	int			rc;
+
+	if (!arg->hdl_share && arg->myrank != 0)
+		return;
+
+	if (arg->async) {
+		rc = daos_event_init(&ev, arg->eq, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	expect_nhandles = 1;
+
+	if (arg->myrank == 0) {
+		print_message("creating container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+
+		rc = daos_cont_create_with_label(arg->pool.poh, clbl, NULL,
+						 &cuuid, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		print_message("container created: %s\n", clbl);
+
+		/* Open, and expect 1 handles  */
+		print_message("rank 0: opening container %ssynchronously\n",
+			      arg->async ? "a" : "");
+		cinfo.ci_nhandles = 0;
+		rc = daos_cont_open(arg->pool.poh, clbl, DAOS_COO_RW, &coh,
+				    &cinfo, arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+		print_message("rank 0: container opened (hdl coh)\n");
+	}
+
+	/* handle share coh among all ranks, all ranks call query and verify nhandles */
+	if (arg->hdl_share)
+		handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0 /* verbose */);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks open coh2, then query and verify nhandles (incremented by num ranks) */
+	expect_nhandles += arg->rank_size;
+	print_message("rank %d: open  container (hdl coh2), expect nhandles<=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_open(arg->pool.poh, clbl, DAOS_COO_RO, &coh2,
+			    &cinfo, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	/* ranks independently opening; nhandles will not reach expectation until after barrier */
+	assert_true(cinfo.ci_nhandles <= expect_nhandles);
+	print_message("rank %d: container opened (hdl coh2), nhandles=%d\n", arg->myrank,
+		      cinfo.ci_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("rank %d: query container (hdl coh2), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh2, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks close coh2, then query and verify nhandles (decremented by num ranks) */
+	expect_nhandles -= arg->rank_size;
+	print_message("rank %d: close container (hdl coh2)\n", arg->myrank);
+	rc = daos_cont_close(coh2, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	print_message("rank %d: query container (hdl coh), expect nhandles=%d\n", arg->myrank,
+		      expect_nhandles);
+	cinfo.ci_nhandles = 0;
+	rc = daos_cont_query(coh, &cinfo, NULL, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nhandles, expect_nhandles);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/* all ranks call close on coh (all except rank 0 handles are global2local handles) */
+	print_message("rank %d: close container (hdl coh)\n", arg->myrank);
+	rc = daos_cont_close(coh, arg->async ? &ev : NULL);
+	assert_rc_equal(rc, 0);
+	WAIT_ON_ASYNC(arg, ev);
+
+	par_barrier(PAR_COMM_WORLD);
+
+	/** destroy container */
+	if (arg->myrank == 0) {
+		print_message("destroying container %ssynchronously ...\n",
+			      arg->async ? "a" : "");
+		rc = daos_cont_destroy(arg->pool.poh, clbl, 1 /* force */,
+				       arg->async ? &ev : NULL);
+		assert_rc_equal(rc, 0);
+		WAIT_ON_ASYNC(arg, ev);
+		if (arg->async) {
+			rc = daos_event_fini(&ev);
+			assert_rc_equal(rc, 0);
+		}
+		print_message("container destroyed\n");
+	}
+
+}
+
+static void
+alloc_group_list(uid_t uid, gid_t gid, gid_t **groups, size_t *nr_groups)
+{
+	struct passwd	*pw;
+	int		tmp = 0;
+	int		rc;
+
+	pw = getpwuid(uid);
+	assert_non_null(pw);
+
+	rc = getgrouplist(pw->pw_name, gid, NULL, &tmp);
+	if (rc != -1) {
+		D_PRINT("getting the number of groups failed\n");
+		assert_true(false);
+	}
+
+	*nr_groups = (size_t)tmp;
+	D_ALLOC_ARRAY(*groups, *nr_groups);
+	assert_non_null(*groups);
+
+	rc = getgrouplist(pw->pw_name, gid, *groups, &tmp);
+	assert_true(rc > 0);
+}
+
+static void
+co_get_perms(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_prop_t	*pool_prop = NULL;
+	daos_prop_t	*cont_prop = NULL;
+	uid_t		uid = geteuid();
+	gid_t		gid = getegid();
+	gid_t		*gids;
+	size_t		nr_gids;
+	uint64_t	perms = 0;
+	int		rc;
+
+	alloc_group_list(uid, gid, &gids, &nr_gids);
+
+	print_message("creating container with default ACLs\n");
+	rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("opening container\n");
+	uuid_unparse(arg->co_uuid, arg->co_str);
+	rc = daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW, &arg->coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("querying pool ACL/ownership\n");
+	pool_prop = daos_prop_alloc(3);
+	assert_non_null(pool_prop);
+	pool_prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_ACL;
+	pool_prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_OWNER;
+	pool_prop->dpp_entries[2].dpe_type = DAOS_PROP_PO_OWNER_GROUP;
+	rc = daos_pool_query(arg->pool.poh, NULL, NULL, pool_prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("getting pool permissions for uid %d\n", uid);
+	rc = daos_pool_get_perms(pool_prop, uid, gids, nr_gids, &perms);
+	assert_rc_equal(rc, 0);
+	/* uid running this is the owner */
+	assert_int_equal(perms, DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE);
+
+	print_message("querying container ACL/ownership\n");
+	cont_prop = daos_prop_alloc(3);
+	assert_non_null(cont_prop);
+	cont_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_ACL;
+	cont_prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_OWNER;
+	cont_prop->dpp_entries[2].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+	rc = daos_cont_query(arg->coh, NULL, cont_prop, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("getting cont permissions for uid %d\n", uid);
+	rc = daos_cont_get_perms(cont_prop, uid, gids, nr_gids, &perms);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(perms, DAOS_ACL_PERM_CONT_ALL); /* uid running this is the owner */
+
+	D_FREE(gids);
+	daos_prop_free(pool_prop);
+	daos_prop_free(cont_prop);
+
+	test_teardown_cont_hdl(arg);
+	test_teardown_cont(arg);
+}
+
+static void
+co_exclusive_open(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*label = "exclusive_open";
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_handle_t	 coh_ex;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' ("DF_UUIDF")\n", label, DP_UUID(uuid));
+
+	print_message("SUBTEST: EX conflicts with RO\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EX, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EX conflicts with RW\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EX, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: other handles already exist; shall get "DF_RC"\n",
+		      DP_RC(-DER_BUSY));
+	print_message(" performing a non-exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" trying to perform an exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh_ex, NULL, NULL);
+	assert_rc_equal(rc, -DER_BUSY);
+	print_message(" closing the non-exclusive handle\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: no other handles; shall succeed\n");
+	print_message(" performing an exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh_ex, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: shall prevent other handles ("DF_RC")\n", DP_RC(-DER_BUSY));
+	print_message(" trying to perform a non-exclusive open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, -DER_BUSY);
+	print_message(" closing the exclusive handle\n");
+	rc = daos_cont_close(coh_ex, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+co_evict_hdls(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*label = "evict_hdls";
+	uuid_t		 uuid;
+	daos_handle_t	 coh0;
+	daos_handle_t	 coh1;
+	daos_handle_t	 coh2;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, &uuid, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("created container '%s' ("DF_UUIDF")\n", label, DP_UUID(uuid));
+
+	print_message("SUBTEST: EVICT conflicts with EVICT_ALL\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT | DAOS_COO_EVICT_ALL,
+			    &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EX|EVICT is not supported\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT, &coh0, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EVICT no handle; shall succeed\n");
+	print_message(" performing an RO|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT my own exclusive handle; shall succeed\n");
+	print_message(" performing an EX open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the evicted EX handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	/*
+	 * Closing an evicted handle returns zero. See "already closed" in
+	 * cont_close.
+	 */
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RW|EVICT handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an RW|EVICT open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT, &coh0, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RW|EVICT handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: RO|EVICT_ALL and RW|EVICT_ALL are not supported\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO | DAOS_COO_EVICT_ALL, &coh0, NULL,
+			    NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW | DAOS_COO_EVICT_ALL, &coh0, NULL,
+			    NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("SUBTEST: EVICT_ALL no existing handles; shall succeed\n");
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT_ALL my own exclusive handle; shall succeed\n");
+	print_message(" performing an EX open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the EX handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the EX|EVICT_ALL handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("SUBTEST: EVICT_ALL my own RO and RW handles; shall succeed\n");
+	print_message(" performing an RO open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RO, &coh1, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" performing an RW open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh2, &info, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 2);
+	print_message(" performing an EX|EVICT_ALL open\n");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_EX | DAOS_COO_EVICT_ALL, &coh0, &info,
+			    NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(info.ci_nhandles, 1);
+	print_message(" closing the RW handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh2, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the RO handle to avoid local resource leaks\n");
+	rc = daos_cont_close(coh1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message(" closing the EX|EVICT_ALL handle\n");
+	rc = daos_cont_close(coh0, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container '%s'\n", label);
+	rc = daos_cont_destroy(arg->pool.poh, label, 0 /* force */, NULL);
+	assert_rc_equal(rc, 0);
 }
 
 static int
@@ -2998,8 +3579,9 @@ setup(void **state)
 }
 
 static const struct CMUnitTest co_tests[] = {
-    {"CONT1: create/open/close/destroy container", co_create, async_disable, test_case_teardown},
-    {"CONT2: create/open/close/destroy container (async)", co_create, async_enable,
+    {"CONT1: create/open/query/close/destroy container", co_create, async_disable,
+     test_case_teardown},
+    {"CONT2: create/open/query/close/destroy container (async)", co_create, async_enable,
      test_case_teardown},
     {"CONT3: container handle local2glocal and global2local", co_create, hdl_share_enable,
      test_case_teardown},
@@ -3039,6 +3621,11 @@ static const struct CMUnitTest co_tests[] = {
      test_case_teardown},
     {"CONT30: daos_cont_global2local failure test", co_global2local_fail_test, NULL,
      test_case_teardown},
+    {"CONT31: container open/query number of handles (hdl_share)", co_nhandles, hdl_share_enable,
+     test_case_teardown},
+    {"CONT32: container get perms", co_get_perms, NULL, test_case_teardown},
+    {"CONT33: exclusive open", co_exclusive_open, NULL, test_case_teardown},
+    {"CONT34: evict handles", co_evict_hdls, NULL, test_case_teardown},
 };
 
 int

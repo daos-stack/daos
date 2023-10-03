@@ -69,7 +69,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 		attr.da_props->dpp_entries[1].dpe_val = DAOS_PROP_CO_REDUN_RANK;
 
 		rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, &coh, &dfs);
-		assert_int_equal(rc, 0);
+		assert_success(rc);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
 		daos_prop_free(attr.da_props);
@@ -208,10 +208,9 @@ out:
 		char	str[37];
 
 		uuid_unparse(cuuid, str);
-		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(cuuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	}
 	par_barrier(PAR_COMM_WORLD);
 }
@@ -695,7 +694,7 @@ dfs_test_cont_atomic(void **state)
 		print_message("one rank Created POSIX Container dfs_par_test_cont\n");
 
 	rc = daos_cont_open(arg->pool.poh, "dfs_par_test_cont", DAOS_COO_RW, &coh, &co_info, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
 	assert_int_equal(rc, 0);
@@ -703,12 +702,12 @@ dfs_test_cont_atomic(void **state)
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, "dfs_par_test_cont", 1, NULL);
-		assert_int_equal(rc, 0);
+		rc = daos_cont_destroy(arg->pool.poh, "dfs_par_test_cont", 0, NULL);
+		assert_success(rc);
 		print_message("Destroyed POSIX Container dfs_par_test_cont\n");
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -898,17 +897,16 @@ atomicity_test_helper(test_arg_t *arg, int rf)
 	rc = dfs_umount(dfs);
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
-	assert_rc_equal(rc, 0);
+	assert_success(rc);
 
 	par_barrier(PAR_COMM_WORLD);
 	if (arg->myrank == 0) {
 		char str[37];
 
 		uuid_unparse(cuuid, str);
-		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(cuuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(cuuid));
 	}
 	par_barrier(PAR_COMM_WORLD);
 }
@@ -1008,10 +1006,9 @@ dfs_teardown(void **state)
 		char	str[37];
 
 		uuid_unparse(co_uuid, str);
-		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
 		assert_rc_equal(rc, 0);
-		printf("Destroyed DFS Container "DF_UUIDF"\n",
-		       DP_UUID(co_uuid));
+		printf("Destroyed DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
 	par_barrier(PAR_COMM_WORLD);
 

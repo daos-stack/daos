@@ -52,7 +52,7 @@ void   chk__check_report__free_unpacked
   assert(message->base.descriptor == &chk__check_report__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
+static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[18] =
 {
   {
     "seq",
@@ -139,8 +139,20 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "cont_uuid",
+    "pool_label",
     8,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Chk__CheckReport, pool_label),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "cont_uuid",
+    9,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -151,8 +163,20 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
+    "cont_label",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Chk__CheckReport, cont_label),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
     "objid",
-    9,
+    11,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -164,7 +188,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "dkey",
-    10,
+    12,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -176,7 +200,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "akey",
-    11,
+    13,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -188,7 +212,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "timestamp",
-    12,
+    14,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -200,7 +224,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "msg",
-    13,
+    15,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
@@ -212,7 +236,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "act_choices",
-    14,
+    16,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_ENUM,
     offsetof(Chk__CheckReport, n_act_choices),
@@ -224,7 +248,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "act_details",
-    15,
+    17,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
     offsetof(Chk__CheckReport, n_act_details),
@@ -236,7 +260,7 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
   {
     "act_msgs",
-    16,
+    18,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_STRING,
     offsetof(Chk__CheckReport, n_act_msgs),
@@ -248,27 +272,29 @@ static const ProtobufCFieldDescriptor chk__check_report__field_descriptors[16] =
   },
 };
 static const unsigned chk__check_report__field_indices_by_name[] = {
-  13,   /* field[13] = act_choices */
-  14,   /* field[14] = act_details */
-  15,   /* field[15] = act_msgs */
+  15,   /* field[15] = act_choices */
+  16,   /* field[16] = act_details */
+  17,   /* field[17] = act_msgs */
   2,   /* field[2] = action */
-  10,   /* field[10] = akey */
+  12,   /* field[12] = akey */
   1,   /* field[1] = class */
-  7,   /* field[7] = cont_uuid */
-  9,   /* field[9] = dkey */
-  12,   /* field[12] = msg */
-  8,   /* field[8] = objid */
+  9,   /* field[9] = cont_label */
+  8,   /* field[8] = cont_uuid */
+  11,   /* field[11] = dkey */
+  14,   /* field[14] = msg */
+  10,   /* field[10] = objid */
+  7,   /* field[7] = pool_label */
   6,   /* field[6] = pool_uuid */
   4,   /* field[4] = rank */
   3,   /* field[3] = result */
   0,   /* field[0] = seq */
   5,   /* field[5] = target */
-  11,   /* field[11] = timestamp */
+  13,   /* field[13] = timestamp */
 };
 static const ProtobufCIntRange chk__check_report__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 16 }
+  { 0, 18 }
 };
 const ProtobufCMessageDescriptor chk__check_report__descriptor =
 {
@@ -278,7 +304,7 @@ const ProtobufCMessageDescriptor chk__check_report__descriptor =
   "Chk__CheckReport",
   "chk",
   sizeof(Chk__CheckReport),
-  16,
+  18,
   chk__check_report__field_descriptors,
   chk__check_report__field_indices_by_name,
   1,  chk__check_report__number_ranges,
@@ -532,16 +558,18 @@ static const ProtobufCEnumValue chk__check_scan_phase__enum_values_by_number[11]
   { "CSP_DTX_RESYNC", "CHK__CHECK_SCAN_PHASE__CSP_DTX_RESYNC", 6 },
   { "CSP_OBJ_SCRUB", "CHK__CHECK_SCAN_PHASE__CSP_OBJ_SCRUB", 7 },
   { "CSP_REBUILD", "CHK__CHECK_SCAN_PHASE__CSP_REBUILD", 8 },
-  { "OSP_AGGREGATION", "CHK__CHECK_SCAN_PHASE__OSP_AGGREGATION", 9 },
-  { "DSP_DONE", "CHK__CHECK_SCAN_PHASE__DSP_DONE", 10 },
+  { "CSP_AGGREGATION", "CHK__CHECK_SCAN_PHASE__CSP_AGGREGATION", 9 },
+  { "CSP_DONE", "CHK__CHECK_SCAN_PHASE__CSP_DONE", 10 },
 };
 static const ProtobufCIntRange chk__check_scan_phase__value_ranges[] = {
 {0, 0},{0, 11}
 };
 static const ProtobufCEnumValueIndex chk__check_scan_phase__enum_values_by_name[11] =
 {
+  { "CSP_AGGREGATION", 9 },
   { "CSP_CONT_CLEANUP", 5 },
   { "CSP_CONT_LIST", 4 },
+  { "CSP_DONE", 10 },
   { "CSP_DTX_RESYNC", 6 },
   { "CSP_OBJ_SCRUB", 7 },
   { "CSP_POOL_CLEANUP", 3 },
@@ -549,8 +577,6 @@ static const ProtobufCEnumValueIndex chk__check_scan_phase__enum_values_by_name[
   { "CSP_POOL_MBS", 2 },
   { "CSP_PREPARE", 0 },
   { "CSP_REBUILD", 8 },
-  { "DSP_DONE", 10 },
-  { "OSP_AGGREGATION", 9 },
 };
 const ProtobufCEnumDescriptor chk__check_scan_phase__descriptor =
 {

@@ -105,8 +105,10 @@ struct ds_rsvc {
 	char		       *s_db_path;
 	uuid_t			s_db_uuid;
 	int			s_ref;
+	uint32_t		s_gen;
 	ABT_mutex		s_mutex;	/* for the following members */
 	bool			s_stop;
+	bool			s_destroy;	/* when putting last ref */
 	uint64_t		s_term;		/**< leader term */
 	enum ds_rsvc_state	s_state;
 	ABT_cond		s_state_cv;
@@ -173,5 +175,6 @@ int ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 size_t ds_rsvc_get_md_cap(void);
 
 void ds_rsvc_request_map_dist(struct ds_rsvc *svc);
+void ds_rsvc_wait_map_dist(struct ds_rsvc *svc);
 
 #endif /* DAOS_SRV_RSVC_H */

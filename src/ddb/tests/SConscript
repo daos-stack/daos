@@ -1,10 +1,10 @@
 # pylint: disable-next=wrong-spelling-in-comment
 """Build tests"""
-import daos_build
+
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs', 'ddblib')
+    Import('env', 'prereqs')
 
     denv = env.Clone()
 
@@ -21,10 +21,10 @@ def scons():
     # Add include directory for vos internal headers
     denv.AppendUnique(CPPPATH=[Dir('../../vos/').srcnode()])
     denv.AppendUnique(CPPPATH=[Dir('../../vos/')])
-    denv.AppendUnique(CPPDEFINES='_GNU_SOURCE') # for fallocate
+    denv.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
     libs = ['vos', 'daos_common_pmem', 'abt', 'gurt', 'uuid', 'bio', 'cart',
-            'cmocka']
+            'cmocka', 'ddb']
     # spdk libraries
     libs += ['spdk_event', 'spdk_log']
     libs += ['spdk_bdev', 'spdk_blob', 'spdk_blob_bdev', 'spdk_json']
@@ -40,14 +40,14 @@ def scons():
            'ddb_commands_tests.c',
            'ddb_main_tests.c',
            'ddb_parse_tests.c',
+           'ddb_path_tests.c',
            'ddb_test_driver.c',
            'ddb_vos_tests.c',
            'ddb_commands_print_tests.c']
-    ddb_tests = daos_build.program(denv, 'ddb_tests',
-                                   [ddblib, src],
-                                   LIBS=libs)
+    ddb_tests = denv.d_program('ddb_tests', [src], LIBS=libs)
 
     denv.Install('$PREFIX/bin/', ddb_tests)
+
 
 if __name__ == "SCons.Script":
     scons()

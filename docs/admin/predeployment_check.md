@@ -155,6 +155,16 @@ with all the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
+### Firewall
+
+Some distributions install a firewall as part of the base OS installation. DAOS uses port 10001
+(or whatever is configured as the `port:` in the configuration files in /etc/daos)
+for its management service. If this port is blocked by firewall rules, neither `dmg` nor the
+`daos_agent` on a remote node will be able to contact the DAOS server(s).
+
+Either configure the firewall to allow traffic for this port, or disable the firewall
+(for example, by running `systemctl stop firewalld; systemctl disable firewalld`).
+
 ## Install from Source
 
 When DAOS is installed from source (and not from pre-built packages), extra manual
@@ -272,6 +282,9 @@ $ sudo ln -s $daospath/include \
            /usr/share/spdk/include
 ```
 
+For convenience, the `utils/setup_daos_server_helper.sh` script may be used to automate the steps
+described above.
+
 !!! note
     The RPM installation is preferred for production scenarios. Manual
     installation is most appropriate for development and predeployment
@@ -279,48 +292,58 @@ $ sudo ln -s $daospath/include \
 
 ### Memory Lock Limits
 
-Low ulimit for memlock can cause SPDK to fail and emit the following error:
+Several components of the DAOS software stack may require to increase the
+`RLIMIT_MEMLOCK` limit from its system default.
+
+On the DAOS servers, a low ulimit for `memlock` can cause SPDK to fail and emit the following error:
 
 ```bash
-daos_engine:1 EAL: cannot set up DMA remapping, error 12 (Cannot allocate
-    memory)
+daos_engine:1 EAL: cannot set up DMA remapping, error 12 (Cannot allocate memory)
 ```
 
-The memlock limit only needs to be manually adjusted when `daos_server` is not
-running as a systemd service. Default ulimit settings vary between OSes.
+On both DAOS servers and DAOS clients, the fabric stack (libfabric/verbs, UCX, ...)
+also needs some amount of memlock'ed address space. For a large number of clients
+and/or a large number of targets per engine, the default memlock limits may cause
+failures.
 
-For RPM installations, the service will typically be launched by systemd and
-the limit is pre-set to unlimited in the `daos_server.service`
-[unit file](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+For RPM installations, the `daos_server` and `daos_agent` services will typically be
+launched by `systemd` and its `LimitMEMLOCK` limit is set to `infinity` in the
+[`daos_server.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_server.service)
+and
+[`daos_agent.service`](https://github.com/daos-stack/daos/blob/master/utils/systemd/daos_agent.service)
+unit files.
+(Note that values set in `/etc/security/limits.conf` are ignored by services
+launched through `systemd`.)
 
-Note that values set in `/etc/security/limits.conf` are ignored by services
-launched by systemd.
+When `daos_server` and/or `daos_agent` are not run as a `systemd` service,
+the `memlock` ulimit should be manually set to unlimited. This applies to both
+RPM installations when `systemd` is not used, as well as to non-RPM installations
+(including source builds) where `daos_server` and/or `daos_agent` are launched
+directly from the commandline.
 
-For non-RPM installations where `daos_server` is launched directly from the
-commandline (including source builds), limits should be adjusted in
-`/etc/security/limits.conf` as per
+Limits should be adjusted in `/etc/security/limits.conf` as per
 [this article](https://access.redhat.com/solutions/61334) (which is a RHEL
-specific document but the instructions apply to most Linux distributions).
+specific document, but the instructions apply to most Linux distributions).
 
 ### Memory mapped areas
 
 The DAOS engine heavily uses mmap(2) to access persistent memory and to
 allocate stacks for asynchronous request processing via Argobots.
-The Linux kernel imposes a maximum limit (i.e. vm.max_map_count) on the
+The Linux kernel imposes a maximum limit (i.e. `vm.max_map_count`) on the
 number of mmap regions that a process can create.
 
-Low max number of per-process mapped areas (vm.max_map_count) can cause ULT
+Low max number of per-process mapped areas (`vm.max_map_count`) can cause ULT
 stack allocation to fall-back from DAOS mmap()'ed way into Argobots preferred
 allocation method.
 
-vm.max_map_count default value (65530) needs to be bumped to a much more higher
+The `vm.max_map_count` default value (65530) needs to be bumped to a much more higher
 value (1M) to better fit with the DAOS needs for the expected huge number of
 concurrent ULTs if we want all their stacks to be mmap()'ed.
 
-For RPM installations, vm.max_map_count is raised through installed
+For RPM installations, `vm.max_map_count` is raised through installed
 `/etc/sysctl.d/10-daos_server.conf` file.
 
-For non-RPM installations, vm.max_map_count may need to be bumped (usual default
+For non-RPM installations, `vm.max_map_count` may need to be bumped (usual default
 of 65530 is too low for non-testing configurations), and the best way to do
 so is to copy `utils/rpms/10-daos_server.conf` into `/etc/sysctl.d/`
 to apply the setting automatically on boot.

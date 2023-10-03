@@ -20,13 +20,13 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestBackend_substituteVMDAddresses(t *testing.T) {
-	const (
-		vmdAddr         = "0000:05:05.5"
-		vmdBackingAddr1 = "050505:01:00.0"
-		vmdBackingAddr2 = "050505:03:00.0"
-	)
+const (
+	vmdAddr         = "0000:05:05.5"
+	vmdBackingAddr1 = "050505:01:00.0"
+	vmdBackingAddr2 = "050505:03:00.0"
+)
 
+func TestBackend_substituteVMDAddresses(t *testing.T) {
 	for name, tc := range map[string]struct {
 		inAddrs     *hardware.PCIAddressSet
 		bdevCache   *storage.BdevScanResponse
@@ -106,7 +106,7 @@ func TestBackend_substituteVMDAddresses(t *testing.T) {
 }
 
 func TestBackend_vmdFilterAddresses(t *testing.T) {
-	testNrHugePages := 42
+	testNrHugepages := 42
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 
@@ -120,7 +120,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 	}{
 		"no filters": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 			inVmdAddrs:   mockAddrList(1, 2),
@@ -128,7 +128,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses allowed": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2),
 			},
@@ -137,7 +137,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses not allowed": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2),
 			},
@@ -145,7 +145,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses partially allowed": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1),
 			},
@@ -154,7 +154,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses blocked": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(1, 2),
 			},
@@ -162,7 +162,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses not blocked": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(1, 2),
 			},
@@ -172,7 +172,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses partially blocked": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(1),
 			},
@@ -181,7 +181,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 		},
 		"addresses partially allowed and partially blocked": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2),
 				PCIBlockList:  mockAddrListStr(1),
@@ -189,9 +189,43 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 			inVmdAddrs:   mockAddrList(3, 2, 1),
 			expAllowList: mockAddrList(2),
 		},
+		"vmd backing devices allowed": {
+			inReq: &storage.BdevPrepareRequest{
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList: hardware.MustNewPCIAddressSet(
+					vmdBackingAddr1, vmdBackingAddr2).String(),
+			},
+			inVmdAddrs:   hardware.MustNewPCIAddressSet(vmdAddr, test.MockPCIAddr(1)),
+			expAllowList: hardware.MustNewPCIAddressSet(vmdAddr),
+		},
+		"vmd backing devices blocked": {
+			inReq: &storage.BdevPrepareRequest{
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIBlockList: hardware.MustNewPCIAddressSet(
+					vmdBackingAddr1, vmdBackingAddr2).String(),
+			},
+			inVmdAddrs:   hardware.MustNewPCIAddressSet(vmdAddr, test.MockPCIAddr(1)),
+			expAllowList: hardware.MustNewPCIAddressSet(test.MockPCIAddr(1)),
+		},
+		"vmd backing devices allowed and blocked": {
+			inReq: &storage.BdevPrepareRequest{
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList: hardware.MustNewPCIAddressSet(
+					vmdBackingAddr1, vmdBackingAddr2, test.MockPCIAddr(1)).String(),
+				PCIBlockList: hardware.MustNewPCIAddressSet(vmdBackingAddr2).String(),
+			},
+			inVmdAddrs:   hardware.MustNewPCIAddressSet(vmdAddr, test.MockPCIAddr(1)),
+			expAllowList: hardware.MustNewPCIAddressSet(test.MockPCIAddr(1)),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			allowList, blockList, gotErr := vmdFilterAddresses(tc.inReq, tc.inVmdAddrs)
+			log, buf := logging.NewTestLogger(name)
+			defer test.ShowBufferOnFailure(t, buf)
+
+			allowList, blockList, gotErr := vmdFilterAddresses(log, tc.inReq, tc.inVmdAddrs)
 			test.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -215,7 +249,7 @@ func TestBackend_vmdFilterAddresses(t *testing.T) {
 }
 
 func TestBackend_updatePrepareRequest(t *testing.T) {
-	testNrHugePages := 42
+	testNrHugepages := 42
 	usrCurrent, _ := user.Current()
 	username := usrCurrent.Username
 
@@ -227,18 +261,18 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 	}{
 		"vmd not enabled": {
 			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 			expOutReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 		},
 		"vmd enabled; vmd detection fails": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 			detectVMD: func() (*hardware.PCIAddressSet, error) { return nil, errors.New("test") },
@@ -247,19 +281,19 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 		"vmd enabled; no vmds detected": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 			detectVMD: func() (*hardware.PCIAddressSet, error) { return nil, nil },
 			expOutReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 		},
 		"vmd enabled; vmds detected": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 			},
 			detectVMD: func() (*hardware.PCIAddressSet, error) {
@@ -267,7 +301,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 			},
 			expOutReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2),
 			},
@@ -275,7 +309,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 		"vmd enabled; vmds detected; some in allow list": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  test.MockPCIAddr(1),
 			},
@@ -284,7 +318,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 			},
 			expOutReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  test.MockPCIAddr(1),
 			},
@@ -292,7 +326,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 		"vmd enabled; vmds detected; some in block list": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  test.MockPCIAddr(1),
 			},
@@ -301,7 +335,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 			},
 			expOutReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  test.MockPCIAddr(2),
 			},
@@ -309,7 +343,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 		"vmd enabled; vmds detected; all in block list; vmd disabled": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(1, 2),
 			},
@@ -317,7 +351,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 				return mockAddrList(1, 2), nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIBlockList:  mockAddrListStr(1, 2),
 			},
@@ -325,7 +359,7 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 		"vmd enabled; vmds detected; none in allow list; vmd disabled": {
 			inReq: &storage.BdevPrepareRequest{
 				EnableVMD:     true,
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList:  mockAddrListStr(1, 2),
 			},
@@ -333,11 +367,49 @@ func TestBackend_updatePrepareRequest(t *testing.T) {
 				return mockAddrList(3, 4), nil
 			},
 			expOutReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
+				HugepageCount: testNrHugepages,
 				TargetUser:    username,
 				PCIAllowList: strings.Join([]string{
 					test.MockPCIAddr(1), test.MockPCIAddr(2),
 				}, " "),
+			},
+		},
+		"vmd enabled; vmds detected; backing devices in allow list": {
+			inReq: &storage.BdevPrepareRequest{
+				EnableVMD:     true,
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList: hardware.MustNewPCIAddressSet(
+					vmdBackingAddr1, vmdBackingAddr2).String(),
+			},
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				return hardware.MustNewPCIAddressSet(vmdAddr, test.MockPCIAddr(1)),
+					nil
+			},
+			expOutReq: &storage.BdevPrepareRequest{
+				EnableVMD:     true,
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList:  hardware.MustNewPCIAddressSet(vmdAddr).String(),
+			},
+		},
+		"vmd enabled; vmds detected; backing devices in block list": {
+			inReq: &storage.BdevPrepareRequest{
+				EnableVMD:     true,
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIBlockList: hardware.MustNewPCIAddressSet(
+					vmdBackingAddr1, vmdBackingAddr2).String(),
+			},
+			detectVMD: func() (*hardware.PCIAddressSet, error) {
+				return hardware.MustNewPCIAddressSet(vmdAddr, test.MockPCIAddr(1)),
+					nil
+			},
+			expOutReq: &storage.BdevPrepareRequest{
+				EnableVMD:     true,
+				HugepageCount: testNrHugepages,
+				TargetUser:    username,
+				PCIAllowList:  test.MockPCIAddr(1),
 			},
 		},
 	} {

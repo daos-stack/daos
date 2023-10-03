@@ -49,9 +49,9 @@ int d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 int d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 		      struct d_tm_node_t *node, uint64_t *node_count,
 		      int max_depth);
-void d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
-			    int level, int filter, char *path, int format,
-			    int opt_fields, FILE *stream);
+void d_tm_iterate(struct d_tm_context *ctx, struct d_tm_node_t *node,
+		  int level, int filter, char *path, int format,
+		  int opt_fields, uint32_t ops, FILE *stream);
 void d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		     int level, char *name, int format, int opt_fields,
 		     FILE *stream);

@@ -172,9 +172,9 @@ struct  _Mgmt__JoinResp
    */
   char *faultdomain;
   /*
-   * Join processed locally.
+   * Join processed in this version of the system map.
    */
-  protobuf_c_boolean localjoin;
+  uint32_t map_version;
 };
 #define MGMT__JOIN_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_resp__descriptor) \
@@ -188,22 +188,28 @@ struct  _Mgmt__LeaderQueryReq
    * System name.
    */
   char *sys;
+  /*
+   * hostset to query
+   */
+  char *hosts;
 };
 #define MGMT__LEADER_QUERY_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__LeaderQueryResp
 {
   ProtobufCMessage base;
-  char *currentleader;
+  char *current_leader;
   size_t n_replicas;
   char **replicas;
+  size_t n_downreplicas;
+  char **downreplicas;
 };
 #define MGMT__LEADER_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__leader_query_resp__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL }
+    , (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
 
 
 struct  _Mgmt__GetAttachInfoReq
@@ -257,10 +263,15 @@ struct  _Mgmt__ClientNetHint
    * Server SRX setting (-1, 0, 1; -1 == unset)
    */
   int32_t srv_srx_set;
+  /*
+   * Client-side environment variables to set
+   */
+  size_t n_env_vars;
+  char **env_vars;
 };
 #define MGMT__CLIENT_NET_HINT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0,NULL }
 
 
 struct  _Mgmt__GetAttachInfoResp__RankUri
@@ -296,10 +307,18 @@ struct  _Mgmt__GetAttachInfoResp
   size_t n_ms_ranks;
   uint32_t *ms_ranks;
   Mgmt__ClientNetHint *client_net_hint;
+  /*
+   * Version of the system database.
+   */
+  uint64_t data_version;
+  /*
+   * Name of the DAOS system
+   */
+  char *sys;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, NULL }
+    , 0, 0,NULL, 0,NULL, NULL, 0, (char *)protobuf_c_empty_string }
 
 
 struct  _Mgmt__PrepShutdownReq
@@ -335,10 +354,14 @@ struct  _Mgmt__SetRankReq
    * DAOS I/O Engine unique identifier.
    */
   uint32_t rank;
+  /*
+   * System map version in which the rank joined the system.
+   */
+  uint32_t map_version;
 };
 #define MGMT__SET_RANK_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__set_rank_req__descriptor) \
-    , 0 }
+    , 0, 0 }
 
 
 struct  _Mgmt__PoolMonitorReq

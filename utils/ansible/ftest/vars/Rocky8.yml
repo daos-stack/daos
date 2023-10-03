@@ -12,22 +12,22 @@ daos_base_deps:
     - python36
     - tree
     - systemd
+    - lbzip2
+    - jq
 
 daos_dev_deps:
   rpms:
     - cmake
     - createrepo
     - dnf-plugins-core
-    - hdf5-devel
-    - hdf5-mpich-devel
-    - hdf5-mpich-static
-    - hdf5-static
+    - libaec-devel
     - meson
-    - mpich-devel
     - python3-clustershell
     - rpmdevtools
     - rpm-build
     - wget
+    - libattr-devel
+    - bzip2-devel
   pips:
     - "avocado=={{ daos_avocado_version | default(daos_avocado_version_default) }}"
     - "avocado-framework=={{ daos_avocado_framework_version | default(daos_avocado_framework_version_default) }}"
@@ -44,12 +44,9 @@ daos_client_deps:
     - compat-hwloc1
     - fuse3
     - fuse3-libs
-    - hdf5-vol-daos-mpich-tests
-    - ior
-    - jq
+    - libaec
     - libuuid
     - lz4-libs
-    - mpich
     - systemd
     - util-linux
 
@@ -58,6 +55,7 @@ daos_server_deps:
     - compat-hwloc1
     - dpdk
     - ipmctl
+    - libfabric
     - libipmctl
     - libpmemobj
     - libuuid

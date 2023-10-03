@@ -10,14 +10,7 @@ server_config:
   engines:
     0:
       targets: 8
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
 
 pool_basic_1:
   control_method: dmg

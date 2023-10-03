@@ -69,7 +69,7 @@ public class IOKeyDesc {
   protected IOKeyDesc(String dkey, int nbrOfKeys, int akeyLen, int batchSize) throws IOException {
     this.dkey = dkey;
     if (dkey != null) {
-      dkeyBytes = DaosUtils.keyToBytes(dkey);
+      dkeyBytes = DaosUtils.keyToBytes8(dkey);
     }
     if (nbrOfKeys < 1) {
       throw new IllegalArgumentException("nbrOfKeys should be at least 1, " + nbrOfKeys);
@@ -299,7 +299,7 @@ public class IOKeyDesc {
         keyLen = descBuffer.readLong();
         byte bytes[] = new byte[(int)keyLen];
         keyBuffer.readBytes(bytes);
-        resultKeys.add(new String(bytes, Constants.KEY_CHARSET));
+        resultKeys.add(DaosUtils.keyBytes8ToStr(bytes));
         descBuffer.readerIndex(descBuffer.readerIndex() + 4); // uint32_t kd_val_type(4)
 //        csumLen = descBuffer.readShort();
         idx += keyLen;

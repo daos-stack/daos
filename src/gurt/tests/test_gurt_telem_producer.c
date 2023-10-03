@@ -1238,15 +1238,15 @@ test_print_metrics(void **state)
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 
-	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
-			       D_TM_INCLUDE_METADATA, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_STANDARD,
+		     D_TM_INCLUDE_METADATA, D_TM_ITER_READ, stdout);
 
 	d_tm_print_field_descriptors(D_TM_INCLUDE_TIMESTAMP |
 				     D_TM_INCLUDE_METADATA, stdout);
 
 	filter &= ~D_TM_DIRECTORY;
-	d_tm_print_my_children(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
-			       D_TM_INCLUDE_METADATA, stdout);
+	d_tm_iterate(cli_ctx, node, 0, filter, NULL, D_TM_CSV,
+		     D_TM_INCLUDE_METADATA, D_TM_ITER_READ, stdout);
 }
 
 static void
@@ -1277,7 +1277,7 @@ test_shared_memory_cleanup(void **state)
 	/* Detach */
 	d_tm_fini();
 
-	/* can still get retained region*/
+	/* can still get retained region */
 	ctx = d_tm_open(simulated_srv_idx);
 	assert_non_null(ctx);
 	d_tm_close(&ctx);
@@ -1287,6 +1287,48 @@ test_shared_memory_cleanup(void **state)
 	shmid = shmget(key, 0, 0);
 	assert_false(shmid < 0);
 	assert_false(shmctl(shmid, IPC_RMID, NULL) < 0);
+}
+
+static void
+test_cleanup_on_init(void **state)
+{
+	int			idx = TEST_IDX + 1;
+	struct d_tm_context	*ctx;
+	struct d_tm_node_t	*node;
+	key_t			sub_key;
+	int			rc;
+
+	/* Close the default stuff */
+	d_tm_fini();
+
+	/* Retain the old shmem region so we can delete/recreate */
+	rc = d_tm_init(idx, 1024, D_TM_RETAIN_SHMEM);
+	assert_rc_equal(rc, 0);
+
+	/* add sub-region */
+	ctx = d_tm_open(idx);
+	assert_non_null(ctx);
+
+	rc = d_tm_add_ephemeral_dir(&node, 256, "/test1");
+	assert_rc_equal(rc, 0);
+	sub_key = node->dtn_shmem_key;
+
+	d_tm_close(&ctx);
+	d_tm_fini();
+
+	/* Verify the regions survived the fini */
+	rc = shmget(d_tm_get_srv_key(idx), 0, 0);
+	assert_false(rc < 0);
+	rc = shmget(sub_key, 0, 0);
+	assert_false(rc < 0);
+
+	/* Recreate fresh */
+	rc = d_tm_init(idx, 2048, 0);
+	assert_rc_equal(rc, 0);
+
+	/* Verify the sub-region was destroyed in recreate */
+	rc = shmget(sub_key, 0, 0);
+	assert_true(rc < 0);
 }
 
 static int
@@ -1327,6 +1369,7 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_print_metrics),
 		/* Run last since nothing can be written afterward */
 		cmocka_unit_test(test_shared_memory_cleanup),
+		cmocka_unit_test(test_cleanup_on_init),
 	};
 
 	d_register_alt_assert(mock_assert);

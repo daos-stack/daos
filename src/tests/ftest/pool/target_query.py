@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -7,7 +7,6 @@ from ior_test_base import IorTestBase
 
 
 class PoolTargetQueryTest(IorTestBase):
-    # pylint: disable=too-many-ancestors
     """
     Test Class Description: To verify object is writing on expected pool targets based on
                             it's type.
@@ -51,7 +50,7 @@ class PoolTargetQueryTest(IorTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=pool
-        :avocado: tags=pool_target_query
+        :avocado: tags=pool_target_query,test_pool_target_query
         """
         self.update_ior_cmd_with_pool()
         # Check the initial size of all targets

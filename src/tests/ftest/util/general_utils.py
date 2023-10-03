@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,19 +12,21 @@ import random
 import string
 import time
 import ctypes
+import math
 from getpass import getuser
 from importlib import import_module
 from socket import gethostname
+from datetime import datetime
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
 from ClusterShell.Task import task_self
-from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+from ClusterShell.NodeSet import NodeSet
 from pydaos.raw import IORequest, DaosObjClass
 
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command
+from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):
@@ -47,19 +49,19 @@ class SimpleProfiler():
         """Clean the metrics collect so far."""
         self._stats = {}
 
-    def run(self, fn, tag, *args, **kwargs):
+    def run(self, fun, tag, *args, **kwargs):
         """Run a function and update its stats.
 
         Args:
-            fn (function): Function to be executed
+            fun (function): Function to be executed
             args  (tuple): Argument list
-            kwargs (dict): Keyworded, variable-length argument list
+            kwargs (dict): variable-length named arguments
         """
-        self._logger.info("Running function: %s()", fn.__name__)
+        self._logger.info("Running function: %s()", fun.__name__)
 
         start_time = time.time()
 
-        ret = fn(*args, **kwargs)
+        ret = fun(*args, **kwargs)
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -89,7 +91,7 @@ class SimpleProfiler():
 
         return self._calculate_metrics(data[1])
 
-    def set_logger(self, fn):
+    def set_logger(self, fun):
         """Assign the function to be used for logging.
 
         Set the function that will be used to print the elapsed time on each
@@ -97,10 +99,10 @@ class SimpleProfiler():
         performed silently.
 
         Parameters:
-            fn (function): Function to be used for logging.
+            fun (function): Function to be used for logging.
 
         """
-        self._logger = fn
+        self._logger = fun
 
     def print_stats(self):
         """Print all the stats collected so far.
@@ -160,9 +162,9 @@ def human_to_bytes(size):
         if match[0][1]:
             multiplier = -1
             unit = match[0][1].lower()
-            for item in conversion:
-                if unit in conversion[item]:
-                    multiplier = item ** conversion[item].index(unit)
+            for item, units in conversion.items():
+                if unit in units:
+                    multiplier = item ** units.index(unit)
                     break
             if multiplier == -1:
                 raise DaosTestError(
@@ -209,7 +211,7 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     This method uses the avocado.utils.process.run() method to run the specified
     command string on the local host using subprocess.Popen(). Even though the
     command is specified as a string, since shell=False is passed to process.run
-    it will use shlex.spit() to break up the command into a list before it is
+    it will use shlex.split() to break up the command into a list before it is
     passed to subprocess.Popen. The shell=False is forced for security. As a
     result typically any command containing ";", "|", "&&", etc. will fail.
 
@@ -289,6 +291,8 @@ def run_command(command, timeout=60, verbose=True, raise_exception=True,
     if msg is not None:
         log.info(msg)
         raise DaosTestError(msg)
+
+    return None
 
 
 def run_task(hosts, command, timeout=None, verbose=False):
@@ -479,9 +483,9 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
         # Determine the unique interrupted state for each host with the same
         # output and exit status
-        for exit_status in output_exit_status:
+        for exit_status, _hosts in output_exit_status.items():
             output_interrupted = {}
-            for host in list(output_exit_status[exit_status]):
+            for host in list(_hosts):
                 is_interrupted = host in host_interrupted
                 if is_interrupted not in output_interrupted:
                     output_interrupted[is_interrupted] = NodeSet()
@@ -489,10 +493,10 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
 
             # Add a result entry for each group of hosts with the same output,
             # exit status, and interrupted status
-            for interrupted in output_interrupted:
+            for interrupted, _hosts in output_interrupted.items():
                 results.append({
                     "command": command,
-                    "hosts": output_interrupted[interrupted],
+                    "hosts": _hosts,
                     "exit_status": exit_status,
                     "interrupted": interrupted,
                     "stdout": [
@@ -506,13 +510,13 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
         for item in results
         if expect_rc is not None and item["exit_status"] != expect_rc]
     if verbose or bad_exit_status:
-        log.info(colate_results(command, results))
+        log.info(collate_results(command, results))
 
     return results
 
 
-def colate_results(command, results):
-    """Colate the output of run_pcmd.
+def collate_results(command, results):
+    """Collate the output of run_pcmd.
 
     Args:
         command (str): command used to obtain the data on each server
@@ -522,7 +526,7 @@ def colate_results(command, results):
                         return for details)
 
     Returns:
-        str: a string colating run_pcmd()'s results
+        str: a string collating run_pcmd()'s results
 
     """
     res = ""
@@ -554,7 +558,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
     """
     log = getLogger()
     host_data = []
-    DATA_ERROR = "[ERROR]"
+    data_error = "[ERROR]"
 
     # Find the data for each specified servers
     log.info("  Obtaining %s data on %s", text, hosts)
@@ -572,7 +576,7 @@ def get_host_data(hosts, command, text, error, timeout=None):
                     result["interrupted"], result["command"])
                 for line in result["stdout"]:
                     log.info("        %s", line)
-        host_data.append({"hosts": hosts, "data": DATA_ERROR})
+        host_data.append({"hosts": hosts, "data": data_error})
     else:
         for result in results:
             host_data.append(
@@ -774,24 +778,61 @@ def check_pool_files(log, hosts, uuid):
     return status
 
 
-def convert_list(value, separator=","):
-    """Convert a list into a separator-separated string of its items.
-
-    Examples:
-        convert_list([1,2,3])        -> '1,2,3'
-        convert_list([1,2,3], " ")   -> '1 2 3'
-        convert_list([1,2,3], ", ")  -> '1, 2, 3'
+def join(joiner, *args):
+    """Join one or more objects together with a specified string.
 
     Args:
-        value (list): list to convert into a string
-        separator (str, optional): list item separator. Defaults to ",".
+        joiner (str): string to use to join the other objects
+        *args: the objects to join. Any non-None object will be passed to str().
 
     Returns:
-        str: a single string containing all the list items separated by the
-            separator.
+        str: a string containing all the objects joined by the joiner string
+    """
+    return joiner.join(filter(None, map(str, args)))
+
+
+def list_to_str(value, joiner=","):
+    """Convert a list to a string by joining its items.
+
+    Args:
+        value (list): list to convert to a string
+        joiner (str, optional): string to use to join items. Defaults to ",".
+
+    Returns:
+        str: a string of each list entry joined by the joiner string
 
     """
-    return separator.join([str(item) for item in value])
+    return join(joiner, *value)
+
+
+def dict_to_list(value, joiner="="):
+    """Convert a dictionary to a list of joined key and value pairs.
+
+    Args:
+        value (dict): dictionary to convert into a list
+        joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        list: a list of joined dictionary key and value strings
+
+    """
+    return [list_to_str(items, joiner) for items in value.items()]
+
+
+def dict_to_str(value, joiner=", ", items_joiner="="):
+    """Convert a dictionary to a string of joined key and value joined pairs.
+
+    Args:
+        value (dict): dictionary to convert into a string
+        joiner (str, optional): string to use to join dict_to_list() item. Defaults to ", ".
+        items_joiner (str, optional): string to use to join each key and value. Defaults to "=".
+
+    Returns:
+        str: a string of each dictionary key and value pair joined by the items_joiner string all
+            joined by the joiner string
+
+    """
+    return list_to_str(dict_to_list(value, items_joiner), joiner)
 
 
 def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
@@ -840,122 +881,6 @@ def dump_engines_stacks(hosts, verbose=True, timeout=60, added_filter=None):
         result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
 
     return result
-
-
-def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None):
-    """Stop the processes on each hosts that match the pattern.
-
-    Args:
-        hosts (NodeSet): hosts on which to stop the processes
-        pattern (str): regular expression used to find process names to stop
-        verbose (bool, optional): display command output. Defaults to True.
-        timeout (int, optional): command timeout in seconds. Defaults to 60
-            seconds.
-        added_filter (str, optional): negative filter to better identify
-            processes.
-
-    Returns:
-        dict: a dictionary of return codes keys and accompanying NodeSet
-            values indicating which hosts yielded the return code.
-            Return code keys:
-                0   No processes matched the criteria / No processes killed.
-                1   One or more processes matched the criteria and a kill was
-                    attempted.
-
-    """
-    result = {}
-    log = getLogger()
-    log.info("Killing any processes on %s that match: %s", hosts, pattern)
-
-    if added_filter:
-        ps_cmd = "/usr/bin/ps xa | grep -E {} | grep -vE {}".format(
-            pattern, added_filter)
-    else:
-        ps_cmd = "/usr/bin/pgrep --list-full {}".format(pattern)
-
-    if hosts is not None:
-        commands = [
-            "rc=0",
-            "if " + ps_cmd,
-            "then rc=1",
-            "sudo /usr/bin/pkill {}".format(pattern),
-            "sleep 5",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
-            "sleep 1",
-            "if " + ps_cmd,
-            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
-            "fi",
-            "fi",
-            "fi",
-            "exit $rc",
-        ]
-        result = pcmd(hosts, "; ".join(commands), verbose, timeout, None)
-    return result
-
-
-def get_partition_hosts(partition, reservation=None):
-    """Get a list of hosts in the specified slurm partition and reservation.
-
-    Args:
-        partition (str): name of the partition
-        reservation (str): name of reservation
-
-    Returns:
-        list: list of hosts in the specified partition
-
-    """
-    log = getLogger()
-    hosts = []
-    if partition is not None:
-        # Get the partition name information
-        cmd = "scontrol show partition {}".format(partition)
-        try:
-            result = process.run(cmd, timeout=10)
-        except process.CmdError as error:
-            log.warning(
-                "Unable to obtain hosts from the %s slurm "
-                "partition: %s", partition, error)
-            result = None
-
-        if result:
-            # Get the list of hosts from the partition information
-            output = result.stdout_text
-            try:
-                hosts = list(NodeSet(re.findall(r"\s+Nodes=(.*)", output)[0]))
-            except (NodeSetParseError, IndexError):
-                log.warning(
-                    "Unable to obtain hosts from the %s slurm partition "
-                    "output: %s", partition, output)
-                hosts = []
-            if hosts and reservation is not None:
-                # Get the list of hosts from the reservation information
-                cmd = "scontrol show reservation {}".format(reservation)
-                try:
-                    result = process.run(cmd, timeout=10)
-                except process.CmdError as error:
-                    log.warning(
-                        "Unable to obtain hosts from the %s slurm "
-                        "reservation: %s", reservation, error)
-                    result = None
-                    hosts = []
-                if result:
-                    # Get the list of hosts from the reservation information
-                    output = result.stdout_text
-                    try:
-                        reservation_hosts = list(
-                            NodeSet(re.findall(r"\sNodes=(\S+)", output)[0]))
-                    except (NodeSetParseError, IndexError):
-                        log.warning(
-                            "Unable to obtain hosts from the %s slurm "
-                            "reservation output: %s", reservation, output)
-                        reservation_hosts = []
-                    is_subset = set(reservation_hosts).issubset(set(hosts))
-                    if reservation_hosts and is_subset:
-                        hosts = reservation_hosts
-                    else:
-                        hosts = []
-    return hosts
 
 
 def get_log_file(name):
@@ -1138,7 +1063,7 @@ def convert_string(item, separator=","):
 
     """
     if isinstance(item, (list, tuple, set)):
-        item = convert_list(item, separator)
+        item = list_to_str(item, separator)
     elif not isinstance(item, str):
         item = str(item)
     return item
@@ -1175,10 +1100,9 @@ def create_directory(hosts, directory, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} /usr/bin/mkdir -p {}".format(
-            get_clush_command(hosts, "-S -v", sudo), directory),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    mkdir_command = "/usr/bin/mkdir -p {}".format(directory)
+    command = get_clush_command(hosts, args="-S -v", command=mkdir_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
@@ -1214,10 +1138,9 @@ def change_file_owner(hosts, filename, owner, group, timeout=15, verbose=True,
                 pid             - command's pid
 
     """
-    return run_command(
-        "{} {} {}".format(
-            get_clush_command(hosts, "-S -v", sudo), get_chown_command(owner, group), filename),
-        timeout=timeout, verbose=verbose, raise_exception=raise_exception)
+    chown_command = get_chown_command(owner, group, file=filename)
+    command = get_clush_command(hosts, args="-S -v", command=chown_command, command_sudo=sudo)
+    return run_command(command, timeout=timeout, verbose=verbose, raise_exception=raise_exception)
 
 
 def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
@@ -1275,8 +1198,9 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if other_hosts:
                 # Existing files with strict file permissions can cause the
                 # subsequent non-sudo copy to fail, so remove the file first
-                rm_command = "{} rm -f {}".format(
-                    get_clush_command(other_hosts, "-S -v", True), source)
+                rm_command = get_clush_command(
+                    other_hosts, args="-S -v", command="rm -f {}".format(source),
+                    command_sudo=True)
                 run_command(rm_command, verbose=verbose, raise_exception=False)
                 result = distribute_files(
                     other_hosts, source, source, mkdir=True,
@@ -1285,15 +1209,15 @@ def distribute_files(hosts, source, destination, mkdir=True, timeout=60,
             if result is None or result.exit_status == 0:
                 # Then a local sudo copy will be executed on the remote node to
                 # copy the source to the destination
-                command = "{} cp {} {}".format(
-                    get_clush_command(hosts, "-S -v", True), source,
-                    destination)
+                command = get_clush_command(
+                    hosts, args="-S -v", command="cp {} {}".format(source, destination),
+                    command_sudo=True)
                 result = run_command(command, timeout, verbose, raise_exception)
         else:
             # Without the sudo requirement copy the source to the destination
             # directly with clush
-            command = "{} --copy {} --dest {}".format(
-                get_clush_command(hosts, "-S -v", False), source, destination)
+            command = get_clush_command(
+                hosts, args="-S -v --copy {} --dest {}".format(source, destination))
             result = run_command(command, timeout, verbose, raise_exception)
 
         # If requested update the ownership of the destination file
@@ -1338,11 +1262,9 @@ def get_file_listing(hosts, files):
                 pid             - command's pid
 
     """
-    result = run_command(
-        "{} /usr/bin/ls -la {}".format(
-            get_clush_command(hosts, "-S -v", True),
-            convert_string(files, " ")),
-        verbose=False, raise_exception=False)
+    ls_command = "/usr/bin/ls -la {}".format(convert_string(files, " "))
+    command = get_clush_command(hosts, args="-S -v", command=ls_command, command_sudo=True)
+    result = run_command(command, verbose=False, raise_exception=False)
     return result
 
 
@@ -1396,6 +1318,20 @@ def get_display_size(size):
         bytes_to_human(size, binary=False))
 
 
+def append_error(errors, title, details=None):
+    """Helper adding an error to the list of errors
+
+    Args:
+        errors (list): List of error messages
+        title (str): Error message title
+        details (list, optional): List of string of the error details
+    """
+    msg = title
+    if details:
+        msg += "\n\t" + "\n\t".join(details)
+    errors.append(msg)
+
+
 def report_errors(test, errors):
     """Print errors and fail the test if there's any errors.
 
@@ -1421,13 +1357,47 @@ def percent_change(val1, val2):
         val1 (float): first value.
         val2 (float): second value.
 
+    Raises:
+        ValueError: if either val is not a number
+
     Returns:
         float: decimal percent change.
+        math.nan: if val1 is 0
 
     """
-    if val1 and val2:
+    try:
         return (float(val2) - float(val1)) / float(val1)
-    return 0.0
+    except ZeroDivisionError:
+        return math.nan
+
+
+def get_journalctl_command(since, until=None, system=False, units=None, identifiers=None):
+    """Get the journalctl command to capture all unit/identifier activity from since to until.
+
+    Args:
+        since (str): show log entries from this date.
+        until (str, optional): show log entries up to this date id specified. Defaults to None.
+        system (bool, optional): show messages from system services and the kernel. Defaults to
+            False which will show all messages that the user can see.
+        units (str/list, optional): show messages for the specified systemd unit(s). Defaults to
+            None.
+        identifiers (str/list, optional): show messages for the specified syslog identifier(s).
+            Defaults to None.
+
+    Returns:
+        str: journalctl command to capture all unit activity
+
+    """
+    command = ["sudo", os.path.join(os.sep, "usr", "bin", "journalctl")]
+    if system:
+        command.append("--system")
+    for key, values in {"unit": units or [], "identifier": identifiers or []}.items():
+        for item in values if isinstance(values, (list, tuple)) else [values]:
+            command.append("--{}={}".format(key, item))
+    command.append("--since=\"{}\"".format(since))
+    if until:
+        command.append("--until=\"{}\"".format(until))
+    return " ".join(command)
 
 
 def get_journalctl(hosts, since, until, journalctl_type):
@@ -1445,12 +1415,22 @@ def get_journalctl(hosts, since, until, journalctl_type):
             "data":  data requested for the group of hosts
 
     """
-    command = ("sudo /usr/bin/journalctl --system -t {} --since=\"{}\" "
-               "--until=\"{}\"".format(journalctl_type, since, until))
+    command = get_journalctl_command(since, until, True, identifiers=journalctl_type)
     err = "Error gathering system log events"
-    results = get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
+    return get_host_data(hosts=hosts, command=command, text="journalctl", error=err)
 
-    return results
+
+def journalctl_time(when=None):
+    # pylint: disable=wrong-spelling-in-docstring
+    """Get time formatted for journalctl.
+
+    Args:
+        when (datetime, optional): time to format. Defaults to datetime.now()
+
+    Returns:
+        str: the time in journalctl format
+    """
+    return (when or datetime.now()).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_avocado_config_value(section, key):
@@ -1465,7 +1445,7 @@ def get_avocado_config_value(section, key):
 
     """
     if int(MAJOR) >= 82:
-        config = settings.as_dict()
+        config = settings.as_dict()  # pylint: disable=no-member
         return config.get(".".join([section, key]))
     return settings.get_value(section, key)     # pylint: disable=no-member
 
@@ -1479,7 +1459,7 @@ def set_avocado_config_value(section, key, value):
         value (object): the value to set
     """
     if int(MAJOR) >= 82:
-        settings.update_option(".".join([section, key]), value)
+        settings.update_option(".".join([section, key]), value)  # pylint: disable=no-member
     else:
         settings.config.set(section, key, str(value))
 
@@ -1498,6 +1478,85 @@ def nodeset_append_suffix(nodeset, suffix):
     """
     return NodeSet.fromlist(
         map(lambda host: host if host.endswith(suffix) else host + suffix, nodeset))
+
+
+def wait_for_result(log, get_method, timeout, delay=1, add_log=False, **kwargs):
+    """Wait for a result with a timeout.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        get_method (object): method that returns a boolean used to determine if the result.
+            is found.
+        timeout (int): number of seconds to wait for a response to be found.
+        delay (int, optional): number of seconds to wait before checking the another result.
+            This should be a small number. Defaults to 1.
+        add_log (bool, optional): whether or not to include the log argument for get_method.
+            Defaults to False.
+        kwargs (dict): kwargs for get_method.
+
+    Returns:
+        bool: if the result was found.
+    """
+    if add_log:
+        kwargs["log"] = log
+    method_str = "{}({})".format(
+        get_method.__name__,
+        ", ".join([list_to_str(items, "=") for items in kwargs.items() if items[0] != "log"]))
+    result_found = False
+    timed_out = False
+    start = time.time()
+    log.debug(
+        "wait_for_result: Waiting for a result from %s with a %s second timeout",
+        method_str, timeout)
+    while not result_found and not timed_out:
+        timed_out = (time.time() - start) >= timeout
+        result_found = get_method(**kwargs)
+        log.debug(
+            "wait_for_result: Result from %s: %s (timed out: %s)",
+            method_str, result_found, timed_out)
+        if not result_found and not timed_out:
+            time.sleep(delay)
+    log.debug("wait_for_result: Waiting for a result from %s complete", method_str)
+    return not timed_out
+
+
+def check_ping(log, host, expected_ping=True, cmd_timeout=60, verbose=True):
+    """Check the host for a ping response.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        host (Node): destination host to ping to.
+        expected_ping (bool, optional): whether a ping response is expected. Defaults to True.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+            Defaults to 60.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if the expected number of pings were returned; False otherwise.
+    """
+    log.debug("Checking for %s to be %sresponsive", host, "" if expected_ping else "un")
+    try:
+        run_local(
+            log, "ping -c 1 {}".format(host), check=True, timeout=cmd_timeout, verbose=verbose)
+    except RunException:
+        return not expected_ping
+    return expected_ping
+
+
+def check_ssh(log, hosts, cmd_timeout=60, verbose=True):
+    """Check the host for a successful pass-wordless ssh.
+
+    Args:
+        log (logger): logger for the messages produced by this method.
+        hosts (NodeSet): destination hosts to ssh to.
+        cmd_timeout (int, optional): number of seconds to wait for a response to be found.
+        verbose (bool, optional): display check ping commands. Defaults to True.
+
+    Returns:
+        bool: True if all hosts respond to the remote ssh session; False otherwise.
+    """
+    result = run_remote(log, hosts, "uname", timeout=cmd_timeout, verbose=verbose)
+    return result.passed
 
 
 def insert_objects(context, container, object_count, dkey_count, akey_count, base_dkey,

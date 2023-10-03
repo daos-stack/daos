@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2020-2021 Intel Corporation.
+ * (C) Copyright 2020-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -11,6 +11,7 @@
  */
 #define D_LOGFAC DD_FAC(vos)
 #include "lru_array.h"
+#include "vos_internal.h"
 
 /** Internal converter for real index to entity index in sub array */
 #define ent2idx(array, sub, ent_idx)	\
@@ -63,6 +64,24 @@ fini_cb(struct lru_array *array, struct lru_sub *sub, struct lru_entry *entry,
 	array->la_cbs.lru_on_fini(entry->le_payload, real_idx, array->la_arg);
 }
 
+static void
+alloc_cb(struct lru_array *array, daos_size_t size)
+{
+	if (array->la_cbs.lru_on_alloc == NULL)
+		return;
+
+	array->la_cbs.lru_on_alloc(array->la_arg, size);
+}
+
+static void
+free_cb(struct lru_array *array, daos_size_t size)
+{
+	if (array->la_cbs.lru_on_free == NULL)
+		return;
+
+	array->la_cbs.lru_on_free(array->la_arg, size);
+}
+
 int
 lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 {
@@ -77,6 +96,8 @@ lrua_array_alloc_one(struct lru_array *array, struct lru_sub *sub)
 	D_ALLOC(sub->ls_table, rec_size * nr_ents);
 	if (sub->ls_table == NULL)
 		return -DER_NOMEM;
+
+	alloc_cb(array, rec_size * nr_ents);
 
 	/** Add newly allocated ones to head of list */
 	d_list_del(&sub->ls_link);
@@ -113,7 +134,7 @@ sub_find_free(struct lru_array *array, struct lru_sub *sub,
 	entry = &sub->ls_table[tree_idx];
 
 	/** Remove from free list */
-	lrua_remove_entry(sub, &sub->ls_free, entry, tree_idx);
+	lrua_remove_entry(array, sub, &sub->ls_free, entry, tree_idx);
 
 	/** Insert at tail (mru) */
 	lrua_insert(sub, &sub->ls_lru, entry, tree_idx, true);
@@ -137,15 +158,8 @@ manual_find_free(struct lru_array *array, struct lru_entry **entryp,
 
 	/** First search already allocated lists */
 	d_list_for_each_entry(sub, &array->la_free_sub, ls_link) {
-		if (sub_find_free(array, sub, entryp, idx, key)) {
-			if (sub->ls_free == LRU_NO_IDX) {
-				/** Remove the entry from the free sub list so
-				 * we stop looking in it.
-				 */
-				d_list_del(&sub->ls_link);
-			}
+		if (sub_find_free(array, sub, entryp, idx, key))
 			return 0;
-		}
 	}
 
 	/** No free entries */
@@ -223,10 +237,11 @@ lrua_evictx(struct lru_array *array, uint32_t idx, uint64_t key)
 	entry->le_key = 0;
 
 	/** Remove from active list */
-	lrua_remove_entry(sub, &sub->ls_lru, entry, ent_idx);
+	lrua_remove_entry(array, sub, &sub->ls_lru, entry, ent_idx);
 
 	if (sub->ls_free == LRU_NO_IDX &&
 	    (array->la_flags & LRU_FLAG_EVICT_MANUAL)) {
+		D_ASSERT(d_list_empty(&sub->ls_link));
 		/** Add the entry back to the free list */
 		d_list_add_tail(&sub->ls_link, &array->la_free_sub);
 	}
@@ -289,6 +304,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 	if (cbs != NULL)
 		array->la_cbs = *cbs;
 
+	alloc_cb(array, sizeof(*array) + sizeof(array->la_sub[0]) * nr_arrays);
 	/** Only allocate one sub array, add the rest to free list */
 	D_INIT_LIST_HEAD(&array->la_free_sub);
 	D_INIT_LIST_HEAD(&array->la_unused_sub);
@@ -300,6 +316,7 @@ lrua_array_alloc(struct lru_array **arrayp, uint32_t nr_ent, uint32_t nr_arrays,
 
 	rc = lrua_array_alloc_one(array, &array->la_sub[0]);
 	if (rc != 0) {
+		free_cb(array, sizeof(*array) + sizeof(array->la_sub[0]) * nr_arrays);
 		D_FREE(array);
 		return rc;
 	}
@@ -318,6 +335,10 @@ array_free_one(struct lru_array *array, struct lru_sub *sub)
 		fini_cb(array, sub, &sub->ls_table[idx], idx);
 
 	D_FREE(sub->ls_table);
+
+	free_cb(array,
+		(sizeof(struct lru_entry) + array->la_payload_size) *
+		(array->la_idx_mask + 1));
 }
 
 void
@@ -329,12 +350,13 @@ lrua_array_free(struct lru_array *array)
 	if (array == NULL)
 		return;
 
-
 	for (i = 0; i < array->la_array_nr; i++) {
 		sub = &array->la_sub[i];
 		if (sub->ls_table != NULL)
 			array_free_one(array, sub);
 	}
+
+	free_cb(array, sizeof(*array) + sizeof(array->la_sub[0]) * array->la_array_nr);
 
 	D_FREE(array);
 }

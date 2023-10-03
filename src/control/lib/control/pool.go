@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	pbUtil "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/fault"
@@ -38,7 +40,7 @@ const (
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 	// DefaultPoolTimeout is the default timeout for a pool request.
-	DefaultPoolTimeout = daos.DefaultCartTimeout * 3
+	DefaultPoolTimeout = 5 * time.Minute
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -132,20 +134,30 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
+	var acl []string
+	if pcr.ACL != nil {
+		acl = pcr.ACL.Entries
+	}
+
 	type toJSON PoolCreateReq
 	return json.Marshal(struct {
 		Properties []*mgmtpb.PoolProperty `json:"properties"`
+		ACL        []string               `json:"acl"`
 		*toJSON
 	}{
 		Properties: props,
+		ACL:        acl,
 		toJSON:     (*toJSON)(pcr),
 	})
 }
 
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
 	if err != nil {
 		return
 	}
@@ -209,7 +221,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		}
 	case *fault.Fault:
 		switch e.Code {
-		case code.ServerDataPlaneNotStarted:
+		case code.ServerDataPlaneNotStarted, code.SystemPoolLocked:
 			return true
 		default:
 			return false
@@ -223,9 +235,10 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		userExt    auth.UserExt
 		User       string
 		UserGroup  string
-		ACL        *AccessControlList
+		ACL        *AccessControlList `json:"-"`
 		NumSvcReps uint32
 		Properties []*daos.PoolProperty `json:"-"`
 		// auto-config params
@@ -235,11 +248,13 @@ type (
 		// manual params
 		Ranks     []ranklist.Rank
 		TierBytes []uint64
+		MetaBytes uint64 `json:"meta_blob_size"`
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
 	PoolCreateResp struct {
 		UUID      string   `json:"uuid"`
+		Leader    uint32   `json:"svc_ldr"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
 		TierBytes []uint64 `json:"tier_bytes"`
@@ -262,7 +277,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolCreate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Create DAOS pool request: %+v\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Create DAOS pool request: %+v\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -299,13 +314,23 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDestroy(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Destroy DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Destroy DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
 	}
 
-	return errors.Wrap(ur.getMSError(), "pool destroy failed")
+	if err := ur.getMSError(); err != nil {
+		// If the error is due to a retried destroy failing to find
+		// the pool, then we can assume that the pool was destroyed
+		// via a server-side cleanup and we can intercept it. Everything
+		// else is still an error.
+		if !(ur.retryCount > 0 && system.IsPoolNotFound(err)) {
+			return errors.Wrap(err, "pool destroy failed")
+		}
+	}
+
+	return nil
 }
 
 // PoolUpgradeReq contains the parameters for a pool upgrade request.
@@ -324,7 +349,7 @@ func PoolUpgrade(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpgradeRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpgrade(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Upgrade DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Upgrade DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -351,7 +376,7 @@ func PoolEvict(ctx context.Context, rpcClient UnaryInvoker, req *PoolEvictReq) e
 		return mgmtpb.NewMgmtSvcClient(conn).PoolEvict(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Evict DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Evict DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -408,8 +433,9 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32  `json:"status"`
-		UUID   string `json:"uuid"`
+		Status int32                   `json:"status"`
+		State  system.PoolServiceState `json:"state"`
+		UUID   string                  `json:"uuid"`
 		PoolInfo
 	}
 
@@ -580,14 +606,44 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQuery(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Query DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	pqr := new(PoolQueryResp)
-	return pqr, convertMSResponse(ur, pqr)
+	err = convertMSResponse(ur, pqr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pqr.UpdateState()
+	if err != nil {
+		return nil, err
+	}
+
+	return pqr, err
+}
+
+// Update the pool state
+func (pqr *PoolQueryResp) UpdateState() error {
+	// Update the state as Ready if DAOS return code is 0.
+	if pqr.Status == 0 {
+		pqr.State = system.PoolServiceStateReady
+	}
+
+	// Pool state is unknown, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = system.PoolServiceStateUnknown
+	}
+
+	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
+	if pqr.State == system.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+		pqr.State = system.PoolServiceStateDegraded
+	}
+
+	return nil
 }
 
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
@@ -603,7 +659,7 @@ func PoolQueryTargets(ctx context.Context, rpcClient UnaryInvoker, req *PoolQuer
 		return mgmtpb.NewMgmtSvcClient(conn).PoolQueryTarget(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Query DAOS pool targets request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Query DAOS pool targets request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -749,7 +805,7 @@ func PoolSetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolSetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolSetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS pool set-prop request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS pool set-prop request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -798,7 +854,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetProp(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("pool get-prop request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("pool get-prop request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -813,7 +869,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
 	}
 
-	resp := req.Properties
 	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
 	for _, prop := range pbResp.GetProperties() {
 		if _, found := pbMap[prop.GetNumber()]; found {
@@ -822,10 +877,12 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
-	for _, prop := range resp {
+	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
+	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			// Properties can be missing due to DAOS-11418 and DAOS-13919
+			rpcClient.Debugf("can't find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -836,6 +893,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		default:
 			return nil, errors.Errorf("unable to represent response value %+v", v)
 		}
+		resp = append(resp, prop)
 	}
 
 	return resp, nil
@@ -898,7 +956,7 @@ func PoolDrain(ctx context.Context, rpcClient UnaryInvoker, req *PoolDrainReq) e
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDrain(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Drain DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Drain DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -937,7 +995,7 @@ func PoolExtend(ctx context.Context, rpcClient UnaryInvoker, req *PoolExtendReq)
 		return mgmtpb.NewMgmtSvcClient(conn).PoolExtend(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Extend DAOS pool request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Extend DAOS pool request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -971,7 +1029,7 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 		return mgmtpb.NewMgmtSvcClient(conn).PoolReintegrate(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("Reintegrate DAOS pool target request: %s\n", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return err
@@ -1001,6 +1059,8 @@ type (
 		UUID string `json:"uuid"`
 		// Label is an optional human-friendly identifier for a pool.
 		Label string `json:"label,omitempty"`
+		// ServiceLeader is the current pool service leader.
+		ServiceLeader uint32 `json:"svc_ldr"`
 		// ServiceReplicas is the list of ranks on which this pool's
 		// service replicas are running.
 		ServiceReplicas []ranklist.Rank `json:"svc_reps"`
@@ -1025,6 +1085,9 @@ type (
 
 		// Usage contains pool usage statistics for each storage tier.
 		Usage []*PoolTierUsage `json:"usage"`
+
+		// PoolRebuildStatus contains detailed information about the pool rebuild process.
+		RebuildState string `json:"rebuild_state"`
 	}
 )
 
@@ -1131,7 +1194,7 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, pbReq)
 	})
 
-	rpcClient.Debugf("DAOS system list-pools request: %s", mgmtpb.Debug(pbReq))
+	rpcClient.Debugf("DAOS system list-pools request: %s", pbUtil.Debug(pbReq))
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1173,12 +1236,22 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
+		p.State = resp.State.String()
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
+		p.RebuildState = resp.Rebuild.State.String()
 	}
+
+	sort.Slice(resp.Pools, func(i int, j int) bool {
+		l, r := resp.Pools[i], resp.Pools[j]
+		if l == nil || r == nil {
+			return false
+		}
+		return l.Label < r.Label
+	})
 
 	for _, p := range resp.Pools {
 		rpcClient.Debugf("DAOS system pool in list-pools response: %+v", p)
@@ -1214,10 +1287,10 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 			continue
 		}
 
-		scmNamespaceFreeBytes := scmNamespace.Mount.AvailBytes
+		usableBytes := scmNamespace.Mount.UsableBytes
 
-		if scmBytes > scmNamespaceFreeBytes {
-			scmBytes = scmNamespaceFreeBytes
+		if scmBytes > usableBytes {
+			scmBytes = usableBytes
 		}
 
 		if _, exists := rankNVMeFreeSpace[scmNamespace.Mount.Rank]; exists {
@@ -1236,6 +1309,12 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, nvmeController := range nvmeControllers {
 		for _, smdDevice := range nvmeController.SmdDevices {
+			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
+				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
+			}
+
 			if smdDevice.NvmeState != storage.NvmeStateNormal {
 				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())
@@ -1253,11 +1332,11 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 					smdDevice.Rank, smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr)
 			}
 
-			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.AvailBytes
+			rankNVMeFreeSpace[smdDevice.Rank] += smdDevice.UsableBytes
 
 			log.Debugf("Added SMD device %s (rank %d, ctrlr %s) is usable: device state=%q, smd-size=%d ctrlr-total-free=%d",
 				smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String(),
-				smdDevice.AvailBytes, rankNVMeFreeSpace[smdDevice.Rank])
+				smdDevice.UsableBytes, rankNVMeFreeSpace[smdDevice.Rank])
 		}
 	}
 
@@ -1266,6 +1345,11 @@ func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeCont
 
 // Return the maximal SCM and NVMe size of a pool which could be created with all the storage nodes.
 func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvoker, ranks ranklist.RankList) (uint64, uint64, error) {
+	// Verify that the DAOS system is ready before attempting to query storage.
+	if _, err := SystemQuery(ctx, rpcClient, &SystemQueryReq{}); err != nil {
+		return 0, 0, err
+	}
+
 	resp, err := StorageScan(ctx, rpcClient, &StorageScanReq{Usage: true})
 	if err != nil {
 		return 0, 0, err
@@ -1282,7 +1366,7 @@ func GetMaxPoolSize(ctx context.Context, log logging.Logger, rpcClient UnaryInvo
 	for _, key := range resp.HostStorage.Keys() {
 		hostStorage := resp.HostStorage[key].HostStorage
 
-		if hostStorage.ScmNamespaces.Free() == 0 {
+		if hostStorage.ScmNamespaces.Usable() == 0 {
 			return 0, 0, errors.Errorf("Host without SCM storage: hostname=%s",
 				resp.HostStorage[key].HostSet.String())
 		}

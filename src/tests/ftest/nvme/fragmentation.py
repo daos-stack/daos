@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -14,11 +13,9 @@ from write_host_file import write_host_file
 from ior_utils import IorCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
-from test_utils_base import LabelGenerator
 
 
 class NvmeFragmentation(TestWithServers):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-many-instance-attributes
     """NVMe drive fragmentation test cases.
 
@@ -41,7 +38,6 @@ class NvmeFragmentation(TestWithServers):
         self.hostfile_clients = write_host_file(self.hostlist_clients, self.workdir, None)
         self.pool = None
         self.out_queue = queue.Queue()
-        self.cont_label_generator = LabelGenerator('cont')
 
     def ior_runner_thread(self, results):
         """Start threads and wait until all threads are finished.
@@ -64,7 +60,8 @@ class NvmeFragmentation(TestWithServers):
             # Define the arguments for the ior_runner_thread method
             ior_cmd = IorCommand()
             ior_cmd.get_params(self)
-            ior_cmd.set_daos_params(self.server_group, self.pool)
+            cont_label = self.label_generator.get_label('cont')
+            ior_cmd.set_daos_params(self.server_group, self.pool, cont_label)
             ior_cmd.dfs_oclass.update(oclass)
             ior_cmd.api.update(api)
             ior_cmd.transfer_size.update(test[0])
@@ -72,9 +69,7 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd.flags.update(flags)
 
             # Define the job manager for the IOR command
-            job_manager = get_job_manager(self, "Mpirun", ior_cmd, mpi_type="mpich")
-            cont_label = self.cont_label_generator.get_label()
-            job_manager.job.dfs_cont.update(cont_label)
+            job_manager = get_job_manager(self, job=ior_cmd)
             env = ior_cmd.get_default_env(str(job_manager))
             job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
             job_manager.assign_processes(processes)
@@ -90,7 +85,7 @@ class NvmeFragmentation(TestWithServers):
         # Destroy the container created by thread
         for cont_label in cont_list:
             try:
-                daos_cmd.container_destroy(pool=self.pool.uuid, cont=cont_label)
+                daos_cmd.container_destroy(pool=self.pool.identifier, cont=cont_label)
             except CommandFailure as error:
                 results.put("FAIL - {}".format(error))
 
@@ -110,7 +105,7 @@ class NvmeFragmentation(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
         :avocado: tags=nvme
-        :avocado: tags=nvme_fragmentation,test_nvme_fragmentation
+        :avocado: tags=NvmeFragmentation,test_nvme_fragmentation
         """
         num_repeat = self.params.get("num_repeat", '/run/ior/*')
         num_parallel_job = self.params.get("num_parallel_job", '/run/ior/*')

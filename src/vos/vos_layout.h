@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -12,7 +12,6 @@
 
 #ifndef _VOS_LAYOUT_H
 #define _VOS_LAYOUT_H
-#include <libpmemobj.h>
 #include <daos/btree.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/vos_types.h>
@@ -21,15 +20,8 @@
 #include <daos_srv/dtx_srv.h>
 #include "ilog.h"
 
-/**
- * Typed Layout named using Macros from libpmemobj
- * for root object.  We don't need to define the TOIDs for
- * other VOS structures because VOS uses umem_off_t for internal
- * pointers rather than using typed allocations.
- */
-POBJ_LAYOUT_BEGIN(vos_pool_layout);
-POBJ_LAYOUT_ROOT(vos_pool_layout, struct vos_pool_df);
-POBJ_LAYOUT_END(vos_pool_layout);
+/** Layout name for vos pool */
+#define VOS_POOL_LAYOUT         "vos_pool_layout"
 
 struct vos_gc_bin_df {
 	/** address of the first(oldest) bag */
@@ -88,7 +80,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				23
+#define POOL_DF_VER_1                           23
 
 /** Individual version specific featuers are assigned to a release specific durable
  * format version number.  This allows us to add multiple features in a release cycle
@@ -99,13 +91,18 @@ enum vos_gc_type {
  */
 
 /** Current durable format version */
-#define POOL_DF_VERSION                         VOS_POOL_DF_2_4
+#define POOL_DF_VERSION                         VOS_POOL_DF_2_6
 
-/** 2.2 features */
+/** 2.2 features.  Until we have an upgrade path for RDB, we need to support more than one old
+ *  version.
+ */
 #define VOS_POOL_FEAT_2_2                       (VOS_POOL_FEAT_AGG_OPT)
 
 /** 2.4 features */
-#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK)
+#define VOS_POOL_FEAT_2_4                       (VOS_POOL_FEAT_CHK | VOS_POOL_FEAT_DYN_ROOT)
+
+/** 2.6 features */
+#define VOS_POOL_FEAT_2_6                       (VOS_POOL_FEAT_EMB_VALUE)
 
 /**
  * Durable format for VOS pool
@@ -127,7 +124,7 @@ struct vos_pool_df {
 	/**
 	 * Offset to area for DAOS check related information (chk_pool_info) for this pool.
 	 * The chk_pool_info::cpi_statistics contains the inconsistency statistics during
-	 * the phases range [CSP_DTX_RESYNC, OSP_AGGREGATION] for the pool shard on the target.
+	 * the phases range [CSP_DTX_RESYNC, CSP_AGGREGATION] for the pool shard on the target.
 	 */
 	umem_off_t				pd_chk;
 	/** Unique PoolID for each VOS pool assigned on creation */
@@ -173,7 +170,7 @@ struct vos_dtx_cmt_ent_df {
 	 *	vos_dtx_blob_df to shrink each committed DTX
 	 *	entry size.
 	 */
-	daos_epoch_t			dce_cmt_time;
+	uint64_t			dce_cmt_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */

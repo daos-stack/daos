@@ -7,7 +7,6 @@
 package main
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -22,6 +21,16 @@ import (
 )
 
 var fiCmpOpt = cmpopts.IgnoreUnexported(FabricInterface{})
+
+func testFabricProviderSet(prov ...string) *hardware.FabricProviderSet {
+	providers := []*hardware.FabricProvider{}
+	for _, p := range prov {
+		providers = append(providers, &hardware.FabricProvider{
+			Name: p,
+		})
+	}
+	return hardware.NewFabricProviderSet(providers...)
+}
 
 func TestAgent_NewNUMAFabric(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
@@ -198,19 +207,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t3"),
 							Name:          "t3",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -228,19 +237,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t3"),
 							Name:          "t3",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -258,19 +267,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Infiniband,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Infiniband,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t3"),
 							Name:          "t3",
 							DeviceClass:   hardware.Infiniband,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -287,7 +296,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Infiniband,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 				},
 			},
@@ -313,13 +322,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Infiniband,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -349,7 +358,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Infiniband,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 					1: {},
 				},
@@ -375,13 +384,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Infiniband,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 					3: fabricInterfacesFromHardware(&hardware.FabricInterface{
 						NetInterfaces: common.NewStringSet("t2"),
 						Name:          "t2",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 				},
 			},
@@ -442,19 +451,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t3"),
 							Name:          "t3",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -491,19 +500,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 					1: fabricInterfacesFromHardware(&hardware.FabricInterface{
 						NetInterfaces: common.NewStringSet("t2"),
 						Name:          "t2",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 					2: fabricInterfacesFromHardware(&hardware.FabricInterface{
 						NetInterfaces: common.NewStringSet("t3"),
 						Name:          "t3",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 				},
 			},
@@ -536,7 +545,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Infiniband,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 				},
 				getAddrInterface: func(_ string) (addrFI, error) {
@@ -556,20 +565,20 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2_dom",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets", "ofi+verbs"),
+							Providers:     testFabricProviderSet("ofi+sockets", "ofi+verbs"),
 						})[0],
 					},
 					1: fabricInterfacesFromHardware(&hardware.FabricInterface{
 						NetInterfaces: common.NewStringSet("t3"),
 						Name:          "t3_dom",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 				},
 			},
@@ -601,13 +610,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 						NetInterfaces: common.NewStringSet("t1"),
 						Name:          "t1",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+sockets"),
+						Providers:     testFabricProviderSet("ofi+sockets"),
 					}),
 					1: fabricInterfacesFromHardware(&hardware.FabricInterface{
 						NetInterfaces: common.NewStringSet("t2"),
 						Name:          "t2_dom",
 						DeviceClass:   hardware.Ether,
-						Providers:     common.NewStringSet("ofi+verbs"),
+						Providers:     testFabricProviderSet("ofi+verbs"),
 					}),
 				},
 			},
@@ -635,7 +644,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 					1: {
@@ -643,7 +652,7 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -671,13 +680,13 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 							NetInterfaces: common.NewStringSet("t1"),
 							Name:          "t1",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 						fabricInterfacesFromHardware(&hardware.FabricInterface{
 							NetInterfaces: common.NewStringSet("t2"),
 							Name:          "t2",
 							DeviceClass:   hardware.Ether,
-							Providers:     common.NewStringSet("ofi+sockets"),
+							Providers:     testFabricProviderSet("ofi+sockets"),
 						})[0],
 					},
 				},
@@ -805,14 +814,14 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 		"include lo": {
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
 					NUMANode:      1,
 					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "lo",
 					NetInterfaces: common.NewStringSet("lo"),
 					NUMANode:      1,
@@ -837,21 +846,21 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 		"multiple devices": {
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
 					NUMANode:      1,
 					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test1"),
 					NUMANode:      0,
 					DeviceClass:   hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets"),
+					Providers:     testFabricProviderSet("ofi+sockets"),
 					Name:          "test2",
 					NetInterfaces: common.NewStringSet("os_test2"),
 					NUMANode:      0,
@@ -883,21 +892,21 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 		"multiple providers per device": {
 			input: hardware.NewFabricInterfaceSet(
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets", "ofi+tcp"),
+					Providers:     testFabricProviderSet("ofi+sockets", "ofi+tcp"),
 					Name:          "test0",
 					NetInterfaces: common.NewStringSet("os_test0"),
 					NUMANode:      1,
 					DeviceClass:   hardware.Ether,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+verbs"),
+					Providers:     testFabricProviderSet("ofi+verbs"),
 					Name:          "verbs_test1",
 					NetInterfaces: common.NewStringSet("os_test1"),
 					NUMANode:      0,
 					DeviceClass:   hardware.Infiniband,
 				},
 				&hardware.FabricInterface{
-					Providers:     common.NewStringSet("ofi+sockets", "ofi+tcp"),
+					Providers:     testFabricProviderSet("ofi+sockets", "ofi+tcp"),
 					Name:          "test1",
 					NetInterfaces: common.NewStringSet("os_test1"),
 					NUMANode:      0,
@@ -932,7 +941,7 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer test.ShowBufferOnFailure(t, buf)
 
-			result := NUMAFabricFromScan(context.TODO(), log, tc.input)
+			result := NUMAFabricFromScan(test.Context(t), log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap, fiCmpOpt); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)

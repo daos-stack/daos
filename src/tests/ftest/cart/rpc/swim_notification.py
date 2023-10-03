@@ -1,12 +1,12 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2018-2021 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 
 from cart_utils import CartTest
+
 
 class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
     # pylint: disable=too-few-public-methods
@@ -19,15 +19,17 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
         """Test CaRT RPC.
 
         :avocado: tags=all,pr
+        :avocado: tags=vm
         :avocado: tags=cart,rpc,one_node,swim_rank_eviction,memcheck
+        :avocado: tags=CartRpcOneNodeSwimNotificationOnRankEvictionTest,test_cart_rpc
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
         try:
             srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
-        except Exception as e:
-            self.print("Exception in launching server : {}".format(e))
+        except Exception as error:
+            self.print("Exception in launching server : {}".format(error))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.

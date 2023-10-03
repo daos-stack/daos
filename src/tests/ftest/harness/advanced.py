@@ -1,19 +1,19 @@
 """
-  (C) Copyright 2021-2022 Intel Corporation.
+  (C) Copyright 2021-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 from random import choice
-from re import findall
 
-from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
+from apricot import TestWithServers
 
 from general_utils import get_avocado_config_value
 from run_utils import run_remote
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 from user_utils import get_chown_command
+from dfuse_utils import get_dfuse, start_dfuse
 
 
 class HarnessAdvancedTest(TestWithServers):
@@ -30,72 +30,15 @@ class HarnessAdvancedTest(TestWithServers):
         self.start_agents_once = False
         self.start_servers_once = False
 
-    def test_core_files(self):
-        """Test to verify core file creation.
+        # Whether to skip tearDown
+        self.skip_teardown = False
 
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
-
-        :avocado: tags=all
-        :avocado: tags=vm
-        :avocado: tags=harness,harness_advanced_test,core_files
-        :avocado: tags=test_core_files
-        """
-        # Choose a server find the pid of its daos_engine process
-        host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
-        ranks = self.server_managers[0].get_host_ranks(host)
-        self.log.info("Obtaining pid of the daos_engine process on %s (rank %s)", host, ranks)
-        pid = None
-        result = run_remote(self.log, host, "pgrep --list-full daos_engine", timeout=20)
-        if not result.passed:
-            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
-        pid = findall(r"(\d+)\s+[A-Za-z0-9/]+daos_engine\s+", "\n".join(result.output[0].stdout))[0]
-        if pid is None:
-            self.fail("Error obtaining pid of the daos_engine process on {}".format(host))
-        self.log.info("Found pid %s", pid)
-
-        # Send a signal 6 to its daos_engine process
-        self.log.info("Sending a signal 6 to %s", pid)
-        if not run_remote(self.log, host, "sudo -n kill -6 {}".format(pid)).passed:
-            self.fail("Error sending a signal 6 to {} on {}".format(pid, host))
-
-        # Simplify resolving the host name to rank by marking all ranks as
-        # expected to be either running or errored (sent a signal 6)
-        self.server_managers[0].update_expected_states(ranks, ["Joined", "Errored"])
-
-        # Wait for the engine to create the core file
-        ranks = self.server_managers[0].get_host_ranks(host)
-        state = ["errored"]
-        try:
-            self.log.info(
-                "Waiting for the engine on %s (rank %s) to move to the %s state",
-                host, ranks, state)
-            if self.server_managers[0].check_rank_state(ranks, state, 25):
-                self.fail("Rank {} state not {} after sending signal 6".format(ranks, state))
-        finally:
-            # Display the journalctl log for the process that was sent the signal
-            self.server_managers[0].manager.dump_logs(host)
-
-        self.log.info("Test passed")
-
-    def test_core_files_hw(self):
-        """Test to verify core file creation.
-
-        This test will send a signal 6 to a random daos_engine process so
-        that it will create a core file, allowing the core file collection code
-        in launch.py to be tested.
-
-        This test can be run in any CI stage: vm, small, medium, large
-
-        :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_advanced_test,core_files
-        :avocado: tags=test_core_files_hw
-        """
-        self.test_core_files()
+    def tearDown(self):
+        """Conditionally skip tearDown."""
+        if self.skip_teardown:
+            self.log.info("Skipping test tearDown()")
+            return
+        super().tearDown()
 
     def test_pool_timeout(self):
         """Test to verify tearDown() timeout setting for timed out tests.
@@ -105,8 +48,8 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout
+        :avocado: tags=harness,pool_timeout
+        :avocado: tags=HarnessAdvancedTest,test_pool_timeout
         """
         namespace = "runner.timeout"
         timeouts = {"after_interrupted": [], "process_alive": [], "process_died": []}
@@ -139,9 +82,9 @@ class HarnessAdvancedTest(TestWithServers):
         runner.timeout.process_alive, and runner.timeout.process_died timeouts by 200 seconds each.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_advanced_test,pool_timeout
-        :avocado: tags=test_pool_timeout_hw
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,pool_timeout
+        :avocado: tags=HarnessAdvancedTest,test_pool_timeout_hw
         """
         self.test_pool_timeout()
 
@@ -154,8 +97,8 @@ class HarnessAdvancedTest(TestWithServers):
 
         :avocado: tags=all
         :avocado: tags=vm
-        :avocado: tags=harness,harness_advanced_test,launch_failures
-        :avocado: tags=test_launch_failures
+        :avocado: tags=harness,launch_failures,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_launch_failures
         """
         host = NodeSet(choice(self.server_managers[0].hosts))   # nosec
         self.log.info("Creating launch.py failure trigger files on %s", host)
@@ -208,8 +151,24 @@ class HarnessAdvancedTest(TestWithServers):
         each file.
 
         :avocado: tags=all
-        :avocado: tags=hw,small,medium,large
-        :avocado: tags=harness,harness_advanced_test,launch_failures
-        :avocado: tags=test_launch_failures_hw
+        :avocado: tags=hw,medium,large
+        :avocado: tags=harness,launch_failures,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_launch_failures_hw
         """
         self.test_launch_failures()
+
+    def test_cleanup_procs(self):
+        """Test to verify launch.py cleans up leftover processes.
+
+        The test starts some processes and then skips tearDown.
+
+        :avocado: tags=all
+        :avocado: tags=vm
+        :avocado: tags=harness,failure_expected
+        :avocado: tags=HarnessAdvancedTest,test_cleanup_procs
+        """
+        self.skip_teardown = True
+        pool = self.get_pool()
+        container = self.get_container(pool)
+        dfuse = get_dfuse(self, self.hostlist_clients)
+        start_dfuse(self, dfuse, pool=pool, container=container)

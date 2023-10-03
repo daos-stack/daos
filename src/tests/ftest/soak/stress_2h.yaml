@@ -14,24 +14,14 @@ setup:
   start_agents: false
 server_config:
   name: daos_server
-  provider: ofi+tcp
   control_log_mask: INFO
   control_log_file: daos_control0.log
   engines_per_host: 1
   engines:
     0:
       log_mask: ERR
-      fabric_iface: ib0
-      fabric_iface_port: 31416
       log_file: daos_io0.log
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
+      storage: auto
   transport_config:
     allow_insecure: true
 agent_config:
@@ -42,24 +32,20 @@ dmg:
     allow_insecure: true
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 40GB
-  nvme_size: 200GB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: SX
   control_method: daos
 container_reserved:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-  oclass: SX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
+  file_oclass: SX
+  dir_oclass: SX
   control_method: daos
+  daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -75,7 +61,8 @@ container_reserved:
 soak_stress:
   name: soak_stress
   # stress test timeout in hours
-  test_timeout: 2
+  test_timeout:
+    test_soak_stress: 2
   joblist:
     - ior_stress
     - mdtest_stress
@@ -108,7 +95,7 @@ ior_stress:
     - '512K'
     - '64k'
   dfs_oclass:
-    - 'SX'
+    - ["SX","SX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
@@ -134,7 +121,7 @@ mdtest_stress:
   depth:
     - 5
   dfs_oclass:
-    - 'S1'
+    - ["S1","S1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
@@ -150,8 +137,9 @@ vpic_stress:
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
+    disable_caching: true
   oclass:
-    - "SX"
+    - ["SX","SX"]
 lammps_stress:
   job_timeout: 30
   nodesperjob:
@@ -163,5 +151,6 @@ lammps_stress:
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
+    disable_caching: true
   oclass:
-    - "SX"
+    - ["SX","SX"]

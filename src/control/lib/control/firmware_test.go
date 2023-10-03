@@ -7,7 +7,6 @@
 package control
 
 import (
-	"context"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -161,7 +160,7 @@ func TestControl_FirmwareQuery(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := FirmwareQuery(ctx, mi, tc.req)
@@ -408,7 +407,7 @@ func TestControl_FirmwareUpdate(t *testing.T) {
 				mic = DefaultMockInvokerConfig()
 			}
 
-			ctx := context.TODO()
+			ctx := test.Context(t)
 			mi := NewMockInvoker(log, mic)
 
 			gotResp, gotErr := FirmwareUpdate(ctx, mi, tc.req)

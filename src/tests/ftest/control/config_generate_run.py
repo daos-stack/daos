@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -35,18 +34,28 @@ class ConfigGenerateRun(TestWithServers):
         Note: When running locally, use 50 sec timeout in DaosServerCommand.__init__()
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
-        :avocado: tags=control,config_generate_entries,config_generate_run
+        :avocado: tags=hw,large
+        :avocado: tags=control,dmg_config_generate
+        :avocado: tags=ConfigGenerateRun,test_config_generate_run
         """
         num_engines = self.params.get("num_engines", "/run/config_generate_params/*/")
-        min_ssds = self.params.get("min_ssds", "/run/config_generate_params/*/")
+        scm_only = self.params.get("scm_only", "/run/config_generate_params/*/")
         net_class = self.params.get("net_class", "/run/config_generate_params/*/")
+        net_provider = self.params.get("net_provider", "/run/config_generate_params/*/")
+        use_tmpfs_scm = self.params.get("use_tmpfs_scm", "/run/config_generate_params/*/")
+
+        # use_tmpfs_scm specifies that a MD-on-SSD conf should be generated and control metadata
+        # path needs to be set in that case.
+        ext_md_path = ""
+        if use_tmpfs_scm:
+            ext_md_path = self.test_dir
 
         # Call dmg config generate. AP is always the first server host.
         server_host = self.hostlist_servers[0]
         result = self.get_dmg_command().config_generate(
-            access_points=server_host, num_engines=num_engines,
-            min_ssds=min_ssds, net_class=net_class)
+            access_points=server_host, num_engines=num_engines, scm_only=scm_only,
+            net_class=net_class, net_provider=net_provider, use_tmpfs_scm=use_tmpfs_scm,
+            control_metadata_path=ext_md_path)
 
         try:
             generated_yaml = yaml.safe_load(result.stdout)

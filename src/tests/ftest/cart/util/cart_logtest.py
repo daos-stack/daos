@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 #
-# Copyright 2018-2022 Intel Corporation
+# (C) Copyright 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: BSD-2-Clause-Patent
 
-"""
-This provides consistency checking for CaRT log files.
-"""
+"""This provides consistency checking for CaRT log files."""
 
 import re
 import sys
@@ -21,11 +19,10 @@ try:
 except ImportError:
     HAVE_TABULATE = False
 
-# pylint: disable=too-few-public-methods
-
 
 class LogCheckError(Exception):
     """Error in the log parsing code"""
+
     def __str__(self):
         return self.__doc__
 
@@ -52,6 +49,7 @@ class LogError(LogCheckError):
 
 class RegionContig():
     """Class to represent a memory region"""
+
     def __init__(self, start, end):
         self.start = start
         self.end = end
@@ -77,6 +75,7 @@ def _ts_to_float(times):
 
 class RegionCounter():
     """Class to represent regions read/written to a file"""
+
     def __init__(self, start, end, times):
         self.start = start
         self.end = end
@@ -150,7 +149,6 @@ wf = None  # pylint: disable=invalid-name
 
 def show_line(line, sev, msg, custom=None):
     """Output a log line in gcc error format"""
-
     # Only report each individual line once.
 
     log = "{}:{}:1: {}: {} '{}'".format(line.filename,
@@ -159,13 +157,14 @@ def show_line(line, sev, msg, custom=None):
                                         msg,
                                         line.get_anon_msg())
     if log in shown_logs:
-        return
+        return False
     print(log)
     if custom:
         custom.add(line, sev, msg)
     elif wf:
         wf.add(line, sev, msg)
     shown_logs.add(log)
+    return True
 
 
 class HwmCounter():
@@ -175,7 +174,7 @@ class HwmCounter():
     def __init__(self):
         self.__val = 0
         self.__hwm = 0
-        self.__acount = 0
+        self.count = 0
         self.__fcount = 0
 
     def has_data(self):
@@ -185,12 +184,12 @@ class HwmCounter():
     def __str__(self):
         return 'Total:{:,} HWM:{:,} {} allocations, '.format(self.__val,
                                                              self.__hwm,
-                                                             self.__acount) + \
-            '{} frees {} possible leaks'.format(self.__fcount, self.__acount - self.__fcount)
+                                                             self.count) + \
+            '{} frees {} possible leaks'.format(self.__fcount, self.count - self.__fcount)
 
     def add(self, val):
         """Add a value"""
-        self.__acount += 1
+        self.count += 1
         if val < 0:
             return
         self.__val += val
@@ -205,10 +204,19 @@ class HwmCounter():
         self.__val -= val
 
 
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-locals
+# During shutdown ERROR messages that end with these strings are not reported as errors.
+SHUTDOWN_RC = ("DER_SHUTDOWN(-2017): 'Service should shut down'",
+               "DER_NOTLEADER(-2008): 'Not service leader'")
+
+# Functions that are never reported as errors.
+IGNORED_FUNCTIONS = ('sched_watchdog_post', 'rdb_timerd')
+
+
 class LogTest():
     """Log testing"""
+
+    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-locals
 
     def __init__(self, log_iter, quiet=False):
         self.quiet = quiet
@@ -216,24 +224,23 @@ class LogTest():
         self.hide_fi_calls = False
         self.fi_triggered = False
         self.fi_location = None
+        self.skip_suffixes = []
+        self._tracers = []
 
         # Records on number, type and frequency of logging.
         self.log_locs = Counter()
         self.log_fac = Counter()
         self.log_levels = Counter()
-        self.nil_frees = Counter()
         self.log_count = 0
         self._common_shown = False
 
-    def save_nill_free(self, line):
-        """Save the location of a nill free call"""
-        loc = '{}:{}'.format(line.filename, line.lineno)
-
-        self.nil_frees[loc] += 1
-
     def __del__(self):
         if not self.quiet and not self._common_shown:
-            self.show_common_logs()
+            self._show_common_logs()
+
+    def add_tracer(self, callback, facs):
+        """Add a tracer for later use"""
+        self._tracers.append((callback, facs))
 
     def save_log_line(self, line):
         """Record a single line of logging"""
@@ -248,7 +255,7 @@ class LogTest():
         self.log_fac[line.fac] += 1
         self.log_levels[line.level] += 1
 
-    def show_common_logs(self):
+    def _show_common_logs(self):
         """Report to stdout the most common logging locations"""
         if self.log_count == 0:
             return
@@ -273,11 +280,6 @@ class LogTest():
                                             100 * count / self.log_count))
         self._common_shown = True
 
-        for (loc, count) in self.nil_frees.most_common(10):
-            if count < 10:
-                break
-            print('Null was freed {} times at {}'.format(count, loc))
-
     def check_log_file(self, abort_on_warning, show_memleaks=True, leak_wf=None):
         """Check a single log file for consistency"""
         to_raise = None
@@ -290,13 +292,12 @@ class LogTest():
             except LogCheckError as error:
                 if to_raise is None:
                     to_raise = error
-        self.show_common_logs()
+        self._show_common_logs()
         if to_raise:
             raise to_raise
 
     def check_dfuse_io(self):
         """Parse dfuse i/o"""
-
         for pid in self._li.get_pids():
 
             client_pids = OrderedDict()
@@ -322,10 +323,10 @@ class LogTest():
             for cpid in client_pids:
                 print('{}:{}'.format(cpid, client_pids[pid]))
 
-    # pylint: disable=too-many-branches,too-many-nested-blocks
     def _check_pid_from_log_file(self, pid, abort_on_warning, leak_wf, show_memleaks=True):
+        # pylint: disable=too-many-branches,too-many-nested-blocks
         """Check a pid from a single log file for consistency"""
-
+        # pylint: disable=too-many-nested-blocks,too-many-locals,too-many-branches
         # Dict of active descriptors.
         active_desc = OrderedDict()
         active_desc['root'] = None
@@ -333,6 +334,7 @@ class LogTest():
         # Dict of active RPCs
         active_rpcs = OrderedDict()
 
+        fi_count = 0
         err_count = 0
         warnings_strict = False
         warnings_mode = False
@@ -349,18 +351,25 @@ class LogTest():
 
         trace_lines = 0
         non_trace_lines = 0
+        cb_list = []
 
-        if self.quiet:
-            rpc_r = None
-        else:
-            rpc_r = RpcReporting()
+        if not self.quiet:
+            cb_list.append((RpcReporting(), ('hg', 'rpc')))
+        for tracer in self._tracers:
+            cb_list.append((tracer[0], tracer[1]))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            if rpc_r:
-                rpc_r.add_line(line)
+            for (cbe, facs) in cb_list:
+                if facs is None or line.fac in facs:
+                    cbe.add_line(line)
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
+
+                if 'DER_UNKNOWN' in msg:
+                    show_line(line, 'NORMAL', 'Use of DER_UNKNOWN')
+                if 'Unknown error' in msg:
+                    show_line(line, 'NORMAL', 'Invalid strerror value')
                 # Warn if a line references the name of the function it was in,
                 # but skip short function names or _internal suffixes.
                 if line.function in msg and len(line.function) > 6 and \
@@ -378,10 +387,12 @@ class LogTest():
                     if self.hide_fi_calls and line.fac != 'external':
                         if line.is_fi_site():
                             show = False
+                            fi_count += 1
                         elif line.is_fi_alloc_fail():
                             show = False
                             self.fi_triggered = True
                             self.fi_location = line
+                            fi_count += 1
                         elif '-1009' in line.get_msg():
 
                             src_offset = line.lineno - self.fi_location.lineno
@@ -404,29 +415,31 @@ class LogTest():
                             # than daos, so allow ENOMEM as well as
                             # -DER_NOMEM
                             show = False
+                        elif line.get_msg().endswith(': 5 (HG_NOMEM)'):
+                            # Mercury uses hg error numbers, rather
+                            # than daos, so allow HG_NOMEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
-                        # Ignore the SWIM RPC opcode, as this often sends RPCs
-                        # that fail during shutdown.
+                        # Ignore the SWIM RPC opcode, as this often sends RPCs that fail during
+                        # shutdown.
                         if line.rpc_opcode == '0xfe000000':
                             show = False
-                    # Disable checking for a number of conditions, either
-                    # because these errors/lines are badly formatted or because
-                    # they're intermittent and we don't want noise in the test
-                    # results.
+                    # Disable checking for a number of conditions, either because these errors/lines
+                    # are badly formatted or because they're intermittent and we don't want noise in
+                    # the test results.
                     if line.fac == 'external':
                         show = False
-                    elif show and server_shutdown and (line.get_msg().endswith(
-                        "DER_SHUTDOWN(-2017): 'Service should shut down'")
-                            or line.get_msg().endswith(
-                                "DER_NOTLEADER(-2008): 'Not service leader'")):
+                    elif show and server_shutdown and any(map(line.get_msg().endswith,
+                                                              SHUTDOWN_RC)):
                         show = False
-                    elif show and line.function == 'rdb_stop':
+                    elif show and line.function in IGNORED_FUNCTIONS:
                         show = False
-                    elif show and line.function == 'sched_watchdog_post':
+                    if show and any(map(line.get_msg().endswith, self.skip_suffixes)):
                         show = False
                     if show:
-                        # Allow WARNING or ERROR messages, but anything higher
-                        # like assert should trigger a failure.
+                        # Allow WARNING or ERROR messages, but anything higher like assert should
+                        # trigger a failure.
                         if line.level < cart_logparse.LOG_LEVELS['ERR']:
                             show_line(line, 'HIGH', 'error in strict mode')
                         else:
@@ -484,8 +497,11 @@ class LogTest():
                 if line.is_calloc():
                     pointer = line.calloc_pointer()
                     if pointer in regions:
+                        # Report both the old and new allocation points here.
                         show_line(regions[pointer], 'NORMAL',
-                                  'new allocation seen for same pointer')
+                                  'new allocation seen for same pointer (old)')
+                        show_line(line, 'NORMAL',
+                                  'new allocation seen for same pointer (new)')
                         err_count += 1
                     regions[pointer] = line
                     memsize.add(line.calloc_size())
@@ -500,16 +516,18 @@ class LogTest():
                         old_regions[pointer] = [regions[pointer], line]
                         del regions[pointer]
                     elif pointer != '(nil)':
+                        # Logs no longer contain free(NULL) however old logs might so continue
+                        # to handle this case.
                         if pointer in old_regions:
-                            show_line(old_regions[pointer][0], 'ERROR',
-                                      'double-free allocation point')
+                            if show_line(old_regions[pointer][0], 'ERROR',
+                                         'double-free allocation point'):
+                                print(f'Memory address is {pointer}')
+
                             show_line(old_regions[pointer][1], 'ERROR', '1st double-free location')
                             show_line(line, 'ERROR', '2nd double-free location')
                         else:
                             show_line(line, 'HIGH', 'free of unknown memory')
                         err_count += 1
-                    else:
-                        self.save_nill_free(line)
                 elif line.is_realloc():
                     (new_pointer, old_pointer) = line.realloc_pointers()
                     (new_size, old_size) = line.realloc_sizes()
@@ -534,8 +552,8 @@ class LogTest():
                             err_count += 1
 
         del active_desc['root']
-        if rpc_r:
-            rpc_r.report()
+        for (cbe, _) in cb_list:
+            cbe.report()
 
         # This isn't currently used anyway.
         # if not have_debug:
@@ -547,23 +565,28 @@ class LogTest():
         if not self.quiet:
             print("Pid {}, {} lines total, {} trace ({:.2f}%)".format(
                 pid, total_lines, trace_lines, p_trace))
+            if fi_count and memsize.count:
+                print("Number of faults injected {} {:.2f}%".format(
+                    fi_count, (fi_count / memsize.count) * 100))
 
         if memsize.has_data():
             print("Memsize: {}".format(memsize))
 
-        # Special case the fuse arg values as these are allocated by IOF
-        # but freed by fuse itself.
-        # Skip over CaRT issues for now to get this landed, we can enable them
-        # once this is stable.
         lost_memory = False
         if show_memleaks:
             for (_, line) in list(regions.items()):
-                pointer = line.get_field(-1).rstrip('.')
+                if line.is_calloc():
+                    pointer = line.calloc_pointer()
+                else:
+                    assert line.is_realloc()
+                    (pointer, _) = line.realloc_pointers()
                 if pointer in active_desc:
-                    show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf)
+                    if show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf):
+                        print(f'Memory address is {pointer}')
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf)
+                    if show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf):
+                        print(f'Memory address is {pointer}')
                 lost_memory = True
 
         if active_desc:
@@ -582,7 +605,6 @@ class LogTest():
             raise WarningStrict()
         if warnings_mode:
             raise WarningMode()
-# pylint: enable=too-many-branches,too-many-nested-blocks
 
 
 class RpcReporting():
@@ -591,6 +613,7 @@ class RpcReporting():
     known_functions = frozenset({'crt_hg_req_send',
                                  'crt_hg_req_destroy',
                                  'crt_rpc_complete',
+                                 'crt_rpc_complete_and_unlock',
                                  'crt_rpc_priv_alloc',
                                  'crt_rpc_handler_common',
                                  'crt_req_send',
@@ -605,7 +628,6 @@ class RpcReporting():
 
     def add_line(self, line):
         """Parse a output line"""
-
         try:
             if line.function not in self.known_functions:
                 return
@@ -613,6 +635,8 @@ class RpcReporting():
             return
 
         if line.is_new_rpc():
+            if line.descriptor in self._current_opcodes:
+                return
             rpc_state = 'ALLOCATED'
             opcode = line.get_field(-4)
             if opcode == 'per':
@@ -656,7 +680,6 @@ class RpcReporting():
 
     def report(self):
         """Print report to stdout"""
-
         if not bool(self._op_state_counters):
             return
 

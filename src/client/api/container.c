@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2015-2022 Intel Corporation.
+ * (C) Copyright 2015-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -8,6 +8,8 @@
 #include <daos/container.h>
 #include <daos/task.h>
 #include <daos/pool.h>
+#include <daos/object.h>
+#include <daos/security.h>
 #include "client_internal.h"
 #include "task_internal.h"
 
@@ -378,7 +380,7 @@ daos_cont_overwrite_acl(daos_handle_t coh, struct daos_acl *acl,
 	daos_prop_t	*prop;
 	int		rc;
 
-	if (daos_acl_cont_validate(acl) != 0) {
+	if (daos_acl_validate(acl) != 0) {
 		D_ERROR("invalid acl parameter\n");
 		return -DER_INVAL;
 	}
@@ -718,6 +720,110 @@ daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 }
 
 int
+daos_cont_snap_oit_create(daos_handle_t coh, daos_epoch_t epoch, char *name,
+			  daos_event_t *ev)
+{
+	daos_cont_snap_oit_create_t *args;
+	tse_task_t		  *task;
+	int			   rc;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_SNAP_OIT_CREATE);
+
+	rc = dc_task_create(dc_cont_snap_oit_create, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= epoch;
+	args->name	= name;
+
+	return dc_task_schedule(task, true);
+}
+
+struct oit_destroy_arg {
+	daos_handle_t	oh;
+};
+
+static int
+oit_destroy_cb(tse_task_t *task, void *cb_args)
+{
+	struct oit_destroy_arg	*oda = *(struct oit_destroy_arg **)cb_args;
+	daos_obj_punch_t	*args;
+	tse_task_t		*ptask;
+	struct daos_task_args	*task_args;
+	int			 rc;
+
+	if (task->dt_result != 0)
+		D_GOTO(out, rc = task->dt_result);
+
+	DAOS_API_ARG_ASSERT(*args, OBJ_PUNCH);
+	rc = tse_task_create(dc_obj_punch_task, tse_task2sched(task), NULL, &ptask);
+	if (rc)
+		D_GOTO(out, rc);
+
+	task_args = tse_task_buf_embedded(ptask, sizeof(struct daos_task_args));
+	task_args->ta_magic = DAOS_TASK_MAGIC;
+
+	args = dc_task_get_args(ptask);
+	args->th	= DAOS_TX_NONE;
+	args->flags	= 0;
+	args->oh	= oda->oh;
+
+	rc = tse_task_register_deps(task, 1, &ptask);
+	if (rc != 0) {
+		tse_task_complete(ptask, rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = dc_task_schedule(ptask, true);
+out:
+	D_FREE(oda);
+	return rc;
+}
+
+int
+daos_cont_snap_oit_destroy(daos_handle_t coh, daos_handle_t oh, daos_event_t *ev)
+{
+	daos_cont_snap_oit_destroy_t	*args;
+	struct oit_destroy_arg		*oda;
+	tse_task_t			*task;
+	int				 rc;
+	daos_obj_id_t			 oid;
+
+	DAOS_API_ARG_ASSERT(*args, CONT_SNAP_OIT_DESTROY);
+
+	rc = dc_obj_hdl2oid(oh, &oid);
+	if (rc)
+		return rc;
+
+	rc = dc_task_create(dc_cont_snap_oit_destroy, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->coh	= coh;
+	args->epoch	= oid.lo; /* low bit is epoch */
+
+	D_ALLOC_PTR(oda);
+	if (oda == NULL) {
+		rc = -DER_NOMEM;
+		tse_task_complete(task, rc);
+		return rc;
+	}
+	oda->oh = oh;
+
+	rc = tse_task_register_comp_cb(task, oit_destroy_cb, &oda, sizeof(oda));
+	if (rc) {
+		tse_task_complete(task, rc);
+		D_FREE(oda);
+		return rc;
+	}
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev)
 {
@@ -744,4 +850,10 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 	args->epr	= epr;
 
 	return dc_task_schedule(task, true);
+}
+
+int
+daos_cont_get_perms(daos_prop_t *cont_prop, uid_t uid, gid_t *gids, size_t nr_gids, uint64_t *perms)
+{
+	return dc_sec_get_cont_permissions(cont_prop, uid, gids, nr_gids, perms);
 }

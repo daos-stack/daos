@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2018-2022 Intel Corporation.
+// (C) Copyright 2018-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
 	"github.com/daos-stack/daos/src/control/system/checker"
+	"github.com/daos-stack/daos/src/control/system/raft"
 )
 
 // mgmtModule represents the daos_server mgmt dRPC module. It sends dRPCs to
@@ -48,10 +49,11 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 type poolDatabase interface {
 	FindPoolServiceByLabel(string) (*system.PoolService, error)
 	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
-	PoolServiceList(all bool) ([]*system.PoolService, error)
-	AddPoolService(ps *system.PoolService) error
-	RemovePoolService(uuid.UUID) error
-	UpdatePoolService(ps *system.PoolService) error
+	PoolServiceList(bool) ([]*system.PoolService, error)
+	AddPoolService(context.Context, *system.PoolService) error
+	RemovePoolService(context.Context, uuid.UUID) error
+	UpdatePoolService(context.Context, *system.PoolService) error
+	TakePoolLock(context.Context, uuid.UUID) (*raft.PoolLock, error)
 }
 
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
@@ -123,7 +125,7 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 	resp := new(srvpb.GetPoolSvcResp)
 
 	ps, err := mod.poolDB.FindPoolServiceByUUID(uuid)
-	if err != nil {
+	if err != nil || ps.State != system.PoolServiceStateReady {
 		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
@@ -147,7 +149,7 @@ func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
 	resp := new(srvpb.PoolFindByLabelResp)
 
 	ps, err := mod.poolDB.FindPoolServiceByLabel(req.GetLabel())
-	if err != nil {
+	if err != nil || ps.State != system.PoolServiceStateReady {
 		resp.Status = int32(daos.Nonexistent)
 		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
 		return proto.Marshal(resp)

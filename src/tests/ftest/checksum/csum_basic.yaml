@@ -15,22 +15,22 @@ server_config:
         0:
           class: ram
           scm_mount: /mnt/daos
-          scm_size: 4
+  system_ram_reserved: 1
 pool:
   scm_size: 3000000000
   svcn: 1
   control_method: dmg
 container: !mux
   properties:
-    enable_checksum: True
+    enable_checksum: true
 dkeys: !mux
   single:
     no_of_dkeys:
-    - 50
+      - 50
 akeys: !mux
   single:
     no_of_akeys:
-    - 10
+      - 10
 record: !mux
   1Byte:
     length:

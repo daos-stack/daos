@@ -13,14 +13,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -28,14 +21,7 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 pool:
   size: 90%
   control_method: dmg
@@ -46,11 +32,11 @@ ior:
   api: "DFS"
   client_processes:
     ppn: 32
-  dfs_destroy: False
+  dfs_destroy: false
   flags: "-v -w -r -R"
   sw_deadline: 120
   test_file: /testFile
   transfer_size: '4K'
   block_size: '100G'
   dfs_oclass: "SX"
-  subprocess: True
+  subprocess: true

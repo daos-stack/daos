@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -9,25 +8,27 @@ import threading
 import queue
 import time
 
+from pydaos.raw import DaosApiError
+
 from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
-from test_utils_container import TestContainer
 from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
 from fio_test_base import FioBase
-from pydaos.raw import DaosApiError
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, run_pcmd
 
 
 def get_data_parity_number(log, oclass):
     """Return EC Object Data and Parity count.
-    Args:
-        log: Log object for reporting error
-        oclass(string): EC Object type.
 
-    return:
-        result[list]: Data and Parity numbers from object type
+    Args:
+        log (logger): Log object for reporting error
+        oclass (string): EC Object type.
+
+    Returns:
+        list: Data and Parity numbers from object type
+
     """
     if 'EC' not in oclass:
         log.error("Provide EC Object type only and not %s", str(oclass))
@@ -37,15 +38,19 @@ def get_data_parity_number(log, oclass):
     return {'data': tmp[0], 'parity': tmp[1]}
 
 
-def check_aggregation_status(pool, quick_check=True, attempt=20):
+def check_aggregation_status(log, pool, quick_check=True, attempt=20):
     """EC Aggregation triggered status.
+
     Args:
-        pool(object): pool object to get the query.
-        quick_check(bool): Return immediately when Aggregation starts for any storage type.
-        attempt(int): Number of attempts to do pool query at interval of 5 seconds.
+        log (logger): Log object for reporting information
+        pool (TestPool): pool object to get the query.
+        quick_check (bool): Return immediately when Aggregation starts for any storage type.
+        attempt (int): Number of attempts to do pool query at interval of 5 seconds.
                       default is 20 attempts.
-    return:
-        result(dic): Storage Aggregation stats SCM/NVMe True/False.
+
+    Returns:
+        dict: Storage Aggregation stats SCM/NVMe True/False.
+
     """
     agg_status = {'scm': False, 'nvme': False}
     pool.connect()
@@ -53,10 +58,10 @@ def check_aggregation_status(pool, quick_check=True, attempt=20):
 
     for _tmp in range(attempt):
         current_usage = pool.pool_percentage_used()
-        print("pool_percentage during Aggregation = {}".format(current_usage))
+        log.debug("pool_percentage during Aggregation = %s", current_usage)
         for storage_type in ['scm', 'nvme']:
             if current_usage[storage_type] > initial_usage[storage_type]:
-                print("Aggregation Started for {}.....".format(storage_type))
+                log.debug("Aggregation Started for {}.....".format(storage_type))
                 agg_status[storage_type] = True
                 # Return immediately once aggregation starts for quick check
                 if quick_check:
@@ -68,12 +73,9 @@ def check_aggregation_status(pool, quick_check=True, attempt=20):
 
 
 class ErasureCodeIor(ServerFillUp):
-    # pylint: disable=too-many-ancestors
-    """
+    """Class to used for EC testing.
 
-    Class to used for EC testing.
     It will get the object types from yaml file write the IOR data set with IOR.
-
     """
 
     def __init__(self, *args, **kwargs):
@@ -96,17 +98,21 @@ class ErasureCodeIor(ServerFillUp):
         engine_count = self.server_managers[0].get_config_value("engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
         # Create the Pool
-        self.create_pool_max_size()
+        kwargs = {
+            "scm": self.params.get("scm", "/run/create_pool_max_size/*", False),
+            "nvme": self.params.get("nvme", "/run/create_pool_max_size/*", False),
+            "percentage": self.params.get("percentage", "/run/create_pool_max_size/*", 96)
+        }
+        self.create_pool_max_size(**kwargs)
         self.update_ior_cmd_with_pool()
         self.obj_class = self.params.get("dfs_oclass_list", '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get("chunk_block_transfer_sizes", '/run/ior/*')
 
     def ec_container_create(self, oclass):
-        """Create the container for EC object"""
+        """Create the container for EC object."""
         # Get container params
-        self.ec_container = TestContainer(self.pool, daos_command=DaosCommand(self.bin))
-        self.ec_container.get_params(self)
-        self.ec_container.oclass.update(oclass)
+        self.ec_container = self.get_container(
+            self.pool, create=False, daos_command=self.get_daos_command(), oclass=oclass)
 
         # update object class for container create, if supplied explicitly.
         ec_object = get_data_parity_number(self.log, oclass)
@@ -124,8 +130,8 @@ class ErasureCodeIor(ServerFillUp):
         """Update the IOR command parameters.
 
         Args:
-            oclass(list): list of the obj class to use with IOR
-            sizes(list): Update Transfer, Chunk and Block sizes
+            oclass (list): list of the obj class to use with IOR
+            sizes (list): Update Transfer, Chunk and Block sizes
         """
         self.ior_local_cmd.dfs_chunk.update(sizes[0])
         self.ior_local_cmd.block_size.update(sizes[1])
@@ -135,16 +141,15 @@ class ErasureCodeIor(ServerFillUp):
 
     def ior_write_single_dataset(self, oclass, sizes, storage='NVMe', operation="WriteRead",
                                  percent=1):
-        # pylint: disable=too-many-arguments
         """Write IOR single data set with EC object.
 
         Args:
-            oclass(list): list of the obj class to use with IOR
-            sizes(list): Update Transfer, Chunk and Block sizes
-            storage(str): Data to be written on storage,default to NVMe.
-            operation(str): Data to be Written only or Write and Read both. default to WriteRead
+            oclass (list): list of the obj class to use with IOR
+            sizes (list): Update Transfer, Chunk and Block sizes
+            storage (str): Data to be written on storage,default to NVMe.
+            operation (str): Data to be Written only or Write and Read both. default to WriteRead
                             both
-            percent(int): %of storage to be filled. Default it will use the given parameters in
+            percent (int): %of storage to be filled. Default it will use the given parameters in
                             yaml file.
         """
         try:
@@ -168,10 +173,10 @@ class ErasureCodeIor(ServerFillUp):
         """Write IOR data set with different EC object and different sizes.
 
         Args:
-            storage(str): Data to be written on storage, default to NVMe
-            operation(str): Data to be Written only or Write and Read both. default to WriteRead
+            storage (str): Data to be written on storage, default to NVMe
+            operation (str): Data to be Written only or Write and Read both. default to WriteRead
                             both.
-            percent(int): %of storage to be filled. Default it's 1%.
+            percent (int): %of storage to be filled. Default it's 1%.
         """
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
@@ -186,12 +191,12 @@ class ErasureCodeIor(ServerFillUp):
         """Read IOR single data set with EC object.
 
         Args:
-            oclass(list): list of the obj class to use with IOR
-            sizes(list): Update Transfer, Chunk and Block sizes
-            storage(str): Data to be written on which storage
-            operation(str): Data to be Read only or Auto_Read which select IOR blocksize during
+            oclass (list): list of the obj class to use with IOR
+            sizes (list): Update Transfer, Chunk and Block sizes
+            storage (str): Data to be written on which storage
+            operation (str): Data to be Read only or Auto_Read which select IOR blocksize during
                             runtime.
-            percent(int): %of storage to be filled. Default it's 1%.
+            percent (int): %of storage to be filled. Default it's 1%.
         """
         self.ior_param_update(oclass, sizes)
 
@@ -202,14 +207,14 @@ class ErasureCodeIor(ServerFillUp):
         self.start_ior_load(storage, operation, percent, create_cont=False)
 
     def ior_read_dataset(self, storage='NVMe', operation="Read", percent=1, parity=1):
-        """Read IOR data and verify for different EC object and different sizes
+        """Read IOR data and verify for different EC object and different sizes.
 
         Args:
-            storage(str): Data to be written on storage, default to NVMe
-            percent(int): %of storage to be filled. Default it's 1%
-            operation(str): Data to be Read only or Auto_Read which select IOR blocksize during
+            storage (str): Data to be written on storage, default to NVMe
+            percent (int): %of storage to be filled. Default it's 1%
+            operation (str): Data to be Read only or Auto_Read which select IOR blocksize during
                             runtime.
-            parity(int): object parity type for reading data, default is 1.
+            parity (int): object parity type for reading data, default is 1.
         """
         # By default read the data set from beginning, or start from the specific container UUID
         if self.read_set_from_beginning:
@@ -224,20 +229,29 @@ class ErasureCodeIor(ServerFillUp):
                 parity_set = "P{}".format(parity)
                 # Read the requested data+parity data set only
                 if parity != 1 and parity_set not in oclass[0]:
-                    print("Skipping Read as object type is {}".format(oclass[0]))
+                    self.log.debug("Skipping Read as object type is %s", oclass[0])
                     self.cont_number += 1
                     continue
 
                 self.ior_read_single_dataset(oclass, sizes, storage, operation, percent)
                 self.cont_number += 1
 
+    def check_aggregation_status(self, quick_check=True, attempt=20):
+        """EC Aggregation triggered status.
+
+        Args:
+            quick_check (bool): Return immediately when Aggregation starts for any storage type.
+            attempt (int): Number of attempts to do pool query at interval of 5 seconds.
+                        default is 20 attempts.
+
+        Returns:
+            dict: Storage Aggregation stats SCM/NVMe True/False.
+        """
+        return check_aggregation_status(self.log, self.pool, quick_check, attempt)
+
 
 class ErasureCodeSingle(TestWithServers):
-    # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-instance-attributes
-    """
-    Class to used for EC testing for single type data.
-    """
+    """Class to used for EC testing for single type data."""
 
     def __init__(self, *args, **kwargs):
         """Initialize a TestWithServers object."""
@@ -260,39 +274,34 @@ class ErasureCodeSingle(TestWithServers):
         self.add_pool()
         self.out_queue = queue.Queue()
 
-    def ec_container_create(self, index, oclass):
-        """Create the container for EC object
+    def ec_container_create(self, oclass):
+        """Create the container for EC object.
 
         Args:
-            index(int): container number
-            oclass(str): object class for creating the container.
+            oclass (str): object class for creating the container.
         """
-        self.container.append(TestContainer(self.pool))
-        # Get container parameters
-        self.container[index].get_params(self)
-
-        # update object class for container create, if supplied explicitly.
-        self.container[index].oclass.update(oclass)
+        self.container.append(self.get_container(self.pool, create=False, oclass=oclass))
 
         # Get the Parity count for setting the container RF property.
         ec_object = get_data_parity_number(self.log, oclass)
-        self.container[index].properties.update("rd_fac:{}".format(ec_object['parity']))
+        self.container[-1].properties.update("rd_fac:{}".format(ec_object['parity']))
 
         # create container
-        self.container[index].create()
+        self.container[-1].create()
 
-    def single_type_param_update(self, index, data):
+    @staticmethod
+    def single_type_param_update(container, data):
         """Update the data set content provided from yaml file.
 
         Args:
-            index(int): container number
-            data(list): dataset content from test yaml file.
+            container (TestContainer): container object
+            data (list): dataset content from test yaml file.
         """
-        self.container[index].object_qty.update(data[0])
-        self.container[index].record_qty.update(data[1])
-        self.container[index].dkey_size.update(data[2])
-        self.container[index].akey_size.update(data[3])
-        self.container[index].data_size.update(data[4])
+        container.object_qty.update(data[0])
+        container.record_qty.update(data[1])
+        container.dkey_size.update(data[2])
+        container.akey_size.update(data[3])
+        container.data_size.update(data[4])
 
     def write_single_type_dataset(self, results=None):
         """Write single type data set with different EC object and different sizes.
@@ -300,7 +309,6 @@ class ErasureCodeSingle(TestWithServers):
         Args:
             results (queue): queue for returning thread results
         """
-        cont_count = 0
         for oclass in self.obj_class:
             for sizes in self.singledata_set:
                 # Skip the object type if server count does not meet the minimum EC object server
@@ -309,11 +317,10 @@ class ErasureCodeSingle(TestWithServers):
                     continue
                 # Create the new container with correct redundancy factor for EC object type
                 try:
-                    self.ec_container_create(cont_count, oclass[0])
-                    self.single_type_param_update(cont_count, sizes)
+                    self.ec_container_create(oclass[0])
+                    self.single_type_param_update(self.container[-1], sizes)
                     # Write the data
-                    self.container[cont_count].write_objects(obj_class=oclass[0])
-                    cont_count += 1
+                    self.container[-1].write_objects(obj_class=oclass[0])
                     if results is not None:
                         results.put("PASS")
                 except (CommandFailure, DaosApiError, DaosTestError):
@@ -326,7 +333,7 @@ class ErasureCodeSingle(TestWithServers):
 
         Args:
             results (queue): queue for returning thread results
-            parity(int): object parity number for reading, default All.
+            parity (int): object parity number for reading, default All.
         """
         cont_count = 0
         self.daos_cmd = DaosCommand(self.bin)
@@ -339,7 +346,7 @@ class ErasureCodeSingle(TestWithServers):
                 parity_set = "P{}".format(parity)
                 # Read the requested data+parity data set only
                 if parity != 1 and parity_set not in oclass[0]:
-                    print("Skipping Read as object type is {}".format(oclass[0]))
+                    self.log.debug("Skipping Read as object type is %s", oclass[0])
                     cont_count += 1
                     continue
 
@@ -366,7 +373,7 @@ class ErasureCodeSingle(TestWithServers):
         """Do Write/Read operation with single data type.
 
         Args:
-            operation (string): Write/Read operation
+            operation (str): Write/Read operation
         """
         # Create the single data Write/Read threads
         if operation == 'WRITE':
@@ -397,10 +404,7 @@ class ErasureCodeSingle(TestWithServers):
 
 
 class ErasureCodeMdtest(MdtestBase):
-    # pylint: disable=too-many-ancestors
-    """
-    Class to used for EC testing for MDtest Benchmark.
-    """
+    """Class to used for EC testing for MDtest Benchmark."""
 
     def __init__(self, *args, **kwargs):
         """Initialize a MdtestBase object."""
@@ -421,8 +425,7 @@ class ErasureCodeMdtest(MdtestBase):
         self.out_queue = queue.Queue()
 
     def write_single_mdtest_dataset(self):
-        """Run MDtest with EC object type.
-        """
+        """Run MDtest with EC object type."""
         # Update the MDtest obj class
         self.mdtest_cmd.dfs_oclass.update(self.obj_class)
 
@@ -430,9 +433,9 @@ class ErasureCodeMdtest(MdtestBase):
         self.execute_mdtest(self.out_queue)
 
     def start_online_mdtest(self):
-        """Run MDtest operation with thread in background. Trigger the server failure while
-        MDtest is running
+        """Run MDtest operation with thread in background.
 
+        Trigger the server failure while MDtest is running
         """
         # Create the MDtest run thread
         job = threading.Thread(target=self.write_single_mdtest_dataset)
@@ -459,10 +462,7 @@ class ErasureCodeMdtest(MdtestBase):
 
 
 class ErasureCodeFio(FioBase):
-    # pylint: disable=too-many-ancestors
-    """
-    Class to use for EC testing with Fio Benchmark.
-    """
+    """Class to use for EC testing with Fio Benchmark."""
 
     def __init__(self, *args, **kwargs):
         """Initialize a FioBase object."""
@@ -512,8 +512,9 @@ class ErasureCodeFio(FioBase):
                 raise
 
     def start_online_fio(self):
-        """Run Fio operation with thread in background. Trigger the server failure while Fio is
-        running
+        """Run Fio operation with thread in background.
+
+        Trigger the server failure while Fio is running
         """
         # Create the Fio run thread
         job = threading.Thread(target=self.write_single_fio_dataset,
@@ -538,3 +539,16 @@ class ErasureCodeFio(FioBase):
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")
+
+    def check_aggregation_status(self, quick_check=True, attempt=20):
+        """EC Aggregation triggered status.
+
+        Args:
+            quick_check (bool): Return immediately when Aggregation starts for any storage type.
+            attempt (int): Number of attempts to do pool query at interval of 5 seconds.
+                        default is 20 attempts.
+
+        Returns:
+            dict: Storage Aggregation stats SCM/NVMe True/False.
+        """
+        return check_aggregation_status(self.log, self.pool, quick_check, attempt)

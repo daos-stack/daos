@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-(C) Copyright 2021-2022 Intel Corporation.
+(C) Copyright 2021-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -76,10 +75,9 @@ class TestWithTelemetry(TestWithServers):
         errors = self.compare_lists(
             list(result), self.server_managers[0].hosts, 0, "",
             "telemetry metrics list hosts")
-        for host in result:
+        for host, host_result in result.items():
             errors.extend(
-                self.compare_lists(
-                    expected, result[host], 2, host, "telemetry metric names"))
+                self.compare_lists(expected, host_result, 2, host, "telemetry metric names"))
         if errors:
             self.fail("\n".join(errors))
 

@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -9,8 +9,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -19,8 +19,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/lib/ui"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -47,44 +47,180 @@ type PoolCmd struct {
 	Upgrade      PoolUpgradeCmd      `command:"upgrade" description:"Upgrade pool to latest format"`
 }
 
+var (
+	// Default to 6% SCM:94% NVMe
+	defaultTierRatios = []float64{0.06, 0.94}
+)
+
+type tierRatioFlag struct {
+	ratios []float64
+}
+
+func (trf *tierRatioFlag) IsSet() bool {
+	return len(trf.ratios) > 0
+}
+
+func (trf tierRatioFlag) Ratios() []float64 {
+	if trf.IsSet() {
+		return trf.ratios
+	}
+
+	return defaultTierRatios
+}
+
+func (trf tierRatioFlag) String() string {
+	var ratioStrs []string
+	for _, ratio := range trf.Ratios() {
+		ratioStrs = append(ratioStrs, pretty.PrintTierRatio(ratio))
+	}
+	return strings.Join(ratioStrs, ",")
+}
+
+func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("no tier ratio specified")
+	}
+
+	roundFloatTo := func(f float64, places int) float64 {
+		if f <= 0 && f >= 100 {
+			return f
+		}
+		shift := math.Pow(10, float64(places))
+		return math.Round(f*shift) / shift
+	}
+
+	for _, trStr := range strings.Split(fv, ",") {
+		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
+		}
+		trf.ratios = append(trf.ratios, roundFloatTo(tr, 2)/100)
+	}
+
+	// Handle single tier ratio as a special case and fill
+	// second tier with remainder (-t 6 will assign 6% of total
+	// storage to tier0 and 94% to tier1).
+	if len(trf.ratios) == 1 && trf.ratios[0] < 1 {
+		trf.ratios = append(trf.ratios, 1-trf.ratios[0])
+	}
+
+	var totalRatios float64
+	for _, ratio := range trf.ratios {
+		if ratio < 0 || ratio > 1 {
+			return errors.New("Storage tier ratio must be a value between 0-100")
+		}
+		totalRatios += ratio
+	}
+	if math.Abs(totalRatios-1) > 0.01 {
+		return errors.Errorf("Storage tier ratios must add up to 100 (got %f)", totalRatios*100)
+	}
+
+	return nil
+}
+
+type sizeFlag struct {
+	bytes uint64
+}
+
+func (sf sizeFlag) IsSet() bool {
+	return sf.bytes > 0
+}
+
+func (sf sizeFlag) String() string {
+	return humanize.Bytes(sf.bytes)
+}
+
+func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
+	if fv == "" {
+		return errors.New("no size specified")
+	}
+
+	sf.bytes, err = humanize.ParseBytes(fv)
+	if err != nil {
+		return errors.Wrapf(err, "invalid size %q", fv)
+	}
+
+	return nil
+}
+
+type poolSizeFlag struct {
+	sizeFlag
+	availRatio uint64
+}
+
+func (psf poolSizeFlag) IsRatio() bool {
+	return psf.availRatio > 0
+}
+
+func (psf poolSizeFlag) IsSet() bool {
+	return psf.sizeFlag.IsSet() || psf.IsRatio()
+}
+
+func (psf poolSizeFlag) String() string {
+	if psf.IsRatio() {
+		return fmt.Sprintf("%d%%", psf.availRatio)
+	}
+
+	return psf.sizeFlag.String()
+}
+
+func (psf *poolSizeFlag) UnmarshalFlag(fv string) error {
+	trimmed := strings.TrimSpace(fv)
+	if strings.HasSuffix(trimmed, "%") {
+		ratioStr := strings.TrimSpace(strings.TrimSuffix(trimmed, "%"))
+		ratio, err := strconv.ParseUint(ratioStr, 10, 64)
+		if err != nil {
+			return errors.Wrapf(err, "invalid pool size ratio %q", fv)
+		}
+		if ratio <= 0 || ratio > 100 {
+			return errors.Errorf("Creating DAOS pool with invalid full size ratio %s:"+
+				" allowed range 0 < ratio <= 100", fv)
+		}
+		psf.availRatio = ratio
+		return nil
+	}
+
+	return psf.sizeFlag.UnmarshalFlag(fv)
+}
+
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.
 type PoolCreateCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
-	GroupName     string           `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
-	UserName      string           `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
-	PoolLabelFlag string           `short:"p" long:"label" description:"Unique label for pool (deprecated, use positional argument)"`
-	Properties    PoolSetPropsFlag `short:"P" long:"properties" description:"Pool properties to be set"`
-	ACLFile       string           `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
-	Size          string           `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
-	TierRatio     string           `short:"t" long:"tier-ratio" default:"6,94" description:"Percentage of storage tiers for pool storage (auto)"`
-	NumRanks      uint32           `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
-	NumSvcReps    uint32           `short:"v" long:"nsvc" description:"Number of pool service replicas"`
-	ScmSize       string           `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
-	NVMeSize      string           `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
-	RankList      ui.RankSetFlag   `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
+	cmdutil.JSONOutputCmd
+	GroupName  ui.ACLPrincipalFlag `short:"g" long:"group" description:"DAOS pool to be owned by given group, format name@domain"`
+	UserName   ui.ACLPrincipalFlag `short:"u" long:"user" description:"DAOS pool to be owned by given user, format name@domain"`
+	Properties PoolSetPropsFlag    `short:"P" long:"properties" description:"Pool properties to be set"`
+	ACLFile    string              `short:"a" long:"acl-file" description:"Access Control List file path for DAOS pool"`
+	Size       poolSizeFlag        `short:"z" long:"size" description:"Total size of DAOS pool or its percentage ratio (auto)"`
+	TierRatio  tierRatioFlag       `short:"t" long:"tier-ratio" description:"Percentage of storage tiers for pool storage (auto; default: 6,94)"`
+	NumRanks   uint32              `short:"k" long:"nranks" description:"Number of ranks to use (auto)"`
+	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
+	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
+	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
+	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
-		PoolLabel string `positional-arg-name:"<pool label>"`
+		PoolLabel string `positional-arg-name:"<pool label>" required:"1"`
 	} `positional-args:"yes"`
 }
 
-// Regexp allowing to define the size of a new pool as the percentage of the overall available storage
-var allFlagPattern = regexp.MustCompile(`^\s*(\d{1,3})\s*%\s*$`)
-
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size != "" && (cmd.ScmSize != "" || cmd.NVMeSize != "") {
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	}
-	if cmd.Size == "" && cmd.ScmSize == "" {
-		return errors.New("either --size or --scm-size must be supplied")
-	}
-
-	if cmd.PoolLabelFlag != "" {
-		cmd.Args.PoolLabel = cmd.PoolLabelFlag
+	if cmd.Size.IsSet() {
+		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
+			return errIncompatFlags("size", "scm-size", "nvme-size")
+		}
+		if cmd.MetaSize.IsSet() {
+			// NOTE DAOS-14223: --meta-size value is currently not taken into account
+			//                  when storage tier sizes are auto-calculated so only
+			//                  support in manual mode.
+			return errors.New("--meta-size can only be set if --scm-size is set")
+		}
+	} else if !cmd.ScmSize.IsSet() {
+		return errors.New("either --size or --scm-size must be set")
 	}
 
 	if cmd.Args.PoolLabel != "" {
@@ -100,8 +236,8 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 	var err error
 	req := &control.PoolCreateReq{
-		User:       cmd.UserName,
-		UserGroup:  cmd.GroupName,
+		User:       cmd.UserName.String(),
+		UserGroup:  cmd.GroupName.String(),
 		NumSvcReps: cmd.NumSvcReps,
 		Properties: cmd.Properties.ToSet,
 		Ranks:      cmd.RankList.Ranks(),
@@ -115,23 +251,13 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 	}
 
 	switch {
-	case allFlagPattern.MatchString(cmd.Size):
+	case cmd.Size.IsRatio():
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("size", "nranks")
 		}
 
-		// If the user use a tier-ratio equal to the default value, the error will not be
-		// raised.
-		if cmd.TierRatio != `6,94` {
-			return errIncompatFlags("size", "tier-ratio")
-		}
-
-		storageRatioString := allFlagPattern.FindStringSubmatch(cmd.Size)[1]
-		storageRatio, _ := strconv.ParseInt(storageRatioString, 10, 32)
-		if storageRatio <= 0 || storageRatio > 100 {
-			msg := "Creating DAOS pool with invalid full size ratio %d%%:"
-			msg += " allowed range 0 < ratio <= 100"
-			return errors.Errorf(msg, storageRatio)
+		if cmd.TierRatio.IsSet() {
+			return errIncompatFlags("size=%", "tier-ratio")
 		}
 
 		// TODO (DAOS-9556) Update the protocol with a new message allowing to perform the
@@ -145,56 +271,29 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return err
 		}
 
-		if storageRatio != 100 {
-			scmBytes = uint64(storageRatio) * scmBytes / uint64(100)
-			nvmeBytes = uint64(storageRatio) * nvmeBytes / uint64(100)
+		if cmd.Size.availRatio < 100 {
+			scmBytes = cmd.Size.availRatio * scmBytes / 100
+			nvmeBytes = cmd.Size.availRatio * nvmeBytes / 100
 		}
 
 		if scmBytes == 0 {
-			return errors.Errorf("Not enough SCM storage available with ratio %d%%: "+
-				"SCM storage capacity or ratio should be increased",
-				storageRatio)
+			return errors.Errorf("Not enough SCM storage available with ratio %s: "+
+				"SCM storage capacity or ratio should be increased", cmd.Size)
 		}
 
 		cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with %d%% of all storage", storageRatio)
-	case cmd.Size != "":
+		cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
+	case !cmd.Size.IsRatio() && cmd.Size.IsSet():
 		// auto-selection of storage values
-		req.TotalBytes, err = humanize.ParseBytes(cmd.Size)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse pool size")
-		}
+		req.TotalBytes = cmd.Size.bytes
 
 		if cmd.NumRanks > 0 && !cmd.RankList.Empty() {
 			return errIncompatFlags("nranks", "ranks")
 		}
 		req.NumRanks = cmd.NumRanks
 
-		tierRatio, err := parseUint64Array(cmd.TierRatio)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse tier ratios")
-		}
-
-		// Handle single tier ratio as a special case and fill
-		// second tier with remainder (-t 6 will assign 6% of total
-		// storage to tier0 and 94% to tier1).
-		if len(tierRatio) == 1 && tierRatio[0] < 100 {
-			tierRatio = append(tierRatio, 100-tierRatio[0])
-		}
-
-		req.TierRatio = make([]float64, len(tierRatio))
-		var totalRatios uint64
-		for tierIdx, ratio := range tierRatio {
-			if ratio > 100 {
-				return errors.New("Storage tier ratio must be a value between 0-100")
-			}
-			totalRatios += ratio
-			req.TierRatio[tierIdx] = float64(ratio) / 100
-		}
-		if totalRatios != 100 {
-			return errors.New("Storage tier ratios must add up to 100")
-		}
+		req.TierRatio = cmd.TierRatio.Ratios()
 		cmd.Infof("Creating DAOS pool with automatic storage allocation: "+
 			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
 	default:
@@ -202,33 +301,34 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		if cmd.NumRanks > 0 {
 			return errIncompatFlags("nranks", "scm-size")
 		}
-
-		scmBytes, err := humanize.ParseBytes(cmd.ScmSize)
-		if err != nil {
-			return errors.Wrap(err, "failed to parse pool SCM size")
+		if cmd.TierRatio.IsSet() {
+			return errIncompatFlags("tier-ratio", "scm-size")
 		}
 
-		var nvmeBytes uint64
-		if cmd.NVMeSize != "" {
-			nvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
-			if err != nil {
-				return errors.Wrap(err, "failed to parse pool NVMe size")
-			}
-		}
-
+		scmBytes := cmd.ScmSize.bytes
+		nvmeBytes := cmd.NVMeSize.bytes
+		metaBytes := cmd.MetaSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)",
-			humanize.Bytes(scmBytes),
-			humanize.Bytes(nvmeBytes),
-			scmRatio*100)
+		if metaBytes > 0 && metaBytes < scmBytes {
+			return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
+				humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
+		}
+		req.MetaBytes = metaBytes
+
+		msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
+			" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes), scmRatio*100)
+		if metaBytes > 0 {
+			msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
+		}
+		cmd.Info(msg)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -273,9 +373,10 @@ type PoolListCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
-	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	cmdutil.JSONOutputCmd
+	Verbose     bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery     bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
+	RebuildOnly bool `short:"r" long:"rebuild-only" description:"List only pools which rebuild stats is not idle"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -292,17 +393,24 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		NoQuery: cmd.NoQuery,
 	}
 
-	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
+	initialResp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err // control api returned an error, disregard response
 	}
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, nil)
+	// If rebuild-only pools requested, list the pools which has been rebuild only
+	// and not in idle state, otherwise list all the pools.
+	resp := new(control.ListPoolsResp)
+	if err := updateListPoolsResponse(resp, initialResp, cmd.RebuildOnly); err != nil {
+		return err
+	}
+
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, nil)
 	}
 
 	var out, outErr strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose, cmd.NoQuery); err != nil {
 		return err
 	}
 	if outErr.String() != "" {
@@ -315,6 +423,17 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 	return resp.Errors()
 }
 
+// Update the pool list, which has been rebuild and not in idle state.
+func updateListPoolsResponse(finalResp *control.ListPoolsResp, resp *control.ListPoolsResp, rebuildOnly bool) error {
+	for _, pool := range resp.Pools {
+		if !rebuildOnly || pool.RebuildState != "idle" {
+			finalResp.Pools = append(finalResp.Pools, pool)
+		}
+	}
+
+	return nil
+}
+
 type PoolID struct {
 	ui.LabelOrUUIDFlag
 }
@@ -324,10 +443,10 @@ type poolCmd struct {
 	baseCmd
 	cfgCmd
 	ctlInvokerCmd
-	jsonOutputCmd
+	cmdutil.JSONOutputCmd
 
 	Args struct {
-		Pool PoolID `positional-arg-name:"<pool name or UUID>" required:"1"`
+		Pool PoolID `positional-arg-name:"<pool label or UUID>" required:"1"`
 	} `positional-args:"yes"`
 }
 
@@ -516,8 +635,8 @@ func (cmd *PoolQueryCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQuery(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -556,8 +675,8 @@ func (cmd *PoolQueryTargetsCmd) Execute(args []string) error {
 
 	resp, err := control.PoolQueryTargets(context.Background(), cmd.ctlInvoker, req)
 
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -595,37 +714,18 @@ func (cmd *PoolUpgradeCmd) Execute(args []string) error {
 // PoolSetPropCmd represents the command to set a property on a pool.
 type PoolSetPropCmd struct {
 	poolCmd
-	Property string `short:"n" long:"name" description:"Name of property to be set (deprecated; use positional argument)"`
-	Value    string `short:"v" long:"value" description:"Value of property to be set (deprecated; use positional argument)"`
 
 	Args struct {
-		Props PoolSetPropsFlag `positional-arg-name:"pool properties to set (key:val[,key:val...])"`
+		Props PoolSetPropsFlag `positional-arg-name:"<key:val[,key:val...]>" required:"1"`
 	} `positional-args:"yes"`
 }
 
 // Execute is run when PoolSetPropCmd subcommand is activatecmd.
 func (cmd *PoolSetPropCmd) Execute(_ []string) error {
-	// TODO (DAOS-7964): Remove support for --name/--value flags.
-	if cmd.Property != "" || cmd.Value != "" {
-		if len(cmd.Args.Props.ToSet) > 0 {
-			return errors.New("cannot mix flags and positional arguments")
-		}
-		if cmd.Property == "" || cmd.Value == "" {
-			return errors.New("both --name and --value must be supplied if either are supplied")
-		}
-
-		propName := strings.ToLower(cmd.Property)
-		p, err := daos.PoolProperties().GetProperty(propName)
-		if err != nil {
-			return err
-		}
-		if err := p.SetValue(cmd.Value); err != nil {
-			return err
-		}
-		cmd.Args.Props.ToSet = []*daos.PoolProperty{p}
-	}
-
 	for _, prop := range cmd.Args.Props.ToSet {
+		if prop.Name == "perf_domain" {
+			return errors.New("can't set perf_domain on existing pool.")
+		}
 		if prop.Name == "rd_fac" {
 			return errors.New("can't set redundancy factor on existing pool.")
 		}
@@ -643,8 +743,8 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 	}
 
 	err := control.PoolSetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(nil, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(nil, err)
 	}
 
 	if err != nil {
@@ -659,7 +759,7 @@ func (cmd *PoolSetPropCmd) Execute(_ []string) error {
 type PoolGetPropCmd struct {
 	poolCmd
 	Args struct {
-		Props PoolGetPropsFlag `positional-arg-name:"pool properties to get (key[,key...])"`
+		Props PoolGetPropsFlag `positional-arg-name:"[key[,key...]]"`
 	} `positional-args:"yes"`
 }
 
@@ -671,8 +771,8 @@ func (cmd *PoolGetPropCmd) Execute(_ []string) error {
 	}
 
 	resp, err := control.PoolGetProp(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -700,8 +800,8 @@ func (cmd *PoolGetACLCmd) Execute(args []string) error {
 	req := &control.PoolGetACLReq{ID: cmd.PoolID().String()}
 
 	resp, err := control.PoolGetACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -770,8 +870,8 @@ func (cmd *PoolOverwriteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolOverwriteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -818,8 +918,8 @@ func (cmd *PoolUpdateACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolUpdateACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {
@@ -848,8 +948,8 @@ func (cmd *PoolDeleteACLCmd) Execute(args []string) error {
 	}
 
 	resp, err := control.PoolDeleteACL(context.Background(), cmd.ctlInvoker, req)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
 	if err != nil {

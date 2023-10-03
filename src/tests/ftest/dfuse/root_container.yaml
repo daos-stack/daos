@@ -14,7 +14,6 @@ server_config:
           scm_mount: /mnt/daos
 pool:
   scm_size: 30000000000
-  control_method: dmg
   pool_count: 5
 container:
   type: POSIX
@@ -23,5 +22,3 @@ container:
   tmp_file_name: test_file
   tmp_file_count: 2
   tmp_file_size: 41943040
-dfuse:
-  mount_dir: "/tmp/daos_dfuse"

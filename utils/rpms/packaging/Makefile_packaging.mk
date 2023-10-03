@@ -39,6 +39,7 @@ PR_REPOS                 ?= $(shell git show -s --format=%B | sed -ne 's/^PR-rep
 LEAP_15_PR_REPOS         ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-leap15: *\(.*\)/\1/p')
 EL_7_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el7: *\(.*\)/\1/p')
 EL_8_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el8: *\(.*\)/\1/p')
+EL_9_PR_REPOS            ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-el9: *\(.*\)/\1/p')
 UBUNTU_20_04_PR_REPOS    ?= $(shell git show -s --format=%B | sed -ne 's/^PR-repos-ubuntu20: *\(.*\)/\1/p')
 REPO_FILES_PR            ?= $(shell git show -s --format=%B | sed -ne 's/^Repo-files-PR: *\(.*\)/\1/p')
 
@@ -66,7 +67,7 @@ DEB_BUILD        := $(DEB_TOP)/$(NAME)-$(VERSION)
 DEB_TARBASE      := $(DEB_TOP)/$(DEB_NAME)_$(VERSION)
 SOURCE           ?= $(eval SOURCE := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -S -l $(SPEC) | sed -e 2,\$$d -e 's/\#/\\\#/g' -e 's/.*:  *//'))$(SOURCE)
 PATCHES          ?= $(eval PATCHES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e 's/.*:  *//' -e 's/.*\///' -e '/\.patch/p'))$(PATCHES)
-OTHER_SOURCES    := $(eval OTHER_SOURCES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e 's/.*:  *//' -e 's/.*\///' -e '/\.patch/d' -e p))$(OTHER_SOURCES)
+OTHER_SOURCES    := $(eval OTHER_SOURCES := $(shell CHROOT_NAME=$(CHROOT_NAME) $(SPECTOOL) $(COMMON_RPM_ARGS) -l $(SPEC) | sed -ne 1d -e '/already present/d' -e '/^Patch.*:/d' -e 's/Source.*:  *//' -e 's/.*\///' -e p))$(OTHER_SOURCES)
 SOURCES          := $(addprefix _topdir/SOURCES/,$(notdir $(SOURCE)) $(PATCHES) $(OTHER_SOURCES))
 ifeq ($(ID_LIKE),debian)
 DEBS             := $(addsuffix _$(VERSION)-1_amd64.deb,$(shell sed -n '/-udeb/b; s,^Package:[[:blank:]],$(DEB_TOP)/,p' $(TOPDIR)/debian/control))
@@ -84,7 +85,7 @@ define distro_map
 	case $(DISTRO_ID) in               \
 	    el7) distro="centos7"          \
 	    ;;                             \
-	    el8) distro="el8"              \
+	    el*) distro="$(DISTRO_ID)"     \
 	    ;;                             \
 	    sle12.3) distro="sles12.3"     \
 	    ;;                             \
@@ -271,6 +272,9 @@ $(DEB_TOP)/$(DEB_DSC): $(CALLING_MAKEFILE) $(DEB_BUILD).tar.$(SRC_EXT) \
 	cd $(DEB_BUILD); dpkg-buildpackage -S --no-sign --no-check-builddeps
 
 $(SRPM): $(SPEC) $(SOURCES)
+	if [ -f bz-1955184_find-requires ]; then \
+	    chmod 755 bz-1955184_find-requires;  \
+	fi
 	rpmbuild -bs $(COMMON_RPM_ARGS) $(RPM_BUILD_OPTIONS) $(SPEC)
 
 srpm: $(SRPM)
@@ -317,20 +321,6 @@ patch:
 	echo "PKG_GIT_COMMIT is not defined"
 endif
 
-# *_LOCAL_* repos are locally built packages.
-ifeq ($(LOCAL_REPOS),true)
-  ifneq ($(ARTIFACTORY_URL),)
-    ifneq ($(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO),)
-      DISTRO_REPOS = disabled # any non-empty value here works and is not used beyond testing if the value is empty or not
-	  # convert to artifactory url
-      DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO := $(subst reposi,artifac,$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO))
-      # $(DISTRO_BASE)_LOCAL_REPOS is a list separated by | because you cannot pass lists
-      # of values with spaces as environment variables
-      $(DISTRO_BASE)_LOCAL_REPOS := [trusted=yes] $(ARTIFACTORY_URL)$(subst stack,stack-daos,$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO))
-      $(DISTRO_BASE)_LOCAL_REPOS += |[trusted=yes] $(ARTIFACTORY_URL)$(subst stack,stack-deps,$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO))
-    endif #ifneq ($(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO),)
-  endif # ifneq ($(ARTIFACTORY_URL),)
-endif # ifeq ($(LOCAL_REPOS),true)
 ifeq ($(ID_LIKE),debian)
 chrootbuild: $(DEB_TOP)/$(DEB_DSC)
 	$(call distro_map)                                      \
@@ -346,6 +336,8 @@ chrootbuild: $(DEB_TOP)/$(DEB_DSC)
 	DEB_TOP="$(DEB_TOP)"                                    \
 	DEB_DSC="$(DEB_DSC)"                                    \
 	DISTRO_ID_OPT="$(DISTRO_ID_OPT)"                        \
+	LOCAL_REPOS='$(LOCAL_REPOS)'                            \
+	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
 	packaging/debian_chrootbuild
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
@@ -360,7 +352,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	REPO_FILE_URL="$(REPO_FILE_URL)"                        \
 	MOCK_OPTIONS="$(MOCK_OPTIONS)"                          \
 	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                \
-	DISTRO_REPOS='$(DISTRO_REPOS)'                          \
+	LOCAL_REPOS='$(LOCAL_REPOS)'                            \
 	ARTIFACTORY_URL="$(ARTIFACTORY_URL)"                    \
 	DISTRO_VERSION="$(DISTRO_VERSION)"                      \
 	TARGET="$<"                                             \
@@ -425,6 +417,7 @@ packaging_check:
 	          --exclude install                             \
 	          --exclude packaging                           \
 	          --exclude utils                               \
+	          --exclude .vscode                             \
 	          -bur $(PACKAGING_CHECK_DIR)/ packaging/; then \
 	    exit 1;                                             \
 	fi

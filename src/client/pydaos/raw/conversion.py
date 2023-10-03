@@ -1,27 +1,25 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=consider-using-f-string
+
 import ctypes
 import uuid
 
 
-def c_uuid_to_str(uuid):
+def c_uuid_to_str(cuuid):
     """ utility function to convert a C uuid into a standard string format """
-    uuid_str = '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}'\
-               '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(
-                   uuid[0], uuid[1], uuid[2], uuid[3], uuid[4], uuid[5],
-                   uuid[6], uuid[7], uuid[8], uuid[9], uuid[10], uuid[11],
-                   uuid[12], uuid[13], uuid[14], uuid[15])
-    return uuid_str
+    return '{:02X}{:02X}{:02X}{:02X}-{:02X}{:02X}-{:02X}{:02X}-{:02X}' \
+           '{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(*cuuid)
 
 
-def c_uuid(p_uuid, c_uuid):
+def c_uuid(puuid, cuuid):
     """ utility function to create a UUID in C format from a python UUID """
-    hexstr = p_uuid.hex
-    for i in range(0, 31, 2):
-        c_uuid[int(i / 2)] = int(hexstr[i:i + 2], 16)
+    hexstr = puuid.hex
+    for index in range(0, 31, 2):
+        cuuid[int(index / 2)] = int(hexstr[index:index + 2], 16)
 
 
 def str_to_c_uuid(uuidstr):

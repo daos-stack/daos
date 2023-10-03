@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -424,6 +424,21 @@ daos_array_punch(daos_handle_t oh, daos_handle_t th, daos_array_iod_t *iod,
 int
 daos_array_get_attr(daos_handle_t oh, daos_size_t *chunk_size,
 		    daos_size_t *cell_size);
+
+/**
+ * Update the chunk size for an open array handle. Users normally should not use this API.
+ *
+ * \param[in]	oh	Array object open handle.
+ * \param[in]	chunk_size
+ *			Chunk size of the array.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_array_update_chunk_size(daos_handle_t oh, daos_size_t chunk_size);
 
 #if defined(__cplusplus)
 }

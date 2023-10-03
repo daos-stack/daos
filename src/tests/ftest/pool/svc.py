@@ -1,5 +1,5 @@
 '''
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -38,19 +38,15 @@ class PoolSvc(TestWithServers):
         except KeyError as error:
             self.log.error("self.pool.query_data: %s", self.pool.query_data)
             self.fail(
-                "Error obtaining [\"response\"][\"leader\"] from dmg pool "
-                "query: {}".format(error))
+                "Error obtaining [\"response\"][\"leader\"] from dmg pool query: {}".format(error))
         except ValueError as error:
             self.fail(
-                "Error converting dmg pool query pool leader {} into an "
-                "integer: {}".format(self.pool.query_data, error))
+                "Error converting dmg pool query pool leader {} into an integer: {}".format(
+                    self.pool.query_data, error))
         if previous_leader is not None:
-            self.log.info(
-                "Pool leader: previous=%s, current=%s",
-                previous_leader, current_leader)
+            self.log.info("Pool leader: previous=%s, current=%s", previous_leader, current_leader)
             leader_change = previous_leader != current_leader
-            message = "The pool leader {} changed".format(
-                "has" if leader_change else "has not")
+            message = "The pool leader {} changed".format("has" if leader_change else "has not")
             self.log.info("  %s", message)
             if leader_change != expect_change:
                 self.fail(message)
@@ -63,9 +59,8 @@ class PoolSvc(TestWithServers):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
-        :avocado: tags=pool,svc
-        :avocado: tags=pool_svc,test_pool_svc
-        :avocado: tags=DAOS_5610
+        :avocado: tags=pool,svc,rebuild
+        :avocado: tags=PoolSvc,test_pool_svc
         """
         # parameter used in pool create
         svc_params = self.params.get("svc_params")
@@ -89,8 +84,8 @@ class PoolSvc(TestWithServers):
             self.log.info("Pool creation with svcn=%s failed as expected", svc_params[0])
         elif pool_create_error:
             self.fail(
-                "Pool creation with svcn={} failed when it was expected to "
-                "pass: {}".format(svc_params[0], pool_create_error))
+                "Pool creation with svcn={} failed when it was expected to pass: {}".format(
+                    svc_params[0], pool_create_error))
         else:
             self.log.info("Pool creation passed as expected")
             self.log.info(
@@ -129,39 +124,53 @@ class PoolSvc(TestWithServers):
                 # Stop the pool leader
                 self.log.info("Stopping the pool leader: %s", pool_leader)
                 try:
-                    self.server_managers[-1].stop_ranks(
-                        [pool_leader], self.test_log)
+                    self.server_managers[-1].stop_ranks([pool_leader], self.test_log)
                 except TestFail as error:
                     self.log.info(error)
                     self.fail(
-                        "Error stopping pool leader - "
-                        "DaosServerManager.stop_ranks([{}])".format(
+                        "Error stopping pool leader - DaosServerManager.stop_ranks([{}])".format(
                             pool_leader))
-
-                self.pool.wait_for_rebuild(to_start=True, interval=1)
-                self.pool.wait_for_rebuild(to_start=False, interval=1)
+                self.pool.wait_for_rebuild_to_start(interval=1)
+                self.pool.wait_for_rebuild_to_end(interval=1)
 
                 # Verify the pool leader has changed
+                self.log.info("Original pool_leader= %s", pool_leader)
+                self.log.info("Pool svc_ranks after pool_leader stopped= %s", non_leader_ranks)
                 pool_leader = self.check_leader(pool_leader, True)
-                non_leader_ranks.remove(pool_leader)
+                mgmt_service_ranks = self.server_managers[0].management_service_ranks
+                self.log.info("New pool_leader= %s", pool_leader)
+                self.log.info("Management_service_ranks= %s", mgmt_service_ranks)
+                for rank in [pool_leader] + mgmt_service_ranks:
+                    if rank in non_leader_ranks:
+                        non_leader_ranks.remove(rank)
+                self.log.info(
+                    "After excluded new leader + management_service_ranks, non_leader_ranks= %s",
+                    non_leader_ranks)
 
                 if svc_params[1] == 5:
-                    # Stop a pool non-leader
-                    non_leader = non_leader_ranks[-1]
-                    self.log.info(
-                        "Stopping a pool non-leader (%s): %s",
-                        non_leader_ranks, non_leader)
+                    if non_leader_ranks:
+                        # Stop a pool non-leader if non_leader_ranks is not empty
+                        rank_to_kill = non_leader_ranks[-1]
+                        self.log.info(
+                            "Stopping a pool non-leader (%s): %s", non_leader_ranks, rank_to_kill)
+                    else:
+                        # Stop the pool new_leader if non_leader_ranks is empty
+                        rank_to_kill = pool_leader
+                        self.log.info(
+                            "Pool non_leader_ranks is empty, Stopping the new pool leader: %s",
+                            rank_to_kill)
                     try:
-                        self.server_managers[-1].stop_ranks([non_leader], self.test_log)
+                        self.server_managers[-1].stop_ranks([rank_to_kill], self.test_log)
                     except TestFail as error:
                         self.log.info(error)
                         self.fail(
-                            "Error stopping a pool non-leader - "
-                            "DaosServerManager.stop_ranks([{}])".format(non_leader))
+                            "Error stopping a pool rank - "
+                            "DaosServerManager.stop_ranks([{}])".format(rank_to_kill))
+                    self.pool.wait_for_rebuild_to_start(interval=1)
+                    self.pool.wait_for_rebuild_to_end(interval=1)
 
-                    self.pool.wait_for_rebuild(to_start=True, interval=1)
-                    self.pool.wait_for_rebuild(to_start=False, interval=1)
-                    # Verify the pool leader has not changed
-                    self.check_leader(pool_leader, False)
+                    if non_leader_ranks:
+                        # Verify the pool leader has not changed
+                        self.check_leader(pool_leader, False)
 
         self.log.info("Test passed!")

@@ -23,52 +23,29 @@ server_config:
   engines:
     0:
       pinned_numa_node: 0
-      nr_xs_helpers: 1
-      fabric_iface: ib0
+      nr_xs_helpers: 2
       fabric_iface_port: 31317
       log_file: daos_server0.log
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
-        1:
-          class: nvme
-          bdev_list: ["aaaa:aa:aa.a"]
+      storage: auto
     1:
       pinned_numa_node: 1
-      nr_xs_helpers: 1
-      fabric_iface: ib1
+      nr_xs_helpers: 2
       fabric_iface_port: 31417
       log_file: daos_server1.log
       log_mask: ERR
       env_vars:
         - FI_UNIVERSE_SIZE=2048
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
-        1:
-          class: nvme
-          bdev_list: ["bbbb:bb:bb.b"]
+      storage: auto
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-  scm_size: 12GB
-  nvme_size: 200GB
-  properties: reclaim:time,ec_cell_sz:64KiB
-  control_method: dmg
+  size: 75%
 pool_reserved:
-  scm_size: 3GB
-  nvme_size: 50GB
-  control_method: dmg
+  size: 10%
 pool_racer:
-  scm_size: 3GB
-  nvme_size: 10GB
-  control_method: dmg
+  size: 10%
 container:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -76,7 +53,8 @@ container:
 container_reserved:
   type: POSIX
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rd_fac:1
-  oclass: EC_2P1GX
+  file_oclass: EC_2P1GX
+  dir_oclass: RP_2GX
   control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
@@ -94,17 +72,21 @@ container_reserved:
 smoke:
   name: soak_smoke
   # smoke test timeout in hours
-  test_timeout: 0.4
+  test_timeout:
+    test_soak_smoke: 0.4
   joblist:
     - ior_smoke
     - fio_smoke
-    - daos_racer
+    #- daos_racer
     - mdtest_smoke
     - vpic_smoke
     - lammps_smoke
     - macsio_smoke
+    - datamover_smoke
   # num of bytes to write to reserved container
   resv_bytes: 500
+  enable_intercept_lib: true
+  enable_remote_logging: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -120,6 +102,8 @@ ior_smoke:
     - DFS
     - MPIIO
     - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
     - HDF5
     - HDF5-VOL
   test_file: daos:/testFile
@@ -133,15 +117,17 @@ ior_smoke:
     - '1m'
   segment_count: 1
   dfs_oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-7'
 fio_smoke:
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   job_timeout: 10
   names:
     - global
@@ -165,13 +151,12 @@ fio_smoke:
       - 'rw'
       - 'randrw'
     oclass:
-      - "EC_2P1GX"
-      # - "EC_4P1G1"
-      # - "EC_4P2GX"
-      # - "EC_8P2G1"
-      # - "EC_16P2GX"
+      - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
 daos_racer:
   runtime: 120
 vpic_smoke:
@@ -180,26 +165,38 @@ vpic_smoke:
     - 1
   taskspernode:
     - 1
-  cmdline: "${DAOS_APP_DIR}/soak/apps/vpic-install/bin/harris.Linux"
-  posix: true
+  cmdline: "${DAOS_TEST_APP_DIR}/vpic-install/bin/harris.Linux"
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/vpic/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/vpic/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 lammps_smoke:
   job_timeout: 10
   nodesperjob:
     - 1
   taskspernode:
     - 1
-  cmdline: "${DAOS_APP_DIR}/soak/apps/lammps/src/lmp_mpi -i ${DAOS_APP_DIR}/soak/apps/lammps/bench/in.lj.smoke"
-  posix: true
+  cmdline: "${DAOS_TEST_APP_DIR}/lammps/src/lmp_mpi -i ${DAOS_TEST_APP_DIR}/lammps/bench/in.lj.smoke"
+  api:
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   workdir: "/tmp/daos_dfuse/lammps/"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/lammps/"
+    disable_caching: true
+    thread_count: 8
+    cores: '0-7'
   oclass:
-    - "EC_2P1GX"
+    - ["EC_2P1GX", "RP_2GX"]
 mdtest_smoke:
   # maximum timeout for a single job in test in minutes
   job_timeout: 10
@@ -209,8 +206,10 @@ mdtest_smoke:
     - 1
   test_dir: "/"
   api:
-    - 'DFS'
-    - 'POSIX'
+    - DFS
+    - POSIX
+    - POSIX-LIBIOIL
+    - POSIX-LIBPIL4DFS
   iteration: 1
   num_of_files_dirs: 100
   pre_iter: 10
@@ -222,15 +221,13 @@ mdtest_smoke:
   depth:
     - 0
   dfs_oclass:
-    - "EC_2P1G1"
-    # - "EC_4P1G1"
-    # - "EC_4P2G1"
-    # - "EC_8P2G1"
-    # - "EC_16P2G1"
+    - ["EC_2P1G1", "RP_2G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-7'
 macsio_smoke:
   job_timeout: 10
   nodesperjob:
@@ -249,14 +246,45 @@ macsio_smoke:
   num_dumps: 2
   debug_level: 1
   oclass:
-    - "EC_2P1GX"
-    # - "EC_4P1G1"
-    # - "EC_4P2GX"
-    # - "EC_8P2G1"
-    # - "EC_16P2GX"
+    - ["EC_2P1GX", "RP_2GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/macsio/"
     disable_caching: true
+    thread_count: 8
+    cores: '0-7'
+datamover_smoke:
+  job_timeout: 10
+  nodesperjob:
+    - 1
+  taskspernode:
+    - 1
+  oclass:
+    - ["EC_2P1GX", "RP_2GX"]
+  dcp:
+    bufsize: 1M
+    chunksize: 1M
+  ior_write:
+    api:
+      - DFS
+    flags: "-w -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
+  ior_read:
+    api:
+      - DFS
+    flags: "-r -R -F -k"
+    signature: "5"
+    transfer_size:
+      - 1M
+    block_size:
+      - 1M
+    test_file: "daos:/testFile"
+    dfs_destroy: false
 hdf5_vol:
   plugin_path: "/usr/lib64/mpich/lib"
 events:

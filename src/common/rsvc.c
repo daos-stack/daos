@@ -257,6 +257,11 @@ rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
 			ep->ep_rank, rc_crt);
 		rsvc_client_process_error(client, rc_crt, ep);
 		return RSVC_CLIENT_RECHOOSE;
+	} else if (rc_crt == -DER_UNREG) {
+		D_DEBUG(DB_MD, "rank %u RPC or protocol version not registered\n",
+			ep->ep_rank);
+		rsvc_client_process_error(client, rc_crt, ep);
+		return RSVC_CLIENT_PROCEED;
 	} else if (rc_crt != 0) {
 		D_DEBUG(DB_MD, "no reply from rank %u: rc_crt=%d\n",
 			ep->ep_rank, rc_crt);

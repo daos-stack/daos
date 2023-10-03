@@ -148,7 +148,7 @@ ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 	ctx->oid.lo = 1;
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -161,7 +161,7 @@ ec_setup_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass, int low)
 	ctx->oid.hi =  100;
 	daos_obj_generate_oid(ctx->coh, &ctx->oid, 0, oclass, 0, 0);
 	ctx->oh = DAOS_HDL_INVAL;
-	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
+	rc = daos_obj_open(ctx->coh, ctx->oid, DAOS_OO_RW, &ctx->oh, NULL);
 	assert_success(rc);
 }
 
@@ -180,7 +180,7 @@ ec_setup_punch_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 	iov_alloc_str(&ctx->dkey, "dkey");
@@ -234,7 +234,7 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 	k = oca->u.ec.e_k;
@@ -328,7 +328,7 @@ test_filled_stripe(struct ec_agg_test_ctx *ctx)
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 
@@ -370,7 +370,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 		ec_setup_obj(ctx, ec_agg_oc, 1);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	p = oca->u.ec.e_p;
@@ -457,7 +457,7 @@ test_half_stripe(struct ec_agg_test_ctx *ctx)
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 	for (j = 0; j < NUM_KEYS; j++)
@@ -507,7 +507,7 @@ verify_2p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	assert_int_equal(oca->u.ec.e_k, 2);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	p = oca->u.ec.e_p;
@@ -626,7 +626,7 @@ test_partial_stripe(struct ec_agg_test_ctx *ctx)
 	ec_setup_obj(ctx, dts_ec_agg_oc, 3);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 	for (j = 0; j < NUM_KEYS; j++)
@@ -670,7 +670,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	ec_setup_obj(ctx, dts_ec_agg_oc, 4);
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 	k = oca->u.ec.e_k;
 	for (j = 0; j < NUM_KEYS; j++)
@@ -681,7 +681,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			ec_cleanup_data(ctx);
 		}
 
@@ -694,7 +694,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			ec_cleanup_data(ctx);
 		}
 
@@ -706,12 +706,12 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
-			assert_int_equal(rc, 0);
+			assert_success(rc);
 			ec_cleanup_data(ctx);
 		}
 
 	rc = daos_obj_close(ctx->oh, NULL);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 }
 
 static void
@@ -727,7 +727,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc)
 
 	assert_int_equal(oid_is_ec(ctx->oid, &oca), true);
 	rc = daos_obj2oc_attr(ctx->oh, &oca1);
-	assert_int_equal(rc, 0);
+	assert_success(rc);
 	len = oca1.u.ec.e_len;
 
 	k = oca->u.ec.e_k;

@@ -365,6 +365,8 @@ void d_log_close(void);
  */
 void d_log_sync_mask(void);
 
+void d_log_sync_mask_ex(const char *log_mask, const char *dd_mask);
+
 /**
  * open a dlog.
  *
@@ -406,7 +408,7 @@ int d_log_setlogmask(int facility, int mask);
  *
  * \return			0 on success, -1 on error.
  */
-int d_log_setmasks(char *mstr, int mlen);
+int d_log_setmasks(const char *mstr, int mlen);
 
 /**
  * get current mask level as a string (not null terminated).

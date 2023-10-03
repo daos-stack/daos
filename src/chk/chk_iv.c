@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -57,10 +57,9 @@ chk_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 	return 0;
 }
 
-static int
+static void
 chk_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	return 0;
 }
 
 static int
@@ -92,35 +91,50 @@ chk_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 		if (src_iv->ci_to_leader) {
 			/*
 			 * The case of the check engine sending IV message to the check leader
-			 * on the same rank has already been handled via chk_iv_update().
+			 * on the same rank has already been handled via chk_iv_update(). Then
+			 * only need to handle the case that the check leader resides on other
+			 * rank (trigger RPC to the check leader - the IV parent via returning
+			 * -DER_IVCB_FORWARD.
 			 */
-			D_ASSERT(!chk_is_on_leader(src_iv->ci_gen, -1, false));
-
-			/* Trigger RPC to the leader (IV parent) via returning -DER_IVCB_FORWARD. */
+			D_ASSERTF(!chk_is_on_leader(src_iv->ci_gen, CHK_LEADER_RANK, false),
+				  "Invalid IV forward path for gen "DF_X64"/"DF_X64", rank %u, "
+				  "phase %u, status %d/%d, from_psl %s\n",
+				  src_iv->ci_gen, src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+				  src_iv->ci_ins_status, src_iv->ci_pool_status,
+				  src_iv->ci_from_psl ? "yes" : "no");
 			rc = -DER_IVCB_FORWARD;
 		} else {
 			/*
 			 * If it is message to engine, then it may be triggered by check leader,
 			 * but it also may be from the pool service leader to other pool shards.
 			 * Return zero that will trigger IV_SYNC to other check engines.
+			 *
+			 * NOTE: Currently, IV refresh from root node is always direct to leaves,
+			 *	 it does not need some internal nodes to forward. So here, if it
+			 *	 is not for PS leader notification, then it must be triggered by
+			 *	 the check leader.
 			 */
 			if (!src_iv->ci_from_psl)
-				D_ASSERT(chk_is_on_leader(src_iv->ci_gen, -1, false));
-
+				D_ASSERTF(chk_is_on_leader(src_iv->ci_gen, CHK_LEADER_RANK, false),
+					  "Invalid IV forward path for gen "DF_X64"/"DF_X64
+					  ", rank %u, phase %u, status %d/%d\n", src_iv->ci_gen,
+					  src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+					  src_iv->ci_ins_status, src_iv->ci_pool_status);
 			rc = 0;
 		}
-	} else if (src_iv->ci_to_leader) {
-		*dst_iv = *src_iv;
-		rc = chk_leader_notify(dst_iv);
 	} else {
 		/*
 		 * We got an IV SYNC (refresh) RPC from some engine. But because the engine
 		 * always set CRT_IV_SHORTCUT_TO_ROOT for sync, then this should not happen.
 		 */
-		D_ERROR("Got invalid IV SYNC with gen "DF_X64", rank %u, phase %u, status %d/%d\n",
-			src_iv->ci_gen, src_iv->ci_rank, src_iv->ci_phase, src_iv->ci_ins_status,
-			src_iv->ci_pool_status);
-		rc = -DER_IO;
+		D_ASSERTF(src_iv->ci_to_leader,
+			  "Got invalid IV SYNC with gen "DF_X64"/"DF_X64", rank %u, phase %u, "
+			  "status %d/%d, to_leader no, from_psl %s\n",
+			  src_iv->ci_gen, src_iv->ci_seq, src_iv->ci_rank, src_iv->ci_phase,
+			  src_iv->ci_ins_status, src_iv->ci_pool_status,
+			  src_iv->ci_from_psl ? "yes" : "no");
+		*dst_iv = *src_iv;
+		rc = chk_leader_notify(dst_iv);
 	}
 
 	return rc;
@@ -136,10 +150,13 @@ chk_iv_ent_refresh(struct ds_iv_entry *entry, struct ds_iv_key *key,
 	int		 rc = 0;
 
 	/*
-	 * Do not need local refresh from the pool service leader.
-	 * But we need local refresh from the check leader on the same rank.
+	 * For the notification from pool service leader, skip the local pool shard that will
+	 * be handled by the pool service leader (including the @cpr status and pool service).
+	 *
+	 * For the notification from the check leader to check engines, do not skip the local
+	 * check engine.
 	 */
-	if (src_iv->ci_rank != dss_self_rank()) {
+	if (!src_iv->ci_to_leader && (src_iv->ci_rank != dss_self_rank() || !src_iv->ci_from_psl)) {
 		*dst_iv = *src_iv;
 		rc = chk_engine_notify(dst_iv);
 	}
@@ -173,8 +190,9 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 	int			rc;
 
 	iv->ci_rank = dss_self_rank();
+	iv->ci_seq = d_hlc_get();
 
-	if (chk_is_on_leader(iv->ci_gen, -1, false) && iv->ci_to_leader) {
+	if (chk_is_on_leader(iv->ci_gen, CHK_LEADER_RANK, false) && iv->ci_to_leader) {
 		/*
 		 * It is the check engine sends IV message to the check leader on
 		 * the same rank. Then directly notify the check leader without RPC.
@@ -193,8 +211,12 @@ chk_iv_update(void *ns, struct chk_iv *iv, uint32_t shortcut, uint32_t sync_mode
 		rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	}
 
-	if (rc != 0)
-		D_ERROR("CHK iv update failed: "DF_RC"\n", DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
+		 "CHK iv "DF_X64"/"DF_X64" on rank %u, phase %u, ins_status %u, "
+		 "pool_status %u, to_leader %s, from_psl %s, destroyed %s: rc = %d\n",
+		 iv->ci_gen, iv->ci_seq, iv->ci_rank, iv->ci_phase, iv->ci_ins_status,
+		 iv->ci_pool_status, iv->ci_to_leader ? "yes" : "no",
+		 iv->ci_from_psl ? "yes" : "no", iv->ci_pool_destroyed ? "yes" : "no", rc);
 
 	return rc;
 }

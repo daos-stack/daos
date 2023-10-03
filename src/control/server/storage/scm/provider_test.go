@@ -132,7 +132,7 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepRes: &storage.ScmPrepareResponse{
-					Socket: storage.ScmSocketState{
+					Socket: &storage.ScmSocketState{
 						State: storage.ScmNoFreeCap,
 					},
 					Namespaces:     storage.ScmNamespaces{defaultNamespace},
@@ -140,7 +140,7 @@ func TestProvider_Prepare(t *testing.T) {
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				Socket: storage.ScmSocketState{
+				Socket: &storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				Namespaces:     storage.ScmNamespaces{defaultNamespace},
@@ -164,14 +164,14 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					Socket: storage.ScmSocketState{
+					Socket: &storage.ScmSocketState{
 						State: storage.ScmFreeCap,
 					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				Socket: storage.ScmSocketState{
+				Socket: &storage.ScmSocketState{
 					State: storage.ScmFreeCap,
 				},
 				RebootRequired: true,
@@ -188,14 +188,14 @@ func TestProvider_Prepare(t *testing.T) {
 			},
 			mbc: &MockBackendConfig{
 				PrepResetRes: &storage.ScmPrepareResponse{
-					Socket: storage.ScmSocketState{
+					Socket: &storage.ScmSocketState{
 						State: storage.ScmNoFreeCap,
 					},
 					RebootRequired: true,
 				},
 			},
 			expResp: &storage.ScmPrepareResponse{
-				Socket: storage.ScmSocketState{
+				Socket: &storage.ScmSocketState{
 					State: storage.ScmNoFreeCap,
 				},
 				RebootRequired: true,
@@ -429,6 +429,7 @@ func TestProvider_Format(t *testing.T) {
 		clearMountpointErr error
 		request            *storage.ScmFormatRequest
 		expResponse        *storage.ScmFormatResponse
+		expMountOpts       string
 		expErr             error
 	}{
 		"missing mount point": {
@@ -500,6 +501,22 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
+			expMountOpts: "mpol=prefer:0,size=1g,huge=always",
+		},
+		"ramdisk: hugepages disabled": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Ramdisk: &storage.RamdiskParams{
+					Size:             1,
+					DisableHugepages: true,
+				},
+			},
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: goodMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+			expMountOpts: "mpol=prefer:0,size=1g",
 		},
 		"ramdisk: not mounted; mkdir fails": {
 			request: &storage.ScmFormatRequest{
@@ -683,6 +700,7 @@ func TestProvider_Format(t *testing.T) {
 				Formatted:  true,
 				Mounted:    true,
 			},
+			expMountOpts: dcpmMountOpts,
 		},
 		"dcpm: not mounted; not formatted; mkfs fails": {
 			request: &storage.ScmFormatRequest{
@@ -839,6 +857,16 @@ func TestProvider_Format(t *testing.T) {
 				}
 			}
 			cmpRes(t, tc.expResponse, res)
+
+			if tc.expMountOpts != "" {
+				mmp, ok := p.mounter.(*storage.MockMountProvider)
+				if ok {
+					gotOpts, _ := mmp.GetMountOpts(req.Mountpoint)
+					if diff := cmp.Diff(tc.expMountOpts, gotOpts); diff != "" {
+						t.Fatalf("unexpected mount options (-want, +got):\n%s\n", diff)
+					}
+				}
+			}
 		})
 	}
 }

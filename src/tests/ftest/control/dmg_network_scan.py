@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -10,7 +9,6 @@ from network_utils import get_network_information, get_dmg_network_information, 
 
 
 class DmgNetworkScanTest(TestWithServers):
-    # pylint: disable=too-many-ancestors
     """Test Class Description:
 
     Simple test to verify the network scan function of the dmg tool.
@@ -55,9 +53,9 @@ class DmgNetworkScanTest(TestWithServers):
         devices on the system.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,small
-        :avocado: tags=dmg,control
-        :avocado: tags=network_scan,basic,test_dmg_network_scan_basic
+        :avocado: tags=hw,medium
+        :avocado: tags=dmg,control,network_scan,basic
+        :avocado: tags=DmgNetworkScanTest,test_dmg_network_scan_basic
         """
         # Get info, both these functions will return a list of NetDev objects
         dmg_info = sorted(

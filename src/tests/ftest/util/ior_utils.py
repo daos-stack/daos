@@ -1,16 +1,41 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import os
 import re
-import uuid
 from enum import IntEnum
 
+from avocado.utils.process import CmdResult
 from command_utils_base import FormattedParameter, BasicParameter
 from exception_utils import CommandFailure
 from command_utils import SubProcessCommand
 from general_utils import get_log_file
+from duns_utils import format_path
+
+
+def get_ior(test, manager, hosts, path, slots, namespace="/run/ior/*", ior_params=None):
+    """Get a Ior object.
+
+    Args:
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Returns:
+        Ior: the Ior object requested
+    """
+    ior = Ior(test, manager, hosts, path, slots, namespace)
+    if ior_params:
+        for name, value in ior_params.items():
+            ior.update(name, value)
+    return ior
 
 
 def run_ior(test, manager, log, hosts, path, slots, group, pool, container, processes, ppn=None,
@@ -51,20 +76,72 @@ def run_ior(test, manager, log, hosts, path, slots, group, pool, container, proc
         CmdResult: result of the ior command
 
     """
-    ior = Ior(test, manager, log, hosts, path, slots, namespace)
-    if ior_params:
-        for name, value in ior_params.items():
-            ior_attr = getattr(ior.command, name, None)
-            if ior_attr:
-                if isinstance(ior_attr, BasicParameter):
-                    ior_attr.update(value, ".".join(["ior", name]))
+    ior = get_ior(test, manager, hosts, path, slots, namespace, ior_params)
+    ior.update_log_file(log)
     return ior.run(
         group, pool, container, processes, ppn, intercept, plugin_path, dfuse, display_space,
-        fail_on_warning)
+        fail_on_warning, False)
+
+
+def thread_run_ior(thread_queue, job_id, test, manager, log, hosts, path, slots, group,
+                   pool, container, processes, ppn, intercept, plugin_path, dfuse,
+                   display_space, fail_on_warning, namespace, ior_params):
+    # pylint: disable=too-many-arguments
+    """Start an IOR thread with thread queue for failure analysis.
+
+    Args:
+        thread_queue (Queue): Thread queue object.
+        job_id (str): Job identifier.
+        test (Test): avocado Test object
+        manager (JobManager): command to manage the multi-host execution of ior
+        log (str): test log.
+        hosts (NodeSet): hosts on which to run the ior command
+        path (str): hostfile path.
+        slots (int): hostfile number of slots per host.
+        group (str): DAOS server group name
+        pool (TestPool): DAOS test pool object
+        container (TestContainer): DAOS test container object.
+        processes (int): number of processes to run
+        ppn (int, optional): number of processes per node to run.  If specified it will override
+            the processes input. Defaults to None.
+        intercept (str, optional): path to interception library. Defaults to None.
+        plugin_path (str, optional): HDF5 vol connector library path. This will enable dfuse
+            working directory which is needed to run vol connector for DAOS. Default is None.
+        dfuse (Dfuse, optional): DAOS test dfuse object required when specifying a plugin_path.
+            Defaults to None.
+        display_space (bool, optional): Whether to display the pool space. Defaults to True.
+        fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
+            is found. Default is False.
+        namespace (str, optional): path to yaml parameters. Defaults to "/run/ior/*".
+        ior_params (dict, optional): dictionary of IorCommand attributes to override from
+            get_params(). Defaults to None.
+
+    Returns:
+        dict: A dictionary containing job_id(str), result(CmdResult) and log(str) keys.
+
+    """
+    thread_result = {
+        "job_id": job_id,
+        "result": None,
+        "log": log
+    }
+    saved_verbose = manager.verbose
+    manager.verbose = False
+    try:
+        thread_result["result"] = run_ior(test, manager, log, hosts, path, slots, group,
+                                          pool, container, processes, ppn, intercept,
+                                          plugin_path, dfuse, display_space, fail_on_warning,
+                                          namespace, ior_params)
+    except CommandFailure as error:
+        thread_result["result"] = CmdResult(command="", stdout=str(error), exit_status=1)
+    finally:
+        manager.verbose = saved_verbose
+        thread_queue.put(thread_result)
 
 
 class IorCommand(SubProcessCommand):
     # pylint: disable=too-many-instance-attributes
+    # pylint: disable=wrong-spelling-in-docstring
     """Defines a object for executing an IOR command.
 
     Example:
@@ -92,6 +169,7 @@ class IorCommand(SubProcessCommand):
         # Flags
         self.flags = FormattedParameter("{}")
 
+        # pylint: disable=wrong-spelling-in-comment
         # Optional arguments
         #   -a=POSIX        API for I/O [POSIX|DUMMY|MPIIO|MMAP|DFS|HDF5]
         #   -b=1048576      blockSize -- contiguous bytes to write per task
@@ -164,6 +242,9 @@ class IorCommand(SubProcessCommand):
         self.dfs_dir_oclass = FormattedParameter("--dfs.dir_oclass {}", "SX")
         self.dfs_prefix = FormattedParameter("--dfs.prefix {}")
 
+        # Include bullseye coverage file environment
+        self.env["COVFILE"] = os.path.join(os.sep, "tmp", "test.cov")
+
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
@@ -180,36 +261,23 @@ class IorCommand(SubProcessCommand):
 
         return param_names
 
-    def set_daos_params(self, group, pool, cont_uuid=None, display=True):
+    def set_daos_params(self, group, pool, cont):
         """Set the IOR parameters for the DAOS group, pool, and container uuid.
 
         Args:
             group (str): DAOS server group name
             pool (TestPool/str): DAOS test pool object or pool uuid/label
-            cont_uuid (str, optional): the container uuid. If not specified one
-                is generated. Defaults to None.
-            display (bool, optional): print updated params. Defaults to True.
-        """
-        self.set_daos_pool_params(pool, display)
-        if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
-            self.dfs_group.update(group, "dfs_group" if display else None)
-            self.dfs_cont.update(
-                cont_uuid if cont_uuid else str(uuid.uuid4()),
-                "dfs_cont" if display else None)
-
-    def set_daos_pool_params(self, pool, display=True):
-        """Set the IOR parameters that are based on a DAOS pool.
-
-        Args:
-            pool (TestPool/str): DAOS test pool object or pool uuid/label
-            display (bool, optional): print updated params. Defaults to True.
+            cont (str): the container uuid or label
         """
         if self.api.value in ["DFS", "MPIIO", "POSIX", "HDF5"]:
             try:
-                dfs_pool = pool.pool.get_uuid_str()
+                dfs_pool = pool.identifier
             except AttributeError:
                 dfs_pool = pool
-            self.dfs_pool.update(dfs_pool, "dfs_pool" if display else None)
+            self.update_params(
+                dfs_group=group,
+                dfs_pool=dfs_pool,
+                dfs_cont=cont)
 
     def get_aggregate_total(self, processes):
         """Get the total bytes expected to be written by ior.
@@ -277,7 +345,6 @@ class IorCommand(SubProcessCommand):
         env = self.env.copy()
         env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
         env["MPI_LIB"] = '""'
-        env["FI_PSM2_DISCONNECT"] = "1"
 
         # ior POSIX api does not require the below options.
         if "POSIX" in manager_cmd:
@@ -285,8 +352,7 @@ class IorCommand(SubProcessCommand):
 
         if "mpirun" in manager_cmd or "srun" in manager_cmd:
             if self.dfs_pool.value is not None:
-                env["DAOS_UNS_PREFIX"] = "daos://{}/{}/".format(self.dfs_pool.value,
-                                                                self.dfs_cont.value)
+                env["DAOS_UNS_PREFIX"] = format_path(self.dfs_pool.value, self.dfs_cont.value)
                 if self.dfs_oclass.value is not None:
                     env["IOR_HINT__MPI__romio_daos_obj_class"] = self.dfs_oclass.value
         return env
@@ -344,45 +410,44 @@ class IorMetrics(IntEnum):
     # Min(OPs)  Mean(OPs) StdDev    Mean(s) Stonewall(s) Stonewall(MiB)
     # Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt
     # blksiz    xsize aggs(MiB)   API RefNum
-    Operation = 0
-    Max_MiB = 1
-    Min_MiB = 2
-    Mean_MiB = 3
-    StdDev_MiB = 4
-    Max_OPs = 5
-    Min_OPs = 6
-    Mean_OPs = 7
-    StdDev_OPs = 8
-    Mean_seconds = 9
-    Stonewall_seconds = 10
-    Stonewall_MiB = 11
-    Test_No = 12
-    Num_Tasks = 13
-    tPN = 14
-    reps = 15
-    fPP = 16
-    reord = 17
-    reordoff = 18
-    reordrand = 19
-    seed = 20
-    segcnt = 21
-    blksiz = 22
-    xsize = 23
-    aggs_MiB = 24
+    OPERATION = 0
+    MAX_MIB = 1
+    MIN_MIB = 2
+    MEAN_MIB = 3
+    STDDEV_MIB = 4
+    MAX_OPS = 5
+    MIN_OPS = 6
+    MEAN_OPS = 7
+    STDDEV_OPS = 8
+    MEAN_SECONDS = 9
+    STONEWALL_SECONDS = 10
+    STONEWALL_MIB = 11
+    TEST_NO = 12
+    NUM_TASKS = 13
+    TPN = 14
+    REPS = 15
+    FPP = 16
+    REORD = 17
+    REORDOFF = 18
+    REORDRAND = 19
+    SEED = 20
+    SEGCNT = 21
+    BLKSIZ = 22
+    XSIZE = 23
+    AGGS_MIB = 24
     API = 25
-    RefNum = 26
+    REFNUM = 26
 
 
 class Ior:
     """Defines a class that runs the ior command through a job manager, e.g. mpirun."""
 
-    def __init__(self, test, manager, log, hosts, path=None, slots=None, namespace="/run/ior/*"):
+    def __init__(self, test, manager, hosts, path=None, slots=None, namespace="/run/ior/*"):
         """Initialize an Ior object.
 
         Args:
             test (Test): avocado Test object
             manager (JobManager): command to manage the multi-host execution of ior
-            log (str): log file.
             hosts (NodeSet): hosts on which to run the ior command
             path (str, optional): hostfile path. Defaults to None.
             slots (int, optional): hostfile number of slots per host. Defaults to None.
@@ -392,9 +457,11 @@ class Ior:
         self.manager.assign_hosts(hosts, path, slots)
         self.manager.job = IorCommand(namespace)
         self.manager.job.get_params(test)
-        self.manager.output_check = "combined"
+        self.manager.output_check = "both"
         self.timeout = test.params.get("timeout", namespace, None)
-        self.env = self.command.get_default_env(str(self.manager), log)
+        self.label_generator = test.label_generator
+        self.test_id = test.test_id
+        self.env = self.command.get_default_env(str(self.manager))
 
     @property
     def command(self):
@@ -406,22 +473,47 @@ class Ior:
         """
         return self.manager.job
 
-    @staticmethod
-    def display_pool_space(pool):
-        """Display the current pool space.
-
-        If the TestPool object has a DmgCommand object assigned, also display
-        the free pool space per target.
+    def update(self, name, value):
+        """Update a IorCommand BasicParameter with a new value.
 
         Args:
-            pool (TestPool): The pool for which to display space.
+            name (str): name of the IorCommand BasicParameter to update
+            value (str): value to assign to the IorCommand BasicParameter
         """
-        pool.display_pool_daos_space()
-        if pool.dmg:
-            pool.set_query_data()
+        param = getattr(self.command, name, None)
+        if param:
+            if isinstance(param, BasicParameter):
+                param.update(value, ".".join([self.command.command, name]))
+
+    def update_log_file(self, log_file):
+        """Update the log file for the ior command.
+
+        Args:
+            log_file (str): new ior log file
+        """
+        self.command.env["D_LOG_FILE"] = get_log_file(
+            log_file or "{}_daos.log".format(self.command.command))
+
+    def get_unique_log(self, container):
+        """Get a unique ior log file name.
+
+        Args:
+            container (TestContainer): container involved with the command
+
+        Returns:
+            str: a log file name
+        """
+        label = self.label_generator.get_label("ior")
+        parts = [self.test_id, container.pool.identifier, container.identifier, label]
+        flags = self.command.flags.value
+        if flags and '-w' in flags.lower():
+            parts.append('write')
+        if flags and '-r' in flags.lower():
+            parts.append('read')
+        return '.'.join(['_'.join(parts), 'log'])
 
     def run(self, group, pool, container, processes, ppn=None, intercept=None, plugin_path=None,
-            dfuse=None, display_space=True, fail_on_warning=False):
+            dfuse=None, display_space=True, fail_on_warning=False, unique_log=True):
         # pylint: disable=too-many-arguments
         """Run ior.
 
@@ -440,6 +532,8 @@ class Ior:
             display_space (bool, optional): Whether to display the pool space. Defaults to True.
             fail_on_warning (bool, optional): Controls whether the test should fail if a 'WARNING'
                 is found. Default is False.
+            unique_log (bool, optional): whether or not to update the log file with a new unique log
+                file name. Defaults to True.
 
         Raises:
             CommandFailure: if there is an error running the ior command
@@ -451,7 +545,7 @@ class Ior:
         result = None
         error_message = None
 
-        self.command.set_daos_params(group, pool, container.uuid)
+        self.command.set_daos_params(group, pool, container.identifier)
 
         if intercept:
             self.env["LD_PRELOAD"] = intercept
@@ -468,20 +562,32 @@ class Ior:
             else:
                 raise CommandFailure("Undefined 'dfuse' argument; required for 'plugin_path'")
 
+        if not self.manager.job.test_file.value:
+            # Provide a default test_file if not specified
+            if dfuse and (self.manager.job.api.value == "POSIX" or plugin_path):
+                test_file = self.manager.job.test_file.value or 'testfile'
+                self.manager.job.test_file.update(os.path.join(dfuse.mount_dir.value, test_file))
+            elif self.manager.job.api.value == "DFS":
+                self.manager.job.test_file.update(
+                    os.path.join(os.sep, self.label_generator.get_label("testfile")))
+
         if ppn is None:
             self.manager.assign_processes(processes)
         else:
-            self.manager.ppn.update(ppn, "{}.ppn".format(self.manager.command))
-            self.manager.processes.update(None, "{}.np".format(self.manager.command))
+            self.manager.ppn.update(ppn, ".".join([self.manager.command, "ppn"]))
+            self.manager.processes.update(None, ".".join([self.manager.command, "np"]))
 
         self.manager.assign_environment(self.env)
 
         if fail_on_warning and "WARNING" not in self.manager.check_results_list:
             self.manager.check_results_list.append("WARNING")
 
+        if unique_log:
+            self.update_log_file(self.get_unique_log(container))
+
         try:
             if display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
             result = self.manager.run()
 
         except CommandFailure as error:
@@ -489,7 +595,7 @@ class Ior:
 
         finally:
             if not self.manager.run_as_subprocess and display_space:
-                self.display_pool_space(pool)
+                pool.display_space()
 
         if error_message:
             raise CommandFailure(error_message)
@@ -515,6 +621,6 @@ class Ior:
                 error_message = "IOR Failed: {}".format(error)
             finally:
                 if pool:
-                    self.display_pool_space(pool)
+                    pool.display_space()
             if error_message:
                 raise CommandFailure(error_message)

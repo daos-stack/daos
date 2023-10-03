@@ -1,6 +1,5 @@
-#!/usr/bin/python3
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -18,10 +17,6 @@ class RbldWithIO(TestWithServers):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
 
@@ -35,7 +30,7 @@ class RbldWithIO(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=vm
         :avocado: tags=pool,rebuild
-        :avocado: tags=rebuildwithio,test_rebuild_with_io
+        :avocado: tags=RbldWithIO,test_rebuild_with_io
         """
         # Get the test params
         self.add_pool(create=False)
@@ -58,8 +53,7 @@ class RbldWithIO(TestWithServers):
             "Invalid pool information detected before rebuild")
 
         self.assertTrue(
-            self.pool.check_rebuild_status(rs_errno=0, rs_state=1,
-                                           rs_obj_nr=0, rs_rec_nr=0),
+            self.pool.check_rebuild_status(rs_errno=0, rs_state=1, rs_obj_nr=0, rs_rec_nr=0),
             "Invalid pool rebuild info detected before rebuild")
 
         # Create and open the container
@@ -77,13 +71,11 @@ class RbldWithIO(TestWithServers):
         self.server_managers[0].stop_ranks([rank], self.d_log)
 
         # Wait for recovery to start
-        self.pool.wait_for_rebuild(True)
+        self.pool.wait_for_rebuild_to_start()
 
-        self.daos_cmd = DaosCommand(self.bin)
-        self.daos_cmd.container_set_prop(pool=self.pool.uuid,
-                                         cont=self.container.uuid,
-                                         prop="status",
-                                         value="healthy")
+        daos_cmd = DaosCommand(self.bin)
+        daos_cmd.container_set_prop(
+            pool=self.pool.uuid, cont=self.container.uuid, prop="status", value="healthy")
 
         # Write data to the container for another 30 seconds
         self.log.info(
@@ -91,7 +83,7 @@ class RbldWithIO(TestWithServers):
             self.container.execute_io(30), self.container.uuid)
 
         # Wait for recovery to complete
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_end()
 
         # Check the pool information after the rebuild
         status = status = self.pool.check_pool_info(
@@ -100,11 +92,9 @@ class RbldWithIO(TestWithServers):
             pi_ndisabled=targets,                  # DAOS-2799
         )
         status &= self.pool.check_rebuild_status(
-            rs_state=2, rs_obj_nr=">0", rs_rec_nr=">0", rs_errno=0)
+            rs_state=2, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild
-        self.assertTrue(
-            self.container.read_objects(),
-            "Data verification error after rebuild")
+        self.assertTrue(self.container.read_objects(), "Data verification error after rebuild")
         self.log.info("Test Passed")

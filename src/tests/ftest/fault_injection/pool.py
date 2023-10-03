@@ -1,6 +1,5 @@
-#!/usr/bin/python
 """
-  (C) Copyright 2020-2022 Intel Corporation.
+  (C) Copyright 2020-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -12,7 +11,8 @@ from general_utils import DaosTestError
 
 
 class PoolServicesFaultInjection(TestWithServers):
-    """Test class Fault domains
+    """Test class Fault domains.
+
     :avocado: recursive
     """
 
@@ -24,21 +24,23 @@ class PoolServicesFaultInjection(TestWithServers):
         self.number_servers = 0
 
     def setUp(self):
+        """Set up each test case."""
         super().setUp()
         self.failed_requests = 0
         self.object_class = self.params.get("object_class", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
 
-    def look_missed_request(self, cmd_stderr, msg=b"MS request error"):
-        """ Read dmg_stderr for the msg string
-        If found, the instance attribute self.failed_request is
-        increased by 1.
+    def look_missed_request(self, cmd_stderr, msg=b"err: DER_TIMEDOUT"):
+        """Read dmg_stderr for the msg string.
+
+        If found, the instance attribute self.failed_request is increased by 1.
         """
         if msg in cmd_stderr:
             self.failed_requests += 1
 
     def create_and_write_into_container(self):
-        """ Create a container
+        """Create a container.
+
         Write objects into container
         Close container
         Look for missed requests shown by daos command.
@@ -57,29 +59,37 @@ class PoolServicesFaultInjection(TestWithServers):
         self.look_missed_request(self.container.daos.result.stderr)
 
     def exclude_and_reintegrate(self):
-        """ Exclude a random server from the pool
+        """Exclude a random server from the pool.
+
         Wait for rebuild
         Reintegrate the server back
         Wait for rebuild
 
-        Due to the nature of how wait_for_rebuild() is coded
+        Due to the nature of how wait_for_rebuild_to_start/end() is coded
         we can only get the last dmg command output.
         """
         server_to_exclude = randint(0, len(self.hostlist_servers) - 1)  # nosec
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_start()
+        self.look_missed_request(self.pool.dmg.result.stderr)
+
+        self.pool.wait_for_rebuild_to_end()
         self.look_missed_request(self.pool.dmg.result.stderr)
 
         self.pool.reintegrate(str(server_to_exclude))
         self.look_missed_request(self.pool.dmg.result.stderr)
 
-        self.pool.wait_for_rebuild(False)
+        self.pool.wait_for_rebuild_to_start()
+        self.look_missed_request(self.pool.dmg.result.stderr)
+
+        self.pool.wait_for_rebuild_to_end()
         self.look_missed_request(self.pool.dmg.result.stderr)
 
     def _clean(self):
-        """Destroy container and pool
+        """Destroy container and pool.
+
         Look for missed request on each executed command
         """
         if self.container:
@@ -91,7 +101,7 @@ class PoolServicesFaultInjection(TestWithServers):
             self.look_missed_request(self.pool.dmg.result.stderr)
 
     def test_pool_services(self):
-        """ Test the following pool commands:
+        """Test the following pool commands:
                 Create
                 Create container
                 Write container (not a pool command)
@@ -110,9 +120,9 @@ class PoolServicesFaultInjection(TestWithServers):
                 injected fault of real network issue.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=fault_injection,pool,faults
-        :avocado: tags=pool_with_faults,test_pool_services
+        :avocado: tags=hw,medium
+        :avocado: tags=fault_injection,pool,faults,rebuild
+        :avocado: tags=PoolServicesFaultInjection,test_pool_services
         """
         failed_commands = 0
         dmg_command = self.get_dmg_command()
@@ -138,11 +148,11 @@ class PoolServicesFaultInjection(TestWithServers):
                 # Delete pool and container
                 self._clean()
 
-            except CommandFailure as e:
-                self.log.error(str(e))
+            except CommandFailure as error:
+                self.log.error(str(error))
                 failed_commands += 1
-            except DaosTestError as e:
-                self.log.error(str(e))
+            except DaosTestError as error:
+                self.log.error(str(error))
                 failed_commands += 1
             finally:
                 if self.pool:
@@ -154,7 +164,7 @@ class PoolServicesFaultInjection(TestWithServers):
         self.assertGreater(self.failed_requests, 0, "No faults detected.")
 
     def manual_test_create_containers_while_blocking_daos_using_iptables(self):
-        """ This is a manual test.
+        """This is a manual test.
 
         Using CaRT as test pool services is a good way to add noise to the
         tools, however there are other ways to simulate a flaky network

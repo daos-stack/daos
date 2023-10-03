@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2021 Intel Corporation.
+ * (C) Copyright 2016-2022 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -67,6 +67,11 @@ struct crt_grp_priv {
 	 * crt_group_mod APIs.
 	 */
 	uint32_t		 gp_membs_ver;
+	/*
+	 * The minimum version of the group. This is set by crt_rank_self_set
+	 * to the version in which we join system.
+	 */
+	uint32_t		 gp_membs_ver_min;
 	/*
 	 * this structure contains the circular list of member ranks.
 	 * It's used to store SWIM related information and should strictly
@@ -373,6 +378,6 @@ int crt_grp_config_psr_load(struct crt_grp_priv *grp_priv, d_rank_t psr_rank);
 int crt_grp_psr_reload(struct crt_grp_priv *grp_priv);
 
 int
-grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank);
+grp_add_to_membs_list(struct crt_grp_priv *grp_priv, d_rank_t rank, uint64_t incarnation);
 
 #endif /* __CRT_GROUP_H__ */

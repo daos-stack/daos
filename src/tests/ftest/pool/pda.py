@@ -1,6 +1,5 @@
-#!/usr/bin/python
 '''
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
@@ -8,7 +7,6 @@ from apricot import TestWithServers
 
 
 class PoolPDAProperty(TestWithServers):
-    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """run tests with pool pda property
 

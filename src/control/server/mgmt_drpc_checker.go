@@ -52,7 +52,7 @@ func (mod *srvModule) handleCheckerListPools(_ context.Context, reqb []byte) (ou
 	return
 }
 
-func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) (out []byte, outErr error) {
+func (mod *srvModule) handleCheckerRegisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
 	req := new(srvpb.CheckRegPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
@@ -65,7 +65,7 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 		out, outErr = proto.Marshal(resp)
 	}()
 
-	uuid, err := uuid.Parse(req.Uuid)
+	poolUUID, err := uuid.Parse(req.Uuid)
 	if err != nil {
 		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
 		resp.Status = int32(daos.InvalidInput)
@@ -82,7 +82,16 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 		return
 	}
 
-	ps, err := mod.poolDB.FindPoolServiceByUUID(uuid)
+	lock, err := mod.poolDB.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		mod.log.Errorf("failed to take pool lock: %s", err)
+		resp.Status = int32(daos.MiscError)
+		return
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	ps, err := mod.poolDB.FindPoolServiceByUUID(poolUUID)
 	if err == nil {
 		// We're updating an existing pool service.
 		if ps.PoolLabel != req.Label {
@@ -96,7 +105,7 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 		ps.Replicas = ranklist.RanksFromUint32(req.Svcreps)
 
 		mod.log.Debugf("updating pool service from req: %+v", req)
-		if err := mod.poolDB.UpdatePoolService(ps); err != nil {
+		if err := mod.poolDB.UpdatePoolService(ctx, ps); err != nil {
 			mod.log.Errorf("failed to update pool: %s", err)
 			resp.Status = int32(daos.MiscError)
 			return
@@ -116,14 +125,14 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 	}
 
 	ps = &system.PoolService{
-		PoolUUID:  uuid,
+		PoolUUID:  poolUUID,
 		PoolLabel: req.Label,
 		State:     system.PoolServiceStateReady,
 		Replicas:  ranklist.RanksFromUint32(req.Svcreps),
 	}
 
 	mod.log.Debugf("adding pool service from req: %+v", req)
-	if err := mod.poolDB.AddPoolService(ps); err != nil {
+	if err := mod.poolDB.AddPoolService(ctx, ps); err != nil {
 		mod.log.Errorf("failed to register pool: %s", err)
 		resp.Status = int32(daos.MiscError)
 		return
@@ -132,7 +141,7 @@ func (mod *srvModule) handleCheckerRegisterPool(_ context.Context, reqb []byte) 
 	return
 }
 
-func (mod *srvModule) handleCheckerDeregisterPool(_ context.Context, reqb []byte) (out []byte, outErr error) {
+func (mod *srvModule) handleCheckerDeregisterPool(parent context.Context, reqb []byte) (out []byte, outErr error) {
 	req := new(srvpb.CheckDeregPoolReq)
 	if err := proto.Unmarshal(reqb, req); err != nil {
 		return nil, drpc.UnmarshalingPayloadFailure()
@@ -145,14 +154,23 @@ func (mod *srvModule) handleCheckerDeregisterPool(_ context.Context, reqb []byte
 		out, outErr = proto.Marshal(resp)
 	}()
 
-	uuid, err := uuid.Parse(req.Uuid)
+	poolUUID, err := uuid.Parse(req.Uuid)
 	if err != nil {
 		mod.log.Errorf("invalid pool UUID %q: %s", req.Uuid, err)
 		resp.Status = int32(daos.InvalidInput)
 		return
 	}
 
-	if _, err := mod.poolDB.FindPoolServiceByUUID(uuid); err != nil {
+	lock, err := mod.poolDB.TakePoolLock(parent, poolUUID)
+	if err != nil {
+		mod.log.Errorf("failed to take pool lock: %s", err)
+		resp.Status = int32(daos.MiscError)
+		return
+	}
+	defer lock.Release()
+	ctx := lock.InContext(parent)
+
+	if _, err := mod.poolDB.FindPoolServiceByUUID(poolUUID); err != nil {
 		if system.IsPoolNotFound(err) {
 			mod.log.Errorf("pool with uuid %q does not exist", req.Uuid)
 			resp.Status = int32(daos.Nonexistent)
@@ -163,7 +181,7 @@ func (mod *srvModule) handleCheckerDeregisterPool(_ context.Context, reqb []byte
 		return
 	}
 
-	if err := mod.poolDB.RemovePoolService(uuid); err != nil {
+	if err := mod.poolDB.RemovePoolService(ctx, poolUUID); err != nil {
 		mod.log.Errorf("failed to remove pool: %s", err)
 		resp.Status = int32(daos.MiscError)
 		return
@@ -184,6 +202,23 @@ func (mod *srvModule) handleCheckerReport(_ context.Context, reqb []byte) (out [
 		mod.log.Debugf("CheckerReport resp: %+v", resp)
 		out, outErr = proto.Marshal(resp)
 	}()
+
+	if req.Report != nil && req.Report.PoolLabel == "" && req.Report.PoolUuid != "" {
+		poolUUID, err := uuid.Parse(req.Report.PoolUuid)
+		if err != nil {
+			mod.log.Errorf("invalid pool UUID %q: %s", req.Report.PoolUuid, err)
+			resp.Status = int32(daos.InvalidInput)
+			return
+		}
+
+		if ps, err := mod.poolDB.FindPoolServiceByUUID(poolUUID); err == nil {
+			// Annotate the report with the pool label for the user.
+			// NB: In some cases this label may be incorrect, in which
+			// case the user will want to use the verbose or JSON output
+			// modes of the checker in order to get the UUID.
+			req.Report.PoolLabel = ps.PoolLabel
+		}
+	}
 
 	finding := checker.AnnotateFinding(checker.NewFinding(req.Report))
 	mod.log.Debugf("annotated finding: %+v", finding)

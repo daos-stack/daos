@@ -27,3 +27,7 @@ notes=FIXME,XXX,TODO
 [REPORTS]
 reports=no
 score=no
+
+[DESIGN]
+# Controls the too-many-ancestors message.  Default is 7, much of our ftest code has 8 or 9
+max-parents=9

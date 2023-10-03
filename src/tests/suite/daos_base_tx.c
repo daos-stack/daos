@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -590,13 +590,26 @@ dtx_16(void **state)
 	insert_single(dkey, akey, 0, update_buf, dts_dtx_iosize,
 		      DAOS_TX_NONE, &req);
 
-	dtx_set_fail_loc(arg, DAOS_DTX_LONG_TIME_RESEND);
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 4, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_DTX_LONG_TIME_RESEND | DAOS_FAIL_SOME, 0, NULL);
+	}
+	par_barrier(PAR_COMM_WORLD);
 
 	arg->expect_result = -DER_EP_OLD;
-	punch_akey(dkey, akey, DAOS_TX_NONE, &req);
-	arg->expect_result = 0;
+	punch_akey_with_flags(dkey, akey, DAOS_TX_NONE, &req, DAOS_COND_PUNCH);
 
-	dtx_set_fail_loc(arg, 0);
+	arg->expect_result = 0;
+	punch_akey(dkey, "akey_non", DAOS_TX_NONE, &req);
+
+	par_barrier(PAR_COMM_WORLD);
+	if (arg->myrank == 0) {
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_NUM, 0, 0, NULL);
+	}
+	par_barrier(PAR_COMM_WORLD);
 
 	D_FREE(update_buf);
 	ioreq_fini(&req);
@@ -868,6 +881,26 @@ dtx_21(void **state)
 	ioreq_fini(&req);
 }
 
+static int
+dtx_base_rf0_setup(void **state)
+{
+	int	rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF0);
+	return rc;
+}
+
+static int
+dtx_base_rf1_setup(void **state)
+{
+	int	rc;
+
+	rc = rebuild_sub_setup_common(state, DEFAULT_POOL_SIZE,
+				      0, DAOS_PROP_CO_REDUN_RF1);
+	return rc;
+}
+
 static const struct CMUnitTest dtx_tests[] = {
 	{"DTX1: update/punch single value with DTX successfully",
 	 dtx_1, NULL, test_case_teardown},
@@ -908,9 +941,9 @@ static const struct CMUnitTest dtx_tests[] = {
 	{"DTX19: DTX resend during bulk data transfer - multiple reps",
 	 dtx_19, NULL, test_case_teardown},
 	{"DTX20: race between DTX refresh and DTX resync",
-	 dtx_20, NULL, test_case_teardown},
+	 dtx_20, dtx_base_rf1_setup, test_case_teardown},
 	{"DTX21: do not abort partially committed DTX",
-	 dtx_21, NULL, test_case_teardown},
+	 dtx_21, dtx_base_rf0_setup, test_case_teardown},
 };
 
 static int

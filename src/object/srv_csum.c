@@ -9,6 +9,7 @@
 #include <daos/common.h>
 #include <gurt/common.h>
 #include <daos/checksum.h>
+#include <daos/object.h>
 #include <daos_types.h>
 #include <daos_srv/bio.h>
 
@@ -685,4 +686,60 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer, struct bio_sglist
 
 	return ds_csum_add2iod_array(iod, csummer, bsgl, biov_csums,
 				     biov_csums_used, iod_csums);
+}
+
+int
+ds_csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
+		    struct dcs_csum_info *dkey_csum,
+		    daos_iod_t *iods, struct dcs_iod_csums *iod_csums, uint32_t iod_nr,
+		    daos_unit_oid_t *uoid)
+{
+	uint32_t	i;
+	int		rc;
+
+	if (!daos_csummer_initialized(csummer) || csummer->dcs_skip_key_verify)
+		return 0;
+
+	if (!DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
+		/**
+		 * with DAOS_VC_DIFF_DKEY, the dkey will be corrupt on purpose
+		 * for object verification tests. Don't reject the
+		 * update in this case
+		 */
+		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
+		if (rc != 0) {
+			D_ERROR("daos_csummer_verify_key error for dkey: "
+				DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
+
+	for (i = 0; i < iod_nr; i++) {
+		daos_iod_t		*iod = &iods[i];
+		struct dcs_iod_csums	*csum = &iod_csums[i];
+
+		if (!csum_iod_is_supported(iod))
+			continue;
+
+		D_DEBUG(DB_CSUM, DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD", csum_nr: %d\n",
+			DP_C_UOID_DKEY(*uoid, dkey), i, DP_C_IOD(iod), csum->ic_nr);
+
+		if (csum->ic_nr > 0)
+			D_DEBUG(DB_CSUM, "first data csum: "DF_CI"\n", DP_CI(*csum->ic_data));
+
+		rc = daos_csummer_verify_key(csummer,
+					     &iod->iod_name,
+					     &csum->ic_akey);
+		if (rc != 0) {
+			D_ERROR(DF_C_UOID_DKEY"iod[%d]: "DF_C_IOD" verify_key "
+					       "failed for akey: "DF_KEY", csum: "DF_CI", "
+					       "error: "DF_RC"\n",
+				DP_C_UOID_DKEY(*uoid, dkey), i,
+				DP_C_IOD(iod), DP_KEY(&iod->iod_name),
+				DP_CI(csum->ic_akey), DP_RC(rc));
+			return rc;
+		}
+	}
+
+	return 0;
 }

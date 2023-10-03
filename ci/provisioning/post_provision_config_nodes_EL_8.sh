@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  (C) Copyright 2021-2022 Intel Corporation.
+#  (C) Copyright 2021-2023 Intel Corporation.
 #
 #  SPDX-License-Identifier: BSD-2-Clause-Patent
 
@@ -16,8 +16,14 @@ group_repo_post() {
 
 distro_custom() {
     # install avocado
-    dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                   clustershell
+    local avocado_rpms=(python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}})
+    if [ -z "$(dnf repoquery "${avocado_rpms[@]}")" ]; then
+        avocado_rpms=()
+        pip install "avocado-framework<83.0"
+        pip install "avocado-framework-plugin-result-html<83.0"
+        pip install "avocado-framework-plugin-varianter-yaml-to-mux<83.0"
+    fi
+    dnf -y install "${avocado_rpms[@]}" clustershell
 
     # for Launchable's pip install
     dnf -y install python3-setuptools.noarch
@@ -47,7 +53,7 @@ install_mofed() {
 
 
     stream=false
-    gversion="$(lsb_release -sr)"
+    gversion="$VERSION_ID"
     if [ "$gversion" == "8" ]; then
         gversion="8.6"
         stream=true
@@ -64,7 +70,7 @@ install_mofed() {
     rm -f RPM-GPG-KEY-Mellanox
     dnf repolist || true
 
-    time dnf -y install mlnx-ofed-basic
+    time dnf -y install mlnx-ofed-basic ucx-cma ucx-ib ucx-knem ucx-rdmacm ucx-xpmem
 
     # now, upgrade firmware
     time dnf -y install mlnx-fw-updater
@@ -81,29 +87,4 @@ install_mofed() {
         dnf remove -y ucx-knem || true
     fi
 
-    # Need this module file
-    version="$(rpm -q --qf "%{version}" openmpi)"
-    mkdir -p /etc/modulefiles/mpi/
-    cat << EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
-    #%Module 1.0
-    #
-    #  OpenMPI module for use with 'environment-modules' package:
-    #
-    conflict		mpi
-    prepend-path 		PATH 		/usr/mpi/gcc/openmpi-$version/bin
-    prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-$version/lib64
-    prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-$version/lib64/pkgconfig
-    prepend-path		MANPATH		/usr/mpi/gcc/openmpi-$version/share/man
-    setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-$version/bin
-    setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-$version/etc
-    setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-$version/lib64
-    setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-$version/include
-    setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-$version/lib64
-    setenv			MPI_MAN			/usr/mpi/gcc/openmpi-$version/share/man
-    setenv			MPI_COMPILER	openmpi-x86_64
-    setenv			MPI_SUFFIX	_openmpi
-    setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-$version
-EOF
-
-    printf 'MOFED_VERSION=%s\n' "$MLNX_VER_NUM" >> /etc/do-release
 }

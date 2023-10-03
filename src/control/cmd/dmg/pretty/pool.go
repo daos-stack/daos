@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2022 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -39,8 +39,9 @@ func PrintPoolQueryResponse(pqr *control.PoolQueryResp, out io.Writer, opts ...P
 	w := txtfmt.NewErrWriter(out)
 
 	// Maintain output compatibility with the `daos pool query` output.
-	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d\n",
-		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version)
+	fmt.Fprintf(w, "Pool %s, ntarget=%d, disabled=%d, leader=%d, version=%d, state=%s\n",
+		pqr.UUID, pqr.TotalTargets, pqr.DisabledTargets, pqr.Leader, pqr.Version, pqr.State)
+
 	if pqr.PoolLayoutVer != pqr.UpgradeLayoutVer {
 		fmt.Fprintf(w, "Pool layout out of date (%d < %d) -- see `dmg pool upgrade` for details.\n",
 			pqr.PoolLayoutVer, pqr.UpgradeLayoutVer)
@@ -97,6 +98,12 @@ func PrintPoolQueryTargetResponse(pqtr *control.PoolQueryTargetResp, out io.Writ
 	return w.Err
 }
 
+// PrintTierRatio generates a human-readable representation of the supplied
+// tier ratio.
+func PrintTierRatio(ratio float64) string {
+	return fmt.Sprintf("%.2f%%", ratio*100)
+}
+
 // PrintPoolCreateResponse generates a human-readable representation of the pool create
 // response and prints it to the supplied io.Writer.
 func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ...PrintConfigOption) error {
@@ -113,10 +120,10 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		totalSize += tierBytes
 	}
 
-	tierRatio := make([]float64, len(pcr.TierBytes))
+	tierRatios := make([]float64, len(pcr.TierBytes))
 	if totalSize != 0 {
 		for tierIdx, tierBytes := range pcr.TierBytes {
-			tierRatio[tierIdx] = float64(tierBytes) / float64(totalSize)
+			tierRatios[tierIdx] = float64(tierBytes) / float64(totalSize)
 		}
 	}
 
@@ -127,19 +134,20 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 	numRanks := uint64(len(pcr.TgtRanks))
 	fmtArgs := make([]txtfmt.TableRow, 0, 6)
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"UUID": pcr.UUID})
+	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Leader": fmt.Sprintf("%d", pcr.Leader)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Service Ranks": formatRanks(pcr.SvcReps)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Storage Ranks": formatRanks(pcr.TgtRanks)})
 	fmtArgs = append(fmtArgs, txtfmt.TableRow{"Total Size": humanize.Bytes(totalSize * numRanks)})
 
 	title := "Pool created with "
 	tierName := "SCM"
-	for tierIdx, tierRatio := range tierRatio {
+	for tierIdx, tierRatio := range tierRatios {
 		if tierIdx > 0 {
 			title += ","
 			tierName = "NVMe"
 		}
 
-		title += fmt.Sprintf("%0.2f%%", tierRatio*100)
+		title += PrintTierRatio(tierRatio)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
 		fmtArgs = append(fmtArgs, txtfmt.TableRow{fmtName: fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.TierBytes[tierIdx]*numRanks), humanize.Bytes(pcr.TierBytes[tierIdx]))})
 	}
@@ -177,6 +185,7 @@ func poolListCreateRow(pool *control.Pool, upgrade bool) txtfmt.TableRow {
 			imbalance = pool.Usage[ti].Imbalance
 		}
 	}
+
 	row := txtfmt.TableRow{
 		"Pool":      pool.GetName(),
 		"Size":      fmt.Sprintf("%s", humanize.Bytes(size)),
@@ -264,6 +273,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 		"SvcReps":        svcReps,
 		"Disabled":       fmt.Sprintf("%d/%d", pool.TargetsDisabled, pool.TargetsTotal),
 		"UpgradeNeeded?": upgrade,
+		"Rebuild State":  pool.RebuildState,
 	}
 
 	for _, tu := range pool.Usage {
@@ -273,7 +283,7 @@ func poolListCreateRowVerbose(pool *control.Pool) txtfmt.TableRow {
 	return row
 }
 
-func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error {
+func printListPoolsRespVerbose(noQuery bool, out io.Writer, resp *control.ListPoolsResp) error {
 	if len(resp.Pools) == 0 {
 		fmt.Fprintln(out, "no pools in system")
 		return nil
@@ -288,6 +298,10 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 	}
 	titles = append(titles, "Disabled")
 	titles = append(titles, "UpgradeNeeded?")
+
+	if !noQuery {
+		titles = append(titles, "Rebuild State")
+	}
 	formatter := txtfmt.NewTableFormatter(titles...)
 
 	var table []txtfmt.TableRow
@@ -306,7 +320,7 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 // PrintListPoolsResponse generates a human-readable representation of the
 // supplied ListPoolsResp struct and writes it to the supplied io.Writer.
 // Additional columns for pool UUID and service replicas if verbose is set.
-func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool) error {
+func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool, noQuery bool) error {
 	warn, err := resp.Validate()
 	if err != nil {
 		return err
@@ -316,7 +330,7 @@ func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, 
 	}
 
 	if verbose {
-		return printListPoolsRespVerbose(out, resp)
+		return printListPoolsRespVerbose(noQuery, out, resp)
 	}
 
 	return printListPoolsResp(out, resp)

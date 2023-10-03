@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -90,6 +90,10 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_SRV_BULK_CACHE,
 	},
 	{
+		.iob_bit	= IOBP_WAL_COMMIT,
+		.iob_str	= IOBP_ENV_WAL_COMMIT,
+	},
+	{
 		.iob_bit	= IOBP_OFF,
 		.iob_str	= NULL,
 	},
@@ -102,15 +106,16 @@ io_bypass_init(void)
 {
 	char	*str = getenv(DENV_IO_BYPASS);
 	char	*tok;
+	char	*saved_ptr;
 
 	if (!str)
 		return;
 
-	tok = strtok(str, ",");
+	tok = strtok_r(str, ",", &saved_ptr);
 	while (tok) {
 		struct io_bypass *iob;
 
-		str = strtok(NULL, ",");
+		str = strtok_r(NULL, ",", &saved_ptr);
 		if (str)
 			str[-1] = '\0';
 
@@ -160,6 +165,9 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	logfile = getenv(D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
+		logfile = NULL;
+	} else if (!strncmp(logfile, "/dev/null", 9)) {
+		/* Don't set up logging or log to stdout if the log file is /dev/null */
 		logfile = NULL;
 	}
 
@@ -250,7 +258,8 @@ DP_UUID(const void *uuid)
 }
 
 #ifndef DAOS_BUILD_RELEASE
-#define DF_KEY_MAX		8
+#define DF_KEY_STR_SIZE 64
+#define DF_KEY_MAX      8
 
 static __thread int thread_key_buf_idx;
 static __thread char thread_key_buf[DF_KEY_MAX][DF_KEY_STR_SIZE];
@@ -272,7 +281,7 @@ daos_key2str(daos_key_t *key)
 		for (i = 0 ; i < len ; i++) {
 			if (akey[i] == '\0')
 				break;
-			if (!isprint(akey[i])) {
+			if (!isprint(akey[i]) || akey[i] == '\'') {
 				can_print = false;
 				break;
 			}
@@ -293,5 +302,29 @@ daos_key2str(daos_key_t *key)
 	thread_key_buf_idx = (thread_key_buf_idx + 1) % DF_KEY_MAX;
 	return buf;
 }
-#endif
 
+/* Format a directory entry suitable for logging.
+ * Take a directory entry (filename) and return something suitable for printing, no not modify the
+ * input itself, either return the input as-is for printing or some metadata about it.
+ * TODO: Check boundary case.
+ */
+char *
+daos_de2str(const char *de)
+{
+	int i;
+
+	if (!de)
+		return "<NULL>";
+
+	for (i = 0; i < NAME_MAX; i++) {
+		if (de[i] == '\0')
+			return (char *)de;
+		if (de[i] == '/')
+			return "<contains slash>";
+		if (!isprint(de[i]) || de[i] == '\'')
+			return "<not printable>";
+	}
+	return "<entry too long>";
+}
+
+#endif

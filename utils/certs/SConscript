@@ -7,7 +7,6 @@ def scons():
 
     env.Install("$PREFIX/lib64/daos/certgen", ['admin.cnf',
                                                'agent.cnf',
-                                               'ca.cnf',
                                                'server.cnf',
                                                'gen_certificates.sh'])
 

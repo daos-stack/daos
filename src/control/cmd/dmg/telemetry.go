@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -29,6 +29,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -40,8 +41,8 @@ type telemCmd struct {
 type telemConfigCmd struct {
 	baseCmd
 	cfgCmd
-	jsonOutputCmd
-	InstallDir string `long:"install-dir" short:"i" description:"Install directory for telemetry binary"`
+	cmdutil.JSONOutputCmd
+	InstallDir string `long:"install-dir" short:"i" required:"1" description:"Install directory for telemetry binary"`
 	System     string `long:"system" short:"s" default:"prometheus" description:"Telemetry system to configure"`
 }
 
@@ -120,21 +121,6 @@ func (cmd *telemConfigCmd) fetchAsset(repo, platform string) (*os.File, error) {
 	return outFile, err
 }
 
-func (cmd *telemConfigCmd) findInstallPath() (string, error) {
-	if cmd.InstallDir != "" {
-		return cmd.InstallDir, nil
-	}
-
-	path := os.Getenv("PATH")
-	for _, dir := range filepath.SplitList(path) {
-		if err := unix.Access(dir, unix.W_OK); err == nil {
-			return dir, nil
-		}
-	}
-
-	return "", errors.New("unable to find writable $PATH entry")
-}
-
 func (cmd *telemConfigCmd) extractFile(rdr *tar.Reader, dest string, mode os.FileMode) error {
 	outFile, err := os.OpenFile(dest, os.O_RDWR|os.O_CREATE, mode)
 	if err != nil {
@@ -155,11 +141,6 @@ type installInfo struct {
 }
 
 func (cmd *telemConfigCmd) installPrometheus(cfgPath string) (*installInfo, error) {
-	iPath, err := cmd.findInstallPath()
-	if err != nil {
-		return nil, err
-	}
-
 	gzFile, err := cmd.fetchAsset("prometheus/prometheus", "linux-amd64")
 	if err != nil {
 		return nil, err
@@ -185,7 +166,7 @@ func (cmd *telemConfigCmd) installPrometheus(cfgPath string) (*installInfo, erro
 		}
 		switch filepath.Base(hdr.Name) {
 		case "prometheus":
-			info.binPath = path.Join(iPath, "prometheus")
+			info.binPath = path.Join(cmd.InstallDir, "prometheus")
 			if err := cmd.extractFile(tarRdr, info.binPath, 0755); err != nil {
 				return nil, err
 			}
@@ -243,6 +224,11 @@ func (cmd *telemConfigCmd) loadPromCfg(cfgPath string) (*promCfg, error) {
 }
 
 func (cmd *telemConfigCmd) configurePrometheus() (*installInfo, error) {
+	if err := unix.Access(cmd.InstallDir, unix.W_OK); err != nil {
+		return nil, errors.Wrapf(err,
+			"Install folder %s does not have write permission", cmd.InstallDir)
+	}
+
 	user, err := user.Current()
 	if err != nil {
 		return nil, err
@@ -318,14 +304,14 @@ type metricsCmd struct {
 // metricsListCmd provides a list of metrics available from the requested DAOS servers.
 type metricsListCmd struct {
 	baseCmd
-	jsonOutputCmd
-	hostListCmd
+	cmdutil.JSONOutputCmd
+	singleHostCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 }
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.hostlist)
+	host, err := getMetricsHost(cmd.getHostList())
 	if err != nil {
 		return err
 	}
@@ -334,7 +320,7 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	req.Port = cmd.Port
 	req.Host = host
 
-	if !cmd.shouldEmitJSON {
+	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
@@ -343,11 +329,11 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.shouldEmitJSON {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
-	err = pretty.PrintMetricsListResp(cmd.writer, resp)
+	err = pretty.PrintMetricsListResp(os.Stdout, resp)
 	if err != nil {
 		return err
 	}
@@ -355,18 +341,14 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 }
 
 func getMetricsHost(hostlist []string) (string, error) {
-	if len(hostlist) == 0 {
-		return "localhost", nil
+	if len(hostlist) != 1 {
+		return "", fmt.Errorf("too many hosts: %v", hostlist)
 	}
 
-	if len(hostlist) == 1 {
-		// discard port if supplied - we use the metrics port
-		parts := strings.Split(hostlist[0], ":")
+	// discard port if supplied - we use the metrics port
+	parts := strings.Split(hostlist[0], ":")
 
-		return parts[0], nil
-	}
-
-	return "", fmt.Errorf("must pass in exactly 1 host (got %d)", len(hostlist))
+	return parts[0], nil
 }
 
 func getConnectingMsg(host string, port uint32) string {
@@ -376,15 +358,15 @@ func getConnectingMsg(host string, port uint32) string {
 // metricsQueryCmd collects the requested metrics from the requested DAOS servers.
 type metricsQueryCmd struct {
 	baseCmd
-	jsonOutputCmd
-	hostListCmd
+	cmdutil.JSONOutputCmd
+	singleHostCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
 }
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.hostlist)
+	host, err := getMetricsHost(cmd.getHostList())
 	if err != nil {
 		return err
 	}
@@ -394,7 +376,7 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 	req.Host = host
 	req.MetricNames = common.TokenizeCommaSeparatedString(cmd.Metrics)
 
-	if !cmd.shouldEmitJSON {
+	if !cmd.JSONOutputEnabled() {
 		cmd.Info(getConnectingMsg(req.Host, req.Port))
 	}
 
@@ -403,11 +385,11 @@ func (cmd *metricsQueryCmd) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.shouldEmitJSON {
-		return cmd.outputJSON(resp, err)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(resp, err)
 	}
 
-	err = pretty.PrintMetricsQueryResp(cmd.writer, resp)
+	err = pretty.PrintMetricsQueryResp(os.Stdout, resp)
 	if err != nil {
 		return err
 	}

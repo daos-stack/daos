@@ -1,5 +1,4 @@
 """Build DAOS I/O Engine"""
-import daos_build
 
 
 def scons():
@@ -17,7 +16,7 @@ def scons():
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']
     libraries += ['hwloc', 'pmemobj', 'protobuf-c', 'isal']
 
-    prereqs.require(denv, 'hwloc', 'argobots', 'protobufc', 'pmdk', 'isal')
+    denv.require('argobots', 'protobufc', 'pmdk', 'isal')
 
     # pylint: disable-next=wrong-spelling-in-comment
     # the "-rdynamic" is to allow other dll to refer symbol defined in
@@ -39,8 +38,7 @@ def scons():
         denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     # Generate I/O Engine program
-    engine = daos_build.program(denv, 'daos_engine',
-                                sources, LIBS=libraries)
+    engine = denv.d_program('daos_engine', sources, LIBS=libraries)
     denv.Install('$PREFIX/bin', engine)
 
     if prereqs.test_requested():

@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -14,6 +14,7 @@
 #include <daos/pool_map.h>
 #include <daos/tse.h>
 #include <daos_types.h>
+#include <daos_cont.h>
 #include <daos/cont_props.h>
 #include "checksum.h"
 
@@ -85,6 +86,8 @@ struct daos_csummer *dc_cont_hdl2csummer(daos_handle_t coh);
 struct cont_props dc_cont_hdl2props(daos_handle_t coh);
 int dc_cont_hdl2redunlvl(daos_handle_t coh, uint32_t *rl);
 int dc_cont_hdl2redunfac(daos_handle_t coh, uint32_t *rf);
+int dc_cont_hdl2globalver(daos_handle_t coh, uint32_t *ver);
+int dc_cont_oid2bid(daos_handle_t coh, daos_obj_id_t oid, uint32_t *bid);
 
 int dc_cont_local2global(daos_handle_t coh, d_iov_t *glob);
 int dc_cont_global2local(daos_handle_t poh, d_iov_t glob,
@@ -109,5 +112,41 @@ int dc_cont_alloc_oids(tse_task_t *task);
 int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
+int dc_cont_snap_oit_oid_get(tse_task_t *task);
+int dc_cont_snap_oit_create(tse_task_t *task);
+int dc_cont_snap_oit_destroy(tse_task_t *task);
+
+static inline bool
+dc_cont_open_flags_valid(uint64_t flags)
+{
+	unsigned int	f;
+	unsigned int	m;
+
+	/* No unknown flags. */
+	if ((flags & DAOS_COO_MASK) != flags)
+		return false;
+
+	/* Avoid mixing 32-bit and 64-bit operands below. */
+	f = flags;
+
+	/* One and only one of DAOS_COO_RO, DAOS_COO_RW, and DAOS_COO_EX. */
+	m = f & (DAOS_COO_RO | DAOS_COO_RW | DAOS_COO_EX);
+	if (m != DAOS_COO_RO && m != DAOS_COO_RW && m != DAOS_COO_EX)
+		return false;
+
+	/* At most one of DAOS_COO_EVICT and DAOS_COO_EVICT_ALL. */
+	if ((f & DAOS_COO_EVICT) && (f & DAOS_COO_EVICT_ALL))
+		return false;
+
+	/* Disallowed due to a lack of clear use cases. */
+	if ((f & (DAOS_COO_RO | DAOS_COO_RW)) && (f & DAOS_COO_EVICT_ALL))
+		return false;
+
+	/* Disallowed due to a lack of clear use cases. */
+	if ((f & DAOS_COO_EX) && (f & DAOS_COO_EVICT))
+		return false;
+
+	return true;
+}
 
 #endif /* __DD_CONT_H__ */

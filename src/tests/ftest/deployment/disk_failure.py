@@ -1,14 +1,20 @@
 """
-  (C) Copyright 2022 Intel Corporation.
+  (C) Copyright 2022-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import json
+import random
 import threading
+import time
+
+from avocado import fail_on
+from ClusterShell.NodeSet import NodeSet
+
+from dmg_utils import get_storage_query_device_info, get_dmg_response
+from exception_utils import CommandFailure
+from general_utils import list_to_str
 from test_utils_pool import add_pool
 from osa_utils import OSAUtils
-from avocado.utils import process
 
 
 class DiskFailureTest(OSAUtils):
@@ -17,67 +23,14 @@ class DiskFailureTest(OSAUtils):
 
     :avocado: recursive
     """
+
     def setUp(self):
+        """Set up for test case."""
         super().setUp()
         self.targets = self.params.get("targets", "/run/server_config/servers/0/*")
-        self.ior_test_sequence = self.params.get(
-            "ior_test_sequence", '/run/ior/*')
-        self.daos_command = self.get_daos_command()
+        self.ior_test_sequence = self.params.get("ior_test_sequence", '/run/ior/*')
 
-    def get_nvme_device_info(self):
-        """Get the list of nvme device-ids.
-
-        Returns:
-            list: list of uuid and ranks
-        """
-        self.dmg_command.json.value = True
-        try:
-            result = self.dmg_command.storage_query_list_devices()
-        except process.CmdError as details:
-            self.fail("dmg command failed: {}".format(details))
-        finally:
-            self.dmg_command.json.value = False
-        data = json.loads(result.stdout_text)
-        resp = data['response']
-        if data['error']:
-            self.fail("dmg command failed: {}".format(data['error']))
-        device_info = {}
-        count = 0
-        for value in list(resp['host_storage_map'].values()):
-            if value['storage']['smd_info']['devices']:
-                for target in range(self.targets):
-                    device_info[count] = {}
-                    uuid_value = value['storage']['smd_info']['devices'][target]['uuid']
-                    device_info[count]["uuid"] = uuid_value
-                    rank = value['storage']['smd_info']['devices'][target]['rank']
-                    device_info[count]["rank"] = rank
-                    tgt_ids = value['storage']['smd_info']['devices'][target]['tgt_ids']
-                    device_info[count]["tgts"] = tgt_ids
-            count = count + 1
-        return device_info
-
-    def set_nvme_faulty(self, nvme_id=None):
-        """Get a device to faulty state.
-
-        Args:
-            device_id (str): Device UUID
-        Returns:
-            resp (json format) : dmg device faulty information.
-        """
-        data = {}
-        if nvme_id is None:
-            self.fail("No device id provided")
-        self.dmg_command.json.value = True
-        try:
-            result = self.dmg_command.storage_set_faulty(uuid=nvme_id)
-        except process.CmdError as details:
-            self.fail("dmg command failed: {}".format(details))
-        finally:
-            self.dmg_command.json.value = False
-        data = json.loads(result.stdout_text)
-        resp = data['response']
-        return resp
-
+    @fail_on(CommandFailure)
     def verify_disk_failure(self, num_pool):
         """Run IOR and create disk failures while IO is happening.
 
@@ -87,10 +40,14 @@ class DiskFailureTest(OSAUtils):
         pool = {}
 
         # Get the device information.
-        device_info = self.get_nvme_device_info()
+        device_info = get_storage_query_device_info(self.dmg_command)
+
         self.log.info("Device information")
         self.log.info("==================")
-        self.log.info(device_info)
+        for index, entry in enumerate(device_info):
+            self.log.info("Device %s:", index)
+            for key in sorted(entry):
+                self.log.info("  %s: %s", key, entry[key])
 
         for val in range(0, num_pool):
             pool[val] = add_pool(self, connect=False)
@@ -103,42 +60,46 @@ class DiskFailureTest(OSAUtils):
                                                     "test": self.ior_test_sequence[0],
                                                     "fail_on_warning": False}))
             # Launch the IOR threads
-            for thrd in threads:
-                self.log.info("Thread : %s", thrd)
-                thrd.start()
+            for thread in threads:
+                self.log.info("Thread : %s", thread)
+                thread.start()
                 time.sleep(5)
 
-            count = 0
-            # Evict some of the targets from the system
-            for key, value in device_info.items():
-                self.log.info("Key: %s, Value: %s", key, value)
-                if count < 1:
-                    resp = self.set_nvme_faulty(value["uuid"])
-                    time.sleep(5)
-                    self.log.info(resp)
-                count = count + 1
+            # Evict a random target from the system
+            evict_device = random.choice(device_info)  # nosec
+            self.log.info("Evicting random target: %s", evict_device["uuid"])
+            original_hostlist = self.dmg_command.hostlist
+            try:
+                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
+                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=evict_device["uuid"])
+            except CommandFailure:
+                self.fail("Error evicting target {}".format(evict_device["uuid"]))
+            finally:
+                self.dmg_command.hostlist = original_hostlist
             done = "Completed setting all devices to fault"
             self.print_and_assert_on_rebuild_failure(done)
-            for thrd in threads:
-                thrd.join()
+            for thread in threads:
+                thread.join()
 
             # Now replace the faulty NVME device.
-            count = 0
-            for key, value in device_info.items():
-                self.log.info("Key: %s, Value: %s", key, value)
-                if count < 1:
-                    resp = self.dmg_command.storage_replace_nvme(old_uuid=value["uuid"],
-                                                                 new_uuid=value["uuid"])
-                    time.sleep(10)
-                    self.log.info(resp)
-                    # Convert target list to string
-                    targets = ",".join(map(str, value["tgts"]))
-                    # Now reintegrate the target to appropriate rank.
-                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               value["rank"],
-                                                               targets)
-                    time.sleep(15)
-                count = count + 1
+            self.log.info("Replacing evicted target: %s", evict_device["uuid"])
+            original_hostlist = self.dmg_command.hostlist
+            try:
+                self.dmg_command.hostlist = evict_device["hosts"].split(":")[0]
+                get_dmg_response(
+                    self.dmg_command.storage_replace_nvme, old_uuid=evict_device["uuid"],
+                    new_uuid=evict_device["uuid"])
+            except CommandFailure as error:
+                self.fail(str(error))
+            finally:
+                self.dmg_command.hostlist = original_hostlist
+            time.sleep(10)
+            self.log.info(
+                "Reintegrating evicted target: uuid=%s, rank=%s, targets=%s",
+                evict_device["uuid"], evict_device["rank"], evict_device["tgt_ids"])
+            output = self.pool.reintegrate(
+                evict_device["rank"], list_to_str(evict_device["tgt_ids"]))
+            time.sleep(15)
             done = "Faulty NVMEs replaced"
             self.print_and_assert_on_rebuild_failure(output)
             self.log.info(done)
@@ -151,36 +112,52 @@ class DiskFailureTest(OSAUtils):
             self.run_ior_thread("Read", oclass=self.ior_cmd.dfs_oclass.value,
                                 test=self.ior_test_sequence[0])
             self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            self.container.check()
 
     def test_disk_failure_w_rf(self):
-        """Jira ID: DAOS-11284
+        """Jira ID: DAOS-11284.
+
         Test disk failures during the IO operation.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=deployment
-        :avocado: tags=disk_failure,test_disk_failure_w_rf
+        :avocado: tags=deployment,disk_failure
+        :avocado: tags=DiskFailureTest,test_disk_failure_w_rf
         """
         self.verify_disk_failure(1)
 
+    @fail_on(CommandFailure)
     def test_disk_fault_to_normal(self):
         """Jira ID: DAOS-11284
         Test a disk inducing faults and resetting is back to normal state.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=deployment
-        :avocado: tags=disk_failure,test_disk_fault_to_normal
+        :avocado: tags=deployment,disk_failure
+        :avocado: tags=DiskFailureTest,test_disk_fault_to_normal
         """
-        device_info = {}
-        # Get the list of device ids.
-        device_info = self.get_nvme_device_info()
-        for key, val in device_info.items():
-            self.log.info("Key: %s, Value: %s", key, val)
-            resp = self.dmg_command.storage_replace_nvme(old_uuid=val["uuid"],
-                                                         new_uuid=val["uuid"])
-            self.log.info(resp)
+        device_info = get_storage_query_device_info(self.dmg_command)
+        for index, device in enumerate(device_info):
+            host = device["hosts"].split(":")[0]
+            self.log.info("Device %s on host %s:", index, host)
+            for key in sorted(device):
+                self.log.info("  %s: %s", key, device[key])
+            try:
+                self.dmg_command.hostlist = NodeSet(host)
+                # Set the device as faulty
+                get_dmg_response(self.dmg_command.storage_set_faulty, uuid=device["uuid"])
+                # Replace the device with same uuid.
+                passed = False
+                for _ in range(10):
+                    data = self.dmg_command.storage_replace_nvme(old_uuid=device["uuid"],
+                                                                 new_uuid=device["uuid"])
+                    if not data['error'] and len(data['response']['host_errors']) == 0:
+                        passed = True
+                        break
+                    time.sleep(5)
+                if not passed:
+                    self.fail('Replacing faulty device did not pass after 10 retries')
+            except CommandFailure as error:
+                self.fail(str(error))
+            finally:
+                self.dmg_command.hostlist = self.server_managers[0].hosts

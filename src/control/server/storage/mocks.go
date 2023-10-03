@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -104,13 +105,14 @@ func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
 		NvmeState: NvmeStateNormal,
 		LedState:  LedStateNormal,
 		TrAddr:    parentTrAddr,
+		Roles:     BdevRoles{OptionBits(BdevRoleAll)},
 	}
 }
 
 // MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := test.GetIndex(varIdx...)
-	pciAddr := concat("0000:80:00", idx, ".")
+	pciAddr := test.MockPCIAddr(idx)
 
 	return &NvmeController{
 		Model:       concat("model", idx),
@@ -212,11 +214,12 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 	}
 }
 
-func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
+func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider, meta MetadataProvider) *Provider {
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
 	p.scm = scm
 	p.bdev = bdev
+	p.metadata = meta
 	return p
 }
 
@@ -257,15 +260,47 @@ type (
 		MakeMountPathErr   error
 	}
 
+	mountMap struct {
+		sync.RWMutex
+		mounts map[string]string
+	}
+
 	// MockMountProvider is a mocked version of a MountProvider that can be used for testing.
 	MockMountProvider struct {
-		cfg *MockMountProviderConfig
+		cfg    *MockMountProviderConfig
+		mounts mountMap
 	}
 )
+
+func (mm *mountMap) Add(target, opts string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	if mm.mounts == nil {
+		mm.mounts = make(map[string]string)
+	}
+	mm.mounts[target] = opts
+}
+
+func (mm *mountMap) Remove(target string) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	delete(mm.mounts, target)
+}
+
+func (mm *mountMap) Get(target string) (string, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	opts, ok := mm.mounts[target]
+	return opts, ok
+}
 
 // Mount is a mock implementation.
 func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.MountErr == nil {
+		m.mounts.Add(req.Target, req.Options)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: true,
@@ -277,6 +312,7 @@ func (m *MockMountProvider) Mount(req MountRequest) (*MountResponse, error) {
 // Unmount is a mock implementation.
 func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	if m.cfg == nil || m.cfg.UnmountErr == nil {
+		m.mounts.Remove(req.Target)
 		return &MountResponse{
 			Target:  req.Target,
 			Mounted: false,
@@ -285,10 +321,17 @@ func (m *MockMountProvider) Unmount(req MountRequest) (*MountResponse, error) {
 	return nil, m.cfg.UnmountErr
 }
 
+// GetMountOpts returns the mount options for the given target.
+func (m *MockMountProvider) GetMountOpts(target string) (string, bool) {
+	opts, exists := m.mounts.Get(target)
+	return opts, exists
+}
+
 // IsMounted is a mock implementation.
-func (m *MockMountProvider) IsMounted(_ string) (bool, error) {
+func (m *MockMountProvider) IsMounted(target string) (bool, error) {
 	if m.cfg == nil {
-		return true, nil
+		opts, exists := m.mounts.Get(target)
+		return exists && opts != "", nil
 	}
 	return m.cfg.IsMountedRes, m.cfg.IsMountedErr
 }
@@ -319,4 +362,87 @@ func NewMockMountProvider(cfg *MockMountProviderConfig) *MockMountProvider {
 // DefaultMockMountProvider creates a mock provider in which all requests succeed.
 func DefaultMockMountProvider() *MockMountProvider {
 	return NewMockMountProvider(nil)
+}
+
+// MockMetadataProvider defines a mock version of a MetadataProvider.
+type MockMetadataProvider struct {
+	MountRes       *MountResponse
+	MountErr       error
+	UnmountRes     *MountResponse
+	UnmountErr     error
+	FormatErr      error
+	NeedsFormatRes bool
+	NeedsFormatErr error
+}
+
+// Format mocks a MetadataProvider format call.
+func (m *MockMetadataProvider) Format(_ MetadataFormatRequest) error {
+	return m.FormatErr
+}
+
+// Mount mocks a MetadataProvider mount call.
+func (m *MockMetadataProvider) Mount(_ MetadataMountRequest) (*MountResponse, error) {
+	return m.MountRes, m.MountErr
+}
+
+// Unmount mocks a MetadataProvider unmount call.
+func (m *MockMetadataProvider) Unmount(MetadataMountRequest) (*MountResponse, error) {
+	return m.UnmountRes, m.UnmountErr
+}
+
+// NeedsFormat mocks a MetadataProvider format check.
+func (m *MockMetadataProvider) NeedsFormat(MetadataFormatRequest) (bool, error) {
+	return m.NeedsFormatRes, m.NeedsFormatErr
+}
+
+// MockScmProvider defines a mock version of an ScmProvider.
+type MockScmProvider struct {
+	MountRes          *MountResponse
+	MountErr          error
+	UnmountRes        *MountResponse
+	UnmountErr        error
+	FormatRes         *ScmFormatResponse
+	FormatErr         error
+	CheckFormatRes    *ScmFormatResponse
+	CheckFormatErr    error
+	ScanRes           *ScmScanResponse
+	ScanErr           error
+	PrepareRes        *ScmPrepareResponse
+	PrepareErr        error
+	FirmwareQueryRes  *ScmFirmwareQueryResponse
+	FirmwareQueryErr  error
+	FirmwareUpdateRes *ScmFirmwareUpdateResponse
+	FirmwareUpdateErr error
+}
+
+func (m *MockScmProvider) Mount(ScmMountRequest) (*MountResponse, error) {
+	return m.MountRes, m.MountErr
+}
+
+func (m *MockScmProvider) Unmount(ScmMountRequest) (*MountResponse, error) {
+	return m.UnmountRes, m.UnmountErr
+}
+
+func (m *MockScmProvider) Format(ScmFormatRequest) (*ScmFormatResponse, error) {
+	return m.FormatRes, m.FormatErr
+}
+
+func (m *MockScmProvider) CheckFormat(ScmFormatRequest) (*ScmFormatResponse, error) {
+	return m.CheckFormatRes, m.CheckFormatErr
+}
+
+func (m *MockScmProvider) Scan(ScmScanRequest) (*ScmScanResponse, error) {
+	return m.ScanRes, m.ScanErr
+}
+
+func (m *MockScmProvider) Prepare(ScmPrepareRequest) (*ScmPrepareResponse, error) {
+	return m.PrepareRes, m.PrepareErr
+}
+
+func (m *MockScmProvider) QueryFirmware(ScmFirmwareQueryRequest) (*ScmFirmwareQueryResponse, error) {
+	return m.FirmwareQueryRes, m.FirmwareQueryErr
+}
+
+func (m *MockScmProvider) UpdateFirmware(ScmFirmwareUpdateRequest) (*ScmFirmwareUpdateResponse, error) {
+	return m.FirmwareUpdateRes, m.FirmwareUpdateErr
 }

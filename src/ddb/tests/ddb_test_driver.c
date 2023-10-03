@@ -17,6 +17,9 @@
 #include "ddb_test_driver.h"
 
 #define DEFINE_IOV(str) {.iov_buf = str, .iov_buf_len = strlen(str), .iov_len = strlen(str)}
+#ifndef DDB_FORCE_VALGRIND
+#define DDB_FORCE_VALGRIND 0
+#endif
 
 bool g_verbose; /* Can be set to true while developing/debugging tests */
 
@@ -84,7 +87,6 @@ dvt_gen_uoid(uint32_t i)
 	daos_obj_set_oid(&oid, DAOS_OT_MULTI_HASHED, OR_RP_1, 1, 0);
 
 	uoid.id_shard	= 0;
-	uoid.id_pad_32	= 0;
 	uoid.id_pub = oid;
 
 	return uoid;
@@ -134,17 +136,22 @@ dvt_vos_insert_single(daos_handle_t coh, daos_unit_oid_t uoid, char *dkey_str, c
  */
 
 uint32_t dvt_fake_print_called;
-char dvt_fake_print_buffer[1024];
+bool dvt_fake_print_just_count;
+char dvt_fake_print_buffer[DVT_FAKE_PRINT_BUFFER_SIZE];
 
 int
 dvt_fake_print(const char *fmt, ...)
 {
 	va_list args;
-	uint32_t buffer_offset = strlen(dvt_fake_print_buffer);
+	uint32_t buffer_offset;
 	uint32_t buffer_left;
 
-	buffer_left = ARRAY_SIZE(dvt_fake_print_buffer) - buffer_offset;
 	dvt_fake_print_called++;
+	if (dvt_fake_print_just_count)
+		return 0;
+
+	buffer_offset = strlen(dvt_fake_print_buffer);
+	buffer_left = ARRAY_SIZE(dvt_fake_print_buffer) - buffer_offset;
 	va_start(args, fmt);
 	vsnprintf(dvt_fake_print_buffer + buffer_offset, buffer_left, fmt, args);
 	va_end(args);
@@ -281,12 +288,21 @@ ddb_test_setup_vos(void **state)
 	D_ASSERT(state);
 	D_ALLOC_PTR(tctx);
 	assert_non_null(tctx);
+	vos_self_init("/mnt/daos", false, 0);
 
 	assert_success(ddb_test_pool_setup(tctx));
 
 	assert_success(vos_pool_open(tctx->dvt_pmem_file, tctx->dvt_pool_uuid, 0, &poh));
-	dvt_insert_data(poh, 0, 0, 0, 0);
+
+	if (DAOS_ON_VALGRIND || DDB_FORCE_VALGRIND)
+		/* smaller test data for valgrind */
+		dvt_insert_data(poh, 8, 4, 4, 4, tctx);
+	else
+		/* default test data */
+		dvt_insert_data(poh, 0, 0, 0, 0, tctx);
+
 	vos_pool_close(poh);
+	vos_self_fini();
 
 	*state = tctx;
 
@@ -298,7 +314,9 @@ ddb_teardown_vos(void **state)
 {
 	struct dt_vos_pool_ctx		*tctx = *state;
 
+	vos_self_init("/mnt/daos", false, 0);
 	assert_success(vos_pool_destroy(tctx->dvt_pmem_file, tctx->dvt_pool_uuid));
+	vos_self_fini();
 	close(tctx->dvt_fd);
 	D_FREE(tctx);
 
@@ -346,7 +364,8 @@ create_object_data(daos_handle_t *coh, uint32_t obj_to_create, uint32_t dkeys_to
 }
 
 void
-dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys, uint32_t akeys)
+dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys, uint32_t akeys,
+		struct dt_vos_pool_ctx *tctx)
 {
 	daos_handle_t		coh;
 	uint32_t		cont_to_create = ARRAY_SIZE(g_uuids);
@@ -364,6 +383,11 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 		dkeys_to_create = dkeys;
 	if (akeys > 0)
 		akeys_to_create = akeys;
+
+	tctx->dvt_cont_count = cont_to_create;
+	tctx->dvt_obj_count = obj_to_create;
+	tctx->dvt_dkey_count = dkeys_to_create;
+	tctx->dvt_akey_count = akeys_to_create;
 
 	/* Setup by creating containers */
 	for (c = 0; c < cont_to_create; c++) {
@@ -422,6 +446,7 @@ dvt_dtx_begin_helper(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_t
 	dth->dth_shares_inited = 1;
 
 	vos_dtx_rsrvd_init(dth);
+	vos_dtx_attach(dth, false, false);
 
 	*dthp = dth;
 }
@@ -538,13 +563,20 @@ create_test_vos_file()
 	int			akeys = 5;
 	int			rc;
 
+	rc = vos_self_init("/mnt/daos", false, 0);
+	if (rc != 0) {
+		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
+		ddb_fini();
+		return -rc;
+	}
+
 	rc = ddb_test_pool_setup(&tctx);
 	if (!SUCCESS(rc)) {
 		print_error("Unable to setup pool: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 	assert_success(vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, 0, &poh));
-	dvt_insert_data(poh, conts, objs, dkeys, akeys);
+	dvt_insert_data(poh, conts, objs, dkeys, akeys, &tctx);
 
 	assert_success(vos_cont_open(poh, g_uuids[0], &coh));
 	dvt_vos_insert_2_records_with_dtx(coh);
@@ -553,6 +585,7 @@ create_test_vos_file()
 	vos_pool_close(poh);
 
 	close(tctx.dvt_fd);
+	vos_self_fini();
 
 	print_message("VOS file created at: %s\n", tctx.dvt_pmem_file);
 	print_message("\t- pool uuid: "DF_UUIDF"\n", DP_UUID(tctx.dvt_pool_uuid));
@@ -592,12 +625,6 @@ int main(int argc, char *argv[])
 	rc = ddb_init();
 	if (rc != 0)
 		return -rc;
-	rc = vos_self_init("/mnt/daos", false, 0);
-	if (rc != 0) {
-		fprintf(stderr, "Unable to initialize VOS: "DF_RC"\n", DP_RC(rc));
-		ddb_fini();
-		return -rc;
-	}
 
 	ddb_test_driver_arguments_parse(argc, argv, &args);
 
@@ -623,9 +650,9 @@ int main(int argc, char *argv[])
 		RUN_TEST_SUIT('d', ddb_commands_tests_run);
 		RUN_TEST_SUIT('e', ddb_main_tests_run);
 		RUN_TEST_SUIT('f', ddb_commands_print_tests_run);
+		RUN_TEST_SUIT('g', ddb_path_tests_run);
 
 done:
-	vos_self_fini();
 	ddb_fini();
 	if (rc > 0)
 		printf("%d test(s) failed!\n", rc);
