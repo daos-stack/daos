@@ -1596,7 +1596,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATES, &ranks);
 	if (rc != 0)
 		return rc;
 

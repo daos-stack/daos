@@ -90,7 +90,7 @@ ds_pool_map_rank_up(struct pool_map *map, d_rank_t rank)
 		return false;
 	D_ASSERTF(rc == 1, "%d\n", rc);
 
-	return node->do_comp.co_status & POOL_GROUP_MAP_STATUS;
+	return node->do_comp.co_status & POOL_GROUP_MAP_STATES;
 }
 
 int
@@ -332,12 +332,12 @@ compute_svc_reconf_objective(int svc_rf, d_rank_list_t *replicas)
 }
 
 /*
- * Find n ranks with states in nodes but not in blacklist_0 or blacklist_1, and
- * append them to list. Return the number of ranks appended or an error.
+ * Find n ranks with states in nodes but not in blacklist, and append them to
+ * list. Return the number of ranks appended or an error.
  */
 static int
 find_ranks(int n, pool_comp_state_t states, struct pool_domain *nodes, int nnodes,
-	   d_rank_list_t *blacklist_0, d_rank_list_t *blacklist_1, d_rank_list_t *list)
+	   d_rank_list_t *blacklist, d_rank_list_t *list)
 {
 	int	n_appended = 0;
 	int	i;
@@ -349,9 +349,7 @@ find_ranks(int n, pool_comp_state_t states, struct pool_domain *nodes, int nnode
 	for (i = 0; i < nnodes; i++) {
 		if (!(nodes[i].do_comp.co_status & states))
 			continue;
-		if (d_rank_list_find(blacklist_0, nodes[i].do_comp.co_rank, NULL /* idx */))
-			continue;
-		if (d_rank_list_find(blacklist_1, nodes[i].do_comp.co_rank, NULL /* idx */))
+		if (d_rank_list_find(blacklist, nodes[i].do_comp.co_rank, NULL /* idx */))
 			continue;
 		rc = d_rank_list_append(list, nodes[i].do_comp.co_rank);
 		if (rc != 0)
@@ -370,7 +368,10 @@ find_ranks(int n, pool_comp_state_t states, struct pool_domain *nodes, int nnode
  * caller is responsible for freeing \a to_add_out and \a to_remove_out with
  * d_rank_list_free.
  *
- * We desire replicas in UP or UPIN states.
+ * We desire replicas in POOL_SVC_MAP_STATES. The \a self replica must be in a
+ * desired state in \a map, or this function will return -DER_INVAL. All
+ * undesired replicas, if any, will be appended to \a to_remove, so that no
+ * replica is outside the pool group.
  *
  * If removals are necessary, we only append desired replicas to \a
  * to_remove_out after all undesired replicas have already been appended to the
@@ -392,12 +393,10 @@ int
 ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replicas, d_rank_t self,
 			 d_rank_list_t **to_add_out, d_rank_list_t **to_remove_out)
 {
-	const pool_comp_state_t	 desired_states = PO_COMP_ST_UPIN;
 	struct pool_domain	*nodes = NULL;
 	int			 nnodes;
 	int			 objective;
 	d_rank_list_t		*desired = NULL;
-	d_rank_list_t		*undesired = NULL;
 	d_rank_list_t		*to_add = NULL;
 	d_rank_list_t		*to_remove = NULL;
 	int			 i;
@@ -409,93 +408,56 @@ ds_pool_plan_svc_reconfs(int svc_rf, struct pool_map *map, d_rank_list_t *replic
 	objective = compute_svc_reconf_objective(svc_rf, replicas);
 
 	desired = d_rank_list_alloc(0);
-	undesired = d_rank_list_alloc(0);
 	to_add = d_rank_list_alloc(0);
 	to_remove = d_rank_list_alloc(0);
-	if (desired == NULL || undesired == NULL || to_add == NULL || to_remove == NULL) {
+	if (desired == NULL || to_add == NULL || to_remove == NULL) {
 		rc = -DER_NOMEM;
 		goto out;
 	}
 
-	/* Classify replicas into desired and undesired. */
+	/* Classify replicas into desired and to_remove. */
 	for (i = 0; i < replicas->rl_nr; i++) {
+		d_rank_t	rank = replicas->rl_ranks[i];
 		d_rank_list_t  *list;
 		int		j;
 
 		for (j = 0; j < nnodes; j++)
-			if (nodes[j].do_comp.co_rank == replicas->rl_ranks[i])
+			if (nodes[j].do_comp.co_rank == rank)
 				break;
 		if (j == nnodes) /* not found (hypothetical) */
-			list = undesired;
-		else if (nodes[j].do_comp.co_status & desired_states)
+			list = to_remove;
+		else if (nodes[j].do_comp.co_status & POOL_SVC_MAP_STATES)
 			list = desired;
 		else
-			list = undesired;
-		rc = d_rank_list_append(list, replicas->rl_ranks[i]);
+			list = to_remove;
+		if (rank == self && list == to_remove) {
+			D_ERROR("self undesired: state=%x\n",
+				j < nnodes ? nodes[j].do_comp.co_status : -1);
+			rc = -DER_INVAL;
+			goto out;
+		}
+		rc = d_rank_list_append(list, rank);
 		if (rc != 0)
 			goto out;
 	}
 
-	D_DEBUG(DB_MD, "desired=%u undesired=%u objective=%d\n", desired->rl_nr, undesired->rl_nr,
+	D_DEBUG(DB_MD, "desired=%u undesired=%u objective=%d\n", desired->rl_nr, to_remove->rl_nr,
 		objective);
 
-	/*
-	 * If we have too many replicas, remove undesired ones (if any) before
-	 * desired ones.
-	 */
-	while (desired->rl_nr + undesired->rl_nr > objective) {
-		rc = move_rank_except_for(self, undesired, to_remove);
-		if (rc == -DER_NONEXIST)
-			break;
-		else if (rc != 0)
-			goto out;
-	}
-	while (desired->rl_nr + undesired->rl_nr > objective) {
-		rc = move_rank_except_for(self, desired, to_remove);
-		D_ASSERT(rc != -DER_NONEXIST);
-		if (rc != 0)
-			goto out;
-	}
-
-	/* If necessary, add more replicas towards the objective. */
-	if (desired->rl_nr + undesired->rl_nr < objective) {
-		rc = find_ranks(objective - desired->rl_nr - undesired->rl_nr, desired_states,
-				nodes, nnodes, desired, undesired, to_add);
-		if (rc < 0)
-			goto out;
-		/* Copy the new ones to desired. */
-		for (i = 0; i < to_add->rl_nr; i++) {
-			rc = d_rank_list_append(desired, to_add->rl_ranks[i]);
-			if (rc != 0)
-				goto out;
-		}
-	}
-
-	/*
-	 * If there are undesired ones, try to replace as many of them as
-	 * possible.
-	 */
-	if (undesired->rl_nr > 0) {
-		int n;
-
-		rc = find_ranks(undesired->rl_nr, desired_states, nodes, nnodes, desired, undesired,
-				to_add);
-		if (rc < 0)
-			goto out;
-		n = rc;
-		/* Copy the n replacements to desired. */
-		for (i = 0; i < n; i++) {
-			rc = d_rank_list_append(desired, to_add->rl_ranks[i]);
-			if (rc != 0)
-				goto out;
-		}
-		/* Move n replicas from undesired to to_remove. */
-		for (i = 0; i < n; i++) {
-			rc = move_rank_except_for(self, undesired, to_remove);
+	if (desired->rl_nr > objective) {
+		/* Too many replicas, remove one by one. */
+		do {
+			rc = move_rank_except_for(self, desired, to_remove);
 			D_ASSERT(rc != -DER_NONEXIST);
 			if (rc != 0)
 				goto out;
-		}
+		} while (desired->rl_nr > objective);
+	} else if (desired->rl_nr < objective) {
+		/* Too few replicas, add some. */
+		rc = find_ranks(objective - desired->rl_nr, POOL_SVC_MAP_STATES, nodes, nnodes,
+				desired, to_add);
+		if (rc < 0)
+			goto out;
 	}
 
 	rc = 0;
@@ -507,7 +469,6 @@ out:
 		d_rank_list_free(to_remove);
 		d_rank_list_free(to_add);
 	}
-	d_rank_list_free(undesired);
 	d_rank_list_free(desired);
 	return rc;
 }
@@ -546,10 +507,6 @@ testu_rank_sets_belong(d_rank_list_t *x, d_rank_t *y_ranks, int y_ranks_len)
 static struct pool_map *
 testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_down_ranks)
 {
-	d_rank_list_t		ranks_list = {
-		.rl_ranks	= ranks,
-		.rl_nr		= n_ranks
-	};
 	struct pool_buf	       *map_buf;
 	struct pool_map	       *map;
 	uint32_t	       *domains;
@@ -567,8 +524,7 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 		domains[3 + i] = i;
 
 	rc = gen_pool_buf(NULL /* map */, &map_buf, 1 /* map_version */, n_domains,
-			  n_ranks, n_ranks * 1 /* ntargets */, domains, &ranks_list,
-			  1 /* dss_tgt_nr */);
+			  n_ranks, n_ranks * 1 /* ntargets */, domains, 1 /* dss_tgt_nr */);
 	D_ASSERT(rc == 0);
 
 	rc = pool_map_create(map_buf, 1, &map);
@@ -590,7 +546,8 @@ testu_create_pool_map(d_rank_t *ranks, int n_ranks, d_rank_t *down_ranks, int n_
 static void
 testu_plan_svc_reconfs(int svc_rf, d_rank_t ranks[], int n_ranks, d_rank_t down_ranks[],
 		       int n_down_ranks, d_rank_t replicas_ranks[], int n_replicas_ranks,
-		       d_rank_t self, d_rank_list_t **to_add, d_rank_list_t **to_remove)
+		       d_rank_t self, int expected_rc, d_rank_list_t **to_add,
+		       d_rank_list_t **to_remove)
 {
 	struct pool_map	       *map;
 	d_rank_list_t		replicas_list;
@@ -602,7 +559,7 @@ testu_plan_svc_reconfs(int svc_rf, d_rank_t ranks[], int n_ranks, d_rank_t down_
 	replicas_list.rl_nr = n_replicas_ranks;
 
 	rc = ds_pool_plan_svc_reconfs(svc_rf, map, &replicas_list, self, to_add, to_remove);
-	D_ASSERT(rc == 0);
+	D_ASSERTF(rc == expected_rc, "rc=%d expected_rc=%d\n", rc, expected_rc);
 
 	pool_map_decref(map);
 }
@@ -614,10 +571,11 @@ ds_pool_test_plan_svc_reconfs(void)
 	d_rank_list_t	       *to_add;
 	d_rank_list_t	       *to_remove;
 
-#define call_testu_plan_svc_reconfs								\
+#define call_testu_plan_svc_reconfs(expected_rc)						\
 	testu_plan_svc_reconfs(svc_rf, ranks, ARRAY_SIZE(ranks), down_ranks,			\
 			       ARRAY_SIZE(down_ranks), replicas_ranks,				\
-			       ARRAY_SIZE(replicas_ranks), self, &to_add, &to_remove);
+			       ARRAY_SIZE(replicas_ranks), self, expected_rc, &to_add,		\
+			       &to_remove);
 
 #define call_d_rank_list_free									\
 	d_rank_list_free(to_add);								\
@@ -630,12 +588,22 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	down_ranks[] = {};
 		d_rank_t	replicas_ranks[] = {0, 1, 2, 3, 4};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 0);
 
 		call_d_rank_list_free
+	}
+
+	/* The PS leader itself must not be undesired. */
+	{
+		int		svc_rf = 1;
+		d_rank_t	ranks[] = {0, 1, 2};
+		d_rank_t	down_ranks[] = {0};
+		d_rank_t	replicas_ranks[] = {0, 1, 2};
+
+		call_testu_plan_svc_reconfs(-DER_INVAL)
 	}
 
 	/* One lonely replica. */
@@ -645,7 +613,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	down_ranks[] = {};
 		d_rank_t	replicas_ranks[] = {0};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 0);
@@ -661,7 +629,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -678,7 +646,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -695,7 +663,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1, 2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -704,17 +672,19 @@ ds_pool_test_plan_svc_reconfs(void)
 		call_d_rank_list_free
 	}
 
-	/* A PS holds its ground when there's no replacement. */
+	/* A PS removes the down rank even when there's no replacement. */
 	{
 		int		svc_rf = 1;
 		d_rank_t	ranks[] = {0, 1, 2};
 		d_rank_t	down_ranks[] = {2};
 		d_rank_t	replicas_ranks[] = {0, 1, 2};
+		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
-		D_ASSERT(to_remove->rl_nr == 0);
+		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
+						   ARRAY_SIZE(expected_to_remove)));
 
 		call_d_rank_list_free
 	}
@@ -728,7 +698,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_add_candidates[] = {3, 4};
 		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 1);
 		D_ASSERT(testu_rank_sets_belong(to_add, expected_to_add_candidates,
@@ -750,7 +720,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0};
 		d_rank_t	expected_to_add[] = {1, 2, 3};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
@@ -767,7 +737,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	replicas_ranks[] = {0, 1, 2};
 		d_rank_t	expected_to_remove[] = {1, 2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
@@ -776,19 +746,21 @@ ds_pool_test_plan_svc_reconfs(void)
 		call_d_rank_list_free
 	}
 
-	/* A PS keeps down ranks while growing. */
+	/* A PS removes down ranks while growing. */
 	{
 		int		svc_rf = 2;
-		d_rank_t	ranks[] = {0, 1, 2, 3, 4};
+		d_rank_t	ranks[] = {0, 1, 2, 3, 4, 5};
 		d_rank_t	down_ranks[] = {2};
 		d_rank_t	replicas_ranks[] = {0, 1, 2};
-		d_rank_t	expected_to_add[] = {3, 4};
+		d_rank_t	expected_to_add[] = {3, 4, 5};
+		d_rank_t	expected_to_remove[] = {2};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
-		D_ASSERT(to_remove->rl_nr == 0);
+		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
+						   ARRAY_SIZE(expected_to_remove)));
 
 		call_d_rank_list_free
 	}
@@ -802,7 +774,7 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	expected_to_remove_candidates[] = {1, 2, 3, 4, 5, 6, 7, 8};
 		d_rank_list_t	tmp;
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(to_add->rl_nr == 0);
 		D_ASSERT(to_remove->rl_nr == 4);
@@ -822,15 +794,14 @@ ds_pool_test_plan_svc_reconfs(void)
 		d_rank_t	down_ranks[] = {1, 3, 5, 7};
 		d_rank_t	replicas_ranks[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
 		d_rank_t	expected_to_add[] = {9};
-		d_rank_t	expected_to_remove_candidates[] = {1, 3, 5, 7};
+		d_rank_t	expected_to_remove[] = {1, 3, 5, 7};
 
-		call_testu_plan_svc_reconfs
+		call_testu_plan_svc_reconfs(0)
 
 		D_ASSERT(testu_rank_sets_identical(to_add, expected_to_add,
 						   ARRAY_SIZE(expected_to_add)));
-		D_ASSERT(to_remove->rl_nr == 3);
-		D_ASSERT(testu_rank_sets_belong(to_remove, expected_to_remove_candidates,
-						ARRAY_SIZE(expected_to_remove_candidates)));
+		D_ASSERT(testu_rank_sets_identical(to_remove, expected_to_remove,
+						   ARRAY_SIZE(expected_to_remove)));
 
 		call_d_rank_list_free
 	}
