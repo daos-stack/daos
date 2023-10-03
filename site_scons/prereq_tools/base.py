@@ -528,7 +528,7 @@ class PreReqComponent():
         common_reqs = ['argobots', 'ucx', 'ofi', 'hwloc', 'mercury', 'boost', 'uuid',
                        'crypto', 'protobufc', 'lz4', 'isal', 'isal_crypto']
         client_reqs = ['fuse', 'json-c', 'capstone']
-        server_reqs = ['pmdk', 'spdk']
+        server_reqs = ['pmdk', 'spdk', 'ipmctl']
         test_reqs = ['cmocka']
 
         reqs = []
@@ -721,6 +721,7 @@ class PreReqComponent():
             extra_include_path -- Subdirectories to add to dependent component path
             out_of_src_build -- Build from a different directory if set to True
             build_env -- Environment variables to set for build
+            skip_arch -- not required on this architecture
         """
         use_installed = False
         if 'all' in self.installed or name in self.installed:
@@ -951,6 +952,7 @@ class _Component():
         out_of_src_build -- Build from a different directory if set to True
         patch_rpath -- Add appropriate relative rpaths to binaries
         build_env -- Environment variable(s) to add to build environment
+        skip_arch -- not required on this platform
     """
 
     def __init__(self,
@@ -992,6 +994,7 @@ class _Component():
         self.include_path.extend(kw.get("extra_include_path", []))
         self.out_of_src_build = kw.get("out_of_src_build", False)
         self.patch_path = self.prereqs.get_build_dir()
+        self.skip_arch = kw.get("skip_arch", False)
 
     @staticmethod
     def _sanitize_patch_path(path):
@@ -1128,6 +1131,10 @@ class _Component():
         if self.targets_found:
             return False
 
+        if self.skip_arch:
+            self.targets_found = True
+            return False
+
         if self.__check_only:
             # Temporarily turn off dry-run.
             env.SetOption('no_exec', False)
@@ -1216,6 +1223,9 @@ class _Component():
 
     def configure(self):
         """Setup paths for a required component"""
+        if self.skip_arch:
+            return
+
         if not self.retriever:
             self.prebuilt_path = "/usr"
         else:
@@ -1234,6 +1244,10 @@ class _Component():
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with the external component"""
+
+        if self.skip_arch:
+            return
+
         lib_paths = []
 
         # Make sure CheckProg() looks in the component's bin/ dir
