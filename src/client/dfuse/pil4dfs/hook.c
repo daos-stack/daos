@@ -111,24 +111,24 @@ get_path_pos(char *buf, char **start, char **end, int path_offset, char *buf_min
 
 	/* look backward for a '\n', the end of last line */
 	for (i = 0; i < PATH_MAX + path_offset; i++) {
+		if ((buf - i) < buf_min) {
+			break;
+		}
 		if (*(buf - i) == '\n') {
 			/* the beginning of lib path */
 			*start = buf - i + path_offset;
-			break;
-		}
-		if ((buf - i) < buf_min) {
 			break;
 		}
 	}
 
 	/* look forward for a '\n', the end of current line */
 	for (i = 0; i < PATH_MAX; i++) {
+		if ((buf + i) > buf_max) {
+			break;
+		}
 		if (*(buf + i) == '\n') {
 			/* the beginning of lib path */
 			*end = buf + i;
-			break;
-		}
-		if ((buf + i) > buf_max) {
 			break;
 		}
 	}
@@ -315,7 +315,6 @@ determine_lib_path(void)
 	}	
 	D_FREE(lib_dir_str);
 
-	found_libc = 1;
 	return;
 
 err:

@@ -278,7 +278,7 @@ rec_free(struct d_hash_table *htable, d_list_t *rlink)
 	if (rc == ENOMEM)
 		rc = dfs_release(hdl->oh);
 	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_release() failed");
 	D_FREE(hdl);
 }
 
@@ -659,7 +659,7 @@ discover_dfuse_mounts(void)
 
 	if (fp == NULL) {
 		rc = errno;
-		D_ERROR("failed to open /proc/self/mounts: %d (%s)\n", errno, strerror(errno));
+		DS_ERROR(errno, "failed to open /proc/self/mounts");
 		return rc;
 	}
 
@@ -969,7 +969,7 @@ query_path(const char *szInput, int *is_target_path, dfs_obj_t **parent, char *i
 			/* daos_init() is expensive to call. We call it only when necessary. */
 			rc = daos_init();
 			if (rc) {
-				D_ERROR("daos_init() failed: " DF_RC "\n", DP_RC(rc));
+				DL_ERROR(rc, "daos_init() failed");
 				*is_target_path = 0;
 				goto out_normal;
 			}
@@ -1239,7 +1239,7 @@ find_next_available_fd(struct file_obj *obj, int *new_fd)
 		D_MUTEX_UNLOCK(&lock_fd);
 		if (allocated)
 			D_FREE(new_obj);
-		D_ERROR("failed to allocate fd: %d (%s)\n", EMFILE, strerror(EMFILE));
+		DS_ERROR(EMFILE, "failed to allocate fd");
 		return EMFILE;
 	}
 	idx = next_free_fd;
@@ -1289,7 +1289,7 @@ find_next_available_dirfd(struct dir_obj *obj, int *new_dir_fd)
 		D_MUTEX_UNLOCK(&lock_dirfd);
 		if (allocated)
 			D_FREE(new_obj);
-		D_ERROR("Failed to allocate dirfd: %d (%s)\n", EMFILE, strerror(EMFILE));
+		DS_ERROR(EMFILE, "Failed to allocate dirfd");
 		return EMFILE;
 	}
 	idx = next_free_dirfd;
@@ -1326,8 +1326,7 @@ find_next_available_map(int *idx)
 	D_MUTEX_LOCK(&lock_mmap);
 	if (next_free_map < 0) {
 		D_MUTEX_UNLOCK(&lock_mmap);
-		D_ERROR("Failed to allocate space from mmap_list[]: %d (%s)\n", EMFILE,
-			strerror(EMFILE));
+		DS_ERROR(EMFILE, "Failed to allocate space from mmap_list[]");
 		return EMFILE;
 	}
 	*idx = next_free_map;
@@ -1397,7 +1396,7 @@ free_fd(int idx)
 		memset(saved_obj, 0, sizeof(struct file_obj));
 		D_FREE(saved_obj);
 		if (rc)
-			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+			DS_ERROR(rc, "dfs_release() failed");
 	}
 }
 
@@ -1435,7 +1434,7 @@ free_dirfd(int idx)
 		D_FREE(saved_obj->ents);
 		rc = dfs_release(saved_obj->dir);
 		if (rc)
-			D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+			DS_ERROR(rc, "dfs_release() failed");
 		/** This memset() is not necessary. It is left here intended. In case of duplicated
 		 *  fd exists, multiple fd could point to same struct dir_obj. struct dir_obj is
 		 *  supposed to be freed only when reference count reaches zero. With zeroing out
@@ -1606,7 +1605,7 @@ allocate_dup2ed_fd(const int fd_src, const int fd_dest)
 	}
 	D_MUTEX_UNLOCK(&lock_fd_dup2ed);
 
-	D_ERROR("fd_dup2_list[] is out of space: %d (%s)\n", EMFILE, strerror(EMFILE));
+	DS_ERROR(EMFILE, "fd_dup2_list[] is out of space");
 	errno = EMFILE;
 	return (-1);
 }
@@ -1715,7 +1714,7 @@ out_readlink:
 		free(*full_path_out);
 		*full_path_out = NULL;
 	}
-	D_ERROR("readlink() failed: %d (%s)\n", errno, strerror(errno));
+	DS_ERROR(errno, "readlink() failed");
 	return (-1);
 }
 
@@ -2053,7 +2052,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 			       file_list[fd_directed - FD_FILE_BASE]->file, &sgl,
 			       offset, &bytes_read, NULL);
 	if (rc) {
-		D_ERROR("dfs_read(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc, strerror(rc));
+		DS_ERROR(rc, "dfs_read(%p, %zu) failed", (void *)ptr, size);
 		errno      = rc;
 		bytes_read = -1;
 	}
@@ -2132,8 +2131,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	rc          = dfs_write(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
 				file_list[fd_directed - FD_FILE_BASE]->file, &sgl, offset, NULL);
 	if (rc) {
-		D_ERROR("dfs_write(%p, %zu) failed: %d (%s)\n", (void *)ptr, size, rc,
-			strerror(rc));
+		DS_ERROR(rc, "dfs_write(%p, %zu) failed", (void *)ptr, size);
 		errno = rc;
 		return (-1);
 	}
@@ -2171,7 +2169,7 @@ new_fxstat(int vers, int fd, struct stat *buf)
 	}
 
 	if (rc) {
-		D_ERROR("dfs_ostat() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_ostat() failed");
 		errno = rc;
 		rc    = -1;
 	}
@@ -2208,7 +2206,7 @@ fstat(int fd, struct stat *buf)
 	}
 
 	if (rc) {
-		D_ERROR("dfs_ostat() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_ostat() failed");
 		errno = rc;
 		rc    = -1;
 	}
@@ -2669,7 +2667,7 @@ statvfs(const char *pathname, struct statvfs *svfs)
 
 	rc = daos_pool_query(dfs_mt->poh, NULL, &info, NULL, NULL);
 	if (rc) {
-		D_ERROR("failed to query pool: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to query pool");
 		D_GOTO(out_err, rc = daos_der2errno(rc));
 	}
 
@@ -3331,7 +3329,7 @@ out_org:
 out_release:
 	rc2 = dfs_release(obj);
 	if (rc2)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc2, strerror(rc2));
+		DS_ERROR(rc2, "dfs_release() failed");
 
 out_err:
 	FREE(parent_dir);
@@ -3396,7 +3394,7 @@ write_all(int fd, const void *buf, size_t count)
 				/* out of space. Quit immediately. */
 				return -1;
 			errno_save = errno;
-			D_ERROR("write_all() failed: %d (%s)\n", errno_save, strerror(errno_save));
+			DS_ERROR(errno_save, "write_all() failed");
 			errno = errno_save;
 			return -1;
 		}
@@ -3548,7 +3546,7 @@ rename(const char *old_name, const char *new_name)
 					      stat_old.st_size - byte_left, &byte_read, NULL);
 				if (rc != 0) {
 					close(fd);
-					D_ERROR("dfs_read() failed: %d (%s)\n", rc, strerror(rc));
+					DS_ERROR(rc, "dfs_read() failed");
 					errno = rc;
 					D_GOTO(out_old, rc);
 				}
@@ -3664,7 +3662,7 @@ rename(const char *old_name, const char *new_name)
 				D_GOTO(out_err, rc = ENAMETOOLONG);
 			} else if (link_len_libc < 0) {
 				errno_save = errno;
-				D_ERROR("readlink() failed: %d (%s)\n", errno, strerror(errno));
+				DS_ERROR(errno, "readlink() failed");
 				D_GOTO(out_err, rc = errno_save);
 			}
 
@@ -3751,7 +3749,7 @@ out_old:
 	errno_save = rc;
 	rc = dfs_release(obj_old);
 	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_release() failed");
 	errno = errno_save;
 	return (-1);
 
@@ -3763,7 +3761,7 @@ out_new:
 	errno_save = rc;
 	rc = dfs_release(obj_new);
 	if (rc)
-		D_ERROR("dfs_release() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_release() failed");
 	errno = errno_save;
 	return (-1);
 
@@ -4386,7 +4384,7 @@ utime(const char *path, const struct utimbuf *times)
 	else
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
-		D_ERROR("fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
+		DS_ERROR(rc, "fail to lookup %s", full_path);
 		D_GOTO(out_err, rc);
 	}
 
@@ -4458,7 +4456,7 @@ utimes(const char *path, const struct timeval times[2])
 	else
 		rc = dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDWR, &obj, &mode, &stbuf);
 	if (rc) {
-		D_ERROR("fail to lookup %s: %d (%s)\n", full_path, rc, strerror(rc));
+		DS_ERROR(rc, "fail to lookup %s", full_path);
 		D_GOTO(out_err, rc);
 	}
 
@@ -4477,7 +4475,7 @@ utimes(const char *path, const struct timeval times[2])
 
 	rc = dfs_osetattr(dfs_mt->dfs, obj, &stbuf, DFS_SET_ATTR_MTIME);
 	if (rc) {
-		D_ERROR("dfs_osetattr() failed: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "dfs_osetattr() failed");
 		dfs_release(obj);
 		D_GOTO(out_err, rc);
 	}
@@ -4839,15 +4837,13 @@ dup2(int oldfd, int newfd)
 		return next_dup2(oldfd, newfd);
 
 	if (newfd >= FD_FILE_BASE) {
-		D_ERROR("unimplemented yet for newfd >= FD_FILE_BASE: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "unimplemented yet for newfd >= FD_FILE_BASE");
 		errno = ENOTSUP;
 		return -1;
 	}
 	fd_directed = query_fd_forward_dest(newfd);
 	if (fd_directed >= FD_FILE_BASE) {
-		D_ERROR("unimplemented yet for fd_directed >= FD_FILE_BASE: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "unimplemented yet for fd_directed >= FD_FILE_BASE");
 		errno = ENOTSUP;
 		return -1;
 	}
@@ -4864,14 +4860,12 @@ dup2(int oldfd, int newfd)
 		if (fd < 0) {
 			/* failed to allocate an fd from kernel */
 			errno_save = errno;
-			D_ERROR("failed to get a fd from kernel: %d (%s)\n", errno_save,
-				strerror(errno_save));
+			DS_ERROR(errno_save, "failed to get a fd from kernel");
 			errno = errno_save;
 			return (-1);
 		} else if (fd != newfd) {
 			close(fd);
-			D_ERROR("failed to get the desired fd in dup2(): %d (%s)\n", EBUSY,
-				strerror(EBUSY));
+			DS_ERROR(EBUSY, "failed to get the desired fd in dup2()");
 			errno = EBUSY;
 			return (-1);
 		}
@@ -4973,7 +4967,7 @@ new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
 	rc = find_next_available_map(&idx_map);
 	if (rc) {
-		D_ERROR("mmap_list is out of space: %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "mmap_list is out of space");
 		errno = rc;
 		return MAP_FAILED;
 	}
@@ -5124,7 +5118,7 @@ flock(int fd, int operation)
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
 	if (report)
-		D_ERROR("flock() is not implemented yet: %d (%s)\n", ENOTSUP, strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "flock() is not implemented yet");
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5146,8 +5140,7 @@ fallocate(int fd, int mode, off_t offset, off_t len)
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
 	if (report)
-		D_ERROR("fallocate() is not implemented yet: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "fallocate() is not implemented yet");
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5169,8 +5162,7 @@ posix_fallocate(int fd, off_t offset, off_t len)
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
 	if (report)
-		D_ERROR("posix_fallocate() is not implemented yet: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "posix_fallocate() is not implemented yet");
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5192,8 +5184,7 @@ posix_fallocate64(int fd, off64_t offset, off64_t len)
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
 	if (report)
-		D_ERROR("posix_fallocate64() is not implemented yet: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "posix_fallocate64() is not implemented yet");
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5215,8 +5206,7 @@ tcgetattr(int fd, void *termios_p)
 
 	/* We output the message only if env "D_IL_REPORT" is set. */
 	if (report)
-		D_ERROR("tcgetattr() is not implemented yet: %d (%s)\n", ENOTSUP,
-			strerror(ENOTSUP));
+		DS_ERROR(ENOTSUP, "tcgetattr() is not implemented yet");
 	errno = ENOTSUP;
 	return -1;
 }
@@ -5593,25 +5583,25 @@ init_dfs(int idx)
 	    daos_pool_connect(dfs_list[idx].pool, NULL, DAOS_PC_RW, &dfs_list[idx].poh,
 			      NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("failed to connect pool: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to connect pool");
 		return daos_der2errno(rc);
 	}
 
 	rc = daos_cont_open(dfs_list[idx].poh, dfs_list[idx].cont, DAOS_COO_RW, &dfs_list[idx].coh,
 			    NULL, NULL);
 	if (rc != 0) {
-		D_ERROR("failed to open container: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to open container");
 		D_GOTO(out_err_cont_open, rc);
 	}
 	rc = dfs_mount(dfs_list[idx].poh, dfs_list[idx].coh, O_RDWR, &dfs_list[idx].dfs);
 	if (rc != 0) {
-		D_ERROR("failed to mount dfs:  %d (%s)\n", rc, strerror(rc));
+		DS_ERROR(rc, "failed to mount dfs");
 		D_GOTO(out_err_mt, rc);
 	}
 	rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &hdl_hash_ops, &dfs_list[idx].dfs_dir_hash);
 	if (rc != 0) {
-		D_ERROR("failed to create hash table: " DF_RC "\n", DP_RC(rc));
+		DL_ERROR(rc, "failed to create hash table");
 		D_GOTO(out_err_ht, rc = daos_der2errno(rc));
 	}
 
@@ -5620,20 +5610,17 @@ init_dfs(int idx)
 out_err_ht:
 	rc2 = dfs_umount(dfs_list[idx].dfs);
 	if (rc2 != 0)
-		D_ERROR("error in dfs_umount(%s): %d (%s)\n", dfs_list[idx].fs_root, rc2,
-			strerror(rc2));
+		DS_ERROR(rc2, "error in dfs_umount(%s)", dfs_list[idx].fs_root);
 
 out_err_mt:
 	rc2 = daos_cont_close(dfs_list[idx].coh, NULL);
 	if (rc2 != 0)
-		D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[idx].fs_root,
-			DP_RC(rc2));
+		DL_ERROR(rc2, "error in daos_cont_close(%s)", dfs_list[idx].fs_root);
 
 out_err_cont_open:
 	rc2 = daos_pool_disconnect(dfs_list[idx].poh, NULL);
 	if (rc2 != 0)
-		D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
-			dfs_list[idx].fs_root, DP_RC(rc2));
+		DL_ERROR(rc2, "error in daos_pool_disconnect(%s)", dfs_list[idx].fs_root);
 
 	return rc;
 }
@@ -5662,26 +5649,22 @@ finalize_dfs(void)
 
 		rc = d_hash_table_destroy(dfs_list[i].dfs_dir_hash, false);
 		if (rc != 0) {
-			D_ERROR("error in d_hash_table_destroy(%s): " DF_RC "\n",
-				dfs_list[i].fs_root, DP_RC(rc));
+			DL_ERROR(rc, "error in d_hash_table_destroy(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		rc = dfs_umount(dfs_list[i].dfs);
 		if (rc != 0) {
-			D_ERROR("error in dfs_umount(%s): %d (%s)\n", dfs_list[i].fs_root, rc,
-				strerror(rc));
+			DS_ERROR(rc, "error in dfs_umount(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		rc = daos_cont_close(dfs_list[i].coh, NULL);
 		if (rc != 0) {
-			D_ERROR("error in daos_cont_close(%s): " DF_RC "\n", dfs_list[i].fs_root,
-				DP_RC(rc));
+			DL_ERROR(rc, "error in daos_cont_close(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		rc = daos_pool_disconnect(dfs_list[i].poh, NULL);
 		if (rc != 0) {
-			D_ERROR("error in daos_pool_disconnect(%s): " DF_RC "\n",
-				dfs_list[i].fs_root, DP_RC(rc));
+			DL_ERROR(rc, "error in daos_pool_disconnect(%s)", dfs_list[i].fs_root);
 			continue;
 		}
 		D_FREE(dfs_list[i].fs_root);
@@ -5694,7 +5677,7 @@ finalize_dfs(void)
 		for (j = 0; j < init_cnt; j++) {
 			rc = daos_fini();
 			if (rc != 0)
-				D_ERROR("daos_fini() failed: " DF_RC "\n", DP_RC(rc));
+				DL_ERROR(rc, "daos_fini() failed");
 		}
 	}
 }
