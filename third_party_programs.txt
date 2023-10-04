@@ -119,7 +119,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	pmdk (BSD 3-clause "New" or "Revised" License)
 	https://github.com/pmem/pmdk
 	https://github.com/pmem/pmdk/blob/master/LICENSE
-	Copyright 2014-2020, Intel Corporation
+	Copyright 2014-2023, Intel Corporation
 
 	Portable Hardware Locality (hwloc) (BSD 3-clause "New" or "Revised" License)
 	https://www.open-mpi.org/projects/hwloc/

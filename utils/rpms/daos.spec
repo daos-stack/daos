@@ -49,7 +49,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmemobj-devel >= 1.12.1~rc1
+BuildRequires: libpmemobj-devel >= 2.0.0
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -145,11 +145,11 @@ Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 03.00.00.0423
-Requires: libpmemobj1 >= 1.12.1~rc1-1.suse1500
+Requires: libpmemobj1 >= 2.0.0-1.suse1500
 Requires: libfabric1 >= %{libfabric_version}
 %else
 Requires: ipmctl >= 03.00.00.0468
-Requires: libpmemobj >= 1.12.1~rc1-1%{?dist}
+Requires: libpmemobj >= 2.0.0-1%{?dist}
 %endif
 Requires: libfabric >= %{libfabric_version}
 Requires: mercury >= %{mercury_version}
@@ -585,6 +585,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
+* Mon Oct 02 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-10
+- Update to pmdk 2.0.0
+  * Remove libpmemblk from dependencies.
+  * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
+  * Stop using BUILD_RPMEMM=n and NDCTL_DISABLE=y.
+  * Point https://github.com/pmem/pmdk as main PMDK reference source.
+
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
   rather than by package name, for portability and future-proofing
