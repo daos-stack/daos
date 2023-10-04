@@ -159,6 +159,10 @@ func PoolProperties() PoolPropertyMap {
 				Number:      PoolPropertyECPda,
 				Description: "Performance domain affinity level of EC",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					// convert pda "-1" to internal DAOS_PROP_PDA_MAX
+					if s == "-1" {
+						s = "4294967295"
+					}
 					ecpdaErr := errors.Errorf("invalid ec_pda value %q", s)
 					pdalvl, err := strconv.ParseUint(s, 10, 32)
 					if err != nil || !EcPdaIsValid(pdalvl) {
@@ -171,9 +175,13 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					return fmt.Sprintf("%d", n)
+					switch n {
+					case PoolPropPDAMAX:
+						return fmt.Sprintf("%d", -1)
+					default:
+						return fmt.Sprintf("%d", n)
+					}
 				},
-				valueMarshaler: numericMarshaler,
 			},
 		},
 		"rp_pda": {
@@ -181,6 +189,10 @@ func PoolProperties() PoolPropertyMap {
 				Number:      PoolPropertyRPPda,
 				Description: "Performance domain affinity level of RP",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					// convert pda "-1" to internal DAOS_PROP_PDA_MAX
+					if s == "-1" {
+						s = "4294967295"
+					}
 					rppdaErr := errors.Errorf("invalid rp_pda value %q", s)
 					pdalvl, err := strconv.ParseUint(s, 10, 32)
 					if err != nil || !RpPdaIsValid(pdalvl) {
@@ -193,9 +205,13 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					return fmt.Sprintf("%d", n)
+					switch n {
+					case PoolPropPDAMAX:
+						return fmt.Sprintf("%d", -1)
+					default:
+						return fmt.Sprintf("%d", n)
+					}
 				},
-				valueMarshaler: numericMarshaler,
 			},
 		},
 		"policy": {

@@ -150,6 +150,11 @@ const (
 )
 
 const (
+	// Maximum value for pda property
+	PoolPropPDAMAX = C.DAOS_PROP_PDA_MAX
+)
+
+const (
 	// ECCellMin defines the minimum-allowaable EC cell size.
 	ECCellMin = C.DAOS_EC_CELL_MIN
 	// ECCellMax defines the maximum-allowaable EC cell size.
