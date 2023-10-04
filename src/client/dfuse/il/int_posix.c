@@ -165,7 +165,7 @@ entry_array_close(void *arg) {
 	/* Do not close container/pool handles at this point
 	 * to allow for reuse.
 	 * ioil_shrink_cont(entry->fd_cont, true, true);
-	*/
+	 */
 }
 
 static int

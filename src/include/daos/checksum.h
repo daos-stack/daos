@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -511,8 +511,8 @@ ci2csum(struct dcs_csum_info ci);
 #define	ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
 
 /** Serialize a \dcs_csum_info structure to an I/O vector. First the structure
-* fields are added to the memory buf, then the actual csum.
-*/
+ * fields are added to the memory buf, then the actual csum.
+ */
 int
 ci_serialize(struct dcs_csum_info *obj, d_iov_t *iov);
 void
