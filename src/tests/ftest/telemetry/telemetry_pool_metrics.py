@@ -27,11 +27,23 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
 
         self.dfs_oclass = self.params.get("oclass", '/run/container/*', self.dfs_oclass)
 
-    def get_expected_value_range(self):
+    def get_expected_value_range(self, timeout_ops, resent_ops):
         """Return the expected metrics value output.
 
         This function returns a hash map of pairs defining min and max values of each tested
-        telemetry metrics.
+        telemetry metrics.  The hash map of pairs returned depends on the tested object class, and
+        the values are weighted according to the number of timeout rpc and resent update rpc.
+
+        Note:
+            The extra network traffic needed to manage transient errors could not be accurately
+            predicted and thus the returned intervals could be invalid when such errors are
+            occurring.  Moreover, there is not yet a telemetry counter defining the number of
+            failing fetch operations.  However, the number of timeout_ops should be at least equal
+            to the number of fetch which have failed and thus have been redo one or more times.
+
+        Args:
+            timeout_ops (int): Total number of timed out RPC requests.
+            resent_ops (int): Total number of timed out RPC requests.
 
         Returns:
             dict: Dictionary of the expected metrics value output.
@@ -42,37 +54,37 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             "SX": {
                 "engine_pool_ops_fetch": (
                     ops_number + 7,
-                    ops_number + 8
+                    ops_number + timeout_ops + 8
                 ),
                 "engine_pool_ops_update": (
                     ops_number + 1,
-                    ops_number + 2
+                    ops_number + resent_ops + 2
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 1) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + resent_ops + 1) * self.ior_cmd.transfer_size.value
                 )
             },
             "RP_3GX": {
                 "engine_pool_ops_fetch": (
                     ops_number + 7,
-                    ops_number + 8
+                    ops_number + timeout_ops + 8
                 ),
                 "engine_pool_ops_update": (
                     ops_number + 1,
-                    ops_number + 2
+                    ops_number + resent_ops + 2
                 ),
                 "engine_pool_xferred_fetch": (
                     ops_number * self.ior_cmd.transfer_size.value,
-                    (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    (ops_number + timeout_ops + 2) * self.ior_cmd.transfer_size.value
                 ),
                 "engine_pool_xferred_update": (
                     3 * ops_number * self.ior_cmd.transfer_size.value,
-                    3 * (ops_number + 1) * self.ior_cmd.transfer_size.value
+                    3 * (ops_number + resent_ops + 1) * self.ior_cmd.transfer_size.value
                 )
             }
         }
@@ -159,21 +171,17 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 "Successfully retrieve metric: %s=%d (init=%d, end=%d)",
                 name, metrics[name], metrics_init[name], metrics_end[name])
 
-        # NOTE DAOS-14220: Check if networking errors occurred during the test.  If yes, we skip the
-        # test as there is no reliable way to know how many fetch and update operations were
-        # effectively performed.
+        # Check if transient networking occurred during the test.
         timeout_ops = metrics["engine_net_req_timeout"]
         resent_ops = metrics["engine_pool_resent"]
         if timeout_ops > 0 or resent_ops > 0:
             self.log.info(
-                "Transient networking errors occurred during the test: "
-                "timeout_ops=%d, resent_ops=%d",
+                "Transient networking errors occurred during the test which could lead "
+                "to false positive: timeout_ops=%d, resent_ops=%d",
                 timeout_ops, resent_ops)
-            self.log.info("------Test skipped------")
-            return
 
         # perform verification check
-        expected_values = self.get_expected_value_range()
+        expected_values = self.get_expected_value_range(timeout_ops, resent_ops)
         for name in expected_values:
             val = metrics[name]
             min_val, max_val = expected_values[name]
