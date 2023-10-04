@@ -308,7 +308,7 @@ struct ad_maxheap_node {
 	/**
 	 * Arena is inactive, it's set to true when any type of group failed to allocate memory
 	 * and create more groups.
-	 * XXX: this is not enough, we should save failed allocatoin counter in matrics and
+	 * XXX: this is not enough, we should save failed allocatoin counter in metrics and
 	 * set arenea as full only if it encounters multiple failures.
 	 */
 				mh_inactive:1;

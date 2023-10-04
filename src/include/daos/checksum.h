@@ -510,7 +510,7 @@ ci2csum(struct dcs_csum_info ci);
  */
 #define	ci_csums_len(obj) ((obj).cs_nr * (obj).cs_len)
 
-/** Serialze a \dcs_csum_info structure to an I/O vector. First the structure
+/** Serialize a \dcs_csum_info structure to an I/O vector. First the structure
 * fields are added to the memory buf, then the actual csum.
 */
 int

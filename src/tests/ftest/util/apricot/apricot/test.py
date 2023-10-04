@@ -195,8 +195,8 @@ class Test(avocadoTest):
         try:
             with open(self.cancel_file) as skip_handle:
                 skip_list = skip_handle.readlines()
-        except Exception as excpt:  # pylint: disable=broad-except
-            skip_process_error("Unable to read skip list: {}".format(excpt))
+        except Exception as err:  # pylint: disable=broad-except
+            skip_process_error("Unable to read skip list: {}".format(err))
             skip_list = []
 
         for item in skip_list:
@@ -218,9 +218,9 @@ class Test(avocadoTest):
                             return
                 except exceptions.TestCancel:   # pylint: disable=try-except-raise
                     raise
-                except Exception as excpt:      # pylint: disable=broad-except
+                except Exception as err:      # pylint: disable=broad-except
                     skip_process_error("Unable to read commit title: "
-                                       "{}".format(excpt))
+                                       "{}".format(err))
                 # Nope, but there is a commit that fixes it
                 # Maybe in this code base, maybe not...
                 if len(vals) > 1:
@@ -228,9 +228,9 @@ class Test(avocadoTest):
                         with open(os.path.join(os.sep, 'tmp',
                                                'commit_list')) as commit_handle:
                             commits = commit_handle.readlines()
-                    except Exception as excpt:  # pylint: disable=broad-except
+                    except Exception as err:  # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
-                                           "{}".format(excpt))
+                                           "{}".format(err))
                         return
                     if commits and vals[1] in commits:
                         # fix is in this code base
