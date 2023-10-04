@@ -8,7 +8,6 @@ import logging
 import os
 import re
 import sys
-from tempfile import TemporaryDirectory
 import time
 
 from ClusterShell.NodeSet import NodeSet
@@ -681,7 +680,7 @@ class TestGroup():
     """Runs a group of tests with same configuration."""
 
     def __init__(self, avocado, test_env, servers, clients, control, tags, nvme,
-                 yaml_directory=None, yaml_extension=None):
+                 yaml_directory, yaml_extension=None):
         # pylint: disable=too-many-arguments
         """_summary_.
 
@@ -693,8 +692,7 @@ class TestGroup():
             control (NodeSet): hosts designated for the control role in tests
             tags (list): a list of tags or test file names
             nvme (str): storage replacement keyword
-            yaml_directory (str, optional): directory used to store modified test yaml files.
-                Defaults to None.
+            yaml_directory (str): directory used to store modified test yaml files.
             yaml_extension (str, optional): optional test yaml file extension to use when creating
                 the TestInfo object. Defaults to None.
         """
@@ -706,37 +704,12 @@ class TestGroup():
         self._partition_hosts = NodeSet(self._servers or self._clients)
         self._tags = tags
         self._nvme = nvme
-        self.yaml_directory = yaml_directory
+        self._yaml_directory = yaml_directory
         self._yaml_extension = yaml_extension
 
         self.tests = []
         self.tag_filters = []
         self._details = {"tags": self._tags, "nvme": self._nvme}
-
-    @property
-    def yaml_directory(self):
-        """Get the directory used to store modified test yaml files.
-
-        Returns:
-            str: directory used to store modified test yaml files
-        """
-        return self._yaml_directory
-
-    @yaml_directory.setter
-    def yaml_directory(self, value=None):
-        """Set the directory used to store modified test yaml files.
-
-        Args:
-            value (str, optional): directory used to store modified test yaml files
-        """
-        if value is None:
-            # pylint: disable=consider-using-with
-            temp_dir = TemporaryDirectory()
-            self._yaml_directory = temp_dir.name
-        else:
-            self._yaml_directory = value
-            if not os.path.exists(self._yaml_directory):
-                os.mkdir(self._yaml_directory)
 
     @property
     def details(self):
@@ -849,7 +822,6 @@ class TestGroup():
 
         updater = YamlUpdater(
             logger, self._servers, self._clients, storage, multiplier, override, verbose)
-        logger.info("Modified test yaml files being created in: %s", self._yaml_directory)
 
         # Replace any placeholders in the extra yaml file, if provided
         if extra_yaml:

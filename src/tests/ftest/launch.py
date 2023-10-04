@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import sys
+from tempfile import TemporaryDirectory
 # import traceback
 
 # When SRE-439 is fixed we should be able to include these import statements here
@@ -311,10 +312,23 @@ class Launch():
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
 
+        # Define the directory in which to create modified test yaml files
+        if args.yaml_directory is None:
+            # Create a temporary directory that will exist only during the execution launch.
+            # pylint: disable=consider-using-with
+            temp_dir = TemporaryDirectory()
+            yaml_dir = temp_dir.name
+        else:
+            # Use the user-specified directory, which will exist after launch completes.
+            yaml_dir = args.yaml_directory
+            if not os.path.exists(yaml_dir):
+                os.mkdir(yaml_dir)
+        logger.info("Modified test yaml files being created in: %s", yaml_dir)
+
         # Define the test configs specified by the arguments
         group = TestGroup(
             self.avocado, test_env, test_servers, test_clients, control_host, args.tags, args.nvme,
-            args.yaml_directory, args.yaml_extension)
+            yaml_dir, args.yaml_extension)
         try:
             group.list_tests(logger)
         except RunException:
