@@ -452,14 +452,15 @@ class Test(avocadoTest):
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
 
-    def log_step(self, message, marker=False):
+    def log_step(self, message, header=False):
         """Log a test step.
 
         Args:
             message (str): description of test step.
-            marker (bool, optional): whether to log a marker line in the log. Defaults to False.
+            header (bool, optional): whether to log a header line before the message. Defaults to
+                False.
         """
-        if marker:
+        if header:
             self.log.info('-' * 80)
         self.log.info("==> Step %s: %s", self._test_step, message)
         self._test_step += 1

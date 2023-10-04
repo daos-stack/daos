@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2023 Intel Corporation.
+  (C) Copyright 2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -104,7 +104,7 @@ class VerifyPoolSpace(TestWithServers):
             container (TestContainer): the container in which to write data
             block_size (str): block size to use with the ior
         """
-        self.log_step(f'Writing data ({block_size} block size) one of {description}')
+        self.log_step(f'Writing data ({block_size} block size) to a container in {description}')
         ior_kwargs['pool'] = container.pool
         ior_kwargs['container'] = container
         ior_kwargs['ior_params']['block_size'] = block_size
@@ -328,8 +328,9 @@ class VerifyPoolSpace(TestWithServers):
                 ' '.join(['Query pool information for', str(pool), 'after stopping rank 1']))
             with pool.no_exception():
                 result = pool.query()
-            if index == 0:
-                # The pool query should succeed for the first pool which only targets rank 0
+            if index in [0, 5]:
+                # The pool query should succeed for the first pool which only targets rank 0 and the
+                # last pool which targets ranks 0, 1, and 2
                 if result['status'] != 0:
                     self.fail(
                         f'{pool.identifier} dmg pool query should succeed after stopping rank 1')
@@ -339,7 +340,7 @@ class VerifyPoolSpace(TestWithServers):
                 message = 'unable to find any available service ranks'
                 if index == 4:
                     message = 'control.PoolQueryReq request timed out'
-                if message not in result['error']:
+                if not result['error'] or message not in result['error']:
                     self.fail(
                         f'{pool.identifier} dmg pool query should fail with \'{message}\' after '
                         'stopping rank 1')
