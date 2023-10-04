@@ -357,6 +357,7 @@ void d_log_fini(void);
  */
 void d_log_close(void);
 
+void d_log_rank_setup(int rank);
 /**
  * Reapplies the masks set in D_LOG_MASK.   Can be called after adding new
  * log facilities to ensure that the mask is set appropriately for the
