@@ -115,7 +115,7 @@ RUN if [ "$COMPILER" = "icc" ]; then                                            
             rpm --import https://yum.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB && \
             dnf config-manager --add-repo https://yum.repos.intel.com/oneapi oneAPI;                     \
         fi;                                                                                              \
-        dnf install intel-oneapi-compiler-dpcpp-cpp &&                                                   \
+        dnf install --nogpgcheck intel-oneapi-compiler-dpcpp-cpp &&                                                   \
         dnf clean all;                                                                                   \
     fi
 
