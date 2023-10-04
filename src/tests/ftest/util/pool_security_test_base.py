@@ -263,8 +263,8 @@ class PoolSecurityTestBase(TestWithServers):
         """
         action = "cont_delete"
         daos = self.get_daos_command()
-        daos.exit_status_exception = False
-        result = daos.container_destroy(container.pool.identifier, container.identifier, True)
+        with daos.no_exception():
+            result = daos.container_destroy(container.pool.identifier, container.identifier, True)
         self.log.info(
             "  In verify_cont_delete %s.\n =container_destroy() result:\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
@@ -322,15 +322,14 @@ class PoolSecurityTestBase(TestWithServers):
         """
         deny_access = '-1001'
         daos_cmd = self.get_daos_command()
-        daos_cmd.exit_status_exception = False
-        if action.lower() == "write":
-            container = self.get_container(pool, create=False, daos_command=daos_cmd)
-            result = container.create()
-        elif action.lower() == "read":
-            result = daos_cmd.pool_query(pool.identifier)
-        else:
-            self.fail(
-                "##In verify_pool_readwrite, invalid action: {}".format(action))
+        with daos_cmd.no_exception():
+            if action.lower() == "write":
+                container = self.get_container(pool, create=False, daos_command=daos_cmd)
+                result = container.create()
+            elif action.lower() == "read":
+                result = daos_cmd.pool_query(pool.identifier)
+            else:
+                self.fail("##In verify_pool_readwrite, invalid action: {}".format(action))
         self.log.info(
             "  In verify_pool_readwrite %s.\n =daos_cmd.run() result:\n%s",
             action, result)
