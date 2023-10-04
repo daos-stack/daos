@@ -32,20 +32,19 @@ int
 dc_cont_init(void)
 {
 	int		rc;
-	uint32_t	ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
+	uint32_t        ver_array[2] = {DAOS_CONT_VERSION - 1, DAOS_CONT_VERSION};
 
 	dc_cont_proto_version = 0;
-	rc = daos_rpc_proto_query(cont_proto_fmt_v6.cpf_base, ver_array,
-				  2, &dc_cont_proto_version);
+	rc = daos_rpc_proto_query(cont_proto_fmt_v7.cpf_base, ver_array, 2, &dc_cont_proto_version);
 	if (rc)
 		return rc;
 
 	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1) {
-		rc = daos_rpc_register(&cont_proto_fmt_v6, CONT_PROTO_CLI_COUNT,
-				       NULL, DAOS_CONT_MODULE);
+		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT, NULL,
+				       DAOS_CONT_MODULE);
 	} else if (dc_cont_proto_version == DAOS_CONT_VERSION) {
-		rc = daos_rpc_register(&cont_proto_fmt_v7, CONT_PROTO_CLI_COUNT,
-				       NULL, DAOS_CONT_MODULE);
+		rc = daos_rpc_register(&cont_proto_fmt_v8, CONT_PROTO_CLI_COUNT, NULL,
+				       DAOS_CONT_MODULE);
 	} else {
 		D_ERROR("%d version cont RPC not supported.\n", dc_cont_proto_version);
 		rc = -DER_PROTO;
@@ -66,9 +65,9 @@ dc_cont_fini(void)
 	int rc;
 
 	if (dc_cont_proto_version == DAOS_CONT_VERSION - 1)
-		rc = daos_rpc_unregister(&cont_proto_fmt_v6);
-	else
 		rc = daos_rpc_unregister(&cont_proto_fmt_v7);
+	else
+		rc = daos_rpc_unregister(&cont_proto_fmt_v8);
 	if (rc != 0)
 		D_ERROR("failed to unregister %d version cont RPCs: "DF_RC"\n",
 			dc_cont_proto_version, DP_RC(rc));
@@ -299,12 +298,12 @@ int
 dc_cont_create(tse_task_t *task)
 {
 	daos_cont_create_t     *args;
-	struct cont_create_in  *in;
 	struct daos_prop_entry *entry;
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
 	struct cont_args	arg = {0, };
+	uuid_t                  null_hdl_uuid;
 	int			rc;
 	daos_prop_t	       *rpc_prop = NULL;
 
@@ -342,24 +341,22 @@ dc_cont_create(tse_task_t *task)
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
 		goto err_prop;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, &rpc);
+	uuid_clear(null_hdl_uuid);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CREATE, pool->dp_pool_hdl, args->uuid,
+			     null_hdl_uuid, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cci_op.ci_uuid, args->uuid);
-	in->cci_prop = rpc_prop;
+	cont_create_in_set_data(rpc, CONT_CREATE, dc_cont_proto_version, rpc_prop);
 
 	arg.pool = pool;
 	arg.rpc = rpc;
 	arg.prop = rpc_prop;
 	crt_req_addref(rpc);
 
-	rc = tse_task_register_comp_cb(task, cont_create_complete, &arg,
-				       sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_create_complete, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -416,13 +413,14 @@ out:
 int
 dc_cont_destroy(tse_task_t *task)
 {
-	daos_cont_destroy_t	*args;
-	struct cont_destroy_in	*in;
+	daos_cont_destroy_t     *args;
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct cont_args	 arg;
+	uuid_t                   null_hdl_uuid;
 	uuid_t			 uuid;
+	crt_opcode_t             opc;
 	const char		*label;
 	int			 rc;
 
@@ -462,30 +460,22 @@ dc_cont_destroy(tse_task_t *task)
 			DP_RC(rc));
 		goto err_pool;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep,
-			     label ? CONT_DESTROY_BYLABEL : CONT_DESTROY,
-			     &rpc);
+	opc = label ? CONT_DESTROY_BYLABEL : CONT_DESTROY;
+	uuid_clear(null_hdl_uuid);
+	rc = cont_req_create(daos_task2ctx(task), &ep, opc, pool->dp_pool_hdl, uuid, null_hdl_uuid,
+			     &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_pool, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cdi_op.ci_uuid, uuid);
-	in->cdi_force = args->force;
-	if (label) {
-		struct cont_destroy_bylabel_in *lbl_in = crt_req_get(rpc);
-
-		lbl_in->cdli_label = label;
-	}
+	cont_destroy_in_set_data(rpc, opc, dc_cont_proto_version, args->force, label);
 
 	arg.pool = pool;
 	arg.rpc = rpc;
 	crt_req_addref(rpc);
 
-	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg,
-				       sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -715,7 +705,7 @@ static int
 cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_v7_out	*out = crt_reply_get(arg->rpc);
+	struct cont_open_out    *out  = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
 	struct dc_cont		*cont = daos_task_get_priv(task);
 	time_t			 otime_sec, mtime_sec;
@@ -749,7 +739,7 @@ cont_open_complete(tse_task_t *task, void *data)
 
 	/* If open by label, copy the returned UUID into dc_cont structure */
 	if (arg->coa_label) {
-		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
 
 		uuid_copy(cont->dc_uuid, lbl_out->colo_uuid);
 	}
@@ -807,7 +797,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 	if (arg->coa_label) {
-		struct cont_open_bylabel_v7_out *lbl_out = crt_reply_get(arg->rpc);
+		struct cont_open_bylabel_out *lbl_out = crt_reply_get(arg->rpc);
 
 		arg->coa_info->ci_md_otime = lbl_out->coo_md_otime;
 		arg->coa_info->ci_md_mtime = lbl_out->coo_md_mtime;
@@ -843,13 +833,13 @@ out:
 static int
 dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 {
-	daos_cont_open_t	*args;
-	struct cont_open_in	*in;
+	daos_cont_open_t        *args;
 	struct dc_cont		*cont;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct cont_open_args	 arg;
 	enum cont_operation	 cont_op;
+	uint64_t                 prop_bits; /* properties to retrieve when opening container */
 	int			 rc;
 
 	args = dc_task_get_args(task);
@@ -871,40 +861,22 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 						   cont->dc_uuid), DP_RC(rc));
 		goto err;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, cont_op, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool_hdl, cont->dc_uuid,
+			     cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		goto err;
 	}
 
-	/* Fill in common components of open / open bylabel RPCs */
-	in = crt_req_get(rpc);
-	uuid_copy(in->coi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->coi_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->coi_op.ci_hdl, cont->dc_cont_hdl);
-	in->coi_flags = cont->dc_capas;
-	/** Determine which container properties need to be retrieved while
-	 * opening the container
-	 */
-	in->coi_prop_bits	= DAOS_CO_QUERY_PROP_CSUM |
-				  DAOS_CO_QUERY_PROP_CSUM_CHUNK |
-				  DAOS_CO_QUERY_PROP_DEDUP |
-				  DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
-				  DAOS_CO_QUERY_PROP_REDUN_LVL |
-				  DAOS_CO_QUERY_PROP_REDUN_FAC |
-				  DAOS_CO_QUERY_PROP_EC_CELL_SZ |
-				  DAOS_CO_QUERY_PROP_EC_PDA |
-				  DAOS_CO_QUERY_PROP_RP_PDA |
-				  DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
-				  DAOS_CO_QUERY_PROP_OBJ_VERSION |
-				  DAOS_CO_QUERY_PROP_PERF_DOMAIN;
-
-	/* open bylabel RPC input */
-	if (label) {
-		struct cont_open_bylabel_in *lbl_in = crt_req_get(rpc);
-
-		lbl_in->coli_label = label;
-	}
+	/* Fill in remaining components of RPCs (field offsets may vary by protocol version). */
+	prop_bits = DAOS_CO_QUERY_PROP_CSUM | DAOS_CO_QUERY_PROP_CSUM_CHUNK |
+		    DAOS_CO_QUERY_PROP_DEDUP | DAOS_CO_QUERY_PROP_DEDUP_THRESHOLD |
+		    DAOS_CO_QUERY_PROP_REDUN_LVL | DAOS_CO_QUERY_PROP_REDUN_FAC |
+		    DAOS_CO_QUERY_PROP_EC_CELL_SZ | DAOS_CO_QUERY_PROP_EC_PDA |
+		    DAOS_CO_QUERY_PROP_RP_PDA | DAOS_CO_QUERY_PROP_GLOBAL_VERSION |
+		    DAOS_CO_QUERY_PROP_OBJ_VERSION | DAOS_CO_QUERY_PROP_PERF_DOMAIN;
+	cont_open_in_set_data(rpc, cont_op, dc_cont_proto_version, cont->dc_capas, prop_bits,
+			      label);
 
 	arg.coa_pool	= pool;
 	arg.coa_info	= args->info;
@@ -975,10 +947,6 @@ dc_cont_open(tse_task_t *task)
 		cont->dc_capas = args->flags;
 		dc_task_set_priv(task, cont);
 	}
-
-	/* DAOS_COO_RO_MDSTATS introduced since 2.4 (protocol version 7) */
-	if (dc_cont_proto_version == 6)
-		cont->dc_capas &= ~DAOS_COO_RO_MDSTATS;
 
 	D_DEBUG(DB_MD, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
 		DP_UUID(pool->dp_pool), args->cont ? : "<compat>",
@@ -1073,8 +1041,7 @@ int
 dc_cont_close(tse_task_t *task)
 {
 	daos_cont_close_t      *args;
-	daos_handle_t		coh;
-	struct cont_close_in   *in;
+	daos_handle_t           coh;
 	struct dc_pool	       *pool;
 	struct dc_cont	       *cont;
 	crt_endpoint_t		ep;
@@ -1135,16 +1102,12 @@ dc_cont_close(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_pool;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_CLOSE, pool->dp_pool_hdl, cont->dc_uuid,
+			     cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		goto err_pool;
 	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->cci_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cci_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->cci_op.ci_hdl, cont->dc_cont_hdl);
 
 	arg.cca_pool = pool;
 	arg.cca_cont = cont;
@@ -1187,7 +1150,7 @@ static int
 cont_query_complete(tse_task_t *task, void *data)
 {
 	struct cont_query_args		*arg = (struct cont_query_args *)data;
-	struct cont_query_v7_out	*out = crt_reply_get(arg->rpc);
+	struct cont_query_out           *out  = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
 	time_t				 otime_sec, mtime_sec;
@@ -1358,8 +1321,7 @@ cont_query_bits(daos_prop_t *prop)
 int
 dc_cont_query(tse_task_t *task)
 {
-	daos_cont_query_t	*args;
-	struct cont_query_in	*in;
+	daos_cont_query_t       *args;
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
 	crt_endpoint_t		 ep;
@@ -1390,17 +1352,14 @@ dc_cont_query(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_QUERY, pool->dp_pool_hdl, cont->dc_uuid,
+			     cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->cqi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
-	in->cqi_bits = cont_query_bits(args->prop);
+	cont_query_in_set_data(rpc, CONT_QUERY, dc_cont_proto_version, cont_query_bits(args->prop));
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1410,8 +1369,7 @@ dc_cont_query(tse_task_t *task)
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
 
-	rc = tse_task_register_comp_cb(task, cont_query_complete, &arg,
-				       sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_query_complete, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -1484,8 +1442,7 @@ dc_cont_set_prop(tse_task_t *task)
 {
 	daos_cont_set_prop_t		*args;
 	struct daos_prop_entry		*entry;
-	struct daos_co_status		 co_stat;
-	struct cont_prop_set_in		*in;
+	struct daos_co_status            co_stat;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			 ep;
@@ -1558,17 +1515,15 @@ dc_cont_set_prop(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_PROP_SET, pool->dp_pool_hdl,
+			     cont->dc_uuid, cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->cpsi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cpsi_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->cpsi_op.ci_hdl, cont->dc_cont_hdl);
-	in->cpsi_prop = args->prop;
+	cont_prop_set_in_set_data(rpc, CONT_PROP_SET, dc_cont_proto_version, args->prop,
+				  pool->dp_pool);
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -1649,8 +1604,7 @@ out:
 int
 dc_cont_update_acl(tse_task_t *task)
 {
-	daos_cont_update_acl_t		*args;
-	struct cont_acl_update_in	*in;
+	daos_cont_update_acl_t          *args;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			 ep;
@@ -1681,17 +1635,14 @@ dc_cont_update_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_UPDATE, pool->dp_pool_hdl,
+			     cont->dc_uuid, cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->caui_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->caui_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->caui_op.ci_hdl, cont->dc_cont_hdl);
-	in->caui_acl = args->acl;
+	cont_acl_update_in_set_data(rpc, CONT_ACL_UPDATE, dc_cont_proto_version, args->acl);
 
 	arg.cua_pool = pool;
 	arg.cua_cont = cont;
@@ -1772,8 +1723,7 @@ out:
 int
 dc_cont_delete_acl(tse_task_t *task)
 {
-	daos_cont_delete_acl_t		*args;
-	struct cont_acl_delete_in	*in;
+	daos_cont_delete_acl_t          *args;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			 ep;
@@ -1804,18 +1754,15 @@ dc_cont_delete_acl(tse_task_t *task)
 			DP_CONT(pool->dp_pool, cont->dc_uuid), DP_RC(rc));
 		goto err_cont;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_ACL_DELETE, pool->dp_pool_hdl,
+			     cont->dc_uuid, cont->dc_cont_hdl, &args->req_time, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
 
-	in = crt_req_get(rpc);
-	uuid_copy(in->cadi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cadi_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->cadi_op.ci_hdl, cont->dc_cont_hdl);
-	in->cadi_principal_type = args->type;
-	in->cadi_principal_name = args->name;
+	cont_acl_delete_in_set_data(rpc, CONT_ACL_DELETE, dc_cont_proto_version, args->name,
+				    args->type);
 
 	arg.cda_pool = pool;
 	arg.cda_cont = cont;
@@ -1939,8 +1886,7 @@ get_tgt_rank(struct dc_pool *pool, unsigned int *rank)
 int
 dc_cont_alloc_oids(tse_task_t *task)
 {
-	daos_cont_alloc_oids_t		*args;
-	struct cont_oid_alloc_in	*in;
+	daos_cont_alloc_oids_t          *args;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			ep;
@@ -1972,17 +1918,12 @@ dc_cont_alloc_oids(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(err_cont, rc);
 
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, &rpc);
+	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_OID_ALLOC, pool->dp_pool_hdl,
+			     cont->dc_uuid, cont->dc_cont_hdl, NULL /* req_timep */, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_cont, rc);
 	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->coai_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->coai_op.ci_uuid, cont->dc_uuid);
-	uuid_copy(in->coai_op.ci_hdl, cont->dc_cont_hdl);
-	in->num_oids = args->num_oids;
 
 	arg.coaa_pool	= pool;
 	arg.coaa_cont	= cont;
@@ -1992,8 +1933,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 	arg.oid		= args->oid;
 	crt_req_addref(rpc);
 
-	rc = tse_task_register_comp_cb(task, cont_oid_alloc_complete, &arg,
-				       sizeof(arg));
+	rc = tse_task_register_comp_cb(task, cont_oid_alloc_complete, &arg, sizeof(arg));
 	if (rc != 0)
 		D_GOTO(err_rpc, rc);
 
@@ -2369,10 +2309,9 @@ out:
 }
 
 static int
-cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
-		 crt_context_t *ctx, struct cont_req_arg *args)
+cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *ctx,
+		 uint64_t *req_timep, struct cont_req_arg *args)
 {
-	struct cont_op_in *in;
 	crt_endpoint_t	   ep;
 	int		   rc;
 
@@ -2397,17 +2336,14 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode,
 		goto out;
 	}
 
-	rc = cont_req_create(ctx, &ep, opcode, &args->cra_rpc);
+	rc = cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool_hdl, args->cra_cont->dc_uuid,
+			     args->cra_cont->dc_cont_hdl, req_timep, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		cont_req_cleanup(CLEANUP_POOL, args);
 		goto out;
 	}
 
-	in = crt_req_get(args->cra_rpc);
-	uuid_copy(in->ci_pool_hdl, args->cra_pool->dp_pool_hdl);
-	uuid_copy(in->ci_uuid, args->cra_cont->dc_uuid);
-	uuid_copy(in->ci_hdl, args->cra_cont->dc_cont_hdl);
 out:
 	return rc;
 }
@@ -2426,9 +2362,9 @@ attr_list_req_complete(tse_task_t *task, void *data)
 int
 dc_cont_list_attr(tse_task_t *task)
 {
-	daos_cont_list_attr_t		*args;
-	struct cont_attr_list_in	*in;
+	daos_cont_list_attr_t           *args;
 	struct cont_req_arg		 cb_args;
+	crt_bulk_t                       bulk = NULL;
 	int				 rc;
 
 	args = dc_task_get_args(task);
@@ -2439,8 +2375,8 @@ dc_cont_list_attr(tse_task_t *task)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	rc = cont_req_prepare(args->coh, CONT_ATTR_LIST,
-			     daos_task2ctx(task), &cb_args);
+	rc = cont_req_prepare(args->coh, CONT_ATTR_LIST, daos_task2ctx(task), &args->req_time,
+			      &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2450,7 +2386,6 @@ dc_cont_list_attr(tse_task_t *task)
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->size);
 
-	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->size > 0) {
 		d_iov_t iov = {
 			.iov_buf     = args->buf,
@@ -2462,15 +2397,16 @@ dc_cont_list_attr(tse_task_t *task)
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
-		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
-				     CRT_BULK_RW, &in->cali_bulk);
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);
 			D_GOTO(out, rc);
 		}
 	}
 
-	cb_args.cra_bulk = in->cali_bulk;
+	cont_attr_list_in_set_data(cb_args.cra_rpc, CONT_ATTR_LIST, dc_cont_proto_version, bulk);
+
+	cb_args.cra_bulk     = bulk;
 	cb_args.cra_callback = attr_list_req_complete;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
@@ -2600,9 +2536,10 @@ free_heap_copy(tse_task_t *task, void *args)
 int
 dc_cont_get_attr(tse_task_t *task)
 {
-	daos_cont_get_attr_t	*args;
-	struct cont_attr_get_in	*in;
+	daos_cont_get_attr_t     *args;
 	struct cont_req_arg	 cb_args;
+	crt_bulk_t                bulk;
+	uint64_t                  key_length;
 	int			 rc;
 	int			 i;
 	char			**new_names = NULL;
@@ -2616,8 +2553,8 @@ dc_cont_get_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_req_prepare(args->coh, CONT_ATTR_GET,
-			     daos_task2ctx(task), &cb_args);
+	rc = cont_req_prepare(args->coh, CONT_ATTR_GET, daos_task2ctx(task), &args->req_time,
+			      &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2626,9 +2563,7 @@ dc_cont_get_attr(tse_task_t *task)
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(cb_args.cra_rpc);
-	in->cagi_count = args->n;
-	in->cagi_key_length = 0;
+	key_length = 0;
 
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
@@ -2648,7 +2583,7 @@ dc_cont_get_attr(tse_task_t *task)
 		uint64_t len;
 
 		len = strnlen(args->names[i], DAOS_ATTR_NAME_MAX);
-		in->cagi_key_length += len + 1;
+		key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
 			D_GOTO(out_rpc, rc = -DER_NOMEM);
@@ -2661,13 +2596,15 @@ dc_cont_get_attr(tse_task_t *task)
 		}
 	}
 
-	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
-			      (size_t *)args->sizes, daos_task2ctx(task),
-			      CRT_BULK_RW, &in->cagi_bulk);
+	rc = attr_bulk_create(args->n, new_names, (void **)args->values, (size_t *)args->sizes,
+			      daos_task2ctx(task), CRT_BULK_RW, &bulk);
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	cb_args.cra_bulk = in->cagi_bulk;
+	cont_attr_get_in_set_data(cb_args.cra_rpc, CONT_ATTR_GET, dc_cont_proto_version, args->n,
+				  key_length, bulk);
+
+	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
@@ -2690,9 +2627,10 @@ out:
 int
 dc_cont_set_attr(tse_task_t *task)
 {
-	daos_cont_set_attr_t	*args;
-	struct cont_attr_set_in	*in;
+	daos_cont_set_attr_t     *args;
 	struct cont_req_arg	 cb_args;
+	uint64_t                  count;
+	crt_bulk_t                bulk;
 	int			 i, rc;
 	char			**new_names = NULL;
 	void			**new_values = NULL;
@@ -2705,8 +2643,8 @@ dc_cont_set_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_req_prepare(args->coh, CONT_ATTR_SET,
-			     daos_task2ctx(task), &cb_args);
+	rc = cont_req_prepare(args->coh, CONT_ATTR_SET, daos_task2ctx(task), &args->req_time,
+			      &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2715,8 +2653,7 @@ dc_cont_set_attr(tse_task_t *task)
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(cb_args.cra_rpc);
-	in->casi_count = args->n;
+	count = args->n;
 
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
@@ -2769,15 +2706,17 @@ dc_cont_set_attr(tse_task_t *task)
 		}
 	}
 
-	rc = attr_bulk_create(args->n, new_names, new_values,
-			      (size_t *)args->sizes, daos_task2ctx(task),
-			      CRT_BULK_RO, &in->casi_bulk);
+	rc = attr_bulk_create(args->n, new_names, new_values, (size_t *)args->sizes,
+			      daos_task2ctx(task), CRT_BULK_RO, &bulk);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);
 	}
 
-	cb_args.cra_bulk = in->casi_bulk;
+	cont_attr_set_in_set_data(cb_args.cra_rpc, CONT_ATTR_SET, dc_cont_proto_version, count,
+				  bulk);
+
+	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
@@ -2798,9 +2737,10 @@ out:
 int
 dc_cont_del_attr(tse_task_t *task)
 {
-	daos_cont_set_attr_t	*args;
-	struct cont_attr_del_in	*in;
+	daos_cont_set_attr_t     *args;
 	struct cont_req_arg	 cb_args;
+	uint64_t                  count;
+	crt_bulk_t                bulk;
 	int			 i, rc;
 	char			**new_names;
 
@@ -2811,8 +2751,8 @@ dc_cont_del_attr(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = cont_req_prepare(args->coh, CONT_ATTR_DEL,
-			      daos_task2ctx(task), &cb_args);
+	rc = cont_req_prepare(args->coh, CONT_ATTR_DEL, daos_task2ctx(task), &args->req_time,
+			      &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -2821,8 +2761,7 @@ dc_cont_del_attr(tse_task_t *task)
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(cb_args.cra_rpc);
-	in->cadi_count = args->n;
+	count = args->n;
 
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
@@ -2849,14 +2788,17 @@ dc_cont_del_attr(tse_task_t *task)
 		}
 	}
 
-	rc = attr_bulk_create(args->n, new_names, NULL, NULL,
-			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
+	rc = attr_bulk_create(args->n, new_names, NULL, NULL, daos_task2ctx(task), CRT_BULK_RO,
+			      &bulk);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);
 	}
 
-	cb_args.cra_bulk = in->cadi_bulk;
+	cont_attr_del_in_set_data(cb_args.cra_rpc, CONT_ATTR_DEL, dc_cont_proto_version, count,
+				  bulk);
+
+	cb_args.cra_bulk = bulk;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
@@ -2899,11 +2841,11 @@ cont_epoch_op_req_complete(tse_task_t *task, void *data)
 }
 
 static int
-dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
-	    unsigned int opts, tse_task_t *task)
+dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch, unsigned int opts,
+	    uint64_t *req_timep, tse_task_t *task)
 {
-	struct cont_epoch_op_in	*in;
 	struct epoch_op_arg	 arg;
+	daos_epoch_t             epc = 0;
 	int			 rc;
 
 	/* Check incoming arguments. For CONT_SNAP_CREATE, epoch is out only. */
@@ -2913,7 +2855,7 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 			D_GOTO(out, rc = -DER_OVERFLOW);
 	}
 
-	rc = cont_req_prepare(coh, opc, daos_task2ctx(task), &arg.eoa_req);
+	rc = cont_req_prepare(coh, opc, daos_task2ctx(task), req_timep, &arg.eoa_req);
 	if (rc != 0)
 		goto out;
 
@@ -2922,10 +2864,9 @@ dc_epoch_op(daos_handle_t coh, crt_opcode_t opc, daos_epoch_t *epoch,
 			arg.eoa_req.cra_cont->dc_uuid), opc,
 		DP_UUID(arg.eoa_req.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(arg.eoa_req.cra_rpc);
 	if (opc != CONT_SNAP_CREATE)
-		in->cei_epoch = *epoch;
-	in->cei_opts  = opts;
+		epc = *epoch;
+	cont_epoch_op_in_set_data(arg.eoa_req.cra_rpc, opc, dc_cont_proto_version, epc, opts);
 
 	arg.eoa_epoch = epoch;
 
@@ -2959,8 +2900,7 @@ dc_cont_aggregate(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch,
-			   0, task);
+	return dc_epoch_op(args->coh, CONT_EPOCH_AGGREGATE, &args->epoch, 0, &args->req_time, task);
 }
 
 int
@@ -3003,8 +2943,8 @@ dc_cont_create_snap(tse_task_t *task)
 		return -DER_INVAL;
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch,
-			   args->opts, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_CREATE, args->epoch, args->opts, &args->req_time,
+			   task);
 }
 
 int
@@ -3021,8 +2961,7 @@ dc_cont_snap_oit_create(tse_task_t *task)
 		return -DER_NOSYS;
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_OIT_CREATE, &args->epoch,
-			   0, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_CREATE, &args->epoch, 0, &args->req_time, task);
 }
 
 int
@@ -3039,8 +2978,8 @@ dc_cont_snap_oit_destroy(tse_task_t *task)
 		return -DER_NOSYS;
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_OIT_DESTROY, &args->epoch,
-			   0, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_OIT_DESTROY, &args->epoch, 0, &args->req_time,
+			   task);
 }
 
 struct get_oit_oid_arg {
@@ -3069,15 +3008,15 @@ cont_get_oit_oid_req_complete(tse_task_t *task, void *data)
 int dc_cont_snap_oit_oid_get(tse_task_t *task)
 {
 	daos_cont_snap_oit_oid_get_t	*dc_args;
-	struct cont_snap_oit_oid_get_in	*in;
-	struct get_oit_oid_arg		arg;
+	struct get_oit_oid_arg           arg;
+	daos_epoch_t                     epoch;
 	int				 rc;
 
 	dc_args = dc_task_get_args(task);
 	D_ASSERTF(dc_args != NULL, "Task Argument OPC does not match DC OPC\n");
 
-	rc = cont_req_prepare(dc_args->coh, CONT_SNAP_OIT_OID_GET,
-			      daos_task2ctx(task), &arg.goo_req);
+	rc = cont_req_prepare(dc_args->coh, CONT_SNAP_OIT_OID_GET, daos_task2ctx(task),
+			      &dc_args->req_time, &arg.goo_req);
 	if (rc != 0)
 		goto out;
 
@@ -3086,9 +3025,11 @@ int dc_cont_snap_oit_oid_get(tse_task_t *task)
 			arg.goo_req.cra_cont->dc_uuid), CONT_SNAP_OIT_OID_GET,
 		DP_UUID(arg.goo_req.cra_cont->dc_cont_hdl));
 
-	in = crt_req_get(arg.goo_req.cra_rpc);
-	in->ogi_epoch = dc_args->epoch;
+	epoch       = dc_args->epoch;
 	arg.goo_oid = dc_args->oid;
+	cont_snap_oit_oid_get_in_set_data(arg.goo_req.cra_rpc, CONT_SNAP_OIT_OID_GET,
+					  dc_cont_proto_version, epoch);
+
 	rc = tse_task_register_comp_cb(task, cont_get_oit_oid_req_complete,
 				       &arg, sizeof(arg));
 	if (rc != 0) {
@@ -3124,8 +3065,8 @@ dc_cont_destroy_snap(tse_task_t *task)
 		D_GOTO(err, rc = -DER_INVAL);
 	}
 
-	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo,
-			   0, task);
+	return dc_epoch_op(args->coh, CONT_SNAP_DESTROY, &args->epr.epr_lo, 0, &args->req_time,
+			   task);
 
 err:
 	tse_task_complete(task, -DER_INVAL);
@@ -3148,9 +3089,9 @@ snap_list_req_complete(tse_task_t *task, void *data)
 int
 dc_cont_list_snap(tse_task_t *task)
 {
-	daos_cont_list_snap_t		*args;
-	struct cont_snap_list_in	*in;
+	daos_cont_list_snap_t           *args;
 	struct cont_req_arg		 cb_args;
+	crt_bulk_t                       bulk = NULL;
 	int				 rc;
 
 	args = dc_task_get_args(task);
@@ -3161,8 +3102,8 @@ dc_cont_list_snap(tse_task_t *task)
 	if (args->epochs == NULL || *args->nr < 0)
 		*args->nr = 0;
 
-	rc = cont_req_prepare(args->coh, CONT_SNAP_LIST,
-			      daos_task2ctx(task), &cb_args);
+	rc = cont_req_prepare(args->coh, CONT_SNAP_LIST, daos_task2ctx(task), &args->req_time,
+			      &cb_args);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -3172,7 +3113,6 @@ dc_cont_list_snap(tse_task_t *task)
 			cb_args.cra_cont->dc_uuid),
 		DP_UUID(cb_args.cra_cont->dc_cont_hdl), *args->nr);
 
-	in = crt_req_get(cb_args.cra_rpc);
 	if (*args->nr > 0) {
 		d_iov_t iov = {
 			.iov_buf     = args->epochs,
@@ -3187,15 +3127,16 @@ dc_cont_list_snap(tse_task_t *task)
 
 		/* TODO: iovs for names[] and list_snap bulk create function */
 
-		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
-				     CRT_BULK_RW, &in->sli_bulk);
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &bulk);
 		if (rc != 0) {
 			cont_req_cleanup(CLEANUP_RPC, &cb_args);
 			D_GOTO(out, rc);
 		}
 	}
 
-	cb_args.cra_bulk = in->sli_bulk;
+	cont_snap_list_in_set_data(cb_args.cra_rpc, CONT_SNAP_LIST, dc_cont_proto_version, bulk);
+
+	cb_args.cra_bulk     = bulk;
 	cb_args.cra_callback = snap_list_req_complete;
 	rc = tse_task_register_comp_cb(task, cont_req_complete,
 				       &cb_args, sizeof(cb_args));
