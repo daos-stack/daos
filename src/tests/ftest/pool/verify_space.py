@@ -73,7 +73,7 @@ class VerifyPoolSpace(TestWithServers):
             description (str): pool description
             pools (list): list of pools to query
         """
-        self.log_step(' '.join(['Query pool information for', description]))
+        self.log_step(f'Query pool information for {description}')
         for pool in pools:
             pool.query()
 
@@ -104,14 +104,14 @@ class VerifyPoolSpace(TestWithServers):
             container (TestContainer): the container in which to write data
             block_size (str): block size to use with the ior
         """
-        self.log_step('Writing data ({} block size) one of {}'.format(block_size, description))
+        self.log_step(f'Writing data ({block_size} block size) one of {description}')
         ior_kwargs['pool'] = container.pool
         ior_kwargs['container'] = container
         ior_kwargs['ior_params']['block_size'] = block_size
         try:
             run_ior(**ior_kwargs)
         except CommandFailure as error:
-            self.fail("IOR write to {} failed, {}".format(description, error))
+            self.fail(f'IOR write to {description} failed, {error}')
 
     def _get_system_pool_size(self, description, scm_mounts):
         """Get the pool size information from the df system command.
@@ -124,9 +124,9 @@ class VerifyPoolSpace(TestWithServers):
             dict: the df command information per server rank
         """
         system_pool_size = {}
-        self.log_step(' '.join(['Collect system-level DAOS mount information for', description]))
+        self.log_step(f'Collect system-level DAOS mount information for {description}')
         fields = ('source', 'size', 'used', 'avail', 'pcent', 'target')
-        command = "df -h --output={} | grep -E '{}'".format(','.join(fields), '|'.join(scm_mounts))
+        command = f"df -h --output={','.join(fields)} | grep -E '{'|'.join(scm_mounts)}'"
         result = run_remote(self.log, self.server_managers[0].hosts, command, stderr=True)
         if not result.passed:
             self.fail('Error collecting system level daos mount information')
@@ -138,7 +138,7 @@ class VerifyPoolSpace(TestWithServers):
                         system_pool_size[rank] = {
                             field: info[index] for index, field in enumerate(fields)}
         if len(system_pool_size) != len(self.server_managers[0].hosts):
-            self.fail('Error obtaining system pool data for all hosts: {}'.format(system_pool_size))
+            self.fail(f'Error obtaining system pool data for all hosts: {system_pool_size}')
         return system_pool_size
 
     def _compare_system_pool_size(self, pool_size, compare_methods):
@@ -175,7 +175,7 @@ class VerifyPoolSpace(TestWithServers):
                 current['size'], compare, status)
             overall &= status
         if not overall:
-            self.fail('Error detected in system pools size for {}'.format(pool_size[-1]['label']))
+            self.fail(f"Error detected in system pools size for {pool_size[-1]['label']}")
 
     def _check_pool_size(self, description, pool_size, scm_mounts, compare_methods):
         """Check the system pool size information reports as expected.
@@ -213,7 +213,7 @@ class VerifyPoolSpace(TestWithServers):
         """
         scm_mounts = set()
         for engine_params in self.server_managers[0].manager.job.yaml.engine_params:
-            scm_mounts.add(engine_params.get_value("scm_mount"))
+            scm_mounts.add(engine_params.get_value('scm_mount'))
         dmg = self.get_dmg_command()
         ior_kwargs = {
             'test': self,
@@ -323,16 +323,25 @@ class VerifyPoolSpace(TestWithServers):
             self.fail("Rank 1 was not stopped")
         self._check_pool_size(
             description, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
-        self.log_step(' '.join(['Query pool information for', description]))
-        message = 'unable to find any available service ranks'
         for index, pool in enumerate(pools):
+            self.log_step(
+                ' '.join(['Query pool information for', str(pool), 'after stopping rank 1']))
             with pool.no_exception():
                 result = pool.query()
-            if index == 0 and result['status'] != 0:
-                self.fail(
-                    f'{pool.identifier} dmg pool query should succeed after stopping rank 1')
-            elif index != 0 and message not in result['error']:
-                self.fail(
-                    f'{pool.identifier} dmg pool query should fail with \'{message}\' after '
-                    'stopping rank 1')
+            if index == 0:
+                # The pool query should succeed for the first pool which only targets rank 0
+                if result['status'] != 0:
+                    self.fail(
+                        f'{pool.identifier} dmg pool query should succeed after stopping rank 1')
+                self.log.debug('Pool query for %s passed as expected', pool)
+            else:
+                # All other pools target the stopped rank (rank 1) so the pool query should fail
+                message = 'unable to find any available service ranks'
+                if index == 4:
+                    message = 'control.PoolQueryReq request timed out'
+                if message not in result['error']:
+                    self.fail(
+                        f'{pool.identifier} dmg pool query should fail with \'{message}\' after '
+                        'stopping rank 1')
+                self.log.debug('Pool query for %s failed as expected', pool)
         dmg.storage_query_usage()
