@@ -264,8 +264,7 @@ class PoolSecurityTestBase(TestWithServers):
         action = "cont_delete"
         daos = self.get_daos_command()
         with daos.no_exception():
-            container.destroy(force=1)
-            result = container.daos.result
+            result = daos.container_destroy(container.pool.identifier, container.identifier, True)
         self.log.info(
             "  In verify_cont_delete %s.\n =container.destroy() result:\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
