@@ -7384,7 +7384,7 @@ daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints
 	attr.pa_domain = props.dcp_redun_lvl;
 	rc = pl_map_query(pool->dp_pool, &attr);
 	if (rc) {
-		D_ERROR("pl_map_query failed, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("pl_map_query failed, " DF_RC "\n", DP_RC(rc));
 		return rc;
 	}
 	rf = dc->dc_props.dcp_redun_fac;
