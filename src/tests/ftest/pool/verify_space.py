@@ -323,5 +323,16 @@ class VerifyPoolSpace(TestWithServers):
             self.fail("Rank 1 was not stopped")
         self._check_pool_size(
             description, pool_size, scm_mounts, [compare_equal, compare_equal, compare_equal])
-        self._query_pool_size(description, pools)
+        self.log_step(' '.join(['Query pool information for', description]))
+        message = 'unable to find any available service ranks'
+        for index, pool in enumerate(pools):
+            with pool.no_exception():
+                result = pool.query()
+            if index == 0 and result['status'] != 0:
+                self.fail(
+                    f'{pool.identifier} dmg pool query should succeed after stopping rank 1')
+            elif index != 0 and message not in result['error']:
+                self.fail(
+                    f'{pool.identifier} dmg pool query should fail with \'{message}\' after '
+                    'stopping rank 1')
         dmg.storage_query_usage()
