@@ -909,7 +909,7 @@ static int
 reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t *nr_reclaimed)
 {
 	int				 i;
-	struct vea_bitmap_entry		*bitmap_entry, *tmp_entry;
+	struct vea_bitmap_entry		*bitmap_entry;
 	struct vea_free_bitmap		*vfb;
 	d_iov_t				 key;
 	int				 rc = 0;
@@ -920,12 +920,11 @@ reclaim_unused_bitmap(struct vea_space_info *vsi, uint32_t nr_reclaim, uint32_t 
 	uint32_t			 blk_cnt;
 
 	for (i = 0; i < VEA_MAX_BITMAP_CLASS; i++) {
-		d_list_for_each_entry_safe(bitmap_entry, tmp_entry,
-				&vsi->vsi_class.vfc_bitmap_empty[i], vbe_link) {
+		while ((bitmap_entry = d_list_pop_entry(&vsi->vsi_class.vfc_bitmap_empty[i],
+							struct vea_bitmap_entry, vbe_link))) {
 			vfb = &bitmap_entry->vbe_bitmap;
 			D_ASSERT(vfb->vfb_class == i + 1);
 			D_ASSERT(is_bitmap_empty(vfb->vfb_bitmaps, vfb->vfb_bitmap_sz));
-			d_list_del_init(&bitmap_entry->vbe_link);
 			D_ALLOC_PTR(fca);
 			if (!fca)
 				return -DER_NOMEM;

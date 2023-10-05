@@ -1093,7 +1093,7 @@ rebuild_debug_print_queue()
 	 * This only accumulates the targets in a single task, so it doesn't
 	 * need to be very big. 200 bytes is enough for ~30 5-digit target ids
 	 */
-	char tgts_buf[200];
+	char tgts_buf[200] = { 0 };
 	int i;
 	/* Position in stack buffer where str data should be written next */
 	size_t tgts_pos;
@@ -1121,7 +1121,7 @@ rebuild_debug_print_queue()
 		}
 		D_DEBUG(DB_REBUILD, DF_UUID" op=%s ver=%u tgts=%s\n",
 			DP_UUID(task->dst_pool_uuid), RB_OP_STR(task->dst_rebuild_op),
-			task->dst_map_ver, tgts_buf);
+			task->dst_map_ver, task->dst_tgts.pti_number > 0 ? tgts_buf : "None");
 	}
 }
 
