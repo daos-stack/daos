@@ -1424,7 +1424,7 @@ chk_leader_handle_pool_label(struct chk_pool_rec *cpr, struct ds_pool_clue *clue
 	struct chk_instance		*ins = cpr->cpr_ins;
 	struct chk_property		*prop = &ins->ci_prop;
 	struct chk_bookmark		*cbk = &ins->ci_bk;
-	char				*strs[3];
+	char				 strs[3][CHK_MSG_BUFLEN] = { 0 };
 	char				 msg[CHK_MSG_BUFLEN] = { 0 };
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
@@ -1521,17 +1521,24 @@ try_ps:
 		if (cpr->cpr_label == NULL) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
-			strs[0] = "Trust PS pool label [suggested].";
-			strs[1] = "Trust MS pool label.";
+			snprintf(strs[0], CHK_MSG_BUFLEN - 1,
+				 "Trust PS pool label: %s [suggested].",
+				 clue->pc_label != NULL ? clue->pc_label : "(null)");
+			snprintf(strs[1], CHK_MSG_BUFLEN - 1, "Trust MS pool label: (null).");
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_MS;
 			options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			strs[0] = "Trust MS pool label [suggested].";
-			strs[1] = "Trust PS pool label.";
+			snprintf(strs[0], CHK_MSG_BUFLEN - 1,
+				 "Trust MS pool label: %s [suggested].", cpr->cpr_label);
+			snprintf(strs[1], CHK_MSG_BUFLEN - 1, "Trust PS pool label: %s.",
+				 clue->pc_label != NULL ? clue->pc_label : "(null)");
 		}
 
 		options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		strs[2] = "Keep the inconsistent pool label, repair nothing.";
+		snprintf(strs[2], CHK_MSG_BUFLEN - 1,
+			 "Keep the inconsistent pool label: %s (MS) vs %s (PS), repair nothing.",
+			 cpr->cpr_label != NULL ? cpr->cpr_label : "(null)",
+			 clue->pc_label != NULL ? clue->pc_label : "(null)");
 		option_nr = 3;
 
 		d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
