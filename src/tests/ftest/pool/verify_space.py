@@ -345,4 +345,6 @@ class VerifyPoolSpace(TestWithServers):
                         f'{pool.identifier} dmg pool query should fail with \'{message}\' after '
                         'stopping rank 1')
                 self.log.debug('Pool query for %s failed as expected', pool)
+                # Disable teardown of an inaccessible pool
+                pool.skip_cleanup()
         dmg.storage_query_usage()
