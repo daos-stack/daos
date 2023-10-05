@@ -262,9 +262,9 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
         """
         action = "cont_delete"
-        with container.no_exception():
-            container.destroy(force=1)
-            result = container.daos.result
+        with container.daos.no_exception():
+            result = container.daos.container_destroy(
+                container.pool.identifier, container.identifier, True)
         self.log.info(
             "  In verify_cont_delete %s.\n =container.destroy() result:\n%s", action, result)
         self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
