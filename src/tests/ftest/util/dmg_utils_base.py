@@ -3,6 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
+
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
