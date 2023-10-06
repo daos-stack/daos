@@ -177,6 +177,18 @@ class ExecutableCommand(CommandWithParameters):
         yield
         self.exit_status_exception = original_value
 
+    @contextlib.contextmanager
+    def as_user(self, user):
+        """Temporarily run commands as a different user.
+
+        Args:
+            user (str): the user to temporarily run as
+        """
+        original_value = self.run_user
+        self.run_user = user
+        yield
+        self.run_user = original_value
+
     def run(self, raise_exception=None):
         """Run the command.
 
