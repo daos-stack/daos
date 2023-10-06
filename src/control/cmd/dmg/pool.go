@@ -93,7 +93,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	for _, trStr := range strings.Split(fv, ",") {
 		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
 		if err != nil {
-			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
+			return errors.Errorf("invalid tier ratio %q", trStr)
 		}
 		trf.ratios = append(trf.ratios, roundFloatTo(tr, 2)/100)
 	}
@@ -138,7 +138,7 @@ func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
 
 	sf.bytes, err = humanize.ParseBytes(fv)
 	if err != nil {
-		return errors.Wrapf(err, "invalid size %q", fv)
+		return errors.Errorf("invalid size %q", fv)
 	}
 
 	return nil
