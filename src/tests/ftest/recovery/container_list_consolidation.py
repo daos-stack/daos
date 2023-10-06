@@ -10,6 +10,7 @@ from ClusterShell.NodeSet import NodeSet
 from recovery_test_base import RecoveryTestBase
 from general_utils import report_errors
 from ddb_utils import DdbCommand
+from exception_utils import CommandFailure
 
 
 class ContainerListConsolidationTest(RecoveryTestBase):
@@ -168,6 +169,9 @@ class ContainerListConsolidationTest(RecoveryTestBase):
             errors.append("Container UUID is found in shard! Checker didn't remove it.")
 
         # Start server to prepare for the cleanup.
-        dmg_command.system_start()
-
-        report_errors(test=self, errors=errors)
+        try:
+            dmg_command.system_start()
+        except CommandFailure as error:
+            self.log.error(error)
+        finally:
+            report_errors(test=self, errors=errors)
