@@ -1419,9 +1419,14 @@ int
 ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool)
 {
 	struct ds_iv_key	key = { 0 };
+	struct pool_iv_key	*pool_key;
 	int			rc;
 
 	key.class_id = IV_POOL_HDL;
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = pool_iv_len;
+	pool_key->pik_eph = d_hlc_get();
+	pool_key->pik_term = ns->iv_master_term;
 	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
 			      CRT_IV_SYNC_NONE, 0, false /* retry */);
 	if (rc)
