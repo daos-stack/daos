@@ -250,27 +250,10 @@ func (cmd *PoolCreateCmd) storageAutoPercentage(ctx context.Context, req *contro
 	if cmd.TierRatio.IsSet() {
 		return errIncompatFlags("size=%", "tier-ratio")
 	}
-
-	scmBytes, nvmeBytes, err := control.GetMaxPoolSize(ctx, cmd, cmd.ctlInvoker,
-		ranklist.RankList(req.Ranks))
-	if err != nil {
-		return err
-	}
-
-	availRatio := cmd.Size.availRatio
-	if availRatio < 100 {
-		scmBytes = availRatio * scmBytes / 100
-		nvmeBytes = availRatio * nvmeBytes / 100
-	}
-	req.TierBytes = []uint64{scmBytes, nvmeBytes}
-
-	if scmBytes == 0 {
-		return errors.Errorf("Not enough SCM storage available with ratio %s: "+
-			"SCM storage capacity or ratio should be increased", cmd.Size)
-	}
-
-	_ = ratio2Percentage(cmd, float64(scmBytes), float64(nvmeBytes))
 	cmd.Infof("Creating DAOS pool with %s of all storage", cmd.Size)
+
+	availFrac := float64(cmd.Size.availRatio) / 100.0
+	req.TierRatio = []float64{availFrac, availFrac}
 
 	return nil
 }
