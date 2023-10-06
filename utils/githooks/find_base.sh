@@ -5,6 +5,8 @@
 #  * SPDX-License-Identifier: BSD-2-Clause-Patent
 # */
 
+echo "Checking for target branch"
+
 if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
     echo "  Failed to determine branch with git rev-parse"
     exit 1
