@@ -798,7 +798,7 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
             test_result.fail_test(logger, "Process", message, sys.exc_info())
             return False
         pattern = '<testcase name='
-        replacement = f'<testcase classname="FTEST_{test.directory}.{test_class}.{name}" name='
+        replacement = f'<testcase classname="FTEST_{test.directory}.{test_class}-{name}" name='
         return update_xml(logger, cmocka_xml, pattern, replacement, cmocka_data, test_result)
 
     # Update the class name to include the functional test directory
