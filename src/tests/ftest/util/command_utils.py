@@ -4,14 +4,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from logging import getLogger
+import contextlib
 from datetime import datetime
 from getpass import getuser
-import re
-import time
-import signal
-import os
 import json
+from logging import getLogger
+import os
+import re
+import signal
+import time
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
@@ -167,6 +168,14 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         return command_as_user(self.with_bind, self.run_user, self.env)
+
+    @contextlib.contextmanager
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        original_value = self.exit_status_exception
+        self.exit_status_exception = False
+        yield
+        self.exit_status_exception = original_value
 
     def run(self, raise_exception=None):
         """Run the command.
