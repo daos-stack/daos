@@ -605,7 +605,7 @@ roundup_pgs(unsigned int pgs)
 }
 
 int
-bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *data)
+bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 {
 	struct bio_bulk_args	*arg = data;
 	struct bio_bulk_hdl	*hdl = NULL;
@@ -619,8 +619,6 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *data)
 	D_ASSERT(biod && biod->bd_chk_type == BIO_CHK_TYPE_IO);
 	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(biov);
-
-	arg->ba_sgl_idx = idx;
 
 	if (biod->bd_bulk_hdls == NULL) {
 		rc = bulk_iod_init(biod);
@@ -638,7 +636,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, int idx, void *data)
 	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
-		rc = dma_map_one(biod, biov, -1, NULL);
+		rc = dma_map_one(biod, biov, NULL);
 		goto done;
 	}
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
