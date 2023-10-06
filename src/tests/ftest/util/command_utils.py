@@ -4,15 +4,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from logging import getLogger
+import contextlib
 from datetime import datetime
 from getpass import getuser
-import re
-import time
-import signal
-import os
 import json
-import contextlib
+from logging import getLogger
+import os
+import re
+import signal
+import time
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet

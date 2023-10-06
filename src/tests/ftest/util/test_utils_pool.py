@@ -330,6 +330,10 @@ class TestPool(TestDaosApiBase):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
 
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.dmg.no_exception()
+
     def skip_cleanup(self):
         """Prevent pool from being removed during cleanup.
 
