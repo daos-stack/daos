@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from time import sleep
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
 from dmg_utils import check_system_query_status
@@ -29,7 +30,8 @@ class OSAOfflineExtend(OSAUtils):
         self.test_oclass = None
         self.dmg_command.exit_status_exception = True
 
-    def run_offline_extend_test(self, num_pool, data=False, oclass=None):
+    def run_offline_extend_test(self, num_pool, data=False, oclass=None,
+                                exclude_or_drain=None):
         """Run the offline extend without data.
 
         Args:
@@ -37,6 +39,7 @@ class OSAOfflineExtend(OSAUtils):
             data (bool) : whether pool has no data or to create
                           some data in pool. Defaults to False.
             oclass (list) : list of daos object class (eg: "RP_2G8")
+            exclude_or_drain (str): Pass "exclude" or "drain" string. Defaults to None.
         """
         # Create a pool
         pool = {}
@@ -95,6 +98,19 @@ class OSAOfflineExtend(OSAUtils):
             if self.test_during_aggregation is True and (num_pool > 1):
                 self.delete_extra_container(self.pool)
             output = self.pool.extend(rank_val)
+            self.log.info(output)
+            if exclude_or_drain == "exclude":
+                self.pool.wait_for_rebuild_to_start()
+                # Give a 4 second delay so that some objects are moved
+                # as part of rebuild operation.
+                sleep(4)
+                self.log.info("Exclude rank 3 while rebuild is happening")
+                output = self.pool.exclude("3")
+            elif exclude_or_drain == "drain":
+                # Drain cannot be performed while extend rebuild is happening.
+                self.print_and_assert_on_rebuild_failure(output)
+                self.log.info("Drain rank 3 after extend rebuild is completed")
+                output = self.pool.drain("3")
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
@@ -202,3 +218,31 @@ class OSAOfflineExtend(OSAUtils):
         self.test_with_snapshot = self.params.get("test_with_snapshot", '/run/snapshot/*')
         self.log.info("Offline Extend Testing: After taking snapshot")
         self.run_offline_extend_test(1, data=True)
+
+    def test_osa_offline_extend_exclude_during_rebuild(self):
+        """Test ID: DAOS-14441.
+
+        Test Description: Validate Offline extend after rebuild is started
+        and a rank is excluded.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_exclude_during_rebuild
+        """
+        self.log.info("Offline Extend Testing: Exclude during Rebuild")
+        self.run_offline_extend_test(1, data=True, exclude_or_drain="exclude")
+
+    def test_osa_offline_extend_drain_after_rebuild(self):
+        """Test ID: DAOS-14441.
+
+        Test Description: Validate Offline extend after rebuild is started
+        and a rank is drained.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,offline_extend
+        :avocado: tags=OSAOfflineExtend,test_osa_offline_extend_drain_after_rebuild
+        """
+        self.log.info("Offline Extend Testing: Drain after rebuild")
+        self.run_offline_extend_test(1, data=True, exclude_or_drain="drain")
