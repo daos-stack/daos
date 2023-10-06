@@ -95,10 +95,12 @@ fi
 # Now rename the previously collected hardware test data for Jenkins
 # to use them for Junit processing.
 : "${STAGE_NAME:=}"
+mkdir -p "${STAGE_NAME}/hardware_prep/"
 for node in ${tnodes//,/ }; do
     old_name="./hardware_prep_node_results.xml.$node"
     new_name="${STAGE_NAME}/hardware_prep/${node}/results.xml"
     if [ -e "$old_name" ]; then
+        mkdir -p "${STAGE_NAME}/hardware_prep/${node}"
         mv "$old_name" "$new_name"
     fi
 done
