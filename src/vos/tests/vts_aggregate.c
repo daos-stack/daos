@@ -1840,13 +1840,14 @@ print_space_info(vos_pool_info_t *pi, char *desc)
 	VERBOSE_MSG("  NVMe allocator statistics:\n");
 	VERBOSE_MSG("    free_p: "DF_U64", \tfree_t: "DF_U64", "
 		    "\tfrags_large: "DF_U64", \tfrags_small: "DF_U64", "
-		    "\tfrags_aging: "DF_U64"\n",
+		    "\tfrags_aging: "DF_U64" \tfrags_bitmap: "DF_U64"\n",
 		    stat->vs_free_persistent, stat->vs_free_transient,
 		    stat->vs_frags_large, stat->vs_frags_small,
-		    stat->vs_frags_aging);
+		    stat->vs_frags_aging, stat->vs_frags_bitmap);
 	VERBOSE_MSG("    resrv_hit: "DF_U64", \tresrv_large: "DF_U64", "
-		    "\tresrv_small: "DF_U64"\n", stat->vs_resrv_hint,
-		    stat->vs_resrv_large, stat->vs_resrv_small);
+		    "\tresrv_small: "DF_U64", \tresrv_bitmap: "DF_U64"\n",
+		    stat->vs_resrv_hint, stat->vs_resrv_large,
+		    stat->vs_resrv_small, stat->vs_resrv_bitmap);
 }
 
 static int

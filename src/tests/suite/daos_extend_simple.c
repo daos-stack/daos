@@ -499,6 +499,8 @@ dfs_extend_punch_kill(void **state)
 void
 dfs_extend_punch_extend(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_PUNCH, extend_cb_internal, false);
 }
 
@@ -511,6 +513,8 @@ dfs_extend_stat_kill(void **state)
 void
 dfs_extend_stat_extend(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_STAT, extend_cb_internal, false);
 }
 
@@ -523,6 +527,8 @@ dfs_extend_enumerate_kill(void **state)
 void
 dfs_extend_enumerate_extend(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_ENUMERATE, extend_cb_internal, false);
 }
 
@@ -535,6 +541,8 @@ dfs_extend_fetch_kill(void **state)
 void
 dfs_extend_fetch_extend(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_FETCH, extend_cb_internal, false);
 }
 
@@ -547,6 +555,8 @@ dfs_extend_write_kill(void **state)
 void
 dfs_extend_write_extend(void **state)
 {
+	FAULT_INJECTION_REQUIRED();
+
 	dfs_extend_internal(state, EXTEND_UPDATE, extend_cb_internal, false);
 }
 
@@ -561,6 +571,8 @@ dfs_extend_fail_retry(void **state)
 	char		str[37];
 	dfs_attr_t attr = {};
 	int		rc;
+
+	FAULT_INJECTION_REQUIRED();
 
 	attr.da_props = daos_prop_alloc(1);
 	assert_non_null(attr.da_props);

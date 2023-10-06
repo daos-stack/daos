@@ -842,6 +842,7 @@ ds_pool_chk_post(uuid_t uuid)
 	struct pool_child_lookup_arg	 collective_arg = { 0 };
 	int				 rc = 0;
 
+	D_ASSERT(engine_in_check());
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	D_DEBUG(DB_MGMT, "Post handle pool starting for "DF_UUIDF" after DAOS check: "DF_RC"\n",
@@ -857,12 +858,28 @@ ds_pool_chk_post(uuid_t uuid)
 	if (pool->sp_stopping)
 		D_GOTO(out, rc = -DER_SHUTDOWN);
 
+	pool->sp_fetch_hdls = 1;
+	pool_fetch_hdls_ult(pool);
+
+	rc = ds_pool_start_ec_eph_query_ult(pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out;
+	}
+
 	collective_arg.pla_uuid = uuid;
 	rc = dss_thread_collective(ds_pool_chk_post_one, &collective_arg, 0);
 
 out:
-	if (pool != NULL)
+	if (pool != NULL) {
+		if (rc != 0) {
+			ds_pool_tgt_ec_eph_query_abort(pool);
+			pool_fetch_hdls_ult_abort(pool);
+		}
+
 		daos_lru_ref_release(pool_cache, &pool->sp_entry);
+	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_INFO,
 		 "Post handle pool started for "DF_UUIDF" after DAOS check: "DF_RC"\n",
@@ -920,20 +937,22 @@ ds_pool_start(uuid_t uuid)
 
 	pool = pool_obj(llink);
 
-	rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS,
-			    0, 0, NULL);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create fetch ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_pool, rc);
-	}
+	if (!engine_in_check()) {
+		rc = dss_ult_create(pool_fetch_hdls_ult, pool, DSS_XS_SYS, 0, 0, NULL);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to create fetch ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_pool, rc);
+		}
 
-	pool->sp_fetch_hdls = 1;
-	rc = ds_pool_start_ec_eph_query_ult(pool);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
-			DP_UUID(uuid), rc);
-		D_GOTO(failure_ult, rc);
+		pool->sp_fetch_hdls = 1;
+
+		rc = ds_pool_start_ec_eph_query_ult(pool);
+		if (rc != 0) {
+			D_ERROR(DF_UUID": failed to start ec eph query ult: "DF_RC"\n",
+				DP_UUID(uuid), DP_RC(rc));
+			D_GOTO(failure_ult, rc);
+		}
 	}
 
 	ds_iv_ns_start(pool->sp_iv_ns);
@@ -1484,7 +1503,7 @@ update_pool_group(struct ds_pool *pool, struct pool_map *map)
 	D_DEBUG(DB_MD, DF_UUID": %u -> %u\n", DP_UUID(pool->sp_uuid), version,
 		pool_map_get_version(map));
 
-	rc = map_ranks_init(map, POOL_GROUP_MAP_STATUS, &ranks);
+	rc = map_ranks_init(map, POOL_GROUP_MAP_STATES, &ranks);
 	if (rc != 0)
 		return rc;
 

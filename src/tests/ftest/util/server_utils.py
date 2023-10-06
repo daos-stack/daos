@@ -331,7 +331,7 @@ class DaosServerManager(SubprocessManager):
         self.log.debug("Checking for the existence of the %s mount point", mount)
         command = "test -d {}".format(mount)
         result = run_remote(self.log, hosts, command, verbose)
-        if result.passed:
+        if result.passed_hosts:
             mounted_hosts = result.passed_hosts
 
             # Remove the superblocks
@@ -466,13 +466,21 @@ class DaosServerManager(SubprocessManager):
 
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.run_user = "daos_server"
         cmd.debug.value = False
         cmd.config.value = get_default_config_file("server")
         self.log.info("Support collect-log on servers: %s", str(cmd))
         cmd.set_command(("support", "collect-log"), **kwargs)
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
+
+    def display_memory_info(self):
+        """Display server hosts memory info."""
+        self.log.debug("#" * 80)
+        self.log.debug("<SERVER> Collection debug memory info")
+        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
+        self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -666,11 +674,14 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
+        self.display_memory_info()
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
+        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
+        self.display_memory_info()
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)

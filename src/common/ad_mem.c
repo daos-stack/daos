@@ -34,7 +34,6 @@ static int arena_tx_publish(struct ad_arena *arena, struct ad_tx *tx);
 static void arena_dump(struct ad_arena *arena);
 static inline int group_unit_avail(const struct ad_group_df *gd);
 static inline int group_weight(const struct ad_group_df *gd);
-static int find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits);
 
 #define ASSERT_DUMP_ARENA(cond, arena)		\
 do {						\
@@ -129,21 +128,6 @@ static struct ad_group_spec grp_specs_large[] = {
 
 static struct ad_blob	*dummy_blob;
 
-static inline void
-setbits64(uint64_t *bmap, int at, int bits)
-{
-	setbit_range((uint8_t *)bmap, at, at + bits - 1);
-}
-
-static inline void
-clrbits64(uint64_t *bmap, int at, int bits)
-{
-	clrbit_range((uint8_t *)bmap, at, at + bits - 1);
-}
-
-#define setbit64(bm, at)	setbit(((uint8_t *)bm), at)
-#define clrbit64(bm, at)	clrbit(((uint8_t *)bm), at)
-#define isset64(bm, at)		isset(((uint8_t *)bm), at)
 
 static int
 group_u2b(int unit, int unit_nr)
@@ -1007,7 +991,7 @@ arena_find(struct ad_blob *blob, uint32_t *arena_id, struct ad_arena_df **ad_p)
 	if (id == AD_ARENA_ANY) {
 		int	bits = 1;
 
-		id = find_bits(bd->bd_bmap, blob->bb_bmap_rsv, blob_bmap_size(blob), 1, &bits);
+		id = daos_find_bits(bd->bd_bmap, blob->bb_bmap_rsv, blob_bmap_size(blob), 1, &bits);
 		if (id < 0) {
 			rc = -DER_NOSPACE;
 			D_ERROR("Blob %s is full, cannot create more arena, "DF_RC"\n",
@@ -1867,83 +1851,6 @@ arena_remove_grp(struct ad_arena *arena, struct ad_group *group)
 	arena->ar_grp_nr--;
 }
 
-/** Find requested number of unused bits (neither set it @used or @reserved */
-static int
-find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits)
-{
-	int	nr_saved;
-	int	at_saved;
-	int	nr;
-	int	at;
-	int	i;
-	int	j;
-
-	nr = nr_saved = 0;
-	at = at_saved = -1;
-
-	for (i = 0; i < bmap_sz; i++) {
-		uint64_t free_bits = ~used[i];
-
-		if (reserved)
-			free_bits &= ~reserved[i];
-
-		if (free_bits == 0) { /* no space in the current int64 */
-			if (nr > nr_saved) {
-				nr_saved = nr;
-				at_saved = at;
-			}
-			nr = 0;
-			at = -1;
-			continue;
-		}
-
-		j = ffsll(free_bits);
-		D_ASSERT(j > 0);
-		if (at >= 0 && j == 1) {
-			D_ASSERT(nr > 0);
-			nr++;
-		} else {
-			at = i * 64 + j - 1;
-			nr = 1;
-		}
-
-		for (; j < 64; j++) {
-			if (nr == *bits) /* done */
-				goto out;
-
-			if (isset64(&free_bits, j)) {
-				if (at < 0)
-					at = i * 64 + j;
-				nr++;
-				continue;
-			}
-
-			if (nr > nr_saved) {
-				nr_saved = nr;
-				at_saved = at;
-			}
-			nr = 0;
-			at = -1;
-			if ((free_bits >> j) == 0)
-				break;
-		}
-		if (nr == *bits)
-			goto out;
-	}
- out:
-	if (nr == *bits || nr > nr_saved) {
-		nr_saved = nr;
-		at_saved = at;
-	}
-
-	if (nr_saved >= bits_min)
-		*bits = nr_saved;
-	else
-		at_saved = -1;
-
-	return at_saved;
-}
-
 /** reserve a new group within @arena */
 static int
 arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
@@ -1981,7 +1888,7 @@ arena_reserve_grp(struct ad_arena *arena, daos_size_t size, int *pos,
 	if (bits_min > bits)
 		bits_min = bits;
 
-	bit_at = find_bits(ad->ad_bmap, arena->ar_space_rsv, ARENA_GRP_BMSZ, bits_min, &bits);
+	bit_at = daos_find_bits(ad->ad_bmap, arena->ar_space_rsv, ARENA_GRP_BMSZ, bits_min, &bits);
 	if (bit_at < 0)
 		return -DER_NOSPACE;
 
@@ -2076,7 +1983,7 @@ group_reserve_addr(struct ad_group *grp, struct ad_reserv_act *act)
 	int	b = 1;
 	int	at;
 
-	at = find_bits(gd->gd_bmap, grp->gp_bmap_rsv, GRP_UNIT_BMSZ, 1, &b);
+	at = daos_find_bits(gd->gd_bmap, grp->gp_bmap_rsv, GRP_UNIT_BMSZ, 1, &b);
 	/* NB: bitmap may includes more bits than the actual number of units */
 	if (at < 0 || at >= gd->gd_unit_nr)
 		return 0;

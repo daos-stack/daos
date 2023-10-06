@@ -174,6 +174,7 @@ struct dtx_id {
 
 void daos_dti_gen_unique(struct dtx_id *dti);
 void daos_dti_gen(struct dtx_id *dti, bool zero);
+void daos_dti_reset(void);
 
 static inline void
 daos_dti_copy(struct dtx_id *des, const struct dtx_id *src)

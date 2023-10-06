@@ -1232,11 +1232,11 @@ crt_proc_struct_ds_pool_clue(crt_proc_t proc, crt_proc_op_t proc_op, struct ds_p
 	if (unlikely(rc != 0))
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_label_len);
+	rc = crt_proc_int32_t(proc, proc_op, &clue->pc_tgt_nr);
 	if (unlikely(rc != 0))
 		return rc;
 
-	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_tgt_nr);
+	rc = crt_proc_uint32_t(proc, proc_op, &clue->pc_label_len);
 	if (unlikely(rc != 0))
 		return rc;
 

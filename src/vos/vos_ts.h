@@ -27,6 +27,8 @@ struct vos_ts_info {
 	struct vos_ts_table	*ti_table;
 	/** Negative entries for this type */
 	struct vos_ts_entry	*ti_misses;
+	/** TLS for tracking memory usage */
+	struct vos_tls		*ti_tls;
 	/** Type identifier */
 	uint32_t		ti_type;
 	/** Mask for negative entry cache */
@@ -620,20 +622,22 @@ vos_ts_peek_entry(uint32_t *idx, uint32_t type, struct vos_ts_entry **entryp,
 /** Allocate thread local timestamp cache.   Set the initial global times
  *
  * \param[in,out]	ts_table	Thread local table pointer
+ * \param[in]		tls		TLS to track memory usage.
  *
  * \return		-DER_NOMEM	Not enough memory available
  *			0		Success
  */
 int
-vos_ts_table_alloc(struct vos_ts_table **ts_table);
+vos_ts_table_alloc(struct vos_ts_table **ts_table, struct vos_tls *tls);
 
 
 /** Free the thread local timestamp cache and reset pointer to NULL
  *
  * \param[in,out]	ts_table	Thread local table pointer
+ * \param[in]		tls		TLS to track memory usage.
  */
 void
-vos_ts_table_free(struct vos_ts_table **ts_table);
+vos_ts_table_free(struct vos_ts_table **ts_table, struct vos_tls *tls);
 
 /** Allocate a timestamp set
  *

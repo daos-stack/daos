@@ -237,6 +237,27 @@ setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 		setbit(bitmap, index);
 }
 
+static inline void
+setbits64(uint64_t *bmap, int at, int bits)
+{
+	setbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+static inline void
+clrbits64(uint64_t *bmap, int at, int bits)
+{
+	clrbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+#define setbit64(bm, at)	setbit(((uint8_t *)bm), at)
+#define clrbit64(bm, at)	clrbit(((uint8_t *)bm), at)
+#define isset64(bm, at)		isset(((uint8_t *)bm), at)
+
+int
+daos_find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits);
+int
+daos_count_free_bits(uint64_t *used, int bmap_sz);
+
 static inline unsigned int
 daos_power2_nbits(unsigned int val)
 {
@@ -873,6 +894,8 @@ enum {
 #define DAOS_CHK_PS_NOTIFY_LEADER	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa4)
 #define DAOS_CHK_PS_NOTIFY_ENGINE	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa5)
 #define DAOS_CHK_SYNC_ORPHAN_PROCESS	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa6)
+#define DAOS_CHK_FAIL_REPORT_POOL1	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa7)
+#define DAOS_CHK_FAIL_REPORT_POOL2	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0xa8)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

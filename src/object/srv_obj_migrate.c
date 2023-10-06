@@ -1364,22 +1364,38 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
 	 * then extent from replication.
-	 *
-	 * Since the parity shard epoch should be higher or equal to the data shard epoch,
-	 * so let's use the minimum epochs of all parity shards as the update epoch of
-	 * this data shard.
 	 */
-
 	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
 		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
 			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
-							 DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
+						mrone->mo_iods_update_ephs_from_parity[i][j],
+						DIOF_EC_RECOV_FROM_PARITY, ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}
@@ -1498,21 +1514,31 @@ migrate_punch(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 
 static int
 migrate_get_cont_child(struct migrate_pool_tls *tls, uuid_t cont_uuid,
-		       struct ds_cont_child **cont_p)
+		       struct ds_cont_child **cont_p, bool create)
 {
 	struct ds_cont_child	*cont_child = NULL;
 	int			rc;
 
 	*cont_p = NULL;
-	if (tls->mpt_opc == RB_OP_EXTEND || tls->mpt_opc == RB_OP_REINT) {
-		/* For extend and reintegration, it may need create the container */
+	if (tls->mpt_pool->spc_pool->sp_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID "pool is being destroyed.\n",
+			DP_UUID(tls->mpt_pool_uuid));
+		return 0;
+	}
+
+	if (create) {
+		/* Since the shard might be moved different location for any pool operation,
+		 * so it may need create the container in all cases.
+		 */
 		rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont_child);
 		if (rc != 0) {
-			if (rc == -DER_SHUTDOWN) {
+			if (rc == -DER_SHUTDOWN || (cont_child && cont_child->sc_stopping)) {
 				D_DEBUG(DB_REBUILD, DF_UUID "container is being destroyed\n",
 					DP_UUID(cont_uuid));
 				rc = 0;
 			}
+			if (cont_child)
+				ds_cont_child_put(cont_child);
 			return rc;
 		}
 	} else {
@@ -1546,7 +1572,7 @@ migrate_dkey(struct migrate_pool_tls *tls, struct migrate_one *mrone,
 	int			 rc;
 
 	D_ASSERT(dss_get_module_info()->dmi_xs_id != 0);
-	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont);
+	rc = migrate_get_cont_child(tls, mrone->mo_cont_uuid, &cont, true);
 	if (rc || cont == NULL)
 		D_GOTO(cont_put, rc);
 
@@ -2455,7 +2481,7 @@ migrate_obj_punch_one(void *data)
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 
-	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont);
+	rc = migrate_get_cont_child(tls, arg->cont_uuid, &cont, true);
 	if (rc != 0 || cont == NULL)
 		D_GOTO(put, rc);
 
@@ -2957,7 +2983,7 @@ free:
 		struct ds_cont_child *cont_child = NULL;
 
 		/* check again to see if the container is being destroyed. */
-		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child);
+		migrate_get_cont_child(tls, arg->cont_uuid, &cont_child, false);
 		if (cont_child == NULL || cont_child->sc_stopping)
 			rc = 0;
 

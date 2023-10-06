@@ -144,6 +144,12 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 		goto out;
 	}
 
+	/* "pc_tgt_nr < 0" means failed to load some vos target. */
+	clue->pc_tgt_nr = -1;
+
+	if (dss_self_rank() == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_CHK_FAIL_REPORT_POOL1))
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	D_ALLOC_ARRAY(clue->pc_tgt_status, dss_tgt_nr);
 	if (clue->pc_tgt_status == NULL) {
 		D_ERROR(DF_UUIDF": failed to allocate service clue for shards status\n",
@@ -177,7 +183,12 @@ ds_pool_clue_init(uuid_t uuid, enum ds_pool_dir dir, struct ds_pool_clue *clue)
 				clue->pc_tgt_status[i] = DS_POOL_TGT_EMPTY;
 		}
 	}
+
+	/* Set pc_tgt_nr as the right value if all vos targets are loaded successfully. */
 	clue->pc_tgt_nr = dss_tgt_nr;
+
+	if (dss_self_rank() == daos_fail_value_get() && DAOS_FAIL_CHECK(DAOS_CHK_FAIL_REPORT_POOL2))
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	path = ds_pool_svc_rdb_path(uuid);
 	if (path == NULL) {
@@ -220,7 +231,7 @@ out:
 		rc = 1;
 	} else {
 		D_ASSERT(rc <= 0);
-		if (rc < 0)
+		if (rc < 0 && clue->pc_tgt_nr < 0)
 			D_FREE(clue->pc_tgt_status);
 	}
 
