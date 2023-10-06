@@ -889,20 +889,6 @@ def get_log_file(name):
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
 
 
-def check_uuid_format(uuid):
-    """Check for a correct UUID format.
-
-    Args:
-        uuid (str): Pool or Container UUID.
-
-    Returns:
-        bool: status of valid or invalid uuid
-
-    """
-    pattern = re.compile("([0-9a-fA-F-]+)")
-    return bool(len(uuid) == 36 and pattern.match(uuid))
-
-
 def get_numeric_list(numeric_range):
     """Convert a string of numeric ranges into an expanded list of integers.
 
