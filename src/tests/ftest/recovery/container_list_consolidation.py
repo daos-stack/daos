@@ -42,7 +42,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         return repair_reports
 
     def test_orphan_container(self):
-        """Test orphan container; Container is in shard, but not in PS.
+        """Test orphan container. Container is in shard, but not in PS.
 
         1. Create a pool and a container.
         2. Inject fault to cause orphan container. i.e., container is left in the system,
