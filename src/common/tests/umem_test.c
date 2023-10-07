@@ -239,10 +239,18 @@ static int
 global_setup(void **state)
 {
 	struct test_arg	*arg;
+	int rc;
+
+	rc = daos_debug_init(DAOS_LOG_DEFAULT);
+	if (rc) {
+		print_message("Failed to init debug\n");
+		return 1;
+	}
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {
 		print_message("Failed to allocate test struct\n");
+		daos_debug_fini();
 		return 1;
 	}
 
@@ -259,6 +267,7 @@ global_teardown(void **state)
 	umem_cache_free(&arg->ta_store);
 
 	D_FREE(arg);
+	daos_debug_fini();
 
 	return 0;
 }
@@ -419,16 +428,14 @@ test_page_cache(void **state)
 	arg->ta_store.stor_ops  = &stor_ops;
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, 3);
-	assert_int_equal(cache->ca_max_mapped, 3);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), 3);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, 3);
+	assert_int_equal(cache->ca_mem_pages, 3);
 
 	reset_arg(arg);
 	/** touch multiple chunks */
@@ -486,16 +493,14 @@ test_many_pages(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
-	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_mem_pages, LARGE_NUM_PAGES);
 
 	/** Touch all pages, more than can fit in a single set */
 	reset_arg(arg);
@@ -532,16 +537,14 @@ test_many_writes(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, 0);
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
 	assert_non_null(cache);
-	assert_int_equal(cache->ca_num_pages, LARGE_NUM_PAGES);
-	assert_int_equal(cache->ca_max_mapped, LARGE_NUM_PAGES);
-
-	rc = umem_cache_map_range(&arg->ta_store, 0, (void *)(UMEM_CACHE_PAGE_SZ), LARGE_NUM_PAGES);
-	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_md_pages, LARGE_NUM_PAGES);
+	assert_int_equal(cache->ca_mem_pages, LARGE_NUM_PAGES);
 
 	/** Touch all pages, more than can fit in a single set */
 	reset_arg(arg);
@@ -559,6 +562,179 @@ test_many_writes(void **state)
 	umem_cache_free(&arg->ta_store);
 }
 
+static int
+waitqueue_create(void **wq)
+{
+	*wq = (void *)(UINT64_MAX);
+	return 0;
+}
+
+static void
+waitqueue_destroy(void *wq)
+{
+}
+
+static void
+waitqueue_wait(void *wq, bool yield_only)
+{
+}
+
+static void
+waitqueue_wakeup(void *wq, bool wakeup_all)
+{
+}
+
+static int
+store_load(struct umem_store *store, char *start_addr, daos_off_t offset, daos_size_t len)
+{
+	return 0;
+}
+
+static struct umem_store_ops p2_ops = {
+	.so_waitqueue_create	= waitqueue_create,
+	.so_waitqueue_destroy	= waitqueue_destroy,
+	.so_waitqueue_wait	= waitqueue_wait,
+	.so_waitqueue_wakeup	= waitqueue_wakeup,
+	.so_load		= store_load,
+	.so_flush_prep		= flush_prep,
+	.so_flush_copy		= flush_copy,
+	.so_flush_post		= flush_post,
+	.so_wal_id_cmp		= wal_id_cmp,
+};
+
+#define PAGE_NUM_MD	20
+#define PAGE_NUM_MEM	10
+#define PAGE_NUM_MAX_NE	5
+
+static bool
+is_evictable_fn(uint32_t page_id)
+{
+	return page_id >= PAGE_NUM_MAX_NE;
+}
+
+static void
+test_p2_basic(void **state)
+{
+	struct test_arg		*arg = *state;
+	struct umem_cache	*cache;
+	struct umem_cache_range	 rg = { 0 };
+	struct umem_pin_handle	*pin_hdl;
+	int			 rc;
+
+	arg->ta_store.stor_size = UMEM_CACHE_PAGE_SZ * PAGE_NUM_MD;
+	arg->ta_store.stor_ops  = &p2_ops;
+	arg->ta_store.store_type = DAOS_MD_BMEM;
+
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
+			      PAGE_NUM_MAX_NE, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+
+	reset_arg(arg);
+
+	/* Load single page */
+	rg.cr_off	= 0;
+	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 1);
+	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, 0), cache->ca_base);
+
+	/* Map single non-evictable page */
+	rg.cr_off	= 1 * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_map(&arg->ta_store, &rg, 1);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
+	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, UMEM_CACHE_PAGE_SZ),
+			 cache->ca_base + UMEM_CACHE_PAGE_SZ);
+
+	/* Load multiple pages */
+	rg.cr_off	= (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= 3 * UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 3);
+
+	/* Pin multiple pages */
+	rg.cr_off	= (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= 5 * UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
+	assert_rc_equal(rc, 0);
+	assert_non_null(pin_hdl);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 5);
+
+	/* Unpin the pinned pages */
+	umem_cache_unpin(&arg->ta_store, pin_hdl);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
+
+	umem_cache_free(&arg->ta_store);
+}
+
+static void
+test_p2_evict(void **state)
+{
+	struct test_arg		*arg = *state;
+	struct umem_cache	*cache;
+	struct umem_cache_range	 rg = { 0 };
+	struct umem_pin_handle	*pin_hdl;
+	uint64_t		 id;
+	int			 i, rc;
+
+	arg->ta_store.stor_size = UMEM_CACHE_PAGE_SZ * PAGE_NUM_MD;
+	arg->ta_store.stor_ops  = &p2_ops;
+	arg->ta_store.store_type = DAOS_MD_BMEM;
+
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
+			      PAGE_NUM_MAX_NE, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+	assert_rc_equal(rc, 0);
+
+	cache = arg->ta_store.cache;
+	assert_non_null(cache);
+
+	reset_arg(arg);
+
+	/* Load all non-evictable pages */
+	rg.cr_off	= 0;
+	rg.cr_size	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
+
+	/* Load more pages to fill the cache */
+	rg.cr_off	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= (PAGE_NUM_MEM - PAGE_NUM_MAX_NE) * UMEM_CACHE_PAGE_SZ;
+	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
+
+	/* Dirty all pages */
+	for (i = 0; i < PAGE_NUM_MEM; i++) {
+		touch_mem(arg, i + 1, i * UMEM_CACHE_PAGE_SZ, UMEM_CACHE_CHUNK_SZ);
+		umem_cache_commit(&arg->ta_store, i + 1);
+	}
+	id = PAGE_NUM_MEM;
+
+	/* Pin an unmapped page to trigger eviction */
+	rg.cr_off	= PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= 100;
+	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 1);
+
+	umem_cache_unpin(&arg->ta_store, pin_hdl);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
+
+	rc = umem_cache_checkpoint(&arg->ta_store, wait_cb, NULL, &id, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(id, PAGE_NUM_MEM);
+	check_lists_empty(arg);
+
+	umem_cache_free(&arg->ta_store);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -570,6 +746,8 @@ main(int argc, char **argv)
 	    {"UMEM005: Test page cache", test_page_cache, NULL, NULL},
 	    {"UMEM006: Test page cache many pages", test_many_pages, NULL, NULL},
 	    {"UMEM007: Test page cache many writes", test_many_writes, NULL, NULL},
+	    {"UMEM008: Test phase2 APIs", test_p2_basic, NULL, NULL},
+	    {"UMEM009: Test phase2 eviction", test_p2_evict, NULL, NULL},
 	    {NULL, NULL, NULL, NULL}};
 
 	d_register_alt_assert(mock_assert);
