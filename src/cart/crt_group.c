@@ -2608,6 +2608,7 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 		}
 	}
 
+	d_log_rank_setup(rank);
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 out:
