@@ -960,3 +960,28 @@ DAOS v2.2 client connections to pools which were created by DAOS v2.4
 will be rejected. DAOS v2.4 client should work with DAOS v2.4 and DAOS v2.2
 server. To upgrade all pools to latest format after software upgrade, run
 `dmg pool upgrade <pool>`
+
+### Interoperability Matrix
+
+The following table is intended to visually depict the interoperability
+policies for all major components in a DAOS system.
+
+
+||Server<br>(daos_server)|Engine<br>(daos_engine)|Agent<br>(daos_agent)|Client<br>(libdaos)|Admin<br>(dmg)|
+|:---|:---:|:---:|:---:|:---:|:---:|
+|Server|x.y.z|x.y.z|x.(y±1)|n/a|x.y|
+|Engine|x.y.z|x.y.z|n/a|x.(y±1)|n/a|
+|Agent|x.(y±1)|n/a|n/a|x.y.z|n/a|
+|Client|n/a|x.(y±1)|x.y.z|n/a|n/a|
+|Admin|x.y|n/a|n/a|n/a|n/a|
+
+Key:
+  * x.y.z: Major.Minor.Patch must be equal
+  * x.y: Major.Minor must be equal
+  * x.(y±1): Major must be equal, Minor must be equal or -1/+1 release version
+  * n/a: Components do not communicate
+
+Examples:
+  * daos_server 2.4.0 is only compatible with daos_engine 2.4.0
+  * daos_agent 2.6.0 is compatible with daos_server 2.4.0 (2.5 is a development version)
+  * dmg 2.4.1 is compatible with daos_server 2.4.0
