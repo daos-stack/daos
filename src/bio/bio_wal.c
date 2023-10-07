@@ -1670,7 +1670,7 @@ bio_wal_replay(struct bio_meta_context *mc, struct bio_wal_rp_stats *wrs,
 	uint64_t		 tx_id, start_id, unmap_start, unmap_end;
 	int			 rc;
 	uint64_t		 total_bytes = 0, rpl_entries = 0, total_tx = 0;
-	uint64_t		 s_us;
+	uint64_t                 s_us = 0;
 
 	D_ALLOC(buf, max_blks * blk_bytes);
 	if (buf == NULL)

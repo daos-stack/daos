@@ -10,7 +10,7 @@
 
 set -e
 
-arch=$(uname -i)
+arch=$(uname -m)
 
 dnf --nodocs install \
     boost-python3-devel \
