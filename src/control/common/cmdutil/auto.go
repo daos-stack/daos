@@ -6,7 +6,7 @@ type ConfGenCmd struct {
 	SCMOnly         bool   `short:"s" long:"scm-only" description:"Create a SCM-only config without NVMe SSDs."`
 	NetClass        string `default:"infiniband" short:"c" long:"net-class" description:"Set the network device class to be used" choice:"ethernet" choice:"infiniband"`
 	NetProvider     string `short:"p" long:"net-provider" description:"Set the network fabric provider to be used"`
-	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem and generate an MD-on-SSD config"`
-	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata in MD-on-SSD mode"`
+	UseTmpfsSCM     bool   `short:"t" long:"use-tmpfs-scm" description:"Use tmpfs for scm rather than PMem"`
+	ExtMetadataPath string `short:"m" long:"control-metadata-path" description:"External storage path to store control metadata. Set this to a persistent location and specify --use-tmpfs-scm to create an MD-on-SSD config"`
 	FabricPorts     string `short:"f" long:"fabric-ports" description:"Allow custom fabric interface ports to be specified for each engine config section. Comma separated port numbers, one per engine"`
 }

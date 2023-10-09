@@ -140,8 +140,10 @@ Help Options:
       -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
       -c, --net-class=[ethernet|infiniband] Set the network device class to be used (default: infiniband)
       -p, --net-provider=                   Set the network fabric provider to be used
-      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem and generate an MD-on-SSD config
-      -m, --control-metadata-path=          External storage path to store control metadata in MD-on-SSD mode
+      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
+      -m, --control-metadata-path=          External storage path to store control metadata. Set this to
+                                            a persistent location and specify --use-tmpfs-scm to create an
+                                            MD-on-SSD config
       -f, --fabric-ports=                   Allow custom fabric interface ports to be specified for each engine
                                             config section. Comma separated port numbers, one per engine
           --skip-prep                       Skip preparation of devices during scan.
@@ -184,8 +186,10 @@ Help Options:
       -s, --scm-only                        Create a SCM-only config without NVMe SSDs.
       -c, --net-class=[ethernet|infiniband] Set the network device class to be used (default: infiniband)
       -p, --net-provider=                   Set the network fabric provider to be used
-      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem and generate an MD-on-SSD config
-      -m, --control-metadata-path=          External storage path to store control metadata in MD-on-SSD mode
+      -t, --use-tmpfs-scm                   Use tmpfs for scm rather than PMem
+      -m, --control-metadata-path=          External storage path to store control metadata. Set this to
+                                            a persistent location and specify --use-tmpfs-scm to create an
+                                            MD-on-SSD config
       -f, --fabric-ports=                   Allow custom fabric interface ports to be specified for each engine
                                             config section. Comma separated port numbers, one per engine
 ```
@@ -239,10 +243,11 @@ prevent the command from selecting the best available.
 
 - `--use-tmpfs-scm` will produce a config specifying RAM-disk (tmpfs) devices in the first (SCM)
 storage tier. The RAM-disk sizes will be calculated based on the host's total memory (as reported
-by `/proc/meminfo`). An MD-on-SSD config will be generated if this flag is set.
+by `/proc/meminfo`).
 
-- `--control-metadata-path` specifies a persistent location to store control-plane metadata when
-MD-on-SSD mode is enabled. This allows for configurations to survive 'daos_server' restarts.
+- `--control-metadata-path` specifies a persistent location to store control-plane metadata which
+allows MD-on-SSD DAOS deployments to survive without data loss over 'daos_server' restarts. If
+this option is set then a MD-on-SSD config will be generated.
 
 - `--fabric-ports` enables custom port numbers to be assigned to each engine's fabric settings.
 Comma separated list must contain enough numbers to cover all engines generated in config.
@@ -365,10 +370,15 @@ SCM format required on instance 0
 SCM format required on instance 1
 ```
 
-To format the storage and start the engine processes, we run the following on a separate
+The `daos_server start --auto-format` option has now been added to allow automatic formatting on
+startup in the event that externally triggered format is not desirable. When using this option
+the storage format will occur on `daos_server` startup without any user intervention assuming the
+supplied config file is valid.
+
+To manually format the storage and start the engine processes, we run the following on a separate
 terminal window and verify that engine processes (ranks) have registered with the system.
-Note the subsequent system query command may not show ranks started immediately after the
-storage format command returns so leave a short period before invoking.
+Note the subsequent system query command may not show ranks started immediately after the storage
+format command returns so it is recommended to leave a short delay before invoking.
 
 ```bash
 [user@wolf-226 daos]$ install/bin/dmg storage format -i
@@ -382,8 +392,7 @@ Rank  State
 [0-1] Joined
 ```
 
-The format of storage enables the `daos_server` service started before to format the storage and
-launch the engine processes.
+Engine I/O processes will be launched by the `daos_server` service following storage format.
 
 ```bash
 Instance 0: starting format of nvme block devices 0000:2b:00.0,0000:2c:00.0,0000:2d:00.0,0000:2e:00.0,0000:63:00.0,0000:64:00.0,0000:65:00.0,0000:66:00.0
