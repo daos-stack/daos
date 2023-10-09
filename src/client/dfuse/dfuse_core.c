@@ -1193,7 +1193,7 @@ dfuse_read_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
@@ -1217,7 +1217,7 @@ dfuse_write_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 

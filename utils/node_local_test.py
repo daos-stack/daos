@@ -22,6 +22,7 @@ import pprint
 import stat
 import errno
 import argparse
+import random
 import threading
 import functools
 import traceback
@@ -2153,6 +2154,69 @@ class PosixTests():
             data = fd.read(16)  # Pass in a buffer size here or python will only read file size.
         print(data)
         assert data == 'test'
+
+    def test_pre_read(self):
+        """Test the pre-read code.
+
+        Test reading a file which is previously unknown to fuse with caching on.  This should go
+        into the pre_read code and load the file contents automatically after the open call.
+        """
+        dfuse = DFuse(self.server, self.conf, container=self.container)
+        dfuse.start(v_hint='pre_read_0')
+
+        with open(join(dfuse.dir, 'file0'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file1'), 'w') as fd:
+            fd.write('test')
+
+        with open(join(dfuse.dir, 'file2'), 'w') as fd:
+            fd.write('testing')
+
+        raw_data0 = ''.join(random.choices(['d', 'a', 'o', 's'], k=1024 * 1024))  # nosec
+        with open(join(dfuse.dir, 'file3'), 'w') as fd:
+            fd.write(raw_data0)
+
+        raw_data1 = ''.join(random.choices(['d', 'a', 'o', 's'], k=(1024 * 1024) - 1))  # nosec
+        with open(join(dfuse.dir, 'file4'), 'w') as fd:
+            fd.write(raw_data1)
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        dfuse = DFuse(self.server, self.conf, caching=True, container=self.container)
+        dfuse.start(v_hint='pre_read_1')
+
+        with open(join(dfuse.dir, 'file0'), 'r') as fd:
+            data0 = fd.read()
+
+        with open(join(dfuse.dir, 'file1'), 'r') as fd:
+            data1 = fd.read(16)
+
+        with open(join(dfuse.dir, 'file2'), 'r') as fd:
+            data2 = fd.read(2)
+
+        with open(join(dfuse.dir, 'file3'), 'r') as fd:
+            data3 = fd.read()
+
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data4 = fd.read()
+            data5 = fd.read()
+
+        # This should not use the pre-read feature, to be validated via the logs.
+        with open(join(dfuse.dir, 'file4'), 'r') as fd:
+            data6 = fd.read()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+        print(data0)
+        assert data0 == 'test'
+        assert data1 == 'test'
+        assert data2 == 'te'
+        assert raw_data0 == data3
+        assert raw_data1 == data4
+        assert len(data5) == 0
+        assert raw_data1 == data6
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one can be read from the other"""
