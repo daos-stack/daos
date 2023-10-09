@@ -41,7 +41,7 @@ def c_err_to_str(err_num):
         err_num (int): C error code.
 
     Returns:
-        err_str (str): String identifying a C error code.
+        str: String identifying a C error code.
 
     """
     err_str = pydaos_shim.err_to_str(DAOS_MAGIC, err_num)
