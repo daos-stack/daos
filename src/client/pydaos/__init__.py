@@ -86,6 +86,6 @@ def _cleanup():
     DaosClient.cleanup()
 
 
-from .pydaos_core import *  # noqa: F403,E402
+from .pydaos_core import *  # noqa: F403,E402,R0401
 
 __all__ = ["pydaos_core"]  # noqa: F405
