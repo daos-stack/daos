@@ -1,17 +1,47 @@
 name: Codespell
 
+# The action runs on landings and PRs, for landings builds it runs the master codespell check which
+# is subject to upstream updates and therefore preiodic failures.
+# For PRs the check runs a defined version of codespell so new commits do not cause PR failures
+# in DAOS.
+
+# When a upstream codespell commit is made then one of two things can happen:
+#  1. There are no new issues identified by the update and there is nothing to do - this creates
+#     the possibility that PRs can introcuce regressions that are missed by PRs but caught by
+#     landings.
+#  2. There are new issues identified for landings builds.  These warnings will not appear on PRs
+#     however should be fixed by a PR, and that PR should update the codespell version used for
+#     PRs at the same time.
+#
+# In summary, upstream changes should not cause regressions for PRs, upstream changes can cause
+# regressions on landings builds at any time, and when this happens then they should be fixed and
+# the codespell version used on PRs should be updated to the latest.
+
 on:
+  push:
+    branches:
+      - master
+      - 'release/*'
   pull_request:
 
 jobs:
 
   Codespell:
     runs-on: ubuntu-22.04
+    if: github.repository == 'daos-stack/daos'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Run check
+      - name: Run master check
+        if: ${{ github.event_name != 'pull_request' }}
         uses: codespell-project/actions-codespell@master
+        with:
+          skip: ./src/control/vendor,./src/control/go.sum,./.git
+          ignore_words_file: ci/codespell.ignores
+          builtin: clear,rare,informal,names,en-GB_to_en-US
+      - name: Run PR check
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: codespell-project/actions-codespell@v2.2.6
         with:
           skip: ./src/control/vendor,./src/control/go.sum,./.git
           ignore_words_file: ci/codespell.ignores
