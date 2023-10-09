@@ -4652,6 +4652,72 @@ def run_dfuse(server, conf):
     return fatal_errors.errors
 
 
+def run_evict_test(server):
+    """Run dfuse, do some I/O and then evict the container
+
+    Create a container which will be persistent, then create a new container within that to
+    test on.
+    """
+    pool = server.get_test_pool_obj()
+
+    container = create_cont(server.conf, pool=pool, label='evict_cont', ctype='POSIX')
+
+    pool = server.get_test_pool_obj()
+    dfuse = DFuse(server, server.conf, container=container, caching=False)
+    dfuse.start()
+
+    cont_path = join(dfuse.dir, 'subcont')
+
+    sub_cont = create_cont(server.conf, pool=pool, path=cont_path)
+
+    # Sample the inode number of the sub-container, and check it's accessible.
+    sub_stat = os.stat(cont_path)
+    dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+    print(dfuse_stat)
+
+    # pylint: disable-next=consider-using-with
+    fd = open(join(cont_path, 'testfile'), 'wb', buffering=0)
+    fd.write(b'hello')
+
+    run_daos_cmd(server.conf, ['container', 'evict', '--all', pool.id(), sub_cont.id()])
+
+    try:
+        fd.write(b'world')
+        assert False
+    except OSError as error:
+        if error.errno != errno.EIO:
+            raise
+
+    subprocess.run(['dd', 'if=/dev/zero', 'bs=16k', 'count=64',  # nosec
+                    f'of={join(cont_path, "dd_file")}'], check=False)
+
+    fd.close()
+
+    # Try a lookup again without any open files to trigger an inval_dentry in dfuse.
+    try:
+        print(os.stat(cont_path))
+        assert False
+    except OSError as error:
+        if error.errno != errno.EIO:
+            raise
+
+    # Re-sample the sub-container to see if it's been evicted.  This does not access it but queries
+    # the mount.
+    count = 3
+    while True:
+        dfuse_stat = dfuse.check_usage(ino=sub_stat.st_ino)
+        print(dfuse_stat)
+        if dfuse_stat['resident'] is False:
+            print('Path has been evicted')
+            break
+        count -= 1
+        if count == 0:
+            assert False, 'Path should have been evicted'
+        time.sleep(1)
+
+    dfuse.stop()
+
+
 def run_in_fg(server, conf, args):
     """Run dfuse in the foreground.
 
@@ -5998,6 +6064,7 @@ def run(wf, args):
     else:
         with DaosServer(conf, test_class='first', wf=wf_server,
                         fatal_errors=fatal_errors) as server:
+
             if args.mode == 'launch':
                 run_in_fg(server, conf, args)
             elif args.mode == 'overlay':
@@ -6012,6 +6079,8 @@ def run(wf, args):
                 test_pydaos_kv(server, conf)
                 test_pydaos_kv_obj_class(server, conf)
                 fatal_errors.add_result(server.set_fi())
+            elif args.mode == 'evict-test':
+                fatal_errors.add_result(run_evict_test(server))
             elif args.test == 'all':
                 fatal_errors.add_result(run_posix_tests(server, conf))
             elif args.test:
@@ -6148,7 +6217,8 @@ def main():
     parser.add_argument('--log-usage-save')
     parser.add_argument('--dtx', action='store_true')
     parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='*')
+    parser.add_argument('mode', nargs='*', choices=['fi', 'all', 'overlay', 'set-fi', 'launch',
+                                                    'evict-test'])
     args = parser.parse_args()
 
     if args.server_fi:

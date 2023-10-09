@@ -625,7 +625,6 @@ daos_der2errno(int err)
 	case -DER_NOTYPE:
 	case -DER_NOSCHEMA:
 	case -DER_NOLOCAL:
-	case -DER_NO_HDL:
 	case -DER_IO_INVAL:	return EINVAL;
 	case -DER_KEY2BIG:
 	case -DER_REC2BIG:	return E2BIG;
@@ -640,6 +639,7 @@ daos_der2errno(int err)
 	case -DER_EQ_BUSY:	return EBUSY;
 	case -DER_AGAIN:	return EAGAIN;
 	case -DER_PROTO:	return EPROTO;
+	case -DER_NO_HDL:
 	case -DER_IO:		return EIO;
 	case -DER_CANCELED:	return ECANCELED;
 	case -DER_OVERFLOW:	return EOVERFLOW;

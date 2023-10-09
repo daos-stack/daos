@@ -206,10 +206,23 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 		D_GOTO(out_dfs, rc);
 	}
 
-	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
+	ie->ie_obj = 0;
+
+	/* Due to DAOS-14476 using the lookup to perform a stat will always succeed, so instead
+	 * call ostat afterwards
+	 */
+	rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, NULL);
 	if (rc) {
 		DFUSE_TRA_ERROR(dfs, "dfs_lookup() returned: %d (%s)", rc, strerror(rc));
 		D_GOTO(out_dfs, rc);
+	}
+
+	rc = dfs_ostat(dfs->dfs_ns, ie->ie_obj, &ie->ie_stat);
+	if (rc) {
+		ie->ie_stat.st_ino = dfs->dfs_ino;
+		ie->ie_dfs         = NULL;
+		DHS_ERROR(dfs, rc, "dfs_ostat() failed");
+		goto out_dfs;
 	}
 
 	ie->ie_stat.st_ino = dfs->dfs_ino;
@@ -226,7 +239,9 @@ check_for_uns_ep(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, ch
 out_dfs:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfs->dfs_entry);
 out_dfp:
-	d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+	/* TODO: This was causing a hash table reference count error, needs fixing on 2.4
+	 * d_hash_rec_decref(&dfuse_info->di_pool_table, &dfp->dfp_entry);
+	 */
 out_err:
 	duns_destroy_attr(&dattr);
 
@@ -234,8 +249,7 @@ out_err:
 }
 
 void
-dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
-		const char *name)
+dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *name)
 {
 	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
 	struct dfuse_inode_entry *ie;
@@ -243,6 +257,9 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	char                      out[DUNS_MAX_XATTR_LEN];
 	char                     *outp     = &out[0];
 	daos_size_t               attr_len = DUNS_MAX_XATTR_LEN;
+	bool                      evict    = false;
+	ino_t                     pinode   = parent->ie_stat.st_ino;
+	ino_t                     cinode   = 0;
 
 	DFUSE_TRA_DEBUG(parent, "Parent:%#lx " DF_DE, parent->ie_stat.st_ino, DP_DE(name));
 
@@ -279,8 +296,16 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (S_ISDIR(ie->ie_stat.st_mode) && attr_len) {
 		rc = check_for_uns_ep(dfuse_info, ie, out, attr_len);
 		DFUSE_TRA_DEBUG(ie, "check_for_uns_ep() returned %d", rc);
-		if (rc != 0)
-			D_GOTO(out_release, rc);
+		if (rc != 0) {
+			/* At this point, we know the dentry exists but there's an error, so try and
+			 * evict the dentry afterwards
+			 */
+			if (rc == EINVAL || rc == EIO) {
+				evict  = true;
+				cinode = ie->ie_stat.st_ino;
+			}
+			goto out_release;
+		}
 	}
 
 	dfuse_reply_entry(dfuse_info, ie, NULL, false, req);
@@ -298,5 +323,21 @@ out:
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+	}
+
+	if (evict) {
+		D_INFO("Calling forget %#lx " DF_DE, pinode, DP_DE(name));
+		rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, pinode, name,
+						      strnlen(name, NAME_MAX));
+		DS_ERROR(-rc, "inval_entry() replied");
+		if (rc && rc != -ENOENT)
+			DS_ERROR(-rc, "inval_entry() failed");
+
+		if (cinode != 0) {
+			rc = fuse_lowlevel_notify_inval_inode(dfuse_info->di_session, cinode, 0, 0);
+			DS_ERROR(-rc, "inval_inode() replied");
+			if (rc && rc != -ENOENT)
+				DS_ERROR(-rc, "inval_inode() failed");
+		}
 	}
 }
