@@ -679,7 +679,7 @@ class PreReqComponent():
         self.__build_info.save('.build_vars.json')
 
     def __parse_build_deps(self):
-        """Parse the build dependances command line flag"""
+        """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         if build_deps in ('yes', 'only'):
             self.download_deps = True

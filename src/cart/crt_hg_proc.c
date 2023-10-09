@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -56,7 +56,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	int		rc = 0;
 
 	if (unlikely(proc == NULL)) {
-		D_ERROR("Proc is not initilalized.\n");
+		D_ERROR("Proc is not initialized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 

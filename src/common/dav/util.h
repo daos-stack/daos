@@ -169,7 +169,7 @@ util_div_ceil(unsigned a, unsigned b)
 #define GLUE(A, B) GLUE_I(A, B)
 #define GLUE_I(A, B) A##B
 
-/* macro for suppresing errors from unused variables (zero to 9) */
+/* macro for suppressing errors from unused variables (zero to 9) */
 #define SUPPRESS_UNUSED(...)\
 	GLUE(SUPPRESS_ARG_, COUNT(__VA_ARGS__))(__VA_ARGS__)
 #define SUPPRESS_ARG_0(X)
