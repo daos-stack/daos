@@ -2468,7 +2468,7 @@ dfuse_count_query(struct cmd_args_s *ap)
 
 	D_ALLOC_ARRAY(stat, query.stat_count);
 	if (stat == NULL)
-		goto close;
+		D_GOTO(close, rc = -DER_NOMEM);
 
 	rc = ioctl(fd,
 		   (int)_IOC(_IOC_READ, DFUSE_IOCTL_TYPE, DFUSE_IOCTL_STAT_NR,
