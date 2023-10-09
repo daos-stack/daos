@@ -550,6 +550,7 @@ def set_test_environment(logger, build_vars_file, test_env=None, servers=None, c
         # Assign additional DAOS environment variables used in functional testing
         os.environ["D_LOG_FILE"] = os.path.join(test_env.log_dir, "daos.log")
         os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+        os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
 
     # Python paths required for functional testing

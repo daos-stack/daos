@@ -2057,7 +2057,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	 * 1. extend job needs to add new targets to the pool map.
 	 * 2. reintegrate job needs to discard the existing objects/records on the
 	 *    reintegrating targets.
-	 * But since the pool map already includs these extending targets, and also
+	 * But since the pool map already includes these extending targets, and also
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */
