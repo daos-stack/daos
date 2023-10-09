@@ -147,32 +147,24 @@ def human_to_bytes(size):
         DaosTestError: when an invalid human readable size value is provided
 
     Returns:
-        int: value translated to bytes.
+        int|float: value translated to bytes.
 
     """
-    conversion_sizes = ("", "k", "m", "g", "t", "p", "e")
-    conversion = {
-        1000: ["{}b".format(item) for item in conversion_sizes],
-        1024: ["{}ib".format(item) for item in conversion_sizes],
-    }
-    match = re.findall(r"([0-9.]+)\s*([a-zA-Z]+|)", size)
+    conversion = {}
+    for index, unit in enumerate(('', 'k', 'm', 'g', 't', 'p', 'e')):
+        conversion[unit] = 1000 ** index
+        conversion[f'{unit}b'] = 1000 ** index
+        conversion[f'{unit}ib'] = 1024 ** index
     try:
-        multiplier = 1
-        if match[0][1]:
-            multiplier = -1
-            unit = match[0][1].lower()
-            for item, units in conversion.items():
-                if unit in units:
-                    multiplier = item ** units.index(unit)
-                    break
-            if multiplier == -1:
-                raise DaosTestError(
-                    "Invalid unit detected, not in {}: {}".format(
-                        conversion[1000] + conversion[1024][1:], unit))
-        value = float(match[0][0]) * multiplier
-    except IndexError as error:
-        raise DaosTestError(
-            "Invalid human readable size format: {}".format(size)) from error
+        match = re.findall(r'([0-9.]+)\s*([a-zA-Z]+|)', str(size))
+        number = match[0][0]
+        unit = match[0][1].lower()
+    except (TypeError, IndexError) as error:
+        raise DaosTestError(f'Invalid human readable size format: {size}') from error
+    try:
+        value = float(number) * conversion[unit]
+    except KeyError as error:
+        raise DaosTestError(f'Invalid unit detected, not in {conversion.keys()}: {unit}') from error
     return int(value) if value.is_integer() else value
 
 
@@ -895,20 +887,6 @@ def get_log_file(name):
 
     """
     return os.path.join(os.environ.get("DAOS_TEST_LOG_DIR", "/tmp"), name)
-
-
-def check_uuid_format(uuid):
-    """Check for a correct UUID format.
-
-    Args:
-        uuid (str): Pool or Container UUID.
-
-    Returns:
-        bool: status of valid or invalid uuid
-
-    """
-    pattern = re.compile("([0-9a-fA-F-]+)")
-    return bool(len(uuid) == 36 and pattern.match(uuid))
 
 
 def get_numeric_list(numeric_range):
