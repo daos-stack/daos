@@ -32,8 +32,12 @@ if command -v gh > /dev/null 2>&1; then
 else
     # With no 'gh' command installed, use the "closest" branch as the target,
     # calculated as the sum of the commits this branch is ahead and behind.
+    # check master, then current release branches, then current feature branches.
     # shellcheck disable=SC2034
-    all_bases=("master" "release/2.4" "feature/cat_recovery" "feature/multiprovider")
+    all_bases=("master")
+    all_bases+=($(git branch --list -r "$ORIGIN/release/*" \
+                | grep -oE "release/2\.[4-9]+.*|release/[3-9]+.*"))
+    all_bases+=("feature/cat_recovery" "feature/multiprovider")
     TARGET="$ORIGIN/master"
     min_diff=-1
     for base in "${all_bases[@]}"; do
