@@ -15,7 +15,7 @@ To enable these standard githooks requires a two step process:
 Configure your core.hookspath as follows (Recommended):
 
 ```sh
-git config.hookspath utils/githooks
+git config core.hookspath utils/githooks
 ```
 
 Additionally, one can copy the files into an already configured path.
