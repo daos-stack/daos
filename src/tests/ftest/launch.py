@@ -63,6 +63,7 @@ SUPPORTED_PROVIDERS = [
     "ucx+dc_x",
     "ofi+tcp;ofi_rxm",
     "ofi+opx",
+    "ucx+ud_x",
 ]
 # Temporary pipeline-lib workaround until DAOS-13934 is implemented
 PROVIDER_ALIAS = {
