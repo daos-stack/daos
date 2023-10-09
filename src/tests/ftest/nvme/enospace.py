@@ -215,7 +215,7 @@ class NvmeEnospace(ServerFillUp):
     def run_enospace_with_bg_job(self, log_file):
         """ Check DER_ENOSPACE occurs when storage space is filled.
 
-        Stress test to validate DER_ENOSPACE managemnt and expected storage size. Single IOR job
+        Stress test to validate DER_ENOSPACE management and expected storage size. Single IOR job
         will run in background while space is filling.
 
         Args:
