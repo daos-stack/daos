@@ -316,7 +316,7 @@ sudo ipcrm -M 0x10242049
 1. Verify that the `access_points` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
-1. Check that `socket_dir` is writeable by the daos_server.
+1. Check that `socket_dir` is writable by the daos_server.
 
 ### Errors creating a Pool
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
