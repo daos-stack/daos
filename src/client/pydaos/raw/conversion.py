@@ -35,7 +35,15 @@ def str_to_c_uuid(uuidstr):
 
 
 def c_err_to_str(err_num):
-    """ Utility function to convert C error code to its string id """
+    """ Utility function to convert C error code to its string id.
+
+    Args:
+        err_num (int): C error code.
+
+    Returns:
+        err_str (str): String identifying a C error code.
+
+    """
     err_str = pydaos_shim.err_to_str(DAOS_MAGIC, err_num)
     if err_str:
         return err_str
