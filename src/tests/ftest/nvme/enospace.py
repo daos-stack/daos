@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import os
 import time
 import threading
 
@@ -14,7 +15,8 @@ from daos_utils import DaosCommand
 from job_manager_utils import get_job_manager
 from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
-from general_utils import error_count
+from general_utils import get_errors_count
+from pydaos.raw import c_err_to_str
 
 
 class NvmeEnospace(ServerFillUp):
@@ -23,47 +25,65 @@ class NvmeEnospace(ServerFillUp):
     :avocado: recursive
     """
 
+    DER_NOSPACE = -1007
+    DER_TIMEDOUT = -1011
+
     def __init__(self, *args, **kwargs):
         """Initialize a NvmeEnospace object."""
         super().__init__(*args, **kwargs)
+
+        self.expected_errors = [self.DER_NOSPACE, self.DER_TIMEDOUT]
+        self.test_result = []
         self.daos_cmd = None
 
     def setUp(self):
         """Initial setup"""
         super().setUp()
 
+        self.test_result = []
+
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
         self.create_pool_max_size()
-        self.der_nospace_count = 0
-        self.other_errors_count = 0
-        self.test_result = []
 
-    def verify_enospace_log(self, der_nospace_err_count):
+    def verify_enospace_log(self, log_file):
+        """ Function checking logs consistency.
+
+        Function checking that only expected errors have occurred and the DER_NOSPACE errors have
+        occurred.
+
+        Args:
+            log_file (string): name prefix of the log files to check.
         """
-        Function to verify there are no other error except DER_NOSPACE and
-        DER_NO_HDL in client log.Verify DER_NOSPACE count is higher.
+        logfile_glob = log_file + r".*[0-9]"
+        errors_count = get_errors_count(self.hostlist_clients, logfile_glob)
+        for error in self.expected_errors:
+            if error not in errors_count:
+                errors_count[error] = 0
 
-        args:
-            expected_err_count(int): Expected DER_NOSPACE count from client log.
-        """
-        # Get the DER_NOSPACE and other error count from log
-        self.der_nospace_count, self.other_errors_count = error_count(
-            "-1007", self.hostlist_clients, self.client_log)
+        unexpected_errors_count = {
+            key: val for key, val in errors_count.items() if key not in self.expected_errors
+        }
+        if len(unexpected_errors_count) > 0:
+            msg = 'Found unexpected errors in client logs {}: '.format(logfile_glob)
+            msg += ", ".join(
+                f'{c_err_to_str(key)}({key}): got={val}'
+                for key, val in unexpected_errors_count.items())
+            self.fail(msg)
 
-        # Get the DER_NO_HDL and other error count from log
-        der_nohdl_count, other_nohdl_err = error_count(
-            "-1002", self.hostlist_clients, self.client_log)
+        if errors_count[self.DER_NOSPACE] <= 0:
+            self.fail(
+                "Expected DER_NOSPACE (-1007) should be > 0: got={}"
+                .format(errors_count[self.DER_NOSPACE]))
 
-        # Check there are no other errors in log file except DER_NO_HDL
-        if self.other_errors_count != der_nohdl_count:
-            self.fail('Found other errors, count {} in client log {}'
-                      .format(int(self.other_errors_count - other_nohdl_err),
-                              self.client_log))
-        # Check the DER_NOSPACE error count is higher if not test will FAIL
-        if self.der_nospace_count < der_nospace_err_count:
-            self.fail('Expected DER_NOSPACE should be > {} and Found {}'
-                      .format(der_nospace_err_count, self.der_nospace_count))
+        for error in self.expected_errors:
+            if error == self.DER_NOSPACE:
+                continue
+            if errors_count[error] == 0:
+                continue
+            self.log.info(
+                "Number of errors %s (%s) is > 0: got=%d",
+                c_err_to_str(error), error, errors_count[error])
 
     def delete_all_containers(self):
         """
@@ -80,6 +100,14 @@ class NvmeEnospace(ServerFillUp):
             kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
+    def verify_background_job(self):
+        """
+        Function to verify that no background jobs have failed during the test.
+        """
+        for _result in self.test_result:
+            if "FAIL" in _result:
+                self.fail("One of the Background IOR job failed")
+
     def ior_bg_thread(self, event):
         """Start IOR Background thread, This will write small data set and
         keep reading it in loop until it fails or main program exit.
@@ -87,6 +115,7 @@ class NvmeEnospace(ServerFillUp):
         args:
             event(obj): Event indicator to stop IOR read.
         """
+        self.log.info('----Starting background IOR load----')
 
         # Define the IOR Command and use the parameter from yaml file.
         ior_bg_cmd = IorCommand()
@@ -110,32 +139,42 @@ class NvmeEnospace(ServerFillUp):
         job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         job_manager.assign_processes(1)
         job_manager.assign_environment(env, True)
-        self.log.info('----Run IOR in Background-------')
+        self.log.info('--Run IOR Write in Background--')
         # run IOR Write Command
         try:
             job_manager.run()
-        except (CommandFailure, TestFail):
-            self.test_result.append("FAIL ior write")
+        except (CommandFailure, TestFail) as exc:
+            self.log.info("Background ior write failed: %s", str(exc))
+            self.test_result.append("FAIL - ior write")
             return
 
         # run IOR Read Command in loop
+        self.log.info('--Run IOR Read in Background--')
         ior_bg_cmd.flags.update(self.ior_read_flags)
         stop_looping = False
         while not stop_looping:
             try:
                 job_manager.run()
-            except (CommandFailure, TestFail):
+            except (CommandFailure, TestFail) as exc:
+                self.log.info("Background ior read failed: %s", str(exc))
                 self.test_result.append("FAIL - ior read")
                 break
             stop_looping = event.wait(1)
 
-    def run_enospace_foreground(self):
-        """Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling
-        up SCM. Then verify that the storage usage is near 100%.
+    def run_enospace_foreground(self, log_file):
+        """Fill SCM and NVMe devices.
+
+        Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling up SCM. Then
+        verify that the storage usage is near 100%.
+
+        Args:
+            log_file (string): name prefix of the log files to check.
         """
+        self.log.info('----Starting main IOR load----')
+
         # Fill 75% of current SCM free space. Aggregation is Enabled so NVMe space will
         # start to fill up.
-        self.log.info('Starting main IOR load')
+        self.log.info('--Filling 75% of the current SCM free space--')
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=75)
         self.log.info(self.pool.pool_percentage_used())
 
@@ -147,8 +186,10 @@ class NvmeEnospace(ServerFillUp):
         # Fill 60% of current SCM free space. This time, NVMe will be Full so data will
         # not be moved to NVMe and continue to fill up SCM. SCM will be full and this
         # command is expected to fail with DER_NOSPACE.
+        self.log.info('--Filling 60% of the current SCM free space--')
         try:
-            self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
+            self.start_ior_load(
+                storage='SCM', operation="Auto_Write", percent=60, log_file=log_file)
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
         else:
@@ -158,8 +199,8 @@ class NvmeEnospace(ServerFillUp):
         # Display the pool usage %
         self.log.info(self.pool.pool_percentage_used())
 
-        # verify the DER_NO_SAPCE error count is expected and no other Error in client log
-        self.verify_enospace_log(self.der_nospace_count)
+        # verify the DER_NO_SPACE error count is expected and no other Error in client log
+        self.verify_enospace_log(log_file)
 
         # Check both NVMe and SCM are full.
         pool_usage = self.pool.pool_percentage_used()
@@ -173,15 +214,14 @@ class NvmeEnospace(ServerFillUp):
             msg = f"Pool SCM used percentage should be > 95%, instead {pool_usage['scm']}"
             self.fail(msg)
 
-    def run_enospace_with_bg_job(self):
+    def run_enospace_with_bg_job(self, log_file):
         """
         Function to run test and validate DER_ENOSPACE and expected storage
         size. Single IOR job will run in background while space is filling.
-        """
-        # Get the initial DER_ENOSPACE count
-        self.der_nospace_count, self.other_errors_count = error_count(
-            "-1007", self.hostlist_clients, self.client_log)
 
+        Args:
+            log_file (string): name prefix of the log files to check.
+        """
         # Start the IOR Background thread which will write small data set and
         # read in loop, until storage space is full.
         job = threading.Thread(target=self.ior_bg_thread)
@@ -191,7 +231,7 @@ class NvmeEnospace(ServerFillUp):
         job.start()
 
         # Run IOR in Foreground
-        self.run_enospace_foreground()
+        self.run_enospace_foreground(log_file)
 
         # Stop running ior reads in the ior_bg_thread thread
         stop_ior_read.set()
@@ -200,9 +240,7 @@ class NvmeEnospace(ServerFillUp):
         job.join()
 
         # Verify the background job result has no FAIL for any IOR run
-        for _result in self.test_result:
-            if "FAIL" in _result:
-                self.fail("One of the Background IOR job failed")
+        self.verify_background_job()
 
     def test_enospace_lazy_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -226,7 +264,7 @@ class NvmeEnospace(ServerFillUp):
         self.log.info(self.pool.pool_percentage_used())
 
         # Run IOR to fill the pool.
-        self.run_enospace_with_bg_job()
+        self.run_enospace_with_bg_job(self.client_log)
         self.log.info("Test passed")
 
     def test_enospace_lazy_with_fg(self):
@@ -255,7 +293,8 @@ class NvmeEnospace(ServerFillUp):
         for _loop in range(10):
             self.log.info("-------enospc_lazy_fg Loop--------- %d", _loop)
             # Run IOR to fill the pool.
-            self.run_enospace_foreground()
+            log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
+            self.run_enospace_foreground(log_file)
             # Delete all the containers
             self.delete_all_containers()
             # Delete container will take some time to release the space
@@ -290,7 +329,7 @@ class NvmeEnospace(ServerFillUp):
         self.pool.set_property("reclaim", "time")
 
         # Run IOR to fill the pool.
-        self.run_enospace_with_bg_job()
+        self.run_enospace_with_bg_job(self.client_log)
 
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
@@ -322,7 +361,8 @@ class NvmeEnospace(ServerFillUp):
             self.log.info("-------enospc_time_fg Loop--------- %d", _loop)
             self.log.info(self.pool.pool_percentage_used())
             # Run IOR to fill the pool.
-            self.run_enospace_with_bg_job()
+            log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
+            self.run_enospace_with_bg_job(log_file)
             # Delete all the containers
             self.delete_all_containers()
             # Delete container will take some time to release the space
@@ -359,7 +399,7 @@ class NvmeEnospace(ServerFillUp):
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
 
         # Run IOR to fill the pool.
-        self.run_enospace_with_bg_job()
+        self.run_enospace_with_bg_job(self.client_log)
 
         # Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
@@ -400,10 +440,6 @@ class NvmeEnospace(ServerFillUp):
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
 
-        # Get the DER_NOSPACE and other error count from log
-        self.der_nospace_count, self.other_errors_count = error_count(
-            "-1007", self.hostlist_clients, self.client_log)
-
         # Repeat the test in loop.
         for _loop in range(10):
             self.log.info("-------enospc_no_aggregation Loop--------- %d", _loop)
@@ -412,17 +448,19 @@ class NvmeEnospace(ServerFillUp):
 
             self.log.info(self.pool.pool_percentage_used())
 
+            log_file = f"-loop_{_loop}".join(os.path.splitext(self.client_log))
             try:
                 # Fill 10% more to SCM ,which should Fail because no SCM space
-                self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
+                self.start_ior_load(
+                    storage='SCM', operation="Auto_Write", percent=40, log_file=log_file)
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
             else:
                 self.fail('This test suppose to fail because of DER_NOSPACE'
                           'but it got Passed')
 
-            # Verify DER_NO_SAPCE error count is expected and no other Error in client log.
-            self.verify_enospace_log(self.der_nospace_count)
+            # Verify DER_NO_SPACE error count is expected and no other Error in client log.
+            self.verify_enospace_log(log_file)
 
             # Delete all the containers
             self.delete_all_containers()
