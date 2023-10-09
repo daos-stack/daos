@@ -1428,7 +1428,7 @@ ds_rsvc_get_md_cap(void)
 	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
-	n = atoi(v);    /* FIXME DAOS-9846 */
+	n = atoi(v);
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);
