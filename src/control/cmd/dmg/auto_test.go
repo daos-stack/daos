@@ -77,12 +77,6 @@ func TestAuto_ConfigCommands(t *testing.T) {
 
 	runConfGenCmdTests(t, []cmdTest{
 		{
-			"MD-on-SSD but no external metadata path",
-			"config generate --use-tmpfs-scm",
-			"",
-			errors.New("--control-metadata-path must also be set"),
-		},
-		{
 			"Generate with no access point",
 			"config generate",
 			printCGRReq(t, func() control.ConfGenerateRemoteReq {
@@ -220,6 +214,20 @@ func TestAuto_ConfigCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Generate tmpfs non-MD-on-SSD config",
+			"config generate -a foo --use-tmpfs-scm",
+			printCGRReq(t, func() control.ConfGenerateRemoteReq {
+				req := control.ConfGenerateRemoteReq{
+					HostList: []string{"localhost:10001"},
+				}
+				req.ConfGenerateReq.NetClass = hardware.Infiniband
+				req.ConfGenerateReq.AccessPoints = []string{"foo"}
+				req.ConfGenerateReq.UseTmpfsSCM = true
+				return req
+			}()),
+			nil,
+		},
+		{
 			"Generate MD-on-SSD config",
 			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos",
 			printCGRReq(t, func() control.ConfGenerateRemoteReq {
@@ -308,11 +316,17 @@ func TestAuto_confGen(t *testing.T) {
 	e0 := control.MockEngineCfg(0, 2, 4, 6, 8).WithHelperStreamCount(4)
 	e1 := control.MockEngineCfg(1, 1, 3, 5, 7).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
+	tmpfsEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(0, mockRamdiskSize+1, control.MockBdevTier(0, 2, 4, 6, 8)).
+			WithHelperStreamCount(4),
+		control.MockEngineCfgTmpfs(1, mockRamdiskSize+1, control.MockBdevTier(1, 1, 3, 5, 7)).
+			WithHelperStreamCount(4),
+	}
 	metadataMountPath := "/mnt/daos_md"
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
-	tmpfsEngineCfgs := []*engine.Config{
+	mdonssdEngineCfgs := []*engine.Config{
 		control.MockEngineCfgTmpfs(0, mockRamdiskSize,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4, 6, 8)).
@@ -365,7 +379,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("1 host"),
 		},
-		"successful fetch of host storage and fabric": {
+		"dcpm scm": {
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostResp},
@@ -376,7 +390,7 @@ func TestAuto_confGen(t *testing.T) {
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; access points set": {
+		"dcpm scm; access points set": {
 			accessPoints: "moon-111,mars-115,jupiter-119",
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
@@ -388,7 +402,7 @@ func TestAuto_confGen(t *testing.T) {
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; unmet min nr ssds": {
+		"dcpm scm; unmet min nr ssds": {
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{
@@ -400,7 +414,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient number of ssds"),
 		},
-		"successful fetch of host storage and fabric; unmet nr engines": {
+		"dcpm scm; unmet nr engines": {
 			nrEngines: 8,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
@@ -408,7 +422,7 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient number of pmem"),
 		},
-		"successful fetch of host storage and fabric; bad net class": {
+		"dcpm scm; bad net class": {
 			netClass: "foo",
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
@@ -416,15 +430,26 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("unrecognized net-class"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm; no control_metadata path": {
+		"tmpfs scm; no control_metadata path": {
 			tmpfsSCM: true,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostRespHighMem},
 			},
-			expErr: ErrTmpfsNoExtMDPath,
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				// 16 targets * 2 engines * 512 pages
+				WithNrHugepages(16 * 2 * 512).
+				WithControlLogFile("/tmp/daos_server.log"),
 		},
-		"successful fetch of host storage and fabric; ram scm tier; low mem": {
+		"dcpm scm; control_metadata path set": {
+			extMetadataPath: metadataMountPath,
+			hostResponsesSet: [][]*control.HostResponse{
+				{netHostResp},
+				{storHostResp},
+			},
+			expErr: errors.New("only supported with scm class ram"),
+		},
+		"tmpfs scm; md-on-ssd; low mem": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
@@ -433,27 +458,27 @@ func TestAuto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient ram"),
 		},
-		"successful fetch of host storage and fabric; tmpfs scm": {
+		"tmpfs scm; md-on-ssd": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostRespHighMem},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
 				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
 				WithNrHugepages(17 * 2 * 512).
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
-		"successful tmpfs scm; no logging to stdout": {
+		"tmpfs scm; md-on-ssd; no logging to stdout": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hostResponsesSet: [][]*control.HostResponse{
 				{netHostResp},
 				{storHostRespHighMem},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
 				// 16+1 (MD-on-SSD extra sys-XS) targets * 2 engines * 512 pages
 				WithNrHugepages(17 * 2 * 512).
 				WithControlLogFile("/tmp/daos_server.log").

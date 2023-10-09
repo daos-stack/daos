@@ -128,6 +128,18 @@ func TestDaosServer_Auto_Commands(t *testing.T) {
 			errors.New("Invalid value"),
 		},
 		{
+			"Generate tmpfs non-MD-on-SSD config",
+			"config generate -a foo --use-tmpfs-scm",
+			printCommand(t, func() *configGenCmd {
+				cmd := &configGenCmd{}
+				cmd.AccessPoints = "foo"
+				cmd.NetClass = "infiniband"
+				cmd.UseTmpfsSCM = true
+				return cmd
+			}()),
+			nil,
+		},
+		{
 			"Generate MD-on-SSD config",
 			"config generate -a foo --use-tmpfs-scm --control-metadata-path /opt/daos_md",
 			printCommand(t, func() *configGenCmd {
@@ -199,23 +211,38 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 	e0 := control.MockEngineCfg(0, 2, 4).WithTargetCount(18).WithHelperStreamCount(4)
 	e1 := control.MockEngineCfg(1, 1, 3).WithTargetCount(18).WithHelperStreamCount(4)
 	exmplEngineCfgs := []*engine.Config{e0, e1}
+
+	engRsvdGiB := 2 /* calculated based on 18 targets */
+	sysRsvdGiB := storage.DefaultSysMemRsvd / humanize.GiByte
+	ramdiskGiB := storage.MinRamdiskMem / humanize.GiByte
+	// Nr hugepages expected with 18 targets * 2 engines * 512 pages-per-target.
+	defNrHugepages := 18 * 2 * 512
+	tmpfsHugeMemGiB := (humanize.MiByte * 2 * defNrHugepages) / humanize.GiByte
+	// Total mem to meet requirements 38GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
+	// per engine RAM-disk.
+	tmpfsMemTotalGiB := humanize.GiByte * (tmpfsHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
+		(2 * ramdiskGiB) + 1 /* add 1GiB buffer */)
+	tmpfsEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(0, ramdiskGiB, control.MockBdevTier(0, 2, 4)).
+			WithTargetCount(18).WithHelperStreamCount(4),
+		control.MockEngineCfgTmpfs(1, ramdiskGiB, control.MockBdevTier(1, 1, 3)).
+			WithTargetCount(18).WithHelperStreamCount(4),
+	}
+
 	metadataMountPath := "/mnt/daos_md"
 	controlMetadata := storage.ControlMetadata{
 		Path: metadataMountPath,
 	}
 	// Nr hugepages expected with 18+1 (extra MD-on-SSD sys-xstream) targets * 2 engines * 512
 	// pages-per-target.
-	tmpfsNrHugepages := 19 * 2 * 512
-	tmpfsHugeMemGiB := (humanize.MiByte * 2 * tmpfsNrHugepages) / humanize.GiByte
-	tmpfsEngRsvdGiB := 2 /* calculated based on 18 targets */
-	tmpfsSysRsvdGiB := storage.DefaultSysMemRsvd / humanize.GiByte
-	tmpfsRamdiskGiB := storage.MinRamdiskMem / humanize.GiByte
+	mdonssdNrHugepages := 19 * 2 * 512
+	mdonssdHugeMemGiB := (humanize.MiByte * 2 * mdonssdNrHugepages) / humanize.GiByte
 	// Total mem to meet requirements 39GiB hugeMem, 2GiB per engine rsvd, 6GiB sys rsvd, 4GiB
 	// per engine RAM-disk.
-	tmpfsMemTotalGiB := humanize.GiByte * (tmpfsHugeMemGiB + (2 * tmpfsEngRsvdGiB) + tmpfsSysRsvdGiB +
-		(2 * tmpfsRamdiskGiB) + 1 /* add 1GiB buffer */)
-	tmpfsEngineCfgs := []*engine.Config{
-		control.MockEngineCfgTmpfs(0, tmpfsRamdiskGiB,
+	mdonssdMemTotalGiB := humanize.GiByte * (mdonssdHugeMemGiB + (2 * engRsvdGiB) + sysRsvdGiB +
+		(2 * ramdiskGiB) + 1 /* add 1GiB buffer */)
+	mdonssdEngineCfgs := []*engine.Config{
+		control.MockEngineCfgTmpfs(0, ramdiskGiB,
 			control.MockBdevTierWithRole(0, storage.BdevRoleWAL, 2),
 			control.MockBdevTierWithRole(0, storage.BdevRoleMeta|storage.BdevRoleData, 4)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -223,7 +250,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				filepath.Join(controlMetadata.EngineDirectory(0), storage.BdevOutConfName),
 			).
 			WithTargetCount(18).WithHelperStreamCount(4),
-		control.MockEngineCfgTmpfs(1, tmpfsRamdiskGiB,
+		control.MockEngineCfgTmpfs(1, ramdiskGiB,
 			control.MockBdevTierWithRole(1, storage.BdevRoleWAL, 1),
 			control.MockBdevTierWithRole(1, storage.BdevRoleMeta|storage.BdevRoleData, 3)).
 			WithStorageControlMetadataPath(metadataMountPath).
@@ -317,8 +344,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				// 18 targets * 2 engines * 512 pages
-				WithNrHugepages(18 * 2 * 512).
+				WithNrHugepages(defNrHugepages).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
 		},
@@ -345,8 +371,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 			},
 			expCfg: control.MockServerCfg("ofi+psm2", exmplEngineCfgs).
-				// 18 targets * 2 engines * 512 pages
-				WithNrHugepages(18*2*512).
+				WithNrHugepages(defNrHugepages).
 				WithAccessPoints("localhost:10001").
 				WithAccessPoints("moon-111:10001", "mars-115:10001", "jupiter-119:10001").
 				WithControlLogFile("/tmp/daos_server.log"),
@@ -431,6 +456,36 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockScmNamespace(0),
 					storage.MockScmNamespace(1),
 				},
+				MemInfo: &common.MemInfo{
+					HugepageSizeKiB: 2048,
+					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
+				},
+				NvmeDevices: storage.NvmeControllers{
+					storage.MockNvmeController(1),
+					storage.MockNvmeController(2),
+					storage.MockNvmeController(3),
+					storage.MockNvmeController(4),
+				},
+			},
+			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
+				WithNrHugepages(defNrHugepages).
+				WithAccessPoints("localhost:10001").
+				WithControlLogFile("/tmp/daos_server.log"),
+		},
+		"dcpm scm; control_metadata path set": {
+			extMetadataPath: metadataMountPath,
+			hf: &control.HostFabric{
+				Interfaces: []*control.HostFabricInterface{
+					eth0, eth1, ib0, ib1,
+				},
+				NumaCount:    2,
+				CoresPerNuma: 24,
+			},
+			hs: &control.HostStorage{
+				ScmNamespaces: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
 				MemInfo: &defMemInfo,
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -439,9 +494,9 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expErr: ErrTmpfsNoExtMDPath,
+			expErr: errors.New("only supported with scm class ram"),
 		},
-		"tmpfs scm; low mem": {
+		"tmpfs scm; md-on-ssd; low mem": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hf: &control.HostFabric{
@@ -469,7 +524,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 			},
 			expErr: errors.New("insufficient ram"),
 		},
-		"tmpfs scm": {
+		"tmpfs scm; md-on-ssd": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hf: &control.HostFabric{
@@ -486,7 +541,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
+					MemTotalKiB:     mdonssdMemTotalGiB / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),
@@ -495,13 +550,13 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 					storage.MockNvmeController(4),
 				},
 			},
-			expCfg: control.MockServerCfg("ofi+psm2", tmpfsEngineCfgs).
-				WithNrHugepages(tmpfsNrHugepages).
+			expCfg: control.MockServerCfg("ofi+psm2", mdonssdEngineCfgs).
+				WithNrHugepages(mdonssdNrHugepages).
 				WithAccessPoints("localhost:10001").
 				WithControlLogFile("/tmp/daos_server.log").
 				WithControlMetadata(controlMetadata),
 		},
-		"tmpfs scm; no logging to stdout": {
+		"tmpfs scm; md-on-ssd; no logging to stdout": {
 			tmpfsSCM:        true,
 			extMetadataPath: metadataMountPath,
 			hf: &control.HostFabric{
@@ -518,7 +573,7 @@ func TestDaosServer_Auto_confGen(t *testing.T) {
 				},
 				MemInfo: &common.MemInfo{
 					HugepageSizeKiB: 2048,
-					MemTotalKiB:     tmpfsMemTotalGiB / humanize.KiByte,
+					MemTotalKiB:     mdonssdMemTotalGiB / humanize.KiByte,
 				},
 				NvmeDevices: storage.NvmeControllers{
 					storage.MockNvmeController(1),

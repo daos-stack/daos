@@ -441,16 +441,20 @@ func (tcs TierConfigs) validateBdevRoles() error {
 //     second bdev tier and Data to all remaining bdev tiers.
 //   - If the scm tier is of class dcpm, the first (and only) bdev tier should have the Data role.
 //   - If emulated NVMe is present in bdev tiers, implicit role assignment is skipped.
-func (tcs TierConfigs) AssignBdevTierRoles() error {
+func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
+	if extMetadataPath == "" {
+		return nil // MD-on-SSD not enabled.
+	}
+
 	scs := tcs.ScmConfigs()
 
 	// Require tier-0 to be a SCM tier.
 	if len(scs) != 1 || scs[0].Tier != 0 {
 		return errors.New("first storage tier is not scm")
 	}
-	// No roles should be assigned if scm tier is DCPM.
+	// MD-on-SSD roles can not be assigned if scm tier is DCPM.
 	if scs[0].Class == ClassDcpm {
-		return nil
+		return errors.New("external metadata path invalid with DCPM scom class")
 	}
 	// Skip role assignment and validation if no real NVMe tiers exist.
 	if !tcs.HaveRealNVMe() {

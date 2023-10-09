@@ -65,9 +65,9 @@ type (
 		AccessPoints []string `json:"-"`
 		// Ports to use for fabric comms (one needed per engine).
 		FabricPorts []int `json:"-"`
-		// Generate MD-on-SSD config with a tmpfs RAM-disk SCM.
+		// Generate config with a tmpfs RAM-disk SCM.
 		UseTmpfsSCM bool `json:"UseTmpfsSCM"`
-		// Location to persist control-plane metadata.
+		// Location to persist control-plane metadata, will generate MD-on-SSD config.
 		ExtMetadataPath string         `json:"ExtMetadataPath"`
 		Log             logging.Logger `json:"-"`
 	}
@@ -975,22 +975,19 @@ func getSCMTier(log logging.Logger, numaID, nrNumaNodes int, sd *storageDetails)
 	return scmTier, nil
 }
 
-func getBdevTiers(log logging.Logger, scmCls storage.Class, ssds *hardware.PCIAddressSet) (storage.TierConfigs, error) {
+func getBdevTiers(log logging.Logger, mdOnSSD bool, ssds *hardware.PCIAddressSet) (storage.TierConfigs, error) {
 	nrSSDs := ssds.Len()
 	if nrSSDs == 0 {
 		log.Debugf("skip assigning ssd tiers as no ssds are available")
 		return nil, nil
 	}
 
-	if scmCls == storage.ClassDcpm {
+	if !mdOnSSD {
 		return storage.TierConfigs{
 			storage.NewTierConfig().
 				WithStorageClass(storage.ClassNvme.String()).
 				WithBdevDeviceList(ssds.Strings()...),
 		}, nil
-	}
-	if scmCls != storage.ClassRam {
-		return nil, errors.New("only scm classes dcpm (pmem) and ram supported")
 	}
 
 	// Assign SSDs to multiple tiers for MD-on-SSD, NVMe SSDs on same NUMA as
@@ -1061,6 +1058,11 @@ func genEngineConfigs(req ConfGenerateReq, newEngineCfg newEngineCfgFn, nodeSet 
 
 	req.Log.Debugf("calculating storage tiers for engines based on scm class %q", sd.scmCls)
 
+	mdOnSSD := req.ExtMetadataPath != ""
+	if mdOnSSD && sd.scmCls != storage.ClassRam {
+		return nil, errors.New("md-on-ssd mode is only supported with scm class ram")
+	}
+
 	for idx, numaID := range nodeSet {
 		ssds := sd.NumaSSDs[numaID]
 		iface := nd.NumaIfaces[numaID]
@@ -1071,7 +1073,7 @@ func genEngineConfigs(req ConfGenerateReq, newEngineCfg newEngineCfgFn, nodeSet 
 		}
 		tiers := storage.TierConfigs{scmTier}
 
-		bdevTiers, err := getBdevTiers(req.Log, sd.scmCls, ssds)
+		bdevTiers, err := getBdevTiers(req.Log, mdOnSSD, ssds)
 		if err != nil {
 			return nil, errors.Wrapf(err, "calculating bdev tiers")
 		}
@@ -1214,19 +1216,14 @@ func genServerConfig(req ConfGenerateReq, ecs []*engine.Config, mi *common.MemIn
 		WithEngines(ecs...).
 		WithControlLogFile(defaultControlLogFile)
 
-	// TODO: Add capability to create an ephemeral RAM-disk based configuration as currently
-	//       MD-on-SSD enabled conf will be generated whenever scm tier is tmpfs.
 	for idx := range cfg.Engines {
 		tiers := cfg.Engines[idx].Storage.Tiers
-		if err := tiers.AssignBdevTierRoles(); err != nil {
+		if err := tiers.AssignBdevTierRoles(req.ExtMetadataPath); err != nil {
 			return nil, errors.Wrapf(err, "assigning engine %d storage bdev tier roles",
 				idx)
 		}
 		// Add default control_metadata path if roles have been assigned.
 		if idx == 0 && tiers.HasBdevRoleMeta() {
-			if req.ExtMetadataPath == "" {
-				return nil, errors.New("no external metadata path specified in request")
-			}
 			cfg.Metadata = storage.ControlMetadata{
 				Path: req.ExtMetadataPath,
 			}
