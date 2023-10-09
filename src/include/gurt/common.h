@@ -358,8 +358,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	})
 
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
-#define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
+#define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
 #define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
 #define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
 #define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
@@ -371,6 +370,35 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
+
+#ifdef DAOS_BUILD_RELEASE
+
+#define D_MUTEX_LOCK(x) __D_PTHREAD(pthread_mutex_lock, x)
+
+#else
+
+#define D_MUTEX_LOCK(x)                                                                            \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = pthread_mutex_trylock((x));                                                  \
+		if (_rc == EBUSY) {                                                                \
+			int             delay1 = 0;                                                \
+			int             delay2 = 1;                                                \
+			struct timespec _wait  = {.tv_sec = delay1 + delay2};                      \
+			D_DEBUG(DB_MEM, "lock(%p), lock held, waiting", x);                        \
+			while ((_rc = pthread_mutex_timedlock((x), &_wait)) == ETIMEDOUT) {        \
+				delay1       = delay2;                                             \
+				delay2       = _wait.tv_sec;                                       \
+				_wait.tv_sec = delay1 + delay2;                                    \
+				D_DEBUG(DB_MEM, "lock(%p), lock still held, waiting %ld", x,       \
+					_wait.tv_sec);                                             \
+			}                                                                          \
+		}                                                                                  \
+		D_ASSERTF(_rc == 0, "pthread_mutex_lock rc=%d %s\n", _rc, strerror(_rc));          \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#endif
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL
