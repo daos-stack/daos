@@ -3419,15 +3419,6 @@ func TestControl_PoolCreateAllCmd(t *testing.T) {
 			test.AssertTrue(t,
 				poolCreateRequest.TierRatio == nil,
 				"Invalid size of TierRatio attribute: disabled with manual allocation")
-			//			msg := fmt.Sprintf("Creating DAOS pool with %d%% of all storage",
-			//				int(tc.StorageRatio*100))
-			//			test.AssertTrue(t, strings.Contains(buf.String(), msg),
-			//				fmt.Sprintf("missing success message: %q", msg))
-			//			if tc.ExpectedOutput.WarningMsg != "" {
-			//				test.AssertTrue(t,
-			//					strings.Contains(buf.String(), tc.ExpectedOutput.WarningMsg),
-			//					"missing warning message: "+tc.ExpectedOutput.WarningMsg)
-			//			}
 		})
 	}
 }
