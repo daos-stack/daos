@@ -47,7 +47,7 @@ class NvmeEnospace(ServerFillUp):
         self.create_pool_max_size()
 
     def verify_enospace_log(self, log_file):
-        """ Function checking logs consistency.
+        """Function checking logs consistency.
 
         Function checking that only expected errors have occurred and the DER_NOSPACE errors have
         occurred.
@@ -105,7 +105,7 @@ class NvmeEnospace(ServerFillUp):
                 self.fail("One of the Background IOR job failed")
 
     def ior_bg_thread(self, event):
-        """ Start IOR Background thread.
+        """Start IOR Background thread.
 
         This will write small data set and keep reading it in loop until it fails or main program
         exit.
@@ -160,7 +160,7 @@ class NvmeEnospace(ServerFillUp):
             stop_looping = event.wait(1)
 
     def run_enospace_foreground(self, log_file):
-        """ Fill SCM and NVMe devices.
+        """Fill SCM and NVMe devices.
 
         Run IOR to fill up SCM and NVMe. Verify that we see DER_NOSPACE while filling up SCM. Then
         verify that the storage usage is near 100%.
@@ -213,7 +213,7 @@ class NvmeEnospace(ServerFillUp):
             self.fail(msg)
 
     def run_enospace_with_bg_job(self, log_file):
-        """ Check DER_ENOSPACE occurs when storage space is filled.
+        """Check DER_ENOSPACE occurs when storage space is filled.
 
         Stress test to validate DER_ENOSPACE management and expected storage size. Single IOR job
         will run in background while space is filling.
@@ -242,7 +242,7 @@ class NvmeEnospace(ServerFillUp):
         self.verify_background_job()
 
     def test_enospace_lazy_with_bg(self):
-        """ Jira ID: DAOS-4756.
+        """Jira ID: DAOS-4756.
 
         Test Description: IO gets DER_NOSPACE when SCM and NVMe is full with default (lazy)
                           Aggregation mode.
@@ -265,7 +265,7 @@ class NvmeEnospace(ServerFillUp):
         self.log.info("Test passed")
 
     def test_enospace_lazy_with_fg(self):
-        """ Jira ID: DAOS-4756.
+        """Jira ID: DAOS-4756.
 
         Test Description: Fill up the system (default aggregation mode) and delete all containers in
                           loop, which should release the space.
@@ -323,7 +323,7 @@ class NvmeEnospace(ServerFillUp):
         self.run_enospace_with_bg_job(self.client_log)
 
     def test_enospace_time_with_fg(self):
-        """ Jira ID: DAOS-4756.
+        """Jira ID: DAOS-4756.
 
         Test Description: Fill up the system (time aggregation mode) and delete all containers in
                           loop, which should release the space.
@@ -361,7 +361,7 @@ class NvmeEnospace(ServerFillUp):
 
     @skipForTicket("DAOS-8896")
     def test_performance_storage_full(self):
-        """ Jira ID: DAOS-4756.
+        """Jira ID: DAOS-4756.
 
         Test Description: Verify IO Read performance when pool size is full.
 
@@ -402,7 +402,7 @@ class NvmeEnospace(ServerFillUp):
                       .format(max_mib_baseline, max_mib_latest))
 
     def test_enospace_no_aggregation(self):
-        """ Jira ID: DAOS-4756.
+        """Jira ID: DAOS-4756.
 
         Test Description: IO gets DER_NOSPACE when SCM is full and it release the size when
                           container destroy with Aggregation disabled.
