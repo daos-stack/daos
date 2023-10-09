@@ -801,6 +801,14 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
         replacement = f'<testcase classname="FTEST_{test.directory}.{test_class}-{name}" name='
         return update_xml(logger, cmocka_xml, pattern, replacement, cmocka_data, test_result)
 
+    if len(re.findall('<testsuites>', cmocka_data)) > 1:
+        # Remove all but the first <testsuites> entry from the cmocka xml
+        if not update_xml(logger, cmocka_xml, '\n<testsuites>', '', cmocka_data, test_result):
+            return False
+        # Remove all but the last </testsuites> entry from the cmocka xml
+        if not update_xml(logger, cmocka_xml, '</testsuites>\n', '', cmocka_data, test_result):
+            return False
+
     # Update the class name to include the functional test directory
     pattern = 'classname="'
     replacement = f'classname="FTEST_{test.directory}.{test_class}.'
