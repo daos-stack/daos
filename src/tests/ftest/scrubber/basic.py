@@ -34,7 +34,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         for test in transfer_block_size:
             self.ior_cmd.transfer_size.update(test[0])
             self.ior_cmd.block_size.update(test[1])
-        status = self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        status = self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         if status is False:
             self.log.info("-------Test Failed-------")
             self.log.info("---No metrics value change----")
@@ -54,7 +54,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_disabled_during_pool_creation
+        :avocado: tags=TestWithScrubberBasic,test_scrubber_disabled_during_pool_creation
 
         """
         self.run_scrubber_basic(None, None)
@@ -71,7 +71,7 @@ class TestWithScrubberBasic(TestWithScrubber):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber
-        :avocado: tags=test_scrubber_enabled_during_pool_creation
+        :avocado: tags=TestWithScrubberBasic,test_scrubber_enabled_during_pool_creation
 
         """
         pool_prop = self.params.get("properties", '/run/pool/*')

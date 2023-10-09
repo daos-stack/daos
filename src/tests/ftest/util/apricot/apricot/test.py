@@ -1838,7 +1838,7 @@ class TestWithServers(TestWithoutServers):
 
         return container
 
-    def add_container(self, pool, namespace=None, create=True):
+    def add_container(self, pool, namespace=None, create=True, **kwargs):
         """Add a container to the test case.
 
         This method defines the common test container creation sequence.
@@ -1849,8 +1849,11 @@ class TestWithServers(TestWithoutServers):
                 the test yaml file. Defaults to None.
             create (bool, optional): should the container be created. Defaults
                 to True.
+            kwargs (dict): name/value of attributes for which to call update(value, name).
+                See TestContainer for available attributes.
         """
-        self.container = self.get_container(pool=pool, namespace=namespace, create=create)
+        self.container = self.get_container(
+            pool=pool, namespace=namespace, create=create, **kwargs)
 
     def add_container_qty(self, quantity, pool, namespace=None, create=True):
         """Add multiple containers to the test case.

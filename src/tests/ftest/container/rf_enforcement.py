@@ -13,11 +13,6 @@ class ContRfEnforce(ContRedundancyFactor):
     :avocado: recursive
     """
 
-    def __init__(self, *args, **kwargs):
-        """Initialize a Rebuild Container RF with ObjClass Write object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
     def test_container_redundancy_factor_oclass_enforcement(self):
         """Jira ID:
         DAOS-6267: Verify that a container can be created with and enforces
@@ -42,7 +37,6 @@ class ContRfEnforce(ContRedundancyFactor):
         :avocado: tags=vm
         :avocado: tags=container
         :avocado: tags=container_rf,cont_rf_oclass_enforcement
-        :avocado: tags=test_container_redundancy_factor_oclass_enforcement
+        :avocado: tags=ContRfEnforce,test_container_redundancy_factor_oclass_enforcement
         """
-        self.mode = "cont_rf_enforcement"
-        self.execute_cont_rf_test()
+        self.execute_cont_rf_test("cont_rf_enforcement")

@@ -217,9 +217,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         if pool:
             funcs.append(pool.set_query_data)
         if container:
-            funcs.append(
-                lambda: self.log.info(
-                    self.daos_cmd.container_query(container.pool.identifier, container.uuid)))
+            funcs.append(container.query)
 
         first_error = None
         for func in funcs:

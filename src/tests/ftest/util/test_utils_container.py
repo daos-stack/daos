@@ -100,7 +100,7 @@ class TestContainerData():
                 "Error writing {}data (dkey={}, akey={}, data={}) to "
                 "container {}: {}".format(
                     "array " if isinstance(data, list) else "", dkey, akey,
-                    data, container.uuid, error)) from error
+                    data, str(container), error)) from error
 
     def write_object(self, container, record_qty, akey_size, dkey_size,
                      data_size, rank=None, obj_class=None, data_array_size=0):
@@ -178,7 +178,7 @@ class TestContainerData():
                 "Error reading {}data (dkey={}, akey={}, size={}) from "
                 "container {}: {}".format(
                     "array " if data_array_size > 0 else "", dkey, akey,
-                    data_size, container.uuid, error)) from error
+                    data_size, str(container), error)) from error
         return [data[:-1] for data in read_data] \
             if data_array_size > 0 else read_data.value
 

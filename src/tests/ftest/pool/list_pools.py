@@ -34,35 +34,36 @@ class ListPoolsTest(TestWithServers):
         """
         # Iterate rank lists to create pools. Store the created pool information
         # as a dictionary of pool UUID keys with a service replica list value.
-        self.pool = []
-        expected_uuids = {}
+        pools = []
+        expected_uuids_labels = {}
         for rank_list in rank_lists:
-            self.pool.append(self.get_pool(target_list=rank_list, svcn=svcn))
-            expected_uuids[self.pool[-1].uuid.lower()] = self.pool[-1].svc_ranks
+            pools.append(self.get_pool(target_list=rank_list, svcn=svcn))
+            uuid_label = (pools[-1].uuid.lower(), pools[-1].label.value)
+            expected_uuids_labels[uuid_label] = pools[-1].svc_ranks
 
         # Verify the 'dmg pool info' command lists the correct created pool
         # information.  The DmgCommand.pool_info() method returns the command
         # output as a dictionary of pool UUID keys with service replica list
         # values.
-        detected_uuids = {}
+        detected_uuids_labels = {}
         try:
             for data in self.get_dmg_command().get_pool_list_all():
-                detected_uuids[data["uuid"]] = data["svc_reps"]
+                uuid_label = (data["uuid"], data["label"])
+                detected_uuids_labels[uuid_label] = data["svc_reps"]
         except KeyError as error:
             self.fail("Error parsing dmg pool list output: {}".format(error))
 
-        self.log.info("Expected pool info: %s", str(expected_uuids))
-        self.log.info("Detected pool info: %s", str(detected_uuids))
+        self.log.info("Expected pool info: %s", str(expected_uuids_labels))
+        self.log.info("Detected pool info: %s", str(detected_uuids_labels))
 
         # Destroy all the pools
-        if self.destroy_pools(self.pool):
+        if self.destroy_pools(pools):
             self.fail("Error destroying pools")
-        self.pool = []
 
         # Compare the expected and detected pool information
         self.assertEqual(
-            expected_uuids, detected_uuids,
-            "dmg pool info does not list all expected pool UUIDs and their "
+            expected_uuids_labels, detected_uuids_labels,
+            "dmg pool info does not list all expected pool UUIDs, labels, and their "
             "service replicas")
 
     def test_list_pools(self):
@@ -76,7 +77,7 @@ class ListPoolsTest(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=pool
-        :avocado: tags=list_pools,test_list_pools
+        :avocado: tags=ListPoolsTest,test_list_pools
         """
         ranks = list(range(len(self.hostlist_servers)))
 

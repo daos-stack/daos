@@ -30,13 +30,13 @@ class TestWithScrubberTargetEviction(TestWithScrubber):
         initial_metrics = {}
         final_metrics = {}
         self.create_pool_cont_with_scrubber(pool_prop=pool_prop, cont_prop=cont_prop)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.pool.query()
         initial_metrics = self.scrubber.get_scrub_corrupt_metrics()
-        self.run_ior_and_check_scruber_status(pool=self.pool, cont=self.container)
+        self.run_ior_and_check_scrubber_status(pool=self.pool, cont=self.container)
         # Wait for a minute for the scrubber to take action and evict target
         # after corruption threshold reached.
         time.sleep(60)
-        self.dmg_cmd.pool_query(self.pool.identifier)
+        self.pool.query()
         final_metrics = self.scrubber.get_scrub_corrupt_metrics()
         status = self.verify_scrubber_metrics_value(initial_metrics, final_metrics)
         if status is False:

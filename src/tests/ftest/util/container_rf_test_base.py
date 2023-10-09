@@ -5,7 +5,6 @@
 """
 import re
 
-from daos_utils import DaosCommand
 from general_utils import DaosTestError
 from rebuild_test_base import RebuildTestBase
 
@@ -15,12 +14,6 @@ class ContRedundancyFactor(RebuildTestBase):
 
     :avocado: recursive
     """
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a CascadingFailures object."""
-        super().__init__(*args, **kwargs)
-        self.mode = None
-        self.daos_cmd = None
 
     def create_test_container(self):
         """Create a container and write objects."""
@@ -61,8 +54,7 @@ class ContRedundancyFactor(RebuildTestBase):
         actual_rf = None
         actual_health = None
 
-        cont_props = self.daos_cmd.container_get_prop(
-            pool=self.pool.uuid, cont=self.container.uuid, properties=["rd_fac", "status"])
+        cont_props = self.container.get_prop(properties=["rd_fac", "status"])
         for cont_prop in cont_props["response"]:
             if cont_prop["name"] == "rd_fac":
                 actual_rf = cont_prop["value"]
@@ -144,16 +136,16 @@ class ContRedundancyFactor(RebuildTestBase):
                     self.fail("#Negative test, container redundancy factor "
                               "test failed, return error RC: -1003 not found")
 
-    def execute_cont_rf_test(self, create_container=True):
+    def execute_cont_rf_test(self, mode, create_container=True):
         """Execute the rebuild test steps for container rd_fac test.
 
         Args:
+            mode (str): "cont_rf_with_rebuild" or "cont_rf_enforcement"
             create_container (bool, optional): should the test create a
                 container. Defaults to True.
         """
         # Get the test params and var
         self.setup_test_pool()
-        self.daos_cmd = DaosCommand(self.bin)
         if create_container:
             self.setup_test_container()
         oclass = self.inputs.object_class.value
@@ -171,7 +163,7 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_pool()
         # Create a container and write objects
         self.create_test_container_and_write_obj(negative_test)
-        if self.mode == "cont_rf_with_rebuild":
+        if mode == "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
             if num_of_ranks > rf_num:
                 expect_cont_status = "UNCLEAN"
@@ -196,7 +188,7 @@ class ContRedundancyFactor(RebuildTestBase):
                 self.log.info("==>(7)Check for container data if the container is healthy.")
                 self.verify_container_data()
             self.log.info("Test passed")
-        elif self.mode == "cont_rf_enforcement":
+        elif mode == "cont_rf_enforcement":
             self.log.info("Container rd_fac test passed")
         else:
             self.fail("#Unsupported container_rf test mode")

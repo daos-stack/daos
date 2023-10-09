@@ -69,7 +69,7 @@ class Cmd(DfuseTestBase):
             # perform test for multiple containers.
             for count in range(cont_count):
                 self.add_container(self.pool)
-                mount_dir = f"/tmp/{self.pool.uuid}_daos_dfuse{count}"
+                mount_dir = "/tmp/daos_dfuse_{}_{}".format(self.pool.identifier, count)
                 self.start_dfuse(
                     self.hostlist_clients, self.pool, self.container, mount_dir=mount_dir)
                 if il_lib is not None:

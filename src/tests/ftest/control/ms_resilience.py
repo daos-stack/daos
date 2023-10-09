@@ -73,13 +73,13 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("*** creating pool")
         self.pool.create()
 
-        self.log.info("Pool UUID %s on server group: %s", self.pool.uuid, self.server_group)
+        self.log.info("%s on server group: %s", str(self.pool), self.server_group)
         # Verify that the pool persisted.
         while not self.find_pool(self.pool.uuid):
             # Occasionally the pool may not be found
             # immediately after creation if the read
             # is serviced by a non-leader replica.
-            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            self.log.info("%s not found yet.", str(self.pool))
             time.sleep(1)
         self.log.info("Found pool in system.")
 
