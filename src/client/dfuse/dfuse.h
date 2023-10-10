@@ -859,7 +859,15 @@ struct dfuse_inode_entry {
  * writes are complete.
  */
 
-#if 0
+#ifdef DAOS_BUILD_RELEASE
+
+#define DFUSE_IE_WFLUSH(_ie)                                                                       \
+	do {                                                                                       \
+		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
+		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
+	} while (0)
+
+#else
 /* Debug version, log on use. */
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
@@ -870,12 +878,7 @@ struct dfuse_inode_entry {
 		}                                                                                  \
 		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
 	} while (0)
-#else
-#define DFUSE_IE_WFLUSH(_ie)                                                                       \
-	do {                                                                                       \
-		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
-		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
-	} while (0)
+
 #endif
 
 static inline struct dfuse_inode_entry *
