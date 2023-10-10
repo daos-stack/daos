@@ -240,9 +240,9 @@ err:
 static void
 df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct dfuse_info         *dfuse_info = fuse_req_userdata(req);
- 	struct dfuse_inode_entry  *parent_inode;
- 	int                        rc;
+	struct dfuse_info        *dfuse_info = fuse_req_userdata(req);
+	struct dfuse_inode_entry *parent_inode;
+	int                       rc;
 
 	parent_inode = dfuse_inode_lookup(dfuse_info, parent);
 	if (!parent_inode) {
