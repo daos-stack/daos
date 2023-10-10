@@ -457,8 +457,11 @@ class OSAUtils(MdtestBase, IorTestBase):
                 "Detected container redundancy factor: %s", self.container.properties.value)
             self.ior_cmd.dfs_oclass.update(None, "ior.dfs_oclass")
             self.ior_cmd.dfs_dir_oclass.update(None, "ior.dfs_dir_oclass")
+        # Run run_ior_with_pool without invoking the pool query method for
+        # displaying pool space information (display_space=False)
         self.run_ior_with_pool(create_pool=False, create_cont=False,
                                fail_on_warning=fail_on_warning,
+                               display_space=False,
                                out_queue=self.out_queue)
         if fail_on_warning and not self.out_queue.empty():
             self.assert_on_exception()

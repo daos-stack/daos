@@ -14,7 +14,7 @@ class DaosSystemQuery(TestWithServers):
     :avocado: recursive
     """
 
-    def test_system_query(self):
+    def test_daos_system_query(self):
         """JIRA ID: DAOS-7983
         Test Description: Test daos system query.
 

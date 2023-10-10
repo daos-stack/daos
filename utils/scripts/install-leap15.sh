@@ -6,7 +6,7 @@
 # Switch to dnf as it seems a bit faster.
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
-# *** Keep these in as much alphbetical order as possible ***
+# *** Keep these in as much alphabetical order as possible ***
 
 set -e
 

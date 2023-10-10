@@ -57,17 +57,16 @@ FAILURE_TRIGGER = "00_trigger-launch-failure_00"
 LOG_FILE_FORMAT = "%(asctime)s %(levelname)-5s %(funcName)30s: %(message)s"
 MAX_CI_REPETITIONS = 10
 TEST_EXPECT_CORE_FILES = ["./harness/core_files.py"]
-PROVIDER_KEYS = OrderedDict(
-    [
-        ("cxi", "ofi+cxi"),
-        ("verbs", "ofi+verbs"),
-        ("ucx", "ucx+dc_x"),
-        ("tcp", "ofi+tcp;ofi_rxm"),
-        ("opx", "ofi+opx"),
-    ]
-)
+SUPPORTED_PROVIDERS = [
+    "ofi+cxi",
+    "ofi+verbs;ofi_rxm",
+    "ucx+dc_x",
+    "ofi+tcp;ofi_rxm",
+    "ofi+opx",
+]
 # Temporary pipeline-lib workaround until DAOS-13934 is implemented
 PROVIDER_ALIAS = {
+    "ofi+verbs": "ofi+verbs;ofi_rxm",
     "ofi+tcp": "ofi+tcp;ofi_rxm"
 }
 PROCS_TO_CLEANUP = [
@@ -1084,6 +1083,7 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+            os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
 
             # Assign the default value for transport configuration insecure mode
             os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
@@ -1299,41 +1299,63 @@ class Launch():
             if result.passed:
                 # Omni-Path adapter found; remove verbs as it will not work with OPA devices.
                 logger.debug("  Excluding verbs provider for Omni-Path adapters")
-                PROVIDER_KEYS.pop("verbs")
+                for index, _provider in enumerate(SUPPORTED_PROVIDERS.copy()):
+                    if "verbs" in _provider:
+                        SUPPORTED_PROVIDERS.pop(index)
+
+            # Get all domains for the interface.
+            # Include the interface as a domain in case of tcp.
+            all_domains_found = set([interface])
+            for device_type in ["infiniband", "cxi"]:
+                command = f"find /sys/class/net/{interface}/device/{device_type}/* " \
+                    f"-maxdepth 0 -printf '%f\\n' 2>/dev/null"
+                result = run_remote(logger, servers, command)
+                if result.passed:
+                    for data in result.output:
+                        if data.stdout:
+                            all_domains_found.update(domain.strip() for domain in data.stdout)
+            logger.debug("Detected supported domains for %s:", interface)
+            logger.debug("  %s", ", ".join(all_domains_found))
 
             # Detect all supported providers
-            command = f"fi_info -d {interface} -l | grep -v 'version:'"
+            command = "hg_info"
             result = run_remote(logger, servers, command)
             if result.passed:
                 # Find all supported providers
-                keys_found = defaultdict(NodeSet)
+                providers_found = defaultdict(NodeSet)
                 for data in result.output:
-                    for line in data.stdout:
-                        provider_name = line.replace(":", "")
-                        if provider_name in PROVIDER_KEYS:
-                            keys_found[provider_name].update(data.hosts)
+                    # Output as:
+                    # <Class>  <Protocol>  <Device>
+                    # Filter by supported domains/devices
+                    domain_re = '|'.join(all_domains_found)
+                    class_protocol_device = re.findall(
+                        fr'(\S+) +([\S]+) +({domain_re})$', '\n'.join(data.stdout), re.MULTILINE)
+                    for _class, _protocol, _ in class_protocol_device:
+                        _provider = f"{_class}+{_protocol}"
+                        if _provider in SUPPORTED_PROVIDERS:
+                            providers_found[_provider].update(data.hosts)
 
                 # Only use providers available on all the server hosts
-                if keys_found:
-                    logger.debug("Detected supported providers:")
-                provider_name_keys = list(keys_found)
-                for provider_name in provider_name_keys:
-                    logger.debug("  %4s: %s", provider_name, str(keys_found[provider_name]))
-                    if keys_found[provider_name] != servers:
-                        keys_found.pop(provider_name)
+                if providers_found:
+                    logger.debug("Detected supported providers for %s:", interface)
+                for _provider, hosts in providers_found.items():
+                    logger.debug("  %4s: %s", _provider, str(hosts))
+                    if hosts != servers:
+                        providers_found.pop(_provider)
 
-                # Select the preferred found provider based upon PROVIDER_KEYS order
-                logger.debug("Supported providers detected: %s", list(keys_found))
-                for key in PROVIDER_KEYS:
-                    if key in keys_found:
-                        provider = PROVIDER_KEYS[key]
+                # Select the preferred found provider based upon SUPPORTED_PROVIDERS order
+                logger.debug(
+                    "Supported providers detected for %s: %s", interface, list(providers_found))
+                for _provider in SUPPORTED_PROVIDERS:
+                    if _provider in providers_found:
+                        provider = _provider
                         break
 
             # Report an error if a provider cannot be found
             if not provider:
                 raise LaunchException(
                     f"Error obtaining a supported provider for {interface} "
-                    f"from: {list(PROVIDER_KEYS)}")
+                    f"from: {SUPPORTED_PROVIDERS}")
 
             logger.debug("  Found %s provider for %s", provider, interface)
 
@@ -2740,7 +2762,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
-                 f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
+                 f"'{cart_logtest} --ftest-mode %'"]
         result = run_remote(
             logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:
@@ -3191,11 +3213,11 @@ def main():
     parser.add_argument(
         "-pr", "--provider",
         action="store",
-        choices=[None] + list(PROVIDER_KEYS.values()) + list(PROVIDER_ALIAS.keys()),
+        choices=[None] + SUPPORTED_PROVIDERS + list(PROVIDER_ALIAS.keys()),
         default=None,
         type=str,
         help="default provider to use in the test daos_server config file, "
-             f"e.g. {', '.join(list(PROVIDER_KEYS.values()))}")
+             f"e.g. {', '.join(SUPPORTED_PROVIDERS)}")
     parser.add_argument(
         "-r", "--rename",
         action="store_true",

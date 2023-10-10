@@ -327,7 +327,8 @@ next_fail:
 		 * skip this shard.
 		 */
 		if (f_shard->fs_status == PO_COMP_ST_DOWN ||
-		    f_shard->fs_status == PO_COMP_ST_DRAIN)
+		    f_shard->fs_status == PO_COMP_ST_DRAIN ||
+		    pool_target_down(spare_tgt))
 			l_shard->po_rebuilding = 1;
 	} else {
 		l_shard->po_shard = -1;

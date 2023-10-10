@@ -470,6 +470,30 @@ func TestConfig_Validation(t *testing.T) {
 			cfg:    validConfig().WithPinnedNumaNode(1).WithServiceThreadCore(1),
 			expErr: errors.New("cannot specify both"),
 		},
+		"config with negative target count should fail": {
+			cfg:    validConfig().WithTargetCount(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative helper stream count should fail": {
+			cfg:    validConfig().WithHelperStreamCount(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative service core index should fail": {
+			cfg: func() *Config {
+				c := validConfig().WithServiceThreadCore(-10)
+				c.PinnedNumaNode = nil
+				return c
+			}(),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative memory size should fail": {
+			cfg:    validConfig().WithMemSize(-10),
+			expErr: errors.New("must not be negative"),
+		},
+		"config with negative hugepage size should fail": {
+			cfg:    validConfig().WithHugepageSize(-10),
+			expErr: errors.New("must not be negative"),
+		},
 		"config with zero target count should fail": {
 			cfg:    validConfig().WithTargetCount(0),
 			expErr: errors.New("target count must be nonzero"),

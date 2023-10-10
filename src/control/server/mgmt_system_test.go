@@ -1000,7 +1000,7 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 			case *mgmtpb.SystemStopReq:
 				gotFanReq.Method = control.StopRanks
 			default:
-				gotFanReq.Method = control.PingRanks
+				t.Fatal("no system request specified")
 			}
 
 			cmpOpts := []cmp.Option{

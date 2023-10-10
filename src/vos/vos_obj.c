@@ -2062,8 +2062,8 @@ obj_iter_delete(struct vos_obj_iter *oiter, void *args)
 	rc = umem_tx_end(umm, rc);
 exit:
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR,
-			 "Failed to delete iter entry: "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_TX_BUSY, DB_TRACE, DLOG_ERR, rc,
+			  "Failed to delete iter entry");
 	return rc;
 }
 

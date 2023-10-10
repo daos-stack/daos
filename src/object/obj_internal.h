@@ -717,6 +717,8 @@ struct dc_object *obj_addref(struct dc_object *obj);
 void obj_decref(struct dc_object *obj);
 int obj_get_grp_size(struct dc_object *obj);
 struct dc_object *obj_hdl2ptr(daos_handle_t oh);
+uint32_t dc_obj_retry_delay(tse_task_t *task, int err, uint16_t *retry_cnt,
+			    uint16_t *inprogress_cnt);
 
 /* handles, pointers for handling I/O */
 struct obj_io_context {
