@@ -158,6 +158,7 @@ ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || {                                                      \
         mkdir /home/daos/.m2 &&                                                               \
         cp /home/daos/daos/utils/scripts/helpers/maven-settings.xml.in /home/daos/.m2/settings.xml &&      \
+        export JAVA_HOME=$(daos-java/find_java_home.sh) && \
         mvn clean install -T 1C                                                               \
             -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn \
             -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos;                               \

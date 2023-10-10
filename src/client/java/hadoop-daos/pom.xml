@@ -15,7 +15,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <hadoop.version>3.3.3</hadoop.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>${project.basedir}/install</daos.install.path>
   </properties>
@@ -190,7 +190,7 @@
                   <include>com.google.protobuf:protobuf-java</include>
                 </includes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
+              <finalName>${project.artifactId}-${project.version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
         </executions>
@@ -209,7 +209,7 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
+                  <file>target/${project.artifactId}-${project.version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
                   <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
@@ -309,7 +309,7 @@
                 <configuration>
                   <artifacts>
                     <artifact>
-                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <file>target/${project.artifactId}-${project.version}-shaded.jar</file>
                       <type>jar</type>
                       <classifier>all-shaded</classifier>
                     </artifact>

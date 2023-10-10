@@ -100,7 +100,6 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 		fsType = "POSIX"
 	}
 	// Compat with old-style output
-	cmd.Infof("Successfully created container %s", C.GoString(&ap.dm_args.dst_cont[0]))
 	cmd.Infof("Successfully copied to %s: %s", fsType, cmd.Dest)
 	cmd.Infof("    Directories: %d", ap.fs_copy_stats.num_dirs)
 	cmd.Infof("    Files:       %d", ap.fs_copy_stats.num_files)

@@ -311,7 +311,7 @@ struct crt_opc_map {
 	struct crt_opc_map_L2	*com_map;
 };
 
-
-void crt_na_config_fini(bool primary, int provider);
+void
+crt_na_config_fini(bool primary, crt_provider_t provider);
 
 #endif /* __CRT_INTERNAL_TYPES_H__ */
