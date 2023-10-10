@@ -299,7 +299,7 @@ int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
 int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
-void ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
+int ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
 int ds_pool_svc_update_label(struct ds_pool_svc *ds_svc, const char *label);
 int ds_pool_svc_evict_all(struct ds_pool_svc *ds_svc);
 struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);
