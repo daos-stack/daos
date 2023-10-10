@@ -679,7 +679,7 @@ class PreReqComponent():
         self.__build_info.save('.build_vars.json')
 
     def __parse_build_deps(self):
-        """Parse the build dependances command line flag"""
+        """Parse the build dependencies command line flag"""
         build_deps = GetOption('build_deps')
         if build_deps in ('yes', 'only'):
             self.download_deps = True
@@ -1125,6 +1125,11 @@ class _Component():
 
         return
 
+    def _print(self, msg):
+        if GetOption('silent'):
+            return
+        print(msg)
+
     def has_missing_targets(self, env):
         """Check for expected build targets (e.g. libraries or headers)"""
         # pylint: disable=too-many-return-statements
@@ -1151,7 +1156,7 @@ class _Component():
             print('help set')
             return True
 
-        print(f"Checking targets for component '{self.name}'")
+        self._print(f"Checking targets for component '{self.name}'")
 
         config = env.Configure()
         config_cb = self.key_words.get("config_cb", None)
@@ -1244,7 +1249,6 @@ class _Component():
 
     def set_environment(self, env, needed_libs):
         """Modify the specified construction environment to build with the external component"""
-
         if self.skip_arch:
             return
 
@@ -1334,7 +1338,9 @@ class _Component():
         rpath = ["$$ORIGIN"]
         norigin = []
         comp_path = self.component_prefix
-        if not comp_path or comp_path.startswith("/usr"):
+        if not comp_path:
+            return
+        if comp_path.startswith('/usr') and '/prereq/' not in comp_path:
             return
         if not os.path.exists(comp_path):
             return

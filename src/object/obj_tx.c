@@ -31,6 +31,9 @@
 #define DTX_SUB_REQ_MAX		((1ULL << 32) - 1)
 #define DTX_SUB_REQ_DEF		16
 
+/* Whether check redundancy group validation when DTX resync. */
+bool tx_verify_rdg;
+
 enum dc_tx_status {
 	TX_OPEN,
 	TX_COMMITTING,
@@ -83,6 +86,7 @@ struct dc_tx {
 				 tx_for_convert:1,
 				 tx_has_cond:1,
 				 tx_renew:1,
+				 tx_closed:1,
 				 tx_reintegrating:1;
 	/** Transaction status (OPEN, COMMITTED, etc.), see dc_tx_status. */
 	enum dc_tx_status	 tx_status;
@@ -100,6 +104,8 @@ struct dc_tx {
 	/** The read requests count */
 	uint32_t		 tx_read_cnt;
 
+	uint16_t		 tx_retry_cnt;
+	uint16_t		 tx_inprogress_cnt;
 	/** Pool map version when trigger first IO. */
 	uint32_t		 tx_pm_ver;
 	/** Reference the pool. */
@@ -968,6 +974,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	crt_rpc_t		 *req = tcca->tcca_req;
 	struct obj_cpd_out	 *oco = crt_reply_get(req);
 	tse_task_t		 *pool_task = NULL;
+	uint32_t		  delay;
 	int			  rc = task->dt_result;
 	int			  rc1;
 	bool			  locked = true;
@@ -1071,7 +1078,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to restart the TX with newer epoch. */
-	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN) {
+	if (rc == -DER_TX_RESTART || rc == -DER_STALE || rc == -DER_UPDATE_AGAIN ||
+	    rc == -DER_EXCLUDED || rc == -DER_HG) {
 		tx->tx_status = TX_FAILED;
 		rc = -DER_TX_RESTART;
 	} else {
@@ -1083,7 +1091,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	locked = false;
 
 	if (rc != -DER_TX_RESTART) {
-		rc1 = dc_task_resched(task);
+		delay = dc_obj_retry_delay(task, rc, &tx->tx_retry_cnt, &tx->tx_inprogress_cnt);
+		rc1 = tse_task_reinit_with_delay(task, delay);
 		if (rc1 != 0) {
 			D_ERROR("Failed to reinit task %p: %d, %d\n", task, rc1, rc);
 			tx->tx_status = TX_ABORTED;
@@ -1626,7 +1635,28 @@ dc_tx_dump(struct dc_tx *tx)
 		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
 }
 
-/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
+static inline bool
+dc_tx_cpd_body_need_bulk(size_t size)
+{
+	/*
+	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to
+	 *	 transfer for large CPD RPC body via RDMA.
+	 */
+	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
+}
+
+static inline size_t
+dc_tx_cpd_adjust_size(size_t size)
+{
+	/* Lower layer (mercury) need some additional space to pack related payload into
+	 * RPC body (or specified buffer) via related proc interfaces, usually that will
+	 * not exceed 1/10 of the payload. We can make some relative large estimation if
+	 * we do not exactly know the real size now.
+	 */
+	return size * 11 / 10;
+}
+
+/* The calculated CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
 dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
@@ -1687,7 +1717,17 @@ dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 				size += sizeof(*oia->oia_offs) * oia->oia_iod_nr;
 
 			if (dcu->dcu_flags & ORF_CPD_BULK)
-				size += sizeof(*dcu->dcu_bulks) * dcsr->dcsr_nr;
+				/*
+				 * NOTE: In object layer, we cannot exactly know how large the
+				 *	 bulk handle will be in lower layer network (mercury).
+				 *	 The lower layer "struct hg_bulk" is opaque to object.
+				 *	 Its current size in packing is 187 bytes, but it may
+				 *	 be changed in future (who knowns). So here, we use it
+				 *	 as estimation and preserve more space via subsequent
+				 *	 dc_tx_cpd_adjust_size. Please check hg_proc_hg_bulk_t
+				 *	 for detail.
+				 */
+				size += 187 * dcsr->dcsr_nr;
 			else
 				size += daos_sgls_packed_size(dcsr->dcsr_sgls, dcsr->dcsr_nr, NULL);
 			break;
@@ -1698,36 +1738,17 @@ dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 			}
 			break;
 		case DCSO_PUNCH_AKEY:
-			for (j = 0; j < dcsr->dcsr_nr; j++)
+			for (j = 0; j < dcsr->dcsr_nr; j++) {
+				size += sizeof(dcsr->dcsr_punch.dcp_akeys[j]);
 				size += dcsr->dcsr_punch.dcp_akeys[j].iov_buf_len;
+			}
 			break;
 		default:
 			break;
 		}
 	}
 
-	return size;
-}
-
-static inline bool
-dc_tx_cpd_body_need_bulk(size_t size)
-{
-	/*
-	 * NOTE: For 2.2 (DAOS_OBJ_VERSION is 8) and older release, we do not support to
-	 *	 transfer for large CPD RPC body via RDMA.
-	 */
-	return dc_obj_proto_version > 8 && size >= DAOS_BULK_LIMIT;
-}
-
-static inline size_t
-dc_tx_cpd_adjust_size(size_t size)
-{
-	/* Lower layer (mercury) need some additional space to pack related payload into
-	 * RPC body (or specified buffer) via related proc interfaces, usually that will
-	 * not exceed 1/10 of the payload. We can make some relative large estimation if
-	 * we do not exactly know the real size now.
-	 */
-	return size * 11 / 10;
+	return dc_tx_cpd_adjust_size(size);
 }
 
 static int
@@ -1769,6 +1790,7 @@ dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
 	int			 rc;
 	int			 i;
 
+again:
 	D_ALLOC(buf, size);
 	if (buf == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -1789,13 +1811,28 @@ dc_tx_cpd_pack_sub_reqs(struct dc_tx *tx, tse_task_t *task, size_t size)
 	}
 
 	used = crp_proc_get_size_used(tx->tx_crt_proc);
-	D_ASSERTF(used <= size, "Input buffer size %ld is too small for real case %ld\n",
-		  size, used);
+	if (unlikely(used > size)) {
+		D_DEBUG(DB_TRACE, "Former estimated size %ld is too small, enlarge it to %ld\n",
+			size, used);
+		size = used;
 
+		D_GOTO(out, rc = -DER_AGAIN);
+	}
+
+	/* The @buf will be attached to tx->tx_reqs_bulk.dcb_iov and released via dc_tx_cleanup. */
 	rc = dc_tx_cpd_body_bulk(&tx->tx_reqs, &tx->tx_reqs_bulk, task, buf, used, req_cnt,
 				 DCST_BULK_REQ);
 
 out:
+	if (rc != 0) {
+		crt_proc_destroy(tx->tx_crt_proc);
+		tx->tx_crt_proc = NULL;
+		D_FREE(buf);
+
+		if (rc == -DER_AGAIN)
+			goto again;
+	}
+
 	return rc;
 }
 
@@ -1904,7 +1941,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * are in the same redundancy group, be as optimization, we will
 	 * not store modification group information inside 'dm_data'.
 	 */
-	if (act_grp_cnt == 1)
+	if (act_grp_cnt == 1 || !tx_verify_rdg)
 		size = 0;
 
 	size += sizeof(*ddt) * act_tgt_cnt;
@@ -1988,7 +2025,11 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		dcsh->dcsh_epoch.oe_rpc_flags &= ~ORF_EPOCH_UNCERTAIN;
 
 	mbs->dm_tgt_cnt = act_tgt_cnt;
-	mbs->dm_grp_cnt = act_grp_cnt;
+	if (!tx_verify_rdg)
+		/* Set dm_grp_cnt as 1 to bypass redundancy group check. */
+		mbs->dm_grp_cnt = 1;
+	else
+		mbs->dm_grp_cnt = act_grp_cnt;
 	mbs->dm_data_size = size;
 
 	ddt = &mbs->dm_tgts[0];
@@ -2034,6 +2075,9 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		 */
 		dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link);
 		D_FREE(dtr);
+	} else if (!tx_verify_rdg) {
+		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg, dtr_link)) != NULL)
+			D_FREE(dtr);
 	} else {
 		ptr = ddt;
 		while ((dtr = d_list_pop_entry(&dtr_list, struct dc_tx_rdg,
@@ -2058,7 +2102,6 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 	 * Let's try to pack them inline the CPD RPC body firstly.
 	 */
 	size = dc_tx_cpd_sub_reqs_size(tx->tx_req_cache + start, req_cnt);
-	size = dc_tx_cpd_adjust_size(size);
 
 	if (dc_tx_cpd_body_need_bulk(body_size + size)) {
 		rc = dc_tx_cpd_pack_sub_reqs(tx, task, size);
@@ -2463,6 +2506,9 @@ out:
 static void
 dc_tx_close_internal(struct dc_tx *tx)
 {
+	D_ASSERT(tx->tx_closed == 0);
+
+	tx->tx_closed = 1;
 	dc_tx_cleanup(tx);
 	dc_tx_hdl_unlink(tx);
 	dc_tx_decref(tx);
@@ -2528,6 +2574,8 @@ dc_tx_restart_begin(struct dc_tx *tx, uint32_t *backoff)
 		 * tx_lock is temporarily released during the backoff.
 		 */
 		tx->tx_status = TX_RESTARTING;
+		tx->tx_retry_cnt = 0;
+		tx->tx_inprogress_cnt = 0;
 
 		*backoff = d_backoff_seq_next(&tx->tx_backoff_seq);
 	}
@@ -3567,17 +3615,14 @@ again:
 	/* dc_tx_restart_begin() will trigger dc_tx_cleanup() internally, let's re-attach. */
 	rc = dc_tx_attach(th, obj, opc, tx->tx_orig_task, *backoff, false);
 
-	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO,
-		 "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u: rc = %d\n",
-		 tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff, rc);
+	DL_CDEBUG(rc != 0, DLOG_ERR, DB_IO, rc,
+		  "Restart convert task %p with DTX " DF_DTI ", pm_ver %u, backoff %u",
+		  tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, *backoff);
 
 	if (unlikely(rc == -DER_TX_RESTART))
 		goto again;
 
 out:
-	if (rc != 0 && tx->tx_has_cond)
-		dc_tx_close_internal(tx);
-
 	return rc;
 }
 
@@ -3588,9 +3633,7 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 	struct dc_tx			*tx = conv->conv_tx;
 	struct dc_object		*obj = conv->conv_obj;
 	enum obj_rpc_opc		 opc = conv->conv_opc;
-	uint32_t			 backoff = 0;
 	int				 rc = task->dt_result;
-	bool				 tx_need_close = true;
 
 	D_DEBUG(DB_IO, "Convert task %p/%p with DTX " DF_DTI ", pm_ver %u: %d\n", task,
 		tx->tx_orig_task, DP_DTI(&tx->tx_id), tx->tx_pm_ver, rc);
@@ -3602,15 +3645,11 @@ dc_tx_convert_cb(tse_task_t *task, void *data)
 		 * dc_tx_convert_post().
 		 */
 		task->dt_result = 0;
-		tx_need_close = false;
 
-		rc = dc_tx_convert_restart(tx, obj, opc, &backoff);
-		if (!tx->tx_has_cond)
-			rc = dc_tx_convert_post(tx, obj, opc, rc, backoff);
-	}
-
-	if (tx_need_close)
+		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
+	} else {
 		dc_tx_close_internal(tx);
+	}
 
 	/* Drop object reference held via dc_tx_convert_post(). */
 	obj_decref(obj);
@@ -3630,7 +3669,14 @@ dc_tx_convert_post(struct dc_tx *tx, struct dc_object *obj, enum obj_rpc_opc opc
 	int				 rc = 0;
 	bool				 tx_need_close = true;
 
-	D_ASSERT(result != -DER_TX_RESTART);
+	if (unlikely(result == -DER_TX_RESTART)) {
+		result = dc_tx_convert_restart(tx, obj, opc, &backoff);
+		/* For condition case, dc_tx_convert_post() will be triggered by dc_tx_post() some
+		 * time later after being re-attached.
+		 */
+		if (result == 0 && tx->tx_has_cond)
+			return 0;
+	}
 
 	if (result != 0)
 		D_GOTO(out, rc = result);
@@ -3687,7 +3733,6 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 {
 	struct dc_tx	*tx = NULL;
 	int		 rc = 0;
-	uint32_t	 backoff = 0;
 	daos_handle_t	 coh;
 
 	D_ASSERT(obj != NULL);
@@ -3709,15 +3754,13 @@ dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task)
 	tx->tx_for_convert = 1;
 	tx->tx_orig_task = task;
 	rc = dc_tx_attach(dc_tx_ptr2hdl(tx), obj, opc, task, 0, false);
-	if (unlikely(rc == -DER_TX_RESTART))
-		rc = dc_tx_convert_restart(tx, obj, opc, &backoff);
 
 	/* The 'task' will be completed via dc_tx_convert_post(). For condition case,
 	 * dc_tx_convert_post() will be triggered via condition callback; otherwise,
 	 * call dc_tx_convert_post() directly.
 	 */
-	if (!tx->tx_has_cond)
-		rc = dc_tx_convert_post(tx, obj, opc, rc, backoff);
+	if (!tx->tx_has_cond || rc != 0)
+		rc = dc_tx_convert_post(tx, obj, opc, rc, 0);
 
 out:
 	if (tx != NULL)

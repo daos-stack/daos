@@ -1,3 +1,24 @@
+daos (2.5.100-9) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 23 Aug 2023 15:02:44 -0400
+
+daos (2.5.100-8) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 08 Aug 2023 10:02:29 -0400
+
+daos (2.5.100-7) unstable; urgency=medium
+
+  [ Brian J. Murrell ]
+  * NOOP change to keep in parity with RPM version
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 07 Jul 2023 16:05:01 -0400
+
 daos (2.5.100-6) unstable; urgency=medium
   [Michael MacDonald]
   * Add golang-go as a tests dependency for dfuse/daos_build.py

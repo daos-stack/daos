@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -83,6 +83,8 @@ struct d_log_state {
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
 	int flush_pri;		/* flush priority */
+	bool append_rank;	/* append rank to the log filename */
+	bool rank_appended;	/* flag to indicate if rank is already appended */
 #ifdef DLOG_MUTEX
 	pthread_mutex_t clogmux;	/* protect clog in threaded env */
 #endif
@@ -387,6 +389,70 @@ out:
 	return mst.log_size + mst.log_buf_nob >= mst.log_size_max;
 }
 
+/* exceeds the size threshold, rename the current log file
+ * as backup, create a new log file.
+ */
+static int
+log_rotate(void)
+{
+	int rc = 0;
+
+	if (!mst.log_old) {
+		rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
+		if (rc < 0) {
+			dlog_print_err(errno, "failed to alloc name\n");
+			return -1;
+		}
+	}
+
+	if (mst.log_old_fd >= 0) {
+		close(mst.log_old_fd);
+		mst.log_old_fd = -1;
+	}
+
+	/* rename the current log file as a backup */
+	rc = rename(mst.log_file, mst.log_old);
+	if (rc) {
+		dlog_print_err(errno, "failed to rename log file\n");
+		return -1;
+	}
+	mst.log_old_fd = mst.log_fd;
+
+	/* create a new log file */
+	if (merge_stderr) {
+		if (freopen(mst.log_file, "w", stderr) == NULL) {
+			fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
+				mst.log_file, strerror(errno));
+			return -1;
+		}
+
+		mst.log_fd = fileno(stderr);
+	} else {
+		mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
+		if (mst.log_fd < 0) {
+			fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
+				mst.log_file, strerror(errno));
+			return -1;
+		}
+		rc = fcntl(mst.log_fd, F_DUPFD, 128);
+		if (rc < 0) {
+			fprintf(stderr,
+				"d_log_write(): failed to recreate log file %s: %s\n",
+				mst.log_file, strerror(errno));
+			close(mst.log_fd);
+			return -1;
+		}
+		close(mst.log_fd);
+		mst.log_fd = rc;
+	}
+
+	mst.log_size = 0;
+	mst.log_last_check_size = 0;
+
+	return rc;
+}
+
+
 /**
  * This function can do a few things:
  * - copy log message @msg to log buffer
@@ -434,66 +500,11 @@ d_log_write(char *msg, int len, bool flush)
 	if (mst.log_buf_nob == 0)
 		return 0; /* nothing to write */
 
+	/* rotate the log if it exceeds the threshold */
 	if (log_exceed_threshold()) {
-		/* exceeds the size threshold, rename the current log file
-		 * as backup, create a new log file.
-		 */
-		if (!mst.log_old) {
-			rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
-			if (rc < 0) {
-				dlog_print_err(errno, "failed to alloc name\n");
-				return -1;
-			}
-		}
-
-		if (mst.log_old_fd >= 0) {
-			close(mst.log_old_fd);
-			mst.log_old_fd = -1;
-		}
-
-		/* remove the backup log file */
-		rc = unlink(mst.log_old);
-		if (rc && errno != ENOENT) {
-			dlog_print_err(errno, "failed to unlink old file\n");
-			return -1;
-		}
-
-		/* rename the current log file as a backup */
-		rc = rename(mst.log_file, mst.log_old);
-		if (rc) {
-			dlog_print_err(errno, "failed to rename log file\n");
-			return -1;
-		}
-		mst.log_old_fd = mst.log_fd;
-
-		/* create a new log file */
-		if (merge_stderr) {
-			if (freopen(mst.log_file, "w", stderr) == NULL) {
-				fprintf(stderr, "d_log_write(): cannot open new %s: %s\n",
-					mst.log_file, strerror(errno));
-				return -1;
-			}
-		} else {
-			mst.log_fd = open(mst.log_file, O_RDWR | O_CREAT, 0644);
-			if (mst.log_fd < 0) {
-				fprintf(stderr, "d_log_write(): failed to recreate log file %s: %s\n",
-					mst.log_file, strerror(errno));
-				return -1;
-			}
-			rc = fcntl(mst.log_fd, F_DUPFD, 128);
-			if (rc < 0) {
-				fprintf(stderr,
-					"d_log_write(): failed to recreate log file %s: %s\n",
-					mst.log_file, strerror(errno));
-				close(mst.log_fd);
-				return -1;
-			}
-			close(mst.log_fd);
-			mst.log_fd = rc;
-		}
-
-		mst.log_size = 0;
-		mst.log_last_check_size = 0;
+		rc = log_rotate();
+		if (rc != 0)
+			return rc;
 	}
 
 	/* flush the cached log messages */
@@ -873,7 +884,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
-			/* Append pid/tgid to log file name */
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
@@ -883,6 +893,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
+
+	env = getenv(D_LOG_FILE_APPEND_RANK_ENV);
+	if (env && strcmp(env, "0") != 0)
+		mst.append_rank = true;
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -1023,8 +1037,43 @@ early_error:
 	if (buffer)
 		free(buffer);
 	if (newtag)
-		free(newtag);		/* was never installed */
+		free(newtag);           /* was never installed */
 	return -1;
+}
+
+void d_log_rank_setup(int rank)
+{
+	char	*filename = NULL;
+	int	rc;
+
+	clog_lock();
+	if (!mst.append_rank || !mst.log_file)
+		goto unlock;
+
+	if (mst.rank_appended == true)
+		goto unlock;
+
+	/* Note: Can't use D_* allocation macros for mst.log_file */
+	rc = asprintf(&filename, "%s.rank=%d", mst.log_file, rank);
+	if (filename == NULL || rc == -1) {
+		fprintf(stderr, "Failed to asprintf for file=%s rank=%d\n",
+			mst.log_file, rank);
+		goto unlock;
+	}
+
+	rc = rename(mst.log_file, filename);
+	if (rc) {
+		dlog_print_err(errno, "failed to rename log file\n");
+		free(filename);
+		goto unlock;
+	}
+
+	free(mst.log_file);
+	mst.log_file = filename;
+	mst.rank_appended = true;
+
+unlock:
+	clog_unlock();
 }
 
 /*

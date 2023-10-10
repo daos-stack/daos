@@ -65,11 +65,18 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
+	/* destination tag */
 	uint32_t	cch_dst_tag;
+
+
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
-	uint32_t	cch_rc;
+	/* TODO: workaround for DAOS-13973 */
+	union {
+		uint32_t	cch_src_timeout;
+		uint32_t	cch_rc;
+	};
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
@@ -602,20 +609,23 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
  * Note that we conservatively use the default, strict memory order for both
  * RPC_ADDREF and RPC_DECREF, leaving relaxations to future work.
  */
-#define RPC_ADDREF(RPC) do {						\
-		int __ref;						\
-		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);	\
-		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));	\
-		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
+#define RPC_ADDREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));                             \
+		RPC_TRACE(DB_NET, (RPC), "addref to %u.\n", __ref + 1);                            \
 	} while (0)
 
-#define RPC_DECREF(RPC) do {						\
-		int __ref;						\
-		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
-		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
-		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
-		if (__ref == 1)						\
-			crt_req_destroy(RPC);				\
+/* Avoid the use of RPC_TRACE here as after the decref then RPC may no longer be valid */
+#define RPC_DECREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));                             \
+		D_DEBUG(DB_NET, "%p: decref to %u", (RPC), __ref - 1);                             \
+		if (__ref == 1)                                                                    \
+			crt_req_destroy(RPC);                                                      \
 	} while (0)
 
 #define RPC_PUB_ADDREF(RPC) do {					\

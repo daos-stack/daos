@@ -189,7 +189,7 @@ create_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to create array obj "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_EXIST, DLOG_DBG, DLOG_ERR, rc, "Failed to create array obj");
 		D_GOTO(err_obj, rc);
 	}
 
@@ -400,7 +400,7 @@ dc_array_g2l(daos_handle_t coh, struct dc_array_glob *array_glob,
 	rc = daos_obj_open(coh, array_glob->oid, array_mode, &array->daos_oh,
 			   NULL);
 	if (rc) {
-		D_ERROR("Failed local object open "DF_RC"\n", DP_RC(rc));
+		D_ERROR("daos_obj_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_array, rc);
 	}
 
@@ -614,8 +614,9 @@ open_handle_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Failed to open object "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_obj, rc);
+		DL_CDEBUG(rc == -DER_NONEXIST, DLOG_DBG, DLOG_ERR, rc,
+			  "Failed to open array object");
+		return rc;
 	}
 
 	/** check and set array metadata in case of array_open */
@@ -826,6 +827,31 @@ err_put1:
 err_ptask:
 	tse_task_complete(task, rc);
 	return rc;
+}
+
+int
+dc_array_close_direct(daos_handle_t oh)
+{
+	struct dc_array		*array;
+	int			rc;
+
+	array = array_hdl2ptr(oh);
+	if (array == NULL)
+		return -DER_NO_HDL;
+
+	rc = daos_obj_close(array->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		array_decref(array);
+		return rc;
+	}
+
+	array_hdl_unlink(array);
+	/* -1 for ref taken here */
+	array_decref(array);
+	/* -1 for array handle */
+	array_decref(array);
+	return 0;
 }
 
 int

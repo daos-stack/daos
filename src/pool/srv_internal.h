@@ -16,8 +16,17 @@
 #include <daos_security.h>
 #include <gurt/telemetry_common.h>
 
-/* Map status of ranks that make up the pool group */
-#define POOL_GROUP_MAP_STATUS (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+/* Map states of ranks that make up the pool group */
+#define POOL_GROUP_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN | PO_COMP_ST_DRAIN)
+
+/* Map states of ranks that make up the pool service */
+#define POOL_SVC_MAP_STATES (PO_COMP_ST_UP | PO_COMP_ST_UPIN)
+
+/*
+ * Since we want all PS replicas to belong to the pool group,
+ * POOL_SVC_MAP_STATES must be a subset of POOL_GROUP_MAP_STATES.
+ */
+D_CASSERT((POOL_SVC_MAP_STATES & POOL_GROUP_MAP_STATES) == POOL_SVC_MAP_STATES);
 
 /**
  * Global pool metrics
@@ -73,8 +82,8 @@ struct pool_iv_prop {
 	uint32_t	pip_global_version;
 	uint32_t	pip_upgrade_status;
 	uint64_t	pip_svc_redun_fac;
-	uint32_t         pip_checkpoint_mode;
-	uint32_t         pip_checkpoint_freq;
+	uint32_t	pip_checkpoint_mode;
+	uint32_t	pip_checkpoint_freq;
 	uint32_t	pip_checkpoint_thresh;
 	uint32_t	pip_obj_version;
 	struct daos_acl	*pip_acl;
@@ -82,6 +91,7 @@ struct pool_iv_prop {
 	uint32_t	pip_acl_offset;
 	uint32_t	pip_svc_list_offset;
 	uint32_t	pip_perf_domain;
+	uint32_t	pip_reint_mode;
 	char		pip_iv_buf[0];
 };
 

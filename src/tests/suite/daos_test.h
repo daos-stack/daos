@@ -22,23 +22,6 @@
 #include <dirent.h>
 
 #include <cmocka.h>
-#ifdef OVERRIDE_CMOCKA_SKIP
-/* redefine cmocka's skip() so it will no longer abort()
- * if CMOCKA_TEST_ABORT=1
- *
- * it can't be redefined as a function as it must return from current context
- */
-#undef skip
-#define skip() \
-	do { \
-		const char *abort_test = getenv("CMOCKA_TEST_ABORT"); \
-		if (abort_test != NULL && abort_test[0] == '1') \
-			print_message("Skipped !!!\n"); \
-		else \
-			_skip(__FILE__, __LINE__); \
-		return; \
-	} while  (0)
-#endif
 
 #if FAULT_INJECTION
 #define FAULT_INJECTION_REQUIRED() do { } while (0)
@@ -405,6 +388,7 @@ int daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
 int daos_pool_upgrade(const uuid_t pool_uuid);
 int ec_data_nr_get(daos_obj_id_t oid);
 int ec_parity_nr_get(daos_obj_id_t oid);
+int ec_tgt_nr_get(daos_obj_id_t oid);
 
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data,
@@ -644,8 +628,7 @@ test_rmdir(const char *path, bool force)
 	if (dir == NULL) {
 		if (errno == ENOENT)
 			D_GOTO(out, rc);
-		D_ERROR("can't open directory %s, %d (%s)",
-			path, errno, strerror(errno));
+		D_ERROR("can't open directory %s, %d (%s)\n", path, errno, strerror(errno));
 		D_GOTO(out, rc = daos_errno2der(errno));
 	}
 
@@ -663,17 +646,15 @@ test_rmdir(const char *path, bool force)
 		case DT_DIR:
 			rc = test_rmdir(fullpath, force);
 			if (rc != 0)
-				D_ERROR("test_rmdir %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("test_rmdir %s failed, rc %d\n", fullpath, rc);
 			break;
 		case DT_REG:
 			rc = unlink(fullpath);
 			if (rc != 0)
-				D_ERROR("unlink %s failed, rc %d",
-						fullpath, rc);
+				D_ERROR("unlink %s failed, rc %d\n", fullpath, rc);
 			break;
 		default:
-			D_WARN("find unexpected type %d", ent->d_type);
+			D_WARN("find unexpected type %d\n", ent->d_type);
 		}
 
 		D_FREE(fullpath);

@@ -193,7 +193,7 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	} else {
 		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
 		if (rc != ABT_SUCCESS)
-			D_ERROR("ABT eventual wait failed. %d", rc);
+			D_ERROR("ABT eventual wait failed. %d\n", rc);
 	}
 }
 
@@ -408,7 +408,7 @@ int bio_mc_destroy(struct bio_xs_context *xs_ctxt, uuid_t pool_id, enum bio_mc_f
 		if (rc == -DER_NONEXIST) {
 			return 0;
 		} else if (rc) {
-			D_ERROR("Qeury data blob for pool "DF_UUID" tgt:%u failed. "DF_RC"\n",
+			D_ERROR("Query data blob for pool " DF_UUID " tgt:%u failed. " DF_RC "\n",
 				DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
 			return rc;
 		}
@@ -906,7 +906,7 @@ int bio_mc_open(struct bio_xs_context *xs_ctxt, uuid_t pool_id,
 			D_ASSERT(data_blobid == SPDK_BLOBID_INVALID);
 			return 0;
 		} else if (rc) {
-			D_ERROR("Qeury data blob for pool "DF_UUID" tgt:%u failed. "DF_RC"\n",
+			D_ERROR("Query data blob for pool " DF_UUID " tgt:%u failed. " DF_RC "\n",
 				DP_UUID(pool_id), xs_ctxt->bxc_tgt_id, DP_RC(rc));
 			return rc;
 		}
@@ -967,13 +967,13 @@ close_wal:
 close_wal_ioctxt:
 	rc1 = bio_ioctxt_close(bio_mc->mc_wal);
 	if (rc1)
-		D_ERROR("Failed to close wal ioctxt. %d", rc1);
+		D_ERROR("Failed to close wal ioctxt. %d\n", rc1);
 close_meta:
 	meta_close(bio_mc);
 close_meta_ioctxt:
 	rc1 = bio_ioctxt_close(bio_mc->mc_meta);
 	if (rc1)
-		D_ERROR("Failed to close meta ioctxt. %d", rc1);
+		D_ERROR("Failed to close meta ioctxt. %d\n", rc1);
 free_mem:
 	D_FREE(bio_mc);
 

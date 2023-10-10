@@ -10,7 +10,7 @@ from server_utils import ServerFailed
 from test_utils_pool import add_pool, check_pool_creation
 
 
-class PoolCreateTests(TestWithServers):
+class PoolCreateCapacityTests(TestWithServers):
     # pylint: disable=too-few-public-methods
     """Pool create tests.
 
@@ -38,7 +38,7 @@ class PoolCreateTests(TestWithServers):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=pool
-        :avocado: tags=PoolCreateTests,test_create_pool_quantity
+        :avocado: tags=PoolCreateCapacityTests,test_create_pool_quantity
         """
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.

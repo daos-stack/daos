@@ -735,6 +735,9 @@ vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id dtis[],
 			int count, daos_epoch_t epoch, bool rm_cos[],
 			struct vos_dtx_act_ent **daes, struct vos_dtx_cmt_ent **dces);
 
+int
+vos_dtx_abort_internal(struct vos_container *cont, struct vos_dtx_act_ent *dae, bool force);
+
 void
 vos_dtx_post_handle(struct vos_container *cont,
 		    struct vos_dtx_act_ent **daes,
@@ -1723,4 +1726,6 @@ int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
 
+void vos_lru_free_track(void *arg, daos_size_t size);
+void vos_lru_alloc_track(void *arg, daos_size_t size);
 #endif /* __VOS_INTERNAL_H__ */

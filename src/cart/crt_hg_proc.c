@@ -56,7 +56,7 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op)
 	int		rc = 0;
 
 	if (unlikely(proc == NULL)) {
-		D_ERROR("Proc is not initilalized.\n");
+		D_ERROR("Proc is not initialized.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -542,6 +542,7 @@ crt_proc_in_common(crt_proc_t proc, crt_rpc_input_t *data)
 						);
 			hdr->cch_dst_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 
+			hdr->cch_src_timeout = rpc_priv->crp_timeout_sec;
 			if (crt_is_service()) {
 				hdr->cch_src_rank =
 					crt_grp_priv_get_primary_rank(

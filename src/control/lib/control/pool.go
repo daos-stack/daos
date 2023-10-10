@@ -153,8 +153,11 @@ func (pcr *PoolCreateReq) MarshalJSON() ([]byte, error) {
 
 // request, filling in any missing fields with reasonable defaults.
 func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err error) {
+	if in.userExt == nil {
+		in.userExt = &auth.External{}
+	}
 	// ensure pool ownership is set up correctly
-	in.User, in.UserGroup, err = formatNameGroup(&auth.External{}, in.User, in.UserGroup)
+	in.User, in.UserGroup, err = formatNameGroup(in.userExt, in.User, in.UserGroup)
 	if err != nil {
 		return
 	}
@@ -232,6 +235,7 @@ type (
 	// PoolCreateReq contains the parameters for a pool create request.
 	PoolCreateReq struct {
 		poolRequest
+		userExt    auth.UserExt
 		User       string
 		UserGroup  string
 		ACL        *AccessControlList `json:"-"`
@@ -244,6 +248,7 @@ type (
 		// manual params
 		Ranks     []ranklist.Rank
 		TierBytes []uint64
+		MetaBytes uint64 `json:"meta_blob_size"`
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -428,8 +433,9 @@ type (
 
 	// PoolQueryResp contains the pool query response.
 	PoolQueryResp struct {
-		Status int32  `json:"status"`
-		UUID   string `json:"uuid"`
+		Status int32                   `json:"status"`
+		State  system.PoolServiceState `json:"state"`
+		UUID   string                  `json:"uuid"`
 		PoolInfo
 	}
 
@@ -607,7 +613,37 @@ func PoolQuery(ctx context.Context, rpcClient UnaryInvoker, req *PoolQueryReq) (
 	}
 
 	pqr := new(PoolQueryResp)
-	return pqr, convertMSResponse(ur, pqr)
+	err = convertMSResponse(ur, pqr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = pqr.UpdateState()
+	if err != nil {
+		return nil, err
+	}
+
+	return pqr, err
+}
+
+// UpdateState update the pool state.
+func (pqr *PoolQueryResp) UpdateState() error {
+	// Update the state as Ready if DAOS return code is 0.
+	if pqr.Status == 0 {
+		pqr.State = system.PoolServiceStateReady
+	}
+
+	// Pool state is unknown, if TotalTargets is 0.
+	if pqr.TotalTargets == 0 {
+		pqr.State = system.PoolServiceStateUnknown
+	}
+
+	// Update the Pool state as Degraded, if initial state is Ready and any target is disabled
+	if pqr.State == system.PoolServiceStateReady && pqr.DisabledTargets > 0 {
+		pqr.State = system.PoolServiceStateDegraded
+	}
+
+	return nil
 }
 
 // PoolQueryTargets performs a pool query targets operation on a DAOS Management Server instance,
@@ -833,7 +869,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")
 	}
 
-	resp := req.Properties
 	pbMap := make(map[uint32]*mgmtpb.PoolProperty)
 	for _, prop := range pbResp.GetProperties() {
 		if _, found := pbMap[prop.GetNumber()]; found {
@@ -842,10 +877,12 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		pbMap[prop.GetNumber()] = prop
 	}
 
-	for _, prop := range resp {
+	resp := make([]*daos.PoolProperty, 0, len(req.Properties))
+	for _, prop := range req.Properties {
 		pbProp, found := pbMap[prop.Number]
 		if !found {
-			rpcClient.Debugf("DAOS-11418: Unable to find prop %d (%s) in resp", prop.Number, prop.Name)
+			// Properties can be missing due to DAOS-11418 and DAOS-13919
+			rpcClient.Debugf("can't find prop %d (%s) in resp", prop.Number, prop.Name)
 			continue
 		}
 		switch v := pbProp.GetValue().(type) {
@@ -856,6 +893,7 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 		default:
 			return nil, errors.Errorf("unable to represent response value %+v", v)
 		}
+		resp = append(resp, prop)
 	}
 
 	return resp, nil
@@ -1047,6 +1085,9 @@ type (
 
 		// Usage contains pool usage statistics for each storage tier.
 		Usage []*PoolTierUsage `json:"usage"`
+
+		// PoolRebuildStatus contains detailed information about the pool rebuild process.
+		RebuildState string `json:"rebuild_state"`
 	}
 )
 
@@ -1195,11 +1236,13 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 			return nil, errors.New("pool query response uuid does not match request")
 		}
 
+		p.State = resp.State.String()
 		p.TargetsTotal = resp.TotalTargets
 		p.TargetsDisabled = resp.DisabledTargets
 		p.PoolLayoutVer = resp.PoolLayoutVer
 		p.UpgradeLayoutVer = resp.UpgradeLayoutVer
 		p.setUsage(resp)
+		p.RebuildState = resp.Rebuild.State.String()
 	}
 
 	sort.Slice(resp.Pools, func(i int, j int) bool {
@@ -1266,6 +1309,12 @@ func processSCMSpaceStats(log logging.Logger, filterRank filterRankFn, scmNamesp
 func processNVMeSpaceStats(log logging.Logger, filterRank filterRankFn, nvmeControllers storage.NvmeControllers, rankNVMeFreeSpace rankFreeSpaceMap) error {
 	for _, nvmeController := range nvmeControllers {
 		for _, smdDevice := range nvmeController.SmdDevices {
+			if !smdDevice.Roles.IsEmpty() && (smdDevice.Roles.OptionBits&storage.BdevRoleData) == 0 {
+				log.Debugf("Skipping SMD device %s (rank %d, ctrlr %s) not used for storing data",
+					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.Rank)
+				continue
+			}
+
 			if smdDevice.NvmeState != storage.NvmeStateNormal {
 				log.Noticef("SMD device %s (rank %d, ctrlr %s) not usable (device state %q)",
 					smdDevice.UUID, smdDevice.Rank, smdDevice.TrAddr, smdDevice.NvmeState.String())

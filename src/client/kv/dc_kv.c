@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -232,6 +232,31 @@ err_ptask:
 }
 
 int
+dc_kv_close_direct(daos_handle_t oh)
+{
+	struct dc_kv	*kv;
+	int		rc;
+
+	kv = kv_hdl2ptr(oh);
+	if (kv == NULL)
+		return -DER_NO_HDL;
+
+	rc = daos_obj_close(kv->daos_oh, NULL);
+	if (rc) {
+		D_ERROR("daos_obj_close() failed: "DF_RC"\n", DP_RC(rc));
+		kv_decref(kv);
+		return rc;
+	}
+
+	kv_hdl_unlink(kv);
+	/* -1 for ref taken here */
+	kv_decref(kv);
+	/* -1 for kv handle */
+	kv_decref(kv);
+	return 0;
+}
+
+int
 dc_kv_close(tse_task_t *task)
 {
 	daos_kv_close_t		*args = daos_task_get_args(task);
@@ -358,9 +383,10 @@ dc_kv_put(tse_task_t *task)
 	daos_obj_update_t	*update_args;
 	tse_task_t		*update_task;
 	struct io_params	*params = NULL;
+	bool			free_params = true;
 	int			rc;
 
-	if (args->key == NULL || args->buf_size == 0 || args->buf == NULL)
+	if (args->key == NULL)
 		D_GOTO(err_task, rc = -DER_INVAL);
 
 	kv = kv_hdl2ptr(args->oh);
@@ -403,6 +429,7 @@ dc_kv_put(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
 		D_GOTO(err_utask, rc);
+	free_params = false;
 
 	rc = tse_task_register_deps(task, 1, &update_task);
 	if (rc != 0)
@@ -418,7 +445,8 @@ err_utask:
 	tse_task_complete(update_task, rc);
 err_task:
 	tse_task_complete(task, rc);
-	D_FREE(params);
+	if (free_params)
+		D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;
@@ -434,6 +462,7 @@ dc_kv_get(tse_task_t *task)
 	struct io_params	*params = NULL;
 	void			*buf;
 	daos_size_t		*buf_size;
+	bool			free_params = true;
 	int			rc;
 
 	if (args->key == NULL)
@@ -493,6 +522,7 @@ dc_kv_get(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
 		D_GOTO(err_ftask, rc);
+	free_params = false;
 
 	rc = tse_task_register_deps(task, 1, &fetch_task);
 	if (rc != 0)
@@ -508,7 +538,8 @@ err_ftask:
 	tse_task_complete(fetch_task, rc);
 err_task:
 	tse_task_complete(task, rc);
-	D_FREE(params);
+	if (free_params)
+		D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;
@@ -522,6 +553,7 @@ dc_kv_remove(tse_task_t *task)
 	daos_obj_punch_t	*punch_args;
 	tse_task_t		*punch_task;
 	struct io_params	*params = NULL;
+	bool			free_params = true;
 	int			rc;
 
 	if (args->key == NULL)
@@ -553,6 +585,7 @@ dc_kv_remove(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, free_io_params_cb, &params, sizeof(params));
 	if (rc != 0)
 		D_GOTO(err_ptask, rc);
+	free_params = false;
 
 	rc = tse_task_register_deps(task, 1, &punch_task);
 	if (rc != 0)
@@ -568,7 +601,8 @@ err_ptask:
 	tse_task_complete(punch_task, rc);
 err_task:
 	tse_task_complete(task, rc);
-	D_FREE(params);
+	if (free_params)
+		D_FREE(params);
 	if (kv)
 		kv_decref(kv);
 	return rc;

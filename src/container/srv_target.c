@@ -55,10 +55,11 @@ agg_rate_ctl(void *arg)
 	if (dss_ult_exiting(req) || pool->sp_reclaim == DAOS_RECLAIM_DISABLED)
 		return -1;
 
-	/* If the container is discarding the object mostly due to rebuild failure
-	 * reclaim, let's abort the aggregation to let discard proceed.
-	 */
-	if (cont->sc_discarding)
+	/*
+	 * XXX temporary workaround: EC aggregation needs to be paused during rebuilding
+	 * to avoid the race between EC rebuild and EC aggregation.
+	 **/
+	if (pool->sp_rebuilding && cont->sc_ec_agg_active && !param->ap_vos_agg)
 		return -1;
 
 	/* System is idle, let aggregation run in tight mode */
@@ -96,7 +97,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	/* The provided prop entry types should cover the types used in
 	 * daos_props_2cont_props().
 	 */
-	props = daos_prop_alloc(16);
+	props = daos_prop_alloc(17);
 	if (props == NULL)
 		return -DER_NOMEM;
 
@@ -116,6 +117,7 @@ ds_cont_get_props(struct cont_props *cont_props, uuid_t pool_uuid,
 	props->dpp_entries[13].dpe_type = DAOS_PROP_CO_REDUN_LVL;
 	props->dpp_entries[14].dpe_type = DAOS_PROP_CO_OBJ_VERSION;
 	props->dpp_entries[15].dpe_type = DAOS_PROP_CO_STATUS;
+	props->dpp_entries[16].dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
 
 	rc = cont_iv_prop_fetch(pool_uuid, cont_uuid, props);
 	if (rc == DER_SUCCESS)
@@ -190,14 +192,11 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
 		return false;
 	}
 
-	if (pool->sp_reintegrating) {
-		if (vos_agg)
-			cont->sc_vos_agg_active = 0;
-		else
-			cont->sc_ec_agg_active = 0;
-		D_DEBUG(DB_EPC, DF_CONT": skip %s aggregation during reintegration %d.\n",
+	if (pool->sp_rebuilding && !vos_agg) {
+		cont->sc_ec_agg_active = 0;
+		D_DEBUG(DB_EPC, DF_CONT": skip EC aggregation during rebuild %d.\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-			vos_agg ? "VOS" : "EC", pool->sp_reintegrating);
+			pool->sp_rebuilding);
 		return false;
 	}
 
@@ -437,8 +436,8 @@ out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
 
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating finished. "DF_RC"\n",
-		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, DP_RC(rc));
+	D_DEBUG(DB_EPC, DF_CONT "[%d]: Aggregating finished. %d\n",
+		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), tgt_id, rc);
 free:
 	if (snapshots != NULL && snapshots != snapshots_local)
 		D_FREE(snapshots);
@@ -477,9 +476,9 @@ cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
 		if (rc == -DER_SHUTDOWN) {
 			break;	/* pool destroyed */
 		} else if (rc < 0) {
-			D_ERROR(DF_CONT": VOS aggregate failed. "DF_RC"\n",
-				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
-				DP_RC(rc));
+			DL_CDEBUG(rc == -DER_BUSY, DB_EPC, DLOG_ERR, rc,
+				  DF_CONT ": VOS aggregate failed",
+				  DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
 		} else if (sched_req_space_check(req) != SCHED_SPACE_PRESS_NONE) {
 			/* Don't sleep too long when there is space pressure */
 			msecs = 2ULL * 100;
@@ -860,9 +859,9 @@ cont_child_start(struct ds_pool_child *pool_child, const uuid_t co_uuid,
 			       pool_child->spc_uuid, true /* create */,
 			       &cont_child);
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD,
-			 DF_CONT"[%d]: Load container error:%d\n",
-			 DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id, rc);
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MD, rc,
+			  DF_CONT "[%d]: Load container error",
+			  DP_CONT(pool_child->spc_uuid, co_uuid), tgt_id);
 		return rc;
 	}
 
@@ -1464,10 +1463,8 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 			D_GOTO(err_hdl, rc);
 
 		hdl->sch_cont = cont;
-		if (rc == 1) {
+		if (rc == 1)
 			poh = hdl->sch_cont->sc_pool->spc_hdl;
-			rc = 0;
-		}
 	}
 
 	uuid_copy(hdl->sch_uuid, cont_hdl_uuid);
@@ -1627,7 +1624,22 @@ ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
 	struct cont_tgt_open_arg arg = { 0 };
 	struct dss_coll_ops	coll_ops = { 0 };
 	struct dss_coll_args	coll_args = { 0 };
+	struct ds_pool		*pool;
 	int			rc;
+
+	/* Only for debugging purpose to compare srv_cont_hdl with cont_hdl_uuid */
+	rc = ds_pool_lookup(pool_uuid, &pool);
+	if (rc != 0) {
+		D_DEBUG(DB_MD, DF_UUID" lookup pool failed: "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		rc = -DER_NO_HDL;
+		return rc;
+	}
+
+	if (uuid_compare(pool->sp_srv_cont_hdl, cont_hdl_uuid) == 0 && sec_capas == 0)
+		D_WARN("srv hdl "DF_UUID" capas is "DF_X64"\n",
+		       DP_UUID(cont_hdl_uuid), sec_capas);
+	ds_pool_put(pool);
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_hdl_uuid, cont_hdl_uuid);
@@ -1741,18 +1753,17 @@ struct xstream_cont_query {
 static int
 cont_query_one(void *vin)
 {
-	struct dss_coll_stream_args	*reduce	   = vin;
-	struct dss_stream_arg_type	*streams   = reduce->csa_streams;
-	struct dss_module_info		*info	   = dss_get_module_info();
-	int				tid	   = info->dmi_tgt_id;
-	struct xstream_cont_query	*pack_args = streams[tid].st_arg;
-	struct cont_tgt_query_in	*in	   = pack_args->xcq_rpc_in;
-	struct ds_pool_hdl		*pool_hdl;
-	struct ds_pool_child		*pool_child;
-	daos_handle_t			vos_chdl;
-	vos_cont_info_t			vos_cinfo;
-	char				*opstr;
-	int				rc;
+	struct dss_coll_stream_args *reduce    = vin;
+	struct dss_stream_arg_type  *streams   = reduce->csa_streams;
+	struct dss_module_info      *info      = dss_get_module_info();
+	int                          tid       = info->dmi_tgt_id;
+	struct xstream_cont_query   *pack_args = streams[tid].st_arg;
+	struct cont_tgt_query_in    *in        = pack_args->xcq_rpc_in;
+	struct ds_pool_hdl          *pool_hdl;
+	struct ds_pool_child        *pool_child;
+	daos_handle_t                vos_chdl;
+	vos_cont_info_t              vos_cinfo;
+	int                          rc;
 
 	info = dss_get_module_info();
 	pool_hdl = ds_pool_hdl_lookup(in->tqi_pool_uuid);
@@ -1763,22 +1774,17 @@ cont_query_one(void *vin)
 	if (pool_child == NULL)
 		D_GOTO(ds_pool_hdl, rc = -DER_NO_HDL);
 
-	opstr = "Opening VOS container open handle\n";
-	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid,
-			   &vos_chdl);
+	rc = vos_cont_open(pool_child->spc_hdl, in->tqi_cont_uuid, &vos_chdl);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed %s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Opening VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(ds_child, rc);
 	}
 
-	opstr = "Querying VOS container open handle\n";
 	rc = vos_cont_query(vos_chdl, &vos_cinfo);
 	if (rc != 0) {
-		D_ERROR(DF_CONT": Failed :%s: "DF_RC"",
-			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), opstr,
-			DP_RC(rc));
+		D_ERROR(DF_CONT ": Querying VOS container open handle failed: " DF_RC "\n",
+			DP_CONT(in->tqi_pool_uuid, in->tqi_cont_uuid), DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	pack_args->xcq_hae = vos_cinfo.ci_hae;

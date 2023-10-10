@@ -33,13 +33,13 @@ obj_shard_decref(struct dc_obj_shard *shard)
 	bool			 release = false;
 
 	D_ASSERT(shard != NULL);
-	D_ASSERT(shard->do_ref > 0);
 	D_ASSERT(shard->do_obj != NULL);
 
 	obj = shard->do_obj;
 	layout = obj_shard2layout(shard);
 
 	D_SPIN_LOCK(&obj->cob_spin);
+	D_ASSERT(shard->do_ref > 0);
 	if (--(shard->do_ref) == 0) {
 		layout->do_open_count--;
 		if (layout->do_open_count == 0 && layout != obj->cob_shards)
@@ -1155,7 +1155,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
 			if (rc != 0)
-				D_ERROR("crt_req_set_timeout error: %d", rc);
+				D_ERROR("crt_req_set_timeout error: %d\n", rc);
 		    }
 
 		rc = daos_rpc_send(req, task);
@@ -1418,9 +1418,8 @@ verify_csum_cb(daos_key_desc_t *kd, void *buf, unsigned int size, void *arg)
 					     &enum_type_val, ci_to_compare);
 
 		if (rc != 0) {
-			D_ERROR("daos_csummer_verify_key error for %s: %d",
-				kd->kd_val_type == OBJ_ITER_AKEY ?
-				"AKEY" : "DKEY", rc);
+			D_ERROR("daos_csummer_verify_key error for %s: %d\n",
+				kd->kd_val_type == OBJ_ITER_AKEY ? "AKEY" : "DKEY", rc);
 			return rc;
 		}
 		break;
@@ -1709,6 +1708,8 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 		if (daos_anchor_get_flags(args->la_dkey_anchor) &
 		    DIOF_FOR_MIGRATION)
 			oei->oei_flags |= ORF_FOR_MIGRATION;
+		if (daos_anchor_get_flags(args->la_dkey_anchor) & DIOF_RECX_REVERSE)
+			oei->oei_flags |= ORF_DESCENDING_ORDER;
 	}
 	if (args->la_akey_anchor != NULL)
 		enum_anchor_copy(&oei->oei_akey_anchor, args->la_akey_anchor);
@@ -1892,7 +1893,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 	if (rc != 0) {
 		if (rc == -DER_NONEXIST) {
-			D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_LOCK(&cb_args->obj->cob_spin);
 			D_GOTO(set_max_epoch, rc = 0);
 		}
 
@@ -1904,9 +1905,9 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				cb_args->rpc, opc, rc);
 		D_GOTO(out, rc);
 	}
-	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
-	D_RWLOCK_WRLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_LOCK(&cb_args->obj->cob_spin);
+	*cb_args->map_ver = obj_reply_map_version_get(rpc);
 
 	if (flags == 0)
 		goto set_max_epoch;
@@ -1922,7 +1923,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 
 		if (okqo->okqo_dkey.iov_len != sizeof(uint64_t)) {
 			D_ERROR("Invalid Dkey obtained\n");
-			D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+			D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 			D_GOTO(out, rc = -DER_IO);
 		}
 
@@ -1984,7 +1985,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 set_max_epoch:
 	if (cb_args->max_epoch && *cb_args->max_epoch < okqo->okqo_max_epoch)
 		*cb_args->max_epoch = okqo->okqo_max_epoch;
-	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
+	D_SPIN_UNLOCK(&cb_args->obj->cob_spin);
 
 out:
 	crt_req_decref(rpc);
@@ -2052,9 +2053,9 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch, uint
 	okqi->okqi_oid			= oid;
 	d_iov_set(&okqi->okqi_dkey, NULL, 0);
 	d_iov_set(&okqi->okqi_akey, NULL, 0);
-	if (dkey != NULL)
+	if (dkey != NULL && !(flags & DAOS_GET_DKEY))
 		okqi->okqi_dkey		= *dkey;
-	if (akey != NULL)
+	if (akey != NULL && !(flags & DAOS_GET_AKEY))
 		okqi->okqi_akey		= *akey;
 	if (epoch->oe_flags & DTX_EPOCH_UNCERTAIN)
 		okqi->okqi_flags	= ORF_EPOCH_UNCERTAIN;
@@ -2212,7 +2213,6 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	struct obj_k2a_args		*k2a_args = (struct obj_k2a_args *)arg;
 	struct obj_key2anchor_in	*oki;
 	struct obj_key2anchor_out	*oko;
-	uint64_t			save_sub_anchor;
 	int				ret = task->dt_result;
 	int				rc = 0;
 
@@ -2256,9 +2256,7 @@ dc_k2a_cb(tse_task_t *task, void *arg)
 	}
 
 	*k2a_args->eaa_map_ver = obj_reply_map_version_get(k2a_args->rpc);
-	save_sub_anchor = k2a_args->anchor->da_sub_anchors;
 	enum_anchor_copy(k2a_args->anchor, &oko->oko_anchor);
-	k2a_args->anchor->da_sub_anchors = save_sub_anchor;
 	dc_obj_shard2anchor(k2a_args->anchor, k2a_args->shard);
 out:
 	if (k2a_args->eaa_obj != NULL)
@@ -2332,7 +2330,7 @@ dc_obj_shard_key2anchor(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	cb_args.eaa_map_ver = &args->ka_auxi.map_ver;
 	cb_args.epoch = &args->ka_auxi.epoch;
 	cb_args.th = &obj_args->th;
-	cb_args.anchor = obj_args->anchor;
+	cb_args.anchor = args->ka_anchor;
 	cb_args.shard = obj_shard->do_shard_idx;
 	rc = tse_task_register_comp_cb(task, dc_k2a_cb, &cb_args, sizeof(cb_args));
 	if (rc != 0)

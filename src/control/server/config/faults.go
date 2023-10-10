@@ -88,7 +88,7 @@ var (
 	)
 	FaultConfigTooManyLayersInFaultDomain = serverConfigFault(
 		code.ServerConfigFaultDomainTooManyLayers,
-		"only a single fault domain layer below the root is supported",
+		"the fault domain path may have a maximum of 2 levels below the root",
 		"update either the fault domain ('fault_path' parameter) or callback script ('fault_cb' parameter) and restart the control server",
 	)
 	FaultConfigHugepagesDisabled = serverConfigFault(

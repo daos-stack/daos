@@ -851,8 +851,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		rc = umem_tx_add_ptr(vos_obj2umm(obj), krec,
 				     sizeof(*krec));
 		if (rc != 0) {
-			D_ERROR("Failed to add key record to transaction,"
-				" rc = %d", rc);
+			D_ERROR("Failed to add key record to transaction: " DF_RC "\n", DP_RC(rc));
 			goto out;
 		}
 	}

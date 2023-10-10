@@ -25,8 +25,8 @@
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
 void ds_cont_unlock_metadata(struct cont_svc *svc);
-int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
-			  const uuid_t pool_uuid);
+int
+     ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid);
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
@@ -71,8 +71,7 @@ struct ds_cont_child {
 				 sc_stopping:1,
 				 sc_vos_agg_active:1,
 				 sc_ec_agg_active:1,
-				 sc_scrubbing:1,
-				 sc_discarding:1;
+				 sc_scrubbing:1;
 	uint32_t		 sc_dtx_batched_gen;
 	/* Tracks the schedule request for aggregation ULT */
 	struct sched_request	*sc_agg_req;

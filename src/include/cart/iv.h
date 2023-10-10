@@ -142,7 +142,7 @@ typedef int (*crt_iv_on_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_fetch() request.
  * \param[in] cb_arg		arguments for \a cb.
  *
@@ -165,7 +165,7 @@ typedef void (*crt_iv_pre_fetch_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_update() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -184,7 +184,7 @@ typedef void (*crt_iv_pre_update_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] ivns		the local handle of the IV namespace
  * \param[in] iv_key		key of the IV
  * \param[in] cb		a callback which must be called or scheduled by
- *				the user in order to compelete the handling of
+ *				the user in order to complete the handling of
  *				the crt_iv_sync() request.
  * \param[in] cb_arg		arguments for \a cb.
  */
@@ -287,11 +287,8 @@ typedef int (*crt_iv_on_get_cb_t)(crt_iv_namespace_t ivns,
  * \param[in] iv_value		iv_value buffers to return
  * \param[in] arg		private user data
  *
- * \return			DER_SUCCESS on success, negative value if error
  */
-typedef int (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns,
-				  d_sg_list_t *iv_value,
-				  void *arg);
+typedef void (*crt_iv_on_put_cb_t)(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *arg);
 
 /**
  * Compares two passed iv keys 'key1' and 'key2' and returns either

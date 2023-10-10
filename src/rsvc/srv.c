@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -78,6 +78,7 @@ alloc_init(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	D_ASSERT(svc->s_id.iov_buf_len >= svc->s_id.iov_len);
 	uuid_copy(svc->s_db_uuid, db_uuid);
 	svc->s_state = DS_RSVC_DOWN;
+	svc->s_map_distd = ABT_THREAD_NULL;
 
 	rc = rsvc_class(class)->sc_name(&svc->s_id, &svc->s_name);
 	if (rc != 0)
@@ -167,8 +168,11 @@ ds_rsvc_put(struct ds_rsvc *svc)
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
 	svc->s_ref--;
 	if (svc->s_ref == 0) {
-		if (svc->s_db != NULL) /* "nodb" */
+		if (svc->s_db != NULL) { /* "nodb" */
 			rdb_stop_and_close(svc->s_db);
+			if (svc->s_destroy)
+				rdb_destroy(svc->s_db_path, svc->s_db_uuid); /* ignore any error */
+		}
 		fini_free(svc);
 	}
 }
@@ -401,16 +405,16 @@ init_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
+	D_ASSERT(svc->s_map_distd == ABT_THREAD_NULL);
 	svc->s_map_dist = false;
 	svc->s_map_distd_stop = false;
 
 	ds_rsvc_get(svc);
 	get_leader(svc);
-	rc = dss_ult_create(map_distd, svc, DSS_XS_SELF, 0, 0,
-			    &svc->s_map_distd);
+	rc = dss_ult_create(map_distd, svc, DSS_XS_SELF, 0, 0, &svc->s_map_distd);
 	if (rc != 0) {
-		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name,
-			DP_RC(rc));
+		D_ERROR("%s: failed to start map_distd: "DF_RC"\n", svc->s_name, DP_RC(rc));
+		svc->s_map_distd = ABT_THREAD_NULL;
 		put_leader(svc);
 		ds_rsvc_put(svc);
 	}
@@ -430,9 +434,8 @@ fini_map_distd(struct ds_rsvc *svc)
 {
 	int rc;
 
-	rc = ABT_thread_join(svc->s_map_distd);
-	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
-	ABT_thread_free(&svc->s_map_distd);
+	rc = ABT_thread_free(&svc->s_map_distd);
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 }
 
 static int
@@ -531,40 +534,37 @@ out_mutex:
 static void
 rsvc_step_down_cb(struct rdb *db, uint64_t term, void *arg)
 {
-	struct ds_rsvc *svc = arg;
+	struct ds_rsvc    *svc = arg;
+	enum ds_rsvc_state entry_state;
 
 	D_DEBUG(DB_MD, "%s: stepping down from "DF_U64"\n", svc->s_name, term);
 	ABT_mutex_lock(svc->s_mutex);
-	D_ASSERTF(svc->s_term == term, DF_U64" == "DF_U64"\n", svc->s_term,
-		  term);
-	D_ASSERT(svc->s_state == DS_RSVC_UP_EMPTY ||
-		 svc->s_state == DS_RSVC_UP);
+	D_ASSERTF(svc->s_term == term, DF_U64" == "DF_U64"\n", svc->s_term, term);
+	entry_state = svc->s_state;
+	D_ASSERT(entry_state == DS_RSVC_UP_EMPTY || entry_state == DS_RSVC_UP);
 
-	if (svc->s_state == DS_RSVC_UP) {
-		/* Stop accepting new leader references. */
-		change_state(svc, DS_RSVC_DRAINING);
+	/* Stop accepting new leader references (ds_rsvc_lookup_leader). */
+	change_state(svc, DS_RSVC_DRAINING);
 
-		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-			drain_map_distd(svc);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		drain_map_distd(svc);
 
+	if (entry_state == DS_RSVC_UP)
 		rsvc_class(svc->s_class)->sc_drain(svc);
 
-		/* TODO: Abort all in-flight RPCs we sent. */
+	/* Wait for all leader references to be released. */
+	for (;;) {
+		if (svc->s_leader_ref == 0)
+			break;
+		D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n", svc->s_name, svc->s_leader_ref);
+		ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
+	}
 
-		/* Wait for all leader references to be released. */
-		for (;;) {
-			if (svc->s_leader_ref == 0)
-				break;
-			D_DEBUG(DB_MD, "%s: waiting for %d leader refs\n",
-				svc->s_name, svc->s_leader_ref);
-			ABT_cond_wait(svc->s_leader_ref_cv, svc->s_mutex);
-		}
-
+	if (entry_state == DS_RSVC_UP)
 		rsvc_class(svc->s_class)->sc_step_down(svc);
 
-		if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
-			fini_map_distd(svc);
-	}
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		fini_map_distd(svc);
 
 	change_state(svc, DS_RSVC_DOWN);
 	ABT_mutex_unlock(svc->s_mutex);
@@ -871,6 +871,7 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, uint64_t
 				goto out;
 			}
 		}
+		D_ASSERT(!svc->s_destroy);
 		if (svc->s_stop)
 			rc = -DER_CANCELED;
 		else
@@ -927,8 +928,10 @@ stop(struct ds_rsvc *svc, bool destroy)
 	while (svc->s_state != DS_RSVC_DOWN)
 		ABT_cond_wait(svc->s_state_cv, svc->s_mutex);
 
-	if (destroy)
-		rc = remove(svc->s_db_path);
+	if (destroy) {
+		D_ASSERT(d_list_empty(&svc->s_entry));
+		svc->s_destroy = true;
+	}
 
 	ABT_mutex_unlock(svc->s_mutex);
 	ds_rsvc_put(svc);
@@ -1308,7 +1311,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  *
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
- * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * for collective RPC, so we have to use both ranks and excluded for the moment,
  * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
@@ -1425,7 +1428,7 @@ ds_rsvc_get_md_cap(void)
 	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
-	n = atoi(v);    /* FIXME DAOS-9846 */
+	n = atoi(v);
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -19,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
 	"github.com/daos-stack/daos/src/control/fault"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
@@ -35,6 +37,7 @@ type mainOpts struct {
 	// TODO(DAOS-3129): This should be -d, but it conflicts with the start
 	// subcommand's -d flag when we default to running it.
 	Debug   bool `short:"b" long:"debug" description:"Enable debug output"`
+	JSON    bool `long:"json" short:"j" description:"enable JSON output"`
 	JSONLog bool `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	Syslog  bool `long:"syslog" description:"Enable logging to syslog"`
 
@@ -54,9 +57,19 @@ type mainOpts struct {
 	preExecTests []execTestFn
 }
 
-type versionCmd struct{}
+type versionCmd struct {
+	cmdutil.JSONOutputCmd
+}
 
 func (cmd *versionCmd) Execute(_ []string) error {
+	if cmd.JSONOutputEnabled() {
+		buf, err := build.MarshalJSON(build.ControlPlaneName)
+		if err != nil {
+			return err
+		}
+		return cmd.OutputJSON(json.RawMessage(buf), nil)
+	}
+
 	fmt.Println(build.String(build.ControlPlaneName))
 	return nil
 }
@@ -71,12 +84,19 @@ func exitWithError(log *logging.LeveledLogger, err error) {
 }
 
 func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error {
+	var wroteJSON atm.Bool
 	p := flags.NewParser(opts, flags.HelpFlag|flags.PassDoubleDash)
 	p.SubcommandsOptional = false
 	p.CommandHandler = func(cmd flags.Commander, cmdArgs []string) error {
 		if len(cmdArgs) > 0 {
 			// don't support positional arguments, extra cmdArgs are unexpected
 			return errors.Errorf("unexpected commandline arguments: %v", cmdArgs)
+		}
+
+		if jsonCmd, ok := cmd.(cmdutil.JSONOutputter); ok && opts.JSON {
+			jsonCmd.EnableJSONOutput(os.Stdout, &wroteJSON)
+			// disable output on stdout other than JSON
+			log.ClearLevel(logging.LogLevelInfo)
 		}
 
 		switch cmd.(type) {
@@ -144,11 +164,11 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 	// Parse commandline flags which override options loaded from config.
 	_, err := p.ParseArgs(args)
-	if err != nil {
-		return err
+	if opts.JSON && wroteJSON.IsFalse() {
+		cmdutil.OutputJSON(os.Stdout, nil, err)
 	}
 
-	return nil
+	return err
 }
 
 func main() {

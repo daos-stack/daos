@@ -32,7 +32,7 @@ class ObjUpdateBadParam(TestWithServers):
             self.log.info(traceback.format_exc())
             self.fail("Test failed during setup .\n")
 
-    def test_bad_handle(self):
+    def test_obj_update_bad_handle(self):
         """
         Test ID: DAOS-1376
 
@@ -41,7 +41,7 @@ class ObjUpdateBadParam(TestWithServers):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=object
-        :avocado: tags=ObjUpdateBadParam,test_bad_handle
+        :avocado: tags=ObjUpdateBadParam,test_obj_update_bad_handle
         """
         try:
             # create an object and write some data into it

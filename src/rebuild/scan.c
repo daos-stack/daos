@@ -646,7 +646,7 @@ rebuild_object(struct rebuild_tgt_pool_tracker *rpt, uuid_t co_uuid, daos_unit_o
 	rc = 0;
 
 	if (myrank == target->ta_comp.co_rank && mytarget == target->ta_comp.co_index &&
-	    rpt->rt_rebuild_op != RB_OP_UPGRADE) {
+	    (shard == oid.id_shard) && rpt->rt_rebuild_op != RB_OP_UPGRADE) {
 		D_DEBUG(DB_REBUILD, DF_UOID" %u/%u already on the target shard\n",
 			DP_UOID(oid), myrank, mytarget);
 		return 0;
@@ -718,6 +718,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	crt_group_rank(rpt->rt_pool->sp_group, &myrank);
 	md.omd_ver = rpt->rt_rebuild_ver;
 	md.omd_fdom_lvl = arg->co_props.dcp_redun_lvl;
+	md.omd_pdom_lvl = arg->co_props.dcp_perf_domain;
+	md.omd_pda = daos_cont_props2pda(&arg->co_props, daos_oclass_is_ec(oc_attr));
 	tgts = tgt_array;
 	shards = shard_array;
 	switch (rpt->rt_rebuild_op) {
@@ -738,7 +740,8 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	case RB_OP_UPGRADE:
 		if (oid.id_layout_ver < rpt->rt_new_layout_ver) {
 			rc = obj_layout_diff(map, oid, rpt->rt_new_layout_ver,
-					     arg->co_props.dcp_obj_version, &md, tgts, shards);
+					     arg->co_props.dcp_obj_version, &md,
+					     tgts, shards, LOCAL_ARRAY_SIZE);
 			/* Then only upgrade the layout version */
 			if (rc == 0) {
 				rc = vos_obj_layout_upgrade(param->ip_hdl, oid,
@@ -753,11 +756,12 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	}
 
 	if (rc <= 0) {
-		D_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, DF_UOID" rebuild shards:" DF_RC"\n",
-			 DP_UOID(oid), DP_RC(rc));
+		DL_CDEBUG(rc == 0, DB_REBUILD, DLOG_ERR, rc, DF_UOID " rebuild shards",
+			  DP_UOID(oid));
 		D_GOTO(out, rc);
 	}
 
+	D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID" rebuild_nr %d\n", DP_UOID(oid), rc);
 	rebuild_nr = rc;
 	rc = 0;
 	for (i = 0; i < rebuild_nr; i++) {
@@ -768,9 +772,9 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			ent->ie_vis_flags & VOS_VIS_FLAG_COVERED ? "no" : "yes");
 
 		/* Ignore the shard if it is not in the same group of failure shard */
-		if (oid.id_shard / grp_size != shards[i] / grp_size) {
-			D_DEBUG(DB_REBUILD, "stale object "DF_UOID" shards %u grp_size %u\n",
-				DP_UOID(oid), shards[i], grp_size);
+		if ((int)tgts[i] == -1 || oid.id_shard / grp_size != shards[i] / grp_size) {
+			D_DEBUG(DB_REBUILD, "i %d stale object "DF_UOID" shards %u grp_size %u tgt %d\n",
+				i, DP_UOID(oid), shards[i], grp_size, (int)tgts[i]);
 			continue;
 		}
 
@@ -852,16 +856,30 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		return rc;
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_RECLAIM ||
-	    rpt->rt_rebuild_op == RB_OP_FAIL_RECLAIM) {
-		rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
-		if (rc != 0) {
-			D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
-				DP_UUID(entry->ie_couuid), DP_RC(rc));
-			vos_cont_close(coh);
-			return rc;
+	rc = ds_cont_child_lookup(rpt->rt_pool_uuid, entry->ie_couuid, &cont_child);
+	if (rc != 0) {
+		D_ERROR("Container "DF_UUID", ds_cont_child_lookup failed: "DF_RC"\n",
+			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		vos_cont_close(coh);
+		return rc;
+	}
+
+	/* Wait for EC aggregation to finish. NB: migrate needs to wait for EC aggregation to finish */
+	while (cont_child->sc_ec_agg_active) {
+		D_ASSERTF(rpt->rt_pool->sp_rebuilding >= 0, DF_UUID" rebuilding %d\n",
+			  DP_UUID(rpt->rt_pool_uuid), rpt->rt_pool->sp_rebuilding);
+			/* Wait for EC aggregation to abort before discard the object */
+		D_DEBUG(DB_REBUILD, DF_UUID" wait for ec agg abort.\n",
+			DP_UUID(entry->ie_couuid));
+		dss_sleep(1000);
+		if (rpt->rt_abort || rpt->rt_finishing) {
+			D_DEBUG(DB_REBUILD, DF_CONT" rebuild op %s ver %u abort %u/%u.\n",
+				DP_CONT(rpt->rt_pool_uuid, entry->ie_couuid),
+				RB_OP_STR(rpt->rt_rebuild_op), rpt->rt_rebuild_ver,
+				rpt->rt_abort, rpt->rt_finishing);
+			*acts |= VOS_ITER_CB_ABORT;
+			D_GOTO(close, rc);
 		}
-		cont_child->sc_discarding = 1;
 	}
 
 	epoch.oe_value = rpt->rt_stable_epoch;
@@ -887,14 +905,14 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
 	dtx_end(dth, NULL, rc);
 
+	*acts |= VOS_ITER_CB_YIELD;
+
+close:
 	vos_cont_close(coh);
 
-	if (cont_child != NULL) {
-		cont_child->sc_discarding = 0;
+	if (cont_child != NULL)
 		ds_cont_child_put(cont_child);
-	}
 
-	*acts |= VOS_ITER_CB_YIELD;
 	D_DEBUG(DB_REBUILD, DF_UUID"/"DF_UUID" iterate cont done: "DF_RC"\n",
 		DP_UUID(rpt->rt_pool_uuid), DP_UUID(entry->ie_couuid),
 		DP_RC(rc));
@@ -1005,7 +1023,12 @@ rebuild_scan_leader(void *data)
 	while (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
 		if (!rpt->rt_abort && !rpt->rt_finishing) {
 			ABT_mutex_lock(rpt->rt_lock);
-			ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			if (rpt->rt_global_dtx_resync_version < rpt->rt_rebuild_ver) {
+				D_INFO(DF_UUID "wait for global dtx %u rebuild ver %u\n",
+				       DP_UUID(rpt->rt_pool_uuid),
+				       rpt->rt_global_dtx_resync_version, rpt->rt_rebuild_ver);
+				ABT_cond_wait(rpt->rt_global_dtx_wait_cond, rpt->rt_lock);
+			}
 			ABT_mutex_unlock(rpt->rt_lock);
 		}
 		if (rpt->rt_abort || rpt->rt_finishing) {
@@ -1013,7 +1036,6 @@ rebuild_scan_leader(void *data)
 			       DP_UUID(rpt->rt_pool_uuid), DP_RC(-DER_SHUTDOWN));
 			D_GOTO(out, rc = -DER_SHUTDOWN);
 		}
-
 	}
 
 	D_DEBUG(DB_REBUILD, "rebuild scan collective "DF_UUID" begin.\n",
@@ -1153,8 +1175,7 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 
-	if (rpt->rt_rebuild_op == RB_OP_REINT)
-		rpt->rt_pool->sp_reintegrating++; /* reset in rebuild_tgt_fini */
+	rpt->rt_pool->sp_rebuilding++; /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */
