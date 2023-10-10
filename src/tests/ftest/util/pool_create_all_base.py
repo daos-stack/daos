@@ -4,6 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import sys
+import time
 
 from avocado.core.exceptions import TestFail
 
@@ -51,8 +52,8 @@ class PoolCreateAllTestBase(TestWithServers):
             host_size += len(host_storage["hosts"].split(','))
 
             scm_bytes = 0
-            for scm_devices in host_storage["storage"]["scm_namespaces"]:
-                scm_bytes += scm_devices["mount"]["usable_bytes"]
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                scm_bytes += scm_device["mount"]["usable_bytes"]
             scm_engine_bytes = min(scm_engine_bytes, scm_bytes)
 
             if host_storage["storage"]["nvme_devices"] is None:
@@ -73,6 +74,26 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_engine_bytes = 0
 
         return host_size * scm_engine_bytes, host_size * nvme_engine_bytes
+
+    def find_hosts_low_scm(self, min_ratio):
+        """Returns list of hosts with available SCM storage below min_ratio.
+
+        Args:
+            min_ratio (int): Minimal storage of available SCM.
+
+        Returns:
+            list: List of host storage tuple without enough available SCM storage.
+        """
+        result = self.dmg.storage_query_usage()
+        hosts = []
+        for host_storage in result["response"]["HostStorage"].values():
+            for scm_device in host_storage["storage"]["scm_namespaces"]:
+                avail_ratio = scm_device["mount"]["avail_bytes"] * 100
+                avail_ratio /= scm_device["mount"]["total_bytes"]
+                if avail_ratio < min_ratio:
+                    hosts.append((host_storage["hosts"], scm_device["mount"]["path"], avail_ratio))
+
+        return hosts
 
     def check_pool_full_storage(self, scm_delta_bytes, nvme_delta_bytes=None, ranks=None):
         """Check the creation of one pool with all the storage capacity.
@@ -200,7 +221,6 @@ class PoolCreateAllTestBase(TestWithServers):
             nvme_delta_bytes (int, optional): Allowed difference of the NVMe pool storage.  Defaults
                 to None.
         """
-
         self.add_pool_qty(pool_count, namespace="/run/pool/*", create=False)
 
         first_pool_size = None
@@ -214,6 +234,23 @@ class PoolCreateAllTestBase(TestWithServers):
             self.log.info(
                 "Pool %d created: scm_size=%d, nvme_size=%d", index, *pool_size)
             self.pool[index].destroy()
+
+            self.log.info("Checking SCM available storage")
+            timeout = 3
+            while timeout > 0:
+                hosts = self.find_hosts_low_scm(90)
+                if not hosts:
+                    break
+                for it in hosts:
+                    self.log.info(
+                        "Find hosts without enough available SCM: "
+                        "timeout=%is, hosts=%s, path=%s, ratio=%f%%",
+                        timeout, *it)
+                time.sleep(1)
+                timeout -= 1
+            self.assertNotEqual(
+                0, timeout,
+                "Destroying pool did not restore available SCM storage space")
 
             if first_pool_size is None:
                 first_pool_size = pool_size
@@ -254,7 +291,7 @@ class PoolCreateAllTestBase(TestWithServers):
                 engine.  Defaults to None.
         """
         self.log.info("Retrieving available size")
-        result = self.server_managers[0].dmg.storage_query_usage()
+        result = self.dmg.storage_query_usage()
 
         scm_used_bytes = [sys.maxsize, 0]
         if nvme_delta_bytes is not None:

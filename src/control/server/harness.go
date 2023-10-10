@@ -62,7 +62,7 @@ type Engine interface {
 	IsReady() bool
 	LocalState() system.MemberState
 	RemoveSuperblock() error
-	Run(context.Context, bool)
+	Run(context.Context)
 	SetupRank(context.Context, ranklist.Rank, uint32) error
 	Stop(os.Signal) error
 	OnInstanceExit(...onInstanceExitFn)
@@ -260,7 +260,7 @@ func (h *EngineHarness) Start(ctx context.Context, db dbLeader, cfg *config.Serv
 	defer h.started.SetFalse()
 
 	for _, ei := range h.Instances() {
-		ei.Run(ctx, cfg.RecreateSuperblocks)
+		ei.Run(ctx)
 	}
 
 	h.OnDrpcFailure(newOnDrpcFailureFn(h.log, db))
