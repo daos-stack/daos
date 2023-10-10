@@ -1064,7 +1064,7 @@ struct bio_wal_info {
 };
 
 /*
- * Qeury WAL total blocks & used blocks.
+ * Query WAL total blocks & used blocks.
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 

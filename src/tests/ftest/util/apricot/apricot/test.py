@@ -175,10 +175,11 @@ class Test(avocadoTest):
                 self.rand_seed = int(env_seed)
             except ValueError:
                 self.log.error(
-                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED does not define a valid integrer: got='%s'",
+                    "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
+                    "does not define a valid integrer: got='%s'",
                     env_seed)
                 raise
-        self.log.info("Test.random seed = %d",self.rand_seed)
+        self.log.info("Test.random seed = %d", self.rand_seed)
         self.random = random.Random(self.rand_seed)
 
     def add_test_data(self, filename, data):
@@ -209,8 +210,8 @@ class Test(avocadoTest):
         try:
             with open(self.cancel_file) as skip_handle:
                 skip_list = skip_handle.readlines()
-        except Exception as excpt:  # pylint: disable=broad-except
-            skip_process_error("Unable to read skip list: {}".format(excpt))
+        except Exception as err:  # pylint: disable=broad-except
+            skip_process_error("Unable to read skip list: {}".format(err))
             skip_list = []
 
         for item in skip_list:
@@ -232,9 +233,9 @@ class Test(avocadoTest):
                             return
                 except exceptions.TestCancel:   # pylint: disable=try-except-raise
                     raise
-                except Exception as excpt:      # pylint: disable=broad-except
+                except Exception as err:      # pylint: disable=broad-except
                     skip_process_error("Unable to read commit title: "
-                                       "{}".format(excpt))
+                                       "{}".format(err))
                 # Nope, but there is a commit that fixes it
                 # Maybe in this code base, maybe not...
                 if len(vals) > 1:
@@ -242,9 +243,9 @@ class Test(avocadoTest):
                         with open(os.path.join(os.sep, 'tmp',
                                                'commit_list')) as commit_handle:
                             commits = commit_handle.readlines()
-                    except Exception as excpt:  # pylint: disable=broad-except
+                    except Exception as err:  # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
-                                           "{}".format(excpt))
+                                           "{}".format(err))
                         return
                     if commits and vals[1] in commits:
                         # fix is in this code base
@@ -466,13 +467,16 @@ class Test(avocadoTest):
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
 
-    def log_step(self, message):
+    def log_step(self, message, header=False):
         """Log a test step.
 
         Args:
             message (str): description of test step.
-
+            header (bool, optional): whether to log a header line before the message. Defaults to
+                False.
         """
+        if header:
+            self.log.info('-' * 80)
         self.log.info("==> Step %s: %s", self._test_step, message)
         self._test_step += 1
 
