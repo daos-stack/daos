@@ -128,6 +128,9 @@ struct ds_cont_child {
 	struct btr_root		 sc_dtx_cos_btr;
 	/* The global list for committable DTXs. */
 	d_list_t		 sc_dtx_cos_list;
+
+	/* heap of the dtx */
+	void			*sc_dtx_cos_heap;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */

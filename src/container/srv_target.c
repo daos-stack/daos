@@ -2431,9 +2431,10 @@ cont_track_eph_init_ult(void *data)
 	return rc;
 }
 
-static int
-cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
+static void
+cont_tgt_track_eph_init_ult(void *data)
 {
+	struct ds_cont_child		*cont_child = data;
 	struct track_eph_ult_arg	arg;
 	int				rc;
 
@@ -2445,22 +2446,40 @@ cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
 	if (rc) {
 		D_ERROR(DF_CONT" init track eph failed: "DF_RC"\n",
 			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), DP_RC(rc));
-		return rc;
+		ds_cont_child_put(cont_child);
+		return;
 	}
 
+	D_DEBUG(DB_MD, DF_UUID" update init track %u\n",
+		DP_UUID(cont_child->sc_uuid), arg.tgt_idx);
 	cont_child->sc_ec_query_agg_eph = arg.ec_eph;
 	cont_child->sc_dtx_commit_eph = arg.dtx_eph;
 
-	return 0;
+	ds_cont_child_put(cont_child);
 }
 
 void
-ds_cont_ec_eph_free(struct ds_pool *pool)
+ds_cont_track_eph_free(struct ds_pool *pool)
 {
 	struct cont_ec_eph	*ec_eph, *tmp;
 
 	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
 		cont_ec_eph_destroy(ec_eph);
+}
+
+static int
+cont_tgt_track_eph_init(struct ds_cont_child *cont_child)
+{
+	int rc;
+
+	ds_cont_child_get(cont_child);
+
+	rc = dss_ult_create(cont_tgt_track_eph_init_ult, cont_child, DSS_XS_SELF,
+			    0, 0, NULL);
+	if (rc != 0)
+		ds_cont_child_put(cont_child);
+
+	return rc;
 }
 
 /**
@@ -2668,15 +2687,22 @@ cont_child_update_commit_eph(struct ds_cont_child *cont_child)
 {
 	struct dtx_leader_handle *dlh = NULL;
 
-	/* Update sc dtx_commit_eph as the last open dtx epoch, i.e. all epoch earlier
-	 * are committable.
-	 */
-	d_list_for_each_entry_reverse(dlh, &cont_child->sc_open_dtx_list, dlh_link_list) {
-		*cont_child->sc_dtx_commit_eph = dlh->dlh_handle.dth_epoch - 1;
+	if (!cont_child->sc_dtx_commit_eph)
 		return;
+
+	/* First Get the minimum epoch from COS list */
+	*cont_child->sc_dtx_commit_eph = dtx_get_min_cos_eph(cont_child);
+
+	/* Then compare it with the open list, since the open list is naturally sorted,
+	 * so only compare the last one */
+	d_list_for_each_entry_reverse(dlh, &cont_child->sc_open_dtx_list, dlh_link_list) {
+		if (*cont_child->sc_dtx_commit_eph > dlh->dlh_handle.dth_epoch - 1)
+			*cont_child->sc_dtx_commit_eph = dlh->dlh_handle.dth_epoch - 1;
+		break;
 	}
-	/* if open dtx list are empty, then use current HLC as commit eph */
-	*cont_child->sc_dtx_commit_eph = d_hlc_get();
+
+	D_DEBUG(DB_MD, DF_UUID" update commit eph to "DF_X64"\n", DP_UUID(cont_child->sc_uuid),
+		*cont_child->sc_dtx_commit_eph);
 }
 
 struct refresh_vos_agg_eph_arg {
@@ -2721,14 +2747,30 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 			    daos_epoch_t eph)
 {
 	struct refresh_vos_agg_eph_arg	arg;
+	struct dss_coll_ops		coll_ops = { 0 };
+	struct dss_coll_args		coll_args = { 0 };
 	int				rc;
+
+	/* setting aggregator args */
+	rc = ds_pool_get_tgt_idx_by_state(pool_uuid,
+					  PO_COMP_ST_DOWN | PO_COMP_ST_DOWNOUT | PO_COMP_ST_UP,
+					  &coll_args.ca_exclude_tgts,
+					  &coll_args.ca_exclude_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
+			DP_UUID(pool_uuid), DP_RC(rc));
+		return rc;
+	}
 
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
 	arg.min_eph = eph;
+	coll_args.ca_func_args	= &arg;
+	coll_ops.co_func = cont_refresh_vos_agg_eph_one;
 
-	rc = dss_task_collective(cont_refresh_vos_agg_eph_one, &arg,
-				 DSS_ULT_FL_PERIODIC);
+	rc = dss_task_collective_reduce(&coll_ops, &coll_args, DSS_ULT_FL_PERIODIC);
+	D_FREE(coll_args.ca_exclude_tgts);
+
 	return rc;
 }
 

@@ -366,6 +366,27 @@ int daos_array_find_ge(void *array, unsigned int len, uint64_t key,
 
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
+/** Function table for combsort and binary search */
+typedef struct {
+	void    (*ho_swap)(void *arrays, int a, int b);
+
+	/**
+	 * For ascending order:
+	 * 1	array[a] > array[b] min heap
+	 * -1	array[a] < array[b] max heap
+	 */
+	int     (*ho_cmp)(void *arrays, int a, int b);
+
+	/* set the key of the array item */
+	void	(*ho_set_key)(void *array, int key);
+} daos_heap_ops_t;
+
+int daos_heap_insert(void *heap, void *array);
+int daos_heap_delete(void *heap, int idx);
+int daos_heap_create(daos_heap_ops_t *ops, unsigned int opt, void **dha);
+void daos_heap_destroy(void *dha);
+void *daos_heap_top(void *heap);
+
 int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,

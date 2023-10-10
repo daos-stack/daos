@@ -266,6 +266,8 @@ int dtx_abort(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t ep
 
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
+daos_epoch_t dtx_get_min_cos_eph(struct ds_cont_child *cont);
+
 /**
  * Check whether the given DTX is resent one or not.
  *

@@ -88,6 +88,7 @@ rebuild_retry_rebuild(void **state)
 
 	rebuild_io(arg, oids, OBJ_NR);
 
+	sleep(15);
 	/* Set no hdl fail_loc on all servers */
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
