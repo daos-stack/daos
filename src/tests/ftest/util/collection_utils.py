@@ -3,6 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 from collections import OrderedDict
 import glob
 import os
@@ -788,6 +789,14 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
     """
     logger.debug("Updating the xml data in the test %s file", cmocka_xml)
 
+    if len(re.findall('<testsuites>', cmocka_data)) > 1:
+        # Remove all but the first <testsuites> entry from the cmocka xml
+        if not update_xml(logger, cmocka_xml, '\n<testsuites>', '', cmocka_data, test_result):
+            return False
+        # Remove all but the last </testsuites> entry from the cmocka xml
+        if not update_xml(logger, cmocka_xml, '</testsuites>\n', '', cmocka_data, test_result):
+            return False
+
     if 'classname' not in cmocka_data:
         # Update cmocka results that are missing a class name entry for their test suite entries
         try:
@@ -800,14 +809,6 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
         pattern = '<testcase name='
         replacement = f'<testcase classname="FTEST_{test.directory}.{test_class}-{name}" name='
         return update_xml(logger, cmocka_xml, pattern, replacement, cmocka_data, test_result)
-
-    if len(re.findall('<testsuites>', cmocka_data)) > 1:
-        # Remove all but the first <testsuites> entry from the cmocka xml
-        if not update_xml(logger, cmocka_xml, '\n<testsuites>', '', cmocka_data, test_result):
-            return False
-        # Remove all but the last </testsuites> entry from the cmocka xml
-        if not update_xml(logger, cmocka_xml, '</testsuites>\n', '', cmocka_data, test_result):
-            return False
 
     # Update the class name to include the functional test directory
     pattern = 'classname="'
