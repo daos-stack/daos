@@ -447,7 +447,7 @@ func (m *mockApiClient) daos_cont_open(_ C.daos_handle_t, _ *C.char, _ C.uint, c
 	return 0
 }
 
-func ContainerOpen(ctx context.Context, poolConn *PoolHandle, contID string, flags ContainerOpenFlag) (*ContainerHandle, error) {
+func ContainerOpen(ctx context.Context, poolConn *PoolHandle, contID string, flags ...ContainerOpenFlag) (*ContainerHandle, error) {
 	log.Debugf("ContainerOpen(%s:%s)", poolConn, contID)
 
 	client, err := getApiClient(ctx)
@@ -460,8 +460,16 @@ func ContainerOpen(ctx context.Context, poolConn *PoolHandle, contID string, fla
 
 	var contConn ContainerHandle
 	var contInfo C.daos_cont_info_t
+
+	if len(flags) == 0 {
+		flags = append(flags, ContainerOpenFlagReadOnly)
+	}
+	var cFlags C.uint
+	for _, flag := range flags {
+		cFlags |= C.uint(flag)
+	}
 	err = daosError(client.daos_cont_open(poolConn.daosHandle, cID,
-		C.uint(flags), &contConn.daosHandle, &contInfo, nil))
+		cFlags, &contConn.daosHandle, &contInfo, nil))
 	if err != nil {
 		return nil, err
 	}
