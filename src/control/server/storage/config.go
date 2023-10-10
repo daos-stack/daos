@@ -448,13 +448,11 @@ func (tcs TierConfigs) AssignBdevTierRoles(extMetadataPath string) error {
 
 	scs := tcs.ScmConfigs()
 
-	// Require tier-0 to be a SCM tier.
 	if len(scs) != 1 || scs[0].Tier != 0 {
-		return errors.New("first storage tier is not scm")
+		return errors.New("first storage tier is not of type scm")
 	}
-	// MD-on-SSD roles can not be assigned if scm tier is DCPM.
 	if scs[0].Class == ClassDcpm {
-		return errors.New("external metadata path invalid with DCPM scom class")
+		return errors.New("external metadata path for md-on-ssd invalid with dcpm scm-class")
 	}
 	// Skip role assignment and validation if no real NVMe tiers exist.
 	if !tcs.HaveRealNVMe() {

@@ -378,7 +378,7 @@ supplied config file is valid.
 To manually format the storage and start the engine processes, we run the following on a separate
 terminal window and verify that engine processes (ranks) have registered with the system.
 Note the subsequent system query command may not show ranks started immediately after the storage
-format command returns so it is recommended to leave a short delay before invoking.
+format command returns so it is recommended to leave a short delay (~5s) before invoking.
 
 ```bash
 [user@wolf-226 daos]$ install/bin/dmg storage format -i
