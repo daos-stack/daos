@@ -1656,7 +1656,7 @@ dc_tx_cpd_adjust_size(size_t size)
 	return size * 11 / 10;
 }
 
-/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
+/* The calculated CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
 dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
