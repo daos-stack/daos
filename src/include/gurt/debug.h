@@ -223,9 +223,6 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define DL_WARN(_rc, _fmt, ...)  D_DEBUG(DLOG_WARN, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
 #define DL_ERROR(_rc, _fmt, ...) D_DEBUG(DLOG_ERR, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
 
-#define DS_ERROR(_rc, _fmt, ...)                                                                   \
-	D_DEBUG(DLOG_ERR, _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc, strerror(_rc))
-
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 #endif /* D_USE_GURT_FAC */

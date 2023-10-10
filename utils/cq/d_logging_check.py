@@ -132,7 +132,7 @@ PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FAT
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG', 'DS_ERROR',
+                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG',
                 'DL_ERROR', 'DHL_ERROR', 'DHL_WARN', 'DL_WARN', 'DL_INFO', 'DHL_INFO']
 
 
