@@ -317,8 +317,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
-        except pygit2.GitError as excpt:
-            print("Error pushing branch: {}".format(excpt))
+        except pygit2.GitError as err:
+            print("Error pushing branch: {}".format(err))
             Exit(1)
 
         print("Creating the PR...")

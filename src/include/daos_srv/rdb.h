@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -164,6 +164,8 @@ int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+int
+		rdb_get_size(struct rdb *db, size_t *sizep);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_ping(struct rdb *db, uint64_t caller_term);
