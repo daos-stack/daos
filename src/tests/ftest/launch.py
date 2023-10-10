@@ -304,8 +304,8 @@ class Launch():
                 set_test_environment(logger)
             else:
                 set_test_environment(
-                    logger, build_vars_file, test_env, test_servers, test_clients, args.provider,
-                    args.insecure_mode, self.details)
+                    logger, test_env, test_servers, test_clients, args.provider, args.insecure_mode,
+                    self.details)
         except TestEnvironmentException as error:
             message = f"Error setting up test environment: {str(error)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())
@@ -355,7 +355,7 @@ class Launch():
         if args.process_cores:
             try:
                 all_hosts = test_servers | test_clients | self.local_host
-                core_files = get_core_file_pattern(logger, all_hosts, args.process_cores)
+                core_files = get_core_file_pattern(logger, all_hosts)
             except LaunchException:
                 message = "Error obtaining the core file pattern information"
                 return self.get_exit_status(1, message, "Setup", sys.exc_info())
