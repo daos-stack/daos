@@ -42,13 +42,14 @@ crt_lib_init(void)
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
+	crt_gdata.cg_primary_prov = CRT_PROV_OFI_TCP_RXM;
 
 	d_srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
 }
 
 /* Library deinit */
@@ -815,6 +816,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		crt_self_test_init();
 
+		crt_iv_init(opt);
 		rc = crt_opc_map_create();
 		if (rc != 0) {
 			D_ERROR("crt_opc_map_create() failed, "DF_RC"\n", DP_RC(rc));

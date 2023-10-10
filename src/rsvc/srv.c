@@ -1311,7 +1311,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  *
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
- * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * for collective RPC, so we have to use both ranks and excluded for the moment,
  * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
