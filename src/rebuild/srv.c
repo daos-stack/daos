@@ -1093,7 +1093,7 @@ rebuild_debug_print_queue()
 	 * This only accumulates the targets in a single task, so it doesn't
 	 * need to be very big. 200 bytes is enough for ~30 5-digit target ids
 	 */
-	char tgts_buf[200];
+	char tgts_buf[200] = { 0 };
 	int i;
 	/* Position in stack buffer where str data should be written next */
 	size_t tgts_pos;
@@ -1121,7 +1121,7 @@ rebuild_debug_print_queue()
 		}
 		D_DEBUG(DB_REBUILD, DF_UUID" op=%s ver=%u tgts=%s\n",
 			DP_UUID(task->dst_pool_uuid), RB_OP_STR(task->dst_rebuild_op),
-			task->dst_map_ver, tgts_buf);
+			task->dst_map_ver, task->dst_tgts.pti_number > 0 ? tgts_buf : "None");
 	}
 }
 
@@ -1412,7 +1412,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 					 task->dst_new_layout_version, &task->dst_tgts,
 					 retry_opc, 5);
 	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND ||
-		   task->dst_rebuild_op == RB_OP_UPGRADE) {
+		   task->dst_rebuild_op == RB_OP_UPGRADE || task->dst_rebuild_op == RB_OP_EXCLUDE ||
+		   task->dst_rebuild_op == RB_OP_DRAIN) {
 		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
@@ -2056,7 +2057,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	 * 1. extend job needs to add new targets to the pool map.
 	 * 2. reintegrate job needs to discard the existing objects/records on the
 	 *    reintegrating targets.
-	 * But since the pool map already includs these extending targets, and also
+	 * But since the pool map already includes these extending targets, and also
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */

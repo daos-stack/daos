@@ -1,72 +1,4 @@
 """Build test suite"""
-import sys
-import subprocess  # nosec
-
-TEST_CMOCKA_SKIP = """
-#include <stdarg.h>
-#include <stddef.h>
-#include <setjmp.h>
-#include <cmocka.h>
-
-static void
-test(void **state) { skip(); }
-
-int main(int argc, char **argv)
-{
-  const struct CMUnitTest tests[] = {
-    cmocka_unit_test(test),
-    cmocka_unit_test(test),
-  };
-  return cmocka_run_group_tests(tests, NULL, NULL);
-}
-"""
-
-
-# pylint: disable-next=invalid-name
-def CheckCmockaSkip(context):
-    """Configure check for cmocka bug"""
-    context.Message('Checking if cmocka skip() bug is present ... ')
-    rc = context.TryCompile(TEST_CMOCKA_SKIP, '.c')
-    if rc == 0:
-        sys.stdout.write(" (Compile failed) assuming ")
-        context.Result(not rc)
-        return rc
-    rc = context.TryLink(TEST_CMOCKA_SKIP, '.c')
-    if rc == 0:
-        sys.stdout.write(" (Link failed) assuming ")
-        context.Result(not rc)
-        return rc
-    prog = context.lastTarget
-    pname = prog.get_abspath()
-    rc = subprocess.call(pname, env={"CMOCKA_TEST_ABORT": "1"}, shell=False,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # in case of abort rc is -6 instead of 134 (128+6) with shell ...
-    if rc == -6:
-        sys.stdout.write(" (Bug reproduced) ")
-    else:
-        if rc != 0:
-            sys.stdout.write(" (Other error than bug) assuming ")
-        else:
-            sys.stdout.write(" (Bug not reproduced) ")
-    context.Result(rc)
-    # return 0 means error
-    return not rc
-
-
-# pylint: disable=no-member
-def configure_cmocka(nenv):
-    """configure cmocka environment"""
-    if GetOption('help') or GetOption('clean'):
-        return nenv
-    conf = Configure(nenv, custom_tests={'CheckCmockaSkip': CheckCmockaSkip})
-    conf.env.AppendUnique(LIBS=['cmocka'])
-    if not conf.CheckCmockaSkip():
-        # it would be cool to be able to check exit code is effectively 134
-        #    (for abort() upon skip() bug) but in all error cases we should
-        #    decide to use workaround
-        conf.env.AppendUnique(CCFLAGS=['-DOVERRIDE_CMOCKA_SKIP'])
-        print("libcmocka with broken skip(), using workaround (DAOS-1093).")
-    return conf.Finish()
 
 
 def scons():
@@ -97,7 +29,7 @@ def scons():
                                c_files + daos_test_tgt,
                                LIBS=['daos_common'] + libraries)
 
-    newenv = configure_cmocka(denv.Clone())
+    newenv = denv.Clone()
 
     c_files = Split("""daos_array.c daos_base_tx.c daos_capa.c daos_checksum.c
                     daos_container.c daos_dedup.c daos_degraded.c

@@ -51,6 +51,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 /**< Env to specify log file pid append to filename*/
 #define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
 
+/**< Env to specify rank to append to the log filename */
+#define D_LOG_FILE_APPEND_RANK_ENV	"D_LOG_FILE_APPEND_RANK"
+
+/**< Env to specify log truncation option */
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
 /**< Env to specify flush priority */

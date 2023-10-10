@@ -272,60 +272,89 @@ class DaosServerManager(SubprocessManager):
 
         Args:
             verbose (bool, optional): display clean commands. Defaults to True.
+
+        Raises:
+            ServerFailed: if there was an error cleaning up the daos server files
         """
-        clean_commands = []
-        for index, engine_params in enumerate(self.manager.job.yaml.engine_params):
-            scm_mount = engine_params.get_value("scm_mount")
-            self.log.info("Cleaning up the %s directory.", str(scm_mount))
-
-            # Remove the superblocks
-            cmd = "sudo rm -fr {}/*".format(scm_mount)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
-
-            # Remove the shared memory segment associated with this io server
-            cmd = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-            clean_commands.append(cmd)
-
-            # Dismount the scm mount point
-            cmd = "while sudo umount {}; do continue; done".format(scm_mount)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
-
+        scm_mounts = []
+        scm_lists = []
+        for engine_params in self.manager.job.yaml.engine_params:
+            scm_mounts.append(engine_params.get_value("scm_mount"))
             if self.manager.job.using_dcpm:
                 scm_list = engine_params.get_value("scm_list")
                 if isinstance(scm_list, list):
-                    self.log.info("Cleaning up the following device(s): %s.", ", ".join(scm_list))
-                    # Umount and wipefs the dcpm device
-                    cmd_list = [
-                        "for dev in {}".format(" ".join(scm_list)),
-                        "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
-                        "if [ ! -z $mount ]",
-                        "then while sudo umount $mount",
-                        "do continue",
-                        "done",
-                        "fi",
-                        "sudo wipefs -a $dev",
-                        "done"
-                    ]
-                    cmd = "; ".join(cmd_list)
-                    if cmd not in clean_commands:
-                        clean_commands.append(cmd)
+                    scm_lists.append(scm_list)
+
+        for index, scm_mount in enumerate(scm_mounts):
+            # Remove the superblocks and dismount the scm mount point
+            self.log.info("Cleaning up the %s scm mount.", str(scm_mount))
+            self.clean_mount(self._hosts, scm_mount, verbose, index)
+
+        for scm_list in scm_lists:
+            # Umount and wipefs the dcpm device
+            self.log.info("Cleaning up the %s dcpm devices", str(scm_list))
+            command_list = [
+                "for dev in {}".format(" ".join(scm_list)),
+                "do mount=$(lsblk $dev -n -o MOUNTPOINT)",
+                "if [ ! -z $mount ]",
+                "then while sudo umount $mount",
+                "do continue",
+                "done",
+                "fi",
+                "sudo wipefs -a $dev",
+                "done"
+            ]
+            command = "; ".join(command_list)
+            result = run_remote(self.log, self._hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed("Failed cleaning {} on {}".format(scm_list, result.failed_hosts))
 
         if self.manager.job.using_control_metadata:
             # Remove the contents (superblocks) of the control plane metadata path
-            cmd = "sudo rm -fr {}/*".format(self.manager.job.control_metadata.path.value)
-            if cmd not in clean_commands:
-                clean_commands.append(cmd)
+            self.log.info(
+                "Cleaning up the control metadata path %s",
+                self.manager.job.control_metadata.path.value)
+            self.clean_mount(self._hosts, self.manager.job.control_metadata.path.value, verbose)
 
-            if self.manager.job.control_metadata.device.value is not None:
-                # Dismount the control plane metadata mount point
-                cmd = "while sudo umount {}; do continue; done".format(
-                    self.manager.job.control_metadata.device.value)
-                if cmd not in clean_commands:
-                    clean_commands.append(cmd)
+    def clean_mount(self, hosts, mount, verbose=True, index=None):
+        """Clean the mount point by removing the superblocks and dismounting.
 
-        pcmd(self._hosts, "; ".join(clean_commands), verbose)
+        Args:
+            hosts (NodeSet): the hosts on which to clean the mount point
+            mount (str): the mount point to clean
+            verbose (bool, optional): display clean commands. Defaults to True.
+            index (int, optional): Defaults to None.
+
+        Raises:
+            ServerFailed: if there is an error cleaning the mount point
+        """
+        self.log.debug("Checking for the existence of the %s mount point", mount)
+        command = "test -d {}".format(mount)
+        result = run_remote(self.log, hosts, command, verbose)
+        if result.passed_hosts:
+            mounted_hosts = result.passed_hosts
+
+            # Remove the superblocks
+            self.log.debug("Removing the %s superblocks", mount)
+            command = "sudo rm -fr {}/*".format(mount)
+            result = run_remote(self.log, mounted_hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed(
+                    "Failed to remove superblocks for {} on {}".format(mount, result.failed_hosts))
+
+            if index is not None:
+                # Remove the shared memory segment associated with this io server
+                self.log.debug("Removing the shared memory segment")
+                command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
+                run_remote(self.log, mounted_hosts, command, verbose)
+
+            # Dismount the scm mount point
+            self.log.debug("Dismount the %s mount point", mount)
+            command = "while sudo umount {}; do continue; done".format(mount)
+            result = run_remote(self.log, mounted_hosts, command, verbose)
+            if not result.passed:
+                raise ServerFailed(
+                    "Failed to dismount {} on {}".format(mount, result.failed_hosts))
 
     def prepare_storage(self, user, using_dcpm=None, using_nvme=None):
         """Prepare the server storage.
@@ -437,13 +466,21 @@ class DaosServerManager(SubprocessManager):
 
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.run_user = "daos_server"
         cmd.debug.value = False
         cmd.config.value = get_default_config_file("server")
         self.log.info("Support collect-log on servers: %s", str(cmd))
         cmd.set_command(("support", "collect-log"), **kwargs)
         return run_remote(
             self.log, self._hosts, cmd.with_exports, timeout=self.collect_log_timeout.value)
+
+    def display_memory_info(self):
+        """Display server hosts memory info."""
+        self.log.debug("#" * 80)
+        self.log.debug("<SERVER> Collection debug memory info")
+        run_remote(self.log, self._hosts, "free -m")
+        run_remote(self.log, self._hosts, "ps -eo size,pid,user,command --sort -size | head -n 6")
+        self.log.debug("#" * 80)
 
     def detect_format_ready(self, reformat=False):
         """Detect when all the daos_servers are ready for storage format.
@@ -637,11 +674,14 @@ class DaosServerManager(SubprocessManager):
         self.prepare()
 
         # Start the servers and wait for them to be ready for storage format
+        self.display_memory_info()
         self.detect_format_ready()
 
         # Collect storage and network information from the servers.
+        self.display_memory_info()
         self.information.collect_storage_information()
         self.information.collect_network_information()
+        self.display_memory_info()
 
         # Format storage and wait for server to change ownership
         self.log.info("<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)

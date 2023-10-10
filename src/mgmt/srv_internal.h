@@ -66,7 +66,7 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 /** srv_pool.c */
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
 			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
-			int domains_nr, uint32_t *domains);
+			int domains_nr, uint32_t *domains, size_t meta_blob_size);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,

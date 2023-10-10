@@ -83,6 +83,8 @@ struct d_log_state {
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
 	int flush_pri;		/* flush priority */
+	bool append_rank;	/* append rank to the log filename */
+	bool rank_appended;	/* flag to indicate if rank is already appended */
 #ifdef DLOG_MUTEX
 	pthread_mutex_t clogmux;	/* protect clog in threaded env */
 #endif
@@ -882,7 +884,6 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
 		if (strcmp(env, "0") != 0) {
-			/* Append pid/tgid to log file name */
 			rc = asprintf(&buffer, "%s.%d", logfile, getpid());
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
@@ -892,6 +893,10 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 					    "continuing.\n");
 		}
 	}
+
+	env = getenv(D_LOG_FILE_APPEND_RANK_ENV);
+	if (env && strcmp(env, "0") != 0)
+		mst.append_rank = true;
 
 	/* quick sanity check (mst.tag is non-null if already open) */
 	if (d_log_xst.tag || !tag ||
@@ -1032,8 +1037,43 @@ early_error:
 	if (buffer)
 		free(buffer);
 	if (newtag)
-		free(newtag);		/* was never installed */
+		free(newtag);           /* was never installed */
 	return -1;
+}
+
+void d_log_rank_setup(int rank)
+{
+	char	*filename = NULL;
+	int	rc;
+
+	clog_lock();
+	if (!mst.append_rank || !mst.log_file)
+		goto unlock;
+
+	if (mst.rank_appended == true)
+		goto unlock;
+
+	/* Note: Can't use D_* allocation macros for mst.log_file */
+	rc = asprintf(&filename, "%s.rank=%d", mst.log_file, rank);
+	if (filename == NULL || rc == -1) {
+		fprintf(stderr, "Failed to asprintf for file=%s rank=%d\n",
+			mst.log_file, rank);
+		goto unlock;
+	}
+
+	rc = rename(mst.log_file, filename);
+	if (rc) {
+		dlog_print_err(errno, "failed to rename log file\n");
+		free(filename);
+		goto unlock;
+	}
+
+	free(mst.log_file);
+	mst.log_file = filename;
+	mst.rank_appended = true;
+
+unlock:
+	clog_unlock();
 }
 
 /*

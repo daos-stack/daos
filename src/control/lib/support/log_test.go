@@ -236,7 +236,7 @@ func TestSupport_cpOutputToFile(t *testing.T) {
 		"Check valid Command with option": {
 			target:    targetTestDir,
 			cmd:       "hostname",
-			option:    "-d",
+			option:    "-s",
 			expResult: hostName,
 			expErr:    nil,
 		},
