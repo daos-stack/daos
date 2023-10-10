@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 )
@@ -106,8 +107,8 @@ func (ph *PoolHandle) DestroyContainer(ctx context.Context, contID string, force
 	return ContainerDestroy(ctx, ph, contID, force)
 }
 
-func (ph *PoolHandle) OpenContainer(ctx context.Context, contID string, flags ContainerOpenFlag) (*ContainerHandle, error) {
-	return ContainerOpen(ctx, ph, contID, flags)
+func (ph *PoolHandle) OpenContainer(ctx context.Context, contID string, flags ...ContainerOpenFlag) (*ContainerHandle, error) {
+	return ContainerOpen(ctx, ph, contID, flags...)
 }
 
 func (ph *PoolHandle) Query(ctx context.Context, req PoolQueryReq) (*daos.PoolInfo, error) {
@@ -162,6 +163,12 @@ func PoolConnect(ctx context.Context, req PoolConnectReq) (*PoolConnectResp, err
 
 	if req.PoolID == "" {
 		return nil, errors.Wrap(daos.InvalidInput, "no pool ID provided")
+	}
+	if req.SystemName == "" {
+		req.SystemName = build.DefaultSystemName
+	}
+	if req.Flags == 0 {
+		req.Flags = C.DAOS_PC_RO
 	}
 
 	var dpi C.daos_pool_info_t
