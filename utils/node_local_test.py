@@ -6084,9 +6084,8 @@ def run(wf, args):
                 # Disabled for now because of errors
                 # fatal_errors.add_result(test_alloc_pil4dfs_ls(server, conf, wf_client))
 
-                # This test is disabled by default, it takes ~4 hours to run and can fill Jenkins
-                # available space, no not enable in CI.
-                # fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
+                # This test is disabled by default, it takes ~4 hours to run so do not enable in CI.
+                fatal_errors.add_result(test_dfs_check(server, conf, wf_client))
 
                 wf_client.close()
 
