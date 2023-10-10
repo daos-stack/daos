@@ -129,7 +129,7 @@ class InodeHandle(DLogEntity):
             return
 
         if line.get_field(2) == 'file':
-            self.dentry = line.get_field(3)[1:-1]
+            self.dentry = line.get_field(3)[3:-1]
             self['name'] = self.dentry
             return
 
