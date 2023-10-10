@@ -1564,8 +1564,7 @@ dfuse_fs_fini(struct dfuse_info *dfuse_info)
 #define START_GROUP_SIZE 12
 
 int
-check_req_perms(struct dfuse_projection_info *fs_handle, struct dfuse_inode_entry *ie,
-		fuse_req_t req)
+check_req_perms(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie, fuse_req_t req)
 {
 	const struct fuse_ctx *ctx;
 	daos_prop_t           *pool_prop = NULL;
