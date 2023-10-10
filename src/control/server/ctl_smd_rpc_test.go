@@ -512,6 +512,86 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 				},
 			},
 		},
+		"device-health; no uuid in request": {
+			req: &ctlpb.SmdQueryReq{
+				OmitPools:        true,
+				Rank:             uint32(ranklist.NilRank),
+				IncludeBioHealth: true,
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								{
+									Uuid:     test.MockUUID(0),
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
+								},
+							},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 100000,
+						},
+					},
+				},
+				1: {
+					{
+						Message: &ctlpb.SmdDevResp{
+							Devices: []*ctlpb.SmdDevice{
+								{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
+							},
+						},
+					},
+					{
+						Message: &ctlpb.BioHealthResp{
+							Temperature: 1000000,
+							TempWarn:    true,
+						},
+					},
+				},
+			},
+			expResp: &ctlpb.SmdQueryResp{
+				Ranks: []*ctlpb.SmdQueryResp_RankResp{
+					{
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(0),
+									DevState: devStateNormal,
+									LedState: ledStateNormal,
+								},
+								Health: &ctlpb.BioHealthResp{
+									Temperature: 100000,
+								},
+							},
+						},
+					},
+					{
+						Rank: 1,
+						Devices: []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{
+							{
+								Details: &ctlpb.SmdDevice{
+									Uuid:     test.MockUUID(1),
+									DevState: devStateFaulty,
+									LedState: ledStateFault,
+								},
+								Health: &ctlpb.BioHealthResp{
+									Temperature: 1000000,
+									TempWarn:    true,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		"device-health (NEW SMD); skip health collection": {
 			req: &ctlpb.SmdQueryReq{
 				OmitPools:        true,
