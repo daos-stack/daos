@@ -92,7 +92,7 @@ func (trf *tierRatioFlag) UnmarshalFlag(fv string) error {
 	for _, trStr := range strings.Split(fv, ",") {
 		tr, err := strconv.ParseFloat(strings.TrimSpace(strings.Trim(trStr, "%")), 64)
 		if err != nil {
-			return errors.Wrapf(err, "invalid tier ratio %s", trStr)
+			return errors.Errorf("invalid tier ratio %q", trStr)
 		}
 		trf.ratios = append(trf.ratios, roundFloatTo(tr, 2)/100)
 	}
@@ -137,7 +137,7 @@ func (sf *sizeFlag) UnmarshalFlag(fv string) (err error) {
 
 	sf.bytes, err = humanize.ParseBytes(fv)
 	if err != nil {
-		return errors.Wrapf(err, "invalid size %q", fv)
+		return errors.Errorf("invalid size %q", fv)
 	}
 
 	return nil
@@ -199,6 +199,7 @@ type PoolCreateCmd struct {
 	NumSvcReps uint32              `short:"v" long:"nsvc" description:"Number of pool service replicas"`
 	ScmSize    sizeFlag            `short:"s" long:"scm-size" description:"Per-engine SCM allocation for DAOS pool (manual)"`
 	NVMeSize   sizeFlag            `short:"n" long:"nvme-size" description:"Per-engine NVMe allocation for DAOS pool (manual)"`
+	MetaSize   sizeFlag            `long:"meta-size" description:"In MD-on-SSD mode specify meta blob size to be used in DAOS pool (manual)"`
 	RankList   ui.RankSetFlag      `short:"r" long:"ranks" description:"Storage engine unique identifiers (ranks) for DAOS pool"`
 
 	Args struct {
@@ -208,11 +209,18 @@ type PoolCreateCmd struct {
 
 // Execute is run when PoolCreateCmd subcommand is activated
 func (cmd *PoolCreateCmd) Execute(args []string) error {
-	if cmd.Size.IsSet() && (cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet()) {
-		return errIncompatFlags("size", "scm-size", "nvme-size")
-	}
-	if !cmd.Size.IsSet() && !cmd.ScmSize.IsSet() {
-		return errors.New("either --size or --scm-size must be supplied")
+	if cmd.Size.IsSet() {
+		if cmd.ScmSize.IsSet() || cmd.NVMeSize.IsSet() {
+			return errIncompatFlags("size", "scm-size", "nvme-size")
+		}
+		if cmd.MetaSize.IsSet() {
+			// NOTE DAOS-14223: --meta-size value is currently not taken into account
+			//                  when storage tier sizes are auto-calculated so only
+			//                  support in manual mode.
+			return errors.New("--meta-size can only be set if --scm-size is set")
+		}
+	} else if !cmd.ScmSize.IsSet() {
+		return errors.New("either --size or --scm-size must be set")
 	}
 
 	if cmd.Args.PoolLabel != "" {
@@ -299,13 +307,22 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 
 		scmBytes := cmd.ScmSize.bytes
 		nvmeBytes := cmd.NVMeSize.bytes
+		metaBytes := cmd.MetaSize.bytes
 		scmRatio := cmd.updateRequest(req, scmBytes, nvmeBytes)
 
-		cmd.Infof("Creating DAOS pool with manual per-engine storage allocation: "+
-			"%s SCM, %s NVMe (%0.2f%% ratio)",
-			humanize.Bytes(scmBytes),
-			humanize.Bytes(nvmeBytes),
-			scmRatio*100)
+		if metaBytes > 0 && metaBytes < scmBytes {
+			return errors.Errorf("--meta-size (%s) can not be smaller than --scm-size (%s)",
+				humanize.Bytes(metaBytes), humanize.Bytes(scmBytes))
+		}
+		req.MetaBytes = metaBytes
+
+		msg := fmt.Sprintf("Creating DAOS pool with manual per-engine storage allocation:"+
+			" %s SCM, %s NVMe (%0.2f%% ratio)", humanize.Bytes(scmBytes),
+			humanize.Bytes(nvmeBytes), scmRatio*100)
+		if metaBytes > 0 {
+			msg += fmt.Sprintf(" with %s meta-blob-size", humanize.Bytes(metaBytes))
+		}
+		cmd.Info(msg)
 	}
 
 	resp, err := control.PoolCreate(context.Background(), cmd.ctlInvoker, req)

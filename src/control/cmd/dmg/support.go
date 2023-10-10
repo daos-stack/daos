@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common/cmdutil"
@@ -32,6 +33,7 @@ type collectLogCmd struct {
 	hostListCmd
 	cmdutil.JSONOutputCmd
 	support.CollectLogSubCmd
+	bld strings.Builder
 }
 
 // gRPC call to initiate the rsync and copy the logs to Admin (central location).
@@ -52,11 +54,9 @@ func (cmd *collectLogCmd) rsyncLog() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "rsync", &cmd.bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -81,11 +81,9 @@ func (cmd *collectLogCmd) archLogsOnServer() error {
 		return err
 	}
 	if len(resp.GetHostErrors()) > 0 {
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		if err := pretty.UpdateErrorSummary(resp, "archive", &cmd.bld); err != nil {
 			return err
 		}
-		cmd.Info(bld.String())
 		return resp.Errors()
 	}
 
@@ -127,8 +125,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 	progress.Steps = 100 / progress.Total
 
 	// Default TargetFolder location where logs will be copied.
+	// Included Date and time stamp to the log folder.
 	if cmd.TargetFolder == "" {
-		cmd.TargetFolder = filepath.Join(os.TempDir(), "daos_support_server_logs")
+		folderName := fmt.Sprintf("daos_support_server_logs_%s", time.Now().Format(time.RFC3339))
+		cmd.TargetFolder = filepath.Join(os.TempDir(), folderName)
 	}
 	cmd.Infof("Support logs will be copied to %s", cmd.TargetFolder)
 	if err := os.Mkdir(cmd.TargetFolder, 0700); err != nil && !os.IsExist(err) {
@@ -166,11 +166,10 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 				return err
 			}
 			if len(resp.GetHostErrors()) > 0 {
-				var bld strings.Builder
-				if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+				if err := pretty.UpdateErrorSummary(resp, logCmd, &cmd.bld); err != nil {
 					return err
 				}
-				cmd.Info(bld.String())
+
 				if cmd.Stop {
 					return resp.Errors()
 				}
@@ -193,7 +192,6 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 			err := support.CollectSupportLog(cmd.Logger, params)
 			if err != nil {
-				fmt.Println(err)
 				if cmd.Stop {
 					return err
 				}
@@ -233,6 +231,14 @@ func (cmd *collectLogCmd) Execute(_ []string) error {
 
 	if cmd.JSONOutputEnabled() {
 		return cmd.OutputJSON(nil, err)
+	}
+
+	// Print the support command summary.
+	if len(cmd.bld.String()) == 0 {
+		fmt.Println("Summary : All Commands Successfully Executed")
+	} else {
+		fmt.Println("Summary :")
+		cmd.Info(cmd.bld.String())
 	}
 
 	return nil
