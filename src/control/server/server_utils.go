@@ -540,6 +540,25 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 	memRamdisk := uint64(sc.Scm.RamdiskSize) * humanize.GiByte
 	memAvail := uint64(mi.MemAvailableKiB) * humanize.KiByte
 
+	// In the event that tmpfs was already mounted, we need to verify that it
+	// is the correct size and that the memory usage still makes sense.
+	if isMounted, err := ei.storage.ScmIsMounted(); err == nil && isMounted {
+		usage, err := ei.storage.GetScmUsage()
+		if err != nil {
+			return errors.Wrap(err, "unable to check tmpfs usage")
+		}
+		// Ensure that the existing ramdisk is not larger than the calculated
+		// optimal size, in order to avoid potential OOM situations.
+		if usage.TotalBytes > memRamdisk {
+			return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
+		}
+		// Looks OK, so we can return early and bypass additional checks.
+		srv.log.Debugf("using existing tmpfs of size %s", humanize.IBytes(usage.TotalBytes))
+		return nil
+	} else if err != nil {
+		return errors.Wrap(err, "unable to check for mounted tmpfs")
+	}
+
 	if err := checkMemForRamdisk(srv.log, memRamdisk, memAvail); err != nil {
 		return err
 	}
@@ -714,7 +733,7 @@ func getGrpcOpts(log logging.Logger, cfgTransport *security.TransportConfig, ldr
 		unaryLoggingInterceptor(log, ldrChk), // must be first in order to properly log errors
 		unaryErrorInterceptor,
 		unaryStatusInterceptor,
-		unaryVersionInterceptor,
+		unaryVersionInterceptor(log),
 	}
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		streamErrorInterceptor,

@@ -53,7 +53,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 		/* Update the stat information, but copy in the inode value afterwards. */
 		rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &entry.attr);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_ostat() failed: (%s)", strerror(rc));
+			DHS_ERROR(ie, rc, "dfs_ostat() failed");
 			D_GOTO(decref, rc);
 		}
 
@@ -77,7 +77,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent, const char *
 
 	rc = dfs_lookup(dfc->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 	if (rc) {
-		DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)", strerror(rc));
+		DHS_ERROR(ie, rc, "dfs_lookup() failed");
 		D_GOTO(close, rc);
 	}
 

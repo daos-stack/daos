@@ -1,5 +1,6 @@
 build/*/*/src/tests/ftest/cart/utest/test_linkage,
 build/*/*/src/tests/ftest/cart/utest/utest_hlc,
+build/*/*/src/tests/ftest/cart/utest/utest_protocol,
 build/*/*/src/tests/ftest/cart/utest/utest_swim,
 build/*/*/src/gurt/tests/test_gurt,
 build/*/*/src/gurt/tests/test_gurt_telem_producer,
