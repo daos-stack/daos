@@ -184,6 +184,13 @@ extern struct crt_plugin_gdata		crt_plugin_gdata;
 #define CRT_DEFAULT_CREDITS_PER_EP_CTX	(32)
 #define CRT_MAX_CREDITS_PER_EP_CTX	(256)
 
+struct crt_quotas {
+	int			limit[CRT_QUOTA_COUNT];
+	int			current[CRT_QUOTA_COUNT];
+	pthread_mutext_t	mutex;
+	bool			enabled;
+};
+
 /* crt_context */
 struct crt_context {
 	d_list_t		 cc_link;	/** link to gdata.cg_ctx_list */
@@ -222,6 +229,9 @@ struct crt_context {
 
 	/** Stores self uri for the current context */
 	char			 cc_self_uri[CRT_ADDR_STR_MAX_LEN];
+
+	/** Stores quotas */
+	struct crt_quotas	cc_quotas;
 };
 
 /* in-flight RPC req list, be tracked per endpoint for every crt_context */

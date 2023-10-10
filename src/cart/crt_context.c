@@ -141,6 +141,12 @@ crt_context_init(crt_context_t crt_ctx)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	rc = D_MUTEX_INIT(&ctx->cc_quotas.mutex, NULL);
+	if (rc != 0) {
+		D_MUTEX_DESTROY(&ctx->cc_mutex);
+		D_GOTO(out, rc);
+	}
+
 	D_INIT_LIST_HEAD(&ctx->cc_link);
 
 	/* create timeout binheap */
@@ -1910,3 +1916,127 @@ crt_req_force_completion(struct crt_rpc_priv *rpc_priv)
 	crt_req_timeout_track(rpc_priv);
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 }
+
+int
+crt_context_quotas_init(crt_context_t crt_ctx)
+{
+	struct crt_context	*ctx = crt_ctx;
+	struct crt_quotas	*quotas;
+	int			rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	quotas = &ctx->cc_quotas;
+
+	if (quotas->enabled) {
+		D_ERROR("Quotas already enabled\n");
+		D_GOTO(out, rc = -DER_ALREADY);
+	}
+
+	quotas->limit[CRT_QUOTA_RPC_ALLOC_SOFT] = 64;
+	quotas->limit[CRT_QUOTA_RPC_ALLOC_HARD] = 512;
+	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 256;
+
+	quotas->current[CRT_QUOTA_RPC_ALLOC_SOFT] = 0;
+	quotas->current[CRT_QUOTA_RPC_ALLOC_HARD] = 0;
+	quotas->current[CRT_QUOTA_RPC_INFLIGHT] = 0;
+
+	quotas->enabled = true;
+out:
+	return rc;
+}
+
+int
+crt_context_quotas_finalize(crt context_t crt_ctx)
+{
+	struct crt_context	*ctx = crt_ctx;
+	struct crt_quotas	*quotas;
+	int			rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	quotas = &ctx->cc_quotas;
+
+	if (!quotas->enabled) {
+		D_ERROR("Quotas were not enabled\n");
+		D_GOTO(out, rc = -DER_ALREADY);
+	}
+
+	quotas->enabled = false;
+
+out:
+	return rc;
+	
+}
+
+int
+crt_context_quota_set(crt_context_t crt_ctx, crt_quota_t quota, int value)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (quota < 0 || quota >= CRT_QUOTA_COUNT) {
+		D_ERROR("Invalid quota %d passed\n", quota);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
+	ctx->cc_quotas.limit[quota] = value;
+	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
+
+out:
+	return rc;
+}
+
+int
+crt_context_quota_get(crt_context_t crt_ctx, crt_quota_t quota, int *value)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			rc = 0;
+
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (quota < 0 || quota >= CRT_QUOTA_COUNT) {
+		D_ERROR("Invalid quota %d passed\n", quota);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (value == NULL) {
+		D_ERROR("NULL value\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	*value = ctx->cc_quotas.limit[quota];
+
+out:
+	return rc;
+}
+
+int
+crt_context_get_quota(crt_context_t crt_ctx, crt_quota_t quota)
+{
+	struct crt_context	*ctx = crt_ctx;
+	int			rc = 0;
+
+	
+}
+
+int
+crt_context_put_quota(crt_context_t crt_ctx, crt_quota_t quota)
+{
+}
+
