@@ -605,7 +605,7 @@ int pool_storage_info(test_arg_t *arg, daos_pool_info_t *pinfo)
 }
 
 /**
- * Enabled/Disabled Aggrgation strategy for Pool.
+ * Enabled/Disabled Aggregation strategy for Pool.
  */
 static int
 set_pool_reclaim_strategy(test_arg_t *arg, char *strategy)
@@ -703,7 +703,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_success(rc);
 
-	/* Disabled Pool Aggrgation */
+	/* Disable Pool Aggregation */
 	rc = set_pool_reclaim_strategy(arg, aggr_disabled);
 	assert_rc_equal(rc, 0);
 	/**
@@ -802,7 +802,7 @@ io_overwrite_large(void **state, daos_obj_id_t oid)
 		nvme_initial_size = pinfo.pi_space.ps_space.s_free[1];
 	}
 
-	/* Enabled Pool Aggrgation */
+	/* Enable Pool Aggregation */
 	rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 	assert_rc_equal(rc, 0);
 
@@ -4748,7 +4748,7 @@ enum_recxs_with_aggregation_internal(void **state, bool incr)
 			total_size += recxs[i].rx_nr;
 
 		if (!enable_agg) {
-			/* Enabled Pool Aggrgation */
+			/* Enable Pool Aggregation */
 			print_message("enable aggregation\n");
 			rc = set_pool_reclaim_strategy(arg, aggr_set_time);
 			assert_rc_equal(rc, 0);
