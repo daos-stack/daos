@@ -358,13 +358,13 @@ _ch_free(struct dfuse_info *dfuse_info, struct dfuse_cont *dfc)
 
 		rc = dfs_umount(dfc->dfs_ns);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed: %d (%s)", rc, strerror(rc));
+			DHS_ERROR(dfc, rc, "dfs_umount() failed");
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc == -DER_NOMEM)
 			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, " DF_RC, DP_RC(rc));
+			DHL_ERROR(dfc, rc, "daos_cont_close() failed");
 	}
 
 	atomic_fetch_sub_relaxed(&dfuse_info->di_container_count, 1);
@@ -716,7 +716,7 @@ dfuse_cont_open_by_label(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, 
 
 	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 	if (rc) {
-		DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
+		DHS_ERROR(dfc, rc, "dfs_mount failed");
 		D_GOTO(err_close, rc);
 	}
 
@@ -755,7 +755,7 @@ err_free:
 /*
  * Return a container connection by uuid.
  *
- * Re-use an existing connection if possible, otherwise open new connection
+ * Reuse an existing connection if possible, otherwise open new connection
  * and setup dfs.
  *
  * In the case of a container which has been created by mkdir _dfs will be a
@@ -839,7 +839,7 @@ dfuse_cont_open(struct dfuse_info *dfuse_info, struct dfuse_pool *dfp, uuid_t *c
 		}
 		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, dfs_flags, &dfc->dfs_ns);
 		if (rc) {
-			DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
+			DHS_ERROR(dfc, rc, "dfs mount() failed");
 			D_GOTO(err_close, rc);
 		}
 
@@ -1140,7 +1140,7 @@ dfuse_ie_close(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
 		if (rc)
-			DFUSE_TRA_ERROR(ie, "dfs_release() failed: %d (%s)", rc, strerror(rc));
+			DHS_ERROR(ie, rc, "dfs_release() failed");
 	}
 
 	if (ie->ie_root) {
@@ -1171,7 +1171,7 @@ dfuse_read_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
@@ -1195,7 +1195,7 @@ dfuse_write_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
@@ -1290,7 +1290,7 @@ dfuse_fs_start(struct dfuse_info *dfuse_info, struct dfuse_cont *dfs)
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj, NULL, &ie->ie_stat);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
+			DHS_ERROR(ie, rc, "dfs_lookup() failed");
 			D_GOTO(err_ie, rc = daos_errno2der(rc));
 		}
 	} else {
@@ -1377,11 +1377,11 @@ ino_flush(d_list_t *rlink, void *arg)
 	rc = fuse_lowlevel_notify_inval_entry(dfuse_info->di_session, ie->ie_parent, ie->ie_name,
 					      strlen(ie->ie_name));
 	if (rc != 0 && rc != -EBADF)
-		DFUSE_TRA_WARNING(ie, "%#lx %#lx " DF_DE ": %d %s", ie->ie_parent,
-				  ie->ie_stat.st_ino, DP_DE(ie->ie_name), rc, strerror(-rc));
+		DHS_WARN(ie, -rc, "%#lx %#lx " DF_DE, ie->ie_parent, ie->ie_stat.st_ino,
+			 DP_DE(ie->ie_name));
 	else
-		DFUSE_TRA_INFO(ie, "%#lx %#lx " DF_DE ": %d %s", ie->ie_parent, ie->ie_stat.st_ino,
-			       DP_DE(ie->ie_name), rc, strerror(-rc));
+		DHS_INFO(ie, -rc, "%#lx %#lx " DF_DE, ie->ie_parent, ie->ie_stat.st_ino,
+			 DP_DE(ie->ie_name));
 
 	/* If the FUSE connection is dead then do not traverse further, it
 	 * doesn't matter what gets returned here, as long as it's negative

@@ -44,7 +44,8 @@ class OSAOnlineExtend(OSAUtils):
         self.daos_racer.get_params(self)
         self.daos_racer.run()
 
-    def run_online_extend_test(self, num_pool, racer=False, oclass=None, app_name="ior"):
+    def run_online_extend_test(self, num_pool, racer=False, oclass=None, app_name="ior",
+                               exclude_or_drain=None):
         """Run the Online extend without data.
 
         Args:
@@ -52,6 +53,7 @@ class OSAOnlineExtend(OSAUtils):
              racer (bool): Run the testing along with daos_racer. Defaults to False.
              oclass (str): Object Class (eg: RP_2G1, etc). Default to None.
              app_name (str): App (ior or mdtest) to run during the testing. Defaults to ior.
+             exclude_or_drain (str): Pass "exclude" or "drain" string. Defaults to None.
         """
         # Pool dictionary
         pool = {}
@@ -111,6 +113,19 @@ class OSAOnlineExtend(OSAUtils):
             # Get initial total free space (scm+nvme)
             initial_free_space = self.pool.get_total_free_space(refresh=True)
             output = self.pool.extend(self.ranks)
+            self.log.info(output)
+            if exclude_or_drain == "exclude":
+                self.pool.wait_for_rebuild_to_start()
+                # Give a 4 minute delay so that some objects are moved
+                # as part of rebuild operation.
+                time.sleep(4)
+                self.log.info("Exclude rank 3 while rebuild is happening")
+                output = self.pool.exclude("3")
+            elif exclude_or_drain == "drain":
+                # Drain cannot be performed while extend rebuild is happening.
+                self.print_and_assert_on_rebuild_failure(output)
+                self.log.info("Drain rank 3 after extend rebuild is completed")
+                output = self.pool.drain("3")
             self.print_and_assert_on_rebuild_failure(output)
             free_space_after_extend = self.pool.get_total_free_space(refresh=True)
 
@@ -213,3 +228,31 @@ class OSAOnlineExtend(OSAUtils):
         self.test_during_aggregation = self.params.get("test_with_aggregation",
                                                        '/run/aggregation/*')
         self.run_online_extend_test(1)
+
+    def test_osa_online_extend_exclude_during_rebuild(self):
+        """Test ID: DAOS-14441.
+
+        Test Description: Validate Online extend after rebuild is started
+        and a rank is excluded.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,online_extend
+        :avocado: tags=OSAOnlineExtend,test_osa_online_extend_exclude_during_rebuild
+        """
+        self.log.info("Online Extend Testing: Exclude during Rebuild")
+        self.run_online_extend_test(1, exclude_or_drain="exclude")
+
+    def test_osa_online_extend_drain_after_rebuild(self):
+        """Test ID: DAOS-14441.
+
+        Test Description: Validate Online extend after rebuild is completed
+        and a rank is drained.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=osa,osa_extend,online_extend
+        :avocado: tags=OSAOnlineExtend,test_osa_online_extend_drain_after_rebuild
+        """
+        self.log.info("Online Extend Testing: Drain after rebuild")
+        self.run_online_extend_test(1, exclude_or_drain="drain")

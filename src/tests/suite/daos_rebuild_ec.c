@@ -1111,6 +1111,7 @@ rebuild_ec_multiple_shards(void **state)
 	d_rank_t	rank = 2;
 	int		i, j, k;
 	char		*data;
+	char		*verify_data;
 	uint64_t	stripe_size = 4 * CELL_SIZE;
 	daos_recx_t	recx;
 
@@ -1118,32 +1119,69 @@ rebuild_ec_multiple_shards(void **state)
 		return;
 
 	data = (char *)malloc(stripe_size);
+	verify_data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
+	assert_true(verify_data != NULL);
+	for (i = 0; i < 20; i++)
+		oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
+
 	for (k = 0; k < 3; k++) {
 		for (i = 0; i < 20; i++) {
-			oids[i] = daos_test_oid_gen(arg->coh, OC_EC_4P2GX, 0, 0, arg->myrank);
 			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(data, 'a' + i, stripe_size);
 			for (j = 5 * k; j < 5 * (k + 1); j++) {
 				req.iod_type = DAOS_IOD_ARRAY;
 				recx.rx_nr = stripe_size;
 				recx.rx_idx = j * stripe_size;
-				memset(data, 'a', stripe_size);
 				insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 					     data, stripe_size, &req);
 			}
 			ioreq_fini(&req);
 		}
+
 		rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 		daos_cont_status_clear(arg->coh, NULL);
+		print_message("exclude rank %u\n", rank);
 		rank++;
+
+		for (i = 0; i < 20; i++) {
+			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(verify_data, 'a' + i, stripe_size);
+			for (j = 5 * k; j < 5 * (k + 1); j++) {
+				req.iod_type = DAOS_IOD_ARRAY;
+				recx.rx_nr = stripe_size;
+				recx.rx_idx = j * stripe_size;
+				memset(data, 0, stripe_size);
+				lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					     data, stripe_size, &req);
+				assert_memory_equal(verify_data, data, stripe_size);
+			}
+			ioreq_fini(&req);
+		}
 	}
 
 	rank = 2;
-	for (i = 0; i < 3; i++) {
+	for (k = 0; k < 3; k++) {
 		reintegrate_pools_ranks(&arg, 1, &rank, 1, false);
 		rank++;
+
+		for (i = 0; i < 20; i++) {
+			ioreq_init(&req, arg->coh, oids[i], DAOS_IOD_ARRAY, arg);
+			memset(verify_data, 'a' + i, stripe_size);
+			for (j = 5 * k; j < 5 * (k + 1); j++) {
+				req.iod_type = DAOS_IOD_ARRAY;
+				recx.rx_nr = stripe_size;
+				recx.rx_idx = j * stripe_size;
+				memset(data, 0, stripe_size);
+				lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+					     data, stripe_size, &req);
+				assert_memory_equal(verify_data, data, stripe_size);
+			}
+			ioreq_fini(&req);
+		}
 	}
 
+	free(verify_data);
 	free(data);
 }
 

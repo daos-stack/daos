@@ -117,11 +117,7 @@ echo "\"\"\"" >> "$cfg_file"
 if [ -n "$DISTRO_VERSION" ]; then
     releasever_opt=("--config-opts=releasever=$DISTRO_VERSION")
 fi
-# shellcheck disable=SC2086
-if ! eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}"           \
-          ${repo_dels[*]} ${repo_adds[*]} --disablerepo=\*-debug*           \
-          "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"; then
-    # Debug information for filing bugs on mock
-    rpm -q mock
-    mock --debug-config
-fi
+
+# shellcheck disable=SC2086,SC2048,SC2294
+eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}" ${repo_dels[*]} ${repo_adds[*]}       \
+    --disablerepo=\*-debug* "${releasever_opt[@]}" $MOCK_OPTIONS $RPM_BUILD_OPTIONS "$TARGET"

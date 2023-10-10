@@ -1726,4 +1726,6 @@ int
 vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 			  uint32_t layout_ver);
 
+void vos_lru_free_track(void *arg, daos_size_t size);
+void vos_lru_alloc_track(void *arg, daos_size_t size);
 #endif /* __VOS_INTERNAL_H__ */

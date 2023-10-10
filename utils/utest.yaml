@@ -142,6 +142,7 @@
   tests:
     - cmd: ["src/tests/ftest/cart/utest/test_linkage"]
     - cmd: ["src/tests/ftest/cart/utest/utest_hlc"]
+    - cmd: ["src/tests/ftest/cart/utest/utest_protocol"]
     - cmd: ["src/tests/ftest/cart/utest/utest_swim"]
 - name: storage_estimator
   base: "DAOS_BASE"
