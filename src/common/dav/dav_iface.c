@@ -260,9 +260,10 @@ dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_
 	max_sz = store->stor_size + MD_BLOB_HDR_SZ;
 	if (!store->stor_size || (sz > max_sz)) {
 		D_ERROR("create: Invalid umem_store size (sz=" DF_U64 ", stor_size=" DF_U64
-			", max=" DF_U64 ")\n", sz, store->stor_size, max_sz);
-		errno = EINVAL;
+			", max=" DF_U64 ")\n",
+			sz, store->stor_size, max_sz);
 		close(fd);
+		errno = EINVAL;
 		return NULL;
 	}
 

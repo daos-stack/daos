@@ -570,6 +570,8 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
 	int			 rc, ret;
 
+	meta_sz = scm_sz;
+
 	*ph = NULL;
 	/* always use PMEM mode for SMD */
 	store.store_type = umempobj_get_backend_type();
@@ -578,24 +580,34 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		store.store_standalone = true;
 	}
 
-	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
-	if (!meta_sz) {
-		if (!scm_sz) {
-			struct stat lstat;
-
-			rc = stat(path, &lstat);
-			if (rc != 0)
-				return daos_errno2der(errno);
-			meta_sz = lstat.st_size;
-		} else {
-			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
-			meta_sz = scm_sz;
-		}
+	/* No NVMe is configured or current xstream doesn't have NVMe context */
+	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL) {
+		//	meta_sz = scm_sz;
+		goto umem_create;
 	}
 
-	/* No NVMe is configured or current xstream doesn't have NVMe context */
-	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
-		goto umem_create;
+	if (!scm_sz) {
+		struct stat lstat;
+
+		rc = stat(path, &lstat);
+		if (rc != 0)
+			return daos_errno2der(errno);
+		meta_sz = lstat.st_size;
+	}
+	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
+	//	if (!meta_sz) {
+	//		if (!scm_sz) {
+	//			struct stat lstat;
+	//
+	//			rc = stat(path, &lstat);
+	//			if (rc != 0)
+	//				return daos_errno2der(errno);
+	//			meta_sz = lstat.st_size;
+	//		} else {
+	//			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
+	//			meta_sz = scm_sz;
+	//		}
+	//	}
 
 	D_INFO("Create BIO meta context for xs:%p pool:" DF_UUID " "
 	       "meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
@@ -625,8 +637,11 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	store.stor_ops = &vos_store_ops;
 
 umem_create:
-	D_INFO("umempobj_create meta_sz: " DF_U64 " store_sz: " DF_U64, meta_sz, store.stor_size);
-	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, meta_sz, 0600, &store);
+	//	D_INFO("umempobj_create meta_sz: " DF_U64 " store_sz: " DF_U64, meta_sz,
+	// store.stor_size); 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, meta_sz,
+	// 0600, &store);
+	D_INFO("umempobj_create scm_sz: " DF_U64 " store_sz: " DF_U64, scm_sz, store.stor_size);
+	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
