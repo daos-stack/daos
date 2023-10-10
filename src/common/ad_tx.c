@@ -1147,8 +1147,8 @@ umo_tx_free(struct umem_instance *umm, umem_off_t umoff)
 }
 
 static umem_off_t
-umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags,
-	     unsigned int type_num)
+umo_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	     unsigned int mbkt_id)
 {
 	struct ad_tx		*tx = tx_get();
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
@@ -1242,7 +1242,8 @@ umo_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 }
 
 static umem_off_t
-umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num)
+umo_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
+	    unsigned int mbkt_id)
 {
 	struct ad_blob_handle	 bh = umm2ad_blob_hdl(umm);
 	struct ad_reserv_act	*ract = act;
@@ -1330,9 +1331,10 @@ failed:
 }
 
 static umem_off_t
-umo_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num)
+umo_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num,
+		 unsigned int mbkt_id)
 {
-	return umo_tx_alloc(umm, size, 0, type_num);
+	return umo_tx_alloc(umm, size, 0, type_num, mbkt_id);
 }
 
 static int

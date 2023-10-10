@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -16,46 +16,42 @@
 /*
  * allocation functions flags
  */
-#define DAV_FLAG_ZERO			(((uint64_t)1) << 0)
-#define DAV_FLAG_NO_FLUSH		(((uint64_t)1) << 1)
-#define DAV_FLAG_NO_SNAPSHOT		(((uint64_t)1) << 2)
-#define DAV_FLAG_ASSUME_INITIALIZED	(((uint64_t)1) << 3)
-#define DAV_FLAG_TX_NO_ABORT		(((uint64_t)1) << 4)
+#define DAV_FLAG_ZERO               (((uint64_t)1) << 0)
+#define DAV_FLAG_NO_FLUSH           (((uint64_t)1) << 1)
+#define DAV_FLAG_NO_SNAPSHOT        (((uint64_t)1) << 2)
+#define DAV_FLAG_ASSUME_INITIALIZED (((uint64_t)1) << 3)
+#define DAV_FLAG_TX_NO_ABORT        (((uint64_t)1) << 4)
 
-#define DAV_CLASS_ID(id)		(((uint64_t)(id)) << 48)
-#define DAV_ARENA_ID(id)		(((uint64_t)(id)) << 32)
+#define DAV_CLASS_ID(id)            (((uint64_t)(id)) << 48)
+#define DAV_EZONE_ID(id)            (((uint64_t)(id)) << 16)
 
-#define DAV_XALLOC_CLASS_MASK		((((uint64_t)1 << 16) - 1) << 48)
-#define DAV_XALLOC_ARENA_MASK		((((uint64_t)1 << 16) - 1) << 32)
-#define DAV_XALLOC_ZERO			DAV_FLAG_ZERO
-#define DAV_XALLOC_NO_FLUSH		DAV_FLAG_NO_FLUSH
-#define DAV_XALLOC_NO_ABORT		DAV_FLAG_TX_NO_ABORT
+#define DAV_XALLOC_CLASS_MASK       ((((uint64_t)1 << 16) - 1) << 48)
+#define DAV_XALLOC_EZONE_MASK       ((((uint64_t)1 << 32) - 1) << 16)
+#define DAV_XALLOC_ZERO             DAV_FLAG_ZERO
+#define DAV_XALLOC_NO_FLUSH         DAV_FLAG_NO_FLUSH
+#define DAV_XALLOC_NO_ABORT         DAV_FLAG_TX_NO_ABORT
 
-#define DAV_TX_XALLOC_VALID_FLAGS	(DAV_XALLOC_ZERO |\
-					DAV_XALLOC_NO_FLUSH |\
-					DAV_XALLOC_ARENA_MASK |\
-					DAV_XALLOC_CLASS_MASK |\
-					DAV_XALLOC_NO_ABORT)
+#define DAV_TX_XALLOC_VALID_FLAGS                                                                  \
+	(DAV_XALLOC_ZERO | DAV_XALLOC_NO_FLUSH | DAV_XALLOC_EZONE_MASK | DAV_XALLOC_CLASS_MASK |   \
+	 DAV_XALLOC_NO_ABORT)
 
-#define DAV_XADD_NO_FLUSH		DAV_FLAG_NO_FLUSH
-#define DAV_XADD_NO_SNAPSHOT		DAV_FLAG_NO_SNAPSHOT
-#define DAV_XADD_ASSUME_INITIALIZED	DAV_FLAG_ASSUME_INITIALIZED
-#define DAV_XADD_NO_ABORT		DAV_FLAG_TX_NO_ABORT
-#define DAV_XADD_VALID_FLAGS		(DAV_XADD_NO_FLUSH |\
-					DAV_XADD_NO_SNAPSHOT |\
-					DAV_XADD_ASSUME_INITIALIZED |\
-					DAV_XADD_NO_ABORT)
+#define DAV_XADD_NO_FLUSH           DAV_FLAG_NO_FLUSH
+#define DAV_XADD_NO_SNAPSHOT        DAV_FLAG_NO_SNAPSHOT
+#define DAV_XADD_ASSUME_INITIALIZED DAV_FLAG_ASSUME_INITIALIZED
+#define DAV_XADD_NO_ABORT           DAV_FLAG_TX_NO_ABORT
+#define DAV_XADD_VALID_FLAGS                                                                       \
+	(DAV_XADD_NO_FLUSH | DAV_XADD_NO_SNAPSHOT | DAV_XADD_ASSUME_INITIALIZED | DAV_XADD_NO_ABORT)
 
 /*
  * WAL Redo hints.
  */
-#define DAV_XADD_WAL_CPTR		(((uint64_t)1) << 5)
+#define DAV_XADD_WAL_CPTR     (((uint64_t)1) << 5)
 
-#define DAV_XLOCK_NO_ABORT	DAV_FLAG_TX_NO_ABORT
-#define DAV_XLOCK_VALID_FLAGS	(DAV_XLOCK_NO_ABORT)
+#define DAV_XLOCK_NO_ABORT    DAV_FLAG_TX_NO_ABORT
+#define DAV_XLOCK_VALID_FLAGS (DAV_XLOCK_NO_ABORT)
 
-#define DAV_XFREE_NO_ABORT	DAV_FLAG_TX_NO_ABORT
-#define DAV_XFREE_VALID_FLAGS	(DAV_XFREE_NO_ABORT)
+#define DAV_XFREE_NO_ABORT    DAV_FLAG_TX_NO_ABORT
+#define DAV_XFREE_VALID_FLAGS (DAV_XFREE_NO_ABORT)
 
 typedef struct dav_obj dav_obj_t;
 struct umem_store;
@@ -77,8 +73,7 @@ struct umem_store;
  *			it returns NULL with errno set appropriately.
  */
 dav_obj_t *
-dav_obj_create(const char *path, int flags, size_t sz, mode_t mode,
-	       struct umem_store *store);
+dav_obj_create(const char *path, int flags, size_t sz, mode_t mode, struct umem_store *store);
 
 /**
  * Open and initialize a DAV object and return its handle.
@@ -122,8 +117,9 @@ typedef int (*dav_constr)(dav_obj_t *pop, void *ptr, void *arg);
  * initialized, or if it's interrupted before the constructor completes, the
  * memory reserved for the object is automatically reclaimed.
  */
-int dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
-	      uint64_t type_num, dav_constr constructor, void *arg);
+int
+dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
+	   dav_constr constructor, void *arg);
 
 /**
  * Frees the memory at specified offset within the DAV object pointed to by hdl.
@@ -139,13 +135,13 @@ dav_free(dav_obj_t *pop, uint64_t off);
 /*
  * DAV version of memcpy. Data copied is made persistent in blob.
  */
-void *dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src,
-			 size_t len);
+void *
+dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src, size_t len);
 /*
  * DAV version of memcpy with deferred commit to blob.
  */
-void *dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
-				 size_t len);
+void *
+dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src, size_t len);
 
 /*
  * If called for the first time on a newly created dav heap, the root object
@@ -156,8 +152,8 @@ void *dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
  *
  * This function is currently *not* thread-safe.
  */
-uint64_t dav_root(dav_obj_t *pop, size_t size);
-
+uint64_t
+dav_root(dav_obj_t *pop, size_t size);
 
 /*
  * Transactions
@@ -167,23 +163,22 @@ uint64_t dav_root(dav_obj_t *pop, size_t size);
  * the dav_tx_begin function.
  */
 enum dav_tx_stage {
-	DAV_TX_STAGE_NONE,	/* no transaction in this thread */
-	DAV_TX_STAGE_WORK,	/* transaction in progress */
-	DAV_TX_STAGE_ONCOMMIT,	/* successfully committed */
-	DAV_TX_STAGE_ONABORT,	/* tx_begin failed or transaction aborted */
-	DAV_TX_STAGE_FINALLY,	/* always called */
+	DAV_TX_STAGE_NONE,     /* no transaction in this thread */
+	DAV_TX_STAGE_WORK,     /* transaction in progress */
+	DAV_TX_STAGE_ONCOMMIT, /* successfully committed */
+	DAV_TX_STAGE_ONABORT,  /* tx_begin failed or transaction aborted */
+	DAV_TX_STAGE_FINALLY,  /* always called */
 
 	DAV_MAX_TX_STAGE
 };
 
-typedef void (*dav_tx_callback)(dav_obj_t *pop, enum dav_tx_stage stage,
-	       void *);
+typedef void (*dav_tx_callback)(dav_obj_t *pop, enum dav_tx_stage stage, void *);
 
 enum dav_tx_param {
 	DAV_TX_PARAM_NONE,
-	DAV_TX_PARAM_UNUSED1,	/* For parity with libpmemobj */
-	DAV_TX_PARAM_UNUSED2,	/* For parity with libpmemobj */
-	DAV_TX_PARAM_CB,	/* dav_tx_callback cb, void *arg */
+	DAV_TX_PARAM_UNUSED1, /* For parity with libpmemobj */
+	DAV_TX_PARAM_UNUSED2, /* For parity with libpmemobj */
+	DAV_TX_PARAM_CB,      /* dav_tx_callback cb, void *arg */
 };
 
 /*
@@ -194,7 +189,8 @@ enum dav_tx_param {
  * returns zero. Otherwise, stage changes to TX_STAGE_ONABORT and an error
  * number is returned.
  */
-int dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...);
+int
+dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...);
 
 /*
  * Aborts current transaction
@@ -203,14 +199,16 @@ int dav_tx_begin(dav_obj_t *pop, jmp_buf env, ...);
  *
  * This function must be called during TX_STAGE_WORK.
  */
-void dav_tx_abort(int errnum);
+void
+dav_tx_abort(int errnum);
 
 /*
  * Commits current transaction
  *
  * This function must be called during TX_STAGE_WORK.
  */
-void dav_tx_commit(void);
+void
+dav_tx_commit(void);
 
 /*
  * Cleanups current transaction. Must always be called after dav_tx_begin,
@@ -225,52 +223,38 @@ void dav_tx_commit(void);
  *
  * This function must *not* be called during TX_STAGE_WORK.
  */
-int dav_tx_end(void *data);
+int
+dav_tx_end(void *data);
 
 /*
  * Returns the current stage of the transaction.
  */
-enum dav_tx_stage dav_tx_stage(void);
+enum dav_tx_stage
+dav_tx_stage(void);
 
 /*
  * Returns last transaction error code.
  */
-int dav_tx_errno(void);
+int
+dav_tx_errno(void);
 
 /*
  * Transactionally allocates a new object.
  *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
- *
- * This function must be called during TX_STAGE_WORK.
- */
-uint64_t dav_tx_alloc(size_t size, uint64_t type_num);
-
-/*
- * Transactionally allocates a new object.
- *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
+ * If successful, returns offset of the object in the heap.
+ * Otherwise, stage changes to TX_STAGE_ONABORT and an zero is returned.
  * 'Flags' is a bitmask of the following values:
  *  - POBJ_XALLOC_ZERO - zero the allocated object
  *  - POBJ_XALLOC_NO_FLUSH - skip flush on commit
  *  - POBJ_XALLOC_NO_ABORT - if the function does not end successfully,
+ *  - DAV_CLASS_ID(id)	   - id of allocation class to use.
+ *  - DAV_EZONE_ID(id)	   - id of zone to use.
  *  do not abort the transaction and return the error number.
  *
  * This function must be called during TX_STAGE_WORK.
  */
-uint64_t dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags);
-
-/*
- * Transactionally allocates new zeroed object.
- *
- * If successful, returns PMEMoid.
- * Otherwise, stage changes to TX_STAGE_ONABORT and an OID_NULL is returned.
- *
- * This function must be called during TX_STAGE_WORK.
- */
-uint64_t dav_tx_zalloc(size_t size, uint64_t type_num);
+uint64_t
+dav_tx_alloc(size_t size, uint64_t type_num, uint64_t flags);
 
 /*
  * Transactionally frees an existing object.
@@ -280,7 +264,8 @@ uint64_t dav_tx_zalloc(size_t size, uint64_t type_num);
  *
  * This function must be called during TX_STAGE_WORK.
  */
-int dav_tx_free(uint64_t off);
+int
+dav_tx_free(uint64_t off);
 
 /*
  * Takes a "snapshot" of the memory block of given size and located at given
@@ -294,7 +279,8 @@ int dav_tx_free(uint64_t off);
  *
  * This function must be called during TX_STAGE_WORK.
  */
-int dav_tx_add_range(uint64_t off, size_t size);
+int
+dav_tx_add_range(uint64_t off, size_t size);
 
 /*
  * Takes a "snapshot" of the given memory region and saves it in the undo log.
@@ -308,7 +294,8 @@ int dav_tx_add_range(uint64_t off, size_t size);
  *
  * This function must be called during TX_STAGE_WORK.
  */
-int dav_tx_add_range_direct(const void *ptr, size_t size);
+int
+dav_tx_add_range_direct(const void *ptr, size_t size);
 
 /*
  * Behaves exactly the same as dav_tx_add_range when 'flags' equals 0.
@@ -319,7 +306,8 @@ int dav_tx_add_range_direct(const void *ptr, size_t size);
  *  - POBJ_XADD_NO_ABORT - if the function does not end successfully,
  *  do not abort the transaction and return the error number.
  */
-int dav_tx_xadd_range(uint64_t off, size_t size, uint64_t flags);
+int
+dav_tx_xadd_range(uint64_t off, size_t size, uint64_t flags);
 
 /*
  * Behaves exactly the same as dav_tx_add_range_direct when 'flags' equals
@@ -330,13 +318,15 @@ int dav_tx_xadd_range(uint64_t off, size_t size, uint64_t flags);
  *  - POBJ_XADD_NO_ABORT - if the function does not end successfully,
  *  do not abort the transaction and return the error number.
  */
-int dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags);
+int
+dav_tx_xadd_range_direct(const void *ptr, size_t size, uint64_t flags);
 
 /*
  * Converts the offset to a pointer in the context of heap associated with
  * current transaction.
  */
-void *dav_tx_off2ptr(uint64_t off);
+void *
+dav_tx_off2ptr(uint64_t off);
 
 enum dav_action_type {
 	/* a heap action (e.g., alloc) */
@@ -363,18 +353,27 @@ struct dav_action {
 	 * This structure should NEVER be stored on persistent memory!
 	 */
 	enum dav_action_type type;
-	uint32_t data[3];
+	uint32_t             data[3];
 	union {
 		struct dav_action_heap heap;
-		uint64_t data2[14];
+		uint64_t               data2[14];
 	};
 };
 
-uint64_t dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num);
-void dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act);
-int dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
-void dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
-int dav_tx_publish(struct dav_action *actv, size_t actvcnt);
+#define DAV_ACTION_XRESERVE_VALID_FLAGS                                                            \
+	(DAV_XALLOC_CLASS_MASK | DAV_XALLOC_EZONE_MASK | DAV_XALLOC_ZERO)
+
+uint64_t
+dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num,
+	     uint64_t flags);
+void
+dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act);
+int
+dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
+void
+dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt);
+int
+dav_tx_publish(struct dav_action *actv, size_t actvcnt);
 
 /*
  * Allocation class interface
@@ -457,7 +456,7 @@ struct dav_alloc_class_desc {
 	 * containing 256 bytes that spans two units. The usable size of that
 	 * allocation will be 240 bytes: 2 * 128 - 16 (header).
 	 */
-	size_t unit_size;
+	size_t               unit_size;
 
 	/*
 	 * Desired alignment of objects from the allocation class.
@@ -468,7 +467,7 @@ struct dav_alloc_class_desc {
 	 * compact one this means that the alignment is 48 bytes.
 	 *
 	 */
-	size_t alignment;
+	size_t               alignment;
 
 	/*
 	 * The minimum number of units that must be present in a
@@ -481,7 +480,7 @@ struct dav_alloc_class_desc {
 	 * allocate, but blocks do go back to the global heap if they are no
 	 * longer actively used for allocation.
 	 */
-	unsigned units_per_block;
+	unsigned             units_per_block;
 
 	/*
 	 * The header of allocations that originate from this allocation class.
@@ -491,14 +490,14 @@ struct dav_alloc_class_desc {
 	/*
 	 * The identifier of this allocation class.
 	 */
-	unsigned class_id;
+	unsigned             class_id;
 };
 
 /*
  * Registers an allocation class handle with the DAV object.
  */
-int dav_class_register(dav_obj_t *pop, struct dav_alloc_class_desc *p);
-
+int
+dav_class_register(dav_obj_t *pop, struct dav_alloc_class_desc *p);
 
 struct dav_heap_stats {
 	uint64_t curr_allocated;
@@ -509,13 +508,30 @@ struct dav_heap_stats {
  * Returns the heap allocation statistics associated  with the
  * DAV object.
  */
-int dav_get_heap_stats(dav_obj_t *pop, struct dav_heap_stats *st);
+int
+dav_get_heap_stats(dav_obj_t *pop, struct dav_heap_stats *st);
 
 struct umem_wal_tx;
 
-uint32_t wal_tx_act_nr(struct umem_wal_tx *tx);
-uint32_t wal_tx_payload_len(struct umem_wal_tx *tx);
-struct umem_action *wal_tx_act_first(struct umem_wal_tx *tx);
-struct umem_action *wal_tx_act_next(struct umem_wal_tx *tx);
+uint32_t
+wal_tx_act_nr(struct umem_wal_tx *tx);
+uint32_t
+wal_tx_payload_len(struct umem_wal_tx *tx);
+struct umem_action *
+wal_tx_act_first(struct umem_wal_tx *tx);
+struct umem_action *
+wal_tx_act_next(struct umem_wal_tx *tx);
+
+/**
+ * Get an evictable zone with sufficient free space within.
+ *
+ * \param[in]		pop		pool handle
+ * \param[in]		flags		zone selection criteria.
+ *
+ * \return id >= 0. Zero indicates non-evictable zone and will be
+ *	returned if no evictable zone can be chosen.
+ */
+uint32_t
+dav_get_zone_evictable(dav_obj_t *pop, int flags);
 
 #endif /* __DAOS_COMMON_DAV_H */

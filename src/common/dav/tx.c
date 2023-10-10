@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * tx.c -- transactions implementation
@@ -354,8 +354,8 @@ tx_alloc_common(struct tx *tx, size_t size, type_num_t type_num,
 		return obj_tx_fail_null(ENOMEM, args.flags);
 
 	if (palloc_reserve(pop->do_heap, size, constructor, &args, type_num, 0,
-		CLASS_ID_FROM_FLAG(args.flags),
-		ARENA_ID_FROM_FLAG(args.flags), action) != 0)
+			   CLASS_ID_FROM_FLAG(args.flags), EZONE_ID_FROM_FLAG(args.flags),
+			   action) != 0)
 		goto err_oom;
 
 	palloc_get_prange(action, &off, &size, 1);
@@ -1265,68 +1265,7 @@ dav_tx_xadd_range(uint64_t hoff, size_t size, uint64_t flags)
  * dav_tx_alloc -- allocates a new object
  */
 uint64_t
-dav_tx_alloc(size_t size, uint64_t type_num)
-{
-	uint64_t off;
-
-	DAV_API_START();
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-
-	uint64_t flags = tx_abort_on_failure_flag(tx);
-
-	if (size == 0) {
-		ERR("allocation with size 0");
-		off = obj_tx_fail_null(EINVAL, flags);
-		DAV_API_END();
-		return off;
-	}
-
-	off = tx_alloc_common(tx, size, (type_num_t)type_num,
-			constructor_tx_alloc, ALLOC_ARGS(flags));
-
-	DAV_API_END();
-	return off;
-}
-
-/*
- * dav_tx_zalloc -- allocates a new zeroed object
- */
-uint64_t
-dav_tx_zalloc(size_t size, uint64_t type_num)
-{
-	uint64_t off;
-	struct tx *tx = get_tx();
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-
-	uint64_t flags = DAV_FLAG_ZERO;
-
-	flags |= tx_abort_on_failure_flag(tx);
-
-	DAV_API_START();
-	if (size == 0) {
-		ERR("allocation with size 0");
-		off = obj_tx_fail_null(EINVAL, flags);
-		DAV_API_END();
-		return off;
-	}
-
-	off = tx_alloc_common(tx, size, (type_num_t)type_num,
-			constructor_tx_alloc, ALLOC_ARGS(flags));
-
-	DAV_API_END();
-	return off;
-}
-
-/*
- * dav_tx_xalloc -- allocates a new object
- */
-uint64_t
-dav_tx_xalloc(size_t size, uint64_t type_num, uint64_t flags)
+dav_tx_alloc(size_t size, uint64_t type_num, uint64_t flags)
 {
 	uint64_t off;
 	struct tx *tx = get_tx();
@@ -1485,128 +1424,12 @@ dav_tx_off2ptr(uint64_t off)
 	return (void *)OBJ_OFF_TO_PTR(tx->pop, off);
 }
 
-/*
- * dav_reserve -- reserves a single object
- */
-uint64_t
-dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
-{
-	DAV_DBG("pop %p act %p size %zu type_num %llx",
-		pop, act, size,
-		(unsigned long long)type_num);
-
-	DAV_API_START();
-	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
-		return 0;
-
-	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
-		0, 0, 0, act) != 0) {
-		DAV_API_END();
-		return 0;
-	}
-
-	DAV_API_END();
-	return act->heap.offset;
-}
-
-/*
- * dav_defer_free -- creates a deferred free action
- */
-void
-dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act)
-{
-	ASSERT(off != 0);
-	ASSERT(OBJ_OFF_IS_VALID(pop, off));
-	palloc_defer_free(pop->do_heap, off, act);
-}
-
-#if	0
-/*
- * dav_publish -- publishes a collection of actions
- */
-int
-dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
-{
-	DAV_API_START();
-	struct operation_context *ctx = pmalloc_operation_hold(pop);
-
-	size_t entries_size = actvcnt * sizeof(struct ulog_entry_val);
-
-	if (operation_reserve(ctx, entries_size) != 0) {
-		DAV_API_END();
-		return -1;
-	}
-
-	palloc_publish(&pop->do_heap, actv, actvcnt, ctx);
-
-	pmalloc_operation_release(pop);
-
-	DAV_API_END();
-	return 0;
-}
-#endif
-
-/*
- * dav_cancel -- cancels collection of actions
- */
-void
-dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
-{
-	DAV_DBG("actvcnt=%zu", actvcnt);
-	DAV_API_START();
-	palloc_cancel(pop->do_heap, actv, actvcnt);
-	DAV_API_END();
-}
-
-
-/*
- * dav_tx_publish -- publishes actions inside of a transaction,
- * with no_abort option
- */
-int
-dav_tx_publish(struct dav_action *actv, size_t actvcnt)
-{
-	struct tx *tx = get_tx();
-	uint64_t flags = 0;
-	uint64_t off, size;
-	int ret;
-
-	ASSERT_IN_TX(tx);
-	ASSERT_TX_STAGE_WORK(tx);
-
-	flags |= tx_abort_on_failure_flag(tx);
-
-	DAV_API_START();
-
-	if (tx_action_reserve(tx, actvcnt) != 0) {
-		ret = obj_tx_fail_err(ENOMEM, flags);
-
-		DAV_API_END();
-		return ret;
-	}
-
-	for (size_t i = 0; i < actvcnt; ++i) {
-		VEC_PUSH_BACK(&tx->actions, actv[i]);
-		if (palloc_action_isalloc(&actv[i])) {
-			palloc_get_prange(&actv[i], &off, &size, 1);
-			struct tx_range_def r = {off, size, DAV_XADD_NO_SNAPSHOT|DAV_XADD_WAL_CPTR};
-
-			ret = dav_tx_add_common(tx, &r);
-			D_ASSERT(ret == 0);
-		}
-	}
-
-	DAV_API_END();
-	return 0;
-}
-
 /* arguments for constructor_alloc */
 struct constr_args {
 	int zero_init;
 	dav_constr constructor;
 	void *arg;
 };
-
 
 /* arguments for constructor_alloc_root */
 struct carg_root {
@@ -1785,10 +1608,8 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	ctx = pop->external;
 	operation_start(ctx);
 
-	int ret = palloc_operation(pop->do_heap, 0, offp, size,
-			constructor_alloc, &carg, type_num, 0,
-			CLASS_ID_FROM_FLAG(flags), ARENA_ID_FROM_FLAG(flags),
-			ctx);
+	int ret = palloc_operation(pop->do_heap, 0, offp, size, constructor_alloc, &carg, type_num,
+				   0, CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), ctx);
 
 	lw_tx_end(pop, NULL);
 	return ret;
@@ -1798,11 +1619,12 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
  * dav_alloc -- allocates a new object
  */
 int
-dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
-	  uint64_t type_num, dav_constr constructor, void *arg)
+dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size, uint64_t type_num, uint64_t flags,
+	   dav_constr constructor, void *arg)
 {
-	DAV_DBG("pop %p offp %p size %zu type_num %llx constructor %p arg %p",
-		pop, offp, size, (unsigned long long)type_num, constructor, arg);
+	DAV_DBG(3, "pop %p offp %p size %zu type_num %llx flags %llx constructor %p arg %p", pop,
+		offp, size, (unsigned long long)type_num, (unsigned long long)flags, constructor,
+		arg);
 
 	if (size == 0) {
 		ERR("allocation with size 0");
@@ -1810,15 +1632,14 @@ dav_alloc(dav_obj_t *pop, uint64_t *offp, size_t size,
 		return -1;
 	}
 
-	if (offp == NULL) {
-		ERR("allocation offp is NULL");
+	if (flags & ~DAV_TX_XALLOC_VALID_FLAGS) {
+		ERR("unknown flags 0x%" PRIx64, flags & ~DAV_TX_XALLOC_VALID_FLAGS);
 		errno = EINVAL;
 		return -1;
 	}
 
 	DAV_API_START();
-	int ret = obj_alloc_construct(pop, offp, size, type_num,
-			0, constructor, arg);
+	int ret = obj_alloc_construct(pop, offp, size, type_num, flags, constructor, arg);
 
 	DAV_API_END();
 	return ret;
@@ -1888,4 +1709,147 @@ dav_memcpy_persist_relaxed(dav_obj_t *pop, void *dest, const void *src,
 
 	DAV_API_END();
 	return ptr;
+}
+
+/*
+ * dav_reserve -- reserves a single object
+ */
+uint64_t
+dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num, uint64_t flags)
+{
+	struct constr_args carg;
+
+	DAV_DBG(3, "pop %p act %p size %zu type_num %llx flags %llx", pop, act, size,
+		(unsigned long long)type_num, (unsigned long long)flags);
+
+	if (flags & ~DAV_ACTION_XRESERVE_VALID_FLAGS) {
+		ERR("unknown flags 0x%" PRIx64, flags & ~DAV_ACTION_XRESERVE_VALID_FLAGS);
+		errno = EINVAL;
+		return 0;
+	}
+
+	DAV_API_START();
+
+	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
+		return 0;
+
+	carg.zero_init   = flags & DAV_FLAG_ZERO;
+	carg.constructor = NULL;
+	carg.arg         = NULL;
+
+	if (palloc_reserve(pop->do_heap, size, constructor_alloc, &carg, type_num, 0,
+			   CLASS_ID_FROM_FLAG(flags), EZONE_ID_FROM_FLAG(flags), act) != 0) {
+		DAV_API_END();
+		return 0;
+	}
+
+	DAV_API_END();
+	return act->heap.offset;
+}
+
+/*
+ * dav_defer_free -- creates a deferred free action
+ */
+void
+dav_defer_free(dav_obj_t *pop, uint64_t off, struct dav_action *act)
+{
+	ASSERT(off != 0);
+	ASSERT(OBJ_OFF_IS_VALID(pop, off));
+	palloc_defer_free(pop->do_heap, off, act);
+}
+
+#if 0
+/*
+ * dav_publish -- publishes a collection of actions
+ */
+int
+dav_publish(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
+{
+	DAV_API_START();
+	struct operation_context *ctx = pmalloc_operation_hold(pop);
+
+	size_t entries_size = actvcnt * sizeof(struct ulog_entry_val);
+
+	if (operation_reserve(ctx, entries_size) != 0) {
+		DAV_API_END();
+		return -1;
+	}
+
+	palloc_publish(&pop->do_heap, actv, actvcnt, ctx);
+
+	pmalloc_operation_release(pop);
+
+	DAV_API_END();
+	return 0;
+}
+#endif
+
+/*
+ * dav_cancel -- cancels collection of actions
+ */
+void
+dav_cancel(dav_obj_t *pop, struct dav_action *actv, size_t actvcnt)
+{
+	DAV_DBG("actvcnt=%zu", actvcnt);
+	DAV_API_START();
+	palloc_cancel(pop->do_heap, actv, actvcnt);
+	DAV_API_END();
+}
+
+/*
+ * dav_tx_publish -- publishes actions inside of a transaction,
+ * with no_abort option
+ */
+int
+dav_tx_publish(struct dav_action *actv, size_t actvcnt)
+{
+	struct tx *tx    = get_tx();
+	uint64_t   flags = 0;
+	uint64_t   off, size;
+	int        ret;
+
+	ASSERT_IN_TX(tx);
+	ASSERT_TX_STAGE_WORK(tx);
+
+	flags |= tx_abort_on_failure_flag(tx);
+
+	DAV_API_START();
+
+	if (tx_action_reserve(tx, actvcnt) != 0) {
+		ret = obj_tx_fail_err(ENOMEM, flags);
+
+		DAV_API_END();
+		return ret;
+	}
+
+	for (size_t i = 0; i < actvcnt; ++i) {
+		VEC_PUSH_BACK(&tx->actions, actv[i]);
+		if (palloc_action_isalloc(&actv[i])) {
+			palloc_get_prange(&actv[i], &off, &size, 1);
+			struct tx_range_def r = {off, size,
+						 DAV_XADD_NO_SNAPSHOT | DAV_XADD_WAL_CPTR};
+
+			ret = dav_tx_add_common(tx, &r);
+			D_ASSERT(ret == 0);
+		}
+	}
+
+	DAV_API_END();
+	return 0;
+}
+
+/*
+ * dav_get_zone_evictable -- Returns an evictable zone id that can be used for
+ * allocations. If there are no evictable zone with sufficient free space then
+ * zero is returned which maps to non-evictable zone.
+ */
+uint32_t
+dav_get_zone_evictable(dav_obj_t *pop, int flags)
+{
+	D_ASSERT(flags == 0);
+	/* REVISIT: TBD
+	 * Return evictable zone that is currently marked as in-use and has sufficient free space.
+	 * Else, find an evictable zone that has more that x% of free memory and mark it as in-use.
+	 */
+	return 0;
 }
