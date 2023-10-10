@@ -23,6 +23,7 @@ server_config:
       env_vars:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
       storage: auto
     1:
       pinned_numa_node: 1
@@ -34,6 +35,7 @@ server_config:
       env_vars:
         - DD_MASK=group_metadata_only,io,epc,rebuild
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
       storage: auto
   transport_config:
     allow_insecure: false
