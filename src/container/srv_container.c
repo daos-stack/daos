@@ -5388,6 +5388,8 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	if ((rc != 0) || dup_op)
 		goto out_lock;
 
+	/* TODO: add client-provided metadata RPC key, lookup in cs_ops KVS, assign dup_op */
+
 	switch (opc) {
 	case CONT_CREATE:
 		rc = cont_create(&tx, pool_hdl, svc, rpc, cont_proto_ver);
@@ -5395,6 +5397,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
 			d_tm_inc_counter(metrics->create_total, 1);
 		}
+		if (dup_op)
+			goto out_lock;
+
 		break;
 	case CONT_OPEN_BYLABEL:
 		olbl_out = crt_reply_get(rpc);
@@ -5421,6 +5426,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	op_val.ov_rc = rc;
 	if (rc != 0)
 		goto out_contref;
+	/* TODO: assign cs_ops value rc=0 */
 
 	/* Update container metadata modified times as applicable
 	 * NB: this is a NOOP if the pool has not been upgraded to the layout containing mdtimes.

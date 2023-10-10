@@ -230,7 +230,7 @@ class CartTest(TestWithoutServers):
         output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
-        env += " -x D_LOG_FILE_APPEND_PID=1"
+        env += " -x D_LOG_FILE_APPEND_PID=1 -x D_LOG_FILE_APPEND_RANK=1 "
 
         env += yaml_envs
 

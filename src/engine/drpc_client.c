@@ -387,11 +387,10 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 		D_GOTO(out_resp, rc = frsp->status);
 	}
 
-	rc = uuid_parse(frsp->uuid, pool_uuid);
-	if (rc != 0) {
-		D_ERROR("Unable to parse pool UUID %s: "DF_RC"\n", frsp->uuid,
-			DP_RC(rc));
-		D_GOTO(out_resp, rc = -DER_IO);
+	if (uuid_parse(frsp->uuid, pool_uuid) != 0) {
+		rc = -DER_IO;
+		DL_ERROR(rc, "Pool UUID is invalid");
+		goto out_resp;
 	}
 
 	ranks = uint32_array_to_rank_list(frsp->svcreps,
