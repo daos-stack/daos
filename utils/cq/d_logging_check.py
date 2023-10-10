@@ -151,7 +151,8 @@ ALLOWED_VARS = ['strerror', 'db_file', 'ii_group_name', 'cg_grpid', 'agg_op2str'
                 'opc_str', 'oi_str', 'sr_name', 's_name', 'ds_rsvc_state_str', 'cpf_name',
                 'bb_name', 'bio_state_enum_to_str', 'traddr', 'dlerror()', 'prop_str',
                 'act_opc2str', 'dc_agent_sockpath', 'getenv', 'cel_grp_id', 'ul_uri', 'crp_tgt_uri',
-                'SWIM_RPC_TYPE_STR', 'ul_grp_id', 'cg_grpid']
+                'SWIM_RPC_TYPE_STR', 'ul_grp_id', 'cg_grpid', 'id_name', 'RB_OP_STR', 'dtn_name',
+                'pool_comp_type2str']
 
 
 class AllChecks():
