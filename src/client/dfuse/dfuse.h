@@ -123,7 +123,7 @@ struct dfuse_inode_entry;
  * when EOF is returned to the kernel.  If it's still present on release then it's freed then.
  */
 struct dfuse_read_ahead {
-	pthread_mutex_t     dra_lock;
+	DAOS_MUTEX          dra_lock;
 	struct dfuse_event *dra_ev;
 	int                 dra_rc;
 };
