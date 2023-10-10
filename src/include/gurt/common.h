@@ -434,6 +434,7 @@ bool d_rank_list_identical(d_rank_list_t *rank_list1,
 bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank);
 int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx);
 int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
+int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
 d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
 int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
 char *d_rank_list_to_str(d_rank_list_t *rank_list);

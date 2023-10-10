@@ -682,6 +682,48 @@ d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 }
 
 /**
+ * Print out the content of a rank_list to stderr.
+ *
+ * \param[in]  rank_list	the rank list to print
+ * \param[in]  name		a name to describe the rank list
+ * \param[in]  name_len		length of the name string (excluding the
+ *				trailing \n);
+ *
+ * \return			0 on success, a negative value on error
+ */
+int
+d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len)
+{
+	int		 width;
+	char		*tmp_str;
+	int		 i;
+	int		 idx = 0;
+	int		 rc = 0;
+
+	width = strnlen(name, name_len + 1);
+	if (width > name_len) {
+		D_ERROR("name parameter too long.\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+	width = 0;
+	for (i = 0; i < rank_list->rl_nr; i++)
+		width += snprintf(NULL, 0, "%d ", rank_list->rl_ranks[i]);
+	width++;
+	D_ALLOC(tmp_str, width);
+	if (tmp_str == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+	for (i = 0; i < rank_list->rl_nr; i++)
+		idx += sprintf(&tmp_str[idx], "%d ", rank_list->rl_ranks[i]);
+	tmp_str[width - 1] = '\0';
+	D_DEBUG(DB_TRACE, "%s, %d ranks: %s\n",
+		name, rank_list->rl_nr, tmp_str);
+	D_FREE(tmp_str);
+
+out:
+	return rc;
+}
+
+/**
  * Create a ranged string representation of a rank list.
  *
  * \param[in]  rank_list	the rank list to represent
