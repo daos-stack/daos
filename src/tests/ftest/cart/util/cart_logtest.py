@@ -361,8 +361,9 @@ class LogTest():
             cb_list.append((mem_r, None))
 
         for line in self._li.new_iter(pid=pid, stateful=True):
-            if rpc_r:
-                rpc_r.add_line(line)
+            for (cbe, facs) in cb_list:
+                if facs is None or line.fac in facs:
+                    cbe.add_line(line)
             self.save_log_line(line)
             try:
                 msg = ''.join(line._fields[2:])
@@ -498,8 +499,8 @@ class LogTest():
             mem_r.active_desc = active_desc
 
         del active_desc['root']
-        if rpc_r:
-            rpc_r.report()
+        for (cbe, _) in cb_list:
+            cbe.report()
 
         if not self.ftest_mode:
             active_desc = mem_r.active_desc
