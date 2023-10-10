@@ -21,7 +21,6 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
-	"github.com/dustin/go-humanize"
 )
 
 // ShouldDebug returns true if the protobuf message should be logged.
