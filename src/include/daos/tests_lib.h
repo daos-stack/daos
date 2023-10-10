@@ -118,7 +118,7 @@ dts_sgl_init_with_strings(d_sg_list_t *sgl, uint32_t count, char *d, ...);
  *
  * @param sgl		Scatter gather list to initialize
  * @param count		Number of IO Vectors that will be created in the SGL
- * @param repeat	Number of tiems to repeat the string
+ * @param repeat	Number of times to repeat the string
  * @param d		First string that will be used
  * @param ...		Rest of strings, up to count
  */

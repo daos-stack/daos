@@ -386,7 +386,7 @@ class StateIter():
 
     def __iter__(self):
 
-        # Dict, indexed by pointer, containing re-use index for that pointer.
+        # Dict, indexed by pointer, containing reuse index for that pointer.
         self.reuse_table = {}
         # Conversion from active pointer to line where it was created.
         self.active_desc = {}
