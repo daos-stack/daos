@@ -32,7 +32,7 @@ def get_build_environment(logger, build_vars_file):
         dict: a dictionary of DAOS build environment variable names and values
 
     """
-    logger.debug("Obtaining DAOS build environment PREFIX path from %s", build_vars_file)
+    logger.debug("Obtaining DAOS build environment from %s", build_vars_file)
     try:
         with open(build_vars_file, encoding="utf-8") as vars_file:
             return json.load(vars_file)
@@ -509,13 +509,12 @@ class TestEnvironment():
         return os.path.join(os.sep, "tmp", "test.cov")
 
 
-def set_test_environment(logger, build_vars_file, test_env=None, servers=None, clients=None,
-                         provider=None, insecure_mode=False, details=None):
+def set_test_environment(logger, test_env=None, servers=None, clients=None, provider=None,
+                         insecure_mode=False, details=None):
     """Set up the test environment.
 
     Args:
         logger (Logger): logger for the messages produced by this method
-        build_vars_file (str): the full path to the DAOS build_vars.json file
         test_env (TestEnvironment, optional): the current test environment. Defaults to None.
         servers (NodeSet, optional): hosts designated for the server role in testing. Defaults to
             None.
@@ -536,6 +535,8 @@ def set_test_environment(logger, build_vars_file, test_env=None, servers=None, c
 
     if test_env:
         # Update the PATH environment variable
+        build_vars_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "..", "..", "..", ".build_vars.json")
         update_path(logger, build_vars_file)
 
         # Get the default fabric interface and provider

@@ -29,13 +29,12 @@ class CoreFileException(Exception):
     """Base exception for this module."""
 
 
-def get_core_file_pattern(log, hosts, process_cores):
+def get_core_file_pattern(log, hosts):
     """Get the core file pattern information from the hosts if collecting core files.
 
     Args:
         log (Logger): logger for the messages produced by this method
         clients (NodeSet): hosts designated for the client role in testing
-        process_cores (bool): whether or not to collect core files after the tests complete
 
     Raises:
         CoreFileException: if there was an error obtaining the core file pattern information
@@ -44,9 +43,6 @@ def get_core_file_pattern(log, hosts, process_cores):
         dict: a dictionary containing the path and pattern for the core files per NodeSet
     """
     core_files = {}
-    if not process_cores:
-        log.debug("Not collecting core files")
-        return core_files
 
     # Determine the core file pattern being used by the hosts
     command = "cat /proc/sys/kernel/core_pattern"

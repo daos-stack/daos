@@ -299,11 +299,9 @@ class Launch():
 
         # Setup the test environment
         test_env = TestEnvironment()
-        build_vars_file = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "..", "..", ".build_vars.json")
         try:
             if args.list:
-                set_test_environment(logger, build_vars_file)
+                set_test_environment(logger)
             else:
                 set_test_environment(
                     logger, build_vars_file, test_env, test_servers, test_clients, args.provider,
@@ -353,12 +351,16 @@ class Launch():
             setup_result.warn_test(logger, "Setup", message, sys.exc_info())
 
         # Get the core file pattern information
-        try:
-            all_hosts = test_servers | test_clients | self.local_host
-            core_files = get_core_file_pattern(logger, all_hosts, args.process_cores)
-        except LaunchException:
-            message = "Error obtaining the core file pattern information"
-            return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        core_files = {}
+        if args.process_cores:
+            try:
+                all_hosts = test_servers | test_clients | self.local_host
+                core_files = get_core_file_pattern(logger, all_hosts, args.process_cores)
+            except LaunchException:
+                message = "Error obtaining the core file pattern information"
+                return self.get_exit_status(1, message, "Setup", sys.exc_info())
+        else:
+            logger.debug("Not collecting core files")
 
         # Determine if bullseye code coverage collection is enabled
         code_coverage = CodeCoverage(test_env)

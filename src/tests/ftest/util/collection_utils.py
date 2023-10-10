@@ -790,11 +790,11 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
     logger.debug("Updating the xml data in the test %s file", cmocka_xml)
 
     if len(re.findall('<testsuites>', cmocka_data)) > 1:
-        # Remove all but the first <testsuites> entry from the cmocka xml
-        if not update_xml(logger, cmocka_xml, '\n<testsuites>', '', cmocka_data, test_result):
-            return False
-        # Remove all but the last </testsuites> entry from the cmocka xml
-        if not update_xml(logger, cmocka_xml, '</testsuites>\n', '', cmocka_data, test_result):
+        # Remove all but the first <testsuites> entry and all but the last </testsuites> entry from
+        # the cmocka xml
+        pattern = '</testsuites>\n<testsuites>\n'
+        cmocka_data = replace_xml(logger, cmocka_xml, pattern, '', cmocka_data, test_result)
+        if not cmocka_data:
             return False
 
     if 'classname' not in cmocka_data:
@@ -838,7 +838,7 @@ def get_xml_data(logger, xml_file, test_result):
 
 
 def update_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
-    """Update the class name information in the test result xml.
+    """Update the result xml.
 
     Args:
         logger (Logger): logger for the messages produced by this method
@@ -850,6 +850,23 @@ def update_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
 
     Returns:
         bool: True if successful; False if an error was detected
+    """
+    return replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result) is not None
+
+
+def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
+    """Replace the patterns in the xml data with specified replacements.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        xml_file (str): the xml file to create with the modified xml data
+        pattern (str): the value to be replaced in the xml data
+        replacement (str): the value to use as the replacement in the xml data
+        xml_data (str): the data to modify and write to the xml file
+        test_result (TestResult): the test result used to update the status of the test
+
+    Returns:
+        str: the updated xml_data; None if an error was detected
     """
     logger.debug("Replacing '%s' with '%s' in %s", pattern, replacement, xml_file)
 
@@ -864,14 +881,16 @@ def update_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
     except OSError:
         message = f"Error writing {xml_file}"
         test_result.fail_test(logger, "Process", message, sys.exc_info())
-        return False
+        return None
 
-    logger.debug("  Contents of %s after replacement", xml_file)
-    for line in get_xml_data(logger, xml_file, test_result).splitlines():
-        logger.debug("    %s", line)
-    logger.debug("")
+    new_xml_data = get_xml_data(logger, xml_file, test_result).splitlines()
+    if new_xml_data is not None:
+        logger.debug("  Contents of %s after replacement", xml_file)
+        for line in new_xml_data:
+            logger.debug("    %s", line)
+        logger.debug("")
 
-    return True
+    return new_xml_data
 
 
 def collect_test_result(logger, test, test_result, job_results_dir, stop_daos, archive, rename,
