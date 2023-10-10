@@ -34,7 +34,8 @@ struct vos_btr_attr {
 	btr_ops_t	*ta_ops;
 };
 
-static struct vos_btr_attr *obj_tree_find_attr(unsigned tree_class);
+static struct vos_btr_attr *
+obj_tree_find_attr(unsigned tree_class, int flags);
 
 static struct vos_svt_key *
 iov2svt_key(d_iov_t *key_iov)
@@ -806,7 +807,13 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	int			 unexpected_flag;
 	int			 rc = 0;
 
-	if (flags & SUBTR_EVT) {
+	vos_evt_desc_cbs_init(&cbs, pool, coh);
+	if ((krec->kr_bmap & (KREC_BF_BTR | KREC_BF_EVT)) == 0)
+		goto create;
+
+	/** If subtree is already created, it could have been created by an older pool version
+	 *  so if the dkey is not flat, we need to use KREC_BF_BTR here */
+	if (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY || (krec->kr_bmap & KREC_BF_FLAT))) {
 		expected_flag = KREC_BF_EVT;
 		unexpected_flag = KREC_BF_BTR;
 	} else {
@@ -825,26 +832,28 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 		goto out;
 	}
 
-	vos_evt_desc_cbs_init(&cbs, pool, coh);
-	if (krec->kr_bmap & expected_flag) {
-		if (flags & SUBTR_EVT) {
-			rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
-		} else {
-			rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh,
-						    pool, sub_toh);
-		}
-		if (rc != 0)
-			D_ERROR("Failed to open tree: "DF_RC"\n", DP_RC(rc));
-
-		goto out;
+	if (flags & SUBTR_EVT) {
+		rc = evt_open(&krec->kr_evt, uma, &cbs, sub_toh);
+	} else {
+		rc = dbtree_open_inplace_ex(&krec->kr_btr, uma, coh, pool, sub_toh);
 	}
+	if (rc != 0)
+		D_ERROR("Failed to open tree: " DF_RC "\n", DP_RC(rc));
 
+	goto out;
+create:
 	if ((flags & SUBTR_CREATE) == 0) {
 		/** This can happen if application does a punch first before any
 		 *  updates.   Simply return -DER_NONEXIST in such case.
 		 */
 		rc = -DER_NONEXIST;
 		goto out;
+	}
+
+	if (flags & SUBTR_EVT) {
+		expected_flag = KREC_BF_EVT;
+	} else {
+		expected_flag = KREC_BF_BTR;
 	}
 
 	if (!created) {
@@ -881,7 +890,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 				tree_feats |= VOS_KEY_CMP_LEXICAL_SET;
 		}
 
-		ta = obj_tree_find_attr(tclass);
+		ta = obj_tree_find_attr(tclass, flags);
 
 		D_DEBUG(DB_TRACE, "Create dbtree %s feats 0x"DF_X64"\n",
 			ta->ta_name, tree_feats);
@@ -900,6 +909,8 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 	 * levels, only the tree_feats version is used.
 	 */
 	krec->kr_bmap |= expected_flag;
+	if (flags & SUBTR_FLAT)
+		krec->kr_bmap |= KREC_BF_FLAT;
 out:
 	return rc;
 }
@@ -933,8 +944,14 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 		*krecp = NULL;
 
 	D_DEBUG(DB_TRACE, "prepare tree, flags=%x, tclass=%d\n", flags, tclass);
-	if (tclass != VOS_BTR_AKEY && (flags & SUBTR_EVT))
-		D_GOTO(out, rc = -DER_INVAL);
+	if (flags & SUBTR_EVT) {
+		if (tclass != VOS_BTR_AKEY && (flags & SUBTR_FLAT) == 0) {
+			D_ERROR("SUBTR_EVT flag passed with invalid type or flags: tclass = %x, "
+				"flags = %x\n",
+				tclass, flags);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
 
 	tree_rec_bundle2iov(&rbund, &riov);
 	rbund.rb_off	= UMOFF_NULL;
@@ -1214,7 +1231,7 @@ obj_tree_register(void)
 
 /** find the attributes of the subtree of @tree_class */
 static struct vos_btr_attr *
-obj_tree_find_attr(unsigned tree_class)
+obj_tree_find_attr(unsigned tree_class, int flags)
 {
 	int	i;
 
@@ -1228,8 +1245,10 @@ obj_tree_find_attr(unsigned tree_class)
 		break;
 
 	case VOS_BTR_DKEY:
-		/* TODO: change it to VOS_BTR_AKEY while adding akey support */
-		tree_class = VOS_BTR_AKEY;
+		if (flags & SUBTR_FLAT)
+			tree_class = VOS_BTR_SINGV;
+		else
+			tree_class = VOS_BTR_AKEY;
 		break;
 	}
 

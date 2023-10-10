@@ -178,12 +178,12 @@ static inline bool
 daos_is_dkey_uint64_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_MULTI_UINT64:
 	case DAOS_OT_DKEY_UINT64:
 	case DAOS_OT_KV_UINT64:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;
@@ -220,9 +220,9 @@ static inline bool
 daos_is_array_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;

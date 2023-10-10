@@ -564,7 +564,10 @@ vos_feats_agg_time_update(daos_epoch_t epoch, uint64_t *feats)
 
 /** Iterator ops for objects and OIDs */
 extern struct vos_iter_ops vos_oi_iter_ops;
-extern struct vos_iter_ops vos_obj_iter_ops;
+extern struct vos_iter_ops vos_obj_dkey_iter_ops;
+extern struct vos_iter_ops vos_obj_akey_iter_ops;
+extern struct vos_iter_ops vos_obj_sv_iter_ops;
+extern struct vos_iter_ops vos_obj_ev_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 extern struct vos_iter_ops vos_dtx_iter_ops;
 
@@ -1036,13 +1039,9 @@ struct vos_iterator {
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
-	uint32_t		 it_from_parent:1,
-				 it_for_purge:1,
-				 it_for_discard:1,
-				 it_for_migration:1,
-				 it_show_uncommitted:1,
-				 it_ignore_uncommitted:1,
-				 it_for_sysdb:1;
+	uint32_t it_from_parent : 1, it_key_flat : 1, it_key_fake : 1, it_for_purge : 1,
+	    it_for_discard : 1, it_for_migration : 1, it_show_uncommitted : 1,
+	    it_ignore_uncommitted : 1, it_for_sysdb : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1056,6 +1055,8 @@ struct vos_iter_info {
 		struct evt_root	*ii_evt;
 		/* Pointer to btree for nested iterator */
 		struct btr_root	*ii_btr;
+		/** Open tree handle for nested iterator */
+		daos_handle_t    ii_tree_hdl;
 		/* oid to hold */
 		daos_unit_oid_t	 ii_oid;
 	};
@@ -1065,7 +1066,8 @@ struct vos_iter_info {
 	struct vea_space_info	*ii_vea_info;
 	/* Reference to vos object, set in iop_tree_prepare. */
 	struct vos_object	*ii_obj;
-	d_iov_t			*ii_akey; /* conditional akey */
+	/** for fake akey, pass the parent ilog info */
+	struct vos_ilog_info    *ii_ilog_info;
 	/** address range (RECX); rx_nr == 0 means entire range (0:~0ULL) */
 	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
@@ -1078,7 +1080,9 @@ struct vos_iter_info {
 	vos_it_epc_expr_t	 ii_epc_expr;
 	/** iterator flags */
 	uint32_t		 ii_flags;
-
+	struct vos_krec_df      *ii_dkey_krec;
+	/** Indicate this is a fake akey and which type */
+	uint32_t                 ii_fake_akey_flag;
 };
 
 /** function table for vos iterator */
@@ -1137,14 +1141,35 @@ vos_hdl2iter(daos_handle_t hdl)
 	return (struct vos_iterator *)hdl.cookie;
 }
 
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE (1 << 31)
+/** Ensure there is no overlap with public iterator flags (defined in
+ *  src/include/daos_srv/vos_types.h).
+ */
+D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
+
+/** Special internal marker for fake akey. If set, it_hdl will point
+ *  at krec of the dkey.  We just need a struct as a placeholder
+ *  to keep iterator presenting an akey to the caller.  This adds
+ *  some small complication to VOS iterator but simplifies rebuild
+ *  and other entities that use it. This flag must not conflict with
+ *  other iterator flags.
+ */
+#define VOS_IT_DKEY_SV (1 << 30)
+#define VOS_IT_DKEY_EV (1 << 29)
+D_CASSERT((VOS_IT_DKEY_SV & VOS_IT_MASK) == 0);
+D_CASSERT((VOS_IT_DKEY_EV & VOS_IT_MASK) == 0);
+
 /** iterator for dkey/akey/recx */
 struct vos_obj_iter {
 	/* public part of the iterator */
 	struct vos_iterator	 it_iter;
 	/** Incarnation log entries for current iterator */
 	struct vos_ilog_info	 it_ilog_info;
-	/** handle of iterator */
-	daos_handle_t		 it_hdl;
+	/** For flat akey, this will open value tree handle and either
+	 * VOS_IT_DKEY_SV or VOS_IT_DKEY_EV will be set.
+	 */
+	daos_handle_t            it_hdl;
 	/** condition of the iterator: epoch logic expression */
 	vos_it_epc_expr_t	 it_epc_expr;
 	/** iterator flags */
@@ -1152,13 +1177,15 @@ struct vos_obj_iter {
 	/** condition of the iterator: epoch range */
 	daos_epoch_range_t	 it_epr;
 	/** highest epoch where parent obj/key was punched */
-	struct vos_punch_record	 it_punched;
-	/** condition of the iterator: attribute key */
-	daos_key_t		 it_akey;
+	struct vos_punch_record  it_punched;
 	/* reference on the object */
 	struct vos_object	*it_obj;
 	/** condition of the iterator: extent range */
 	daos_recx_t              it_recx;
+	/** For fake akey, save the dkey krec as well */
+	struct vos_krec_df      *it_dkey_krec;
+	/** Store the fake akey */
+	char                     it_fake_akey;
 };
 
 static inline struct vos_obj_iter *
@@ -1195,8 +1222,10 @@ tree_rec_bundle2iov(struct vos_rec_bundle *rbund, d_iov_t *iov)
 }
 
 enum {
-	SUBTR_CREATE	= (1 << 0),	/**< may create the subtree */
-	SUBTR_EVT	= (1 << 1),	/**< subtree is evtree */
+	SUBTR_CREATE  = (1 << 0), /**< may create the subtree */
+	SUBTR_EVT     = (1 << 1), /**< subtree is evtree */
+	SUBTR_FLAT    = (1 << 2), /**< use flat kv on create */
+	SUBTR_NO_OPEN = (1 << 3), /**< Don't initialize the subtree if the key is flat */
 };
 
 /* vos_common.c */
@@ -1375,13 +1404,6 @@ vos_obj_iter_check_punch(daos_handle_t ih);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
-
-/** Internal bit for initializing iterator from open tree handle */
-#define VOS_IT_KEY_TREE	(1 << 31)
-/** Ensure there is no overlap with public iterator flags (defined in
- *  src/include/daos_srv/vos_types.h).
- */
-D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
 
 /** Internal vos iterator API for iterating through keys using an
  *  open tree handle to initialize the iterator
@@ -1728,4 +1750,27 @@ vos_oi_upgrade_layout_ver(struct vos_container *cont, daos_unit_oid_t oid,
 
 void vos_lru_free_track(void *arg, daos_size_t size);
 void vos_lru_alloc_track(void *arg, daos_size_t size);
+
+static inline bool
+vos_obj_flat_kv_supported(struct vos_container *cont, daos_unit_oid_t oid)
+{
+	struct vos_pool *pool = vos_cont2pool(cont);
+
+	if ((pool->vp_feats & VOS_POOL_FEAT_FLAT_DKEY) == 0)
+		return false;
+
+	if (daos_is_array(oid.id_pub) || daos_is_kv(oid.id_pub))
+		return true;
+
+	return false;
+}
+
+/** For flat trees, we sometimes need a fake akey anchor */
+static inline void
+vos_fake_anchor_create(daos_anchor_t *anchor)
+{
+	memset(&anchor->da_buf[0], 0, sizeof(anchor->da_buf));
+	anchor->da_type = DAOS_ANCHOR_TYPE_HKEY;
+}
+
 #endif /* __VOS_INTERNAL_H__ */
