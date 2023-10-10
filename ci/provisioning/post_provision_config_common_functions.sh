@@ -286,6 +286,11 @@ post_provision_config_nodes() {
         cmd+=(upgrade)
     fi
 
+    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
+	    # Remove OPA and install MOFED
+	    install_mofed
+    fi
+
     local repos_added=()
     local repo
     local inst_repos=()
@@ -312,14 +317,9 @@ post_provision_config_nodes() {
         disable_gpg_check "$repo_url"
     done
 
-    if ! "${cmd[@]}" --exclude golang-*.daos.*; then
+    if ! "${cmd[@]}" ; then
 	    dump_repos
 	    return 1
-    fi
-
-    if lspci | grep "ConnectX-6" && ! grep MOFED_VERSION /etc/do-release; then
-	    # Remove OPA and install MOFED
-	    install_mofed
     fi
 
     local inst_rpms=()
