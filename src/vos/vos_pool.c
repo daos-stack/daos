@@ -567,7 +567,6 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop = NULL;
-	size_t                   umempobj_sz = scm_sz;
 	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
 	int			 rc, ret;
 
@@ -583,9 +582,6 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
 
-	if ((!scm_sz) && (meta_sz))
-		umempobj_sz = meta_sz;
-
 	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
 	if (!meta_sz) {
 		if (!scm_sz) {
@@ -599,7 +595,13 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
 			meta_sz = scm_sz;
 		}
+	} else if ((scm_sz) && (meta_sz != scm_sz)) {
+		// See below comment on DAV allocator support and remove check when completed.
+		D_ERROR("scm_size != meta_size pool create case not supported, scm_sz: " DF_U64
+			" meta_sz: " DF_U64, scm_sz, meta_sz);
+		return -DER_INVAL;
 	}
+
 
 	D_INFO("Create BIO meta context for xs:%p pool:" DF_UUID " "
 	       "meta_sz: %zu, nvme_sz: %zu wal_sz:%zu\n",
@@ -624,19 +626,18 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
+	// TODO DAOS-13690: When DAV allocator supports different MD-blob and VOS-file sizes, pass
+	//                  meta_sz and scm_sz to umem_store. The poolsize umempobj_create()
+	//                  param will continue to be used as it is currently (non-zero for create,
+	//                  zero to use existing) to keep compatibility with PMEM mode.
+
 	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
 
 umem_create:
-	if ((store.stor_size) && (umempobj_sz > store.stor_size))
-		umempobj_sz = store.stor_size;
-
-	D_INFO("umempobj_create sz: " DF_U64 " store_sz: " DF_U64, umempobj_sz, store.stor_size);
-	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, umempobj_sz, 0600, &store);
-	//	D_INFO("umempobj_create scm_sz: " DF_U64 " store_sz: " DF_U64, scm_sz,
-	// store.stor_size); 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz,
-	// 0600, &store);
+	D_INFO("umempobj_create sz: " DF_U64 " store_sz: " DF_U64, scm_sz, store.stor_size);
+	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
 	if (pop != NULL) {
 		*ph = pop;
 		return 0;
