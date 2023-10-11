@@ -169,7 +169,7 @@ class Test(avocadoTest):
         # Random generator that could be seeded for reproducibility
         env_seed = os.environ.get("DAOS_TEST_RANDOM_SEED", None)
         if env_seed is None:
-            self.rand_seed = random.randrange(sys.maxsize)
+            self.rand_seed = int.from_bytes(os.urandom(8), byteorder='little')
         else:
             try:
                 self.rand_seed = int(env_seed)
