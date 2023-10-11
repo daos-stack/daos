@@ -560,9 +560,8 @@ out:
 
 void d_log_fini(void)
 {
-	D_ASSERT(d_log_refcount > 0);
-
 	D_MUTEX_LOCK(&d_log_lock);
+	D_ASSERT(d_log_refcount > 0);
 	d_log_refcount--;
 	if (d_log_refcount == 0) {
 		cleanup_dbg_namebit();

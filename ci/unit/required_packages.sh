@@ -12,19 +12,30 @@ elif [[ "$distro" = *8 ]]; then
     OPENMPI_VER=""
     PY_MINOR_VER=""
 fi
-pkgs="gotestsum openmpi$OPENMPI_VER                \
-      hwloc-devel argobots                         \
-      fuse3-libs fuse3                             \
-      boost-python3$PY_MINOR_VER-devel             \
-      libisa-l-devel libpmem                       \
-      libpmemobj protobuf-c                        \
-      spdk-devel libfabric-devel                   \
-      pmix numactl-devel                           \
-      libipmctl-devel python3$PY_MINOR_VER-pyxattr \
-      python3$PY_MINOR_VER-junit_xml               \
-      python3$PY_MINOR_VER-tabulate numactl        \
-      libyaml-devel                                \
-      valgrind-devel patchelf capstone"
+pkgs="argobots                         \
+      boost-python3$PY_MINOR_VER-devel \
+      capstone                         \
+      fuse3                            \
+      fuse3-libs                       \
+      gotestsum                        \
+      hwloc-devel                      \
+      libipmctl-devel                  \
+      libisa-l-devel                   \
+      libfabric-devel                  \
+      libpmem                          \
+      libpmemobj                       \
+      libyaml-devel                    \
+      numactl                          \
+      numactl-devel                    \
+      openmpi$OPENMPI_VER              \
+      patchelf                         \
+      pmix                             \
+      protobuf-c                       \
+      python3$PY_MINOR_VER-junit_xml   \
+      python3$PY_MINOR_VER-pyxattr     \
+      python3$PY_MINOR_VER-tabulate    \
+      spdk-devel                       \
+      valgrind-devel"
 
 if $quick_build; then
     if ! read -r mercury_version < "$distro"-required-mercury-rpm-version; then

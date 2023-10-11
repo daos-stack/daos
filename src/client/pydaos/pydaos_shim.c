@@ -1484,13 +1484,13 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 
 	module = PyModule_Create(&moduledef);
 
-#define DEFINE_PY_RETURN_CODE(name, desc, errstr) \
-	PyModule_AddIntConstant(module, ""#name, desc);
+#define DEFINE_PY_RETURN_CODE(name, errstr) PyModule_AddIntConstant(module, "" #name, name);
 
 	/** export return codes */
 	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);
 	D_FOREACH_DAOS_ERR(DEFINE_PY_RETURN_CODE);
 	PyModule_AddIntConstant(module, "DER_SUCCESS", DER_SUCCESS);
+	PyModule_AddIntConstant(module, "DER_UNKNOWN", DER_UNKNOWN);
 
 	/** export object type */
 	PyModule_AddIntConstant(module, "PYDAOS_DICT", PYDAOS_DICT);

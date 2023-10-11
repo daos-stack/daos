@@ -3,7 +3,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import random
 import time
 
 from exception_utils import CommandFailure
@@ -113,7 +112,7 @@ class DmgPoolQueryRanks(ControlTestBase):
         disabled_ranks = []
 
         all_ranks = enabled_ranks.copy()
-        random.shuffle(all_ranks)
+        self.random.shuffle(all_ranks)
         self.log.info("Starting excluding ranks: all_ranks=%s", all_ranks)
         for rank in all_ranks:
             self.log.debug("Excluding rank %d", rank)
@@ -139,7 +138,7 @@ class DmgPoolQueryRanks(ControlTestBase):
             self.pool.wait_for_rebuild_to_start()
             self.pool.wait_for_rebuild_to_end()
 
-        random.shuffle(all_ranks)
+        self.random.shuffle(all_ranks)
         self.log.info("Starting reintegrating ranks: all_ranks=%s", all_ranks)
         for rank in all_ranks:
             self.log.debug("Reintegrating rank %d", rank)

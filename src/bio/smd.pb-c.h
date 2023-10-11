@@ -42,21 +42,25 @@ typedef struct _Ctl__SmdManageResp__RankResp Ctl__SmdManageResp__RankResp;
 
 typedef enum _Ctl__NvmeDevState {
   /*
+   * Device state is unknown, zero value
+   */
+  CTL__NVME_DEV_STATE__UNKNOWN = 0,
+  /*
    * Device is in a normal operational state
    */
-  CTL__NVME_DEV_STATE__NORMAL = 0,
+  CTL__NVME_DEV_STATE__NORMAL = 1,
   /*
    * Device is new and is not yet in-use
    */
-  CTL__NVME_DEV_STATE__NEW = 1,
+  CTL__NVME_DEV_STATE__NEW = 2,
   /*
    * Device is faulty and has been evicted
    */
-  CTL__NVME_DEV_STATE__EVICTED = 2,
+  CTL__NVME_DEV_STATE__EVICTED = 3,
   /*
    * Device has been physically removed
    */
-  CTL__NVME_DEV_STATE__UNPLUGGED = 3
+  CTL__NVME_DEV_STATE__UNPLUGGED = 4
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(CTL__NVME_DEV_STATE)
 } Ctl__NvmeDevState;
 typedef enum _Ctl__LedState {
@@ -95,10 +99,18 @@ struct  _Ctl__BioHealthReq
 {
   ProtobufCMessage base;
   char *dev_uuid;
+  /*
+   * Size of the metadata (i.e. vos file index) blob
+   */
+  uint64_t meta_size;
+  /*
+   * Size of the RDB blob
+   */
+  uint64_t rdb_size;
 };
 #define CTL__BIO_HEALTH_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_req__descriptor) \
-    , (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, 0, 0 }
 
 
 /*
@@ -195,10 +207,18 @@ struct  _Ctl__BioHealthResp
    * blobstore cluster size in bytes
    */
   uint64_t cluster_size;
+  /*
+   * metadata WAL blob size
+   */
+  uint64_t meta_wal_size;
+  /*
+   * RDB WAL blob size
+   */
+  uint64_t rdb_wal_size;
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 /*
@@ -234,7 +254,7 @@ struct  _Ctl__SmdDevice
    */
   uint64_t total_bytes;
   /*
-   * blobstore clusters available bytes
+   * Available RAW storage for data
    */
   uint64_t avail_bytes;
   /*
@@ -249,10 +269,30 @@ struct  _Ctl__SmdDevice
    * Device active roles (bitmask)
    */
   uint32_t role_bits;
+  /*
+   * Size of the metadata (i.e. vos file index) blob
+   */
+  uint64_t meta_size;
+  /*
+   * Size of the metadata WAL blob
+   */
+  uint64_t meta_wal_size;
+  /*
+   * Size of the RDB blob
+   */
+  uint64_t rdb_size;
+  /*
+   * Size of the RDB WAL blob
+   */
+  uint64_t rdb_wal_size;
+  /*
+   * Effective storage available for data
+   */
+  uint64_t usable_bytes;
 };
 #define CTL__SMD_DEVICE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__smd_device__descriptor) \
-    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__NORMAL, CTL__LED_STATE__OFF, 0, 0, 0, 0, 0 }
+    , (char *)protobuf_c_empty_string, 0,NULL, (char *)protobuf_c_empty_string, CTL__NVME_DEV_STATE__UNKNOWN, CTL__LED_STATE__OFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq

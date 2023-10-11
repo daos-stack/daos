@@ -278,9 +278,8 @@ pool_get_blob(uuid_t pool_id, uint32_t tgt_id, char *table_name, uint64_t *blob_
 	smd_db_lock();
 	rc = smd_db_fetch(table_name, &id, sizeof(id), &pool, sizeof(pool));
 	if (rc) {
-		D_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT,
-			 "Fetch pool "DF_UUID" failed. "DF_RC"\n",
-			 DP_UUID(&id.uuid), DP_RC(rc));
+		DL_CDEBUG(rc != -DER_NONEXIST, DLOG_ERR, DB_MGMT, rc,
+			  "Fetch pool " DF_UUID " failed", DP_UUID(&id.uuid));
 		goto out;
 	}
 

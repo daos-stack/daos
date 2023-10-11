@@ -6,13 +6,13 @@
 import os
 import grp
 
-import security_test_base as secTestBase
+from security_test_base import acl_entry
 from pool_security_test_base import PoolSecurityTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
 
 
-class DaosRunPoolSecurityTest(PoolSecurityTestBase):
+class SecurityPoolGroupsTest(PoolSecurityTestBase):
     """Test daos_pool acl for primary and secondary groups.
 
     :avocado: recursive
@@ -40,7 +40,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         :avocado: tags=all,full_regression
         :avocado: tags=vm
         :avocado: tags=security,pool
-        :avocado: tags=DaosRunPoolSecurityTest,pool_acl,sec_acl_groups,test_daos_pool_acl_groups
+        :avocado: tags=SecurityPoolGroupsTest,pool_acl,sec_acl_groups,test_daos_pool_acl_groups
         '''
         user_gid = os.getegid()
         current_group = grp.getgrgid(user_gid)[0]
@@ -49,8 +49,7 @@ class DaosRunPoolSecurityTest(PoolSecurityTestBase):
         read, write = self.params.get(
             "pg_read_write", "/run/pool_acl/primary_secondary_group_test/*")
         acl_entries = ["", "", "",
-                       secTestBase.acl_entry("group", current_group, primary_grp_perm,
-                                             PERMISSIONS), ""]
+                       acl_entry("group", current_group, primary_grp_perm, PERMISSIONS), ""]
         if primary_grp_perm.lower() == "none":
             primary_grp_perm = ""
         if primary_grp_perm not in PERMISSIONS:

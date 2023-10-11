@@ -113,7 +113,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		ci_set_null(rbund.rb_csum);
 
 		rc = dbtree_iter_fetch(ih, &kiov, &riov, anchor);
-		if (vos_dtx_continue_detect(rc))
+		if (vos_dtx_continue_detect(rc, query->qt_pool->vp_sysdb))
 			goto next;
 
 		if (rc != 0)
@@ -123,7 +123,7 @@ find_key(struct open_query *query, daos_handle_t toh, daos_key_t *key,
 		if (rc == 0)
 			break;
 
-		if (vos_dtx_continue_detect(rc))
+		if (vos_dtx_continue_detect(rc, query->qt_pool->vp_sysdb))
 			continue;
 
 		if (rc != -DER_NONEXIST)
@@ -145,7 +145,7 @@ out:
 	if (rc == 0)
 		rc = fini_rc;
 
-	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+	return vos_dtx_hit_inprogress(query->qt_pool->vp_sysdb) ? -DER_INPROGRESS : rc;
 }
 
 static int
@@ -583,6 +583,7 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	uint32_t		 cflags = 0;
 	int			 rc = 0;
 	int			 nr_akeys = 0;
+	bool			 is_sysdb = false;
 
 	obj_epr.epr_hi = dtx_is_valid_handle(dth) ? dth->dth_epoch : epoch;
 	bound = dtx_is_valid_handle(dth) ? dth->dth_epoch_bound : epoch;
@@ -654,21 +655,21 @@ query_write:
 		}
 	}
 
-	vos_dth_set(dth);
-	rc = vos_ts_set_allocate(&query->qt_ts_set, 0, cflags, nr_akeys, dth);
+	cont = vos_hdl2cont(coh);
+	is_sysdb = cont->vc_pool->vp_sysdb;
+	vos_dth_set(dth, is_sysdb);
+	rc = vos_ts_set_allocate(&query->qt_ts_set, 0, cflags, nr_akeys, dth, is_sysdb);
 	if (rc != 0) {
 		D_ERROR("Failed to allocate timestamp set: "DF_RC"\n",
 			DP_RC(rc));
 		goto free_query;
 	}
 
-	cont = vos_hdl2cont(coh);
-
 	rc = vos_ts_set_add(query->qt_ts_set, cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
 	query->qt_bound = MAX(obj_epr.epr_hi, bound);
-	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), oid,
+	rc = vos_obj_hold(vos_obj_cache_current(is_sysdb), vos_hdl2cont(coh), oid,
 			  &obj_epr, query->qt_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &obj, query->qt_ts_set);
 	if (rc != 0) {
@@ -786,7 +787,7 @@ out:
 		*max_write = obj->obj_df->vo_max_write;
 
 	if (obj != NULL)
-		vos_obj_release(vos_obj_cache_current(), obj, false);
+		vos_obj_release(vos_obj_cache_current(is_sysdb), obj, false);
 
 	if (rc == 0 || rc == -DER_NONEXIST) {
 		if (vos_ts_wcheck(query->qt_ts_set, obj_epr.epr_hi,
@@ -799,7 +800,7 @@ out:
 
 	vos_ts_set_free(query->qt_ts_set);
 free_query:
-	vos_dth_set(NULL);
+	vos_dth_set(NULL, is_sysdb);
 	D_FREE(query);
 
 	return rc;

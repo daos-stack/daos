@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -176,6 +175,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -203,6 +203,7 @@ hostfile
 hostlist
 hostname
 hostnames
+https
 hugepage
 hugepages
 hwloc
@@ -252,6 +253,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre
@@ -387,7 +389,9 @@ shlex
 simul
 sinfo
 slurm
+slurmd
 slurmctl
+slurmctld
 spdk
 squeue
 src

@@ -149,15 +149,27 @@ char *DP_UUID(const void *uuid);
 #define DF_CONTF		DF_UUIDF"/"DF_UUIDF
 
 #ifdef DAOS_BUILD_RELEASE
-#define DF_KEY			"[%d]"
-#define DP_KEY(key)		(int)((key)->iov_len)
-#else
-char *daos_key2str(daos_key_t *key);
-#define DF_KEY_STR_SIZE		64
 
-#define DF_KEY			"[%d] '%s'"
-#define DP_KEY(key)		(int)(key)->iov_len,	\
-				daos_key2str(key)
+#define DF_KEY       "[%d]"
+#define DP_KEY(_key) (int)((_key)->iov_len)
+
+#define DF_DE        "de[%zi]"
+#define DP_DE(_de)   strnlen(_de, NAME_MAX)
+
+#else
+
+char *
+daos_key2str(daos_key_t *key);
+
+#define DF_KEY      "[%d] '%s'"
+#define DP_KEY(key) (int)(key)->iov_len, daos_key2str(key)
+
+char *
+daos_de2str(const char *de);
+
+#define DF_DE       "de'%s'"
+#define DP_DE(_de)  daos_de2str(_de)
+
 #endif
 
 #define DF_RECX			"["DF_X64"-"DF_X64"]"
@@ -224,6 +236,27 @@ setbit_range(uint8_t *bitmap, uint32_t start, uint32_t end)
 	for (index = start; index <= end; ++index)
 		setbit(bitmap, index);
 }
+
+static inline void
+setbits64(uint64_t *bmap, int at, int bits)
+{
+	setbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+static inline void
+clrbits64(uint64_t *bmap, int at, int bits)
+{
+	clrbit_range((uint8_t *)bmap, at, at + bits - 1);
+}
+
+#define setbit64(bm, at)	setbit(((uint8_t *)bm), at)
+#define clrbit64(bm, at)	clrbit(((uint8_t *)bm), at)
+#define isset64(bm, at)		isset(((uint8_t *)bm), at)
+
+int
+daos_find_bits(uint64_t *used, uint64_t *reserved, int bmap_sz, int bits_min, int *bits);
+int
+daos_count_free_bits(uint64_t *used, int bmap_sz);
 
 static inline unsigned int
 daos_power2_nbits(unsigned int val)
@@ -600,6 +633,7 @@ daos_der2errno(int err)
 	case -DER_UNREACH:	return EHOSTUNREACH;
 	case -DER_NOSPACE:	return ENOSPC;
 	case -DER_ALREADY:	return EALREADY;
+	case -DER_DOS:
 	case -DER_NOMEM:	return ENOMEM;
 	case -DER_TIMEDOUT:	return ETIMEDOUT;
 	case -DER_BUSY:
@@ -814,6 +848,7 @@ enum {
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 #define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 #define DAOS_CONT_G2L_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6a)
+#define DAOS_POOL_CREATE_FAIL_STEP_UP	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x6b)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
@@ -845,6 +880,7 @@ enum {
 #define DAOS_REBUILD_OBJ_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9c)
 #define DAOS_FAIL_POOL_CREATE_VERSION	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9d)
 #define DAOS_FORCE_OBJ_UPGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9e)
+#define DAOS_OBJ_FAIL_NVME_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9f)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 

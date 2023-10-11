@@ -103,7 +103,7 @@ class MdtestBase(DfuseTestBase):
         # Initialize MpioUtils if mdtest needs to be run using mpich
         if mpi_type == "MPICH":
             manager = get_job_manager(
-                self, "Mpirun", self.mdtest_cmd, self.subprocess, mpi_type="mpich")
+                self, "Mpirun", self.mdtest_cmd, self.subprocess)
         else:
             manager = get_job_manager(self, "Orterun", self.mdtest_cmd, self.subprocess)
         return manager

@@ -213,7 +213,7 @@ const ProtobufCMessageDescriptor ctl__set_log_masks_req__descriptor =
   (ProtobufCMessageInit) ctl__set_log_masks_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors[1] =
+static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors[2] =
 {
   {
     "status",
@@ -227,14 +227,27 @@ static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "errors",
+    2,
+    PROTOBUF_C_LABEL_REPEATED,
+    PROTOBUF_C_TYPE_STRING,
+    offsetof(Ctl__SetLogMasksResp, n_errors),
+    offsetof(Ctl__SetLogMasksResp, errors),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned ctl__set_log_masks_resp__field_indices_by_name[] = {
+  1,   /* field[1] = errors */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange ctl__set_log_masks_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 1 }
+  { 0, 2 }
 };
 const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor =
 {
@@ -244,7 +257,7 @@ const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor =
   "Ctl__SetLogMasksResp",
   "ctl",
   sizeof(Ctl__SetLogMasksResp),
-  1,
+  2,
   ctl__set_log_masks_resp__field_descriptors,
   ctl__set_log_masks_resp__field_indices_by_name,
   1,  ctl__set_log_masks_resp__number_ranges,

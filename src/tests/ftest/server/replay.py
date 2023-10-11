@@ -158,7 +158,7 @@ class ReplayTests(TestWithServers):
         :avocado: tags=all,pr
         :avocado: tags=hw,medium
         :avocado: tags=server,replay
-        :avocado: tags=ReplayTests,test_restart_posix
+        :avocado: tags=ReplayTests,test_replay_posix
         """
         ppn = self.params.get('ppn', '/run/ior_write/*', 1)
         container = self.create_container()

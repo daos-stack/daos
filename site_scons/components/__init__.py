@@ -58,7 +58,7 @@ class InstalledComps():
             self.installed.append(name)
             return True
 
-        if not GetOption('help'):
+        if not GetOption('help') and not GetOption('silent'):
             print(f'Using build version of {name}')
         self.not_installed.append(name)
         return False
@@ -90,12 +90,14 @@ def check(reqs, name, built_str, installed_str=""):
 
 def ofi_config(config):
     """Check ofi version"""
-    print('Checking for libfabric > 1.11...', end=' ')
+    if not GetOption('silent'):
+        print('Checking for libfabric > 1.11...', end=' ')
     code = """#include <rdma/fabric.h>
 _Static_assert(FI_MAJOR_VERSION == 1 && FI_MINOR_VERSION >= 11,
                "libfabric must be >= 1.11");"""
     rc = config.TryCompile(code, ".c")
-    print('yes' if rc else 'no')
+    if not GetOption('silent'):
+        print('yes' if rc else 'no')
     return rc
 
 
@@ -108,29 +110,12 @@ def define_mercury(reqs):
     else:
         reqs.define('rt', libs=['rt'])
 
-    reqs.define('psm2',
-                retriever=GitRepoRetriever('https://github.com/cornelisnetworks/opa-psm2.git'),
-                # psm2 hard-codes installing into /usr/...
-                commands=[['sed',
-                           '-i',
-                           '-e',
-                           's/\\(.{DESTDIR}\\/\\)usr\\//\\1/',
-                           '-e',
-                           's/\\(INSTALL_LIB_TARG=\\/usr\\/lib\\)64/\\1/',
-                           '-e',
-                           's/\\(INSTALL_LIB_TARG=\\)\\/usr/\\1/',
-                           'Makefile',
-                           'compat/Makefile'],
-                          ['make', 'LIBDIR=/lib64'],
-                          ['make', 'DESTDIR=$PSM2_PREFIX', 'LIBDIR=/lib64', 'install']],
-                headers=['psm2.h'],
-                libs=['psm2'])
-
     # pylint: disable-next=wrong-spelling-in-comment,fixme
     # TODO: change to --enable-opx once upgraded to libfabric 1.17+
     ofi_build = ['./configure',
                  '--prefix=$OFI_PREFIX',
                  '--disable-efa',
+                 '--disable-psm2',
                  '--disable-psm3',
                  '--disable-opx',
                  '--without-gdrcopy']
@@ -140,15 +125,6 @@ def define_mercury(reqs):
     else:
         ofi_build.append('--disable-debug')
 
-    ofi_build.extend(include(reqs,
-                             'psm2',
-                             check(reqs,
-                                   'psm2',
-                                   ['--enable-psm2=$PSM2_PREFIX',
-                                    'LDFLAGS=-Wl,--enable-new-dtags -Wl,-rpath=$PSM2_PREFIX/lib64'],
-                                   ['--enable-psm2']),
-                             ['--disable-psm2']))
-
     reqs.define('ofi',
                 retriever=GitRepoRetriever('https://github.com/ofiwg/libfabric'),
                 commands=[['./autogen.sh'],
@@ -156,9 +132,9 @@ def define_mercury(reqs):
                           ['make'],
                           ['make', 'install']],
                 libs=['fabric'],
-                requires=include(reqs, 'psm2', ['psm2'], []),
                 config_cb=ofi_config,
                 headers=['rdma/fabric.h'],
+                pkgconfig='libfabric',
                 package='libfabric-devel' if inst(reqs, 'ofi') else None,
                 patch_rpath=['lib'],
                 build_env={'CFLAGS': "-fstack-usage"})
@@ -186,6 +162,7 @@ def define_mercury(reqs):
                           ['make', 'install'],
                           ['mkdir', '-p', '$UCX_PREFIX/lib64/pkgconfig'],
                           ['cp', 'ucx.pc', '$UCX_PREFIX/lib64/pkgconfig']],
+                build_env={'CFLAGS': '-Wno-error'},
                 package='ucx-devel' if inst(reqs, 'ucx') else None)
 
     mercury_build = ['cmake',
@@ -209,12 +186,6 @@ def define_mercury(reqs):
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=ON')
     else:
         mercury_build.append('-DMERCURY_ENABLE_DEBUG:BOOL=OFF')
-
-    mercury_build.extend(check(reqs,
-                               'ofi',
-                               ['-DOFI_INCLUDE_DIR:PATH=$OFI_PREFIX/include',
-                                '-DOFI_LIBRARY:FILEPATH=$OFI_PREFIX/lib/libfabric.so'],
-                               []))
 
     reqs.define('mercury',
                 retriever=GitRepoRetriever('https://github.com/mercury-hpc/mercury.git', True),
@@ -245,8 +216,6 @@ def define_common(reqs):
 
     reqs.define('yaml', headers=['yaml.h'], package='libyaml-devel')
 
-    reqs.define('lmdb', headers=['lmdb.h'], libs=['lmdb'], package='lmdb-devel')
-
     reqs.define('event', libs=['event'], package='libevent-devel')
 
     reqs.define('crypto', libs=['crypto'], headers=['openssl/md5.h'], package='openssl-devel')
@@ -256,6 +225,11 @@ def define_common(reqs):
     reqs.define('uuid', libs=['uuid'], headers=['uuid/uuid.h'], package='libuuid-devel')
 
     reqs.define('hwloc', libs=['hwloc'], headers=['hwloc.h'], package='hwloc-devel')
+
+    if ARM_PLATFORM:
+        reqs.define('ipmctl', skip_arch=True)
+    else:
+        reqs.define('ipmctl', headers=['nvm_management.h'], package='libipmctl-devel')
 
 
 def define_ompi(reqs):

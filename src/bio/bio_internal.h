@@ -368,7 +368,7 @@ struct bio_blobstore {
 
 /* Per-xstream blobstore */
 struct bio_xs_blobstore {
-	/* Inflight blob read/write */
+	/* In-flight blob read/write */
 	unsigned int		 bxb_blob_rw;
 	/* spdk io channel */
 	struct spdk_io_channel	*bxb_io_channel;
@@ -442,7 +442,7 @@ struct bio_desc {
 	struct bio_rsrvd_dma	 bd_rsrvd;
 	/* Report blob i/o completion */
 	ABT_eventual		 bd_dma_done;
-	/* Inflight SPDK DMA transfers */
+	/* In-flight SPDK DMA transfers */
 	unsigned int		 bd_inflights;
 	int			 bd_result;
 	unsigned int		 bd_chk_type;
@@ -645,6 +645,7 @@ struct bio_xs_blobstore *
 bio_xs_context2xs_blobstore(struct bio_xs_context *xs_ctxt, enum smd_dev_type st);
 struct bio_xs_blobstore *
 bio_xs_blobstore_by_devid(struct bio_xs_context *xs_ctxt, uuid_t dev_uuid);
+uint64_t default_wal_sz(uint64_t meta_sz);
 
 /* bio_recovery.c */
 int bio_bs_state_transit(struct bio_blobstore *bbs);

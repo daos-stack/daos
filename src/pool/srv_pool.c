@@ -38,7 +38,10 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
-#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED 1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
+
+#define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
 
 /* Pool service crt event */
 struct pool_svc_event {
@@ -65,12 +68,12 @@ struct pool_svc_events {
 
 /* Pool service schedule state */
 struct pool_svc_sched {
-	int		psc_svc_rf;
-	bool		psc_force_notify;	/* for pool_svc_step_up_cb */
 	ABT_mutex	psc_mutex;		/* only for psc_cv */
 	ABT_cond	psc_cv;
 	bool		psc_in_progress;
 	bool		psc_canceled;
+	void	       *psc_arg;
+	int		psc_rc;
 };
 
 static int
@@ -89,10 +92,10 @@ sched_init(struct pool_svc_sched *sched)
 		return dss_abterr2der(rc);
 	}
 
-	sched->psc_svc_rf = -1;
-	sched->psc_force_notify = false;
 	sched->psc_in_progress = false;
 	sched->psc_canceled = false;
+	sched->psc_arg = NULL;
+	sched->psc_rc = 0;
 	return 0;
 }
 
@@ -104,10 +107,12 @@ sched_fini(struct pool_svc_sched *sched)
 }
 
 static void
-sched_begin(struct pool_svc_sched *sched)
+sched_begin(struct pool_svc_sched *sched, void *arg)
 {
 	sched->psc_in_progress = true;
 	sched->psc_canceled = false;
+	sched->psc_arg = arg;
+	sched->psc_rc = 0;
 }
 
 static void
@@ -118,18 +123,30 @@ sched_end(struct pool_svc_sched *sched)
 }
 
 static void
-sched_cancel_and_wait(struct pool_svc_sched *sched)
+sched_cancel(struct pool_svc_sched *sched)
+{
+	if (sched->psc_in_progress)
+		sched->psc_canceled = true;
+}
+
+static void
+sched_wait(struct pool_svc_sched *sched)
 {
 	/*
 	 * The CV requires a mutex. We don't otherwise need it for ULTs within
 	 * the same xstream.
 	 */
 	ABT_mutex_lock(sched->psc_mutex);
-	if (sched->psc_in_progress)
-		sched->psc_canceled = true;
 	while (sched->psc_in_progress)
 		ABT_cond_wait(sched->psc_cv, sched->psc_mutex);
 	ABT_mutex_unlock(sched->psc_mutex);
+}
+
+static void
+sched_cancel_and_wait(struct pool_svc_sched *sched)
+{
+	sched_cancel(sched);
+	sched_wait(sched);
 }
 
 /* Pool service */
@@ -144,8 +161,9 @@ struct pool_svc {
 	struct ds_pool	       *ps_pool;
 	struct pool_svc_events	ps_events;
 	uint32_t		ps_global_version;
+	int			ps_svc_rf;
+	bool			ps_force_notify;/* MS of PS membership */
 	struct pool_svc_sched	ps_reconf_sched;
-
 	/* Check all containers RF for the pool */
 	struct pool_svc_sched	ps_rfcheck_sched;
 	/* The global pool map version on all pool targets */
@@ -627,6 +645,14 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop)
 			if (rc)
 				return rc;
 			break;
+		case DAOS_PROP_PO_REINT_MODE:
+			val32 = entry->dpe_val;
+			d_iov_set(&value, &val32, sizeof(val32));
+			rc = rdb_tx_update(tx, kvs, &ds_pool_prop_reint_mode,
+					   &value);
+			if (rc)
+				return rc;
+			break;
 		default:
 			D_ERROR("bad dpe_type %d.\n", entry->dpe_type);
 			return -DER_INVAL;
@@ -653,6 +679,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
+	uint32_t                svc_ops_enabled        = 0;
+	uint64_t                rdb_size;
 	int			rc;
 	struct daos_prop_entry *entry;
 
@@ -726,8 +754,28 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Create pool service operations KVS */
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_svc_ops, &attr);
+	if (rc != 0) {
+		D_ERROR("failed to create service ops KVS, " DF_RC "\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Determine if duplicate service operations detection will be enabled */
+	rc = rdb_get_size(tx->dt_db, &rdb_size);
+	if (rc != 0)
+		goto out_map_buf;
+	if (rdb_size >= DUP_OP_MIN_RDB_SIZE)
+		svc_ops_enabled = 1;
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc != 0)
+		D_ERROR("failed to set svc_ops_enabled, " DF_RC "\n", DP_RC(rc));
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -1027,6 +1075,8 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	uuid_copy(svc->ps_uuid, id->iov_buf);
 	D_INIT_LIST_HEAD(&svc->ps_events.pse_queue);
 	svc->ps_events.pse_handler = ABT_THREAD_NULL;
+	svc->ps_svc_rf = -1;
+	svc->ps_force_notify = false;
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
@@ -1448,7 +1498,10 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 {
 	struct rdb_tx		tx;
 	d_iov_t			value;
-	bool			version_exists = false;
+	bool                    version_exists  = false;
+	bool                    rdb_size_ok     = false;
+	uint32_t                svc_ops_enabled = 0;
+	uint64_t                rdb_size;
 	struct daos_prop_entry *svc_rf_entry;
 	int			rc;
 
@@ -1528,9 +1581,31 @@ check_map:
 	svc_rf_entry = daos_prop_entry_get(*prop, DAOS_PROP_PO_SVC_REDUN_FAC);
 	D_ASSERT(svc_rf_entry != NULL);
 	if (daos_prop_is_set(svc_rf_entry))
-		svc->ps_reconf_sched.psc_svc_rf = svc_rf_entry->dpe_val;
+		svc->ps_svc_rf = svc_rf_entry->dpe_val;
 	else
-		svc->ps_reconf_sched.psc_svc_rf = -1;
+		svc->ps_svc_rf = -1;
+
+	/* Check if duplicate operations detection is enabled, for informative debug log */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
+	if (rc != 0)
+		goto out_lock;
+	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
+
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
+		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
@@ -1629,9 +1704,10 @@ pool_svc_check_node_status(struct pool_svc *svc)
 	D_PRINT(fmt, ## __VA_ARGS__);								\
 } while (0)
 
-static void pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
-			      void (*func)(void *));
-static void pool_svc_reconf_ult(void *arg);
+static int pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
+			     void (*func)(void *), void *arg);
+static int pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map,
+				    uint32_t map_version_for, bool sync_remove);
 static void pool_svc_rfcheck_ult(void *arg);
 
 static int
@@ -1645,7 +1721,6 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
 	bool			events_initialized = false;
-	bool			svc_scheduled = false;
 	d_rank_t		rank = dss_self_rank();
 	int			rc;
 
@@ -1692,14 +1767,26 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	 * Just in case the previous leader didn't finish the last series of
 	 * reconfigurations or the last MS notification.
 	 */
-	svc->ps_reconf_sched.psc_force_notify = true;
-	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
-	pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
-	svc_scheduled = true;
+	svc->ps_force_notify = true;
+	rc = pool_svc_schedule_reconf(svc, NULL /* map */, map_version, false /* sync_remove */);
+	if (rc == -DER_OP_CANCELED) {
+		DL_INFO(rc, DF_UUID": not scheduling pool service reconfiguration",
+			DP_UUID(svc->ps_uuid));
+	} else if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to schedule pool service reconfiguration",
+			 DP_UUID(svc->ps_uuid));
+		goto out;
+	}
+
+	rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult, NULL /* arg */);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
+		goto out;
+	}
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
-		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
+		D_ERROR("ds_pool_iv_prop_update failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1714,7 +1801,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	rc = ds_pool_iv_srv_hdl_update(svc->ps_pool, pool_hdl_uuid,
 				       cont_hdl_uuid);
 	if (rc) {
-		D_ERROR("ds_pool_iv_srv_hdl_update failed %d.\n", rc);
+		D_ERROR("ds_pool_iv_srv_hdl_update failed: " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -1734,11 +1821,8 @@ out:
 	if (rc != 0) {
 		if (events_initialized)
 			fini_events(svc);
-		if (svc_scheduled) {
-			sched_cancel_and_wait(&svc->ps_reconf_sched);
-			sched_cancel_and_wait(&svc->ps_rfcheck_sched);
-		}
-
+		sched_cancel_and_wait(&svc->ps_rfcheck_sched);
+		sched_cancel_and_wait(&svc->ps_reconf_sched);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1794,15 +1878,14 @@ pool_svc_map_dist_cb(struct ds_rsvc *rsvc)
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to read pool map buffer: %d\n",
-			DP_UUID(svc->ps_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": failed to read pool map buffer", DP_UUID(svc->ps_uuid));
 		goto out;
 	}
 
 	rc = ds_pool_iv_map_update(svc->ps_pool, map_buf, map_version);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to distribute pool map %u: %d\n",
-			DP_UUID(svc->ps_uuid), map_version, rc);
+		DL_ERROR(rc, DF_UUID ": failed to distribute pool map %u", DP_UUID(svc->ps_uuid),
+			 map_version);
 		D_GOTO(out, rc);
 	}
 	svc->ps_global_map_version = max(svc->ps_global_map_version, map_version);
@@ -2283,7 +2366,7 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		d_iov_set(&value, NULL, 0);
 		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &svc_list);
 		if (rc) {
-			D_ERROR("get svc list failed: rc %d\n", rc);
+			D_ERROR("get svc list failed: rc " DF_RC "\n", DP_RC(rc));
 			D_GOTO(out_prop, rc);
 		}
 		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_SVC_LIST;
@@ -2532,6 +2615,25 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 		idx++;
 	}
 
+	if (bits & DAOS_PO_QUERY_PROP_REINT_MODE) {
+		d_iov_set(&value, &val32, sizeof(val32));
+		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reint_mode, &value);
+		/* NB: would test global_ver < 2, but on master branch, code added after v3 bump. */
+		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
+			rc  = 0;
+			val32 = DAOS_PROP_PO_REINT_MODE_DEFAULT;
+			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
+		} else if (rc != 0) {
+			D_ERROR(DF_UUID ": DAOS_PROP_PO_REINT_MODE missing from the pool\n",
+				DP_UUID(svc->ps_uuid));
+			D_GOTO(out_prop, rc);
+		}
+		D_ASSERT(idx < nr);
+		prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_REINT_MODE;
+		prop->dpp_entries[idx].dpe_val  = val32;
+		idx++;
+	}
+
 	*prop_out = prop;
 	return 0;
 
@@ -2663,7 +2765,10 @@ out_tx:
 		 */
 		D_DEBUG(DB_MD, DF_UUID": trying to finish stepping up\n",
 			DP_UUID(in->pri_op.pi_uuid));
-		rc = pool_svc_step_up_cb(&svc->ps_rsvc);
+		if (DAOS_FAIL_CHECK(DAOS_POOL_CREATE_FAIL_STEP_UP))
+			rc = -DER_GRPVER;
+		else
+			rc = pool_svc_step_up_cb(&svc->ps_rsvc);
 		if (rc != 0) {
 			D_ASSERT(rc != DER_UNINIT);
 			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
@@ -3082,7 +3187,7 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	out = crt_reply_get(rpc);
 	rc = out->tdo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to disconnect from "DF_RC" targets\n",
+		D_ERROR(DF_UUID ": failed to disconnect from targets: " DF_RC "\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	}
@@ -3243,7 +3348,7 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	out = crt_reply_get(rpc);
 	rc = out->tqo_rc;
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query from "DF_RC" targets\n",
+		D_ERROR(DF_UUID ": failed to query from targets: " DF_RC "\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		rc = -DER_IO;
 	} else {
@@ -4031,166 +4136,6 @@ out:
 	crt_reply_send(rpc);
 }
 
-static int
-process_query_result(d_rank_list_t **ranks, daos_pool_info_t *info, uuid_t pool_uuid,
-		     uint32_t map_version, uint32_t leader_rank, struct daos_pool_space *ps,
-		     struct daos_rebuild_status *rs, struct pool_buf *map_buf)
-{
-	struct pool_map	       *map;
-	int			rc;
-	unsigned int		num_disabled = 0;
-
-	rc = pool_map_create(map_buf, map_version, &map);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create local pool map, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		return rc;
-	}
-
-	rc = pool_map_find_failed_tgts(map, NULL, &num_disabled);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to get num disabled tgts, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-	info->pi_ndisabled = num_disabled;
-
-	if (ranks != NULL) {
-		bool	get_enabled = (info ? ((info->pi_bits & DPI_ENGINES_ENABLED) != 0) : false);
-
-		rc = pool_map_get_ranks(pool_uuid, map, get_enabled, ranks);
-		if (rc != 0) {
-			D_ERROR(DF_UUID": pool_map_get_ranks() failed, "DF_RC"\n",
-				DP_UUID(pool_uuid), DP_RC(rc));
-			goto out;
-		}
-		D_DEBUG(DB_MD, DF_UUID": found %u %s ranks in pool map\n",
-			DP_UUID(pool_uuid), (*ranks)->rl_nr, get_enabled ? "ENABLED" : "DISABLED");
-	}
-
-	pool_query_reply_to_info(pool_uuid, map_buf, map_version, leader_rank, ps, rs, info);
-
-out:
-	pool_map_decref(map);
-	return rc;
-}
-
-/**
- * Query the pool without holding a pool handle.
- *
- * \param[in]	pool_uuid		UUID of the pool
- * \param[in]	ps_ranks		Ranks of pool svc replicas
- * \param[out]	ranks			Optional, returned storage ranks in this pool.
- *					If #pool_info is NULL, engines with disabled targets.
- *					If #pool_info is passed, engines with enabled or disabled
- *					targets according to #pi_bits (DPI_ENGINES_ENABLED bit).
- *					Note: ranks may be empty (i.e., *ranks->rl_nr may be 0).
- *					The caller must free the list with d_rank_list_free().
- * \param[out]	pool_info		Results of the pool query
- * \param[out]	pool_layout_ver		Results of the current pool global version
- * \param[out]	pool_upgrade_layout_ver	Results of the target latest pool global version
- *
- * \return	0		Success
- *		-DER_INVAL	Invalid input
- *		Negative value	Error
- */
-int
-ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		  daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		  uint32_t *upgrade_layout_ver)
-{
-	int			  rc;
-	struct rsvc_client	  client;
-	crt_endpoint_t		  ep;
-	struct dss_module_info	 *info = dss_get_module_info();
-	crt_rpc_t		 *rpc;
-	struct pool_query_v5_in	 *in;
-	struct pool_query_v5_out *out;
-	struct pool_buf		 *map_buf;
-	uint32_t		  map_size = 0;
-
-	if (ranks == NULL || pool_info == NULL)
-		D_GOTO(out, rc = -DER_INVAL);
-
-	D_DEBUG(DB_MGMT, DF_UUID": Querying pool\n", DP_UUID(pool_uuid));
-
-	rc = rsvc_client_init(&client, ps_ranks);
-	if (rc != 0)
-		goto out;
-
-rechoose:
-	ep.ep_grp = NULL; /* primary group */
-	rc = rsvc_client_choose(&client, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": cannot find pool service: "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_client;
-	}
-
-realloc:
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_QUERY, &rpc);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool query rpc, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_client;
-	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->pqi_op.pi_uuid, pool_uuid);
-	uuid_clear(in->pqi_op.pi_hdl);
-	in->pqi_query_bits = pool_query_bits(pool_info, NULL);
-
-	rc = map_bulk_create(info->dmi_ctx, &in->pqi_map_bulk, &map_buf,
-			     map_size);
-	if (rc != 0)
-		goto out_rpc;
-
-	rc = dss_rpc_send(rpc);
-	out = crt_reply_get(rpc);
-	D_ASSERT(out != NULL);
-
-	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pqo_op);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
-		map_bulk_destroy(in->pqi_map_bulk, map_buf);
-		crt_req_decref(rpc);
-		dss_sleep(RECHOOSE_SLEEP_MS);
-		goto rechoose;
-	}
-
-	rc = out->pqo_op.po_rc;
-	if (rc == -DER_TRUNC) {
-		map_size = out->pqo_map_buf_size;
-		map_bulk_destroy(in->pqi_map_bulk, map_buf);
-		crt_req_decref(rpc);
-		goto realloc;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID": failed to query pool, "DF_RC"\n", DP_UUID(pool_uuid), DP_RC(rc));
-		goto out_bulk;
-	}
-
-	D_DEBUG(DB_MGMT, DF_UUID": Successfully queried pool\n", DP_UUID(pool_uuid));
-
-	rc = process_query_result(ranks, pool_info, pool_uuid,
-				  out->pqo_op.po_map_version, out->pqo_op.po_hint.sh_rank,
-				  &out->pqo_space, &out->pqo_rebuild_st, map_buf);
-	if (pool_layout_ver)
-		*pool_layout_ver = out->pqo_pool_layout_ver;
-	if (upgrade_layout_ver)
-		*upgrade_layout_ver = out->pqo_upgrade_layout_ver;
-	if (rc != 0)
-		D_ERROR(DF_UUID": failed to process pool query results, "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
-
-out_bulk:
-	map_bulk_destroy(in->pqi_map_bulk, map_buf);
-out_rpc:
-	crt_req_decref(rpc);
-out_client:
-	rsvc_client_fini(&client);
-out:
-	return rc;
-}
-
 /**
  * Query pool target information without holding a pool handle.
  *
@@ -4701,6 +4646,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids = 0;
 	uint32_t		connectable;
+	uint32_t                svc_ops_enabled = 0;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -4895,6 +4841,21 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
+	d_iov_set(&value, &val32, sizeof(val32));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reint_mode, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		val32 = DAOS_PROP_PO_REINT_MODE_DEFAULT;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_reint_mode, &value);
+		if (rc != 0) {
+			D_ERROR("failed to write pool reintegration mode prop, "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
 	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_upgrade_global_version,
 			   &value);
 	if (rc && rc != -DER_NONEXIST) {
@@ -4911,6 +4872,63 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
+	/* Upgrade for the pool/container service operations KVS */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops\n", DP_UUID(pool_uuid));
+
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n", DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		struct rdb_kvs_attr attr;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops KVS\n", DP_UUID(pool_uuid));
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc             = rdb_tx_create_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
+				DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+	/* And enable the new service operations KVS only if rdb is large enough */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_enabled\n", DP_UUID(pool_uuid));
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops enabled boolean: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		uint64_t rdb_nbytes;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops enabled boolean\n",
+			DP_UUID(pool_uuid));
+
+		rc = rdb_get_size(tx->dt_db, &rdb_nbytes);
+		if (rc != 0)
+			D_GOTO(out_free, rc);
+		if (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE)
+			svc_ops_enabled = 1;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": set svc_ops_enabled=%d failed, " DF_RC "\n",
+				DP_UUID(pool_uuid), svc_ops_enabled, DP_RC(rc));
+			D_GOTO(out_free, rc);
+		}
+		D_DEBUG(DB_MD,
+			DF_UUID ": duplicate RPC detection %s (rdb size: " DF_U64 " %s %u)\n",
+			DP_UUID(pool_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_nbytes,
+			svc_ops_enabled ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
+		need_commit = true;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": need_commit=%s\n", DP_UUID(pool_uuid),
+		need_commit ? "true" : "false");
 	if (need_commit) {
 		daos_prop_t *prop = NULL;
 
@@ -5273,6 +5291,11 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 
 	D_DEBUG(DB_MGMT, DF_UUID": Setting pool prop\n", DP_UUID(pool_uuid));
 
+	if (daos_prop_entry_get(prop, DAOS_PROP_PO_PERF_DOMAIN)) {
+		D_ERROR("Can't set perf_domain on existing pool.\n");
+		D_GOTO(out, rc = -DER_NO_PERM);
+	}
+
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_REDUN_FAC)) {
 		D_ERROR("Can't set set redundancy factor on existing pool.\n");
 		D_GOTO(out, rc = -DER_NO_PERM);
@@ -5300,7 +5323,7 @@ ds_pool_svc_set_prop(uuid_t pool_uuid, d_rank_list_t *ranks, daos_prop_t *prop)
 
 	/* Disallow to begin with; will support in the future. */
 	if (daos_prop_entry_get(prop, DAOS_PROP_PO_SVC_REDUN_FAC)) {
-		D_ERROR(DF_UUID": cannot set pool service redundancy factor on existing pool",
+		D_ERROR(DF_UUID ": cannot set pool service redundancy factor on existing pool\n",
 			DP_UUID(pool_uuid));
 		rc = -DER_NO_PERM;
 		goto out;
@@ -5695,27 +5718,48 @@ out:
 	return rc;
 }
 
+struct pool_svc_reconf_arg {
+	struct pool_map	       *sca_map;
+	uint32_t		sca_map_version_for;
+	bool			sca_sync_remove;
+};
+
+/* Must be used with pool_svc.ps_reconf_sched (see container_of below). */
 static void
-pool_svc_reconf_ult(void *arg)
+pool_svc_reconf_ult(void *varg)
 {
-	struct pool_svc		*svc = arg;
-	struct pool_svc_sched	*reconf = &svc->ps_reconf_sched;
-	d_rank_list_t		*current;
-	d_rank_list_t		*to_add;
-	d_rank_list_t		*to_remove;
-	d_rank_list_t		*new;
-	int			 rc;
+	struct pool_svc_sched      *reconf = varg;
+	struct pool_svc_reconf_arg *arg    = reconf->psc_arg;
+	struct pool_svc            *svc;
+	struct pool_map            *map;
+	d_rank_list_t              *current;
+	d_rank_list_t              *to_add;
+	d_rank_list_t              *to_remove;
+	d_rank_list_t *new;
+	uint64_t rdb_nbytes = 0;
+	int      rc;
+
+	svc = container_of(reconf, struct pool_svc, ps_reconf_sched);
+
+	if (arg->sca_map == NULL)
+		map = svc->ps_pool->sp_map;
+	else
+		map = arg->sca_map;
 
 	D_DEBUG(DB_MD, DF_UUID": begin\n", DP_UUID(svc->ps_uuid));
 
-	if (reconf->psc_canceled)
+	if (reconf->psc_canceled) {
+		rc = -DER_OP_CANCELED;
 		goto out;
+	}
 
 	/* When there are pending events, the pool map may be unstable. */
-	while (events_pending(svc)) {
+	while (!arg->sca_sync_remove && events_pending(svc)) {
 		dss_sleep(3000 /* ms */);
-		if (reconf->psc_canceled)
+		if (reconf->psc_canceled) {
+			rc = -DER_OP_CANCELED;
 			goto out;
+		}
 	}
 
 	rc = rdb_get_ranks(svc->ps_rsvc.s_db, &current);
@@ -5725,10 +5769,20 @@ pool_svc_reconf_ult(void *arg)
 		goto out;
 	}
 
-	ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
-	rc = ds_pool_plan_svc_reconfs(reconf->psc_svc_rf, svc->ps_pool->sp_map, current,
-				      dss_self_rank(), &to_add, &to_remove);
-	ABT_rwlock_unlock(svc->ps_pool->sp_lock);
+	/* If adding replicas, get the correct rdb size (do not trust DAOS_MD_CAP). */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_nbytes);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to get rdb size: " DF_RC "\n", DP_UUID(svc->ps_uuid),
+			DP_RC(rc));
+		goto out_cur;
+	}
+
+	if (arg->sca_map == NULL)
+		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
+	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(), &to_add,
+				      &to_remove);
+	if (arg->sca_map == NULL)
+		ABT_rwlock_unlock(svc->ps_pool->sp_lock);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": cannot plan pool service reconfigurations: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
@@ -5736,7 +5790,7 @@ pool_svc_reconf_ult(void *arg)
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": svc_rf=%d current=%u to_add=%u to_remove=%u\n",
-		DP_UUID(svc->ps_uuid), reconf->psc_svc_rf, current->rl_nr, to_add->rl_nr,
+		DP_UUID(svc->ps_uuid), svc->ps_svc_rf, current->rl_nr, to_add->rl_nr,
 		to_remove->rl_nr);
 
 	/*
@@ -5747,14 +5801,17 @@ pool_svc_reconf_ult(void *arg)
 	 * of the two calls returns an error, we still need to report any
 	 * membership changes to the MS.
 	 */
-	if (to_add->rl_nr > 0)
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
-	if (reconf->psc_canceled)
-		goto out_to_add_remove;
-	if (to_add->rl_nr > to_remove->rl_nr)
-		to_remove->rl_nr = 0;
-	else
-		to_remove->rl_nr -= to_add->rl_nr;
+	if (!arg->sca_sync_remove && to_add->rl_nr > 0) {
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes);
+		if (reconf->psc_canceled) {
+			rc = -DER_OP_CANCELED;
+			goto out_to_add_remove;
+		}
+		if (to_add->rl_nr > to_remove->rl_nr)
+			to_remove->rl_nr = 0;
+		else
+			to_remove->rl_nr -= to_add->rl_nr;
+	}
 	if (to_remove->rl_nr > 0) {
 		d_rank_list_t *tmp;
 
@@ -5783,26 +5840,35 @@ pool_svc_reconf_ult(void *arg)
 		d_rank_list_sort(current);
 		d_rank_list_sort(new);
 
-		if (reconf->psc_force_notify || !d_rank_list_identical(new, current)) {
+		if (svc->ps_force_notify || !d_rank_list_identical(new, current)) {
+			int rc_tmp;
+
 			/*
 			 * Send RAS event to control-plane over dRPC to indicate
 			 * change in pool service replicas.
 			 */
-			rc = ds_notify_pool_svc_update(&svc->ps_uuid, new, svc->ps_rsvc.s_term);
-			if (rc == 0)
-				reconf->psc_force_notify = false;
+			rc_tmp = ds_notify_pool_svc_update(&svc->ps_uuid, new, svc->ps_rsvc.s_term);
+			if (rc_tmp == 0)
+				svc->ps_force_notify = false;
 			else
-				D_ERROR(DF_UUID": replica update notify failure: "DF_RC"\n",
-					DP_UUID(svc->ps_uuid), DP_RC(rc));
+				DL_ERROR(rc_tmp, DF_UUID": replica update notify failure",
+					 DP_UUID(svc->ps_uuid));
 		}
 
 		d_rank_list_free(new);
 	}
-	if (reconf->psc_canceled)
+	if (reconf->psc_canceled) {
+		rc = -DER_OP_CANCELED;
 		goto out_to_add_remove;
+	}
 
-	/* Ignore the return value of this ds_rsvc_dist_stop call. */
-	if (to_remove->rl_nr > 0)
+	/*
+	 * Don't attempt to destroy any removed replicas in the "synchronous
+	 * remove" mode, so that we don't delay pool_svc_update_map_internal
+	 * for too long. Ignore the return value of this ds_rsvc_dist_stop
+	 * call.
+	 */
+	if (!arg->sca_sync_remove && to_remove->rl_nr > 0)
 		ds_rsvc_dist_stop(svc->ps_rsvc.s_class, &svc->ps_rsvc.s_id, to_remove,
 				  NULL /* excluded */, svc->ps_rsvc.s_term, true /* destroy */);
 
@@ -5812,14 +5878,17 @@ out_to_add_remove:
 out_cur:
 	d_rank_list_free(current);
 out:
+	/* Do not yield between the D_FREE and the sched_end. */
+	D_FREE(reconf->psc_arg);
+	reconf->psc_rc = rc;
 	sched_end(reconf);
 	ABT_cond_broadcast(reconf->psc_cv);
-	D_DEBUG(DB_MD, DF_UUID": end\n", DP_UUID(svc->ps_uuid));
+	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 }
 
-static void
-pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
-		  void (*func)(void *))
+static int
+pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched, void (*func)(void *),
+		  void *arg)
 {
 	enum ds_rsvc_state	state;
 	int			rc;
@@ -5834,13 +5903,13 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
 	if (state == DS_RSVC_DRAINING) {
 		D_DEBUG(DB_MD, DF_UUID": end: service %s\n", DP_UUID(svc->ps_uuid),
 			ds_rsvc_state_str(state));
-		return;
+		return -DER_OP_CANCELED;
 	}
 
 	D_ASSERT(&svc->ps_reconf_sched == sched || &svc->ps_rfcheck_sched == sched);
 	sched_cancel_and_wait(sched);
 
-	sched_begin(sched);
+	sched_begin(sched, arg);
 
 	/*
 	 * An extra svc leader reference is not required, because
@@ -5848,14 +5917,16 @@ pool_svc_schedule(struct pool_svc *svc, struct pool_svc_sched *sched,
 	 *
 	 * ULT tracking is achieved through sched, not a ULT handle.
 	 */
-	rc = dss_ult_create(func, svc, DSS_XS_SELF, 0, 0, NULL /* ult */);
+	rc = dss_ult_create(func, sched, DSS_XS_SELF, 0, 0, NULL /* ult */);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create ULT: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		sched_end(sched);
+		return rc;
 	}
 
 	D_DEBUG(DB_MD, DF_UUID": end: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
+	return 0;
 }
 
 static int pool_find_all_targets_by_addr(struct pool_map *map,
@@ -5874,8 +5945,8 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 	 */
 	rc = ds_cont_rf_check(pool_uuid, cont_uuid, tx);
 	if (rc)
-		D_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, DF_CONT" check_rf: "DF_RC"\n",
-			 DP_CONT(pool_uuid, cont_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_RF, DB_MD, DLOG_ERR, rc, DF_CONT " check_rf",
+			  DP_CONT(pool_uuid, cont_uuid));
 
 	if (sched->psc_canceled) {
 		D_DEBUG(DB_MD, DF_CONT" is canceled.\n", DP_CONT(pool_uuid, cont_uuid));
@@ -5885,11 +5956,12 @@ cont_rf_check_cb(uuid_t pool_uuid, uuid_t cont_uuid, struct rdb_tx *tx, void *ar
 	return 0;
 }
 
+/* Must be used with pool_svc.ps_rfcheck_sched (see container_of below). */
 static void
 pool_svc_rfcheck_ult(void *arg)
 {
-	struct pool_svc	*svc = arg;
-	int rc;
+	struct pool_svc	       *svc = container_of(arg, struct pool_svc, ps_rfcheck_sched);
+	int			rc;
 
 	do {
 		/* retry until some one stop the pool svc(rc == 1) or succeed */
@@ -5907,6 +5979,69 @@ pool_svc_rfcheck_ult(void *arg)
 	sched_end(&svc->ps_rfcheck_sched);
 	D_INFO("RF check finished for "DF_UUID"\n", DP_UUID(svc->ps_uuid));
 	ABT_cond_broadcast(svc->ps_rfcheck_sched.psc_cv);
+}
+
+/*
+ * If map is NULL, map_version_for must be provided, and svc->ps_pool->sp_map
+ * will be used during reconfiguration; otherwise, map_version_for is ignored.
+ */
+static int
+pool_svc_schedule_reconf(struct pool_svc *svc, struct pool_map *map, uint32_t map_version_for,
+			 bool sync_remove)
+{
+	struct pool_svc_reconf_arg     *reconf_arg;
+	uint32_t			v;
+	int				rc;
+
+	if (map == NULL)
+		v = map_version_for;
+	else
+		v = pool_map_get_version(map);
+
+	if (svc->ps_reconf_sched.psc_in_progress) {
+		uint32_t v_in_progress;
+
+		/* Safe to access psc_arg as long as we don't yield. */
+		reconf_arg = svc->ps_reconf_sched.psc_arg;
+		if (reconf_arg->sca_map == NULL)
+			v_in_progress = reconf_arg->sca_map_version_for;
+		else
+			v_in_progress = pool_map_get_version(reconf_arg->sca_map);
+		if (v_in_progress >= v) {
+			D_DEBUG(DB_MD, DF_UUID": stale request: v_in_progress=%u v=%u\n",
+				DP_UUID(svc->ps_uuid), v_in_progress, v);
+			return -DER_OP_CANCELED;
+		}
+	}
+
+	D_ALLOC_PTR(reconf_arg);
+	if (reconf_arg == NULL)
+		return -DER_NOMEM;
+	reconf_arg->sca_map = map;
+	reconf_arg->sca_map_version_for = v;
+	reconf_arg->sca_sync_remove = sync_remove;
+
+	/*
+	 * If successful, this call passes the ownership of reconf_arg to
+	 * pool_svc_reconf_ult.
+	 */
+	rc = pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult, reconf_arg);
+	if (rc != 0) {
+		D_FREE(reconf_arg);
+		return rc;
+	}
+
+	if (sync_remove) {
+		sched_wait(&svc->ps_reconf_sched);
+
+		rc = svc->ps_reconf_sched.psc_rc;
+		if (rc != 0) {
+			DL_ERROR(rc, DF_UUID": pool service reconfigurator", DP_UUID(svc->ps_uuid));
+			return rc;
+		}
+	}
+
+	return 0;
 }
 
 /*
@@ -5947,27 +6082,14 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	struct pool_map	       *map;
 	uint32_t		map_version_before;
 	uint32_t		map_version;
-	uint32_t		rebuild_ver = 0;
 	struct pool_buf	       *map_buf = NULL;
+	struct pool_domain     *node;
 	bool			updated = false;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID": opc=%u exclude_rank=%d ntgts=%d ntgt_addrs=%d\n",
 		DP_UUID(svc->ps_uuid), opc, exclude_rank, tgts->pti_number,
 		tgt_addrs == NULL ? 0 : tgt_addrs->pta_number);
-
-	/* Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
-	 * updating the pool map during rebuild, which might screw the object layout.
-	 */
-	if (opc == POOL_EXTEND || opc == POOL_REINT || opc == POOL_DRAIN) {
-		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver, NULL, NULL);
-		if (rebuild_ver != 0) {
-			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
-				" so current opc %d can not be done: %d\n",
-				DP_UUID(svc->ps_uuid), rebuild_ver, opc, DER_BUSY);
-			D_GOTO(out, rc = -DER_BUSY);
-		}
-	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
@@ -6031,13 +6153,13 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 			}
 		}
 	}
+
 	/*
 	 * Attempt to modify the temporary pool map and save its versions
 	 * before and after. If the version hasn't changed, we are done.
 	 */
 	map_version_before = pool_map_get_version(map);
-	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver,
-				     true);
+	rc = ds_pool_map_tgts_update(map, tgts, opc, exclude_rank, tgt_map_ver, true);
 	if (rc != 0)
 		D_GOTO(out_map, rc);
 	map_version = pool_map_get_version(map);
@@ -6046,6 +6168,35 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	if (map_version == map_version_before)
 		D_GOTO(out_map, rc = 0);
 
+	/*
+	 * If the map modification affects myself, leave it to a new PS leader
+	 * if there's another PS replica, or reject it.
+	 */
+	node = pool_map_find_node_by_rank(map, dss_self_rank());
+	if (node == NULL || !(node->do_comp.co_status & POOL_SVC_MAP_STATES)) {
+		d_rank_list_t *replicas;
+
+		rc = rdb_get_ranks(svc->ps_rsvc.s_db, &replicas);
+		if (replicas->rl_nr == 1) {
+			D_ERROR(DF_UUID": rejecting rank exclusion: self removal requested\n",
+				DP_UUID(svc->ps_uuid));
+			rc = -DER_INVAL;
+		} else {
+			/*
+			 * The handling is unreliable, for we may become a new
+			 * PS leader again; a more reliable implementation
+			 * requires the currently unavailable Raft leadership
+			 * transfer support.
+			 */
+			D_INFO(DF_UUID": resigning PS leadership: self removal requested\n",
+			       DP_UUID(svc->ps_uuid));
+			rdb_resign(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term);
+			rc = -DER_NOTLEADER;
+		}
+		d_rank_list_free(replicas);
+		goto out_map;
+	}
+
 	/* Write the new pool map. */
 	rc = pool_buf_extract(map, &map_buf);
 	if (rc != 0)
@@ -6053,6 +6204,17 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 	rc = write_map_buf(&tx, &svc->ps_root, map_buf, map_version);
 	if (rc != 0)
 		goto out_map_buf;
+
+	/*
+	 * Remove all undesired PS replicas (if any) before committing map, so
+	 * that the set of PS replicas remains a subset of the pool groups.
+	 */
+	rc = pool_svc_schedule_reconf(svc, map, 0 /* map_version_for */, true /* sync_remove */);
+	if (rc != 0) {
+		DL_ERROR(rc, DF_UUID": failed to remove undesired pool service replicas",
+			 DP_UUID(svc->ps_uuid));
+		goto out_map;
+	}
 
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0) {
@@ -6079,9 +6241,17 @@ pool_svc_update_map_internal(struct pool_svc *svc, unsigned int opc,
 
 	ds_rsvc_request_map_dist(&svc->ps_rsvc);
 
-	pool_svc_schedule(svc, &svc->ps_reconf_sched, pool_svc_reconf_ult);
-	if (opc == POOL_EXCLUDE)
-		pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult);
+	rc = pool_svc_schedule_reconf(svc, NULL /* map */, map_version, false /* sync_remove */);
+	if (rc != 0)
+		DL_INFO(rc, DF_UUID": failed to schedule pool service reconfiguration",
+			DP_UUID(svc->ps_uuid));
+
+	if (opc == POOL_EXCLUDE) {
+		rc = pool_svc_schedule(svc, &svc->ps_rfcheck_sched, pool_svc_rfcheck_ult,
+				       NULL /* arg */);
+		if (rc != 0)
+			DL_INFO(rc, DF_UUID": failed to schedule RF check", DP_UUID(svc->ps_uuid));
+	}
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -6276,6 +6446,18 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
+	if (svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_NO_DATA_SYNC) {
+		D_DEBUG(DB_MD, "self healing is disabled for no_data_sync reintegration mode.\n");
+		if (opc == POOL_EXCLUDE || opc == POOL_DRAIN) {
+			rc = ds_pool_tgt_exclude_out(svc->ps_pool->sp_uuid, &target_list);
+			if (rc)
+				D_INFO("mark failed target %d of "DF_UUID " as DOWNOUT: "DF_RC"\n",
+					target_list.pti_ids[0].pti_id,
+					DP_UUID(svc->ps_pool->sp_uuid), DP_RC(rc));
+		}
+		D_GOTO(out, rc);
+	}
+
 	if (daos_fail_check(DAOS_REBUILD_DELAY))
 		delay = 5;
 
@@ -6306,6 +6488,7 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	d_rank_list_t		rank_list;
 	uint32_t		ndomains;
 	uint32_t		*domains;
+	uint32_t		rebuild_ver = 0;
 	int			rc;
 
 	D_DEBUG(DB_MD, DF_UUID": processing rpc %p\n", DP_UUID(in->pei_op.pi_uuid), rpc);
@@ -6320,12 +6503,24 @@ ds_pool_extend_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
+	/**
+	 * Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+	 * updating the pool map during rebuild, which might screw the object layout.
+	 */
+	ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver, NULL, NULL);
+	if (rebuild_ver != 0) {
+		D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+			"extending can not be done: %d\n",
+			DP_UUID(svc->ps_uuid), rebuild_ver, -DER_BUSY);
+		D_GOTO(put, rc = -DER_BUSY);
+	}
+
 	rc = pool_svc_update_map(svc, opc_get(rpc->cr_opc),
 				 false /* exclude_rank */,
 				 &rank_list, domains, ndomains,
 				 NULL, NULL, &out->peo_op.po_map_version,
 				 &out->peo_op.po_hint);
-
+put:
 	pool_svc_put_leader(svc);
 out:
 	out->peo_op.po_rc = rc;
@@ -6399,6 +6594,7 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	struct pool_tgt_update_in      *in = crt_req_get(rpc);
 	struct pool_tgt_update_out     *out = crt_reply_get(rpc);
 	struct pool_svc		       *svc;
+	uint32_t			rebuild_ver = 0;
 	struct pool_target_addr_list	list = { 0 };
 	struct pool_target_addr_list	inval_list_out = { 0 };
 	int				rc;
@@ -6415,10 +6611,26 @@ ds_pool_update_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		goto out;
 
+	if (opc_get(rpc->cr_opc) == POOL_REINT || opc_get(rpc->cr_opc) == POOL_DRAIN) {
+		/**
+		 * Check if there are ongoing rebuild jobs for extend/reint/drain, to avoid
+		 * updating the pool map during rebuild, which might screw the object layout.
+		 */
+		ds_rebuild_running_query(svc->ps_uuid, &rebuild_ver, NULL, NULL);
+		if (rebuild_ver != 0) {
+			D_ERROR(DF_UUID": other rebuild job rebuild ver %u is ongoing,"
+				" so current opc %d can not be done: %d\n",
+				DP_UUID(svc->ps_uuid), rebuild_ver, opc_get(rpc->cr_opc),
+				-DER_BUSY);
+			D_GOTO(out_svc, rc = -DER_BUSY);
+		}
+	}
+
 	list.pta_number = in->pti_addr_list.ca_count;
 	list.pta_addrs = in->pti_addr_list.ca_arrays;
 
-	if (opc_get(rpc->cr_opc) == POOL_REINT) {
+	if (opc_get(rpc->cr_opc) == POOL_REINT &&
+	    svc->ps_pool->sp_reint_mode == DAOS_REINT_MODE_DATA_SYNC) {
 		rc = pool_discard(rpc->cr_ctx, svc, &list);
 		if (rc)
 			goto out_svc;
@@ -6785,8 +6997,7 @@ rechoose:
 
 	rc = pool_req_create(info->dmi_ctx, &ep, POOL_EVICT, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to create pool evict rpc: %d\n",
-			DP_UUID(pool_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": failed to create pool evict rpc", DP_UUID(pool_uuid));
 		D_GOTO(out_client, rc);
 	}
 
@@ -6816,8 +7027,7 @@ rechoose:
 
 	rc = out->pvo_op.po_rc;
 	if (rc != 0)
-		D_ERROR(DF_UUID": pool destroy failed to evict handles, "
-			"rc: %d\n", DP_UUID(pool_uuid), rc);
+		DL_ERROR(rc, DF_UUID ": pool destroy failed to evict handles", DP_UUID(pool_uuid));
 	if (count)
 		*count = out->pvo_n_hdls_evicted;
 
@@ -6929,7 +7139,7 @@ ds_pool_ranks_get_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_INVAL);
 
 	/* Get available ranks */
-	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATUS, &out_ranks);
+	rc = ds_pool_get_ranks(in->prgi_op.pi_uuid, POOL_GROUP_MAP_STATES, &out_ranks);
 	if (rc != 0) {
 		D_ERROR(DF_UUID ": get ranks failed, " DF_RC "\n",
 			DP_UUID(in->prgi_op.pi_uuid), DP_RC(rc));

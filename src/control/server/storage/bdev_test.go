@@ -20,12 +20,24 @@ import (
 	"github.com/daos-stack/daos/src/control/common/test"
 )
 
+func ctrlrsFromPCIAddrs(addrs ...string) NvmeControllers {
+	ncs := make(NvmeControllers, len(addrs))
+	for i, addr := range addrs {
+		nc := NvmeController{PciAddr: addr}
+		ncs[i] = &nc
+	}
+	return ncs
+}
+
 func Test_NvmeDevState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		state  NvmeDevState
 		expStr string
 		expErr error
 	}{
+		"zero value": {
+			expStr: "UNKNOWN",
+		},
 		"new state": {
 			state:  NvmeStateNew,
 			expStr: "NEW",
@@ -159,7 +171,8 @@ func Test_Convert_SmdDevice(t *testing.T) {
 	}
 	expOut := `{"role_bits":7,"uuid":"00000001-0001-0001-0001-000000000001","tgt_ids":[5,6,7,8],` +
 		`"dev_state":"EVICTED","led_state":"ON","rank":0,"total_bytes":0,"avail_bytes":0,` +
-		`"cluster_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
+		`"usable_bytes":0,"cluster_size":0,"meta_size":0,"meta_wal_size":0,"rdb_size":0,` +
+		`"rdb_wal_size":0,"health":null,"tr_addr":"0000:01:00.0","roles":"data,meta,wal",` +
 		`"has_sys_xs":true}`
 	if diff := cmp.Diff(expOut, string(out)); diff != "" {
 		t.Fatalf("expected json output to be human readable (-want, +got):\n%s\n", diff)
@@ -184,22 +197,53 @@ func Test_NvmeController_Update(t *testing.T) {
 	test.AssertEqual(t, len(mockCtrlrs), 7, "expected 7")
 }
 
-func Test_filterBdevScanResponse(t *testing.T) {
-	const (
-		vmdAddr1         = "0000:5d:05.5"
-		vmdBackingAddr1a = "5d0505:01:00.0"
-		vmdBackingAddr1b = "5d0505:03:00.0"
-		vmdAddr2         = "0000:7d:05.5"
-		vmdBackingAddr2a = "7d0505:01:00.0"
-		vmdBackingAddr2b = "7d0505:03:00.0"
-	)
-	ctrlrsFromPCIAddrs := func(addrs ...string) (ncs NvmeControllers) {
-		for _, addr := range addrs {
-			ncs = append(ncs, &NvmeController{PciAddr: addr})
-		}
-		return
-	}
+func Test_NvmeController_Addresses(t *testing.T) {
+	for name, tc := range map[string]struct {
+		ctrlrs   NvmeControllers
+		expAddrs []string
+		expErr   error
+	}{
+		"two vmd endpoints with two backing devices": {
+			ctrlrs: ctrlrsFromPCIAddrs(
+				"5d0505:03:00.0",
+				"7d0505:01:00.0",
+				"5d0505:01:00.0",
+				"7d0505:03:00.0",
+			),
+			expAddrs: []string{
+				"5d0505:01:00.0",
+				"5d0505:03:00.0",
+				"7d0505:01:00.0",
+				"7d0505:03:00.0",
+			},
+		},
+		"no addresses": {
+			expAddrs: []string{},
+		},
+		"invalid address": {
+			ctrlrs: ctrlrsFromPCIAddrs("a"),
+			expErr: errors.New("unable to parse"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			gotAddrs, gotErr := tc.ctrlrs.Addresses()
+			test.CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
 
+			gotAddrStrs := gotAddrs.Strings()
+			t.Logf("ea: %v\n", gotAddrStrs)
+
+			if diff := cmp.Diff(tc.expAddrs, gotAddrStrs); diff != "" {
+				//if diff := cmp.Diff(tc.expAddrs, gotAddrs.Strings()); diff != "" {
+				t.Fatalf("unexpected output address set (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func Test_filterBdevScanResponse(t *testing.T) {
 	for name, tc := range map[string]struct {
 		addrs    []string
 		scanResp *BdevScanResponse
@@ -207,12 +251,19 @@ func Test_filterBdevScanResponse(t *testing.T) {
 		expErr   error
 	}{
 		"two vmd endpoints; one filtered out": {
-			addrs: []string{vmdAddr2},
+			addrs: []string{"0000:7d:05.5"},
 			scanResp: &BdevScanResponse{
-				Controllers: ctrlrsFromPCIAddrs(vmdBackingAddr1a, vmdBackingAddr1b,
-					vmdBackingAddr2a, vmdBackingAddr2b),
+				Controllers: ctrlrsFromPCIAddrs(
+					"5d0505:03:00.0",
+					"7d0505:01:00.0",
+					"5d0505:01:00.0",
+					"7d0505:03:00.0",
+				),
 			},
-			expAddrs: []string{vmdBackingAddr2a, vmdBackingAddr2b},
+			expAddrs: []string{
+				"7d0505:01:00.0",
+				"7d0505:03:00.0",
+			},
 		},
 		"two ssds; one filtered out": {
 			addrs: []string{"0000:81:00.0"},

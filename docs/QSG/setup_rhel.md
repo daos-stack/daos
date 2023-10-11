@@ -8,7 +8,7 @@ RHEL8, Rocky Linux and AlmaLinux.
 For setup instructions on OpenSuse, refer to [OpenSuse setup](setup_suse.md).
 
 For more details, including the prerequisite steps before installing DAOS,
-reference the [DAOS administration guide](https://docs.daos.io/v2.4/admin/hardware/).
+reference the [DAOS administration guide](https://docs.daos.io/v2.6/admin/hardware/).
 
 ## Requirements
 
@@ -27,7 +27,7 @@ All nodes must have:
   commands in parallel)
 
 In addition the server nodes should also have
-[IOMMU enabled](https://docs.daos.io/v2.4/admin/predeployment_check/#enable-iommu-optional).
+[IOMMU enabled](https://docs.daos.io/v2.6/admin/predeployment_check/#enable-iommu-optional).
 
 For the use of the commands outlined on this page the following shell
 variables will need to be defined:
@@ -61,9 +61,9 @@ based upon their role.  Admin and client nodes require the installation
 of the daos-client RPM and the server nodes require the installation of the
 daos-server RPM.
 
-1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.4/):
+1. Configure access to the [DAOS package repository](https://packages.daos.io/v2.6/):
 
-		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.4/EL8/packages/x86_64/daos_packages.repo'
+		pdsh -w $ALL_NODES 'sudo wget -O /etc/yum.repos.d/daos-packages.repo https://packages.daos.io/v2.6/EL8/packages/x86_64/daos_packages.repo'
 
 
 2. Import GPG key on all nodes:
@@ -175,7 +175,7 @@ Server nodes require the following certificate files:
 - A copy of the Client certificate (client.crt) owned by the
   daos\_server user
 
-See [Certificate Configuration](https://docs.daos.io/v2.4/admin/deployment/#certificate-configuration)
+See [Certificate Configuration](https://docs.daos.io/v2.6/admin/deployment/#certificate-configuration)
 for more information.
 
 !!! note
@@ -408,6 +408,6 @@ Examples are available on [github](https://github.com/daos-stack/daos/tree/maste
 		pdsh -S -w $CLIENT_NODES "cat /tmp/daos_agent.log"
 
 		# Sample output depending on number of client nodes
-		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.4 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
-		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.4 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
+		client-1: agent INFO 2022/05/05 22:38:46 DAOS Agent v2.6 (pid 47580) listening on /var/run/daos_agent/daos_agent.sock
+		client-2: agent INFO 2022/05/05 22:38:53 DAOS Agent v2.6 (pid 39135) listening on /var/run/daos_agent/daos_agent.sock
 

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2017-2022 Intel Corporation.
+ * (C) Copyright 2017-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -154,6 +154,9 @@ crt_proc_msg_installsnapshot_response_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 	rc = crt_proc_int32_t(proc, proc_op, &p->complete);
+	if (unlikely(rc))
+		return rc;
+	rc = crt_proc_int64_t(proc, proc_op, &p->lease);
 	if (unlikely(rc))
 		return rc;
 

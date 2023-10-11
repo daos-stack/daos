@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -478,6 +478,12 @@ dss_init_state_set(enum dss_init_state state)
 {
 }
 
+int
+dss_module_setup_all()
+{
+	return 0;
+}
+
 size_t
 ds_rsvc_get_md_cap(void)
 {
@@ -503,11 +509,9 @@ ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in)
 }
 
 int
-ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
-		    d_rank_list_t *targets, size_t scm_size,
-		    size_t nvme_size, daos_prop_t *prop,
-		    d_rank_list_t **svcp, int nr_domains,
-		    uint32_t *domains)
+ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
+		    size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains, size_t meta_blob_size)
 {
 	return 0;
 }
@@ -608,4 +612,3 @@ mock_ds_mgmt_dev_set_faulty_setup(void)
 	ds_mgmt_dev_set_faulty_return = 0;
 	uuid_clear(ds_mgmt_dev_set_faulty_uuid);
 }
-

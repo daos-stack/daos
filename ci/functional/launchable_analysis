@@ -12,7 +12,13 @@ if ! mkdir -p "$dir"; then
             cat "$dir"
         fi
     done
-    exit 1
+    if [ -f "$1" ]; then
+        mv "$1"{,.$SECONDS}
+        if ! mkdir -p "$dir"; then
+            echo "Failed to create \"$dir\""
+            exit 1
+        fi
+    fi
 fi
 
 notify=false

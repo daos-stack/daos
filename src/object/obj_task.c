@@ -400,6 +400,7 @@ dc_obj_key2anchor_task_create(daos_handle_t oh, daos_handle_t th, daos_key_t *dk
 	args->dkey	= dkey;
 	args->akey	= akey;
 	args->anchor	= anchor;
+	args->nr	= NULL;
 
 	return 0;
 }

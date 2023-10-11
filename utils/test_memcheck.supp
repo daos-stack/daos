@@ -257,6 +257,17 @@
    ...
 }
 {
+   Tcp provider with ofi rxm 2
+   Memcheck:Param
+   sendmsg(msg.msg_iov[2])
+   fun:sendmsg
+   fun:ofi_sockapi_sendv_socket
+   fun:ofi_bsock_sendv
+   ...
+   fun:fi_tsend
+   ...
+}
+{
    par_init mpi or dlopen leak
    Memcheck:Leak
    match-leak-kinds: all

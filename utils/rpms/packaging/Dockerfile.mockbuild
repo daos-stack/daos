@@ -1,11 +1,14 @@
 #
-# Copyright 2018-2022 Intel Corporation
+# Copyright 2018-2023 Intel Corporation
 #
 # 'recipe' for Docker to build an RPM
 #
 
 # Pull base image
-FROM fedora:latest
+ARG FVERSION=38    # this should be changed to 'latest' and some point soon
+FROM fedora:$FVERSION
+# Needed for later use of FVERSION
+ARG FVERSION
 LABEL maintainer="daos@daos.groups.io"
 
 # Use local repo server if present
@@ -51,6 +54,21 @@ RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&       
          rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                                           \
      fi) < rpmlint--ignore-unused-rpmlintrc.patch;                                             \
     rm -f  rpmlint--ignore-unused-rpmlintrc.patch
+
+# Prime the mock build environment to save time on each build
+# https://rpm-software-management.github.io/mock/#mock-inside-podman-fedora-toolbox-or-docker-container
+# But it's not working yet
+# https://github.com/rpm-software-management/mock/discussions/1095
+# https://github.com/rpm-software-management/mock/issues/1100
+#RUN set -x; \
+#    if [ $FVERSION -gt 37 ]; then                                      \
+#        for chroot in {opensuse-leap-15.4,rocky+epel-{8,9}}-x86_64; do \
+#            ls -l /var/cache/mock/$chroot/root_cache/; \
+#            id; \
+#            su - build -c "id; mock -r \"$chroot\" --shell id";        \
+#            ls -l /var/cache/mock/$chroot/root_cache/; \
+#        done;                                                          \
+#    fi
 
 # show the release that was built
 ARG CACHEBUST

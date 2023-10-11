@@ -248,7 +248,7 @@ func (mi *MockInstance) RemoveSuperblock() error {
 	return mi.cfg.RemoveSuperblockErr
 }
 
-func (mi *MockInstance) Run(_ context.Context, _ bool) {}
+func (mi *MockInstance) Run(_ context.Context) {}
 
 func (mi *MockInstance) SetupRank(_ context.Context, _ ranklist.Rank, _ uint32) error {
 	return mi.cfg.SetupRankErr
@@ -278,7 +278,7 @@ func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.Member
 
 func (mi *MockInstance) requestStart(_ context.Context) {}
 
-func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController) ([]storage.NvmeController, error) {
+func (mi *MockInstance) updateInUseBdevs(_ context.Context, _ []storage.NvmeController, _ uint64, _ uint64) ([]storage.NvmeController, error) {
 	return []storage.NvmeController{}, nil
 }
 

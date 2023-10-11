@@ -57,7 +57,7 @@
 #include "obj_ec.h"
 #include "srv_internal.h"
 
-#define EC_AGG_ITERATION_MAX	2048
+#define EC_AGG_ITERATION_MAX	1024
 
 /* Pool/container info. Shared handle UUIDs, and service list are initialized
  * in system Xstream.
@@ -306,6 +306,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 			carry_is_hole = true;
 
 		d_list_del(&extent->ae_link);
+		D_ASSERT(entry->ae_cur_stripe.as_extent_cnt > 0);
 		entry->ae_cur_stripe.as_extent_cnt--;
 		D_FREE(extent);
 	}
@@ -971,9 +972,9 @@ agg_fetch_remote_parity(struct ec_agg_entry *entry)
 				   &entry->ae_dkey, 1, &iod, &sgl, NULL,
 				   DIOF_TO_SPEC_SHARD | DIOF_FOR_EC_AGG,
 				   &peer_shard, NULL);
-		D_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE,
-			 DF_UOID " fetch parity from peer shard %d, " DF_RC "\n",
-			 DP_UOID(entry->ae_oid), peer_shard, DP_RC(rc));
+		DL_CDEBUG(rc != 0, DLOG_ERR, DB_TRACE, rc,
+			  DF_UOID " fetch parity from peer shard %d", DP_UOID(entry->ae_oid),
+			  peer_shard);
 		if (rc)
 			goto out;
 	}
@@ -1796,7 +1797,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	/* Query the parity, entry->ae_par_extent.ape_epoch will be set to
 	 * parity ext epoch if exist.
 	 */
-	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	iter_param.ip_hdl		= agg_param->ap_cont_handle;
 	/* set epr_lo as zero to pass-through possibly existed snapshot
 	 * between agg_param->ap_epr.epr_lo and .epr_hi.
 	 */
@@ -2089,11 +2090,13 @@ agg_shard_is_leader(struct ds_pool *pool, struct ec_agg_entry *agg_entry)
 static void
 agg_reset_dkey_entry(struct ec_agg_entry *agg_entry, vos_iter_entry_t *entry)
 {
+	agg_clear_extents(agg_entry);
 	agg_reset_pos(VOS_ITER_AKEY, agg_entry);
 
 	agg_entry->ae_cur_stripe.as_stripenum	= 0UL;
 	agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 	agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
+	agg_entry->ae_cur_stripe.as_has_holes = false;
 	agg_entry->ae_cur_stripe.as_extent_cnt	= 0U;
 	agg_entry->ae_cur_stripe.as_offset	= 0U;
 }
@@ -2323,6 +2326,8 @@ ec_agg_object(daos_handle_t ih, vos_iter_entry_t *entry, struct ec_agg_param *ag
 	md.omd_id = entry->ie_oid.id_pub;
 	md.omd_ver = agg_param->ap_pool_info.api_pool->sp_map_version;
 	md.omd_fdom_lvl = props.dcp_redun_lvl;
+	md.omd_pdom_lvl = props.dcp_perf_domain;
+	md.omd_pda = props.dcp_ec_pda;
 	rc = pl_obj_place(map, agg_entry->ae_oid.id_layout_ver, &md, DAOS_OO_RO, NULL,
 			  &agg_entry->ae_obj_layout);
 
@@ -2581,6 +2586,10 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		goto update_hae;
 	}
 
+	rc = vos_aggregate_enter(cont->sc_hdl, epr);
+	if (rc)
+		goto update_hae;
+
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
@@ -2614,6 +2623,8 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 		sched_req_sleep(cont->sc_ec_agg_req, 5 * 1000);
 	}
 
+	vos_aggregate_exit(cont->sc_hdl);
+
 update_hae:
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0) {
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
@@ -2638,13 +2649,11 @@ ds_obj_ec_aggregate(void *arg)
 	param.ap_cont = cont;
 	rc = ec_agg_param_init(cont, &param);
 	if (rc) {
-		/* To make sure the EC aggregation can be run on this xstream,
-		 * let's do not exit here, and in cont_ec_aggregate_cb(), it will
-		 * keep retrying parameter init.
+		/* To make sure the EC aggregation can be run on this xstream, let's do not exit
+		 * here, and in cont_ec_aggregate_cb(), it will keep retrying parameter init.
 		 */
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR,
-			 DF_UUID" EC aggregation failed: "DF_RC"\n",
-			 DP_UUID(cont->sc_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR, rc,
+			  DF_UUID " EC aggregation failed", DP_UUID(cont->sc_uuid));
 	}
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);

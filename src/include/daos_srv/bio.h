@@ -731,11 +731,14 @@ bio_yield(struct umem_instance *umm)
  * \param dev_state	[OUT]	BIO device health state
  * \param dev_uuid	[IN]	uuid of device
  * \param st		[IN]	smd dev type
+ * \param meta_size	[IN]	Metadata blob size
+ * \param rdb_size	[IN]	RDB blob size
  *
  * \return			Zero on success, negative value on error
  */
 int bio_get_dev_state(struct nvme_stats *dev_state, uuid_t dev_uuid,
-		      struct bio_xs_context *xs);
+		      struct bio_xs_context *xs, uint64_t meta_size,
+		      uint64_t rdb_size);
 
 /*
  * Helper function to get the internal blobstore state for a given xstream.
@@ -846,11 +849,13 @@ void *bio_buf_addr(struct bio_desc *biod);
  * \param umem		[IN]	umem instance
  * \param bsgl_src	[IN]	Source BIO SGL
  * \param bsgl_dst	[IN]	Target BIO SGL
+ * \param desc		[OUT]	Returned BIO copy descriptor
  *
- * \return			BIO copy descriptor on success, NULL on error
+ * \return			Zero on success, negative value on error
  */
-struct bio_copy_desc *bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
-				    struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst);
+int bio_copy_prep(struct bio_io_context *ioctxt, struct umem_instance *umem,
+		  struct bio_sglist *bsgl_src, struct bio_sglist *bsgl_dst,
+		  struct bio_copy_desc **desc);
 
 struct bio_csum_desc {
 	uint8_t		*bmd_csum_buf;
@@ -1059,7 +1064,7 @@ struct bio_wal_info {
 };
 
 /*
- * Qeury WAL total blocks & used blocks.
+ * Query WAL total blocks & used blocks.
  */
 void bio_wal_query(struct bio_meta_context *mc, struct bio_wal_info *info);
 

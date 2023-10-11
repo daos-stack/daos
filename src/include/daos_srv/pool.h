@@ -48,6 +48,8 @@ struct ds_pool {
 	uint32_t		sp_ec_pda;
 	/* Performance Domain Affinity Level of replicated object */
 	uint32_t		sp_rp_pda;
+	/* Performance Domain level */
+	uint32_t		sp_perf_domain;
 	uint32_t		sp_global_version;
 	uint32_t		sp_space_rb;
 	crt_group_t	       *sp_group;
@@ -77,7 +79,9 @@ struct ds_pool {
 	 */
 	uint32_t		sp_rebuild_gen;
 
-	int			sp_reintegrating;
+	int			sp_rebuilding;
+
+	int			sp_discard_status;
 	/** path to ephemeral metrics */
 	char			sp_path[D_TM_MAX_NAME_LEN];
 
@@ -96,6 +100,7 @@ struct ds_pool {
 	uint32_t                 sp_checkpoint_mode;
 	uint32_t                 sp_checkpoint_freq;
 	uint32_t                 sp_checkpoint_thresh;
+	uint32_t		 sp_reint_mode;
 };
 
 int ds_pool_lookup(const uuid_t uuid, struct ds_pool **pool);
@@ -156,6 +161,7 @@ struct ds_pool_child {
 	ABT_eventual	spc_ref_eventual;
 
 	uint64_t	spc_discard_done:1;
+	uint32_t	spc_reint_mode;
 	/**
 	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
 	 * actual structure. Initialized only for modules that specified a
@@ -163,6 +169,17 @@ struct ds_pool_child {
 	 * DAOS_TGT_TAG.
 	 */
 	void			*spc_metrics[DAOS_NR_MODULE];
+};
+
+struct svc_op_key {
+	uint64_t mdk_client_time;
+	uuid_t   mdk_client_id;
+	/* TODO: add a (cart) opcode to the key? */
+};
+
+struct svc_op_val {
+	int  mdv_rc;
+	char mdv_resvd[62];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -208,9 +225,9 @@ int ds_pool_svc_delete_acl(uuid_t pool_uuid, d_rank_list_t *ranks,
 			   enum daos_acl_principal_type principal_type,
 			   const char *principal_name);
 
-int ds_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_list_t **ranks,
-		      daos_pool_info_t *pool_info, uint32_t *pool_layout_ver,
-		      uint32_t *upgrade_layout_ver);
+int dsc_pool_svc_query(uuid_t pool_uuid, d_rank_list_t *ps_ranks, uint64_t deadline,
+		       d_rank_list_t **ranks, daos_pool_info_t *pool_info,
+		       uint32_t *pool_layout_ver, uint32_t *upgrade_layout_ver);
 int ds_pool_svc_query_target(uuid_t pool_uuid, d_rank_list_t *ps_ranks, d_rank_t rank,
 			     uint32_t tgt_idx, daos_target_info_t *ti);
 

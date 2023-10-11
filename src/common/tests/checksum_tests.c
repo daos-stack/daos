@@ -1,5 +1,5 @@
-/**
- * (C) Copyright 2019-2022 Intel Corporation.
+/*
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -10,7 +10,7 @@
 
 #include <stdarg.h>
 #include <stddef.h>
-#include <setjmp.h> /** For cmocka.h */
+#include <setjmp.h> /* For cmocka.h */
 #include <stdint.h>
 #include <cmocka.h>
 #include <gurt/types.h>
@@ -18,6 +18,7 @@
 #include <daos/common.h>
 #include <daos/cont_props.h>
 #include <daos/tests_lib.h>
+#include <daos/test_perf.h>
 
 static bool verbose;
 
@@ -38,7 +39,7 @@ static bool verbose;
 		assert_ci_equal((e).ic_data[__i], (a).ic_data[__i]);\
 } while (0)
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Setup some fake functions and variables to track how the functions are
  * called. Will be used for checksummer testing.
@@ -72,7 +73,7 @@ fake_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
 	if (buf_len == 0)
 		return 0;
-	*((uint8_t *)daos_mhash_ctx) += 1; /** Just increment */
+	*((uint8_t *)daos_mhash_ctx) += 1; /* Just increment */
 	fake_update_bytes_seen += buf_len;
 	strncpy(fake_update_buf, (char *)buf, buf_len);
 	fake_update_buf += buf_len;
@@ -108,7 +109,7 @@ static struct hash_ft fake_algo = {
 	.cf_update	= fake_update,
 	.cf_reset	= fake_reset,
 	.cf_finish	= fake_finish,
-	.cf_hash_len	= 0,
+	.cf_hash_len	= 4,
 	.cf_get_size	= NULL,
 	.cf_type	= FAKE_CSUM_TYPE,
 	.cf_name	= "fake"
@@ -125,7 +126,7 @@ reset_fake_algo(void)
 	fake_get_size_result = 0;
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Test the CSUMMER initialize, destroy, and some other basic functions
  * -----------------------------------------------------------------------------
@@ -142,7 +143,7 @@ test_init_and_destroy(void **state)
 	assert_int_equal(1, fake_init_called);
 	assert_int_equal(FAKE_CSUM_TYPE, daos_csummer_get_type(csummer));
 
-	/** get size should use static size or get size function if set*/
+	/* get size should use static size or get size function if set*/
 	fake_algo.cf_hash_len = 4;
 	assert_int_equal(4, daos_csummer_get_csum_len(csummer));
 	fake_algo.cf_hash_len = 0;
@@ -172,10 +173,10 @@ test_update_reset(void **state)
 
 	memset(buf, 0, len);
 
-	/** before an update, the csum should be 0 */
+	/* before an update, the csum should be 0 */
 	assert_int_equal(0, csum);
 
-	/** The fake csummer simply increments the csum each time */
+	/* The fake csummer simply increments the csum each time */
 	daos_csummer_update(csummer, buf, len);
 	daos_csummer_finish(csummer);
 	assert_int_equal(1, csum);
@@ -185,7 +186,7 @@ test_update_reset(void **state)
 	daos_csummer_finish(csummer);
 	assert_int_equal(2, csum);
 
-	/** reset */
+	/* reset */
 	daos_csummer_reset(csummer);
 	daos_csummer_finish(csummer);
 	assert_int_equal(0, csum);
@@ -196,13 +197,13 @@ test_update_reset(void **state)
 static void
 test_update_with_multiple_buffers(void **state)
 {
-	uint32_t		 csum = 0; /** buffer */
-	uint32_t		 csum2 = 0; /** buffer */
+	uint32_t		 csum = 0; /* buffer */
+	uint32_t		 csum2 = 0; /* buffer */
 	size_t			 len = 64;
 	uint8_t			 buf[len];
 	struct daos_csummer	*csummer;
 
-	fake_get_size_result = sizeof(uint32_t); /** setup fake checksum */
+	fake_get_size_result = sizeof(uint32_t); /* setup fake checksum */
 	daos_csummer_init(&csummer, &fake_algo, 0, 0);
 
 	memset(buf, 0xa, len);
@@ -221,7 +222,7 @@ test_update_with_multiple_buffers(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * A series of tests for calculating csums
  * -----------------------------------------------------------------------------
@@ -343,7 +344,7 @@ test_daos_checksummer_with_mult_iov_single_chunk(void **state)
 	assert_int_equal(1, actual->ic_data[0].cs_nr);
 	assert_int_equal(fake_get_size_result, actual->ic_data[0].cs_len);
 
-	/** fake checksum calc should have been called 3 times (1 for each
+	/* fake checksum calc should have been called 3 times (1 for each
 	 * iov in sgl)
 	 */
 	assert_int_equal(3, *ic_idx2csum(actual, 0, 0));
@@ -370,7 +371,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 	dts_sgl_init_with_strings(&sgl, 2, "abcdefghijklmnopqrstufwxyz",
 				  "1234");
 
-	assert_int_equal(32, daos_sgl_buf_size(&sgl)); /** Check my math */
+	assert_int_equal(32, daos_sgl_buf_size(&sgl)); /* Check my math */
 	recx[0].rx_idx = 0;
 	recx[0].rx_nr = 16;
 	recx[1].rx_idx = 16;
@@ -387,7 +388,7 @@ test_daos_checksummer_with_multi_iov_multi_extents(void **state)
 				    &actual);
 
 	assert_rc_equal(0, rc);
-	/** fake checksum calc should have been called once for the first one,
+	/* fake checksum calc should have been called once for the first one,
 	 * all the bytes for recx[0] are in the first iov.
 	 * fake checksum calc should have been called twice for recx[1]. It
 	 * would need the rest of the bytes in iov 1 and all of
@@ -436,7 +437,7 @@ test_daos_checksummer_with_multiple_chunks(void **state)
 				    &actual);
 
 	assert_rc_equal(0, rc);
-	int csum_expected_count = 3; /** 11/4=3 */
+	int csum_expected_count = 3; /* 11/4=3 */
 
 	assert_int_equal(fake_get_size_result * csum_expected_count,
 			 actual->ic_data[0].cs_buf_len);
@@ -469,51 +470,51 @@ get_map_test(void **state)
 	map.iom_recxs = recxs;
 	map.iom_nr = 1;
 
-	/** Includes only */
+	/* Includes only */
 	dcr_set_idx_nr(&range, 0, 10);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(1, result.dcr_nr);
 
-	/** Includes second */
+	/* Includes second */
 	map.iom_nr = 2;
 	dcr_set_idx_nr(&range, 10, 10);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(1, result.dcr_lo);
 	assert_int_equal(1, result.dcr_nr);
 
-	/** Only includes second */
+	/* Only includes second */
 	map.iom_nr = ARRAY_SIZE(recxs);
 	dcr_set_idx_nr(&range, 10, 10);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(1, result.dcr_lo);
 	assert_int_equal(1, result.dcr_nr);
 
-	/** Only includes second and third */
+	/* Only includes second and third */
 	dcr_set_idx_nr(&range, 10, 20);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(1, result.dcr_lo);
 	assert_int_equal(2, result.dcr_nr);
 
-	/** includes 3, 4, 5  */
+	/* includes 3, 4, 5  */
 	dcr_set_idx_nr(&range, 20, 30);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(2, result.dcr_lo);
 	assert_int_equal(3, result.dcr_nr);
 
-	/** includes all */
+	/* includes all */
 	dcr_set_idx_nr(&range, 0, 100);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(ARRAY_SIZE(recxs), result.dcr_nr);
 
-	/** includes none */
+	/* includes none */
 	dcr_set_idx_nr(&range, 1000, 100);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(0, result.dcr_nr);
 
-	/** Overlapping should be included */
+	/* Overlapping should be included */
 	dcr_set_idx_nr(&range, 0, 3);
 	result = get_maps_idx_nr_for_range(&range, &map);
 	assert_int_equal(0, result.dcr_lo);
@@ -523,7 +524,7 @@ get_map_test(void **state)
 	assert_int_equal(1, result.dcr_lo);
 	assert_int_equal(1, result.dcr_nr);
 
-	/** Mapped area is larger than request */
+	/* Mapped area is larger than request */
 	dcr_set_idx_nr(&range, 3, 3);
 	map.iom_recxs[0].rx_idx = 0;
 	map.iom_recxs[0].rx_nr = 10;
@@ -549,7 +550,7 @@ test_skip_csum_calculations_when_skip_set(void **state)
 	fake_algo.cf_get_size = fake_get_size;
 
 	dts_sgl_init_with_strings(&sgl, 1, "abcdef");
-	sgl.sg_iovs->iov_len --; /** remove ending '\0' */
+	sgl.sg_iovs->iov_len --; /* remove ending '\0' */
 
 	recx.rx_idx = 0;
 	recx.rx_nr = daos_sgl_buf_size(&sgl);
@@ -559,21 +560,21 @@ test_skip_csum_calculations_when_skip_set(void **state)
 	iod.iod_type = DAOS_IOD_ARRAY;
 	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
 
-	/** skip key calculation */
+	/* skip key calculation */
 	csummer->dcs_skip_key_calc = true;
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, NULL, 1, 0, NULL, 0,
 				    &iod_csums);
 	assert_rc_equal(0, rc);
-	/** with key calculation would look like this ...
+	/* with key calculation would look like this ...
 	 * assert_string_equal("akey|abcdef|", fake_update_buf_copy);
 	 */
 	assert_string_equal("abcdef|", fake_update_buf_copy);
 
-	/**
+	/*
 	 * skipping the data verification means that the csummer won't try
 	 * to calculate the checksum again to verify.
 	 */
-	/** reset */
+	/* reset */
 	memset(fake_update_buf_copy, 0, FAKE_UPDATE_BUF_LEN);
 	fake_update_buf = fake_update_buf_copy;
 
@@ -581,7 +582,7 @@ test_skip_csum_calculations_when_skip_set(void **state)
 	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL,
 				     0, NULL);
 	assert_rc_equal(0, rc);
-	assert_string_equal("", fake_update_buf_copy); /** update not called */
+	assert_string_equal("", fake_update_buf_copy); /* update not called */
 
 	daos_csummer_free_ic(csummer, &iod_csums);
 	d_sgl_fini(&sgl, true);
@@ -655,9 +656,9 @@ test_csum_info_list_handling(void **state)
 static void
 test_csum_info_list_handle_many(void **state)
 {
-	struct dcs_ci_list list = {0};
-	int i;
-	struct dcs_csum_info info[100];
+	struct dcs_ci_list	list = {0};
+	struct dcs_csum_info	info[100] = {0};
+	int			i;
 
 	assert_dcs_csum_info_list_init(list, 2);
 
@@ -670,6 +671,7 @@ test_csum_info_list_handle_many(void **state)
 		info[i].cs_nr = rand() % 4 + 1;
 		info[i].cs_buf_len = info[i].cs_len * info[i].cs_nr;
 		D_ALLOC(info[i].cs_csum, info[i].cs_buf_len);
+		assert_non_null(info[i].cs_csum);
 		for (j = 0; j < info[i].cs_buf_len; j++)
 			info[i].cs_csum[j] = rand();
 
@@ -686,7 +688,7 @@ test_csum_info_list_handle_many(void **state)
 	dcs_csum_info_list_fini(&list);
 
 	for (i = 0; i < ARRAY_SIZE(info); i++)
-		D_FREE(info->cs_csum);
+		D_FREE(info[i].cs_csum);
 }
 
 #define MAP_MAX 10
@@ -720,7 +722,7 @@ holes_test_case(struct holes_test_args *args)
 	while (req_recx_nr < MAP_MAX && args->req_recx[req_recx_nr].rx_nr > 0)
 		req_recx_nr++;
 
-	/** Setup */
+	/* Setup */
 	daos_csummer_init(&csummer, &fake_algo, args->chunksize, 0);
 	fake_update_buf = fake_update_buf_copy;
 	memset(fake_update_buf_copy, 0, ARRAY_SIZE(fake_update_buf_copy));
@@ -738,7 +740,7 @@ holes_test_case(struct holes_test_args *args)
 	map.iom_type = DAOS_IOD_ARRAY;
 
 	dts_sgl_init_with_strings(&sgl, 1, args->sgl_data);
-	/** sanity check */
+	/* sanity check */
 	for (i = 0; i < req_recx_nr; i++)
 		total_req_size += args->req_recx[i].rx_nr * args->record_size;
 	if (total_req_size != daos_sgl_buf_size(&sgl))
@@ -746,12 +748,12 @@ holes_test_case(struct holes_test_args *args)
 			 "daos_sgl_buf_size(&sgl)[%lu]",
 			 total_req_size, daos_sgl_buf_size(&sgl));
 
-	/** Act */
+	/* Act */
 	rc = daos_csummer_calc_iods(csummer, &sgl, &iod, &map, 1, 0, NULL, 0,
 				    &actual);
 	assert_rc_equal(0, rc);
 
-	/** Verify */
+	/* Verify */
 	assert_string_equal(args->expected_checksum_updates,
 			    fake_update_buf_copy);
 
@@ -771,7 +773,7 @@ holes_1(void **state)
 			{.rx_idx = 10, .rx_nr = 6},
 		},
 		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
-		/** '_' represents holes */
+		/* '_' represents holes */
 		.sgl_data = "__YYYYYY__ZZZZZZ___",
 		.expected_checksum_updates = "akey|YYYYYY|ZZZZZZ|",
 	});
@@ -788,7 +790,7 @@ holes_2(void **state)
 			{.rx_idx = 10, .rx_nr = 6},
 		},
 		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
-		/** '_' represents holes */
+		/* '_' represents holes */
 		.sgl_data = "__YYYYYY__ZZZZZZ___",
 		.expected_checksum_updates = "akey|YY|YYYY|ZZ|ZZZZ|",
 	});
@@ -805,7 +807,7 @@ holes_3(void **state)
 			{.rx_idx = 10, .rx_nr = 6},
 		},
 		.req_recx = { {.rx_idx = 0, .rx_nr = 20} },
-		/** '_' represents holes */
+		/* '_' represents holes */
 		.sgl_data = "__YYYY____ZZZZZZ___",
 		.expected_checksum_updates = "akey|YY|YY|ZZ|ZZZZ|",
 	});
@@ -822,7 +824,7 @@ holes_4(void **state)
 			{.rx_idx = 20, .rx_nr = 6},
 		},
 		.req_recx = { {.rx_idx = 0, .rx_nr = 30} },
-		/** '_' represents holes */
+		/* '_' represents holes */
 		.sgl_data = "__YYYY______________ZZZZZZ___",
 		.expected_checksum_updates = "akey|YY|YY|ZZZZ|ZZ|",
 	});
@@ -853,7 +855,7 @@ holes_5(void **state)
 	});
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Test checksum comparison function
  * -----------------------------------------------------------------------------
@@ -869,9 +871,9 @@ simple_test_compare_checksums(void **state)
 	struct daos_csummer	*csummer;
 	uint8_t			 csum_buf[] = "checksum";
 	uint8_t			 csum_buf_same[] = "checksum";
-	/** same len, different value */
+	/* same len, different value */
 	uint8_t			 csum_buf_dif[] = "corruptd";
-	/** mostly the same, dif len */
+	/* mostly the same, dif len */
 	uint8_t			 csum_buf_dif_len[] = "checksumm";
 	uint8_t			 csum_buf_dif_len2[] = "checksu";
 	struct dcs_csum_info	 one;
@@ -960,16 +962,16 @@ test_get_iod_csum_allocation_size(void **state)
 	recxs[0].rx_idx = 0;
 	recxs[0].rx_nr = chunksize;
 	assert_int_equal(sizeof(struct dcs_iod_csums) +
-			 csum_size + /** akey csum */
-			 sizeof(struct dcs_csum_info) + /** 1 data csum info */
-			 csum_size, /** 1 data csum */
+			 csum_size + /* akey csum */
+			 sizeof(struct dcs_csum_info) + /* 1 data csum info */
+			 csum_size, /* 1 data csum */
 			 daos_csummer_allocation_size(csummer, &iods[0],
 						      1, 0, NULL));
 
 	recxs[0].rx_idx = 0;
-	recxs[0].rx_nr = chunksize + 1; /** two checksums now */
+	recxs[0].rx_nr = chunksize + 1; /* two checksums now */
 	assert_int_equal(sizeof(struct dcs_iod_csums) +
-				 csum_size + /** akey csum */
+				 csum_size + /* akey csum */
 				 sizeof(struct dcs_csum_info) +
 			 csum_size * 2,
 			 daos_csummer_allocation_size(csummer, &iods[0],
@@ -979,7 +981,7 @@ test_get_iod_csum_allocation_size(void **state)
 	recxs[1].rx_idx = 0;
 	recxs[1].rx_nr = chunksize;
 	assert_int_equal(sizeof(struct dcs_iod_csums) +
-				 csum_size + /** akey csum */
+				 csum_size + /* akey csum */
 			 sizeof(struct dcs_csum_info) * 2 +
 			 csum_size * 3,
 			 daos_csummer_allocation_size(csummer, &iods[0],
@@ -991,17 +993,20 @@ test_get_iod_csum_allocation_size(void **state)
 	iods[1].iod_size = 1;
 	iods[1].iod_type = DAOS_IOD_ARRAY;
 	assert_int_equal(sizeof(struct dcs_iod_csums) * 2 +
-			 csum_size * 2 + /** akey csum (1 for each iod_csum */
+			 csum_size * 2 + /* akey csum (1 for each iod_csum */
 			 sizeof(struct dcs_csum_info) * 2 +
 			 csum_size * 3,
 			 daos_csummer_allocation_size(csummer, &iods[0],
 						      2, 0, NULL));
 
-	/** skip data */
+	/* skip data */
 	assert_int_equal(sizeof(struct dcs_iod_csums) * 2 +
-			 csum_size * 2, /** akey csum (1 for each iod_csum */
+			 csum_size * 2, /* akey csum (1 for each iod_csum */
 			 daos_csummer_allocation_size(csummer, &iods[0], 2,
 						      true, NULL));
+
+	/* Clean up */
+	daos_csummer_destroy(&csummer);
 }
 
 static void
@@ -1027,7 +1032,7 @@ print_checksum(struct daos_csummer *csummer, struct dcs_csum_info *csum)
 	fflush(stdout);
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Loop through and verify all the different checksum algorithms supporting
  * -----------------------------------------------------------------------------
@@ -1045,7 +1050,7 @@ test_all_algo_basic(void **state)
 	daos_iod_t		 iod = {0};
 	int			 rc;
 
-	/** expected checksum lengths */
+	/* expected checksum lengths */
 	csum_lens[HASH_TYPE_CRC16]	= 2;
 	csum_lens[HASH_TYPE_CRC32]	= 4;
 	csum_lens[HASH_TYPE_ADLER32]	= 4;
@@ -1078,7 +1083,7 @@ test_all_algo_basic(void **state)
 		assert_int_equal(csum_lens[type],
 				 daos_csummer_get_csum_len(csummer));
 
-		/** run it a second time to make sure that checksums
+		/* run it a second time to make sure that checksums
 		 * are calculated the same and the reset, update, finish flow
 		 * works
 		 */
@@ -1132,7 +1137,7 @@ test_do_not_need_to_call(void **state)
 		rc = daos_csummer_finish(csummer);
 		assert_int_equal(0, rc);
 
-		/** checksum buffer should have been untouched */
+		/* checksum buffer should have been untouched */
 		for (i = 0; i < buffer_len; i++) {
 			if (buffer[i] != 0)
 				fail_msg("checksum type %d, buffer[%d] (%d) "
@@ -1149,7 +1154,7 @@ test_repeat_updates(void **state)
 	const daos_size_t	 data_buf_len = 512;
 	const daos_size_t	 update_chunks[] = {32, 64, 128, 256};
 	uint8_t			 data_buf[data_buf_len];
-	/** sha512 is largest */
+	/* sha512 is largest */
 	const daos_size_t	 csum_buf_len = 512 / 8;
 	uint8_t			 csum_buf_1[csum_buf_len];
 	uint8_t			 csum_buf_2[csum_buf_len];
@@ -1166,7 +1171,7 @@ test_repeat_updates(void **state)
 		print_message("Checksum : %s\n",
 			      daos_csummer_get_name(csummer));
 
-		/** Calculate checksum for whole buffer */
+		/* Calculate checksum for whole buffer */
 		memset(csum_buf_1, 0, csum_buf_len);
 		daos_csummer_set_buffer(csummer, csum_buf_1, csum_buf_len);
 		rc = daos_csummer_reset(csummer);
@@ -1176,7 +1181,7 @@ test_repeat_updates(void **state)
 		rc = daos_csummer_finish(csummer);
 		assert_int_equal(0, rc);
 
-		/** calculate checksum for buffer in incremental updates */
+		/* calculate checksum for buffer in incremental updates */
 		for (c = 0; c < ARRAY_SIZE(update_chunks); c++) {
 			daos_size_t chunk = update_chunks[c];
 
@@ -1210,7 +1215,7 @@ test_repeat_updates(void **state)
 	}
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Test some helper functions for indexing checksums within a daos_csum_info
  * -----------------------------------------------------------------------------
@@ -1245,13 +1250,13 @@ test_helper_functions(void **state)
 	assert_int_equal(0x0202, *(uint16_t *) ci_off2csum(&dcb, 4));
 
 
-	/** try some larger values */
-	dcb.cs_chunksize = 1024 * 16; /** 16K */
+	/* try some larger values */
+	dcb.cs_chunksize = 1024 * 16; /* 16K */
 	assert_int_equal(0, ci_off2idx(&dcb, 1024 * 16 - 1));
 	assert_int_equal(1, ci_off2idx(&dcb, 1024 * 16));
 	assert_int_equal(1024, ci_off2idx(&dcb, 1024 * 1024 * 16));
 
-	/** insert csum into dcb */
+	/* insert csum into dcb */
 	ci_insert(&dcb, 0, (uint8_t *) &csum, sizeof(csum));
 	assert_int_equal(0xa, *(uint16_t *) ci_idx2csum(&dcb, 0));
 	csum = 0xb;
@@ -1267,7 +1272,7 @@ test_helper_functions(void **state)
 static void
 test_csum_chunk_count(void **state)
 {
-	/** chunksize, lo_idx, hi_idx, rec_size */
+	/* chunksize, lo_idx, hi_idx, rec_size */
 	assert_int_equal(1, csum_chunk_count(1, 0, 0, 1));
 	assert_int_equal(1, csum_chunk_count(2, 0, 1, 1));
 	assert_int_equal(2, csum_chunk_count(2, 1, 2, 1));
@@ -1296,7 +1301,7 @@ test_recx_calc_chunks(void **state)
 	recx.rx_idx = 1;
 	recx.rx_nr = 16;
 	rec_size = 1;
-	/** chunks = 0-3, 4-7, 8-11, 12-16, 16-20 */
+	/* chunks = 0-3, 4-7, 8-11, 12-16, 16-20 */
 	assert_int_equal(5, daos_recx_calc_chunks(recx, rec_size, chunksize));
 }
 
@@ -1312,14 +1317,14 @@ test_daos_align_to_floor_of_chunk(void **state)
 	assert_int_equal(32, csum_chunk_align_floor(32, 16));
 }
 
-/**
+/*
  * ----------------------------------------------------------------------
  * Test cases for getting chunk boundaries provided a recx and chunk idx
  * ----------------------------------------------------------------------
  */
 struct daos_recx_get_chunk_testcase_args {
-	uint64_t cs; /** chunk size */
-	uint64_t rb; /** record bytes */
+	uint64_t cs; /* chunk size */
+	uint64_t rb; /* record bytes */
 	daos_recx_t recx;
 };
 
@@ -1351,7 +1356,7 @@ daos_recx_get_chunk_testcase(char *filename, int line,
 static void
 daos_recx_get_chunk_tests(void **state)
 {
-	/** extent is 0->9, with chunk = 2
+	/*  extent is 0->9, with chunk = 2
 	 *  - all chunks will be full chunk
 	 *  - chunk 0 will start at 0
 	 *  - chunk 1 will start at 2
@@ -1374,14 +1379,14 @@ daos_recx_get_chunk_tests(void **state)
 	DAOS_RECX_GET_CHUNK_TESTCASE(1, 2, 1,
 				     {.cs = 2, .rb = 1, .recx = {1, 2} });
 
-	/** partial extent is 3-7, with chunk = 8. chunk is the whole extent */
+	/* partial extent is 3-7, with chunk = 8. chunk is the whole extent */
 	DAOS_RECX_GET_CHUNK_TESTCASE(0, 3, 5,
 				     {.cs = 8, .rb = 1, .recx = {3, 5} });
-	/** partial extent is 3-6, with chunk = 8. chunk is the whole extent */
+	/* partial extent is 3-6, with chunk = 8. chunk is the whole extent */
 	DAOS_RECX_GET_CHUNK_TESTCASE(0, 3, 4,
 				     {.cs = 8, .rb = 1, .recx = {3, 4} });
 
-	/** More testing ... */
+	/* More testing ... */
 	DAOS_RECX_GET_CHUNK_TESTCASE(0, 2, 6,
 				     {.cs = 8, .rb = 1, .recx = {2, 50} });
 	DAOS_RECX_GET_CHUNK_TESTCASE(1, 8, 8,
@@ -1400,7 +1405,7 @@ daos_recx_get_chunk_tests(void **state)
 	DAOS_RECX_GET_CHUNK_TESTCASE(0, 16, 16,
 				     {.cs = 16, .rb = 1, .recx = {16, 16} });
 
-	/** Max recx index  */
+	/* Max recx index  */
 	DAOS_RECX_GET_CHUNK_TESTCASE(0, UINT64_MAX, 1,
 				     {
 					     .cs = 32 * 1024,
@@ -1414,95 +1419,95 @@ test_align_boundaries(void **state)
 	struct daos_csum_range result;
 
 	result = csum_align_boundaries(
-		0, /** lo */
-		0 /** hi */,
-		0 /** lo boundary */,
-		7 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		0, /* lo */
+		0 /* hi */,
+		0 /* lo boundary */,
+		7 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 	assert_int_equal(8, result.dcr_nr);
 
 	result = csum_align_boundaries(
-		1, /** lo */
-		0 /** hi */,
-		0 /** lo boundary */,
-		7 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		1, /* lo */
+		0 /* hi */,
+		0 /* lo boundary */,
+		7 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
-		1, /** lo */
-		6 /** hi */,
-		0 /** lo boundary */,
-		7 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		1, /* lo */
+		6 /* hi */,
+		0 /* lo boundary */,
+		7 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
-		1, /** lo */
-		6 /** hi */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		1, /* lo */
+		6 /* hi */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_align_boundaries(
-		1, /** lo */
-		8 /** hi */,
-		0 /** lo boundary */,
-		10 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		1, /* lo */
+		8 /* hi */,
+		0 /* lo boundary */,
+		10 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(10, result.dcr_hi);
 
 	result = csum_align_boundaries(
-		16, /** lo */
-		96 /** hi */,
-		0 /** lo boundary */,
-		100 /** hi boundary */,
-		2 /** rec size */,
-		8 /** chunk size */);
+		16, /* lo */
+		96 /* hi */,
+		0 /* lo boundary */,
+		100 /* hi boundary */,
+		2 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(16, result.dcr_lo);
 	assert_int_equal(99, result.dcr_hi);
 
 	result = csum_align_boundaries(
-		UINT64_MAX, /** lo */
-		UINT64_MAX /** hi */,
-		0 /** lo boundary */,
-		UINT64_MAX /** hi boundary */,
-		8 /** rec size */,
-		1024 * 32 /** chunk size */);
+		UINT64_MAX, /* lo */
+		UINT64_MAX /* hi */,
+		0 /* lo boundary */,
+		UINT64_MAX /* hi boundary */,
+		8 /* rec size */,
+		1024 * 32 /* chunk size */);
 	assert_int_equal(UINT64_MAX - 0xFFF, result.dcr_lo);
 	assert_int_equal(UINT64_MAX, result.dcr_hi);
 	assert_int_equal(1024 * 4 - 1, result.dcr_nr);
 
-	/** result is 0 if lo/hi is outside of boundary */
+	/* result is 0 if lo/hi is outside of boundary */
 	result = csum_align_boundaries(
-		10, /** lo */
-		10 /** hi */,
-		50 /** lo boundary */,
-		100 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		10, /* lo */
+		10 /* hi */,
+		50 /* lo boundary */,
+		100 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(0, result.dcr_hi);
 	assert_int_equal(0, result.dcr_nr);
 	result = csum_align_boundaries(
-		10, /** lo */
-		1000 /** hi */,
-		5 /** lo boundary */,
-		100 /** hi boundary */,
-		1 /** rec size */,
-		8 /** chunk size */);
+		10, /* lo */
+		1000 /* hi */,
+		5 /* lo boundary */,
+		100 /* hi boundary */,
+		1 /* rec size */,
+		8 /* chunk size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(0, result.dcr_hi);
 	assert_int_equal(0, result.dcr_nr);
@@ -1514,63 +1519,63 @@ test_align_to_chunk(void **state)
 	struct daos_csum_range result;
 
 	result = csum_recidx2range(
-		8 /** chunksize */,
-		0 /** record index */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */);
+		8 /* chunksize */,
+		0 /* record index */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 	assert_int_equal(8, result.dcr_nr);
 
 	result = csum_recidx2range(
-		8 /** chunksize */,
-		1 /** record index */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */);
+		8 /* chunksize */,
+		1 /* record index */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_recidx2range(
-		8 /** chunksize */,
-		7 /** record index */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */);
+		8 /* chunksize */,
+		7 /* record index */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */);
 	assert_int_equal(0, result.dcr_lo);
 	assert_int_equal(7, result.dcr_hi);
 
 	result = csum_recidx2range(
-		8 /** chunksize */,
-		8 /** record index */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */);
+		8 /* chunksize */,
+		8 /* record index */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */);
 	assert_int_equal(8, result.dcr_lo);
 	assert_int_equal(8, result.dcr_hi);
 
 	result = csum_recidx2range(
-		8 /** chunksize */,
-		8 /** record index */,
-		0 /** lo boundary */,
-		8 /** hi boundary */,
-		1 /** rec size */);
+		8 /* chunksize */,
+		8 /* record index */,
+		0 /* lo boundary */,
+		8 /* hi boundary */,
+		1 /* rec size */);
 	assert_int_equal(8, result.dcr_lo);
 	assert_int_equal(8, result.dcr_hi);
 
 	result = csum_recidx2range(
-		1024 * 32 /** chunksize */,
-		UINT64_MAX /** record index */,
-		0 /** lo boundary */,
-		UINT64_MAX /** hi boundary */,
-		8 /** rec size */);
+		1024 * 32 /* chunksize */,
+		UINT64_MAX /* record index */,
+		0 /* lo boundary */,
+		UINT64_MAX /* hi boundary */,
+		8 /* rec size */);
 	assert_int_equal(UINT64_MAX - 0xFFF, result.dcr_lo);
 	assert_int_equal(UINT64_MAX, result.dcr_hi);
 	assert_int_equal(1024 * 4, result.dcr_nr);
 }
 
-/**
+/*
  * -----------------------------------------------------------------------------
  * Test some DAOS Container Property Knowledge
  * -----------------------------------------------------------------------------
@@ -1606,7 +1611,7 @@ test_is_valid_csum(void **state)
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA256));
 	assert_true(daos_cont_csum_prop_is_valid(DAOS_PROP_CO_CSUM_SHA512));
 
-	/** Not supported yet */
+	/* Not supported yet */
 	assert_false(daos_cont_csum_prop_is_valid(99));
 }
 
@@ -1621,7 +1626,7 @@ test_is_csum_enabled(void **state)
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA256));
 	assert_true(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_SHA512));
 
-	/** Not supported yet */
+	/* Not supported yet */
 	assert_false(daos_cont_csum_prop_is_enabled(DAOS_PROP_CO_CSUM_OFF));
 	assert_false(daos_cont_csum_prop_is_enabled(9999));
 }
@@ -1713,13 +1718,12 @@ test_verify_sv_data(void **state)
 	daos_csummer_init_with_type(&csummer, HASH_TYPE_CRC64, 1024 * 1024, 0);
 	dts_sgl_init_with_strings(&sgl, 1, "0123456789");
 
-
 	iod.iod_size = daos_sgl_buf_size(&sgl);
 	iod.iod_nr = 1;
 	iod.iod_recxs = NULL;
 	iod.iod_type = DAOS_IOD_SINGLE;
 
-	/** Checksum not set in iod_csums but csummer is set so should error */
+	/* Checksum not set in iod_csums but csummer is set so should error */
 	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
 				     NULL);
 	assert_rc_equal(-DER_INVAL, rc);
@@ -1732,22 +1736,23 @@ test_verify_sv_data(void **state)
 				     NULL);
 	assert_rc_equal(0, rc);
 
-	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /** Corrupt the data */
+	((char *)sgl.sg_iovs[0].iov_buf)[0]++; /* Corrupt the data */
 	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
 				     NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
-	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /** Un-corrupt the data */
-	/** Corrupt data elsewhere*/
+	((char *)sgl.sg_iovs[0].iov_buf)[0]--; /* Un-corrupt the data */
+	/* Corrupt data elsewhere*/
 	sgl_buf_half = daos_sgl_buf_size(&sgl) / 2;
 	((char *)sgl.sg_iovs[0].iov_buf)[sgl_buf_half + 1]++;
 	rc = daos_csummer_verify_iod(csummer, &iod, &sgl, iod_csums, NULL, 0,
 				     NULL);
 	assert_rc_equal(-DER_CSUM, rc);
 
-	/** Clean up */
+	/* Clean up */
 	daos_csummer_free_ic(csummer, &iod_csums);
 	daos_csummer_destroy(&csummer);
+	d_sgl_fini(&sgl, true);
 }
 
 static void
@@ -1793,7 +1798,7 @@ test_akey_csum(void **state)
 static void
 test_calc_rec_chunksize(void **state)
 {
-	/**	expected,	default_chunksize,	rec_size */
+	/*	expected,	default_chunksize,	rec_size */
 	assert_int_equal(1, csum_record_chunksize(1, 1));
 	assert_int_equal(2, csum_record_chunksize(2, 2));
 	assert_int_equal(2, csum_record_chunksize(2, 1));
@@ -1853,10 +1858,101 @@ test_ci_serialize(void **state)
 	ci_cast(&actual, &iov);
 	assert_ci_equal(expected, *actual);
 
-	/** iov buf is too short */
+	/* iov buf is too short */
 	iov.iov_len = iov.iov_len - 1;
 	ci_cast(&actual, &iov);
 	assert_null(actual);
+}
+
+static void
+csum_performance_measurements_experiment(uint32_t iod_nr, enum DAOS_HASH_TYPE algo_type)
+{
+	struct test_data	 td;
+	struct daos_csummer	*csummer;
+	daos_iod_t		*iods;
+	d_sg_list_t		*sgls;
+	struct dcs_iod_csums	*iod_csums = NULL;
+	daos_key_t		 key = {0};
+	struct dcs_csum_info	*key_csum;
+
+	td_init_array_values(&td, iod_nr, 3, 1024, 1024);
+
+	sgls = td.td_sgls;
+	iods = td.td_iods;
+
+	assert_success(daos_csummer_init_with_type(&csummer, algo_type, 1024 * 32, 0));
+
+	/*
+	 * checksum verification
+	 */
+	MEASURE_TIME(
+	    daos_csummer_verify_iods(csummer, iods, sgls, iod_csums, iod_nr, NULL, -1, NULL),
+	    daos_csummer_calc_iods(csummer, sgls, iods, NULL, iod_nr, false, NULL, -1, &iod_csums),
+	    daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 * checksum calculation
+	 */
+	MEASURE_TIME(daos_csummer_calc_iods(csummer, sgls, iods, NULL, iod_nr, false, NULL, -1,
+					    &iod_csums),
+		     noop(),
+		     daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 * iod_csum allocation
+	 */
+	MEASURE_TIME(daos_csummer_alloc_iods_csums(csummer, iods, iod_nr, false, NULL, &iod_csums),
+		     noop(),
+		     daos_csummer_free_ic(csummer, &iod_csums));
+
+	/*
+	 *  allocation size
+	 */
+	MEASURE_TIME(daos_csummer_allocation_size(csummer, iods, iod_nr, false, NULL),
+		     noop(), noop());
+
+	/*
+	 * key verification
+	 */
+	dts_iov_alloc_str(&key, "key");
+
+	MEASURE_TIME(daos_csummer_verify_key(csummer, &key, key_csum),
+		     daos_csummer_calc_key(csummer, &key, &key_csum),
+		     daos_csummer_free_ci(csummer, &key_csum));
+
+	/*
+	 * copy csummer
+	 */
+	struct daos_csummer *copy;
+
+	MEASURE_TIME(copy = daos_csummer_copy(csummer),
+		     noop(),
+		     daos_csummer_destroy(&copy));
+
+	/*
+	 * Some helper functions
+	 */
+	MEASURE_TIME(daos_csummer_get_rec_chunksize(csummer, 3),
+		     noop(), noop());
+
+	MEASURE_TIME(csum_align_boundaries(10, 1000, 5, 100, 1, 8),
+		     noop(), noop());
+
+	/* Clean up */
+	daos_csummer_destroy(&csummer);
+	daos_iov_free(&key);
+	td_destroy(&td);
+}
+
+static void
+csum_performance_measurements(void **state)
+{
+	print_message("\n------\n1 iod, CRC32\n");
+	csum_performance_measurements_experiment(1, HASH_TYPE_CRC32);
+	print_message("\n------\n10 iod, CRC32\n");
+	csum_performance_measurements_experiment(10, HASH_TYPE_CRC32);
+	print_message("\n------\n10 iod, noop checksum\n");
+	csum_performance_measurements_experiment(10, HASH_TYPE_NOOP);
 }
 
 static int
@@ -1962,6 +2058,7 @@ static const struct CMUnitTest tests[] = {
 	     "multiple chunks", holes_4),
 	TEST("CSUM_HOLES05: With record size 2 and many holes within a "
 	     "single chunk", holes_5),
+	TEST("CSUM_PERF: Some performance measurements", csum_performance_measurements),
 };
 
 int

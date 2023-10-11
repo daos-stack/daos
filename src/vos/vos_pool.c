@@ -173,7 +173,7 @@ vos_meta_load(struct umem_store *store, char *start)
 	rc = ABT_cond_create(&mlc.mlc_cond);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
-		D_ERROR("Failed to create ABT cond: %d", rc);
+		D_ERROR("Failed to create ABT cond: %d\n", rc);
 		goto destroy_lock;
 	}
 
@@ -255,8 +255,7 @@ vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_h
 
 	rc = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		D_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR,
-			 "Failed to prepare DMA buffer. "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR, rc, "Failed to prepare DMA buffer");
 		goto free;
 	}
 
@@ -573,6 +572,13 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB) {
+		store.store_type = DAOS_MD_PMEM;
+		store.store_standalone = true;
+	}
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
@@ -648,6 +654,13 @@ vos_pmemobj_open(const char *path, uuid_t pool_id, const char *layout, unsigned 
 	int			 rc, ret;
 
 	*ph = NULL;
+	/* always use PMEM mode for SMD */
+	store.store_type = umempobj_get_backend_type();
+	if (flags & VOS_POF_SYSDB) {
+		store.store_type = DAOS_MD_PMEM;
+		store.store_standalone = true;
+	}
+
 	/* No NVMe is configured or current xstream doesn't have NVMe context */
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_open;
@@ -779,7 +792,7 @@ pool_hop_free(struct d_ulink *hlink)
 	}
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, 0);
+		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
 	D_FREE(pool);
 }
@@ -812,7 +825,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 {
 	int	rc;
 
-	rc = d_uhash_link_insert(vos_pool_hhash_get(), ukey, NULL,
+	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
 		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
@@ -828,8 +841,10 @@ static int
 pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 {
 	struct d_ulink *hlink;
+	bool		is_sysdb = uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0 ?
+					true : false;
 
-	hlink = d_uhash_link_lookup(vos_pool_hhash_get(), ukey, NULL);
+	hlink = d_uhash_link_lookup(vos_pool_hhash_get(is_sysdb), ukey, NULL);
 	if (hlink == NULL) {
 		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
@@ -949,7 +964,7 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		scm_sz = lstat.st_size;
 	}
 
-	uma.uma_id = UMEM_CLASS_PMEM;
+	uma.uma_id = umempobj_backend_type2class_id(ph->up_store.store_type);
 	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
@@ -1008,8 +1023,8 @@ end:
 	uuid_copy(blob_hdr.bbh_pool, uuid);
 
 	/* Format SPDK blob*/
-	rc = vea_format(&umem, vos_txd_get(), &pool_df->pd_vea_df, VOS_BLK_SZ,
-			VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
+	rc = vea_format(&umem, vos_txd_get(flags & VOS_POF_SYSDB), &pool_df->pd_vea_df,
+			VOS_BLK_SZ, VOS_BLOB_HDR_BLKS, nvme_sz, vos_blob_format_cb,
 			&blob_hdr, false);
 	if (rc) {
 		D_ERROR("Format blob error for pool:"DF_UUID". "DF_RC"\n",
@@ -1063,6 +1078,7 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 			rc = 0;
 			break;
 		}
+		D_ASSERT(pool->vp_sysdb == false);
 
 		D_ASSERT(pool != NULL);
 		if (gc_have_pool(pool)) {
@@ -1084,7 +1100,8 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
-	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+	D_DEBUG(DB_MGMT, DF_UUID": No open handles, OK to delete: flags=%x\n", DP_UUID(uuid),
+		flags);
 
 	vos_delete_blob(uuid, flags);
 	return 0;
@@ -1166,11 +1183,14 @@ lock_pool_memory(struct vos_pool *pool)
 	if (lock_mem == LM_FLAG_DISABLED)
 		return;
 
+	/*
+	 * Mlock may take several tens of seconds to complete when memory
+	 * is tight, so mlock is skipped in current MD-on-SSD scenario.
+	 */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META))
-		lock_bytes = vos_pool2umm(pool)->umm_pool->up_store.stor_size;
-	else
-		lock_bytes = pool->vp_pool_df->pd_scm_sz;
+		return;
 
+	lock_bytes = pool->vp_pool_df->pd_scm_sz;
 	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
 	if (rc != 0) {
 		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
@@ -1207,8 +1227,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = UMEM_CLASS_PMEM;
 	uma->uma_pool = ph;
+	uma->uma_id = umempobj_backend_type2class_id(uma->uma_pool->up_store.store_type);
 
 	/* Initialize dummy data I/O context */
 	rc = bio_ioctxt_open(&pool->vp_dummy_ioctxt, vos_xsctxt_get(), pool->vp_id, true);
@@ -1244,8 +1264,8 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 		unmap_ctxt.vnc_unmap = vos_blob_unmap_cb;
 		unmap_ctxt.vnc_data = vos_data_ioctxt(pool);
 		unmap_ctxt.vnc_ext_flush = flags & VOS_POF_EXTERNAL_FLUSH;
-		rc = vea_load(&pool->vp_umm, vos_txd_get(), &pool_df->pd_vea_df,
-			      &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
+		rc = vea_load(&pool->vp_umm, vos_txd_get(flags & VOS_POF_SYSDB),
+			      &pool_df->pd_vea_df, &unmap_ctxt, vea_metrics, &pool->vp_vea_info);
 		if (rc) {
 			D_ERROR("Failed to load block space info: "DF_RC"\n",
 				DP_RC(rc));
@@ -1259,6 +1279,7 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, pool_df->pd_id);
+	pool->vp_sysdb = !!(flags & VOS_POF_SYSDB);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
@@ -1266,21 +1287,22 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	pool->vp_dtx_committed_count = 0;
-	pool->vp_pool_df = pool_df;
+	pool->vp_pool_df             = pool_df;
+
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	pool->vp_rdb = !!(flags & VOS_POF_RDB);
-	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
-		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	pool->vp_rdb    = !!(flags & VOS_POF_RDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
+		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
 	lock_pool_memory(pool);
-	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	D_DEBUG(DB_MGMT, "Opened pool %p df version %d\n", pool, pool_df->pd_version);
 	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
@@ -1396,9 +1418,17 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	if (version == pool_df->pd_version)
 		return 0;
 
+	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
+		pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
+
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_vea_info)
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
+	if (rc)
+		return rc;
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc != 0)
@@ -1420,6 +1450,8 @@ end:
 		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+	if (version >= VOS_POOL_DF_2_6)
+		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
 	return 0;
 }
@@ -1496,6 +1528,7 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	}
 
 	D_ASSERT(pool != NULL);
+	D_ASSERT(pool->vp_sysdb == false);
 	rc = vos_space_query(pool, vps, false);
 	vos_pool_decref(pool);
 	return rc;

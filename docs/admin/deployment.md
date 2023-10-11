@@ -1356,6 +1356,12 @@ per four target threads, for example `targets: 16` and `nr_xs_helpers: 4`.
 The server should have sufficiently many physical cores to support the
 number of targets plus the additional service threads.
 
+The 'targets:' and 'nr_xs_helpers:' requirement are mandatory, if the number
+of physical cores are not enough it will fail the starting of the daos engine
+(notes that 2 cores reserved for system service), or configures with ENV
+"DAOS_TARGET_OVERSUBSCRIBE=1" to force starting daos engine (possibly hurts
+performance as multiple XS compete on same core).
+
 
 ## Storage Formatting
 
@@ -1587,3 +1593,17 @@ the `[Service]` section before reloading systemd and restarting the
 [^5]: https://github.com/pmem/ndctl/issues/130
 
 [6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)
+
+## Multi-user DFuse setup
+
+Running a single-user dfuse instance, for example on a compute node, requires no special setup.
+However configuration is required for allowing multi-user dfuse on a node.
+
+### Updating fuse config
+
+Multi-user dfuse makes use of the `allow_other` fuse mount option which allows requests from users
+other than the user running dfuse.  For reasons of safety this option is disabled by default for
+fuse and must be enabled by root before any user can use it.  To allow this then root must add or
+uncomment a line in `/etc/fuse.conf` to enable the `user_allow_other` setting.  The daos-client rpm
+does not do this automatically. An administrator must set this option on all nodes on which they
+want to provide a persistent multi-user dfuse service.

@@ -30,14 +30,17 @@
 #include <daos.h> /* for daos_init() */
 
 #define MAX_MODULE_OPTIONS	64
+#if BUILD_PIPELINE
+#define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild,pipeline"
+#else
 #define MODULE_LIST	"vos,rdb,rsvc,security,mgmt,dtx,pool,cont,obj,rebuild"
+#endif
 
 /** List of modules to load */
 static char		modules[MAX_MODULE_OPTIONS + 1];
 
 /**
- * Number of target threads the user would like to start
- * 0 means default value, see dss_tgt_nr_get();
+ * Number of target threads the user would like to start.
  */
 static unsigned int	nr_threads;
 
@@ -246,56 +249,51 @@ modules_load(void)
 	return rc;
 }
 
+static unsigned int
+ncores_needed(unsigned int tgt_nr, unsigned int nr_helpers)
+{
+	return DAOS_TGT0_OFFSET + tgt_nr + nr_helpers;
+}
+
 /**
- * Get the appropriate number of main XS based on the number of cores and
- * passed in preferred number of threads.
+ * Check if the #targets and #nr_xs_helpers is valid to start server, the #nr_xs_helpers possibly
+ * be reduced.
  */
 static int
-dss_tgt_nr_get(unsigned int ncores, unsigned int nr, bool oversubscribe)
+dss_tgt_nr_check(unsigned int ncores, unsigned int tgt_nr, bool oversubscribe)
 {
-	int tgt_nr;
-
 	D_ASSERT(ncores >= 1);
 
 	/* at most 2 helper XS per target */
-	if (dss_tgt_offload_xs_nr > 2 * nr)
-		dss_tgt_offload_xs_nr = 2 * nr;
-	else if (dss_tgt_offload_xs_nr == 0)
+	if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
+		D_PRINT("#nr_xs_helpers(%d) cannot exceed 2 times #targets (2 x %d = %d).\n",
+			dss_tgt_offload_xs_nr, tgt_nr, 2 * tgt_nr);
+		dss_tgt_offload_xs_nr = 2 * tgt_nr;
+	} else if (dss_tgt_offload_xs_nr == 0) {
 		D_WARN("Suggest to config at least 1 helper XS per DAOS engine\n");
-
-	/* Each system XS uses one core, and  with dss_tgt_offload_xs_nr
-	 * offload XS. Calculate the tgt_nr as the number of main XS based
-	 * on number of cores.
-	 */
-retry:
-	tgt_nr = ncores - DAOS_TGT0_OFFSET - dss_tgt_offload_xs_nr;
-	if (tgt_nr <= 0)
-		tgt_nr = 1;
-
-	/* If user requires less target threads then set it as dss_tgt_nr,
-	 * if user oversubscribes, then:
-	 *      . if oversubscribe is enabled, use the required number
-	 *      . if oversubscribe is disabled(default),
-	 *        use the number calculated above
-	 * Note: oversubscribing  may hurt performance.
-	 */
-	if (nr >= 1 && ((nr < tgt_nr) || oversubscribe)) {
-		tgt_nr = nr;
-		if (dss_tgt_offload_xs_nr > 2 * tgt_nr)
-			dss_tgt_offload_xs_nr = 2 * tgt_nr;
-	} else if (dss_tgt_offload_xs_nr > 2 * tgt_nr) {
-		dss_tgt_offload_xs_nr--;
-		goto retry;
 	}
 
-	if (tgt_nr != nr)
-		D_PRINT("%d target XS(xstream) requested (#cores %d); "
-			"use (%d) target XS\n", nr, ncores, tgt_nr);
+	if (oversubscribe) {
+		if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores)
+			D_PRINT("Force to start engine with %d targets %d xs_helpers on %d cores("
+				"%d cores reserved for system service).\n",
+				tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		goto out;
+	}
 
+	if (ncores_needed(tgt_nr, dss_tgt_offload_xs_nr) > ncores) {
+		D_ERROR("cannot start engine with %d targets %d xs_helpers on %d cores, may try "
+			"with DAOS_TARGET_OVERSUBSCRIBE=1 or reduce #targets/#nr_xs_helpers("
+			"%d cores reserved for system service).\n",
+			tgt_nr, dss_tgt_offload_xs_nr, ncores, DAOS_TGT0_OFFSET);
+		return -DER_INVAL;
+	}
+
+out:
 	if (dss_tgt_offload_xs_nr % tgt_nr != 0)
 		dss_helper_pool = true;
 
-	return tgt_nr;
+	return 0;
 }
 
 static int
@@ -317,35 +315,30 @@ dss_topo_init()
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
 	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	dss_tgt_nr = nr_threads;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
 	/* fall back to the legacy core allocation algorithm */
 	if (dss_numa_node == -1 || numa_node_nr <= 0) {
 		D_PRINT("Using legacy core allocation algorithm\n");
-		dss_tgt_nr = dss_tgt_nr_get(dss_core_nr, nr_threads,
-					    tgt_oversub);
-
 		if (dss_core_offset >= dss_core_nr) {
-			D_ERROR("invalid dss_core_offset %u "
-				"(set by \"-f\" option),"
-				" should within range [0, %u]",
+			D_ERROR("invalid dss_core_offset %u (set by \"-f\" option), should within "
+				"range [0, %u]\n",
 				dss_core_offset, dss_core_nr - 1);
 			return -DER_INVAL;
 		}
-		return 0;
+
+		return dss_tgt_nr_check(dss_core_nr, dss_tgt_nr, tgt_oversub);
 	}
 
 	if (dss_numa_node > numa_node_nr) {
-		D_ERROR("Invalid NUMA node selected. "
-			"Must be no larger than %d\n",
-			numa_node_nr);
+		D_ERROR("Invalid NUMA node selected. Must be no larger than %d\n", numa_node_nr);
 		return -DER_INVAL;
 	}
 
 	numa_obj = hwloc_get_obj_by_depth(dss_topo, depth, dss_numa_node);
 	if (numa_obj == NULL) {
-		D_ERROR("NUMA node %d was not found in the topology",
-			dss_numa_node);
+		D_ERROR("NUMA node %d was not found in the topology\n", dss_numa_node);
 		return -DER_INVAL;
 	}
 
@@ -377,17 +370,15 @@ dss_topo_init()
 	hwloc_bitmap_asprintf(&cpuset, core_allocation_bitmap);
 	free(cpuset);
 
-	dss_tgt_nr = dss_tgt_nr_get(dss_num_cores_numa_node, nr_threads,
-				    tgt_oversub);
 	if (dss_core_offset >= dss_num_cores_numa_node) {
-		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), "
-			"should within range [0, %d]", dss_core_offset,
-			dss_num_cores_numa_node - 1);
+		D_ERROR("invalid dss_core_offset %d (set by \"-f\" option), should within range "
+			"[0, %d]\n",
+			dss_core_offset, dss_num_cores_numa_node - 1);
 		return -DER_INVAL;
 	}
-
 	D_PRINT("Using NUMA core allocation algorithm\n");
-	return 0;
+
+	return dss_tgt_nr_check(dss_num_cores_numa_node, dss_tgt_nr, tgt_oversub);
 }
 
 static ABT_mutex		server_init_state_mutex;
@@ -687,7 +678,6 @@ server_init(int argc, char *argv[])
 		       DP_RC(rc));
 
 	metrics = &dss_engine_metrics;
-
 	/** Report timestamp when engine was started */
 	d_tm_record_timestamp(metrics->started_time);
 
@@ -797,11 +787,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	rc = dss_module_setup_all();
-	if (rc != 0)
-		goto exit_init_state;
-	D_INFO("Modules successfully set up\n");
 
 	rc = crt_register_event_cb(dss_crt_event_cb, NULL);
 	if (rc)

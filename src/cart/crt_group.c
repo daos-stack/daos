@@ -1826,24 +1826,23 @@ crt_group_config_path_set(const char *path)
 	int rc;
 
 	if (path == NULL) {
-		D_ERROR("path can't be NULL");
+		D_ERROR("path can't be NULL\n");
 		return -DER_INVAL;
 	}
 
 	if (strlen(path) >= CRT_MAX_ATTACH_PREFIX) {
-		D_ERROR("specified path must be fewer than %d characters",
-			CRT_MAX_ATTACH_PREFIX);
+		D_ERROR("specified path must be fewer than %d characters\n", CRT_MAX_ATTACH_PREFIX);
 		return -DER_INVAL;
 	}
 
 	rc = stat(path, &buf);
 	if (rc != 0) {
-		D_ERROR("bad path specified: %s", path);
+		D_ERROR("bad path specified: %s\n", path);
 		return d_errno2der(errno);
 	}
 
 	if (!S_ISDIR(buf.st_mode)) {
-		D_ERROR("not a directory: %s", path);
+		D_ERROR("not a directory: %s\n", path);
 		return -DER_NOTDIR;
 	}
 
@@ -2609,6 +2608,7 @@ crt_rank_self_set(d_rank_t rank, uint32_t group_version_min)
 		}
 	}
 
+	d_log_rank_setup(rank);
 unlock:
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 out:

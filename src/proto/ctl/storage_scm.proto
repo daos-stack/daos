@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -33,10 +33,11 @@ message ScmNamespace {
 	message Mount {
 		string path = 1;
 		uint64 total_bytes = 2;
-		uint64 avail_bytes = 3;
+		uint64 avail_bytes = 3;			// Available RAW storage for data
 		repeated string device_list = 4;
 		string class = 5;
-		uint32 rank = 6;	// DAOS I/O Engine using SCM devices
+		uint32 rank = 6;			// DAOS I/O Engine using SCM devices
+		uint64 usable_bytes = 7;		// Effective storage available for data
 	}
 	string uuid = 1;
 	string blockdev = 2;

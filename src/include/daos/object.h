@@ -141,6 +141,13 @@ struct daos_obj_md {
 	 * use pl_map's default value PL_DEFAULT_DOMAIN (PO_COMP_TP_RANK).
 	 */
 	uint32_t		omd_fdom_lvl;
+	/* Performance domain affinity */
+	uint32_t		omd_pda;
+	/* Performance domain level - PO_COMP_TP_ROOT or PO_COMP_TP_GRP.
+	 * Now will enable the performance domain feature only when omd_pdom_lvl set as
+	 * PO_COMP_TP_GRP and with PO_COMP_TP_GRP layer in pool map.
+	 */
+	uint32_t		omd_pdom_lvl;
 };
 
 /** object shard metadata stored in each container shard */
@@ -240,8 +247,9 @@ int daos_obj_set_oid_by_class(daos_obj_id_t *oid, enum daos_otype_t type,
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
-int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-			enum daos_obj_redun *ord, uint32_t *nr);
+int
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr, enum daos_obj_redun *ord,
+		    uint32_t *nr, uint32_t rf_factor);
 bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
 int daos_obj_get_oclass(daos_handle_t coh, enum daos_otype_t type, daos_oclass_hints_t hints,
 			uint32_t args, daos_oclass_id_t *cid);
@@ -478,6 +486,7 @@ int dc_obj_query_class(tse_task_t *task);
 int dc_obj_list_class(tse_task_t *task);
 int dc_obj_open(tse_task_t *task);
 int dc_obj_close(tse_task_t *task);
+int dc_obj_close_direct(daos_handle_t oh);
 int dc_obj_punch_task(tse_task_t *task);
 int dc_obj_punch_dkeys_task(tse_task_t *task);
 int dc_obj_punch_akeys_task(tse_task_t *task);
@@ -496,8 +505,12 @@ int dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout);
 int dc_obj_layout_refresh(daos_handle_t oh);
 int dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr);
 daos_handle_t dc_obj_hdl2cont_hdl(daos_handle_t oh);
+int dc_obj_hdl2obj_md(daos_handle_t oh, struct daos_obj_md *md);
 int dc_obj_get_grp_size(daos_handle_t oh, int *grp_size);
 int dc_obj_hdl2oid(daos_handle_t oh, daos_obj_id_t *oid);
+uint32_t dc_obj_hdl2redun_lvl(daos_handle_t oh);
+uint32_t dc_obj_hdl2pda(daos_handle_t oh);
+uint32_t dc_obj_hdl2pdom(daos_handle_t oh);
 
 int dc_tx_open(tse_task_t *task);
 int dc_tx_commit(tse_task_t *task);
@@ -516,6 +529,8 @@ dc_obj_anchor2shard(daos_anchor_t *anchor)
 {
 	return anchor->da_shard;
 }
+
+uint32_t dc_obj_hdl2layout_ver(daos_handle_t oh);
 
 /** Encode shard into enumeration anchor. */
 static inline void
@@ -547,6 +562,8 @@ enum daos_io_flags {
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 	/* Force fetch/list to do degraded enumeration/fetch */
 	DIOF_FOR_FORCE_DEGRADE = 0x400,
+	/* reverse enumeration for recx */
+	DIOF_RECX_REVERSE = 0x800,
 };
 
 /**
@@ -767,16 +784,14 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
-			"re_ep_valid %d, re_snapshot %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid,
-			list->re_snapshot);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid, list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
+			D_ERROR("[type %d, [" DF_X64 "," DF_X64 "], " DF_X64 "]\n",
+				recx_ep->re_type, recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
+				recx_ep->re_ep);
 		}
-		D_ERROR("\n");
 	}
 }
 

@@ -238,6 +238,7 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 	svc := newMgmtSvc(harness, ms, db, nil, events.NewPubSub(ctx, log))
 	svc.batchInterval = 100 * time.Microsecond // Speed up tests
 	svc.startAsyncLoops(ctx)
+	svc.startLeaderLoops(ctx)
 	return svc
 }
 

@@ -345,7 +345,6 @@ class IorCommand(SubProcessCommand):
         env = self.env.copy()
         env["D_LOG_FILE"] = get_log_file(log_file or "{}_daos.log".format(self.command))
         env["MPI_LIB"] = '""'
-        env["FI_PSM2_DISCONNECT"] = "1"
 
         # ior POSIX api does not require the below options.
         if "POSIX" in manager_cmd:

@@ -70,7 +70,7 @@ server operations:
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
 |Data Plane|log_file|/tmp/daos_engine.\*.log|
-|[Privileged Helper](https://docs.daos.io/v2.4/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
+|[Privileged Helper](https://docs.daos.io/v2.6/admin/predeployment_check/#privileged-helper)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
 ### Control Plane Log
@@ -316,7 +316,7 @@ sudo ipcrm -M 0x10242049
 1. Verify that the `access_points` host is accessible and the port is not used.
 1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
 1. Check `fabric_iface` in `engines`. They should be available and enabled.
-1. Check that `socket_dir` is writeable by the daos_server.
+1. Check that `socket_dir` is writable by the daos_server.
 
 ### Errors creating a Pool
 1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
@@ -463,6 +463,15 @@ fabric_iface_port: 31316
 # engine 1
 fabric_iface_port: 31416
 ```
+### daos_agent cache of engine URIs is stale
+
+The `daos_agent` cache may become invalid if `daos_engine` processes restart with different
+configurations or IP addresses, or if the DAOS system is reformatted.
+If this happens, the `daos` tool (as well as other I/O or `libdaos` operations) may return
+`-DER_BAD_TARGET` (-1035) errors.
+
+To resolve the issue, a privileged user may send a `SIGUSR2` signal to the `daos_agent` process to
+force an immediate cache refresh.
 
 ## Diagnostic and Recovery Tools
 
@@ -951,7 +960,7 @@ pool header correct
 
 ## Syslog
 
-[`RAS events`](https://docs.daos.io/v2.4/admin/administration/#ras-events) are printed to the Syslog
+[`RAS events`](https://docs.daos.io/v2.6/admin/administration/#ras-events) are printed to the Syslog
 by 'daos_server' processes via the Go standard library API.
 If no Syslog daemon is configured on the host, errors will be printed to the 'daos_server' log file:
 

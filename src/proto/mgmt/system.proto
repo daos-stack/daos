@@ -81,6 +81,7 @@ message SystemQueryReq {
 	string sys = 1; // DAOS system name
 	string ranks = 2; // rankset to query
 	string hosts = 3; // hostset to query
+	uint32 state_mask = 4; // bitmask defining desired member states
 }
 
 // SystemQueryResp returns active system members.

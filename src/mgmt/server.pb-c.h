@@ -71,13 +71,18 @@ struct  _Ctl__SetLogMasksResp
 {
   ProtobufCMessage base;
   /*
-   * DAOS error code
+   * DAOS error code returned from dRPC
    */
   int32_t status;
+  /*
+   * per-instance error strings
+   */
+  size_t n_errors;
+  char **errors;
 };
 #define CTL__SET_LOG_MASKS_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__set_log_masks_resp__descriptor) \
-    , 0 }
+    , 0, 0,NULL }
 
 
 /* Ctl__SetLogMasksReq methods */

@@ -149,8 +149,8 @@ func (cmd *objQueryCmd) Execute(_ []string) error {
 	defer C.daos_obj_layout_free(cLayout)
 
 	layout := newObjLayout(oid, cLayout)
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(layout, nil)
+	if cmd.JSONOutputEnabled() {
+		return cmd.OutputJSON(layout, nil)
 	}
 
 	// TODO: Revisit this output to make it more non-developer friendly.

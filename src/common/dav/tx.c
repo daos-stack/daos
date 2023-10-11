@@ -681,8 +681,9 @@ obj_tx_abort(int errnum, int user)
 
 	tx->last_errnum = errnum;
 	errno = errnum;
-	if (user)
+	if (user) {
 		DAV_DBG("!explicit transaction abort");
+	}
 
 	/* ONABORT */
 	obj_tx_callback(tx);

@@ -11,11 +11,34 @@
 
 #include <stdarg.h>
 #include <math.h>
+#include <malloc.h>
 #include <string.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <dlfcn.h>
+#include <pthread.h>
+
+#include <malloc.h>
+
 #include <gurt/common.h>
+#include <gurt/atomic.h>
 
 /* state buffer for DAOS rand and srand calls, NOT thread safe */
 static struct drand48_data randBuffer = {0};
+
+d_alloc_track_cb_t d_alloc_track_cb;
+d_alloc_track_cb_t d_free_track_cb;
+static __thread void *track_arg;
+
+void
+d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg)
+{
+	d_alloc_track_cb = alloc_cb;
+	d_free_track_cb = free_cb;
+	track_arg = arg;
+
+	D_INFO("memory track is enabled for the engine.\n");
+}
 
 void
 d_srand(long int seedval)
@@ -32,34 +55,115 @@ d_rand()
 	return result;
 }
 
+/* Developer/debug version, poison memory on free.
+ * This tries several ways to access the buffer size however none of them are perfect so for now
+ * this is no in release builds.
+ */
+
+#ifdef DAOS_BUILD_RELEASE
 void
 d_free(void *ptr)
 {
+	if (unlikely(track_arg != NULL)) {
+		size_t size = malloc_usable_size(ptr);
+
+		d_free_track_cb(track_arg, size);
+	}
+
 	free(ptr);
 }
+
+#else
+
+static size_t
+_f_get_alloc_size(void *ptr)
+{
+	size_t size = malloc_usable_size(ptr);
+	size_t obs;
+
+	obs = __builtin_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+
+#if __USE_FORTIFY_LEVEL > 2
+	obs = __builtin_dynamic_object_size(ptr, 0);
+	if (obs != -1 && obs < size)
+		size = obs;
+#endif
+
+	return size;
+}
+
+void
+d_free(void *ptr)
+{
+	size_t msize = _f_get_alloc_size(ptr);
+
+	memset(ptr, 0x42, msize);
+	free(ptr);
+}
+
+#endif
 
 void *
 d_calloc(size_t count, size_t eltsize)
 {
-	return calloc(count, eltsize);
+	void *ptr;
+
+	ptr = calloc(count, eltsize);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 void *
 d_malloc(size_t size)
 {
-	return malloc(size);
+	void *ptr;
+
+	ptr = malloc(size);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, size);
+	}
+
+	return ptr;
 }
 
 void *
 d_realloc(void *ptr, size_t size)
 {
-	return realloc(ptr, size);
+	void *new_ptr;
+
+	if (unlikely(track_arg != NULL)) {
+		size_t old_size = malloc_usable_size(ptr);
+
+		new_ptr = realloc(ptr, size);
+		if (new_ptr != NULL) {
+			d_free_track_cb(track_arg, old_size);
+			d_alloc_track_cb(track_arg, size);
+		}
+	} else {
+		new_ptr = realloc(ptr, size);
+	}
+	return new_ptr;
 }
 
 char *
 d_strndup(const char *s, size_t n)
 {
-	return strndup(s, n);
+	char *ptr;
+
+	ptr = strndup(s, n);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 int
@@ -72,22 +176,61 @@ d_asprintf(char **strp, const char *fmt, ...)
 	rc = vasprintf(strp, fmt, ap);
 	va_end(ap);
 
+	if (unlikely(track_arg != NULL)) {
+		if (rc > 0 && *strp != NULL)
+			d_alloc_track_cb(track_arg, (size_t)rc);
+	}
+
 	return rc;
+}
+
+char *
+d_asprintf2(int *_rc, const char *fmt, ...)
+{
+	char   *str = NULL;
+	va_list ap;
+	int     rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(&str, fmt, ap);
+	va_end(ap);
+
+	*_rc = rc;
+
+	if (rc == -1)
+		return NULL;
+
+	return str;
 }
 
 char *
 d_realpath(const char *path, char *resolved_path)
 {
-	return realpath(path, resolved_path);
+	char *ptr;
+
+	ptr = realpath(path, resolved_path);
+	if (unlikely(track_arg != NULL)) {
+		if (ptr != NULL)
+			d_alloc_track_cb(track_arg, malloc_usable_size(ptr));
+	}
+
+	return ptr;
 }
 
 void *
 d_aligned_alloc(size_t alignment, size_t size, bool zero)
 {
-	void *buf = aligned_alloc(alignment, size);
+	void *buf;
+
+	buf = aligned_alloc(alignment, size);
+	if (unlikely(track_arg != NULL)) {
+		if (buf != NULL)
+			d_alloc_track_cb(track_arg, size);
+	}
 
 	if (!zero || buf == NULL)
 		return buf;
+
 	memset(buf, 0, size);
 	return buf;
 }
@@ -160,22 +303,15 @@ d_rank_list_dup_sort_uniq(d_rank_list_t **dst, const d_rank_list_t *src)
 		if (rank_tmp == rank_list->rl_ranks[i]) {
 			identical_num++;
 			for (j = i; j < rank_num; j++)
-				rank_list->rl_ranks[j - 1] =
-					rank_list->rl_ranks[j];
-			D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed "
-				"identical rank[%d](%d).\n", __FILE__, __LINE__,
-				rank_list, i, rank_tmp);
+				rank_list->rl_ranks[j - 1] = rank_list->rl_ranks[j];
 
 			i--;
 			rank_num--;
 		}
 		rank_tmp = rank_list->rl_ranks[i];
 	}
-	if (identical_num != 0) {
+	if (identical_num != 0)
 		rank_list->rl_nr -= identical_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, removed %d ranks.\n",
-			__FILE__, __LINE__, rank_list, identical_num);
-	}
 
 out:
 	return rc;
@@ -213,18 +349,12 @@ d_rank_list_filter(d_rank_list_t *src_set, d_rank_list_t *dst_set,
 			continue;
 		filter_num++;
 		for (j = i; j < rank_num - 1; j++)
-			dst_set->rl_ranks[j] =
-				dst_set->rl_ranks[j + 1];
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter rank[%d](%d).\n",
-			__FILE__, __LINE__, dst_set, i, rank);
+			dst_set->rl_ranks[j] = dst_set->rl_ranks[j + 1];
 		/* as dst_set moved one item ahead */
 		i--;
 	}
-	if (filter_num != 0) {
+	if (filter_num != 0)
 		dst_set->rl_nr -= filter_num;
-		D_DEBUG(DB_TRACE, "%s:%d, rank_list %p, filter %d ranks.\n",
-			__FILE__, __LINE__, dst_set, filter_num);
-	}
 }
 
 int
@@ -1196,4 +1326,120 @@ d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer)
 	pointers->p_buf[pointers->p_len] = pointer;
 	pointers->p_len++;
 	return 0;
+}
+
+/**
+ * Overloads to hook the unsafe getenv()/[un]setenv()/putenv()/clearenv()
+ * functions from glibc.
+ * Libgurt is the preferred place for this as it is the lowest layer in DAOS,
+ * so it will be the earliest to be loaded and will ensure the hook to be
+ * installed as early as possible and could prevent usage of LD_PRELOAD.
+ * The idea is to strengthen all the environment APIs by using a common lock.
+ *
+ * XXX this will address the main lack of multi-thread protection in the Glibc
+ * APIs but do not handle all unsafe use-cases (like the change/removal of an
+ * env var when its value address has already been grabbed by a previous
+ * getenv(), ...).
+ */
+
+static pthread_rwlock_t hook_env_lock = PTHREAD_RWLOCK_INITIALIZER;
+static char *(* ATOMIC real_getenv)(const char *);
+static int (* ATOMIC real_putenv)(char *);
+static int (* ATOMIC real_setenv)(const char *, const char *, int);
+static int (* ATOMIC real_unsetenv)(const char *);
+static int (* ATOMIC real_clearenv)(void);
+
+static void bind_libc_symbol(void **real_ptr_addr, const char *name)
+{
+	void *real_temp;
+
+	/* XXX __atomic_*() built-ins are used to avoid the need to cast
+	 * each of the ATOMIC pointers of functions, that seems to be
+	 * required to make Intel compiler happy ...
+	 */
+	if (__atomic_load_n(real_ptr_addr, __ATOMIC_RELAXED) == NULL) {
+		/* libc should be already loaded ... */
+		real_temp = dlsym(RTLD_NEXT, name);
+		if (real_temp == NULL) {
+			/* try after loading libc now */
+			void *handle;
+
+			handle = dlopen("libc.so.6", RTLD_LAZY);
+			D_ASSERT(handle != NULL);
+			real_temp = dlsym(handle, name);
+			D_ASSERT(real_temp != NULL);
+		}
+		__atomic_store_n(real_ptr_addr, real_temp, __ATOMIC_RELAXED);
+	}
+}
+
+static pthread_once_t init_real_symbols_flag = PTHREAD_ONCE_INIT;
+
+static void init_real_symbols(void)
+{
+	bind_libc_symbol((void **)&real_getenv, "getenv");
+	bind_libc_symbol((void **)&real_putenv, "putenv");
+	bind_libc_symbol((void **)&real_setenv, "setenv");
+	bind_libc_symbol((void **)&real_unsetenv, "unsetenv");
+	bind_libc_symbol((void **)&real_clearenv, "clearenv");
+}
+
+char *getenv(const char *name)
+{
+	char *p;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_RDLOCK(&hook_env_lock);
+	p = real_getenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return p;
+}
+
+int putenv(char *name)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_putenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int setenv(const char *name, const char *value, int overwrite)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_setenv(name, value, overwrite);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int unsetenv(const char *name)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_unsetenv(name);
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
+}
+
+int clearenv(void)
+{
+	int rc;
+
+	pthread_once(&init_real_symbols_flag, init_real_symbols);
+	D_RWLOCK_WRLOCK(&hook_env_lock);
+	rc = real_clearenv();
+	D_RWLOCK_UNLOCK(&hook_env_lock);
+
+	return rc;
 }

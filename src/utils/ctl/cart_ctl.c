@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2018-2022 Intel Corporation.
+ * (C) Copyright 2018-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -221,6 +221,10 @@ ctl_parse_fi_attr(char *arg_str, struct crt_ctl_fi_attr_set_in *fi_attr_in)
 
 	fi_attr_in->fa_probability_x = strtoull(token, &endptr, 10);
 
+	/* Workaround for DAOS-13900, make probability be a percentage */
+	if (fi_attr_in->fa_probability_x != 0)
+		fi_attr_in->fa_probability_y = 1000;
+
 	token = strtok_r(NULL, ",", &saveptr);
 	if (token == NULL)
 		D_GOTO(error_out, 0);
@@ -268,7 +272,7 @@ print_usage_msg(const char *msg)
 	printf("\tReturn pids of the specified ranks\n");
 	printf("\nset_fi_attr\n");
 	printf("\tset fault injection attributes for a fault ID. This command\n"
-	       "\tmust be acompanied by the option\n"
+	       "\tmust be accompanied by the option\n"
 	       "\t--attr fault_id,max_faults,probability,err_code"
 	       "[,argument]\n");
 	printf("\noptions:\n");

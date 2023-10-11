@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -69,7 +69,11 @@ utest_pmem_create(const char *name, size_t pool_size, size_t root_size,
 		return -DER_NOMEM;
 
 	strcpy(ctx->uc_pool_name, name);
-	ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
+	if (store)
+		ctx->uc_uma.uma_id = umempobj_backend_type2class_id(store->store_type);
+	else
+		ctx->uc_uma.uma_id = UMEM_CLASS_PMEM;
+
 	ctx->uc_uma.uma_pool = umempobj_create(name, "utest_pool",
 				UMEMPOBJ_ENABLE_STATS, pool_size, 0666, store);
 

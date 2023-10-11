@@ -19,8 +19,9 @@ class CartNoPmixOneNodeTest(CartTest):
         """Test CaRT NoPmix.
 
         :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
         :avocado: tags=cart,no_pmix,one_node,memcheck
-        :avocado: tags=test_cart_no_pmix
+        :avocado: tags=CartNoPmixOneNodeTest,test_cart_no_pmix
         """
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 

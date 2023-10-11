@@ -65,11 +65,18 @@ struct crt_common_hdr {
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
-	/* tag to which rpc request was sent to */
+	/* destination tag */
 	uint32_t	cch_dst_tag;
+
+
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
-	uint32_t	cch_rc;
+	/* TODO: workaround for DAOS-13973 */
+	union {
+		uint32_t	cch_src_timeout;
+		uint32_t	cch_rc;
+	};
 };
+
 
 typedef enum {
 	RPC_STATE_INITED = 0x36,
@@ -133,7 +140,7 @@ struct crt_rpc_priv {
 	uint64_t		crp_timeout_ts;
 	crt_cb_t		crp_complete_cb;
 	void			*crp_arg; /* argument for crp_complete_cb */
-	struct crt_ep_inflight	*crp_epi; /* point back to inflight ep */
+	struct crt_ep_inflight	*crp_epi; /* point back to in-flight ep */
 
 	ATOMIC uint32_t		crp_refcount;
 	crt_rpc_state_t		crp_state; /* RPC state */
@@ -209,7 +216,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&rpc_priv->crp_mutex);
 }
 
-#define CRT_PROTO_INTERNAL_VERSION 4
+#define CRT_PROTO_INTERNAL_VERSION 5
 #define CRT_PROTO_FI_VERSION 3
 #define CRT_PROTO_ST_VERSION 1
 #define CRT_PROTO_CTL_VERSION 1
@@ -301,7 +308,7 @@ crt_rpc_unlock(struct crt_rpc_priv *rpc_priv)
 		crt_hdlr_iv_update, NULL)				\
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
-		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
+		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
@@ -469,7 +476,8 @@ CRT_RPC_DECLARE(crt_st_status_req,
 	((d_rank_t)		(ifi_root_node)		CRT_VAR)
 
 #define CRT_OSEQ_IV_FETCH	/* output fields */		 \
-	((int32_t)		(ifo_rc)		CRT_VAR)
+	((d_sg_list_t)		(ifo_sgl)		CRT_VAR) \
+	((int32_t)		(ifo_rc)		CRT_VAR) \
 
 CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 
@@ -484,6 +492,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((d_iov_t)		(ivu_sync_type)		CRT_VAR) \
 	/* Bulk handle for iv value */				 \
 	((crt_bulk_t)		(ivu_iv_value_bulk)	CRT_VAR) \
+	((d_sg_list_t)		(ivu_iv_sgl)		CRT_VAR) \
 	/* Root node for IV UPDATE */				 \
 	((d_rank_t)		(ivu_root_node)		CRT_VAR) \
 	/* Original node that issued crt_iv_update call */	 \
@@ -493,7 +502,8 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 	((uint32_t)		(padding)		CRT_VAR)
 
 #define CRT_OSEQ_IV_UPDATE	/* output fields */		 \
-	((uint64_t)		(rc)			CRT_VAR)
+	((uint64_t)		(rc)			CRT_VAR) \
+	((d_sg_list_t)		(ivo_iv_sgl)		CRT_VAR)
 
 CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 
@@ -506,8 +516,9 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 	((d_iov_t)		(ivs_key)		CRT_VAR) \
 	/* IOV for sync type */					 \
 	((d_iov_t)		(ivs_sync_type)		CRT_VAR) \
+	((d_sg_list_t)		(ivs_sync_sgl)		CRT_VAR) \
 	/* IV Class ID */					 \
-	((uint32_t)		(ivs_class_id)		CRT_VAR)
+	((uint32_t)		(ivs_class_id)		CRT_VAR) \
 
 #define CRT_OSEQ_IV_SYNC	/* output fields */		 \
 	((int32_t)		(rc)			CRT_VAR)
@@ -602,20 +613,23 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
  * Note that we conservatively use the default, strict memory order for both
  * RPC_ADDREF and RPC_DECREF, leaving relaxations to future work.
  */
-#define RPC_ADDREF(RPC) do {						\
-		int __ref;						\
-		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);	\
-		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));	\
-		RPC_TRACE(DB_NET, RPC, "addref to %u.\n", __ref + 1);	\
+#define RPC_ADDREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_add(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p addref from zero\n", (RPC));                             \
+		RPC_TRACE(DB_NET, (RPC), "addref to %u.\n", __ref + 1);                            \
 	} while (0)
 
-#define RPC_DECREF(RPC) do {						\
-		int __ref;						\
-		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);	\
-		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));	\
-		RPC_TRACE(DB_NET, RPC, "decref to %u.\n", __ref - 1);	\
-		if (__ref == 1)						\
-			crt_req_destroy(RPC);				\
+/* Avoid the use of RPC_TRACE here as after the decref then RPC may no longer be valid */
+#define RPC_DECREF(RPC)                                                                            \
+	do {                                                                                       \
+		int __ref;                                                                         \
+		__ref = atomic_fetch_sub(&(RPC)->crp_refcount, 1);                                 \
+		D_ASSERTF(__ref != 0, "%p decref from zero\n", (RPC));                             \
+		D_DEBUG(DB_NET, "%p: decref to %u", (RPC), __ref - 1);                             \
+		if (__ref == 1)                                                                    \
+			crt_req_destroy(RPC);                                                      \
 	} while (0)
 
 #define RPC_PUB_ADDREF(RPC) do {					\

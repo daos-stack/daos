@@ -64,9 +64,11 @@ if ! retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
     exit 1
 fi
 
-git log --format=%s -n 1 HEAD | \
+git log --format=%B -n 1 HEAD | sed -ne '1s/^\([A-Z][A-Z]*-[0-9][0-9]*\) .*/\1/p' \
+                                     -e '/^Fixes:/{s/^Fixes: *//;s/ /\
+/g;p}' | \
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
-                                     "cat >/tmp/commit_title"
+                                     "cat >/tmp/commit_fixes"
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
 retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \

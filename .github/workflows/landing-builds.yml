@@ -46,7 +46,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -156,7 +156,7 @@ jobs:
             with: rockylinux/rockylinux:9
           - distro: fedora
             base: el.8
-            with: fedora:36
+            with: fedora:38
           - distro: leap.15
             base: leap.15
             with: opensuse/leap:15.4
@@ -297,7 +297,7 @@ jobs:
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 1
 
   Build-branch-ARM:
     name: Build DAOS (ARM64)
@@ -383,4 +383,4 @@ jobs:
       - name: Run NLT
         run: docker run --mount type=tmpfs,destination=/mnt/daos_0,tmpfs-mode=1777 --user root:root
                  build-image ./daos/utils/node_local_test.py --no-root
-                 --memcheck no --test cont_copy
+                 --memcheck no --test cont_copy --system-ram-reserved 6

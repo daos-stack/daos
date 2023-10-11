@@ -187,6 +187,12 @@ deflate_decompress(void *daos_dc_ctx, uint8_t *src, size_t src_len,
 static void
 deflate_destroy(void *daos_dc_ctx)
 {
+	struct deflate_ctx *ctx = daos_dc_ctx;
+
+	if (ctx == NULL)
+		return;
+
+	D_FREE(ctx->stream.level_buf);
 	D_FREE(daos_dc_ctx);
 }
 

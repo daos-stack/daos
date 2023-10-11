@@ -1,10 +1,16 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package security
+
+import (
+	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
+)
 
 // Component represents the DAOS component being granted authorization.
 type Component int
@@ -27,6 +33,7 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/StorageNvmeRebind":        {ComponentAdmin},
 	"/ctl.CtlSvc/StorageNvmeAddDevice":     {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":              {ComponentAdmin},
+	"/ctl.CtlSvc/CollectLog":               {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareQuery":            {ComponentAdmin},
 	"/ctl.CtlSvc/FirmwareUpdate":           {ComponentAdmin},
 	"/ctl.CtlSvc/SmdQuery":                 {ComponentAdmin},
@@ -34,7 +41,6 @@ var methodAuthorizations = map[string][]Component{
 	"/ctl.CtlSvc/SetEngineLogMasks":        {ComponentAdmin},
 	"/ctl.CtlSvc/PrepShutdownRanks":        {ComponentServer},
 	"/ctl.CtlSvc/StopRanks":                {ComponentServer},
-	"/ctl.CtlSvc/PingRanks":                {ComponentServer},
 	"/ctl.CtlSvc/ResetFormatRanks":         {ComponentServer},
 	"/ctl.CtlSvc/StartRanks":               {ComponentServer},
 	"/mgmt.MgmtSvc/Join":                   {ComponentServer},
@@ -75,6 +81,24 @@ var methodAuthorizations = map[string][]Component{
 	"/RaftTransport/RequestVote":           {ComponentServer},
 	"/RaftTransport/TimeoutNow":            {ComponentServer},
 	"/RaftTransport/InstallSnapshot":       {ComponentServer},
+}
+
+func methodToComponent(method string, methodAuthorizations map[string][]Component) (build.Component, error) {
+	comps, found := methodAuthorizations[method]
+	if !found || len(comps) == 0 {
+		return build.ComponentAny, errors.Errorf("method %q does not map to a known authorized component", method)
+	} else if len(comps) > 1 {
+		// In this case, the caller must explicitly set the component and cannot
+		// rely on this helper to resolve it.
+		return build.ComponentAny, errors.Errorf("method %q maps to multiple authorized components", method)
+	}
+
+	return build.Component(comps[0].String()), nil
+}
+
+// MethodToComponent resolves a gRPC method string to a build.Component.
+func MethodToComponent(method string) (build.Component, error) {
+	return methodToComponent(method, methodAuthorizations)
 }
 
 // HasAccess check if the given component has access to method given in FullMethod

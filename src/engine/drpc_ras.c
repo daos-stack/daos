@@ -77,7 +77,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->proc_id = (uint64_t)getpid();
 
 	if (dmi == NULL) {
-		D_ERROR("failed to retrieve xstream id");
+		D_ERROR("failed to retrieve xstream id\n");
 		D_GOTO(out_ts, rc = -DER_UNINIT);
 	}
 	evt->thread_id = (uint64_t)dmi->dmi_xs_id;

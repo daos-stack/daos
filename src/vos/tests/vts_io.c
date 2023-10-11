@@ -224,7 +224,7 @@ setup_io(void **state)
 	srand(time(NULL));
 	test_args_init(&test_args, VPOOL_SIZE);
 
-	table = vos_ts_table_get();
+	table = vos_ts_table_get(true);
 	if (table == NULL)
 		return -1;
 
@@ -236,12 +236,12 @@ int
 teardown_io(void **state)
 {
 	struct io_test_args	*arg = *state;
-	struct vos_ts_table	*table = vos_ts_table_get();
+	struct vos_ts_table	*table = vos_ts_table_get(true);
 	int			 rc;
 
 	if (table) {
-		vos_ts_table_free(&table);
-		rc = vos_ts_table_alloc(&table);
+		vos_ts_table_free(&table, NULL);
+		rc = vos_ts_table_alloc(&table, NULL);
 		if (rc != 0) {
 			printf("Fatal error, table couldn't be reallocated\n");
 			exit(rc);
@@ -966,7 +966,7 @@ io_obj_cache_test(void **state)
 	rc = vos_obj_cache_create(10, &occ);
 	assert_rc_equal(rc, 0);
 
-	tls             = vos_tls_get();
+	tls             = vos_tls_get(true);
 	old_cache       = tls->vtl_ocache;
 	tls->vtl_ocache = occ;
 
@@ -3085,6 +3085,7 @@ int
 run_io_test(int *types, int num_types, int keys, const char *cfg)
 {
 	int rc = 0;
+	int i;
 
 	init_num_keys = VTS_IO_KEYS;
 	if (keys)
@@ -3095,7 +3096,7 @@ run_io_test(int *types, int num_types, int keys, const char *cfg)
 
 	rc = run_single_class_tests(cfg);
 
-	for (int i = 0; i < num_types; i++) {
+	for (i = 0; i < num_types; i++) {
 		init_type = types[i];
 		rc += run_oclass_tests(cfg);
 	}

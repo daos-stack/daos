@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(container)
 
 #include <daos_srv/container.h>
+#include <daos_srv/security.h>
 #include "srv_internal.h"
 #include "rpc.h"
 #include <daos_srv/iv.h>
@@ -83,10 +84,10 @@ cont_iv_ent_get(struct ds_iv_entry *entry, void **priv)
 	return 0;
 }
 
-static int
+static void
 cont_iv_ent_put(struct ds_iv_entry *entry, void *priv)
 {
-	return 0;
+	return;
 }
 
 static int
@@ -333,6 +334,10 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 			iv_prop->cip_rp_pda = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_RP_PDA;
 			break;
+		case DAOS_PROP_CO_PERF_DOMAIN:
+			iv_prop->cip_perf_domain = prop_entry->dpe_val;
+			bits |= DAOS_CO_QUERY_PROP_PERF_DOMAIN;
+			break;
 		case DAOS_PROP_CO_GLOBAL_VERSION:
 			iv_prop->cip_global_version = prop_entry->dpe_val;
 			bits |= DAOS_CO_QUERY_PROP_GLOBAL_VERSION;
@@ -460,7 +465,7 @@ again:
 				D_ERROR("create cont prop iv entry failed "
 					""DF_RC"\n", DP_RC(rc));
 			} else if (class_id == IV_CONT_CAPA) {
-				struct container_hdl	chdl;
+				struct container_hdl	chdl = { 0 };
 				int			rc1;
 
 				/* If PS leader switches, it may not in IV cache,
@@ -474,12 +479,19 @@ again:
 					struct daos_prop_entry	*prop_entry;
 					struct daos_co_status	stat = { 0 };
 
+					if (uuid_is_null(chdl.ch_cont)) {
+						/* Skip for container server handler */
+						iv_entry.iv_capa.sec_capas =
+							ds_sec_get_rebuild_cont_capabilities();
+						iv_entry.iv_capa.flags = 0;
+						D_GOTO(out, rc = 0);
+					}
 					rc = ds_cont_get_prop(entry->ns->iv_pool_uuid,
-							      civ_key->cont_uuid, &prop);
+							      chdl.ch_cont, &prop);
 					if (rc) {
 						D_ERROR(DF_CONT "get prop: "DF_RC"\n",
 							DP_CONT(entry->ns->iv_pool_uuid,
-								civ_key->cont_uuid), DP_RC(rc));
+								chdl.ch_cont), DP_RC(rc));
 						D_GOTO(out, rc);
 					}
 					prop_entry = daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS);
@@ -631,6 +643,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			if (rc)
 				D_GOTO(out, rc);
 		}
+		entry->iv_valid = false;
 	} else {
 		struct cont_iv_entry *iv_entry;
 
@@ -648,9 +661,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
-			 DB_ANY, DLOG_ERR,
-			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  "failed to insert");
 
 	return rc;
 }
@@ -746,9 +758,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR,
-			 DF_UUID" iv fetch failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
+			  DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -779,10 +790,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
-			 DB_ANY, DLOG_ERR,
-			 DF_UUID" iv update failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
+			  DF_UUID " iv update failed", DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -1261,6 +1270,11 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry->dpe_val = iv_prop->cip_rp_pda;
 		prop_entry->dpe_type = DAOS_PROP_CO_RP_PDA;
 	}
+	if (bits & DAOS_CO_QUERY_PROP_PERF_DOMAIN) {
+		prop_entry = &prop->dpp_entries[i++];
+		prop_entry->dpe_val = iv_prop->cip_perf_domain;
+		prop_entry->dpe_type = DAOS_PROP_CO_PERF_DOMAIN;
+	}
 	if (bits & DAOS_CO_QUERY_PROP_GLOBAL_VERSION) {
 		prop_entry = &prop->dpp_entries[i++];
 		prop_entry->dpe_val = iv_prop->cip_global_version;
@@ -1275,7 +1289,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t **prop_out)
 		prop_entry = &prop->dpp_entries[i++];
 		acl = &iv_prop->cip_acl;
 		if (acl->dal_ver != 0) {
-			D_ASSERT(daos_acl_validate(acl) == 0);
+			rc = daos_acl_validate(acl);
+			if (rc != -DER_SUCCESS)
+				D_GOTO(out, rc);
 			prop_entry->dpe_val_ptr = daos_acl_dup(acl);
 			if (prop_entry->dpe_val_ptr == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
@@ -1367,6 +1383,7 @@ cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop, bool sync)
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_OBJ_VERSION) != NULL);
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_STATUS) != NULL);
 	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_RP_PDA) != NULL);
+	D_ASSERT(daos_prop_entry_get(prop, DAOS_PROP_CO_PERF_DOMAIN) != NULL);
 
 	uuid_copy(iv_entry->cont_uuid, cont_uuid);
 	cont_iv_prop_l2g(prop, &iv_entry->iv_prop);
@@ -1413,8 +1430,7 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
 		D_GOTO(out, rc);
 	}
 

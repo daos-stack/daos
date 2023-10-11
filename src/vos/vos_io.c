@@ -577,7 +577,8 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(), ioc->ic_obj, evict);
+		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+				ioc->ic_obj, evict);
 
 	vos_ioc_reserve_fini(ioc);
 	vos_ilog_fetch_finish(&ioc->ic_dkey_info);
@@ -670,8 +671,9 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		}
 	}
 
+	cont = vos_hdl2cont(coh);
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
-				 dth);
+				 dth, cont->vc_pool->vp_sysdb);
 	if (rc != 0)
 		goto error;
 
@@ -680,7 +682,6 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		return 0;
 	}
 
-	cont = vos_hdl2cont(coh);
 	bioc = vos_data_ioctxt(cont->vc_pool);
 	ioc->ic_biod = bio_iod_alloc(bioc, vos_ioc2umm(ioc), iod_nr,
 			read_only ? BIO_IOD_TYPE_FETCH : BIO_IOD_TYPE_UPDATE);
@@ -786,6 +787,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
 	struct dcs_csum_info	csum_info = {0};
+	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch	= ioc->ic_bound;
@@ -798,7 +800,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 
 	rc = dbtree_fetch(toh, BTR_PROBE_LE, DAOS_INTENT_DEFAULT, &kiov, &kiov,
 			  &riov);
-	if (vos_dtx_hit_inprogress())
+	if (vos_dtx_hit_inprogress(standalone))
 		D_GOTO(out, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	if (rc == -DER_NONEXIST) {
@@ -911,6 +913,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	bool			 with_shadow = (shadow_ep != DAOS_EPOCH_MAX);
 	uint32_t		 inob;
 	int			 rc;
+	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
@@ -926,7 +929,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	evt_ent_array_init(ioc->ic_ent_array, 0);
 
 	rc = evt_find(toh, &filter, ioc->ic_ent_array);
-	if (rc != 0 || vos_dtx_hit_inprogress())
+	if (rc != 0 || vos_dtx_hit_inprogress(standalone))
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	holes = 0;
@@ -940,7 +943,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
 		daos_size_t	 nr;
 
-		D_ASSERT(hi >= lo);
+		D_ASSERTF(hi >= lo, "hi < lo, filter.fr_ex: " DF_EXT ", ent: " DF_ENT "\n",
+			  DP_EXT(&filter.fr_ex), DP_ENT(ent));
 		nr = hi - lo + 1;
 
 		if (BIO_ADDR_IS_CORRUPTED(&ent->en_addr)) {
@@ -1128,6 +1132,7 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	   bool check_uncertainty)
 {
 	uint64_t	flags;
+	bool		standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
 	if (*rc == 0)
 		return false;
@@ -1135,7 +1140,7 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	if (*rc != -DER_NONEXIST)
 		return true;
 
-	if (vos_dtx_hit_inprogress()) {
+	if (vos_dtx_hit_inprogress(standalone)) {
 		*rc = -DER_INPROGRESS;
 		return true;
 	}
@@ -1194,6 +1199,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	bool			 has_cond = false;
 	struct daos_recx_ep_list *shadow;
+	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
 		DP_KEY(&iod->iod_name),
@@ -1281,7 +1287,7 @@ fetch_value:
 			rc = akey_fetch_recx(toh, &val_epr, &fetch_recx,
 					     shadow_ep, &rsize, ioc);
 
-			if (vos_dtx_continue_detect(rc))
+			if (vos_dtx_continue_detect(rc, standalone))
 				continue;
 
 			if (rc != 0) {
@@ -1291,7 +1297,7 @@ fetch_value:
 			}
 		}
 
-		if (vos_dtx_hit_inprogress()) {
+		if (vos_dtx_hit_inprogress(standalone)) {
 			D_DEBUG(DB_IO, "inprogress %d: idx %lu, nr %lu rsize "
 				DF_U64"\n", i,
 				(unsigned long)iod->iod_recxs[i].rx_idx,
@@ -1321,7 +1327,7 @@ fetch_value:
 		}
 	}
 
-	if (vos_dtx_hit_inprogress())
+	if (vos_dtx_hit_inprogress(standalone))
 		goto out;
 
 	ioc_trim_tail_holes(ioc);
@@ -1329,7 +1335,7 @@ out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, is_array);
 
-	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+	return vos_dtx_hit_inprogress(standalone) ? -DER_INPROGRESS : rc;
 }
 
 static void
@@ -1350,6 +1356,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i, rc;
 	bool			 has_cond;
+	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1404,7 +1411,7 @@ fetch_akey:
 	for (i = 0; i < ioc->ic_iod_nr; i++) {
 		iod_set_cursor(ioc, i);
 		rc = akey_fetch(ioc, toh);
-		if (vos_dtx_continue_detect(rc))
+		if (vos_dtx_continue_detect(rc, standalone))
 			continue;
 
 		if (rc != 0)
@@ -1412,14 +1419,14 @@ fetch_akey:
 	}
 
 	/* Add this check to prevent some new added logic after above for(). */
-	if (vos_dtx_hit_inprogress())
+	if (vos_dtx_hit_inprogress(standalone))
 		goto out;
 
 out:
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, false);
 
-	return vos_dtx_hit_inprogress() ? -DER_INPROGRESS : rc;
+	return vos_dtx_hit_inprogress(standalone) ? -DER_INPROGRESS : rc;
 }
 
 uint64_t
@@ -1474,13 +1481,13 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
-	vos_dth_set(dth);
+	vos_dth_set(dth, ioc->ic_cont->vc_pool->vp_sysdb);
 
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
-	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
-			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
+	rc = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+			  ioc->ic_cont, oid, &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &ioc->ic_obj, ioc->ic_ts_set);
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
 		       &rc, false)) {
@@ -1509,7 +1516,7 @@ fetch_dkey:
 set_ioc:
 	*ioh = vos_ioc2ioh(ioc);
 out:
-	vos_dth_set(NULL);
+	vos_dth_set(NULL, ioc->ic_cont->vc_pool->vp_sysdb);
 
 	if (rc == -DER_NONEXIST || rc == -DER_INPROGRESS ||
 	    (rc == 0 && ioc->ic_read_ts_only)) {
@@ -2302,7 +2309,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
 
-	err = vos_tx_begin(dth, umem);
+	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
 	if (err != 0)
 		goto abort;
 
@@ -2325,8 +2332,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, ioc->ic_oid,
-			   &ioc->ic_epr, ioc->ic_bound,
+	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+			   ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
 			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
 			   &ioc->ic_obj, ioc->ic_ts_set);
 	if (err != 0)

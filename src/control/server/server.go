@@ -85,12 +85,7 @@ func processFabricProvider(cfg *config.Server) {
 }
 
 func shouldAppendRXM(provider string) bool {
-	for _, rxmProv := range []string{"ofi+verbs", "ofi+tcp"} {
-		if rxmProv == provider {
-			return true
-		}
-	}
-	return false
+	return provider == "ofi+verbs"
 }
 
 // server struct contains state and components of DAOS Server.
@@ -193,6 +188,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 
@@ -364,7 +360,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 
 // setupGrpc creates a new grpc server and registers services.
 func (srv *server) setupGrpc() error {
-	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig)
+	srvOpts, err := getGrpcOpts(srv.log, srv.cfg.TransportConfig, srv.sysdb.IsLeader)
 	if err != nil {
 		return err
 	}
@@ -403,7 +399,7 @@ func (srv *server) registerEvents() {
 	srv.sysdb.OnLeadershipGained(
 		func(ctx context.Context) error {
 			srv.log.Infof("MS leader running on %s", srv.hostname)
-			srv.mgmtSvc.startAsyncLoops(ctx)
+			srv.mgmtSvc.startLeaderLoops(ctx)
 			registerLeaderSubscriptions(srv)
 			srv.log.Debugf("requesting immediate GroupUpdate after leader change")
 			go func() {
@@ -469,6 +465,15 @@ func (srv *server) start(ctx context.Context) error {
 			srv.log.Errorf("error during dRPC cleanup: %s", err)
 		}
 	}()
+
+	srv.mgmtSvc.startAsyncLoops(ctx)
+
+	if srv.cfg.AutoFormat {
+		srv.log.Notice("--auto flag set on server start so formatting storage now")
+		if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+			return errors.WithMessage(err, "attempting to auto format")
+		}
+	}
 
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)

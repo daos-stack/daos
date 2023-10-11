@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -50,6 +51,7 @@ type (
 	// for a MockInvoker.
 	MockInvokerConfig struct {
 		Sys                 string
+		Component           build.Component
 		UnaryError          error
 		UnaryResponse       *UnaryResponse
 		UnaryResponseSet    []*UnaryResponse
@@ -102,6 +104,10 @@ func (mi *MockInvoker) GetSystem() string {
 	return mi.cfg.Sys
 }
 
+func (mi *MockInvoker) GetComponent() build.Component {
+	return mi.cfg.Component
+}
+
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
 	// Allow the test to override the timeouts set by the caller.
 	if mi.cfg.ReqTimeout > 0 {
@@ -125,10 +131,12 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	ur := mi.cfg.UnaryResponse
 	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
+		mi.log.Debugf("using configured UnaryResponseSet[%d]", mi.invokeCount)
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
 	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
+		mi.log.Debugf("using dummy UnaryResponse")
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
 		ur = &UnaryResponse{
@@ -140,6 +148,8 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 				},
 			},
 		}
+	} else {
+		mi.log.Debugf("using configured UnaryResponse")
 	}
 
 	var invokeCount int
@@ -148,6 +158,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	invokeCount = mi.invokeCount
 	mi.invokeCountMutex.Unlock()
 	go func(invokeCount int) {
+		mi.log.Debugf("returning mock responses, invokeCount=%d", invokeCount)
 		delayIdx := invokeCount - 1
 		for idx, hr := range ur.Responses {
 			var delay time.Duration
@@ -156,14 +167,17 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 				delay = mi.cfg.UnaryResponseDelays[delayIdx][idx]
 			}
 			if delay > 0 {
-				time.Sleep(delay)
+				mi.log.Debugf("delaying mock response for %s", delay)
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
+					mi.log.Debugf("context canceled on iteration %d (error=%s)", idx, ctx.Err().Error())
+					return
+				}
 			}
 
-			select {
-			case <-ctx.Done():
-				return
-			case responses <- hr:
-			}
+			mi.log.Debug("sending mock response")
+			responses <- hr
 		}
 		close(responses)
 	}(invokeCount)
@@ -365,7 +379,8 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 			nc.SocketID = int32(i % 2)
 			sd := storage.MockSmdDevice(nc.PciAddr, int32(i))
 			sd.TotalBytes = uint64(humanize.TByte) * uint64(i)
-			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
+			sd.AvailBytes = uint64((humanize.TByte/4)*3) * uint64(i)  // 25% used
+			sd.UsableBytes = uint64((humanize.TByte/4)*3) * uint64(i) // 25% used
 			nc.SmdDevices = append(nc.SmdDevices, sd)
 			ncs = append(ncs, nc)
 		}
@@ -588,9 +603,11 @@ func MockFormatResp(t *testing.T, mfc MockFormatConf) *StorageFormatResp {
 
 type (
 	MockStorageConfig struct {
-		TotalBytes uint64
-		AvailBytes uint64
-		NvmeState  *storage.NvmeDevState
+		TotalBytes  uint64 // RAW size of the device
+		AvailBytes  uint64 // Available raw storage
+		UsableBytes uint64 // Effective storage available for data
+		NvmeState   *storage.NvmeDevState
+		NvmeRole    *storage.BdevRoles
 	}
 
 	MockScmConfig struct {
@@ -638,12 +655,13 @@ func MockStorageScanResp(t *testing.T,
 		}
 		if mockScmConfig.TotalBytes > uint64(0) {
 			scmNamespace.Mount = &storage.ScmMountPoint{
-				Class:      storage.ClassDcpm,
-				Path:       fmt.Sprintf("/mnt/daos%d", index),
-				DeviceList: []string{fmt.Sprintf("pmem%d", index)},
-				TotalBytes: mockScmConfig.TotalBytes,
-				AvailBytes: mockScmConfig.AvailBytes,
-				Rank:       mockScmConfig.Rank,
+				Class:       storage.ClassDcpm,
+				Path:        fmt.Sprintf("/mnt/daos%d", index),
+				DeviceList:  []string{fmt.Sprintf("pmem%d", index)},
+				TotalBytes:  mockScmConfig.TotalBytes,
+				AvailBytes:  mockScmConfig.AvailBytes,
+				UsableBytes: mockScmConfig.UsableBytes,
+				Rank:        mockScmConfig.Rank,
 			}
 		}
 		scmNamespaces = append(scmNamespaces, scmNamespace)
@@ -657,9 +675,13 @@ func MockStorageScanResp(t *testing.T,
 		nvmeController := storage.MockNvmeController(int32(index))
 		smdDevice := nvmeController.SmdDevices[0]
 		smdDevice.AvailBytes = mockNvmeConfig.AvailBytes
+		smdDevice.UsableBytes = mockNvmeConfig.UsableBytes
 		smdDevice.TotalBytes = mockNvmeConfig.TotalBytes
 		if mockNvmeConfig.NvmeState != nil {
 			smdDevice.NvmeState = *mockNvmeConfig.NvmeState
+		}
+		if mockNvmeConfig.NvmeRole != nil {
+			smdDevice.Roles = *mockNvmeConfig.NvmeRole
 		}
 		smdDevice.Rank = mockNvmeConfig.Rank
 		nvmeControllers = append(nvmeControllers, nvmeController)

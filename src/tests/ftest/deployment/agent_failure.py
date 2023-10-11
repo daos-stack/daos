@@ -4,14 +4,14 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-from datetime import datetime
 import os
 import threading
+
 from ClusterShell.NodeSet import NodeSet
 
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, get_journalctl
+from general_utils import report_errors, get_journalctl, journalctl_time
 from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from run_utils import stop_processes
@@ -104,13 +104,13 @@ class AgentFailure(IorTestBase):
         errors = []
 
         # 3. Stop daos_agent process while IOR is running.
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         self.log.info("Stopping agent")
         stop_agent_errors = self.stop_agents()
         for error in stop_agent_errors:
             self.log.debug(error)
             errors.append(error)
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # Wait until the IOR thread ends.
         job.join()
@@ -208,7 +208,7 @@ class AgentFailure(IorTestBase):
         errors = []
 
         # 3. Stop daos_agent process while IOR is running on one of the clients.
-        since = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        since = journalctl_time()
         self.log.info("Stopping agent on %s", agent_host_kill)
         pattern = self.agent_managers[0].manager.job.command_regex
         detected, running = stop_processes(self.log, hosts=agent_host_kill, pattern=pattern)
@@ -220,7 +220,7 @@ class AgentFailure(IorTestBase):
             errors.append(msg)
         else:
             self.log.info("daos_agent processes on %s killed", detected)
-        until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        until = journalctl_time()
 
         # 4. Wait until both of the IOR thread ends.
         thread_1.join()
