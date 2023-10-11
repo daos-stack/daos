@@ -331,8 +331,8 @@ file system benchmark.
 ```bash
 docker compose --file utils/docker/examples/docker-compose.client_bm.yml run --rm daos_client_bm
 mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
-daos container create --type=posix tank posix-fs
-dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" tank posix-fs
+daos container create --type=posix <POOL NAME> posix-fs
+dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" <POOL NAME> posix-fs
 df --human-readable --type=fuse.daos
 fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
@@ -445,8 +445,8 @@ file system benchmark.
 docker compose --file utils/docker/examples/docker-compose.client_sa.yml up --detach daos_agent
 docker compose --file utils/docker/examples/docker-compose.client_sa.yml run --rm daos_client_sa
 mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
-daos container create --type=posix tank posix-fs
-dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" tank posix-fs
+daos container create --type=posix <POOL NAME> posix-fs
+dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" <POOL NAME> posix-fs
 df --human-readable --type=fuse.daos
 fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
@@ -515,8 +515,8 @@ file system benchmark.
 ```bash
 docker compose --file utils/docker/examples/docker-compose.yml run --rm daos_client_gt
 mkdir -p "/home/<DAOS_CLIENT_UNAME>/mnt"
-daos container create --type=posix tank posix-fs
-dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" tank posix-fs
+daos container create --type=posix <POOL NAME> posix-fs
+dfuse "/home/<DAOS_CLIENT_UNAME>/mnt" <POOL NAME> posix-fs
 df --human-readable --type=fuse.daos
 fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
