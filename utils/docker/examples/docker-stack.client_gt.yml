@@ -6,8 +6,8 @@
 version: "3.8"
 
 services:
-  daos_client:
-    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+  daos_client_gt:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-client_gt-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     tty: true
     networks:
       - docker_host

@@ -8,16 +8,14 @@ version: "3.8"
 services:
 
   daos_server:
-    image: "daos-server:${DAOS_DOCKER_IMAGE_TAG}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-server-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
-      context: "daos-server/el8"
+      context: "daos-server/${LINUX_DISTRO}"
       args:
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
-        - "DAOS_CLIENT_UNAME=${DAOS_CLIENT_UNAME}"
-        - "DAOS_CLIENT_UID=${DAOS_CLIENT_UID}"
-        - "DAOS_CLIENT_GNAME=${DAOS_CLIENT_GNAME}"
-        - "DAOS_CLIENT_GID=${DAOS_CLIENT_GID}"
     # XXX Seems to not be possible to use uio without privileged mode
     # https://github.com/moby/moby/issues/22825
     privileged: true
