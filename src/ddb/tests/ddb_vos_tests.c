@@ -72,7 +72,7 @@ int fake_sv_handler(struct ddb_sv *sv, void *args)
 }
 
 static int fake_array_handler_call_count;
-static struct ddb_array fake_array_handler_arrays[2048 * 10];
+static struct ddb_array fake_array_handler_arrays[2048 * 100];
 int fake_array_handler(struct ddb_array *array, void *args)
 {
 	assert_true(fake_array_handler_call_count < ARRAY_SIZE(fake_array_handler_arrays));

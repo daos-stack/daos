@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -58,8 +58,9 @@ int ddb_path_tests_run(void);
  * Insert data into the pool. The cont, objs, ... parameters indicate how many of each to
  * insert into its parent. If numbers are 0, then it will use a default number.
  */
-void dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys,
-		     uint32_t akeys, struct dt_vos_pool_ctx *tctx);
+void
+dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys, uint32_t akeys,
+		uint32_t recxes, struct dt_vos_pool_ctx *tctx);
 
 int ddb_test_pool_setup(struct dt_vos_pool_ctx *tctx);
 

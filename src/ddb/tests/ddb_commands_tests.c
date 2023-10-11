@@ -235,10 +235,10 @@ rm_cmd_tests(void **state)
 	dvt_fake_print_reset();
 
 	/* Delete RECX */
-	opt.path = "[0]/[0]/[0]/[0]/[0]";
+	opt.path = "[0]/[0]/[0]/[1]/[0]";
 	assert_success(ddb_run_rm(&g_ctx, &opt));
 	assert_string_equal(dvt_fake_print_buffer,
-			    "RECX: (/[0]/[0]/[0]/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
+			    "RECX: (/[0]/[0]/[0]/[1]/[0]) /12345678-1234-1234-1234-123456789001/"
 			    "281479271743488.4294967296.0.0/dkey-1/akey-1/{0-9}.0x5 deleted\n");
 	dvt_fake_print_reset();
 
@@ -247,7 +247,7 @@ rm_cmd_tests(void **state)
 	assert_success(ddb_run_rm(&g_ctx, &opt));
 	assert_string_equal(dvt_fake_print_buffer,
 			    "AKEY: (/[0]/[0]/[0]/[0]) /12345678-1234-1234-1234-123456789001/"
-			    "281479271743488.4294967296.0.0/dkey-1/akey-1 deleted\n");
+			    "281479271743488.4294967296.0.0/dkey-1/akey{5} deleted\n");
 	dvt_fake_print_reset();
 
 	/* Delete DKey */
@@ -283,7 +283,7 @@ load_cmd_tests(void **state)
 
 	assert_invalid(ddb_run_value_load(&g_ctx, &opt));
 
-	opt.dst = "/[0]/[0]/[0]/[1]";
+	opt.dst                         = "/[0]/[1]/[0]/[1]";
 	opt.src = "/tmp/value_src";
 	dvt_fake_get_file_exists_result = true;
 	snprintf(dvt_fake_read_file_buf, ARRAY_SIZE(dvt_fake_read_file_buf), "Some text!!");

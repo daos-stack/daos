@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2022 Intel Corporation.
+ * (C) Copyright 2022-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -296,10 +296,10 @@ ddb_test_setup_vos(void **state)
 
 	if (DAOS_ON_VALGRIND || DDB_FORCE_VALGRIND)
 		/* smaller test data for valgrind */
-		dvt_insert_data(poh, 8, 4, 4, 4, tctx);
+		dvt_insert_data(poh, 8, 4, 4, 4, 4, tctx);
 	else
 		/* default test data */
-		dvt_insert_data(poh, 0, 0, 0, 0, tctx);
+		dvt_insert_data(poh, 0, 0, 0, 0, 0, tctx);
 
 	vos_pool_close(poh);
 	vos_self_fini();
@@ -364,7 +364,7 @@ create_object_data(daos_handle_t *coh, uint32_t obj_to_create, uint32_t dkeys_to
 
 void
 dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys, uint32_t akeys,
-		struct dt_vos_pool_ctx *tctx)
+		uint32_t recxes, struct dt_vos_pool_ctx *tctx)
 {
 	daos_handle_t		coh;
 	uint32_t		cont_to_create = ARRAY_SIZE(g_uuids);
@@ -382,7 +382,8 @@ dvt_insert_data(daos_handle_t poh, uint32_t conts, uint32_t objs, uint32_t dkeys
 		dkeys_to_create = dkeys;
 	if (akeys > 0)
 		akeys_to_create = akeys;
-
+	if (recxes > 0)
+		recx_to_create = recxes;
 	tctx->dvt_cont_count = cont_to_create;
 	tctx->dvt_obj_count = obj_to_create;
 	tctx->dvt_dkey_count = dkeys_to_create;
@@ -561,6 +562,7 @@ create_test_vos_file()
 	int			objs = 5;
 	int			dkeys = 5;
 	int			akeys = 5;
+	int                     recex = 5;
 	int			rc;
 
 	rc = vos_self_init("/mnt/daos", false, 0);
@@ -576,7 +578,7 @@ create_test_vos_file()
 		return rc;
 	}
 	assert_success(vos_pool_open(tctx.dvt_pmem_file, tctx.dvt_pool_uuid, 0, &poh));
-	dvt_insert_data(poh, conts, objs, dkeys, akeys, &tctx);
+	dvt_insert_data(poh, conts, objs, dkeys, akeys, recex, &tctx);
 
 	assert_success(vos_cont_open(poh, g_uuids[0], &coh));
 	dvt_vos_insert_2_records_with_dtx(coh);

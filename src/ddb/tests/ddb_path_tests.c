@@ -337,9 +337,9 @@ string_to_path_to_string(void **state)
 
 	assert_path_parsed_equals("/12345678-1234-1234-1234-123456789012/1.2.3.4/\\/",
 				  "/12345678-1234-1234-1234-123456789012/1.2.3.4/\\/");
-	assert_path_parsed_equals("/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1///"
+	assert_path_parsed_equals("/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1/\\//"
 				  "DFS_INODE/{0-87}.0x123dac613de00000",
-				  "/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1///"
+				  "/7a63a764-f2ad-4791-8a5d-dff44e2fd2dc/281479271677952.0.0.1/\\//"
 				  "DFS_INODE/{0-87}.0x123dac613de00000");
 }
 
