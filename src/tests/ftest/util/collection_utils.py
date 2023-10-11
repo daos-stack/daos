@@ -800,10 +800,11 @@ def update_cmocka_xml(logger, test, cmocka_xml, cmocka_data, test_class, test_re
     if 'classname' not in cmocka_data:
         # Update cmocka results that are missing a class name entry for their test suite entries
         try:
-            name = re.findall(r'<testsuite name="([A-Za-z0-9_-]*)"', cmocka_data)[0]
+            pattern = r'<testsuite name="([A-Za-z0-9_-]*)"'
+            name = re.findall(pattern, cmocka_data)[0]
             logger.debug("Cmocka test name from xml: %s", name)
         except IndexError:
-            message = f"Error obtaining cmocka test name from {cmocka_xml}"
+            message = f"Error obtaining cmocka test name from {cmocka_xml} - no match for {pattern}"
             test_result.fail_test(logger, "Process", message, sys.exc_info())
             return False
         pattern = '<testcase name='
@@ -883,10 +884,10 @@ def replace_xml(logger, xml_file, pattern, replacement, xml_data, test_result):
         test_result.fail_test(logger, "Process", message, sys.exc_info())
         return None
 
-    new_xml_data = get_xml_data(logger, xml_file, test_result).splitlines()
+    new_xml_data = get_xml_data(logger, xml_file, test_result)
     if new_xml_data is not None:
         logger.debug("  Contents of %s after replacement", xml_file)
-        for line in new_xml_data:
+        for line in new_xml_data.splitlines():
             logger.debug("    %s", line)
         logger.debug("")
 
