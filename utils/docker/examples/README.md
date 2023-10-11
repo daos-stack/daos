@@ -1,7 +1,8 @@
 # DAOS in Docker
 
 This document describes different ways to build and deploy Docker images for running application
-using a DAOS storage system.
+using a DAOS storage system.  This document also presents how to containerize a DAOS server and
+the SPDK setup third party tool.
 
 
 ## Prerequisites

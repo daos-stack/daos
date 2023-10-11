@@ -3,7 +3,7 @@
 # set -x
 set -e -o pipefail
 
-CWD="$(realpath "$(dirname "$0")")"
+CWD="$(realpath "${0%/*}")"
 
 set -a
 source "$CWD/.env"
