@@ -125,7 +125,7 @@ Run the following command to detach them from the kernel and let SPDK manage the
 docker compose --file utils/docker/examples/docker-compose.spdk_setup.yml run --rm daos_spdk_setup config
 ```
 
-After running this command, running the status sub-command should produce the follwowing output.
+After running this command, running the status sub-command should produce the following output.
 ```
 Type     BDF             Vendor Device NUMA    Driver           Device     Block devices
 NVMe     0000:83:00.0    8086   0953   1       uio_pci_generic  -          -
@@ -225,7 +225,7 @@ and its file path defined in the following variable of the docker environment fi
   "secrets/daos\_admin-certs.txz")
 
 When the environment file has been properly filled, run the following commands to format the DAOS
-file sytem and to create a DAOS pool using all the available storage.
+file system and to create a DAOS pool using all the available storage.
 ```bash
 docker compose --file utils/docker/examples/docker-compose.admin.yml run --rm daos_admin
 dmg storage format
@@ -264,7 +264,7 @@ container and the DAOS Agent is running on the docker host node.
 
 The first step is to install and configure the `daos_agent` service on the docker host.
 Installation and deploymnent of this service is out of the scope of this documentation.
-Please refer to docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailled instructions.
+Please refer to docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 ### Building Docker Image <a name="anchor-003"></a>
 
