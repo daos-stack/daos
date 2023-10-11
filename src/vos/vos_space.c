@@ -44,7 +44,7 @@ vos_space_sys_init(struct vos_pool *pool)
 	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
 	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	POOL_SCM_SYS(pool) = get_frag_overhead(scm_tot, DAOS_MEDIA_SCM);
+	POOL_SCM_SYS(pool)  = get_frag_overhead(scm_tot, DAOS_MEDIA_SCM);
 	POOL_NVME_SYS(pool) = get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME);
 
 	gc_reserve_space(&pool->vp_space_sys[DAOS_MEDIA_SCM]);
