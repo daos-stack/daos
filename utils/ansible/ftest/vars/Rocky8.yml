@@ -10,6 +10,7 @@ daos_base_deps:
     - glibc
     - jq
     - lbzip2
+    - mercury
     - platform-python
     - python36
     - systemd
