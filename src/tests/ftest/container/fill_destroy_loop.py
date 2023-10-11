@@ -48,12 +48,12 @@ class BoundaryPoolContainerSpace(TestWithServers):
         """Check if GC engine errors have occurred during the test
 
         This method parse the engine log to find silent errors regarding the GC engine operations.
-        When the SCM storage is completly full, it is not possible to perform some operations on
+        When the SCM storage is completely full, it is not possible to perform some operations on
         metadata such as destroying a pool.  Indeed, such operations require some temporary SCM
-        storage to reogarnize the B-trees used for recording the data layout of the pools.  When
+        storage to reorganize the B-trees used for recording the data layout of the pools.  When
         such error occurs, some storage leakage could eventually happen.  At this time, the only
         reliable way to detect these errors is to check if errors regarding B-tree management have
-        occured.  With this test, this can be done with looking for error messages generated with
+        occurred.  With this test, this can be done with looking for error messages generated with
         the call of the function btr_rec_free().
         """
         self.log.info("==>Checking server logs of hosts %s", self.hostlist_servers)
