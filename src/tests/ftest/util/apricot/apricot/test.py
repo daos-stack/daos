@@ -180,7 +180,7 @@ class Test(avocadoTest):
                     env_seed)
                 raise
         self.log.info("Test.random seed = %d", self.rand_seed)
-        self.random = random.SystemRandom(self.rand_seed)
+        self.random = random.Random(self.rand_seed)
 
     def add_test_data(self, filename, data):
         """Add a file to the test variant specific data directory.

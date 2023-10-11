@@ -31,7 +31,6 @@ class BoundaryPoolContainerSpace(TestWithServers):
         self.test_loop = 0
         self.reclaim_props = []
         self.delta_bytes = 0
-        self.rand_seed = None
 
     def setUp(self):
         """Set up each test case."""
