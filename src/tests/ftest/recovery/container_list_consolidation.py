@@ -172,6 +172,7 @@ class ContainerListConsolidationTest(RecoveryTestBase):
         try:
             dmg_command.system_start()
         except CommandFailure as error:
+            # Handle the potential system start error just in case.
             self.log.error(error)
         finally:
             report_errors(test=self, errors=errors)
