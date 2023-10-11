@@ -180,13 +180,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 		palloc_heap_vg_open(hdl->do_heap, 1);
 #endif
 
-	rc = heap_buckets_init(hdl->do_heap);
-	if (rc) {
-		err = rc;
-		heap_cleanup(hdl->do_heap);
-		goto out2;
-	}
-
 	rc = dav_create_clogs(hdl);
 	if (rc) {
 		err = rc;

@@ -312,6 +312,9 @@ struct umem_instance;
 #define UMEM_FLAG_NO_FLUSH	(((uint64_t)1) << 1)
 #define UMEM_XADD_NO_SNAPSHOT	(((uint64_t)1) << 2)
 
+/* Macros associated with Memory buckets */
+#define	UMEM_DEFAULT_MBKT_ID	0
+
 /* type num used by umem ops */
 enum {
 	UMEM_TYPE_ANY,
@@ -333,11 +336,12 @@ typedef struct {
 	 *
 	 * \param umm	   [IN]	umem class instance.
 	 * \param size	   [IN]	size to allocate.
-	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK)
-	 * \param type_num [IN]	struct type (for PMDK)
+	 * \param flags	   [IN]	flags like zeroing, noflush (for PMDK and BMEM)
+	 * \param type_num [IN]	struct type (for PMDK and BMEM)
+	 * \param mbkt_id  [IN]	memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_tx_alloc)(struct umem_instance *umm, size_t size,
-					uint64_t flags, unsigned int type_num);
+	umem_off_t (*mo_tx_alloc)(struct umem_instance *umm, size_t size, uint64_t flags,
+				  unsigned int type_num, unsigned int mbkt_id);
 	/**
 	 * Add the specified range of umoff to current memory transaction.
 	 *
@@ -360,7 +364,7 @@ typedef struct {
 	 * \param offset [IN]	start offset of \a umoff tracked by the
 	 *			transaction.
 	 * \param size	[IN]	size of \a umoff tracked by the transaction.
-	 * \param flags [IN]	PMDK flags
+	 * \param flags [IN]	PMDK and BMEM flags
 	 */
 	int		 (*mo_tx_xadd)(struct umem_instance *umm,
 				       umem_off_t umoff, uint64_t offset,
@@ -393,9 +397,10 @@ typedef struct {
 	 * \param act	[IN|OUT]	action used for later cancel/publish.
 	 * \param size	[IN]		size to be reserved.
 	 * \param type_num [IN]		struct type (for PMDK)
+	 * \param mbkt_id  [IN]		memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
-				       unsigned int type_num);
+	umem_off_t (*mo_reserve)(struct umem_instance *umm, void *act, size_t size,
+				 unsigned int type_num, unsigned int mbkt_id);
 
 	/**
 	 * Defer free til commit.  For use with reserved extents that are not
@@ -445,13 +450,14 @@ typedef struct {
 	/**
 	 * allocate umoff with the specified size & flags atomically
 	 *
-	 * \param umm	[IN]	umem class instance.
-	 * \param size	[IN]	size to allocate.
-	 * \param flags	[IN]	flags like zeroing, noflush (for PMDK)
-	 * \param type_num [IN]	struct type (for PMDK)
+	 * \param umm	   [IN]	 umem class instance.
+	 * \param size	   [IN]	 size to allocate.
+	 * \param flags	   [IN]	 flags like zeroing, noflush (for PMDK)
+	 * \param type_num [IN]	 struct type (for PMDK)
+	 * \param mbkt_id  [IN]	 memory bucket id (for BMEM)
 	 */
-	umem_off_t	 (*mo_atomic_alloc)(struct umem_instance *umm, size_t size,
-					    unsigned int type_num);
+	umem_off_t (*mo_atomic_alloc)(struct umem_instance *umm, size_t size, unsigned int type_num,
+				      unsigned int mbkt_id);
 
 	/**
 	 * flush data at specific offset to persistent store.
@@ -557,11 +563,11 @@ umem_has_tx(struct umem_instance *umm)
 	return umm->umm_ops->mo_tx_add != NULL;
 }
 
-#define umem_alloc_verb(umm, flags, size)			                                   \
+#define umem_alloc_verb(umm, flags, size, mbkt_id)                                                 \
 	({                                                                                         \
 		umem_off_t __umoff;                                                                \
                                                                                                    \
-		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY);   \
+		__umoff = (umm)->umm_ops->mo_tx_alloc(umm, size, flags, UMEM_TYPE_ANY, mbkt_id);   \
 		D_ASSERTF(umem_off2flags(__umoff) == 0,                                            \
 			  "Invalid assumption about allocnot using flag bits");                    \
 		D_DEBUG(DB_MEM,                                                                    \
@@ -572,14 +578,17 @@ umem_has_tx(struct umem_instance *umm)
 		__umoff;                                                                           \
 	})
 
-#define umem_alloc(umm, size)						\
-	umem_alloc_verb(umm, 0, size)
+#define umem_alloc(umm, size)  umem_alloc_verb(umm, 0, size, UMEM_DEFAULT_MBKT_ID)
 
-#define umem_zalloc(umm, size)						\
-	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size)
+#define umem_alloc_from_bucket(umm, size, mbkt_id)  umem_alloc_verb(umm, 0, size, mbkt_id)
 
-#define umem_alloc_noflush(umm, size)					\
-	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size)
+#define umem_zalloc(umm, size) umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, UMEM_DEFAULT_MBKT_ID)
+
+#define umem_zalloc_from_bucket(umm, size, mbkt_id)						   \
+	umem_alloc_verb(umm, UMEM_FLAG_ZERO, size, mbkt_id)
+
+#define umem_alloc_noflush(umm, size)								   \
+	umem_alloc_verb(umm, UMEM_FLAG_NO_FLUSH, size, UMEM_DEFAULT_MBKT_ID)
 
 #define umem_free(umm, umoff)                                                                      \
 	({                                                                                         \
@@ -735,13 +744,20 @@ int umem_rsrvd_act_realloc(struct umem_instance *umm, struct umem_rsrvd_act **ac
 /* Free up the array of reserved actions */
 int umem_rsrvd_act_free(struct umem_rsrvd_act **act);
 
-umem_off_t umem_reserve(struct umem_instance *umm,
-			struct umem_rsrvd_act *rsrvd_act, size_t size);
-void umem_defer_free(struct umem_instance *umm, umem_off_t off,
-		     struct umem_rsrvd_act *rsrvd_act);
-void umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
-int umem_tx_publish(struct umem_instance *umm,
-		    struct umem_rsrvd_act *rsrvd_act);
+umem_off_t
+umem_reserve_common(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act, size_t size,
+	     unsigned int mbkt_id);
+#define umem_reserve(umm, rsrvd_act, size)							\
+	umem_reserve_common(umm, rsrvd_act, size, UMEM_DEFAULT_MBKT_ID)
+#define umem_reserve_from_bucket(umm, rsrvd_act, size, mbkt_id)					\
+	umem_reserve_common(umm, rsrvd_act, size, mbkt_id)
+
+void
+umem_defer_free(struct umem_instance *umm, umem_off_t off, struct umem_rsrvd_act *rsrvd_act);
+void
+umem_cancel(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
+int
+umem_tx_publish(struct umem_instance *umm, struct umem_rsrvd_act *rsrvd_act);
 
 static inline void *
 umem_atomic_copy(struct umem_instance *umm, void *dest, void *src, size_t len,
@@ -755,7 +771,15 @@ static inline umem_off_t
 umem_atomic_alloc(struct umem_instance *umm, size_t len, unsigned int type_num)
 {
 	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
-	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, UMEM_DEFAULT_MBKT_ID);
+}
+
+static inline umem_off_t
+umem_atomic_alloc_from_bucket(struct umem_instance *umm, size_t len, unsigned int type_num,
+		  unsigned int mbkt_id)
+{
+	D_ASSERT(umm->umm_ops->mo_atomic_alloc != NULL);
+	return umm->umm_ops->mo_atomic_alloc(umm, len, type_num, mbkt_id);
 }
 
 static inline int
@@ -784,6 +808,18 @@ umem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 	D_ASSERT(umm->umm_ops->mo_tx_add_callback != NULL);
 	return umm->umm_ops->mo_tx_add_callback(umm, txd, stage, cb, data);
 }
+
+/**
+ * Get an evictable Memory Bucket with sufficient free space within.
+ *
+ * \param[in]		umm		umem instance pointer.
+ * \param[in]		flags		MB selection criteria.
+ *
+ * \return id >= 0. Zero non-evictable memory bucket and will be returned
+ *	   if no evictable memory can be chosen.
+ */
+uint32_t
+umem_get_mb_evictable(struct umem_instance *umm, int flags);
 
 /*********************************************************************************/
 
