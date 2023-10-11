@@ -409,7 +409,6 @@ defined in the following variable of the docker environment file "utils/docker/e
 - `DAOS_AGENT_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS agent
   (e.g. "secrets/daos\_agent-certs.txz")
 
-
 This tarball has to contains at least the following files:
 ```
 tar tvJf secrets/daos_agent-certs.txz
