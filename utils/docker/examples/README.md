@@ -141,7 +141,9 @@ This section presents how to build and deploy a Docker image running a DAOS serv
 This section describes how to build a Docker image of a DAOS server.  The first step is to create
 the "daos\_server.yml" configuration file and to place it in the directory
 "utils/docker/examples/daos-server/el8".  Example of such configuration file is available in this
-last directory.
+last directory.  Defining the content of this configuration files is out of scope of this
+documentaiton.  Please refer to the section "Create Configuration Files" of the
+docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 !!! warning
     The 'disable_vfio' yaml property of the "daos\_server.yml" configuration file shall be set to
@@ -164,11 +166,24 @@ docker compose --file utils/docker/examples/docker-compose.server.yml build daos
 
 This section presents how to run the image of a containerized DAOS server thanks to docker compose.
 In a first time, a compressed tarball (i.e. `tar` archive compressed with `xz`) of the DAOS
-certificate files needs to be created when the DAOS authentication is enabled.  For using Docker
-Compose the tarball of the certificates file path must be readable by all users and its file path
-defined in the following variable of the docker environment file "utils/docker/examples/.env":
+certificate files needs to be created when the DAOS authentication is enabled.  Creating this
+tarball is out  of the scope of this documentation.  Please refer to the section "Generate
+certificates" of the docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
+
+For using Docker Compose the tarball of the certificates file path must be readable by all users and
+its file path defined in the following variable of the docker environment file
+"utils/docker/examples/.env":
 - `DAOS_SERVER_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS server
   (e.g. "secrets/daos\_server-certs.txz").
+
+This tarball has to contains at least the following files:
+```
+tar tvJf secrets/daos_server-certs.txz
+-rw-r--r-- ckochhof/ckochhof 1436 2023-09-15 14:45 daosCA.crt
+-rw-r--r-- ckochhof/ckochhof 5287 2023-09-15 14:45 server.crt
+-r-------- ckochhof/ckochhof 2459 2023-09-15 14:45 server.key
+-rw-r--r-- ckochhof/ckochhof 5238 2023-09-15 14:45 agent.crt
+```
 
 !!! note
     For properly managing secret, Docker Stack should be used instead of Docker Compose.  Sadly,
@@ -194,7 +209,9 @@ This section describes how to build a Docker image allowing to administrate a DA
 through the DAOS Management Tool (i.e. dmg) CLI.  The first step is to create the
 "daos\_control.yml" configuration file and to place it in the directory
 "utils/docker/examples/daos-admin/el8".  Example of such configuration file is avalailable in this
-last directory.
+last directory.  Defining the content of this configuration files is out of scope of this
+documentaiton.  Please refer to the section "Create Configuration Files" of the
+docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 In a second time, update the following environment variables of the docker environment file
 "utils/docker/examples/.env" to customize the Docker image to build:
@@ -215,6 +232,14 @@ This section presents two different ways for running a DAOS admin container.  Fo
 a compressed tarball (i.e. `tar` archive compressed with `xz`) of the DAOS certificate files should
 be created when the DAOS authentication is enabled.
 However, it is not managed in the same way with both solutions.
+
+This tarball has to contains at least the following files:
+```
+tar tvJf secrets/daos_admin-certs.txz
+-rw-r--r-- ckochhof/ckochhof 1436 2023-09-15 14:45 daosCA.crt
+-rw-r--r-- ckochhof/ckochhof 5238 2023-09-15 14:45 admin.crt
+-r-------- ckochhof/ckochhof 2459 2023-09-15 14:45 admin.key
+```
 
 #### Running with Docker Compose
 
@@ -348,6 +373,9 @@ docker compose --file utils/docker/examples/docker-compose.client_sa.yml build d
 This section describes how to build the Docker container running the DAOS agent service allowing the
 DAOS client container to access a DAOS file system.  The first step is to create a "daos\_agent.yml"
 configuration file and to place it in the directory "utils/docker/examples/daos-agent/el8".
+Defining the content of this configuration files is out of scope of this documentaiton.  Please
+refer to the section "Create Configuration Files" of the docs/QSG/setup\_rhel.md or
+docs/QSG/setup\_suse.md for detailed instructions.
 
 !!! warning
     As for the bare metal DAOS agent, the `fabric_ifaces` section of the "daos\_agent.yml"
@@ -380,6 +408,15 @@ Compose the tarball of the certificates file path should be readable by all user
 defined in the following variable of the docker environment file "utils/docker/examples/.env":
 - `DAOS_AGENT_CERTS_TXZ`: tarball containing the DAOS certificated needed by the DAOS agent
   (e.g. "secrets/daos\_agent-certs.txz")
+
+
+This tarball has to contains at least the following files:
+```
+tar tvJf secrets/daos_agent-certs.txz
+-rw-r--r-- ckochhof/ckochhof 1436 2023-09-15 14:45 daosCA.crt
+-rw-r--r-- ckochhof/ckochhof 5238 2023-09-15 14:45 agent.crt
+-r-------- ckochhof/ckochhof 2455 2023-09-15 14:45 agent.key
+```
 
 !!! note
     As [Docker Secret](https://docs.docker.com/engine/swarm/secrets/) is a Docker Swarm service, it
