@@ -1424,8 +1424,9 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
 
-	rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df,
-			 pool_df->pd_version);
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_vea_info)
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
 	if (rc)
 		return rc;
 

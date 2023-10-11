@@ -29,10 +29,10 @@ dpdk_cli_override_opts;
 #define NVME_DEV_FL_INUSE	(1 << 1)	/* Used by DAOS (present in SMD) */
 #define NVME_DEV_FL_FAULTY	(1 << 2)	/* Faulty state has been assigned */
 
-/** Env defining the size of a metadata pmem pool/file in MiBs */
+/** Env defining the size of a metadata pmem pool/file allocated during pool create, in MiBs */
 #define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
-/** Default size of a metadata pmem pool/file (128 MiB) */
-#define DEFAULT_DAOS_MD_CAP_SIZE	(1ul << 27)
+/** Default size of a metadata pmem pool/file (1024 MiB) */
+#define DEFAULT_DAOS_MD_CAP_SIZE        (1ul << 30)
 
 /** Utility macros */
 #define CHK_FLAG(x, m) ((x & m) == m)
