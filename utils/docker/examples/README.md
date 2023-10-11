@@ -106,7 +106,7 @@ $ df --human-readable --type=fuse.daos
 $ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting --directory="/home/<DAOS_CLIENT_UNAME>/mnt"
 ```
 
-### Confguring Bare Metal DAOS Agent
+### Configuring Bare Metal DAOS Agent
 
 When a Docker Engine service is installed on a node it creates a virtual interface `docker0` which
 could be misused by the DAOS agent.  To overcome this issue, the `fabric_ifaces` section of the
