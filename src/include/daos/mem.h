@@ -907,7 +907,7 @@ struct umem_cache {
 	d_list_t                 ca_pgs_dirty;
 	/** All Non-evictable[0] & evictable[1] pages */
 	d_list_t                 ca_pgs_lru[2];
-	/** all the pages in the porgress of flushing */
+	/** all the pages in the progress of flushing */
 	d_list_t		 ca_pgs_flushing;
 	/** all the pages waiting for commit */
 	d_list_t		 ca_pgs_wait_commit;

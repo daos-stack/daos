@@ -1915,6 +1915,7 @@ cache_pop_free_page(struct umem_cache *cache)
 #define UMEM_CACHE_PAGE_SHIFT_MAX 27	/* 128MB */
 #define UMEM_CACHE_BMAP_SZ_MAX    (1 << (UMEM_CACHE_PAGE_SHIFT_MAX - \
 					UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT))
+#define UMEM_CACHE_RSRVD_PAGES	4
 
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
@@ -1951,7 +1952,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 		mem_pgs = md_pgs;
 		max_ne_pgs = md_pgs;
 	} else {
-		D_ASSERT(mem_pgs > (max_ne_pgs + 1));
+		D_ASSERT(mem_pgs > (max_ne_pgs + UMEM_CACHE_RSRVD_PAGES));
 	}
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
@@ -2788,7 +2789,7 @@ need_evict(struct umem_cache *cache)
 	if (d_list_empty(&cache->ca_pgs_free))
 		return true;
 
-	return need_reserve(cache, 2);
+	return need_reserve(cache, UMEM_CACHE_RSRVD_PAGES + 1);
 }
 
 static int
@@ -3128,7 +3129,7 @@ umem_cache_reserve(struct umem_store *store)
 		return rc;
 
 	/* MUST ensure the FIFO order */
-	if (!need_reserve(cache, 1) && !cache->ca_reserve_waiters)
+	if (!need_reserve(cache, UMEM_CACHE_RSRVD_PAGES) && !cache->ca_reserve_waiters)
 		return rc;
 
 	D_ASSERT(cache->ca_reserve_wq != NULL);
@@ -3138,7 +3139,7 @@ umem_cache_reserve(struct umem_store *store)
 		store->stor_ops->so_waitqueue_wait(cache->ca_reserve_wq, false);
 	}
 
-	while (need_reserve(cache, 1)) {
+	while (need_reserve(cache, UMEM_CACHE_RSRVD_PAGES)) {
 		rc = cache_evict_page(cache, false);
 		if (rc && rc != -DER_AGAIN && rc != -DER_BUSY) {
 			DL_ERROR(rc, "Evict page failed.\n");

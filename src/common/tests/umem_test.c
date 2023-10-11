@@ -662,17 +662,17 @@ test_p2_basic(void **state)
 
 	/* Pin multiple pages */
 	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
-	rg.cr_size	= 5 * UMEM_CACHE_PAGE_SZ;
+	rg.cr_size	= 2 * UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
 	assert_rc_equal(rc, 0);
 	assert_non_null(pin_hdl);
-	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 4);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 1);
 
 	/* Unpin the pinned pages */
 	umem_cache_unpin(&arg->ta_store, pin_hdl);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
 
-	/* Reserve a free page */
+	/* Reserve free pages */
 	rc = umem_cache_reserve(&arg->ta_store);
 	assert_rc_equal(rc, 0);
 
