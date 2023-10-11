@@ -670,7 +670,6 @@ int bio_mc_create(struct bio_xs_context *xs_ctxt, uuid_t pool_id, uint64_t meta_
 		goto delete_data;
 	}
 
-	D_INFO("create meta blob " DF_U64, meta_sz);
 	rc = bio_blob_create(pool_id, xs_ctxt, meta_sz, SMD_DEV_TYPE_META, flags, &meta_blobid);
 	if (rc)
 		goto delete_data;
