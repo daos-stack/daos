@@ -1,6 +1,6 @@
 hosts:
   test_servers: 1
-timeout: 60
+timeout: 400
 setup:
   start_agents: False
   start_servers: False
@@ -13,3 +13,4 @@ server_config:
   engines:
     0:
       storage: auto
+sequences: 3
