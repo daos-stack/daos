@@ -142,7 +142,7 @@ This section describes how to build a Docker image of a DAOS server.  The first 
 the "daos\_server.yml" configuration file and to place it in the directory
 "utils/docker/examples/daos-server/el8".  Example of such configuration file is available in this
 last directory.  Defining the content of this configuration files is out of scope of this
-documentaiton.  Please refer to the section "Create Configuration Files" of the
+documentation.  Please refer to the section "Create Configuration Files" of the
 docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 !!! warning
@@ -210,7 +210,7 @@ through the DAOS Management Tool (i.e. dmg) CLI.  The first step is to create th
 "daos\_control.yml" configuration file and to place it in the directory
 "utils/docker/examples/daos-admin/el8".  Example of such configuration file is avalailable in this
 last directory.  Defining the content of this configuration files is out of scope of this
-documentaiton.  Please refer to the section "Create Configuration Files" of the
+documentation.  Please refer to the section "Create Configuration Files" of the
 docs/QSG/setup\_rhel.md or docs/QSG/setup\_suse.md for detailed instructions.
 
 In a second time, update the following environment variables of the docker environment file
@@ -373,7 +373,7 @@ docker compose --file utils/docker/examples/docker-compose.client_sa.yml build d
 This section describes how to build the Docker container running the DAOS agent service allowing the
 DAOS client container to access a DAOS file system.  The first step is to create a "daos\_agent.yml"
 configuration file and to place it in the directory "utils/docker/examples/daos-agent/el8".
-Defining the content of this configuration files is out of scope of this documentaiton.  Please
+Defining the content of this configuration files is out of scope of this documentation.  Please
 refer to the section "Create Configuration Files" of the docs/QSG/setup\_rhel.md or
 docs/QSG/setup\_suse.md for detailed instructions.
 
