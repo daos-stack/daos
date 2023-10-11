@@ -58,16 +58,17 @@ reset_arg(struct test_arg *arg)
 static void
 touch_mem(struct test_arg *arg, uint64_t tx_id, uint64_t offset, uint64_t size)
 {
+	struct umem_cache *cache = arg->ta_store.cache;
 	struct chunk *prep       = &arg->ta_chunks[arg->ta_chunk_nr++];
 	struct chunk *flush      = &arg->ta_chunks[arg->ta_chunk_nr++];
 	d_list_t     *prep_list  = &arg->ta_prep_list;
 	d_list_t     *flush_list = &arg->ta_flush_list;
 	int           rc;
 
-	rc = umem_cache_touch(&arg->ta_store, tx_id, offset, size);
+	rc = umem_cache_touch(&arg->ta_store, tx_id, offset + cache->ca_base_off, size);
 	assert_int_equal(rc, 0);
 
-	prep->ch_off  = offset;
+	prep->ch_off  = offset + cache->ca_base_off;
 	prep->ch_size = size;
 	d_list_add_tail(&prep->ch_link, prep_list);
 
@@ -140,7 +141,7 @@ check_io_region(struct test_arg *arg, struct umem_store_region *region)
 static void
 check_iov(struct test_arg *arg, d_iov_t *iov)
 {
-	find_expected(arg, "io_region", &arg->ta_flush_list, (uint64_t)iov->iov_buf,
+	find_expected(arg, "io_iov", &arg->ta_flush_list, (uint64_t)iov->iov_buf,
 		      (uint64_t)iov->iov_buf + iov->iov_len);
 }
 
@@ -428,7 +429,7 @@ test_page_cache(void **state)
 	arg->ta_store.stor_ops  = &stor_ops;
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, 3, 0, 0, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
@@ -493,7 +494,7 @@ test_many_pages(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
@@ -537,7 +538,7 @@ test_many_writes(void **state)
 	/** In case prior test failed */
 	umem_cache_free(&arg->ta_store);
 
-	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0,
+	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, LARGE_NUM_PAGES, 0, 0, 0,
 			      (void *)(UMEM_CACHE_PAGE_SZ), NULL);
 	assert_rc_equal(rc, 0);
 
@@ -626,7 +627,7 @@ test_p2_basic(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -635,40 +636,45 @@ test_p2_basic(void **state)
 	reset_arg(arg);
 
 	/* Load single page */
-	rg.cr_off	= 0;
+	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 1);
-	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, 0), cache->ca_base);
+	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, cache->ca_base_off), cache->ca_base);
 
 	/* Map single non-evictable page */
-	rg.cr_off	= 1 * UMEM_CACHE_PAGE_SZ;
+	rg.cr_off	= cache->ca_base_off + 1 * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_map(&arg->ta_store, &rg, 1);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 2);
-	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store, UMEM_CACHE_PAGE_SZ),
+	assert_ptr_equal(umem_cache_off2ptr(&arg->ta_store,
+				cache->ca_base_off + UMEM_CACHE_PAGE_SZ),
 			 cache->ca_base + UMEM_CACHE_PAGE_SZ);
 
 	/* Load multiple pages */
-	rg.cr_off	= (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
+	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 3 * UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], 3);
 
 	/* Pin multiple pages */
-	rg.cr_off	= (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
+	rg.cr_off	= cache->ca_base_off + (PAGE_NUM_MAX_NE - 1) * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 5 * UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
 	assert_rc_equal(rc, 0);
 	assert_non_null(pin_hdl);
-	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 5);
+	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 4);
 
 	/* Unpin the pinned pages */
 	umem_cache_unpin(&arg->ta_store, pin_hdl);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED], 0);
+
+	/* Reserve a free page */
+	rc = umem_cache_reserve(&arg->ta_store);
+	assert_rc_equal(rc, 0);
 
 	umem_cache_free(&arg->ta_store);
 }
@@ -688,7 +694,7 @@ test_p2_evict(void **state)
 	arg->ta_store.store_type = DAOS_MD_BMEM;
 
 	rc = umem_cache_alloc(&arg->ta_store, UMEM_CACHE_PAGE_SZ, PAGE_NUM_MD, PAGE_NUM_MEM,
-			      PAGE_NUM_MAX_NE, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
+			      PAGE_NUM_MAX_NE, 4096, (void *)(UMEM_CACHE_PAGE_SZ), is_evictable_fn);
 	assert_rc_equal(rc, 0);
 
 	cache = arg->ta_store.cache;
@@ -697,14 +703,14 @@ test_p2_evict(void **state)
 	reset_arg(arg);
 
 	/* Load all non-evictable pages */
-	rg.cr_off	= 0;
+	rg.cr_off	= cache->ca_base_off;
 	rg.cr_size	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE], PAGE_NUM_MAX_NE);
 
 	/* Load more pages to fill the cache */
-	rg.cr_off	= PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
+	rg.cr_off	= cache->ca_base_off + PAGE_NUM_MAX_NE * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= (PAGE_NUM_MEM - PAGE_NUM_MAX_NE) * UMEM_CACHE_PAGE_SZ;
 	rc = umem_cache_load(&arg->ta_store, &rg, 1, false);
 	assert_rc_equal(rc, 0);
@@ -718,7 +724,7 @@ test_p2_evict(void **state)
 	id = PAGE_NUM_MEM;
 
 	/* Pin an unmapped page to trigger eviction */
-	rg.cr_off	= PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
+	rg.cr_off	= cache->ca_base_off + PAGE_NUM_MEM * UMEM_CACHE_PAGE_SZ;
 	rg.cr_size	= 100;
 	rc = umem_cache_pin(&arg->ta_store, &rg, 1, false, &pin_hdl);
 	assert_rc_equal(rc, 0);

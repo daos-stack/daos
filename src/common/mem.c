@@ -1692,7 +1692,6 @@ struct umem_page_info {
 	uint64_t pi_io		: 1, /** Page is being flushed/loaded to/from MD-blob */
 		 pi_copying	: 1, /** Page is being copied. Blocks writes. */
 		 pi_mapped	: 1, /** Page is mapped to a MD page */
-		 pi_evictable	: 1, /** Page is evictable */
 		 pi_sys		: 1, /** Page is brought to cache by system internal access */
 		 pi_loaded	: 1; /** Page is loaded */
 	/** Highest transaction ID checkpointed.  This is set before the page is copied. The
@@ -1721,11 +1720,26 @@ struct umem_page_info {
 	uint64_t *pi_bmap;
 };
 
+/* Convert page ID to MD-blob offset */
+static inline umem_off_t
+cache_id2off(struct umem_cache *cache, uint32_t pg_id)
+{
+	return ((umem_off_t)pg_id << cache->ca_page_shift) + cache->ca_base_off;
+}
+
+/* Convert MD-blob offset to page ID */
+static inline uint32_t
+cache_off2id(struct umem_cache *cache, umem_off_t offset)
+{
+	D_ASSERT(offset >= cache->ca_base_off);
+	return (offset - cache->ca_base_off) >> cache->ca_page_shift;
+}
+
 /* Convert MD-blob offset to MD page */
 static inline struct umem_page *
 cache_off2page(struct umem_cache *cache, umem_off_t offset)
 {
-	uint32_t idx = offset >> cache->ca_page_shift;
+	uint32_t idx = cache_off2id(cache, offset);
 
 	D_ASSERTF(idx < cache->ca_md_pages, "offset=" DF_U64 ", md_pages=%u, idx=%u\n",
 		  offset, cache->ca_md_pages, idx);
@@ -1750,6 +1764,14 @@ cache_ptr2pinfo(struct umem_cache *cache, void *ptr)
 	return &pinfo[idx];
 }
 
+/* Convert MD-blob offset to page offset */
+static inline uint32_t
+cache_off2pg_off(struct umem_cache *cache, umem_off_t offset)
+{
+	D_ASSERT(offset >= cache->ca_base_off);
+	return (offset - cache->ca_base_off) & cache->ca_page_mask;
+}
+
 /* Convert MD-blob offset to memory pointer */
 void *
 umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
@@ -1759,7 +1781,7 @@ umem_cache_off2ptr(struct umem_store *store, umem_off_t offset)
 
 	/* The page must be mapped */
 	D_ASSERT(page->pg_info != NULL);
-	return (void *)(page->pg_info->pi_addr + (offset & cache->ca_page_mask));
+	return (void *)(page->pg_info->pi_addr + cache_off2pg_off(cache, offset));
 }
 
 /* Convert memory pointer to MD-blob offset */
@@ -1772,7 +1794,7 @@ umem_cache_ptr2off(struct umem_store *store, void *ptr)
 
 	/* The page must be mapped */
 	D_ASSERT(pinfo->pi_mapped);
-	offset = (umem_off_t)pinfo->pi_pg_id * cache->ca_page_sz;
+	offset = cache_id2off(cache, pinfo->pi_pg_id);
 	offset += (ptr - cache->ca_base) & cache->ca_page_mask;
 
 	return offset;
@@ -1846,6 +1868,7 @@ umem_cache_free(struct umem_store *store)
 	D_ASSERT(d_list_empty(&cache->ca_pgs_wait_commit));
 	D_ASSERT(d_list_empty(&cache->ca_pgs_pinned));
 	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] == 0);
+	D_ASSERT(cache->ca_reserve_waiters == 0);
 
 	pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
 	for (i = 0; i < cache->ca_mem_pages; i++) {
@@ -1853,6 +1876,12 @@ umem_cache_free(struct umem_store *store)
 
 		page_waitqueue_destroy(store->cache, pinfo);
 		pinfo++;
+	}
+
+	if (cache->ca_reserve_wq != NULL) {
+		store->stor_ops->so_waitqueue_destroy(cache->ca_reserve_wq);
+		cache->ca_reserve_wq = NULL;
+
 	}
 
 	D_FREE(store->cache);
@@ -1889,7 +1918,8 @@ cache_pop_free_page(struct umem_cache *cache)
 
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
-		 uint32_t max_ne_pgs, void *base, bool (*is_evictable_fn)(uint32_t pg_id))
+		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
+		 bool (*is_evictable_fn)(uint32_t pg_id))
 {
 	struct umem_cache	*cache;
 	struct umem_page_info	*pinfo;
@@ -1921,7 +1951,7 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 		mem_pgs = md_pgs;
 		max_ne_pgs = md_pgs;
 	} else {
-		D_ASSERT(mem_pgs > max_ne_pgs);
+		D_ASSERT(mem_pgs > (max_ne_pgs + 1));
 	}
 
 	bmap_sz = (1 << (page_shift - UMEM_CACHE_CHUNK_SZ_SHIFT - UMEM_CHUNK_IDX_SHIFT));
@@ -1932,11 +1962,12 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	if (cache == NULL)
 		return -DER_NOMEM;
 
-	D_DEBUG(DB_IO, "Allocated page cache, md-pages(%u), mem-pages(%u), %p\n",
-		md_pgs, mem_pgs, cache);
+	D_DEBUG(DB_IO, "Allocated page cache, md-pages(%u), mem-pages(%u), max-ne-pages(%u) %p\n",
+		md_pgs, mem_pgs, max_ne_pgs, cache);
 
 	cache->ca_store		= store;
 	cache->ca_base		= base;
+	cache->ca_base_off	= base_off;
 	cache->ca_md_pages	= md_pgs;
 	cache->ca_mem_pages	= mem_pgs;
 	cache->ca_max_ne_pages	= max_ne_pgs;
@@ -1975,6 +2006,10 @@ umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, ui
 	/* Phase 2 mode */
 	if (cache_mode(cache) != 1) {
 		D_ASSERT(store->stor_ops->so_waitqueue_create != NULL);
+		rc = store->stor_ops->so_waitqueue_create(&cache->ca_reserve_wq);
+		if (rc)
+			goto error;
+
 		pinfo = (struct umem_page_info *)&cache->ca_pages[cache->ca_md_pages];
 		for (idx = 0; idx < cache->ca_mem_pages; idx++) {
 			rc = page_waitqueue_create(cache, pinfo);
@@ -2009,6 +2044,12 @@ error:
 	return rc;
 }
 
+static inline bool
+is_id_evictable(struct umem_cache *cache, uint32_t pg_id)
+{
+	return cache->ca_evictable_fn && cache->ca_evictable_fn(pg_id);
+}
+
 static inline void
 cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
@@ -2018,11 +2059,15 @@ cache_unmap_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 
 	pinfo->pi_mapped = 0;
 	pinfo->pi_loaded = 0;
-	pinfo->pi_evictable = 0;
 	cache->ca_pages[pinfo->pi_pg_id].pg_info = NULL;
 
 	d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_free);
 	cache->ca_pgs_stats[UMEM_PG_STATS_FREE] += 1;
+
+	if (!is_id_evictable(cache, pinfo->pi_pg_id)) {
+		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] > 0);
+		cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] -= 1;
+	}
 }
 
 static inline void
@@ -2034,6 +2079,9 @@ cache_map_page(struct umem_cache *cache, struct umem_page_info *pinfo, unsigned 
 	pinfo->pi_mapped = 1;
 	pinfo->pi_pg_id = pg_id;
 	cache->ca_pages[pg_id].pg_info = pinfo;
+	if (!is_id_evictable(cache, pg_id))
+		cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] += 1;
+
 }
 
 static inline void
@@ -2041,9 +2089,8 @@ cache_add2lru(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
 	D_ASSERT(d_list_empty(&pinfo->pi_lru_link));
 	D_ASSERT(pinfo->pi_ref == 0);
-	D_ASSERT(pinfo->pi_loaded == 1);
 
-	if (pinfo->pi_evictable)
+	if (is_id_evictable(cache, pinfo->pi_pg_id))
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[1]);
 	else
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[0]);
@@ -2056,13 +2103,12 @@ cache_unpin_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	pinfo->pi_ref--;
 
 	if (pinfo->pi_ref == 0) {
-		D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] > 0);
-		cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] -= 1;
 		d_list_del_init(&pinfo->pi_lru_link);
-
-		/* Add to LRU when it's loaded */
-		if (pinfo->pi_loaded)
-			cache_add2lru(cache, pinfo);
+		cache_add2lru(cache, pinfo);
+		if (is_id_evictable(cache, pinfo->pi_pg_id)) {
+			D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] > 0);
+			cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] -= 1;
+		}
 	}
 }
 
@@ -2071,9 +2117,10 @@ cache_pin_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 {
 	pinfo->pi_ref++;
 	if (pinfo->pi_ref == 1) {
-		cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] += 1;
 		d_list_del_init(&pinfo->pi_lru_link);
 		d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_pinned);
+		if (is_id_evictable(cache, pinfo->pi_pg_id))
+			cache->ca_pgs_stats[UMEM_PG_STATS_PINNED] += 1;
 	}
 }
 
@@ -2183,7 +2230,7 @@ touch_page(struct umem_store *store, struct umem_page_info *pinfo, uint64_t wr_t
 	pinfo->pi_last_inflight = wr_tx;
 }
 
-/* Convert MD-blob offset to memory pointer */
+/* Convert MD-blob offset to memory page */
 static inline struct umem_page_info *
 cache_off2pinfo(struct umem_cache *cache, umem_off_t addr)
 {
@@ -2196,11 +2243,10 @@ cache_off2pinfo(struct umem_cache *cache, umem_off_t addr)
 int
 umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos_size_t size)
 {
-	struct umem_cache *cache     = store->cache;
-	struct umem_page_info *pinfo;
-	umem_off_t        end_addr  = addr + size - 1;
-	struct umem_page_info *end_pinfo;
-	umem_off_t        start_addr;
+	struct umem_cache	*cache = store->cache;
+	struct umem_page_info	*pinfo;
+	umem_off_t		 start_addr, end_addr = addr + size - 1;
+	struct umem_page_info	*end_pinfo;
 
 	if (cache == NULL)
 		return 0; /* TODO: When SMD is supported outside VOS, this will be an error */
@@ -2212,15 +2258,18 @@ umem_cache_touch(struct umem_store *store, uint64_t wr_tx, umem_off_t addr, daos
 	if (pinfo->pi_copying)
 		return -DER_CHKPT_BUSY;
 
+	/* Convert the MD-blob offset to umem cache offset (exclude the allocator header) */
+	D_ASSERT(addr >= cache->ca_base_off);
+	addr -= cache->ca_base_off;
+	end_addr -= cache->ca_base_off;
+
 	if (pinfo != end_pinfo) {
-		/** Eventually, we can just assert equal here.  But until we have a guarantee that
-		 * no allocation will span a page boundary, we have to handle this case.  We should
-		 * never have to span multiple pages though.
-		 */
+		D_ASSERT(cache_mode(cache) == 1);
+
 		if (end_pinfo->pi_copying)
 			return -DER_CHKPT_BUSY;
-		start_addr = end_addr & ~cache->ca_page_mask;
 
+		start_addr = end_addr & ~cache->ca_page_mask;
 		touch_page(store, end_pinfo, wr_tx, start_addr, end_addr);
 		end_addr = start_addr - 1;
 	}
@@ -2275,7 +2324,7 @@ page2chkpt(struct umem_store *store, struct umem_page_info *pinfo,
 	uint64_t               bmap;
 	int       i;
 	uint64_t               first_bit_shift;
-	uint64_t               offset = (uint64_t)pinfo->pi_pg_id << cache->ca_page_shift;
+	uint64_t               offset = cache_id2off(cache, pinfo->pi_pg_id);
 	uint64_t               map_offset;
 	uint8_t               *page_addr = pinfo->pi_addr;
 	int                    nr        = sgl->sg_nr_out;
@@ -2565,7 +2614,7 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 		return 0;
 	}
 
-	offset = (uint64_t)pinfo->pi_pg_id << cache->ca_page_shift;
+	offset = cache_id2off(cache, pinfo->pi_pg_id);
 	D_ASSERT(offset < store->stor_size);
 	len = min(cache->ca_page_sz, store->stor_size - offset);
 	pinfo->pi_io = 1;
@@ -2578,10 +2627,6 @@ cache_load_page(struct umem_cache *cache, struct umem_page_info *pinfo)
 	}
 
 	pinfo->pi_loaded = 1;
-	pinfo->pi_evictable = cache->ca_evictable_fn(pinfo->pi_pg_id) ? 1 : 0;
-	if (!pinfo->pi_evictable)
-		cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] += 1;
-
 	/* Add to LRU when it's unpinned */
 	if (pinfo->pi_ref == 0)
 		cache_add2lru(cache, pinfo);
@@ -2726,18 +2771,24 @@ evict:
 }
 
 static inline bool
-need_evict(struct umem_cache *cache)
+need_reserve(struct umem_cache *cache, uint32_t page_nr)
 {
-	if (d_list_empty(&cache->ca_pgs_free))
-		return true;
-
 	/* No need to reserve when non-evictable zone has grown to maixmum size */
 	D_ASSERT(cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] <= cache->ca_max_ne_pages);
 	if (cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] == cache->ca_max_ne_pages)
 		return false;
 
 	/* One free page is always reserved for potential non-evictable zone grow */
-	return cache->ca_pgs_stats[UMEM_PG_STATS_FREE] <= 1 ? true : false;
+	return cache->ca_pgs_stats[UMEM_PG_STATS_FREE] < page_nr ? true : false;
+}
+
+static inline bool
+need_evict(struct umem_cache *cache)
+{
+	if (d_list_empty(&cache->ca_pgs_free))
+		return true;
+
+	return need_reserve(cache, 2);
 }
 
 static int
@@ -2771,65 +2822,52 @@ cache_get_free_page(struct umem_cache *cache, struct umem_page_info **ret_pinfo,
 	return 0;
 }
 
-/* Only allow map non-evictable empty page */
+/*
+ * Only allow map empty pages. It could yield when mapping an evictable page,
+ * so when caller tries to map non-evictable page, the page_nr must be 1.
+ */
 static int
 cache_map_pages(struct umem_cache *cache, uint32_t *pages, int page_nr)
 {
 	struct umem_page_info	*pinfo;
 	uint32_t		 pg_id;
-	int			 i, processed = 0, rc = 0;
+	int			 i, rc = 0;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
 		pinfo = cache->ca_pages[pg_id].pg_info;
 
+		if (is_id_evictable(cache, pg_id) && page_nr != 1) {
+			D_ERROR("Can only map single evictable page.\n");
+			return -DER_INVAL;
+		}
+
 		/* The page is already mapped */
 		if (pinfo != NULL) {
 			D_ASSERT(pinfo->pi_pg_id == pg_id);
 			D_ASSERT(pinfo->pi_mapped == 1);
-			if (pinfo->pi_loaded == 0) {
-				D_ERROR("Page(%u) is mapped but not loaded.\n", pg_id);
-				rc = -DER_INVAL;
-				break;
-			}
-			if (pinfo->pi_evictable == 1) {
-				D_ERROR("Map evict-able page(%u) isn't allowed.\n", pg_id);
-				rc = -DER_NO_PERM;
-				break;
-			}
-			processed++;
 			continue;
 		}
 
-		pinfo = cache_pop_free_page(cache);
-		if (pinfo == NULL) {
-			D_ERROR("No free pages.\n");
-			rc = -DER_BUSY;
-			break;
+		if (is_id_evictable(cache, pg_id)) {
+			rc = cache_get_free_page(cache, &pinfo, 0, false);
+			if (rc) {
+				DL_ERROR(rc, "Failed to get free page.\n");
+				break;
+			}
+		} else {
+			pinfo = cache_pop_free_page(cache);
+			if (pinfo == NULL) {
+				D_ERROR("No free pages.\n");
+				rc = -DER_BUSY;
+				break;
+			}
 		}
 
 		cache_map_page(cache, pinfo, pg_id);
-		/* Map an empty non-evict-able page, doesn't need to load page */
-		pinfo->pi_evictable = 0;
+		cache_add2lru(cache, pinfo);
+		/* Map an empty page, doesn't need to load page */
 		pinfo->pi_loaded = 1;
-		processed++;
-	}
-
-	for (i = 0; i < processed; i++) {
-		pg_id = pages[i];
-		pinfo = cache->ca_pages[pg_id].pg_info;
-
-		D_ASSERT(pinfo != NULL);
-		D_ASSERT(pinfo->pi_evictable == 0);
-		/* Don't need to maintain LRU order for non-evictable pages */
-		if (d_list_empty(&pinfo->pi_lru_link)) {
-			if (rc) {
-				cache_unmap_page(cache, pinfo);
-			} else {
-				cache->ca_pgs_stats[UMEM_PG_STATS_NONEVICTABLE] += 1;
-				d_list_add_tail(&pinfo->pi_lru_link, &cache->ca_pgs_lru[0]);
-			}
-		}
 	}
 
 	return rc;
@@ -2840,7 +2878,7 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for
 {
 	struct umem_page_info	*pinfo;
 	uint32_t		 pg_id;
-	int			 i, processed = 0, rc = 0;
+	int			 i, processed = 0, pinned = 0, rc = 0;
 
 	for (i = 0; i < page_nr; i++) {
 		pg_id = pages[i];
@@ -2850,18 +2888,19 @@ cache_pin_pages(struct umem_cache *cache, uint32_t *pages, int page_nr, bool for
 		if (pinfo != NULL) {
 			D_ASSERT(pinfo->pi_pg_id == pg_id);
 			D_ASSERT(pinfo->pi_mapped == 1);
-			cache_pin_page(cache, pinfo);
-			processed++;
-			continue;
+			goto next;
 		}
 
-		rc = cache_get_free_page(cache, &pinfo, processed, for_sys);
+		rc = cache_get_free_page(cache, &pinfo, pinned, for_sys);
 		if (rc)
 			goto error;
 
 		cache_map_page(cache, pinfo, pg_id);
+next:
 		cache_pin_page(cache, pinfo);
 		processed++;
+		if (is_id_evictable(cache, pinfo->pi_pg_id))
+			pinned++;
 	}
 
 	for (i = 0; i < page_nr; i++) {
@@ -2921,7 +2960,7 @@ cache_rgs2pgs(struct umem_cache *cache, struct umem_cache_range *ranges, int ran
 
 		D_ASSERT(range.cr_size > 0);
 		while (range.cr_size > 0) {
-			page_id = range.cr_off >> cache->ca_page_shift;
+			page_id = cache_off2id(cache, range.cr_off);
 
 			if (len != 0 && page_id != pages[page_idx]) {
 				page_idx++;
@@ -2938,7 +2977,7 @@ cache_rgs2pgs(struct umem_cache *cache, struct umem_cache_range *ranges, int ran
 			}
 
 			pages[page_idx] = page_id;
-			len = cache->ca_page_sz - (range.cr_off & cache->ca_page_mask);
+			len = cache->ca_page_sz - cache_off2pg_off(cache, range.cr_off);
 			range.cr_off += len;
 			if (range.cr_size >= len)
 				range.cr_size -= len;
@@ -3077,6 +3116,47 @@ umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle)
 	}
 
 	D_FREE(pin_handle);
+}
+
+int
+umem_cache_reserve(struct umem_store *store)
+{
+	struct umem_cache	*cache = store->cache;
+	int			 rc = 0, retry_cnt = 0;
+
+	if (cache_mode(cache) == 1)
+		return rc;
+
+	/* MUST ensure the FIFO order */
+	if (!need_reserve(cache, 1) && !cache->ca_reserve_waiters)
+		return rc;
+
+	D_ASSERT(cache->ca_reserve_wq != NULL);
+	cache->ca_reserve_waiters++;
+	if (cache->ca_reserve_waiters > 1) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wait != NULL);
+		store->stor_ops->so_waitqueue_wait(cache->ca_reserve_wq, false);
+	}
+
+	while (need_reserve(cache, 1)) {
+		rc = cache_evict_page(cache, false);
+		if (rc && rc != -DER_AGAIN && rc != -DER_BUSY) {
+			DL_ERROR(rc, "Evict page failed.\n");
+			break;
+		}
+
+		D_DEBUG(DB_TRACE, "Retry reserve free page, %d times\n", retry_cnt);
+		retry_cnt++;
+	}
+
+	D_ASSERT(cache->ca_reserve_waiters > 0);
+	cache->ca_reserve_waiters--;
+	if (cache->ca_reserve_waiters > 0) {
+		D_ASSERT(store->stor_ops->so_waitqueue_wakeup != NULL);
+		store->stor_ops->so_waitqueue_wakeup(cache->ca_reserve_wq, false);
+	}
+
+	return rc;
 }
 
 #endif

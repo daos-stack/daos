@@ -885,6 +885,8 @@ struct umem_cache {
 	struct umem_store	*ca_store;
 	/** Base address of the page cache */
 	void			*ca_base;
+	/** Offset of first page */
+	uint32_t		 ca_base_off;
 	/** Total MD pages */
 	uint32_t                 ca_md_pages;
 	/** Total memory pages in cache */
@@ -899,8 +901,6 @@ struct umem_cache {
 	uint32_t		 ca_page_mask;
 	/** Per-page Bitmap size (in uint64_t) */
 	uint32_t		 ca_bmap_sz;
-	/** How many waiters waiting on page reserve */
-	uint32_t		 ca_reserve_waiters;
 	/** Free list for unmapped page info */
 	d_list_t                 ca_pgs_free;
 	/** Non-evictable & evictable dirty pages */
@@ -919,6 +919,10 @@ struct umem_cache {
 	bool			(*ca_evictable_fn)(uint32_t pg_id);
 	/** Page stats */
 	uint32_t		 ca_pgs_stats[UMEM_PG_STATS_MAX];
+	/** How many waiters waiting on free page reserve */
+	uint32_t		 ca_reserve_waiters;
+	/** Waitqueue for free page reserve: umem_cache_reserve() */
+	void			*ca_reserve_wq;
 	/** TODO: some other global status */
 	/** MD page array, array index is page ID */
 	struct umem_page         ca_pages[0];
@@ -942,6 +946,7 @@ struct umem_cache_chkpt_stats {
  * \param[in]	md_pgs		Total MD pages
  * \param[in]	mem_pgs		Total memory pages
  * \param[in]	max_ne_pgs	Maximum Non-evictable pages
+ * \param[in]	base_off	Offset of the umem cache base
  * \param[in]	base		Start address of the page cache
  * \param[in]	is_evictable_fn	Callback function to check if page is evictable
  *
@@ -949,9 +954,10 @@ struct umem_cache_chkpt_stats {
  */
 int
 umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
-		 uint32_t max_ne_pgs, void *base, bool (*is_evictable_fn)(uint32_t pg_id));
+		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
+		 bool (*is_evictable_fn)(uint32_t pg_id));
 
-/** Free global cache for umem store.  Pages must be unmapped first
+/** Free global cache for umem store.
  *
  * \param[in]	store	Store for which to free cache
  *
@@ -986,8 +992,9 @@ struct umem_cache_range {
 };
 
 /** Map MD pages in specified range to memory pages. The range to be mapped should be empty
- *  (no page loading required), and the map operation will fail with -DER_BUSY if there are
- *  not enough free pages (no page eviction required).
+ *  (no page loading required). If caller tries to map non-evictable pages, page eviction
+ *  won't be triggered when there are not enough free pages; If caller tries to map evictable
+ *  page, page eviction could be triggered, but it can only map single evictable page at a time.
  *
  * \param[in]	store		The umem store
  * \param[in]	ranges		Ranges to be mapped
@@ -1039,6 +1046,17 @@ umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int ran
  */
 void
 umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
+
+/** Reserve a free page for potential non-evictable zone grow within a transaction.
+ *  Caller needs to ensure there is no CPU yielding after this call till transaction
+ *  start.
+ *
+ *  \param[in]	store		The umem store
+ *
+ *  \return 0 on success
+ */
+int
+umem_cache_reserve(struct umem_store *store);
 
 /** Inform umem cache the last committed ID.
  *
