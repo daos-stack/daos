@@ -7,8 +7,6 @@ if [[ "$(id -u)" != "0" ]] ; then
 	echo "[ERROR] run-daos_agent can only be run as root"
 fi
 
-CWD="$(realpath "$(dirname $0)")"
-
 mkdir -p /var/run/daos_agent/
 chmod 755 /var/run/daos_agent/
 chown daos_agent:daos_agent /var/run/daos_agent/

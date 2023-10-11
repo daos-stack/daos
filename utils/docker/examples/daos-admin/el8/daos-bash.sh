@@ -7,8 +7,6 @@ if [[ "$(id -u)" != "0" ]] ; then
 	echo "[ERROR] daos-bash can only be run as root"
 fi
 
-CWD="$(realpath "$(dirname "$0")")"
-
 mkdir -p /etc/daos/certs
 chmod 755 /etc/daos/certs
 tar --extract --xz --directory=/etc/daos/certs --no-same-owner --preserve-permissions --file=/run/secrets/daos_admin-certs.txz
