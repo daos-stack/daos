@@ -32,7 +32,7 @@ RUN	echo "[INFO] Installing DAOS containerization dependencies" ;               
 COPY    daos_server.yml /etc/daos/daos_server.yml
 
 # Install DAOS server launcher
-COPY	run-daos_server /usr/local/sbin/run-daos_server
+COPY	run-daos_server.sh /usr/local/sbin/run-daos_server
 RUN	chmod 755 /usr/local/sbin/run-daos_server
 
 # Copy missing configuration file

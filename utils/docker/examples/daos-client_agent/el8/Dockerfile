@@ -32,7 +32,7 @@ RUN	echo "[INFO] Installing DAOS containerization dependencies" ;               
 # Install DAOS Bash launcher
 ARG	DAOS_CLIENT_UNAME=""
 ARG	DAOS_CLIENT_GNAME=""
-COPY	daos-bash.in /tmp/daos-bash.in
+COPY	daos-bash.sh /tmp/daos-bash.in
 RUN	echo "[INSTALL] Installing DAOS Agent entry point" ;                                       \
 	for it in DAOS_CLIENT_UNAME DAOS_CLIENT_GNAME ; do                                         \
 		if eval "[[ -z \$$it ]]" ; then                                                    \

@@ -28,7 +28,7 @@ RUN	echo "[INFO] Installing DAOS containerization dependencies" ;               
 	dnf clean all
 
 # Install DAOS Bash launcher
-COPY	daos-bash /usr/local/sbin/daos-bash
+COPY	daos-bash.sh /usr/local/sbin/daos-bash
 RUN	echo "[INSTALL] Installing DAOS Agent entry point" ;                                       \
 	chmod 755 /usr/local/sbin/daos-bash
 

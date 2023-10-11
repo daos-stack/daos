@@ -1,4 +1,4 @@
 # Ignore everything except Dockerfile configuration file
 *
-!daos-bash
+!daos-bash.sh
 !daos_control.yml

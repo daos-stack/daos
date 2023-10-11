@@ -31,7 +31,7 @@ RUN	echo "[INFO] Installing DAOS containerization dependencies" ;               
 COPY	daos_agent.yml /etc/daos/daos_agent.yml
 
 # Install DAOS agent launcher
-COPY	run-daos_agent /usr/local/sbin/run-daos_agent
+COPY	run-daos_agent.sh /usr/local/sbin/run-daos_agent
 RUN	chmod 755 /usr/local/sbin/run-daos_agent
 
 # Define entrypoint and cmd:
