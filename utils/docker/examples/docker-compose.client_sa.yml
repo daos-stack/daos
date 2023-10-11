@@ -8,10 +8,12 @@ version: "3.8"
 services:
 
   daos_agent:
-    image: "daos-agent:${DAOS_DOCKER_IMAGE_TAG}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-agent-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
-      context: "daos-agent/el8"
+      context: "daos-agent/${LINUX_DISTRO}"
       args:
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
     network_mode: host
@@ -26,11 +28,13 @@ services:
       - source: daos_agent-certs
         target: daos_agent-certs.txz
 
-  daos_client:
-    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+  daos_client_sa:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-client_sa-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
-      context: "daos-client/el8"
+      context: "daos-client/${LINUX_DISTRO}"
       args:
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
     tty: true
