@@ -1533,7 +1533,7 @@ func TestControl_Pool_setUsage(t *testing.T) {
 						Imbalance: 10,
 					},
 					{
-						TierName:  "NVME",
+						TierName:  "NVMe",
 						Size:      humanize.GByte * 500,
 						Free:      humanize.GByte * 250,
 						Imbalance: 10,
@@ -1565,7 +1565,7 @@ func TestControl_Pool_setUsage(t *testing.T) {
 						Imbalance: 5,
 					},
 					{
-						TierName:  "NVME",
+						TierName:  "NVMe",
 						Size:      humanize.GByte * 500,
 						Free:      humanize.GByte * 250,
 						Imbalance: 5,
@@ -1628,7 +1628,7 @@ func TestControl_ListPools(t *testing.T) {
 			Imbalance: 12,
 		},
 		{
-			TierName:  "NVME",
+			TierName:  "NVMe",
 			Size:      1234567,
 			Free:      600000,
 			Imbalance: 1,
@@ -2259,7 +2259,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				NvmeBytes: uint64(700) * uint64(humanize.GByte),
 			},
 		},
-		"No NVME; single server": {
+		"No NVMe; single server": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -2281,7 +2281,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				NvmeBytes: uint64(0),
 			},
 		},
-		"No NVME; double server": {
+		"No NVMe; double server": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -2400,7 +2400,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 				NvmeBytes: uint64(0),
 			},
 		},
-		"SCM:NVME ratio": {
+		"SCM:NVMe ratio": {
 			HostsConfigArray: []MockHostStorageConfig{
 				{
 					HostName: "foo",
@@ -2744,7 +2744,7 @@ func TestControl_GetMaxPoolSize(t *testing.T) {
 			test.AssertEqual(t,
 				tc.ExpectedOutput.NvmeBytes,
 				nvmeBytes,
-				fmt.Sprintf("Invalid NVME pool size: expected=%d got=%d",
+				fmt.Sprintf("Invalid NVMe pool size: expected=%d got=%d",
 					tc.ExpectedOutput.NvmeBytes,
 					nvmeBytes))
 			if tc.ExpectedOutput.Debug != "" {
