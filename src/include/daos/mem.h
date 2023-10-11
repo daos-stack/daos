@@ -1047,7 +1047,7 @@ umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int ran
 void
 umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
 
-/** Reserve a free page for potential non-evictable zone grow within a transaction.
+/** Reserve few free pages for potential non-evictable zone grow within a transaction.
  *  Caller needs to ensure there is no CPU yielding after this call till transaction
  *  start.
  *
