@@ -7,7 +7,7 @@ version: "3.8"
 
 services:
   daos_admin:
-    image: "daos-admin:${DAOS_DOCKER_IMAGE_TAG}"
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-admin-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     tty: true
     secrets:
       - source: daos_admin-certs

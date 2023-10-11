@@ -7,11 +7,13 @@ version: "3.8"
 
 services:
 
-  daos_client:
-    image: "daos-client:${DAOS_DOCKER_IMAGE_TAG}"
+  daos_client_gt:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-client_gt-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
     build:
-      context: "daos-client_agent/el8"
+      context: "daos-client_agent/${LINUX_DISTRO}"
       args:
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
         - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
         - "DAOS_VERSION=${DAOS_VERSION}"
         - "DAOS_CLIENT_UNAME=${DAOS_CLIENT_UNAME}"

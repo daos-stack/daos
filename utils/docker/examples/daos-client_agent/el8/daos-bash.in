@@ -9,6 +9,6 @@ fi
 
 CWD="$(realpath "$(dirname $0)")"
 
-/usr/bin/nohup /usr/bin/sudo --user=root --group=root /usr/local/sbin/run-daos_agent start < /dev/null &> /dev/null &
+nohup sudo --user=root --group=root /usr/local/sbin/run-daos_agent start < /dev/null &> /dev/null &
 
-exec /usr/bin/sudo --user=@DAOS_CLIENT_UNAME@ --group=@DAOS_CLIENT_GNAME@ /bin/bash "$@"
+exec sudo --user=@DAOS_CLIENT_UNAME@ --group=@DAOS_CLIENT_GNAME@ /bin/bash "$@"

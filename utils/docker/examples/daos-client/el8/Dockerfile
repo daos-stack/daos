@@ -4,12 +4,16 @@
 # 'recipe' for building a base RHEL DAOS client docker image
 #
 # This Dockerfile accept the following input build arguments:
-# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "rocky8.6")
+# - LINUX_DISTRO             Linux distribution identifier (default "el8")
+# - DAOS_DOCKER_IMAGE_NSP    Namespace identifier of the base DAOS docker image (default "daos")
+# - DAOS_DOCKER_IMAGE_TAG    Tag identifier of the DAOS client docker image (default "v2.4.0")
 # - DAOS_VERSION             Version of DAOS to use (default "2.4.0-2.el8")
 
 # Pull base image
-ARG	DAOS_DOCKER_IMAGE_TAG=rocky8.6
-FROM	daos-base:$DAOS_DOCKER_IMAGE_TAG
+ARG	LINUX_DISTRO="el8"
+ARG	DAOS_DOCKER_IMAGE_NSP="daos"
+ARG	DAOS_DOCKER_IMAGE_TAG="v2.4.0"
+FROM	"$DAOS_DOCKER_IMAGE_NSP/daos-base-$LINUX_DISTRO:$DAOS_DOCKER_IMAGE_TAG"
 LABEL	maintainer="daos@daos.groups.io"
 
 # Install base DAOS package
