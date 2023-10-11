@@ -1,0 +1,15 @@
+hosts:
+  test_servers: 1
+timeout: 60
+setup:
+  start_agents: False
+  start_servers: False
+  start_agents_once: False
+  start_servers_once: False
+server_config:
+  name: daos_server
+  port: 10001
+  engines_per_host: 1
+  engines:
+    0:
+      storage: auto
