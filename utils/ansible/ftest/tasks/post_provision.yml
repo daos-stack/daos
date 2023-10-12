@@ -1,0 +1,21 @@
+# Ansible scripts for configuring a DAOS node with ftest
+# yamllint disable rule:line-length
+
+
+### Custom configuration for functional test checking permission
+
+- name: Install pip for python3.11
+  become: true
+  dnf:
+    state: latest
+    update_cache: true
+    name: python3.11-pip
+
+- name: Install cluster shell for python3.11
+  become: true
+  pip:
+    state: latest
+    executable: pip3.11
+    extra_args: --user
+    name:
+      - ClusterShell
