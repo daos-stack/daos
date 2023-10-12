@@ -34,11 +34,17 @@ ARG	DAOS_GPG_KEYS=""
 RUN	wget -O /etc/yum.repos.d/daos-packages.repo "${DAOS_REPOS}" && \
 	rpm --import "${DAOS_GPG_KEYS}" && \
 	dnf update && \
-	dnf install -y spdk-devel argobots-devel
+	dnf install -y spdk-devel argobots-devel && \
+	dnf clean all
+
+RUN	useradd --no-log-init --user-group --home-dir /home/daos --no-create-home --shell /bin/bash daos_dev && \
+	echo "daos_dev:daos_dev" | chpasswd && \
+	echo "daos_dev ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup && \
+	chown --recursive daos_dev:daos_dev /home/daos
 
 ARG	DAOS_GIT_REPOS=""
 ARG	DAOS_GIT_BRANCH=""
-USER	daos_server:daos_server
+USER	daos_dev:daos_dev
 RUN	git clone --recurse-submodules "${DAOS_GIT_REPOS}" daos-src
 RUN	if [ "${DAOS_GIT_BRANCH}" != "master" ] ; then \
 		cd daos-src && \
@@ -47,7 +53,7 @@ RUN	if [ "${DAOS_GIT_BRANCH}" != "master" ] ; then \
 
 USER	root:root
 RUN	cd daos-src/src/rdb/raft && dnf build-dep --spec raft.spec
-USER	daos_server:daos_server
+USER	daos_dev:daos_dev
 RUN	cd daos-src/src/rdb/raft && make -f Makefile-rpm.mk
 USER	root:root
 RUN	cd daos-src/src/rdb/raft && dnf install -y _topdir/RPMS/x86_64/*.rpm
@@ -56,7 +62,7 @@ RUN	cd daos-src/src/rdb/raft && dnf install -y _topdir/RPMS/x86_64/*.rpm
 # RUN	cd daos-src/utils/rpms && dnf build-dep --spec daos.spec
 
 ARG	DAOS_VENV_DIR=""
-USER	daos_server:daos_server
+USER	daos_dev:daos_dev
 RUN	rm -frv venv bin && mkdir -pv "${DAOS_VENV_DIR}" && python3 -m venv "${DAOS_VENV_DIR}"
 RUN	source "${DAOS_VENV_DIR}/bin/activate" && \
 	pip3 install --upgrade pip && \
