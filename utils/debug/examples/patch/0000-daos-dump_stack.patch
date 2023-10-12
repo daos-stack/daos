@@ -1,0 +1,148 @@
+diff --git a/src/gurt/SConscript b/src/gurt/SConscript
+index 5397848ba..a29af90f2 100644
+--- a/src/gurt/SConscript
++++ b/src/gurt/SConscript
+@@ -19,7 +19,7 @@ def scons():
+ 
+     denv = env.Clone()
+ 
+-    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm', 'dl'])
++    denv.AppendUnique(LIBS=['pthread', 'yaml', 'm', 'dl', 'unwind'])
+     denv.require('uuid')
+ 
+     gurt_targets = denv.SharedObject(SRC)
+diff --git a/src/gurt/debug.c b/src/gurt/debug.c
+index 4fb112b7d..80dbcc58b 100644
+--- a/src/gurt/debug.c
++++ b/src/gurt/debug.c
+@@ -9,6 +9,10 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <malloc.h>
++#include <string.h>
++#define UNW_LOCAL_ONLY
++#include <libunwind.h>
+ 
+ #include <gurt/common.h>
+ 
+@@ -610,3 +614,66 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
+ 	}
+ 	return -DER_INVAL;
+ }
++
++int
++dump_stack(char* msg, size_t msg_size)
++{
++	const char msg_start[] = "{\"stack_trace\":[";
++	const char msg_end[] = "]}";
++
++	char* msg_cursor = msg;
++	size_t msg_cursor_size = msg_size;
++
++	unw_cursor_t unw_cursor;
++	unw_context_t unw_context;
++
++	if (msg == NULL) {
++		D_PRINT_ERR("Invalid msg parameter\n");
++		return -1;
++	}
++	if (msg_size < sizeof(msg_start)) {
++		D_PRINT_ERR("Too short message size\n");
++		return -1;
++	}
++	if (unw_getcontext(&unw_context) < 0) {
++		D_PRINT_ERR("Cannot get local machine state\n");
++		return -1;
++	}
++	if (unw_init_local(&unw_cursor, &unw_context) < 0) {
++		D_PRINT_ERR("Cannot initialize cursor for local unwinding\n");
++		return -1;
++	}
++
++	memcpy(msg_cursor, msg_start, sizeof(msg_start) -1);
++	msg_cursor += sizeof(msg_start) - 1;
++	msg_cursor_size = msg_size - (sizeof(msg_start) + 1);
++
++	while (unw_step(&unw_cursor) > 0) {
++		unw_word_t  offset, pc, sp;
++		char        name[512];
++		size_t      frame_size;
++
++		unw_get_reg(&unw_cursor, UNW_REG_IP, &pc);
++		unw_get_reg(&unw_cursor, UNW_REG_SP, &sp);
++		unw_get_proc_name(&unw_cursor, name, sizeof(name), &offset);
++
++		frame_size = snprintf(msg_cursor, msg_cursor_size,
++				      "{\"name\":\"%s\", \"offset\":\"0x%lx\", "
++				      "\"pc\":\"0x%lx\", \"sp\":\"0x%lx\"},",
++				      name, offset, pc, sp);
++		if (frame_size >= msg_cursor_size) {
++			D_PRINT_ERR("Message will be truncated\n");
++			return -1;
++		}
++
++		msg_cursor += frame_size;
++		msg_cursor_size += frame_size;
++	}
++	if (*(msg_cursor-1) == ',') {
++		--msg_cursor;
++		--msg_cursor_size;
++	}
++	memcpy(msg_cursor, msg_end, sizeof(msg_end));
++
++	return 0;
++}
+diff --git a/src/gurt/dlog.c b/src/gurt/dlog.c
+index 3a720e3c9..ba9a07db7 100644
+--- a/src/gurt/dlog.c
++++ b/src/gurt/dlog.c
+@@ -568,7 +568,7 @@ d_log_sync(void)
+  */
+ void d_vlog(int flags, const char *fmt, va_list ap)
+ {
+-#define DLOG_TBSIZ    1024	/* bigger than any line should be */
++#define DLOG_TBSIZ    4086	/* bigger than any line should be */
+ 	static __thread char b[DLOG_TBSIZ];
+ 	static __thread uint32_t tid = -1;
+ 	static __thread uint32_t pid = -1;
+diff --git a/src/gurt/tests/SConscript b/src/gurt/tests/SConscript
+index 6ba63fe61..fdc07eae1 100644
+--- a/src/gurt/tests/SConscript
++++ b/src/gurt/tests/SConscript
+@@ -18,7 +18,7 @@ def scons():
+ 
+     test_env = env.Clone()
+     test_env.require('mercury', 'uuid')
+-    test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl'])
++    test_env.AppendUnique(LIBS=['pthread', 'cmocka', 'm', 'dl', 'unwind'])
+     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
+     tests = []
+ 
+diff --git a/src/include/gurt/debug.h b/src/include/gurt/debug.h
+index 1dbe4cc9b..a7a84df38 100644
+--- a/src/include/gurt/debug.h
++++ b/src/include/gurt/debug.h
+@@ -357,6 +357,9 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
+ #define DP_HG_RC(rc) rc, HG_Error_to_string(rc)
+ #endif /* DF_HG_RC */
+ 
++int
++dump_stack(char* msg, size_t msg_size);
++
+ /** @}
+  */
+ #endif /* __GURT_DEBUG_H__ */
+diff --git a/src/tests/ftest/cart/utest/SConscript b/src/tests/ftest/cart/utest/SConscript
+index 28b488441..ed8638e38 100644
+--- a/src/tests/ftest/cart/utest/SConscript
++++ b/src/tests/ftest/cart/utest/SConscript
+@@ -20,7 +20,7 @@ def scons():
+     test_env.require('mercury', 'uuid', 'cmocka')
+     # The test is checking that this feature works so disable the compile warnings for it.
+     test_env.AppendIfSupported(CCFLAGS=['-Wno-gnu-designator', '-Wno-missing-field-initializers'])
+-    test_env.AppendUnique(LIBS=['pthread', 'm', 'yaml', 'dl'])
++    test_env.AppendUnique(LIBS=['pthread', 'm', 'yaml', 'dl', 'unwind'])
+     test_env.AppendUnique(CXXFLAGS=['-std=c++0x'])
+     test_env.AppendUnique(LIBPATH=LIBPATH)
+     test_env.AppendUnique(RPATH_FULL=LIBPATH)
