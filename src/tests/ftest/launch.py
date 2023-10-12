@@ -1083,6 +1083,7 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+            os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
 
             # Assign the default value for transport configuration insecure mode
             os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)
@@ -2761,7 +2762,7 @@ class Launch():
         logger.debug("-" * 80)
         logger.debug("Running %s on %s files on %s", cart_logtest, source_files, hosts)
         other = ["-print0", "|", "xargs", "-0", "-r0", "-n1", "-I", "%", "sh", "-c",
-                 f"'{cart_logtest} % > %.cart_logtest 2>&1'"]
+                 f"'{cart_logtest} --ftest-mode %'"]
         result = run_remote(
             logger, hosts, find_command(source, pattern, depth, other), timeout=4800)
         if not result.passed:

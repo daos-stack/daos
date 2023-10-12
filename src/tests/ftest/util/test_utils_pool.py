@@ -330,6 +330,10 @@ class TestPool(TestDaosApiBase):
             raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
         self._dmg = value
 
+    def no_exception(self):
+        """Temporarily disable raising exceptions for failed commands."""
+        return self.dmg.no_exception()
+
     def skip_cleanup(self):
         """Prevent pool from being removed during cleanup.
 
@@ -444,8 +448,8 @@ class TestPool(TestDaosApiBase):
         if self.pool and not self.connected:
             kwargs = {"flags": permission}
             self.log.info(
-                "Connecting to pool %s with permission %s (flag: %s)",
-                self.uuid, permission, kwargs["flags"])
+                "Connecting to %s with permission %s (flag: %s)",
+                str(self), permission, kwargs["flags"])
             self._call_method(self.pool.connect, kwargs)
             self.connected = True
             return True
@@ -461,7 +465,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool and self.connected:
-            self.log.info("Disconnecting from pool %s", self.uuid)
+            self.log.info("Disconnecting from %s", str(self))
             self._call_method(self.pool.disconnect, {})
             self.connected = False
             return True
@@ -523,7 +527,7 @@ class TestPool(TestDaosApiBase):
             CmdResult: Object that contains exit status, stdout, and other information.
 
         """
-        return self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+        return self.dmg.pool_delete_acl(self.identifier, principal=principal)
 
     @fail_on(CommandFailure)
     def drain(self, rank, tgt_idx=None):
@@ -729,10 +733,10 @@ class TestPool(TestDaosApiBase):
                         "test yaml parameter.".format(
                             self.pool_query_timeout.value, self.identifier)) from error
 
-                if self.pool_query_delay:
+                if self.pool_query_delay.value:
                     self.log.info(
                         "Waiting %s seconds before issuing next dmg pool query",
-                        self.pool_query_delay)
+                        self.pool_query_delay.value)
                     sleep(self.pool_query_delay.value)
 
     @fail_on(CommandFailure)
@@ -1093,7 +1097,7 @@ class TestPool(TestDaosApiBase):
             for key in sorted(daos_space.keys())
             for index, item in enumerate(daos_space[key])]
         self.log.info(
-            "Pool %s space%s:\n  %s", self.uuid,
+            "%s space%s:\n  %s", str(self),
             " " + msg if isinstance(msg, str) else "", "\n  ".join(sizes))
 
     def pool_percentage_used(self):

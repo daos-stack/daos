@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -308,6 +309,8 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 	engineTargetNb := uint64(engineCfg.TargetCount)
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
+		// TODO DAOS-14223: GetMetaSize() should reflect custom values set through pool
+		//                  create --meta-size option.
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
 		c.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
 			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
@@ -507,21 +510,6 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 	}
 }
 
-func checkEnginesReady(instances []Engine) error {
-	for _, inst := range instances {
-		if !inst.IsReady() {
-			var err error = FaultDataPlaneNotStarted
-			if inst.IsStarted() {
-				err = errEngineNotReady
-			}
-
-			return errors.Wrapf(err, "instance %d", inst.Index())
-		}
-	}
-
-	return nil
-}
-
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	if req == nil {
@@ -535,8 +523,12 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	// to support off-line storage scan functionality which uses cached stats (e.g. dmg storage
 	// scan --nvme-meta).
 	if req.Scm.Usage && req.Nvme.Meta {
-		if err := checkEnginesReady(c.harness.Instances()); err != nil {
-			return nil, err
+		nrInstances := len(c.harness.Instances())
+		readyRanks := c.harness.readyRanks()
+		if len(readyRanks) != nrInstances {
+			return nil, errors.Wrapf(errEngineNotReady, "%s, ready: %v",
+				english.Plural(nrInstances, "engine", "engines"),
+				readyRanks)
 		}
 	}
 
