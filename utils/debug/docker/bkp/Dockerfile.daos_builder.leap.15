@@ -1,0 +1,31 @@
+# Copyright 2021-2024 Intel Corporation
+# All rights reserved.
+#
+# 'recipe' for building a RPMs leap15 DAOS builder
+
+ARG	GIT_TAG="latest"
+FROM	"daos/builder-leap15.5:${GIT_TAG}"
+
+USER	root:root
+COPY	./files/daos_ci-leap15-artifactory.repo /etc/yum.repos.d/daos_ci-leap15-artifactory.repo
+RUN	dnf clean all -y && dnf upgrade -y --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel
+RUN	dnf install -y rpmdevtools rpmlint rpm-build
+
+ARG	GIT_BRANCH="master"
+USER	daos_server:daos_server
+RUN	git clone --recurse-submodules https://github.com/daos-stack/daos.git daos-build
+RUN	cd daos-build && git switch --recurse-submodules --create="${GIT_BRANCH}" "origin/${GIT_BRANCH}"
+
+USER	root:root
+RUN	cd daos-build/src/rdb/raft && dnf build-dep --spec raft.spec
+
+USER	daos_server:daos_server
+RUN	cd daos-build/src/rdb/raft && make -f Makefile-rpm.mk
+
+USER	root:root
+RUN	cd daos-build/src/rdb/raft && dnf install -y _topdir/RPMS/x86_64/*.rpm
+RUN	cd daos-build/utils/rpms && dnf build-dep --spec daos.spec
+
+USER	daos_server:daos_server
+RUN	pip uninstall -y scons
+COPY	files/create-tarball.sh daos-build/utils/rpms

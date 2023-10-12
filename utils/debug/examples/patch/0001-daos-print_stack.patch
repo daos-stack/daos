@@ -1,0 +1,15 @@
+diff --git a/src/vos/vos_space.c b/src/vos/vos_space.c
+index 099c92f24..a10689953 100644
+--- a/src/vos/vos_space.c
++++ b/src/vos/vos_space.c
+@@ -46,6 +46,10 @@ get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
+ 
+ 	if (media == DAOS_MEDIA_SCM) {
+ 		int *my_pointer ;
++		char call_stack[2048];
++
++		dump_stack(call_stack, sizeof(call_stack));
++		D_ERROR("Dump stack before SEGV: stack=%s", call_stack);
+ 
+ 		my_pointer=(int*)((&media > (int*)&small_pool)?(&media-(int*)&small_pool):((int*)&small_pool-&media));
+ 		(*(int*)my_pointer)++;
