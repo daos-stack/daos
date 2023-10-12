@@ -11,7 +11,10 @@ from run_utils import run_remote
 
 
 class DaosServerMemUsage(TestWithServers):
-    """Test memory usage after starting/stopping servers."""
+    """Test memory usage after starting/stopping servers.
+
+    :avocado: recursive
+    """
 
     def get_memory_data(self, description):
         """Get the total, free, and available memory per server host.
