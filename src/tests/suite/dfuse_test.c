@@ -506,7 +506,7 @@ do_mmap(void **state)
 	root = open(test_dir, O_PATH | O_DIRECTORY);
 	assert_return_code(root, errno);
 
-	fd = openat(root, "file", O_CREAT);
+	fd = openat(root, "file", O_CREAT, S_IRUSR | S_IWUSR);
 	assert_return_code(root, errno);
 
 	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_PRIVATE, fd, 0);
