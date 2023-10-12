@@ -32,8 +32,58 @@ services:
         - "DAOS_GIT_BRANCH=${DAOS_GIT_BRANCH}"
         - "DAOS_VENV_DIR=${DAOS_VENV_DIR}"
     tty: true
+
+  daos_ftest_build:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-ftest-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
+    build:
+      context: "daos-ftest/${LINUX_DISTRO}"
+      args:
+        - "LINUX_DISTRO=${LINUX_DISTRO}"
+        - "DAOS_DOCKER_IMAGE_NSP=${DAOS_DOCKER_IMAGE_NSP}"
+        - "DAOS_DOCKER_IMAGE_TAG=${DAOS_DOCKER_IMAGE_TAG}"
+    container_name: daos-ftest
+    hostname: daos-ftest
+    privileged: true
+    cgroup: host
     volumes:
       - type: bind
         read_only: false
-        source: /home/ckochhof
-        target: /home/ckochhof
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: tmpfs
+        target: /run
+      - type: bind
+        read_only: false
+        source: /dev/hugepages
+        target: /dev/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/kernel/mm/hugepages
+        target: /sys/kernel/mm/hugepages
+
+  daos_ftest_run:
+    image: "${DAOS_DOCKER_IMAGE_NSP}/daos-ftest_run-${LINUX_DISTRO}:${DAOS_DOCKER_IMAGE_TAG}"
+    container_name: daos-ftest
+    hostname: daos-ftest
+    privileged: true
+    cgroup: host
+    network_mode: host
+    volumes:
+      - type: bind
+        read_only: false
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+      - type: tmpfs
+        target: /run
+      - type: bind
+        read_only: false
+        source: /dev/hugepages
+        target: /dev/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/kernel/mm/hugepages
+        target: /sys/kernel/mm/hugepages
+      - type: bind
+        read_only: false
+        source: /sys/devices/system/node
+        target: /sys/devices/system/node
