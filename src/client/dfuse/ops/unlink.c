@@ -37,10 +37,9 @@ dfuse_oid_unlinked(struct dfuse_info *dfuse_info, fuse_req_t req, daos_obj_id_t 
 	parent_ino = parent->ie_stat.st_ino;
 
 	/* At this point the request is complete so the kernel is free to drop any refs on parent
-	 *  so it should not be accessed
+	 * so it should not be accessed.
 	 */
 	DFUSE_REPLY_ZERO(parent, req);
-	parent = NULL;
 
 	/* If caching is enabled then invalidate the data and attribute caches.  As this came a
 	 * unlink/rename call the kernel will have just done a lookup and knows what was likely

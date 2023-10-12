@@ -164,37 +164,6 @@ ih_decref(struct d_hash_table *htable, d_list_t *rlink)
 	return (atomic_fetch_sub_relaxed(&ie->ie_ref, 1) == 1);
 }
 
-#if 0
-static int
-ih_ndecref(struct d_hash_table *htable, d_list_t *rlink, int count)
-{
-	struct dfuse_inode_entry *ie;
-	uint32_t                  oldref = 0;
-	uint32_t                  newref = 0;
-
-	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
-
-	do {
-		oldref = atomic_load_relaxed(&ie->ie_ref);
-
-		if (oldref < count)
-			break;
-
-		newref = oldref - count;
-
-	} while (!atomic_compare_exchange(&ie->ie_ref, oldref, newref));
-
-	if (oldref < count) {
-		DFUSE_TRA_ERROR(ie, "unable to decref %u from %u", count, oldref);
-		return -DER_INVAL;
-	}
-
-	if (newref == 0)
-		return 1;
-	return 0;
-}
-#endif
-
 static void
 ih_free(struct d_hash_table *htable, d_list_t *rlink)
 {
