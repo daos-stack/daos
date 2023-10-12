@@ -3,7 +3,7 @@
 
 daos_openmpi_module_path: /usr/share/modulefiles/mpi/openmpi-x86_64
 
-daos_base_deps:
+daos_common_deps:
   rpms:
     - bash
     - bzip2-devel
@@ -33,9 +33,11 @@ daos_base_deps:
 daos_dev_deps:
   rpms:
     - daos-raft-devel
+    - daxctl-devel
     - gcc-gfortran
     - libaec-devel
     - libattr-devel
+    - ndctl-devel
     - python3.11
     - python3.11-devel
     - python3-clustershell

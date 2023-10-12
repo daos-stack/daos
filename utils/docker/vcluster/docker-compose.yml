@@ -3,8 +3,6 @@
 #
 # Docker Compose file allowing to build and deploy locally a DAOS virtual cluster
 
-version: "3.8"
-
 services:
 
   daos_base:
@@ -24,7 +22,7 @@ services:
     cgroup: host
     volumes:
       - type: bind
-        read_only: true
+        read_only: false
         source: /sys/fs/cgroup
         target: /sys/fs/cgroup
       - type: tmpfs
@@ -59,7 +57,7 @@ services:
       - "daos-client:${DAOS_IFACE_IP}"
     volumes:
       - type: bind
-        read_only: true
+        read_only: false
         source: /sys/fs/cgroup
         target: /sys/fs/cgroup
       - type: bind
@@ -101,7 +99,7 @@ services:
       - "daos-client:${DAOS_IFACE_IP}"
     volumes:
       - type: bind
-        read_only: true
+        read_only: false
         source: /sys/fs/cgroup
         target: /sys/fs/cgroup
       - type: tmpfs
@@ -137,7 +135,7 @@ services:
       - "daos-client:${DAOS_IFACE_IP}"
     volumes:
       - type: bind
-        read_only: true
+        read_only: false
         source: /sys/fs/cgroup
         target: /sys/fs/cgroup
       - type: tmpfs
