@@ -1,0 +1,3 @@
+# DAOS development environment — loaded automatically by direnv.
+# Re-allow after changes: direnv allow
+source ./setup-dev.sh
