@@ -448,14 +448,6 @@ def get_common_provider(logger, hosts, interface, supported=None, verbose=True):
     for dev_name in get_interface_device_name(logger, hosts, interface, verbose):
         providers.update(get_interface_providers(dev_name, hg_info))
 
-    # Not currently needed for provider auto-detection
-    # if not supported or re.findall(r"ucx", "|".join(supported)):
-    #     ucx_info = get_ucx_info(logger, hosts, supported, verbose)
-    #     for dev_name in get_interface_device_name(logger, hosts, interface, verbose):
-    #         for add_on in ([], ["1"]):
-    #             device = ":".join([dev_name] + add_on)
-    #             providers.update(get_interface_providers(device, ucx_info))
-
     # Only include the providers supported by the interface on all of the hosts
     common_providers = set()
     if providers:

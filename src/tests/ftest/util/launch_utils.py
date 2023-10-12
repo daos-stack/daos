@@ -25,8 +25,6 @@ from storage_utils import StorageInfo, StorageException
 from user_utils import groupadd, useradd, userdel, get_group_id, get_user_groups
 from yaml_utils import get_yaml_data, YamlUpdater
 
-ARG_SPLITTER = "+"
-
 
 class LaunchException(Exception):
     """Exception for launch.py execution."""

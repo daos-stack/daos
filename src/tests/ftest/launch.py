@@ -401,7 +401,7 @@ class Launch():
         status |= summarize_run(logger, self.mode, test_status)
 
         # Record the group details
-        self.details["test group"] = group.details
+        self.details.update(group.details)
 
         # Restart the timer for the test result to account for any non-test execution steps
         setup_result.start()
