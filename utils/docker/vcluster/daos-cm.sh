@@ -140,7 +140,7 @@ function start
 
 	info "Starting DAOS server node"
 	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_server ; then
-		fatal "DAOS virtual DAOS server ndoe could no be started"
+		fatal "DAOS virtual DAOS server node could not be started"
 	fi
 
 	info "Waiting for daos_server services to be started"
