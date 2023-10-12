@@ -16,7 +16,7 @@ ARG CB0
 RUN dnf -y install dnf-plugins-core &&					\
     dnf config-manager --save --setopt=install_weak_deps=False &&	\
     dnf -y upgrade &&							\
-    dnf -y install diffutils file findutils git golang-bin		\
+    dnf -y install diffutils file findutils git golang		        \
 	python3-pygithub python-unversioned-command ShellCheck &&	\
     dnf clean all
 
