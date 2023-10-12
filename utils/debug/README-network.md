@@ -6,7 +6,7 @@
 [ROCE DEBUG FLOW FOR LINUX](https://enterprise-support.nvidia.com/s/article/RoCE-Debug-Flow-for-Linux)
 [PERFORMANCE TUNING FOR MELLANOX ADAPTERS](https://enterprise-support.nvidia.com/s/article/performance-tuning-for-mellanox-adapters)
 [Testing Early InfiniBand RDMA operation](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/networking_guide/sec-testing_early_infiniband_rdma_operation)
-[Allow Infiniband and RDMA Operations To Run Without Root Priveledges](https://access.redhat.com/solutions/5929621)
+[Allow Infiniband and RDMA Operations To Run Without Root Privileges](https://access.redhat.com/solutions/5929621)
 [NVIDIA MLNX_OFED Documentation v23.07](https://docs.nvidia.com/nvidia-mlnx-ofed-documentation-v23-07.pdf)
 [Quick and simple pingpong test for libfabric](https://ofiwg.github.io/libfabric/v1.6.1/man/fi_pingpong.1.html)
 [Diagnosing Performance - Mercury](https://mercury-hpc.github.io/user/perf/)
@@ -41,7 +41,7 @@ To have information about network topology:
 - `ibswitches`
 
 To test RDMA communications with ib network:
-- `ibping`: require to be run as root or to have write priviledge on devices `/dev/infiniband/umad*`
+- `ibping`: require to be run as root or to have write privilege on devices `/dev/infiniband/umad*`
 
 To test IB Verbs with `ibv_rc_pingpong`:
 - client: `ibv_rc_pingpong -d <ib device> -i <ib index> -g <server gid> -p <server port> <server ip>`
@@ -61,7 +61,7 @@ To have the supported libfabric configuration:
 To test Mercury:
 - client: `scp <server ip>:port.cfg . && hg_rate -c ofi -p 'verbs;ofi_rxm' -V -d <if name>`
 - server: `hg_perf_server -c ofi -p 'verbs;ofi_rxm' -d <if name> -V -b`
-On the server a file `port.cfg` is generated wihch should be copied on the client.
+On the server a file `port.cfg` is generated which should be copied on the client.
 
 To test CART:
 - `self-test -u --group-name daos_server --message-size '(0 0)' --repetitions 1 --endpoint "0:0-7" `
