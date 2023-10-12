@@ -1234,7 +1234,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
 		if (rc) {
-			D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
+			DL_ERROR(rc, "Failed to truncate file");
 			daos_array_close(file->oh, NULL);
 			return daos_der2errno(rc);
 		}
@@ -3939,7 +3939,7 @@ dfs_lookup_rel_int(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 		if (flags & O_TRUNC) {
 			rc = daos_array_set_size(obj->oh, DAOS_TX_NONE, 0, NULL);
 			if (rc) {
-				D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
+				DL_ERROR(rc, "Failed to truncate file");
 				daos_array_close(obj->oh, NULL);
 				D_GOTO(err_obj, rc = daos_der2errno(rc));
 			}
