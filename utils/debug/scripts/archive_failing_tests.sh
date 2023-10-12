@@ -12,13 +12,13 @@ echo "[INFO] Decompressing bzip2 logs"
 find "${@:2}" -type f -name "*.bz2" -exec bunzip2 -v {} \;
 
 echo "[INFO] Searching failing tests"
-for file_path in $(find "${@:2}" -type f -name debug.log) ; do
+find "${@:2}" -type f -name debug.log | while read file_path ; do
 	if tail -2 "$file_path" | head -1 | grep -q -v -e ' INFO | PASS ' -e ' ERROR| SKIP ' -e 'ERROR| WARN ' ; then
 		echo "[INFO]    - $file_path"
-		result_path=$(dirname $file_path)
-		test_path=$(dirname $(dirname $result_path))
+		result_path="$(dirname "$file_path")"
+		test_path="$(dirname "$(dirname "$result_path")")"
 		if [[ ! -d "$tmp_dir/$test_path" ]] ; then
-			mkdir -p "$tmp_dir/$(dirname $test_path)"
+			mkdir -p "$tmp_dir/$(dirname "$test_path")"
 			cp -a "$test_path" "$tmp_dir/$test_path"
 			rm -fr "$tmp_dir/$test_path/test-results"
 			mkdir -p "$tmp_dir/$test_path/test-results"
