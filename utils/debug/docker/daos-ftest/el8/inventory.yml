@@ -1,0 +1,41 @@
+# Sample inventory of a DAOS functional platform running on the wolf cluster
+#
+# Detailed information on the content of this ansible inventory file is available in the README.md
+# file of the directory containing this first file.
+
+all:
+  vars:
+    #
+    # Mandatory variable defining the shared directory used to install DAOS.
+    daos_runtime_dir: /home/daos/daos-install
+    #
+    # Optional variable defining the network provider to use by the DAOS engines.  This variable
+    # is also used to define which network driver rpms have to be install.
+    #  default: ofi+tcp;ofi_rxm
+    daos_ofi_provider: ofi+tcp;ofi_rxm
+  children:
+    daos_dev:
+      vars:
+        #
+        # Mandatory variable defining the path of the directory containing the DAOS source code.
+        daos_source_dir: /home/daos/daos-src
+        #
+        # Mandatory variable defining the path of the directory containing the DAOS build outputs.
+        daos_build_dir: /home/daos/daos-build
+        #
+        # Optional variable defining the network interface to use with the launch.py python
+        # script.
+        #  default: None
+        daos_ofi_interface: wlp4s0
+      hosts:
+        daos-ftest:
+    daos_servers:
+      vars:
+        #
+        # Optional variable defining the number of hugepages to be allocated by the linux kernel.
+        daos_hugepages_nb: 4096
+      hosts:
+        daos-ftest:
+    daos_clients:
+      hosts:
+        daos-ftest:
