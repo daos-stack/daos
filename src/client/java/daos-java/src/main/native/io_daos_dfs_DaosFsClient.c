@@ -1005,7 +1005,7 @@ Java_io_daos_dfs_DaosFsClient_dfsWriteAsync(JNIEnv *env, jobject client,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \param[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	maxEntries	maximum entries to be read. not implemented yet
  *
@@ -1142,7 +1142,7 @@ set_user_group_name(JNIEnv *env, char *buffer, struct stat *stat)
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \param[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	bufferAddress	pointer to opened fs object
  */
@@ -1196,7 +1196,7 @@ Java_io_daos_dfs_DaosFsClient_dfsOpenedObjStat(JNIEnv *env,
  *
  * \param[in]	env		JNI environment
  * \param[in]	client		DaosFsClient object
- * \param[in]	dfsPtr		ointer to dfs object
+ * \param[in]	dfsPtr		pointer to dfs object
  * \param[in]	objId		pointer to opened fs object
  * \param[in]	name		attribute name
  * \param[in]	value		attribute value
@@ -1238,7 +1238,7 @@ Java_io_daos_dfs_DaosFsClient_dfsSetExtAttr(JNIEnv *env,
  *
  * \param[in]	env			JNI environment
  * \param[in]	client			DaosFsClient object
- * \param[in]	dfsPtr			ointer to dfs object
+ * \param[in]	dfsPtr			pointer to dfs object
  * \param[in]	objId			pointer to opened fs object
  * \param[in]	name			attribute name
  * \param[in]	expectedValenLen	expected value length

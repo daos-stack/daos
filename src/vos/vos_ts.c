@@ -99,13 +99,29 @@ static void init_entry(void *payload, uint32_t idx, void *arg)
 	entry->te_info = info;
 }
 
+static void vos_lru_ts_alloc(void *arg, daos_size_t size)
+{
+	struct vos_ts_info	*info = arg;
+
+	vos_lru_alloc_track(info->ti_tls, size);
+}
+
+static void vos_lru_ts_free(void *arg, daos_size_t size)
+{
+	struct vos_ts_info	*info = arg;
+
+	vos_lru_free_track(info->ti_tls, size);
+}
+
 static const struct lru_callbacks lru_cbs = {
 	.lru_on_evict = evict_entry,
 	.lru_on_init = init_entry,
+	.lru_on_alloc = vos_lru_ts_alloc,
+	.lru_on_free = vos_lru_ts_free,
 };
 
 int
-vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
+vos_ts_table_alloc(struct vos_ts_table **ts_tablep, struct vos_tls *tls)
 {
 	struct vos_ts_entry	*entry;
 	struct vos_ts_table	*ts_table;
@@ -129,6 +145,11 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		goto free_table;
 	}
 
+	if (tls != NULL)
+		d_tm_inc_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
+
 	ts_table->tt_ts_rl = vos_start_epoch;
 	ts_table->tt_ts_rh = vos_start_epoch;
 	uuid_clear(ts_table->tt_tx_rl.dti_uuid);
@@ -140,6 +161,7 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 		info->ti_type = i;
 		info->ti_count = type_counts[i];
 		info->ti_table = ts_table;
+		info->ti_tls = tls;
 		switch (i) {
 		case VOS_TS_TYPE_OBJ:
 			miss_size = OBJ_MISS_SIZE;
@@ -192,6 +214,10 @@ vos_ts_table_alloc(struct vos_ts_table **ts_tablep)
 cleanup:
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		lrua_array_free(ts_table->tt_type_info[i].ti_array);
+	if (tls != NULL)
+		d_tm_dec_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
 	D_FREE(ts_table->tt_misses);
 free_table:
 	D_FREE(ts_table);
@@ -200,7 +226,7 @@ free_table:
 }
 
 void
-vos_ts_table_free(struct vos_ts_table **ts_tablep)
+vos_ts_table_free(struct vos_ts_table **ts_tablep, struct vos_tls *tls)
 {
 	struct vos_ts_table	*ts_table = *ts_tablep;
 	int			 i;
@@ -208,6 +234,10 @@ vos_ts_table_free(struct vos_ts_table **ts_tablep)
 	for (i = 0; i < VOS_TS_TYPE_COUNT; i++)
 		lrua_array_free(ts_table->tt_type_info[i].ti_array);
 
+	if (tls != NULL)
+		d_tm_dec_gauge(tls->vtl_lru_alloc_size,
+			       sizeof(*ts_table->tt_misses) *
+			       (OBJ_MISS_SIZE + DKEY_MISS_SIZE + AKEY_MISS_SIZE));
 	D_FREE(ts_table->tt_misses);
 	D_FREE(ts_table);
 

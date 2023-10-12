@@ -42,13 +42,14 @@ crt_lib_init(void)
 
 	crt_gdata.cg_refcount = 0;
 	crt_gdata.cg_inited = 0;
-	crt_gdata.cg_primary_prov = CRT_PROV_OFI_SOCKETS;
+	crt_gdata.cg_primary_prov = CRT_PROV_OFI_TCP_RXM;
 
 	d_srand(d_timeus_secdiff(0) + getpid());
 	start_rpcid = ((uint64_t)d_rand()) << 32;
 
 	crt_gdata.cg_rpcid = start_rpcid;
 	crt_gdata.cg_num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+	crt_gdata.cg_iv_inline_limit = 19456; /* 19KB */
 }
 
 /* Library deinit */
@@ -72,7 +73,7 @@ dump_envariables(void)
 		"FI_UNIVERSE_SIZE", "CRT_ENABLE_MEM_PIN",
 		"FI_OFI_RXM_USE_SRX", "D_LOG_FLUSH", "CRT_MRC_ENABLE",
 		"CRT_SECONDARY_PROVIDER", "D_PROVIDER_AUTH_KEY", "D_PORT_AUTO_ADJUST",
-		"D_POLL_TIMEOUT"};
+		"D_POLL_TIMEOUT", "D_LOG_FILE_APPEND_RANK"};
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(envars); i++) {
@@ -558,6 +559,20 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 }
 
 int
+crt_protocol_info_get(const char *info_string, struct crt_protocol_info **protocol_info_p)
+{
+	static_assert(sizeof(struct crt_protocol_info) == sizeof(struct na_protocol_info),
+		      "protocol info structs do not match");
+	return crt_hg_get_protocol_info(info_string, (struct na_protocol_info **)protocol_info_p);
+}
+
+void
+crt_protocol_info_free(struct crt_protocol_info *protocol_info)
+{
+	crt_hg_free_protocol_info((struct na_protocol_info *)protocol_info);
+}
+
+int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
 	char		*provider_env;
@@ -801,6 +816,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 
 		crt_self_test_init();
 
+		crt_iv_init(opt);
 		rc = crt_opc_map_create();
 		if (rc != 0) {
 			D_ERROR("crt_opc_map_create() failed, "DF_RC"\n", DP_RC(rc));
