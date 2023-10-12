@@ -1,5 +1,11 @@
 # Ansible scripts for deploying the DAOS functional test platform
 
+- hosts: all
+  vars_files:
+    - vars/defaults.yml
+  tasks:
+    - import_tasks: tasks/pre_provision.yml
+
 - hosts: daos_dev
   vars_files:
     - vars/defaults.yml
@@ -17,3 +23,9 @@
     - vars/defaults.yml
   tasks:
     - import_tasks: tasks/daos_clients.yml
+
+- hosts: all
+  vars_files:
+    - vars/defaults.yml
+  tasks:
+    - import_tasks: tasks/post_provision.yml
