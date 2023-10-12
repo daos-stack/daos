@@ -6,7 +6,6 @@
     msg: "Variable '{{ item }}' is not defined"
   when: item not in vars
   loop:
-    - daos_runtime_dir
     - daos_source_dir
     - daos_build_dir
 

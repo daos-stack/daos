@@ -12,8 +12,8 @@
   dnf:
     state: latest
     update_cache: true
-    disablerepo:
-      - appstream
+    # disablerepo:
+    #  - appstream
     name: "{{ daos_dev_deps.rpms }}"
 
 - name: Install DAOS install-el8.sh

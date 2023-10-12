@@ -239,8 +239,8 @@ if [[ ${PYTHONPATH:+x} ]] ; then
 else
 	export PYTHONPATH="$DAOS_INSTALL_DIR/lib/daos/TESTING/ftest/util"
 fi
-cd "$DAOS_SOURCE_DIR/utils/sl"
-source setup_local.sh
+cd "$DAOS_SOURCE_DIR"
+source utils/sl/setup_local.sh
 
 info "Setting MPI simulation environment"
 if run $MODULE_EXE is-avail mpi/mpich-x86_64 ; then

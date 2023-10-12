@@ -1,13 +1,6 @@
 # Ansible scripts for deploying a DAOS development node
 # yamllint disable rule:line-length
 
-- name: Checking required variables
-  fail:
-    msg: "Variable '{{ item }}' is not defined"
-  when: item not in vars
-  loop:
-    - daos_runtime_dir
-
 - name: Base DAOS configuration
   import_tasks: daos_base.yml
 

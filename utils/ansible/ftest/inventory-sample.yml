@@ -13,6 +13,9 @@
 #     # is also used to define which network driver rpms have to be install.
 #     #  default: ofi+tcp;ofi_rxm
 #     daos_ofi_provider: ofi+tcp;ofi_rxm
+#     #
+#     # Mandatory variable defining the user running the daos-launch.sh script
+#     daos_launch_username: foo
 #   children:
 #     daos_dev:
 #       vars:

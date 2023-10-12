@@ -1,6 +1,13 @@
 # Ansible scripts for configuring a DAOS node with ftest
 # yamllint disable rule:line-length
 
+- name: Checking required variables
+  fail:
+    msg: "Variable '{{ item }}' is not defined"
+  when: item not in vars
+  loop:
+    - daos_launch_username
+
 - name: Gather distribution specific variables
   include_vars: "{{ item }}"
   with_first_found:
@@ -44,7 +51,7 @@
     dest: /root/enable-coredumps.sh
     owner: root
     group: root
-    mode: '0644'
+    mode: '0600'
 
 - name: Enable CORE dump
   remote_user: root
@@ -57,8 +64,39 @@
     dest: /root/configure-nofile.sh
     owner: root
     group: root
-    mode: '0644'
+    mode: '0600'
 
 - name: Configure Number of Open Files
   remote_user: root
   command: /bin/bash /root/configure-nofile.sh
+
+- name: Copy bash script configure-passwd.sh
+  remote_user: root
+  copy:
+    src: file/configure-passwd.sh
+    dest: /root/configure-passwd.sh
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Configure /etc/passwd
+  remote_user: root
+  command: "/bin/bash /root/configure-passwd.sh {{ daos_launch_username }}"
+
+- name: Add EPEL release
+  remote_user: root
+  dnf:
+    name: epel-release
+    state: present
+
+- name: Add DAOS repository
+  remote_user: root
+  yum_repository:
+    name: daos-packages
+    description: DAOS v2.6.1 Packages Packages
+    baseurl: https://packages.daos.io/v2.6.1/EL8/packages/x86_64
+    enabled: true
+    gpgcheck: true
+    protect: true
+    gpgkey: https://packages.daos.io/RPM-GPG-KEY-2023
+    state: present
