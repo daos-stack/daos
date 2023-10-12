@@ -317,7 +317,7 @@ post_provision_config_nodes() {
         disable_gpg_check "$repo_url"
     done
 
-    if ! "${cmd[@]}" ; then
+    if ! "${cmd[@]}" --exclude golang-bin*; then
 	    dump_repos
 	    return 1
     fi
