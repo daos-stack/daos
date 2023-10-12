@@ -21,13 +21,11 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         """Set up each test case."""
         super().setUp()
         self.acl_filename = "test_acl_file.txt"
-        self.daos_cmd = self.get_daos_command()
-        self.prepare_pool()
-        self.add_container(self.pool)
+        self.pool = self.get_pool()
+        self.container = self.get_container(self.pool)
 
         # List of ACL entries
-        self.cont_acl = self.get_container_acl_list(
-            self.pool.uuid, self.container.uuid)
+        self.cont_acl = self.get_container_acl_list(self.container)
 
     def test_acl_update_invalid_inputs(self):
         """
@@ -46,34 +44,25 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         invalid_entries = self.params.get("invalid_acl_entries", "/run/*")
         invalid_filename = self.params.get("invalid_acl_filename", "/run/*")
 
-        # Disable raising an exception if the daos command fails
-        self.daos_cmd.exit_status_exception = False
-
         test_errs = []
         for entry in invalid_entries:
-
             # Run update command
-            self.daos_cmd.container_update_acl(
-                self.pool.uuid,
-                self.container.uuid,
-                entry=entry)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1003"))
+            with self.container.no_exception():
+                self.container.update_acl(entry=entry)
+            test_errs.extend(self.error_handling(self.container.daos.result, "-1003"))
 
             # Check that the acl file was unchanged
-            self.acl_file_diff(self.cont_acl)
+            self.acl_file_diff(self.container, self.cont_acl)
 
         for acl_file in invalid_filename:
-
             # Run update command
-            self.daos_cmd.container_update_acl(
-                self.pool.uuid,
-                self.container.uuid,
-                acl_file=acl_file)
+            with self.container.no_exception():
+                self.container.update_acl(acl_file=acl_file)
             test_errs.extend(self.error_handling(
-                self.daos_cmd.result, "no such file or directory"))
+                self.container.daos.result, "no such file or directory"))
 
             # Check that the acl file was unchanged
-            self.acl_file_diff(self.cont_acl)
+            self.acl_file_diff(self.container, self.cont_acl)
 
         if test_errs:
             self.fail("container update-acl command expected to fail: \
@@ -94,9 +83,6 @@ class UpdateContainerACLTest(ContSecurityTestBase):
             "invalid_acl_file_content", "/run/*")
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
-        # Disable raising an exception if the daos command fails
-        self.daos_cmd.exit_status_exception = False
-
         test_errs = []
         for content in invalid_file_content:
             create_acl_file(path_to_file, content)
@@ -105,14 +91,12 @@ class UpdateContainerACLTest(ContSecurityTestBase):
                 exp_err = "no entries"
 
             # Run update command
-            self.daos_cmd.container_update_acl(
-                self.pool.uuid,
-                self.container.uuid,
-                acl_file=path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, exp_err))
+            with self.container.no_exception():
+                self.container.update_acl(acl_file=path_to_file)
+            test_errs.extend(self.error_handling(self.container.daos.result, exp_err))
 
             # Check that the acl file was unchanged
-            self.acl_file_diff(self.cont_acl)
+            self.acl_file_diff(self.container, self.cont_acl)
 
         if test_errs:
             self.fail("container update-acl command expected to fail: \
@@ -139,39 +123,30 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         create_acl_file(path_to_file, self.cont_acl + ace_to_add)
 
         # Run update command
-        self.daos_cmd.container_update_acl(
-            self.pool.uuid,
-            self.container.uuid,
-            acl_file=path_to_file)
+        self.container.update_acl(acl_file=path_to_file)
 
         # Verify that the entry added did not affect any other entry
-        self.acl_file_diff(self.cont_acl + ace_to_add)
+        self.acl_file_diff(self.container, self.cont_acl + ace_to_add)
 
         # Let's add a file with existing principals and verify overridden values
         ace_to_add_2 = ["A:G:my_great_test@:rwd", "A::my_new_principal@:rw"]
         create_acl_file(path_to_file, ace_to_add_2)
 
         # Run update command
-        self.daos_cmd.container_update_acl(
-            self.pool.uuid,
-            self.container.uuid,
-            acl_file=path_to_file)
+        self.container.update_acl(acl_file=path_to_file)
 
         # Verify that the ACL file is now composed of the updated ACEs
-        self.acl_file_diff(self.cont_acl + ace_to_add_2)
+        self.acl_file_diff(self.container, self.cont_acl + ace_to_add_2)
 
         # Lastly, let's add a file that contains only new principals
         ace_to_add_3 = ["A:G:new_new_principal@:rwd", "A::last_one@:rw"]
         create_acl_file(path_to_file, ace_to_add_3)
 
         # Run update command
-        self.daos_cmd.container_update_acl(
-            self.pool.uuid,
-            self.container.uuid,
-            acl_file=path_to_file)
+        self.container.update_acl(acl_file=path_to_file)
 
         # Verify that the ACL file is now composed of the updated ACEs
-        self.acl_file_diff(self.cont_acl + ace_to_add_2 + ace_to_add_3)
+        self.acl_file_diff(self.container, self.cont_acl + ace_to_add_2 + ace_to_add_3)
 
     def test_update_cont_acl_no_perm(self):
         """
@@ -189,28 +164,22 @@ class UpdateContainerACLTest(ContSecurityTestBase):
         path_to_file = os.path.join(self.tmp, self.acl_filename)
 
         # Let's give access to the pool to the root user
-        self.get_dmg_command().pool_update_acl(
-            self.pool.uuid, entry="A::EVERYONE@:rw")
-
-        # The root user shouldn't have access to updating container ACL entries
-        self.daos_cmd.sudo = True
-
-        # Disable raising an exception if the daos command fails
-        self.daos_cmd.exit_status_exception = False
+        self.pool.update_acl(False, entry="A::EVERYONE@:rw")
 
         # Let's check that we can't run as root (or other user) and update
         # entries if no permissions are set for that user.
         test_errs = []
         for content in valid_file_content:
             create_acl_file(path_to_file, content)
-            self.daos_cmd.container_update_acl(
-                self.pool.uuid,
-                self.container.uuid,
-                acl_file=path_to_file)
-            test_errs.extend(self.error_handling(self.daos_cmd.result, "-1001"))
+            # Disable raising an exception if the daos command fails
+            with self.container.no_exception():
+                # The root user shouldn't have access to updating container ACL entries
+                with self.container.as_user('root'):
+                    self.container.update_acl(acl_file=path_to_file)
+            test_errs.extend(self.error_handling(self.container.daos.result, "-1001"))
 
             # Check that the acl file was unchanged
-            self.acl_file_diff(self.cont_acl)
+            self.acl_file_diff(self.container, self.cont_acl)
 
         if test_errs:
             self.fail("container update-acl command expected to fail: \
