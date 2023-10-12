@@ -16,9 +16,9 @@ clush -B -S -o '-i ci_key' -l root -w "${first_node}" \
     "NODELIST=${NODELIST} $(cat ci/functional/setup_nfs.sh)"
 
 clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-  "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}                \
-   FIRST_NODE=${first_node}                            \
-   TEST_RPMS=${TEST_RPMS}                              \
+  "OPERATIONS_EMAIL=${OPERATIONS_EMAIL}           \
+   FIRST_NODE=${first_node}                       \
+   TEST_RPMS=${TEST_RPMS}                         \
    $(cat ci/functional/test_main_prep_node.sh)"
 
 # this is being mis-flagged as SC2026 where shellcheck.net is OK with it
@@ -40,8 +40,8 @@ if $TEST_RPMS; then
     ssh -i ci_key -l jenkins "${first_node}" \
       "TEST_TAG=\"$test_tag\"                        \
        TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"$FTEST_ARG\"                      \
-       WITH_VALGRIND=\"$WITH_VALGRIND\"              \
+       FTEST_ARG=\"${FTEST_ARG:-}\"                  \
+       WITH_VALGRIND=\"${WITH_VALGRIND:-}\"          \
        STAGE_NAME=\"$STAGE_NAME\"                    \
        $(cat ci/functional/test_main_node.sh)"
 else
