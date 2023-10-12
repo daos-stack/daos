@@ -12,12 +12,6 @@
   dnf:
     state: latest
     update_cache: true
-
-- name: Install rpms DAOS client dependencies
-  remote_user: root
-  dnf:
-    state: latest
-    update_cache: true
     disablerepo:
       - appstream
     name: "{{ daos_client_deps.rpms }}"
