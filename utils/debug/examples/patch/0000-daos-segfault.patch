@@ -1,0 +1,43 @@
+From bec48dfd35d319b247f6fbc73760a3da487c7af5 Mon Sep 17 00:00:00 2001
+From: Cedric Koch-Hofer <cedric.koch.hofer@gmail.com>
+Date: Wed, 27 Sep 2023 12:34:07 +0000
+Subject: [PATCH] Dumb modifications for testing purpose
+
+Required-githooks: true
+
+Signed-off-by: Cedric Koch-Hofer <cedric.koch-hofer@intel.com>
+---
+ src/vos/vos_space.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/src/vos/vos_space.c b/src/vos/vos_space.c
+index 28b7fd694..099c92f24 100644
+--- a/src/vos/vos_space.c
++++ b/src/vos/vos_space.c
+@@ -5,6 +5,9 @@
+  */
+ #define D_LOGFAC	DD_FAC(vos)
+ 
++// FIXME CKH For testing purpose
++#include <stdlib.h>
++
+ #include <daos_types.h>
+ #include "vos_internal.h"
+ #include "vos_policy.h"
+@@ -41,6 +44,13 @@ get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
+ 			ovhd = max_sz;
+ 	}
+ 
++	if (media == DAOS_MEDIA_SCM) {
++		int *my_pointer ;
++
++		my_pointer=(int*)((&media > (int*)&small_pool)?(&media-(int*)&small_pool):((int*)&small_pool-&media));
++		(*(int*)my_pointer)++;
++	}
++
+ 	return ovhd;
+ }
+ 
+-- 
+2.31.1
+
