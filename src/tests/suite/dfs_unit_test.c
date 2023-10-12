@@ -3053,7 +3053,6 @@ dfs_test_fix_chunk_size(void **state)
 	D_FREE(buf);
 }
 
-<<<<<<< HEAD
 static void
 dfs_test_oflags_write_file(char *name)
 {
@@ -3152,7 +3151,9 @@ dfs_test_oflags(void **state)
 	assert_int_equal(rc, 0);
 
 	rc = dfs_remove(dfs_mt, NULL, filename_file1, 0, NULL);
-=======
+	assert_int_equal(rc, 0);
+}
+
 #define NUM_ENTRIES	1024
 #define NR_ENUM		64
 
@@ -3273,7 +3274,6 @@ dfs_test_pipeline_find(void **state)
 	rc = dfs_release(dir1);
 	assert_int_equal(rc, 0);
 	rc = dfs_remove(dfs_mt, NULL, dirname, true, NULL);
->>>>>>> master
 	assert_int_equal(rc, 0);
 }
 
