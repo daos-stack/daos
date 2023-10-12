@@ -8,6 +8,7 @@
   loop:
     - daos_runtime_dir
     - daos_source_dir
+    - daos_build_dir
 
 - name: Client DAOS configuration
   import_tasks: daos_clients.yml

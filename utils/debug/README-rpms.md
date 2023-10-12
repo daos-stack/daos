@@ -1,7 +1,7 @@
 # General advices
 
 The easiest way to Build custom DAOS RPMs is to use a docker container.
-This could dbe done with manually building the docker container or with useing a docker compose
+This could dbe done with manually building the docker container or with using a docker compose
 file.
 
 ## Manual Building

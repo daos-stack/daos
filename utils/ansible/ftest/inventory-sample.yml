@@ -20,6 +20,9 @@
 #         # Mandatory variable defining the path of the directory containing the DAOS source code.
 #         daos_source_dir: /home/foo/work/daos
 #         #
+#         # Mandatory variable defining the path of the directory containing the DAOS build outputs.
+#         daos_build_dir: /home/foo/work/daos/build
+#         #
 #         # Optional variable defining the network interface to use with the launch.py python
 #         # script.
 #         #  default: None
