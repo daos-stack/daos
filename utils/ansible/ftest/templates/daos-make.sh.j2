@@ -178,16 +178,6 @@ check_cmds $SSH_EXE $WGET_EXE $CLUSH_EXE $NODESET_EXE $MODULE_EXE $MAKE_EXE $CMA
 
 set -e
 
-info "Checking of home partition"
-{% if "daos_clients" in groups and groups["daos_clients"] | length > 0 %}
-for host in $($NODESET_EXE -e $CLIENTS_LIST $SERVERS_LIST)
-{% else %}
-for host in $($NODESET_EXE -e $SERVERS_LIST)
-{% endif %}
-do
-	run $SSH_EXE root@$host mountpoint --quiet "$HOME" || fatal "Home directory '$home' not mounted on $host"
-done
-
 if "$FORCE_INSTALL" ; then
 	for dir in "$DAOS_INSTALL_DIR" "$DAOS_VENV_DIR" "$DAOS_BUILD_DIR"
 	do

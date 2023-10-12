@@ -7,15 +7,21 @@ daos_base_deps:
   rpms:
     - bash
     - capstone
+    - createrepo
     - gdb
     - glibc
+    - iproute
     - jq
     - lbzip2
     - numactl
     - numactl-libs
     - numatop
     - platform-python
+    - psmisc
     - python36
+    - python3.11-devel
+    - python3-pexpect
+    - python3-wheel
     - systemd
     - tree
 
