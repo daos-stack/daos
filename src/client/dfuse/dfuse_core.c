@@ -937,7 +937,7 @@ err_free:
 /*
  * Return a container connection by uuid.
  *
- * Re-use an existing connection if possible, otherwise open new connection
+ * Reuse an existing connection if possible, otherwise open new connection
  * and setup dfs.
  *
  * In the case of a container which has been created by mkdir _dfs will be a
@@ -1412,7 +1412,7 @@ dfuse_read_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 
@@ -1436,7 +1436,7 @@ dfuse_write_event_reset(void *arg)
 	int                 rc;
 
 	if (ev->de_iov.iov_buf == NULL) {
-		D_ALLOC(ev->de_iov.iov_buf, DFUSE_MAX_READ);
+		D_ALLOC_NZ(ev->de_iov.iov_buf, DFUSE_MAX_READ);
 		if (ev->de_iov.iov_buf == NULL)
 			return false;
 

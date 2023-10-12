@@ -235,7 +235,7 @@ alloc_ts_cache(void **state)
 	if (ts_table != NULL)
 		ts_arg->old_table = ts_table;
 
-	rc = vos_ts_table_alloc(&ts_table);
+	rc = vos_ts_table_alloc(&ts_table, NULL);
 	if (rc != 0) {
 		print_message("Can't allocate timestamp table: "DF_RC"\n",
 			      DP_RC(rc));
@@ -757,7 +757,7 @@ ts_test_fini(void **state)
 
 	vos_ts_set_free(ts_arg->ta_ts_set);
 	ts_table = vos_ts_table_get(true);
-	vos_ts_table_free(&ts_table);
+	vos_ts_table_free(&ts_table, NULL);
 	vos_ts_table_set(ts_arg->old_table);
 	D_FREE(ts_arg);
 
