@@ -413,7 +413,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 					Meta: true,
 				},
 			},
-			expErr: FaultDataPlaneNotStarted,
+			expErr: errEngineNotReady,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
