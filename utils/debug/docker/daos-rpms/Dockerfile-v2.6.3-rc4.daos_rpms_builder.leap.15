@@ -1,0 +1,73 @@
+# Copyright 2021-2024 Intel Corporation
+# All rights reserved.
+#
+# 'recipe' for building a RPMs leap15 DAOS builder
+
+ARG	GIT_TAG="latest"
+FROM	"daos/builder-leap15.5:${GIT_TAG}"
+
+USER	root:root
+COPY	files/daos-rpms-builder.sh /usr/local/bin/daos-rpms-builder
+RUN	chmod 755 /usr/local/bin/daos-rpms-builder
+
+RUN	dnf clean all -y && dnf upgrade -y --exclude=fuse,fuse-libs,fuse-devel,libraft0,raft-devel,mercury,mercury-devel
+RUN	dnf install -y rpmdevtools rpmlint rpm-build
+
+USER	daos_server:daos_server
+RUN	pip uninstall -y scons
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/libfabric.git libfabric-build && \
+	cd libfabric-build && \
+	sudo dnf build-dep --spec libfabric.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/dpdk.git dpdk-build && \
+	cd dpdk-build && \
+	sudo dnf build-dep --spec dpdk.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/isa-l.git isal-build && \
+	cd isal-build && \
+	sudo dnf build-dep --spec isa-l.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/isa-l_crypto.git isal_crypto-build && \
+	cd isal_crypto-build && \
+	sudo dnf build-dep --spec isa-l_crypto.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/argobots.git argobots-build && \
+	cd argobots-build && \
+	sudo dnf build-dep --spec argobots.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/mercury.git mercury-build && \
+	cd mercury-build && \
+	sudo dnf build-dep --spec mercury.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/spdk.git spdk-build && \
+	cd spdk-build && \
+	sudo dnf build-dep --spec spdk.spec && \
+	make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/pmdk-pkg.git pmdk-build && \
+	cd pmdk-build && \
+	sudo dnf build-dep --spec pmdk.spec && \
+	env RPM_BUILD_OPTIONS=--nocheck make rpms && \
+	sudo dnf install --allowerasing _topdir/RPMS/x86_64/*.rpm
+
+RUN	git clone --recurse-submodules https://github.com/daos-stack/daos.git daos-build
+
+ # Define entrypoint and cmd:
+ # - ENTRYPOINT for the command to run
+ # - CMD for the default arguments
+ ENTRYPOINT ["/usr/local/bin/daos-rpms-builder"]
+ CMD ["--help"]
