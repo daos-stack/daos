@@ -138,18 +138,18 @@ function start
 	DAOS_IFACE_IP="${1:?Network Interface IP has to be defined}"
 	DAOS_POOL_SIZE="${2:?Pool size has to be defined}"
 
-	info "Starting DAOS virtual cluster containers"
-	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_server daos_admin daos_client ; then
-		fatal "DAOS virtual cluster containers could no be started"
+	info "Starting DAOS server node"
+	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_server ; then
+		fatal "DAOS virtual DAOS server node could not be started"
 	fi
 
-	info "Waiting for daos-server services to be started"
+	info "Waiting for daos_server services to be started"
 	timeout_counter=5
 	until docker exec daos-server systemctl --quiet is-active daos_server > /dev/null 2>&1 ; do
-		info "daos-server not yet ready: timeout=$timeout_counter"
+		info "daos_server not yet ready: timeout=$timeout_counter"
 		sleep 1
 		if ! (( timeout_counter-- )) ; then
-			fatal "DAOS server could not be started"
+			fatal "DAOS server service could not be started"
 		fi
 	done
 
@@ -162,6 +162,11 @@ function start
 		fi
 	done
 	info "DAOS file system ready to be formatted"
+
+	info "Starting DAOS admin node"
+	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_admin ; then
+		fatal "DAOS virtual admin node could no be started"
+	fi
 
 	info "Formatting DAOS storage"
 	if ! run docker exec daos-admin dmg storage format --host-list=daos-server ; then
@@ -192,6 +197,21 @@ function start
 	if ! run docker exec daos-admin dmg pool query tank ; then
 		fatal "DAOS pool tank not healthy"
 	fi
+
+	info "Starting DAOS client node"
+	if ! run env DAOS_IFACE_IP="$DAOS_IFACE_IP" docker compose up --detach daos_client ; then
+		fatal "DAOS virtual client node could no be started"
+	fi
+
+	info "Waiting for daos_agent services to be started"
+	timeout_counter=5
+	until docker exec daos-client systemctl --quiet is-active daos_agent > /dev/null 2>&1 ; do
+		info "daos_agent service not yet ready: timeout=$timeout_counter"
+		sleep 1
+		if ! (( timeout_counter-- )) ; then
+			fatal "DAOS agent service could not be started"
+		fi
+	done
 
 	info "Creating POSIX container posix-fs in tank pool"
 	if ! run docker exec daos-client daos container create --type=posix tank posix-fs ; then
