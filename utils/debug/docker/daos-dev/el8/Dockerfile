@@ -52,7 +52,7 @@ RUN	cd daos-src/src/rdb/raft && make -f Makefile-rpm.mk
 USER	root:root
 RUN	cd daos-src/src/rdb/raft && dnf install -y _topdir/RPMS/x86_64/*.rpm
 
-# FIXME Some pacakges such as mercury are not available as it
+# FIXME Some packages such as mercury are not available as it
 # RUN	cd daos-src/utils/rpms && dnf build-dep --spec daos.spec
 
 ARG	DAOS_VENV_DIR=""
