@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <sys/statfs.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <dirent.h>
 
 #include "dfuse_ioctl.h"
@@ -34,7 +35,7 @@
 /* Tests can be run by specifying the appropriate argument for a test or all will be run if no test
  * is specified.
  */
-static const char *all_tests = "ismd";
+static const char *all_tests = "ismdf";
 
 static void
 print_usage()
@@ -494,6 +495,30 @@ do_directory(void **state)
 	assert_return_code(rc, errno);
 }
 
+void
+do_mmap(void **state)
+{
+	int   root;
+	int   fd;
+	int   rc;
+	void *addr;
+
+	root = open(test_dir, O_PATH | O_DIRECTORY);
+	assert_return_code(root, errno);
+
+	fd = openat(root, "file", O_CREAT);
+	assert_return_code(root, errno);
+
+	addr = mmap(NULL, 1024 * 1024, PROT_READ, MAP_PRIVATE, fd, 0);
+	assert_ptr_not_equal(addr, NULL);
+
+	rc = close(fd);
+	assert_return_code(rc, errno);
+
+	rc = close(root);
+	assert_return_code(rc, errno);
+}
+
 static int
 run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 {
@@ -544,6 +569,16 @@ run_specified_tests(const char *tests, int *sub_tests, int sub_tests_size)
 			nr_failed += cmocka_run_group_tests(readdir_tests, NULL, NULL);
 			break;
 
+		case 'f':
+			printf("\n\n=================");
+			printf("dfuse mmap tests");
+			printf("=====================\n");
+			const struct CMUnitTest mmap_tests[] = {
+			    cmocka_unit_test(do_mmap),
+			};
+			nr_failed += cmocka_run_group_tests(mmap_tests, NULL, NULL);
+			break;
+
 		default:
 			assert_true(0);
 		}
@@ -568,9 +603,10 @@ main(int argc, char **argv)
 					       {"stream", no_argument, NULL, 's'},
 					       {"metadata", no_argument, NULL, 'm'},
 					       {"directory", no_argument, NULL, 'd'},
+					       {"mmap", no_argument, NULL, 'f'},
 					       {NULL, 0, NULL, 0}};
 
-	while ((opt = getopt_long(argc, argv, "aM:imsd", long_options, &index)) != -1) {
+	while ((opt = getopt_long(argc, argv, "aM:imsdf", long_options, &index)) != -1) {
 		if (strchr(all_tests, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
