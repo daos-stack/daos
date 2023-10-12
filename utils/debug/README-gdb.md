@@ -5,7 +5,7 @@ When debugging on a differeent node, some libraries could eventually be differen
 be able to rebuild the calling stack.  In such situation, the configuration of the defunct host has
 to be reproduce which is not an easy task: using docker container should be evaluated.  If it is not
 possible, the stack unwinding has to be done manually using the stack pointer (i.e. rsp register)
-and the function call addressses recorded in the stack.
+and the function call addresses recorded in the stack.
 
 To have the source code annotation, the debuginfo and the source rpms of the executable and its
 libraries shall be installed.
@@ -15,7 +15,7 @@ Install of the glibc debuginfo rpms could be very useful for debugging heap memo
 
 # GDB Tips
 
-## Usefull Commands
+## Useful Commands
 
 ```GDB
 p /x $rip # Print @ of the instruction pointer
@@ -25,7 +25,7 @@ x /10i <@>  # Dump 10 instructions stored in mem before @
 x /10gx	<@> # Dump 10 quad words
 x /s <@>    # Dump string
 
-disass /s <@> # Dump disassembled code from @ as machine instructions and source souce code
+disass /s <@> # Dump disassembled code from @ as machine instructions and source source code
               # This command accept range of address as arguments
 ```
 
@@ -51,7 +51,7 @@ Default GNU C calling convention use some registers to pass parameters:
 - `rax`: function's return value
 Other parameters should be passed with the stack.
 
-The prefix name of a regiser define its size:
+The prefix name of a register define its size:
 - `r`: 64 bits
 - `e`: 32 bits
 - `l`: 16 bits
@@ -59,13 +59,13 @@ The prefix name of a regiser define its size:
 ## Memory Corruption Tips
 
 When the `free()` function is failing it could be due to some buffer overflow which have corrupted
-the header of a malloc chunck.
-The size of a malloc chunck is defined by the `MALLOC_HEADER_SIZE` constant and is located just
+the header of a malloc chunk.
+The size of a malloc chunk is defined by the `MALLOC_HEADER_SIZE` constant and is located just
 before the chunk of storage return by malloc.
 
 ## Buffer Overflow Example
 
-A code simulating a buffer overlfow could be find in _examples/src/malloc\_overflow.c_.
+A code simulating a buffer overflow could be find in _examples/src/malloc\_overflow.c_.
 
 ### With the Call Stack
 
@@ -105,7 +105,7 @@ In this case the program have been compiled with the -g and thus it is not that 
 0x1a5a6d0:      0x5     0x6
 ```
 
-This last command show that the malloc chunck header has been corrupted.
+This last command show that the malloc chunk header has been corrupted.
 
 ### Without the Call Stack
 
@@ -125,8 +125,8 @@ look at the assembly code and the content of the stack.
 ...
 ```
 
-In the stack we could see that a main relative adress equal to 0x400735 (i.e \<main+207\>)  was
-stored at 0x7ffffd8699b0 just before a free relative adress equal to 0x7fb3ea08ea9c (i.e.
+In the stack we could see that a main relative address equal to 0x400735 (i.e \<main+207\>)  was
+stored at 0x7ffffd8699b0 just before a free relative address equal to 0x7fb3ea08ea9c (i.e.
 \<_int_free+748\>).  The disassemble command allow to validate this hypothesis.
 
 ```GDB
@@ -168,14 +168,14 @@ of the stack pointer (i.e. `rsp` register):
    0x000000000040066a <+4>:     sub    $0x20,%rsp
 ```
 
-The `rbp` register is then used for storing the adress of the buffer:
+The `rbp` register is then used for storing the address of the buffer:
 
 ```GDB
    0x000000000040068b <+37>:    callq  0x400570 <malloc@plt>
    0x0000000000400690 <+42>:    mov    %rax,-0x18(%rbp)
 ```
 
-Thus at the instruction \<+42\>, the adress of the buffer is recorded at the following place in the
+Thus at the instruction \<+42\>, the address of the buffer is recorded at the following place in the
 buffer.
 
 <pre>
@@ -196,7 +196,7 @@ buffer.
                 |                                |
 </pre>
 
-The `rbp` register is then used for retrieving the adress of the buffer from stack and pass it to
+The `rbp` register is then used for retrieving the address of the buffer from stack and pass it to
 the `free()` function through the `rdi` register.
 
 ```
@@ -228,7 +228,7 @@ address of the buffer stored into the stack.
                 |                                |
 </pre>
 
-We are now able get the address of the buffer and to show that the malloc chunck header has been
+We are now able get the address of the buffer and to show that the malloc chunk header has been
 corrupted.
 
 ```GDB
@@ -255,7 +255,7 @@ In the directory _examples/patch_ could be find the following patches:
 - _0001-daos-print_stack.patch_: This patch print a backtrace just before the segfault introuced by
    the patch _0000-daos-segfault.patch_.
 
-On the following backtrace we could see that the `SEGFAULT` occured in the `get_frag_overhead()`
+On the following backtrace we could see that the `SEGFAULT` occurred in the `get_frag_overhead()`
 function from the _libvos_srv.so_ shared lib.
 
 ```GDB
@@ -286,7 +286,7 @@ From                To                  Syms Read   Shared Object Library
 (*): Shared library is missing debugging information.
 ```
 
-Thus, the only way to find where the `SEGFAULT` occured in the code is to look at the assembly code
+Thus, the only way to find where the `SEGFAULT` occurred in the code is to look at the assembly code
 and associate it with the C code.
 
 ```GDB
@@ -314,9 +314,9 @@ Dump of assembler code for function get_frag_overhead:
 $1 = 0x1
 ```
 
-In the assembly code code, we could see that the move to the memory at the address 0x1 is the orign
-of the `SEGFAULT`.  At line +185 we can see a call to the function `dump_stack()` which coud be used
-to identify which memory access is faulty.
+In the assembly code code, we could see that the move to the memory at the address 0x1 is the origin
+of the `SEGFAULT`.  At line +185 we can see a call to the function `dump_stack()` which could be
+used to identify which memory access is faulty.
 
 ```C
  24 static inline daos_size_t
@@ -405,7 +405,7 @@ If gdb was not able to unwind the callstack this could be done manually with inv
 stack.  In this use case what is important to note that the allocation of the the `call_stack`
 array will makes the compiler stack at least 2048 (0x800) _char_ at the beginning of the function.
 This is confirmed with looking at line <+2> of the function.  Thus the caller address of
-this function should be at least beyound 0x828 of the current value of the `rsp` register. To this
+this function should be at least beyond 0x828 of the current value of the `rsp` register. To this
 value we could also add the previous two `push` instructions.
 
 ```GDB
@@ -433,10 +433,13 @@ End of assembler dump.
 At the line 0x7ffc465caff0 we could indeed find the return address of the caller of the function.
 
 
-# Usefull Debugging Tools
+# Useful Debugging Tools
 
 The `sosreport` command could be used, to identify the libraries installed on a node where a core
 file was generated.
+
+For SLES distribution, the `supportconfig` is the equivalent of the `sosreport` command.  It can be
+installed with the following command: `zypper install supportutils`.
 
 The `eu-unstrip` command could be used with a core file to have details on the libs which were
 loaded when the application crashed.
