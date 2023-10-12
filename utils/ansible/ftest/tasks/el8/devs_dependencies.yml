@@ -1,13 +1,6 @@
 # Install dependencies of a development node
 
-- name: Install rpms DAOS base dependencies
-  become: true
-  dnf:
-    state: latest
-    update_cache: true
-    name: "{{ daos_base_deps.rpms }}"
-
-- name: Install rpms missing development dependencies
+- name: Install rpms development dependencies
   become: true
   dnf:
     state: latest
