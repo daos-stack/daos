@@ -23,7 +23,7 @@ class DaosServerMemUsage(TestWithServers):
             dict: total, free, and available memory per server host
         """
         memory_data = {}
-        result = run_remote(self.log, self.server_managers[0].hosts, "free -m", stderr=True)
+        result = run_remote(self.log, self.hostlist_servers, "free -m", stderr=True)
         if not result.passed:
             self.fail(f'Error obtaining available memory on {result.failed_hosts}')
         for data in result.output:
