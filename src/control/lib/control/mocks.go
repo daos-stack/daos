@@ -731,7 +731,7 @@ func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCr
 	return poolCreateRespMsg
 }
 
-func mockBdevTier(numaID int, pciAddrIDs ...int) *storage.TierConfig {
+func MockBdevTier(numaID int, pciAddrIDs ...int) *storage.TierConfig {
 	return storage.NewTierConfig().
 		WithNumaNodeIndex(uint(numaID)).
 		WithStorageClass(storage.ClassNvme.String()).
@@ -758,14 +758,14 @@ func MockEngineCfg(numaID int, pciAddrIDs ...int) *engine.Config {
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID)),
 	}
 	if len(pciAddrIDs) > 0 {
-		tcs = append(tcs, mockBdevTier(numaID, pciAddrIDs...))
+		tcs = append(tcs, MockBdevTier(numaID, pciAddrIDs...))
 	}
 
 	return mockEngineCfg(numaID, tcs...)
 }
 
 func MockBdevTierWithRole(numaID, role int, pciAddrIDs ...int) *storage.TierConfig {
-	return mockBdevTier(numaID, pciAddrIDs...).WithBdevDeviceRoles(role)
+	return MockBdevTier(numaID, pciAddrIDs...).WithBdevDeviceRoles(role)
 }
 
 // MockEngineCfgTmpfs generates ramdisk engine config with pciAddrIDs defining bdev tier device

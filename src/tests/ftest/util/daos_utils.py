@@ -623,7 +623,7 @@ class DaosCommand(DaosCommandBase):
         Args:
             pool (str): pool UUID or label
             cont (str): container UUID or label
-            attr (str): attribute name
+            attr (str/list): single attribute name or list of names
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
 
@@ -634,29 +634,10 @@ class DaosCommand(DaosCommandBase):
             CommandFailure: if the daos get-attr command fails.
 
         """
+        if isinstance(attr, (list, tuple)):
+            attr = list_to_str(attr, ",")
         return self._get_json_result(
             ("container", "get-attr"), pool=pool, cont=cont, attr=attr, sys_name=sys_name)
-
-    def container_get_attrs(self, pool, cont, attrs, sys_name=None):
-        """Call daos container get-attr for multiple attributes.
-
-        Args:
-            pool (str): Pool UUID.
-            cont (str): Container UUID.
-            attrs (list): Attribute names.
-            sys_name (str, optional): DAOS system name context for servers.
-                Defaults to None.
-
-        Returns:
-            dict: the daos json command output converted to a python dictionary
-
-        Raises:
-            CommandFailure: if the daos get-attr command fails.
-
-        """
-        return self._get_json_result(
-            ("container", "get-attr"), pool=pool, cont=cont,
-            attr=list_to_str(attrs, ","), sys_name=sys_name)
 
     def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.

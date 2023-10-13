@@ -38,7 +38,10 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
-#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED 1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_HDL_CRED    1
+#define DAOS_POOL_GLOBAL_VERSION_WITH_SVC_OPS_KVS 3
+
+#define DUP_OP_MIN_RDB_SIZE                       (1 << 30)
 
 /* Pool service crt event */
 struct pool_svc_event {
@@ -688,6 +691,8 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 	struct rdb_kvs_attr	attr;
 	int			ntargets = nnodes * dss_tgt_nr;
 	uint32_t		upgrade_global_version = DAOS_POOL_GLOBAL_VERSION;
+	uint32_t                svc_ops_enabled        = 0;
+	uint64_t                rdb_size;
 	int			rc;
 	struct daos_prop_entry *entry;
 
@@ -761,8 +766,28 @@ init_pool_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, uint32_t nnodes, co
 
 	/* Create pool user attributes KVS */
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_attr_user, &attr);
-	if (rc != 0)
+	if (rc != 0) {
 		D_ERROR("failed to create user attr KVS, "DF_RC"\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Create pool service operations KVS */
+	rc = rdb_tx_create_kvs(tx, kvs, &ds_pool_prop_svc_ops, &attr);
+	if (rc != 0) {
+		D_ERROR("failed to create service ops KVS, " DF_RC "\n", DP_RC(rc));
+		goto out_map_buf;
+	}
+
+	/* Determine if duplicate service operations detection will be enabled */
+	rc = rdb_get_size(tx->dt_db, &rdb_size);
+	if (rc != 0)
+		goto out_map_buf;
+	if (rdb_size >= DUP_OP_MIN_RDB_SIZE)
+		svc_ops_enabled = 1;
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_update(tx, kvs, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc != 0)
+		D_ERROR("failed to set svc_ops_enabled, " DF_RC "\n", DP_RC(rc));
 
 out_map_buf:
 	pool_buf_free(map_buf);
@@ -1490,10 +1515,10 @@ ds_pool_svc_load(struct rdb_tx *tx, uuid_t uuid, rdb_path_t *root, uint32_t *glo
 {
 	uuid_t			uuid_tmp;
 	d_iov_t			value;
-	bool			version_exists = false;
 	uint32_t		global_version;
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version;
+	bool                    version_exists  = false;
 	int			rc;
 
 	/*
@@ -1581,6 +1606,10 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	struct pool_buf	       *map_buf;
 	uint32_t		map_version;
 	daos_prop_t	       *prop = NULL;
+	bool                    rdb_size_ok     = false;
+	uint32_t                svc_ops_enabled = 0;
+	uint64_t                rdb_size;
+	d_iov_t			value;
 	struct daos_prop_entry *svc_rf_entry;
 	int			rc;
 
@@ -1609,6 +1638,28 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 	else
 		svc->ps_svc_rf = -1;
 
+	/* Check if duplicate operations detection is enabled, for informative debug log */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
+	if (rc != 0)
+		goto out_lock;
+	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
+
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc == -DER_NONEXIST) {
+		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
+			DP_UUID(svc->ps_uuid));
+		rc = 0;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto out_lock;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
+		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
+
 	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	*map_buf_out = map_buf;
 	*map_version_out = map_version;
@@ -1616,6 +1667,7 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf_out,
 out_map_buf:
 	if (rc != 0)
 		D_FREE(map_buf);
+
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
@@ -2657,11 +2709,14 @@ pool_prop_read(struct rdb_tx *tx, const struct pool_svc *svc, uint64_t bits,
 	if (bits & DAOS_PO_QUERY_PROP_REINT_MODE) {
 		d_iov_set(&value, &val32, sizeof(val32));
 		rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_reint_mode, &value);
-		if (rc == -DER_NONEXIST && global_ver < 2) { /* needs to be upgraded */
+		/* NB: would test global_ver < 2, but on master branch, code added after v3 bump. */
+		if (rc == -DER_NONEXIST && global_ver < 3) { /* needs to be upgraded */
 			rc  = 0;
 			val32 = DAOS_PROP_PO_REINT_MODE_DEFAULT;
 			prop->dpp_entries[idx].dpe_flags |= DAOS_PROP_ENTRY_NOT_SET;
 		} else if (rc != 0) {
+			D_ERROR(DF_UUID ": DAOS_PROP_PO_REINT_MODE missing from the pool\n",
+				DP_UUID(svc->ps_uuid));
 			D_GOTO(out_prop, rc);
 		}
 		D_ASSERT(idx < nr);
@@ -4682,6 +4737,7 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 	size_t			hdl_uuids_size;
 	int			n_hdl_uuids = 0;
 	uint32_t		connectable;
+	uint32_t                svc_ops_enabled = 0;
 
 	if (rpc) {
 		rc = find_hdls_to_evict(tx, svc, &hdl_uuids, &hdl_uuids_size,
@@ -4907,6 +4963,63 @@ pool_upgrade_props(struct rdb_tx *tx, struct pool_svc *svc,
 		need_commit = true;
 	}
 
+	/* Upgrade for the pool/container service operations KVS */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops\n", DP_UUID(pool_uuid));
+
+	d_iov_set(&value, NULL, 0);
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops KVS: %d\n", DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		struct rdb_kvs_attr attr;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops KVS\n", DP_UUID(pool_uuid));
+		attr.dsa_class = RDB_KVS_GENERIC;
+		attr.dsa_order = 16;
+		rc             = rdb_tx_create_kvs(tx, &svc->ps_root, &ds_pool_prop_svc_ops, &attr);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": failed to create service ops KVS: %d\n",
+				DP_UUID(pool_uuid), rc);
+			D_GOTO(out_free, rc);
+		}
+		need_commit = true;
+	}
+
+	/* And enable the new service operations KVS only if rdb is large enough */
+	D_DEBUG(DB_MD, DF_UUID ": check ds_pool_prop_svc_ops_enabled\n", DP_UUID(pool_uuid));
+	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
+	rc = rdb_tx_lookup(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+	if (rc && rc != -DER_NONEXIST) {
+		D_ERROR(DF_UUID ": failed to lookup service ops enabled boolean: %d\n",
+			DP_UUID(pool_uuid), rc);
+		D_GOTO(out_free, rc);
+	} else if (rc == -DER_NONEXIST) {
+		uint64_t rdb_nbytes;
+
+		D_DEBUG(DB_MD, DF_UUID ": creating service ops enabled boolean\n",
+			DP_UUID(pool_uuid));
+
+		rc = rdb_get_size(tx->dt_db, &rdb_nbytes);
+		if (rc != 0)
+			D_GOTO(out_free, rc);
+		if (rdb_nbytes >= DUP_OP_MIN_RDB_SIZE)
+			svc_ops_enabled = 1;
+		rc = rdb_tx_update(tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
+		if (rc != 0) {
+			D_ERROR(DF_UUID ": set svc_ops_enabled=%d failed, " DF_RC "\n",
+				DP_UUID(pool_uuid), svc_ops_enabled, DP_RC(rc));
+			D_GOTO(out_free, rc);
+		}
+		D_DEBUG(DB_MD,
+			DF_UUID ": duplicate RPC detection %s (rdb size: " DF_U64 " %s %u)\n",
+			DP_UUID(pool_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_nbytes,
+			svc_ops_enabled ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
+		need_commit = true;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID ": need_commit=%s\n", DP_UUID(pool_uuid),
+		need_commit ? "true" : "false");
 	if (need_commit) {
 		daos_prop_t *prop = NULL;
 
@@ -5725,15 +5838,16 @@ struct pool_svc_reconf_arg {
 static void
 pool_svc_reconf_ult(void *varg)
 {
-	struct pool_svc_sched		*reconf = varg;
-	struct pool_svc_reconf_arg	*arg = reconf->psc_arg;
-	struct pool_svc			*svc;
-	struct pool_map			*map;
-	d_rank_list_t			*current;
-	d_rank_list_t			*to_add;
-	d_rank_list_t			*to_remove;
-	d_rank_list_t			*new;
-	int				 rc;
+	struct pool_svc_sched      *reconf = varg;
+	struct pool_svc_reconf_arg *arg    = reconf->psc_arg;
+	struct pool_svc            *svc;
+	struct pool_map            *map;
+	d_rank_list_t              *current;
+	d_rank_list_t              *to_add;
+	d_rank_list_t              *to_remove;
+	d_rank_list_t *new;
+	uint64_t rdb_nbytes = 0;
+	int      rc;
 
 	svc = container_of(reconf, struct pool_svc, ps_reconf_sched);
 
@@ -5765,6 +5879,14 @@ pool_svc_reconf_ult(void *varg)
 		goto out;
 	}
 
+	/* If adding replicas, get the correct rdb size (do not trust DAOS_MD_CAP). */
+	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_nbytes);
+	if (rc != 0) {
+		D_ERROR(DF_UUID ": failed to get rdb size: " DF_RC "\n", DP_UUID(svc->ps_uuid),
+			DP_RC(rc));
+		goto out_cur;
+	}
+
 	if (arg->sca_map == NULL)
 		ABT_rwlock_rdlock(svc->ps_pool->sp_lock);
 	rc = ds_pool_plan_svc_reconfs(svc->ps_svc_rf, map, current, dss_self_rank(), &to_add,
@@ -5790,7 +5912,7 @@ pool_svc_reconf_ult(void *varg)
 	 * membership changes to the MS.
 	 */
 	if (!arg->sca_sync_remove && to_add->rl_nr > 0) {
-		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, ds_rsvc_get_md_cap());
+		ds_rsvc_add_replicas_s(&svc->ps_rsvc, to_add, rdb_nbytes);
 		if (reconf->psc_canceled) {
 			rc = -DER_OP_CANCELED;
 			goto out_to_add_remove;
