@@ -273,7 +273,7 @@ CRT_RPC_DECLARE(cont_close_v8, DAOS_ISEQ_CONT_CLOSE_V8, DAOS_OSEQ_CONT_CLOSE)
 	((uint64_t)		(cqi_bits)		CRT_VAR)
 
 #define DAOS_ISEQ_CONT_QUERY_V8 /* input fields */                                                 \
-	((struct cont_op_in)(cqi_op)CRT_VAR)((uint64_t)(cqi_bits)CRT_VAR)
+	((struct cont_op_v8_in)(cqi_op)CRT_VAR)((uint64_t)(cqi_bits)CRT_VAR)
 
 #define DAOS_OSEQ_CONT_QUERY /* common fields */                                                   \
 	((struct cont_op_out)(cqo_op)CRT_VAR)((daos_prop_t)(cqo_prop)CRT_PTR)(                     \
@@ -301,7 +301,7 @@ CRT_RPC_DECLARE(cont_oid_alloc, DAOS_ISEQ_CONT_OID_ALLOC, DAOS_OSEQ_CONT_OID_ALL
 	((crt_bulk_t)		(cali_bulk)		CRT_VAR)
 
 #define DAOS_ISEQ_CONT_ATTR_LIST_V8 /* input fields */                                             \
-	((struct cont_op_in)(cali_op)CRT_VAR)((crt_bulk_t)(cali_bulk)CRT_VAR)
+	((struct cont_op_v8_in)(cali_op)CRT_VAR)((crt_bulk_t)(cali_bulk)CRT_VAR)
 
 #define DAOS_OSEQ_CONT_ATTR_LIST /* output fields */		 \
 	((struct cont_op_out)	(calo_op)		CRT_VAR) \
@@ -526,13 +526,16 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	int                    rc;
 	crt_opcode_t           opcode;
 	static __thread uuid_t cli_id;
+	int                    proto_ver;
 	struct cont_op_in     *in;
 
-	if (uuid_is_null(cli_id))
+	if (uuid_is_null(cli_id)) {
 		uuid_generate(cli_id);
+		D_INFO("New client thread: " DF_UUID "\n", DP_UUID(cli_id));
+	}
 
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, dc_cont_proto_version ?
-				 dc_cont_proto_version : DAOS_CONT_VERSION);
+	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
+	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
 
@@ -552,11 +555,19 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		*req_timep = d_hlc_get();
 
 	/* Temporary req_timep check: some opcodes aren't (yet) at v8 and don't have the op key */
-	if (req_timep && (dc_cont_proto_version >= CONT_PROTO_VER_WITH_SVC_OP_KEY)) {
+	if (req_timep && (proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)) {
 		struct cont_op_v8_in *in8 = crt_req_get(*req);
 
 		uuid_copy(in8->ci_cli_id, cli_id);
 		in8->ci_time = *req_timep;
+		D_INFO("RPC opc %d, client=" DF_UUID ", time=" DF_X64 "\n", opc,
+			DP_UUID(in8->ci_cli_id), in8->ci_time);
+	} else {
+		struct cont_op_v8_in *in8 = crt_req_get(*req);
+
+		D_WARN("RPC opc %d, UNINITIALIZED client=" DF_UUID ", time=" DF_X64
+		       ", due to proto=%d, req_timep=%p\n", opc, DP_UUID(in8->ci_cli_id),
+		       in8->ci_time, proto_ver, req_timep);
 	}
 
 	return rc;
@@ -1022,31 +1033,5 @@ cont_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver
 		((struct cont_acl_delete_in *)in)->cadi_principal_type = cadi_principal_type;
 	}
 }
-
-#if 0
-static inline void
-cont_oid_alloc_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   daos_size_t *num_oidsp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*num_oidsp = ((struct cont_oid_alloc_v8_in *)in)->num_oids;
-	else
-		*num_oidsp = ((struct cont_oid_alloc_in *)in)->num_oids;
-}
-
-static inline void
-cont_oid_alloc_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   daos_size_t num_oids)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_oid_alloc_v8_in *)in)->num_oids = num_oids;
-	else
-		((struct cont_oid_alloc_in *)in)->num_oids = num_oids;
-}
-#endif
 
 #endif /* __CONTAINER_RPC_H__ */

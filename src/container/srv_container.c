@@ -5196,7 +5196,7 @@ cont_op_check_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_s
 		goto out;
 
 	/* open is tricky due to the daos_prop_t in reply, won't fit in ds_pool_svc_op_val */
-	if (opc == CONT_OPEN)
+	if ((opc == CONT_OPEN) || (opc == CONT_OPEN_BYLABEL))
 		goto out;
 
 	/* If enabled, lookup client-provided op key, assign dup_op accordingly. */
@@ -5282,7 +5282,7 @@ cont_op_save_dup(struct rdb_tx *cur_tx, struct ds_pool_hdl *pool_hdl, struct con
 		goto out;
 
 	/* open is tricky due to the daos_prop_t in reply, won't fit in ds_pool_svc_op_val */
-	if (opc == CONT_OPEN)
+	if ((opc == CONT_OPEN) || (opc == CONT_OPEN_BYLABEL))
 		goto out;
 
 	if (cur_tx) {
@@ -5524,17 +5524,6 @@ ds_cont_op_handler(crt_rpc_t *rpc, int cont_proto_ver)
 	if (pool_hdl == NULL)
 		D_GOTO(out, rc = -DER_NO_HDL);
 
-#if 0
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		struct cont_op_v8_in		*in8 = crt_req_get(rpc);
-
-		D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", cli_id="DF_UUID
-			", time="DF_X64", opc=%u(%s)\n", DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			rpc, cont_proto_ver, DP_UUID(in->ci_hdl), DP_UUID(in8->ci_cli_id),
-			in8->ci_time, opc, cont_cli_opc_name(opc));
-	} else {
-	}
-#endif
 	D_DEBUG(DB_MD, DF_CONT ": processing rpc: %p proto=%d hdl=" DF_UUID ", opc=%u(%s)\n",
 		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, cont_proto_ver,
 		DP_UUID(in->ci_hdl), opc, cont_cli_opc_name(opc));
