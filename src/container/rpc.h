@@ -535,7 +535,7 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 	}
 
 	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
-	opcode = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
+	opcode    = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
 	/* call daos_rpc_tag to get the target tag/context idx */
 	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
 
@@ -560,14 +560,6 @@ cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 		uuid_copy(in8->ci_cli_id, cli_id);
 		in8->ci_time = *req_timep;
-		D_INFO("RPC opc %d, client=" DF_UUID ", time=" DF_X64 "\n", opc,
-			DP_UUID(in8->ci_cli_id), in8->ci_time);
-	} else {
-		struct cont_op_v8_in *in8 = crt_req_get(*req);
-
-		D_WARN("RPC opc %d, UNINITIALIZED client=" DF_UUID ", time=" DF_X64
-		       ", due to proto=%d, req_timep=%p\n", opc, DP_UUID(in8->ci_cli_id),
-		       in8->ci_time, proto_ver, req_timep);
 	}
 
 	return rc;

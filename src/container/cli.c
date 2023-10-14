@@ -1339,9 +1339,9 @@ dc_cont_query(tse_task_t *task)
 	pool = dc_hdl2pool(cont->dc_pool_hdl);
 	D_ASSERT(pool != NULL);
 
-	D_DEBUG(DB_MD, DF_CONT": querying: hdl="DF_UUID" proto_ver=%d\n",
-		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid),
-		DP_UUID(cont->dc_cont_hdl), dc_cont_proto_version);
+	D_DEBUG(DB_MD, DF_CONT ": querying: hdl=" DF_UUID " proto_ver=%d\n",
+		DP_CONT(pool->dp_pool_hdl, cont->dc_uuid), DP_UUID(cont->dc_cont_hdl),
+		dc_cont_proto_version);
 
 	ep.ep_grp  = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
@@ -1890,10 +1890,10 @@ dc_cont_alloc_oids(tse_task_t *task)
 	struct cont_oid_alloc_in	*in;
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
-	crt_endpoint_t			 ep;
+	crt_endpoint_t                   ep;
 	crt_rpc_t			*rpc;
-	struct cont_oid_alloc_args	 arg;
-	int				 rc;
+	struct cont_oid_alloc_args       arg;
+	int                              rc;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -1926,7 +1926,7 @@ dc_cont_alloc_oids(tse_task_t *task)
 		D_GOTO(err_cont, rc);
 	}
 
-	in = crt_req_get(rpc);
+	in           = crt_req_get(rpc);
 	in->num_oids = args->num_oids;
 
 	arg.coaa_pool	= pool;
