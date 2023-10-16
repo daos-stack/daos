@@ -54,13 +54,13 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
 }
 
 /**
-   * Allocate a new failed shard then add it into remap list
-   *
-   * \param[in] remap_list        List for the failed shard to be added onto.
-   * \param[in] shard_idx         The shard number of the failed shard.
-   * \paramp[in] tgt              The failed target that will be added to the
-   *                              remap list.
-   */
+ * Allocate a new failed shard then add it into remap list
+ *
+ * \param[in] remap_list        List for the failed shard to be added onto.
+ * \param[in] shard_idx         The shard number of the failed shard.
+ * \param[in] tgt               The failed target that will be added to the
+ *                              remap list.
+ */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 		struct pool_target *tgt, bool for_reint, void *data)
