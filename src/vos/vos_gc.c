@@ -561,13 +561,13 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df *bag;
 	int		      first;
-	umem_off_t	      addr;
+	struct vos_gc_item    it;
 	int		      rc = 0;
 
 	bag = umem_off2ptr(&pool->vp_umm, bin->bin_bag_first);
 	D_ASSERT(bag && bag->bag_item_nr > 0);
 	D_ASSERT(item == &bag->bag_items[bag->bag_item_first]);
-	addr = item->it_addr;
+	it = *item;
 
 	first = bag->bag_item_first + 1;
 	if (first == bin->bin_bag_size)
@@ -592,9 +592,9 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		rc = gc->gc_free(gc, pool, vos_cont2hdl(cont), item);
+		rc = gc->gc_free(gc, pool, vos_cont2hdl(cont), &it);
 	else
-		rc = umem_free(&pool->vp_umm, addr);
+		rc = umem_free(&pool->vp_umm, it.it_addr);
 
 	if (rc != 0)
 		goto failed;
