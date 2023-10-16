@@ -213,9 +213,8 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
  * map was allocated as a pl_jump_map with a pl_map as it's
  * first member.
  *
- * \param[in]   *map    A pointer to a pl_map which is the first
- *                      member of the specific placement map we're
- *                      converting to.
+ * \param[in]   map	A pointer to a pl_map which is the first member of the specific placement
+ * 			map we're converting to.
  *
  * \return      A pointer to the full pl_jump_map used for
  *              object placement, rebuild, and reintegration
@@ -264,28 +263,24 @@ struct dom_grp_used {
 };
 
 /**
-* Try to remap all the failed shards in the @remap_list to proper
-* targets. The new target id will be updated in the @layout if the
-* remap succeeds, otherwise, corresponding shard and target id in
-* @layout will be cleared as -1.
-*
-* \paramp[in]   jmap            The placement map being used for placement.
-* \paramp[in]   md              Object Metadata.
-* \paramp[in]   layout          The original layout which contains some shards
-*                               on failed targets.
-* \paramp[in]   jmop            Structure containing information related to
-*                               layout characteristics.
-* \paramp[in]   remap_list      List containing shards to be remapped sorted
-*                               by failure sequence.
-* \paramp[in]	allow_status	the target status allowed to be in the layout.
-* \paramp[in]	allow_version	the target status needs to be restored to its
-*                               original status by version, then check.
-* \paramp[in]   dom_used        Bookkeeping array used to keep track of which
-*                               domain components have already been used.
-*
-* \return       return an error code signifying whether the shards were
-*               successfully remapped properly.
-*/
+ * Try to remap all the failed shards in the @remap_list to proper
+ * targets. The new target id will be updated in the @layout if the
+ * remap succeeds, otherwise, corresponding shard and target id in
+ * @layout will be cleared as -1.
+ *
+ * \param[in] jmap		The placement map being used for placement.
+ * \param[in] md			Object Metadata.
+ * \param[in] layout		The original layout which contains some shards on failed targets.
+ * \param[in] jmop		Structure containing information related to layout characteristics.
+ * \param[in] remap_list		List containing shards to be remapped sorted by failure
+ * sequence. \param[in] allow_status	the target status allowed to be in the layout. \param[in]
+ * allow_version	the target status needs to be restored to its original status by version,
+ * then check. \param[in] dom_used		Bookkeeping array used to keep track of which domain
+ * components have already been used.
+ *
+ * \return       return an error code signifying whether the shards were
+ *               successfully remapped properly.
+ */
 static int
 obj_remap_shards(struct pl_jump_map *jmap, uint32_t layout_ver, struct daos_obj_md *md,
 		 struct pl_obj_layout *layout, struct jm_obj_placement *jmop,

@@ -433,7 +433,7 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
  * @param[in]		sgl		sgl to be read from
  * @param[in]		check_buf	if true process on the sgl buf len
 					instead of iov_len
- * @param[in/out]	idx		index into the sgl to start reading from
+ * @param[in,out]	idx		index into the sgl to start reading from
  * @param[in]		buf_len_req	number of bytes requested
  * @param[out]		p_buf		resulting pointer to buffer
  * @param[out]		p_buf_len	length of buffer

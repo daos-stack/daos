@@ -3215,9 +3215,9 @@ int dc_pool_get_redunc(daos_handle_t poh)
 /**
  * Get pool_target by dc pool and target index.
  *
- * \param pool [IN]	dc pool
- * \param tgt_idx [IN]	target index.
- * \param tgt [OUT]	pool target pointer.
+ * \param[in]  pool	dc pool
+ * \param[in]  tgt_idx	target index.
+ * \param[out] tgt	pool target pointer.
  *
  * \return		0 if get the pool_target.
  * \return		errno if it does not get the pool_target.

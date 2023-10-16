@@ -525,7 +525,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 
 /**
  * Fill in RPC arguments to turn on / turn off fault injection on target
- * \param[in/out] rpc_req        pointer to the RPC
+ * \param[in,out] rpc_req        pointer to the RPC
  * \param[in] op                 0 means the RPC will disable fault injection on
  *                               the target, 1 means the RPc will enable fault
  *                               injection on the target.
