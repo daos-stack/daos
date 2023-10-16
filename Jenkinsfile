@@ -316,7 +316,7 @@ pipeline {
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
         string(name: 'CI_UNIT_VM1_NVME_LABEL',
-               defaultValue: 'bwx_vm1',
+               defaultValue: 'ci_ssd_vm1',
                description: 'Label to use for 1 VM node unit tests that need NVMe')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
