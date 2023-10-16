@@ -3685,26 +3685,6 @@ set_prop(struct rdb_tx *tx, struct ds_pool *pool,
 		if ((stat_cli.dcs_flags & DAOS_PROP_CSF_READONLY) &&
 		    (stat_cli.dcs_status & DAOS_PROP_CO_READONLY) &&
 		    (pstat_srv->dcs_status & DAOS_PROP_CO_READONLY) == 0) {
-			daos_epoch_t	*snapshots = NULL;
-			int		 snap_count = 0;
-
-			/* reject request if with snapshot */
-			rc = ds_cont_read_snap_list(tx, cont, &snapshots, &snap_count);
-			if (rc) {
-				D_ERROR(DF_UUID": failed to read_snap_list for cont, "DF_RC"\n",
-					DP_UUID(cont->c_uuid), DP_RC(rc));
-				D_FREE(pstat_srv_dup);
-				D_GOTO(out, rc);
-			}
-
-			if (snap_count > 0) {
-				rc = -DER_NO_PERM;
-				D_DEBUG(DB_IO, DF_UUID": destroy snapshots before flatten container"
-					", "DF_RC"\n", DP_UUID(cont->c_uuid), DP_RC(rc));
-				D_FREE(pstat_srv_dup);
-				D_GOTO(out, rc);
-			}
-
 			/* turn the co_status as READONLY (flatten) */
 			pstat_srv_dup->dcs_status |= DAOS_PROP_CO_READONLY;
 			pstat_srv_dup->dcs_epoch = d_hlc_get();
