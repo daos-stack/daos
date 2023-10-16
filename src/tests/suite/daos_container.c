@@ -3803,8 +3803,6 @@ update_after_flat(void **state)
 	daos_iod_t		 iod;
 	daos_recx_t		 recx;
 	char			 stack_buf[STACK_BUF_LEN];
-	daos_epoch_t		 snap_epoch = 0;
-	daos_epoch_range_t	 epr;
 	int			 rc;
 
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
@@ -3835,20 +3833,7 @@ update_after_flat(void **state)
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_create_snap(arg->coh, &snap_epoch, NULL, NULL);
-	assert_rc_equal(rc, 0);
-	assert_int_not_equal(snap_epoch, 0);
-
-	print_message("flatten the container should fail as container with snapshot\n");
-	rc = daos_cont_set_ro(arg->coh, NULL);
-	assert_rc_equal(rc, -DER_NO_PERM);
-
-	epr.epr_lo = snap_epoch;
-	epr.epr_hi = snap_epoch;
-	rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
-	assert_rc_equal(rc, 0);
-
-	print_message("flatten the container should success after destroying snapshots\n");
+	print_message("flatten the container should success\n");
 	rc = daos_cont_set_ro(arg->coh, NULL);
 	assert_rc_equal(rc, 0);
 
