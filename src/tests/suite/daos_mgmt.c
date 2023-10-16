@@ -366,13 +366,7 @@ pool_create_and_destroy_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	print_message("setting DAOS_POOL_CREATE_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
-
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_CREATE_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("creating pool synchronously ... ");
 	rc = dmg_pool_create(dmg_config_file,
 			     geteuid(), getegid(),
@@ -383,18 +377,13 @@ pool_create_and_destroy_retry(void **state)
 	assert_rc_equal(rc, 0);
 	print_message("success uuid = "DF_UUIDF"\n", DP_UUID(uuid));
 
-	print_message("setting DAOS_POOL_DESTROY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
-	assert_success(rc);
-	print_message("success\n");
-
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_POOL_DESTROY_FAIL_CORPC | DAOS_FAIL_ONCE);
 	print_message("destroying pool synchronously ... ");
 	rc = dmg_pool_destroy(dmg_config_file, uuid, arg->group, 1);
 	assert_rc_equal(rc, 0);
-
 	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static void
