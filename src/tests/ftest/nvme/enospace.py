@@ -352,6 +352,7 @@ class NvmeEnospace(ServerFillUp):
         self.start_ior_load(storage='SCM', operation="Auto_Write", percent=1)
         # Read the baseline data set
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1, create_cont=False)
+        baseline_container = self.nvme_local_cont
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Baseline Read MiB %s", max_mib_baseline)
 
@@ -359,6 +360,7 @@ class NvmeEnospace(ServerFillUp):
         self.run_enospace_with_bg_job()
 
         # Read the same container which was written at the beginning.
+        self.nvme_local_cont = baseline_container
         self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1, create_cont=False)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
         self.log.info("IOR Latest Read MiB %s", max_mib_latest)
