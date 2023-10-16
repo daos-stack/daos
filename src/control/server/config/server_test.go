@@ -311,7 +311,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceRoles(storage.BdevRoleAll),
 			).
 			WithFabricInterface("ib1").
-			WithFabricInterfacePort(20000).
+			WithFabricInterfacePort(21000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithFabricAuthKey("foo:bar").
 			WithCrtCtxShareAddr(0).

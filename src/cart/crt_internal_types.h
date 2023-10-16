@@ -100,6 +100,7 @@ struct crt_gdata {
 	/** credits limitation for #in-flight RPCs per target EP CTX */
 	uint32_t		cg_credit_ep_ctx;
 
+	uint32_t		cg_iv_inline_limit;
 	/** the global opcode map */
 	struct crt_opc_map	*cg_opc_map;
 	/** HG level global data */

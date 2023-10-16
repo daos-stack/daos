@@ -531,10 +531,15 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return resp, nil
 	}
 
+	if req.StateMask == 0 {
+		req.StateMask = uint32(system.AllMemberFilter)
+	}
+
 	members, err := svc.membership.Members(hitRanks, system.MemberState(req.StateMask))
 	if err != nil {
 		return nil, errors.Wrap(err, "get membership")
 	}
+
 	if err := convert.Types(members, &resp.Members); err != nil {
 		return nil, err
 	}

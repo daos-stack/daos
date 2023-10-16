@@ -25,8 +25,8 @@
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
 void ds_cont_unlock_metadata(struct cont_svc *svc);
-int ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
-			  const uuid_t pool_uuid);
+int
+     ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs, const uuid_t pool_uuid);
 int ds_cont_svc_init(struct cont_svc **svcp, const uuid_t pool_uuid,
 		     uint64_t id, struct ds_rsvc *rsvc);
 void ds_cont_svc_fini(struct cont_svc **svcp);
