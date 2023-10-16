@@ -29,7 +29,8 @@ class DaosServerMemUsage(TestWithServers):
         for data in result.output:
             hosts = str(data.hosts)
             try:
-                info = re.findall(r'Mem:\s+(\d+)\s+\d+\s+(\d+)\s+\d+\s+\d+\s+(\d+)', data.stdout)
+                info = re.findall(
+                    r'Mem:\s+(\d+)\s+\d+\s+(\d+)\s+\d+\s+\d+\s+(\d+)', '\n'.join(data.stdout))
                 memory_data[hosts] = {
                     'total': info[0], 'free': info[1], 'avail': info[2], 'description': description}
             except IndexError:
