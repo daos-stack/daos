@@ -1169,7 +1169,7 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 
 	if (krec->kr_bmap & KREC_BF_FLAT) {
 		/** In such case, toh will refer to a child tree so we an
-		 * initialze its iterator in such case as it is needed.
+		 * initialize its iterator in such case as it is needed.
 		 * We also set the type of the tree here so we know what
 		 * type of nested iterator we need to use.
 		 */
