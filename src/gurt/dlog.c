@@ -127,9 +127,9 @@ static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
- * \param pri [IN]		the priority to convert to a string
+ * \param[in] pri	the priority to convert to a string
  *
- * \return			the string (symbolic name) of the priority
+ * \return		the string (symbolic name) of the priority
  */
 static const char *clog_pristr(int pri)
 {
@@ -149,7 +149,7 @@ static const char *clog_pristr(int pri)
  * we set the default name for facility 0 here.
  * caller must hold clog_lock.
  *
- * \param n [IN]	the number of facilities to allocate space for now.
+ * \param[in] n		the number of facilities to allocate space for now.
  *
  * \return		zero on success, -1 on error.
  */

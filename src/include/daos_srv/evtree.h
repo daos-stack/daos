@@ -576,9 +576,9 @@ int evt_destroy(daos_handle_t toh);
  * It returns if all input credits are consumed or the tree is empty, in the
  * later case, it also destroys the evtree.
  *
- * \param toh		[IN]	 Tree open handle.
- * \param credits	[IN/OUT] Input and returned drain credits
- * \param destroyed	[OUT]	 Tree is empty and destroyed
+ * \param[in] toh		Tree open handle.
+ * \param[in,out] credits	Input and returned drain credits
+ * \param[out] destroyed	Tree is empty and destroyed
  */
 int evt_drain(daos_handle_t toh, int *credits, bool *destroyed);
 

@@ -23,7 +23,7 @@
  *					logic
  * @param[in]		bsgl		bio scatter gather list with the data
  * @param[in]		biov_csums	list csum info for each \bsgl
- * @param[in/out]	biov_csums_used	track the number of csums used
+ * @param[in,out]	biov_csums_used	track the number of csums used
  * @return
  */
 int

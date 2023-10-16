@@ -1197,12 +1197,12 @@ dss_acc_offload(struct dss_acc_task *at_args)
 	return rc;
 }
 
-/*
+/**
  * Set parameters on the server.
  *
- * param key_id [IN]		key id
- * param value [IN]		the value of the key.
- * param value_extra [IN]	the extra value of the key.
+ * \param[in] key_id		key id
+ * \param[in] value		the value of the key.
+ * \param[in] value_extra	the extra value of the key.
  *
  * return	0 if setting succeeds.
  *              negative errno if fails.

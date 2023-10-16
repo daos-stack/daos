@@ -69,15 +69,14 @@ vos_dtx_validation(struct dtx_handle *dth);
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
- * \param coh		[IN]	Container open handle.
- * \param dti		[IN]	Pointer to the DTX identifier.
- * \param epoch		[IN,OUT] Pointer to current epoch, if it is zero and
- *				 if the DTX exists, then the DTX's epoch will
- *				 be saved in it.
- * \param pm_ver	[OUT]	Hold the DTX's pool map version.
- * \param mbs		[OUT]	Pointer to the DTX participants information.
- * \param dck		[OUT]	Pointer to the key for CoS cache.
- * \param for_refresh	[IN]	It is for DTX_REFRESH or not.
+ * \param[in] coh		Container open handle.
+ * \param[in] dti		Pointer to the DTX identifier.
+ * \param[in,out] epoch		Pointer to current epoch, if it is zero and if the DTX exists, then
+ *				the DTX's epoch will be saved in it.
+ * \param[out] pm_ver		Hold the DTX's pool map version.
+ * \param[out] mbs		Pointer to the DTX participants information.
+ * \param[out] dck		Pointer to the key for CoS cache.
+ * \param[in] for_refresh	It is for DTX_REFRESH or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
  *					so the local modification has been done
@@ -529,17 +528,15 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch.
- * \param flags	[IN]	VOS flags
- * \param dkey	[IN]	Distribution key.
- * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN/OUT]
- *			Array of I/O descriptors. The returned record
- *			sizes are also stored in this parameter.
- * \param sgls	[OUT]	Scatter/gather list to store the returned record values
- *			or value addresses.
+ * \param[in] coh	Container open handle
+ * \param[in] oid	Object ID
+ * \param[in] epoch	Epoch for the fetch.
+ * \param[in] flags	VOS flags
+ * \param[in] dkey	Distribution key.
+ * \param[in] iod_nr	Number of I/O descriptors in \a iods.
+ * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also stored in this
+ * 			parameter.
+ * \param[out] sgls	Scatter/gather list to store the returned record values or value addresses.
  *
  * \return		Zero on success, negative value if error
  */
@@ -555,19 +552,16 @@ vos_obj_fetch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch.  Ignored if a valid DTX handle
- *			is provided.
- * \param flags	[IN]	Fetch flags
- * \param dkey	[IN]	Distribution key.
- * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN/OUT]
- *			Array of I/O descriptors. The returned record
- *			sizes are also stored in this parameter.
- * \param sgls	[OUT]	Scatter/gather list to store the returned record values
- *			or value addresses.
- * \param dth	[IN]	Optional dtx handle
+ * \param[in] coh	Container open handle
+ * \param[in] oid	Object ID
+ * \param[in] epoch	Epoch for the fetch.  Ignored if a valid DTX handle is provided.
+ * \param[in] flags	Fetch flags
+ * \param[in] dkey	Distribution key.
+ * \param[in] iod_nr	Number of I/O descriptors in \a iods.
+ * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also stored in this
+ * 			parameter.
+ * \param[out] sgls	Scatter/gather list to store the returned record values or value addresses.
+ * \param[in] dth	Optional dtx handle
  *
  * \return		Zero on success, negative value if error
  */
@@ -582,24 +576,20 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
  *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
- *			is provided.
- * \param pm_ver [IN]   Pool map version for this update, which will be
- *			used during rebuild.
- * \param flags	[IN]	Update flags
- * \param dkey	[IN]	Distribution key.
- * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ * \param[in] coh	Container open handle
+ * \param[in] oid	object ID
+ * \param[in] epoch	Epoch for the update. Ignored if a DTX handle is provided.
+ * \param[in] pm_ver	Pool map version for this update, which will be used during rebuild.
+ * \param[in] flags	Update flags
+ * \param[in] dkey	Distribution key.
+ * \param[in] iod_nr	Number of I/O descriptors in \a iods.
+ * \param[in] iods	Array of I/O descriptors. If \a flags includes
  *			VOS_OF_EC, then the iod_recxs field of every single
  *			value iod in \a iods must contain the "gsize" instead
  *			of a memory address.
- * \param iods_csums [IN]
- *			Array of iod_csums (1 for each iod). Will be NULL
+ * \param[in] iods_csums	Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
- * \param sgls	[IN/OUT]
- *			Scatter/gather list to pass in record value buffers,
+ * \param[in,out] sgls	Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
  *			providing input buffers, then VOS will allocate spaces
  *			for the records and return addresses of them, so upper
@@ -613,36 +603,31 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	       unsigned int iod_nr, daos_iod_t *iods,
 	       struct dcs_iod_csums *iods_csums, d_sg_list_t *sgls);
 
-
 /**
  * Update records for the specified object.
  * If input buffer is not provided in \a sgl, then this function returns
  * the new allocated addresses to store the records, upper layer can
  * directly write data into these addresses (rdma mode).
  *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	object ID
- * \param epoch	[IN]	Epoch for the update. Ignored if a DTX handle
- *			is provided.
- * \param pm_ver [IN]   Pool map version for this update, which will be
- *			used during rebuild.
- * \param flags	[IN]	Update flags
- * \param dkey	[IN]	Distribution key.
- * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ * \param[in] coh	Container open handle
+ * \param[in] oid	object ID
+ * \param[in] epoch	Epoch for the update. Ignored if a DTX handle is provided.
+ * \param[in] pm_ver	Pool map version for this update, which will be used during rebuild.
+ * \param[in] flags	Update flags
+ * \param[in] dkey	Distribution key.
+ * \param[in] iod_nr	Number of I/O descriptors in \a iods.
+ * \param[in] iods	Array of I/O descriptors. If \a flags includes
  *			VOS_OF_EC, then the iod_recxs field of every single
  *			value iod in \a iods must contain the "gsize" instead
  *			of a memory address.
- * \param iods_csums [IN]
- *			Array of iod_csums (1 for each iod). Will be NULL
- *			if csums are disabled.
- * \param sgls	[IN/OUT]
- *			Scatter/gather list to pass in record value buffers,
+ * \param[in] iods_csums	Array of iod_csums (1 for each iod). Will be NULL if csums are
+ * 				disabled.
+ * \param[in,out] sgls	Scatter/gather list to pass in record value buffers,
  *			if caller sets the input buffer size only without
  *			providing input buffers, then VOS will allocate spaces
  *			for the records and return addresses of them, so upper
  *			layer stack can transfer data via rdma.
- * \param dth	[IN]	Optional transaction handle
+ * \param[in] dth	[IN]	Optional transaction handle
  *
  * \return		Zero on success, negative value if error
  */
@@ -751,23 +736,20 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
  *
  * TODO: add more detail descriptions for punched or missing records.
  *
- * \param coh	[IN]	Container open handle
- * \param oid	[IN]	Object ID
- * \param epoch	[IN]	Epoch for the fetch. Ignored if a DTX handle
- *			is provided.
- * \param dkey	[IN]	Distribution key.
- * \param nr	[IN]	Number of I/O descriptors in \a ios.
- * \param iods	[IN/OUT]
- *			Array of I/O descriptors. The returned record
- *			sizes are also restored in this parameter.
- * \param vos_flags [IN]
- *			VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY
- *			or VOS_OF_FETCH_RECX_LIST.
- * \param shadows [IN]	Optional shadow recx/epoch lists, one for each iod.
+ * \param[in] coh	Container open handle
+ * \param[in] oid	Object ID
+ * \param[in] epoch	Epoch for the fetch. Ignored if a DTX handle is provided.
+ * \param[in] dkey	Distribution key.
+ * \param[in] nr	Number of I/O descriptors in \a ios.
+ * \param[in,out] iods	Array of I/O descriptors. The returned record sizes are also restored in
+ * 			this parameter.
+ * \param[in] vos_flags	VOS fetch flags, VOS cond flags, VOS_OF_FETCH_SIZE_ONLY or
+ * 			VOS_OF_FETCH_RECX_LIST.
+ * \param[in] shadows	Optional shadow recx/epoch lists, one for each iod.
  *			data of extents covered by these should not be returned
  *			by fetch function. Only used for EC obj degraded fetch.
- * \param ioh	[OUT]	The returned handle for the I/O.
- * \param dth	[IN]	Pointer to the DTX handle.
+ * \param[out] ioh	The returned handle for the I/O.
+ * \param[in] dth	Pointer to the DTX handle.
  *
  * \return		Zero on success, negative value if error
  */
@@ -1062,10 +1044,9 @@ vos_iter_copy(daos_handle_t ih, vos_iter_entry_t *entry,
 /**
  * Process the operation for the current cursor.
  *
- * \param ih	[IN]	Iterator open handle.
- * \param op	[IN]	op code to process. See vos_iter_proc_op_t
- * \param args	[IN/OUT]
- *			Optional, Provide additional hints while
+ * \param[in] ih	Iterator open handle.
+ * \param[in] op	op code to process. See vos_iter_proc_op_t
+ * \param[in,out] args	Optional, Provide additional hints while
  *			deletion to handle special cases.
  *			for example return record of this node
  *			to user instead of deleting.
