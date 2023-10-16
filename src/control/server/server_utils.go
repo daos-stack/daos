@@ -525,9 +525,9 @@ func checkEngineTmpfsMem(srv *server, ei *EngineInstance, mi *common.MemInfo) er
 		}
 		// Ensure that the existing ramdisk is not larger than the calculated
 		// optimal size, in order to avoid potential OOM situations.
-		if usage.TotalBytes > memRamdisk {
-			return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
-		}
+		// if usage.TotalBytes > memRamdisk {
+		// 	return storage.FaultRamdiskBadSize(usage.TotalBytes, memRamdisk)
+		// }
 		// Looks OK, so we can return early and bypass additional checks.
 		srv.log.Debugf("using existing tmpfs of size %s", humanize.IBytes(usage.TotalBytes))
 		return nil
