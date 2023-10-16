@@ -1395,7 +1395,7 @@ crt_hdlr_iv_fetch_aux(void *arg)
 						   &iv_value, input->ifi_value_bulk,
 						   rpc_req, user_priv);
 			if (rc != 0) {
-				DL_ERROR(rc, "bulk transfer failed.\n");
+				DL_ERROR(rc, "bulk transfer failed");
 				D_GOTO(reply_direct, rc);
 			}
 			put_needed = false;
@@ -3135,7 +3135,7 @@ exit:
 decref_error:
 	IVNS_DECREF(ivns_internal);
 put_error:
-	iv_ops->ivo_on_put(ivns_internal, &iv_value, &user_priv);
+	iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 send_error:
 	output->rc = rc;
@@ -3346,7 +3346,7 @@ send_error:
 	crt_reply_send(rpc_req);
 
 	if (put_needed)
-		iv_ops->ivo_on_put(ivns_internal, &iv_value, &user_priv);
+		iv_ops->ivo_on_put(ivns_internal, &iv_value, user_priv);
 
 	/* ADDREF done in lookup above */
 	if (ivns_internal)
