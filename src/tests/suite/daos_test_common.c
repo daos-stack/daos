@@ -1383,3 +1383,90 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 
 	return -DER_TIMEDOUT;
 }
+
+/**
+ * If this is client rank 0, set fail_loc to \a fail_loc on \a engine_rank. The
+ * caller must eventually set fail_loc to 0 on these engines, even when using
+ * DAOS_FAIL_ONCE.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_loc	fail_loc, which must either be 0 or include one
+ *				of DAOS_FAIL_ONCE, DAOS_FAIL_SOME, or
+ *				DAOS_FAIL_ALWAYS)
+ */
+void
+test_set_engine_fail_loc(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_loc)
+{
+	int rc;
+
+	assert(fail_loc == 0 ||
+	       (fail_loc & (DAOS_FAIL_ONCE | DAOS_FAIL_SOME | DAOS_FAIL_ALWAYS)) != 0);
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_loc to " DF_X64 " on all engine ranks\n", fail_loc);
+	else
+		print_message("setting fail_loc to " DF_X64 " on engine rank %u\n", fail_loc,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_LOC, fail_loc, 0, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+/**
+ * If this is client rank 0, set fail_value to \a fail_value on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_value	fail_value
+ */
+void
+test_set_engine_fail_value(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_value)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_value to " DF_X64 " on all engine ranks\n", fail_value);
+	else
+		print_message("setting fail_value to " DF_X64 " on engine rank %u\n", fail_value,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_VALUE, fail_value, 0,
+				   NULL);
+	assert_rc_equal(rc, 0);
+}
+
+
+/**
+ * If this is client rank 0, set fail_num to \a fail_num on \a engine_rank.
+ * 
+ * \param[in]	arg		test state
+ * \param[in]	engine_rank	rank of an engine or CRT_NO_RANK (i.e., all
+ *				engines)
+ * \param[in]	fail_num	fail_num
+ */
+void
+test_set_engine_fail_num(test_arg_t *arg, d_rank_t engine_rank, uint64_t fail_num)
+{
+	int rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	if (engine_rank == CRT_NO_RANK)
+		print_message("setting fail_num to " DF_X64 " on all engine ranks\n", fail_num);
+	else
+		print_message("setting fail_num to " DF_X64 " on engine rank %u\n", fail_num,
+			      engine_rank);
+
+	rc = daos_debug_set_params(arg->group, engine_rank, DMG_KEY_FAIL_NUM, fail_num, 0, NULL);
+	assert_rc_equal(rc, 0);
+}

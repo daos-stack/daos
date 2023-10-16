@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -536,10 +536,8 @@ pool_properties(void **state)
 	if (arg->myrank == 0) {
 		rc = daos_pool_query(arg->pool.poh, NULL, &info, NULL, NULL);
 		assert_rc_equal(rc, 0);
-		rc = daos_debug_set_params(arg->group, info.pi_leader,
-			DMG_KEY_FAIL_LOC, DAOS_FORCE_PROP_VERIFY, 0, NULL);
-		assert_rc_equal(rc, 0);
 	}
+	test_set_engine_fail_loc(arg, info.pi_leader, DAOS_FORCE_PROP_VERIFY | DAOS_FAIL_ALWAYS);
 	par_barrier(PAR_COMM_WORLD);
 
 	prop_query = daos_prop_alloc(0);
@@ -610,9 +608,7 @@ pool_properties(void **state)
 		fail_msg("scrubber threshold verification failed.\n");
 	}
 
-	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
-				     0, NULL);
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	par_barrier(PAR_COMM_WORLD);
 
 	daos_prop_free(prop);
@@ -634,12 +630,8 @@ pool_op_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	print_message("setting on leader %u DAOS_POOL_CONNECT_FAIL_CORPC ... ",
-		arg->pool.pool_info.pi_leader);
-	rc = daos_debug_set_params(arg->group, arg->pool.pool_info.pi_leader, DMG_KEY_FAIL_LOC,
-				   DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, arg->pool.pool_info.pi_leader,
+				 DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	print_message("connecting to pool ... ");
 	rc = daos_pool_connect(arg->pool.pool_str, arg->group,
@@ -651,11 +643,7 @@ pool_op_retry(void **state)
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
-	print_message("setting on leader %u DAOS_POOL_QUERY_FAIL_CORPC ... ", info.pi_leader);
-	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
-				   DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, info.pi_leader, DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	print_message("querying pool info... ");
 	memset(&info, 'D', sizeof(info));
@@ -668,17 +656,16 @@ pool_op_retry(void **state)
 	print_message("no disabled targets and %u pool storage engine ranks... success\n",
 		      engine_ranks->rl_nr);
 
-	print_message("setting on leader %u DAOS_POOL_DISCONNECT_FAIL_CORPC ... ", info.pi_leader);
-	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_DISCONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
-	assert_rc_equal(rc, 0);
-	print_message("success\n");
+	test_set_engine_fail_loc(arg, info.pi_leader,
+				 DAOS_POOL_DISCONNECT_FAIL_CORPC | DAOS_FAIL_ONCE);
 
 	/** disconnect from pool */
 	print_message("disconnecting from pool ... ");
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
+
+	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 }
 
 static int
