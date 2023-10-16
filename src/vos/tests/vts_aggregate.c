@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -45,7 +45,10 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	if (daos_is_array(oid.id_pub))
+		d_iov_set(&dkey_iov, dkey, sizeof(uint64_t));
+	else
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
@@ -100,7 +103,10 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	assert_true(!(arg->ta_flags & TF_ZERO_COPY));
 
 	arg->oid = oid;
-	d_iov_set(&dkey_iov, dkey, strlen(dkey));
+	if (daos_is_array(oid.id_pub))
+		d_iov_set(&dkey_iov, dkey, sizeof(uint64_t));
+	else
+		d_iov_set(&dkey_iov, dkey, strlen(dkey));
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
