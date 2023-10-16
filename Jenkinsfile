@@ -1110,9 +1110,9 @@ pipeline {
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
                         job_step_update(nlt_test())
-                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                                       skipPublishingChecks: true,
-                                       id: 'fir', name: 'Fault Injection Report')
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                        //                skipPublishingChecks: true,
+                        //                id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {
