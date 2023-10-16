@@ -178,6 +178,8 @@ struct rdb_raft_node {
 	struct rdb_raft_is	dn_is;
 };
 
+void rdb_raft_module_init(void);
+void rdb_raft_module_fini(void);
 int rdb_raft_init(daos_handle_t pool, daos_handle_t mc, const d_rank_list_t *replicas);
 int rdb_raft_open(struct rdb *db, uint64_t caller_term);
 int rdb_raft_start(struct rdb *db);
