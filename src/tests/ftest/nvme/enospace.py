@@ -362,11 +362,11 @@ class NvmeEnospace(ServerFillUp):
         # Read the same container which was written at the beginning.
         self.nvme_local_cont = baseline_container
         # Add retry 10 loops with 60 seconds delay
-        for tst_loop in range(1,10):
-            self.log.info("..Starting IOR read testing loop %s:", tst_loop) 
+        for _loop in range(1,11):
+            self.log.info("..Starting IOR read testing loop %s:", _loop) 
             self.start_ior_load(storage='SCM', operation='Auto_Read', percent=1, create_cont=False)
             max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
-            self.log.info("..IOR read testing loop %s completed.", tst_loop)
+            self.log.info("..IOR read testing loop %s completed.", _loop)
             self.log.info("..IOR BaseLine Read MiB %s", max_mib_baseline)
             self.log.info("..IOR Latest   Read MiB %s", max_mib_latest)
 
@@ -376,6 +376,7 @@ class NvmeEnospace(ServerFillUp):
                 self.log.info('Latest IOR read performance is not under 5% Tolerance'
                           ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                           .format(max_mib_baseline, max_mib_latest))
+            time.sleep(60)
 
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
