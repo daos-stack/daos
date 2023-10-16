@@ -2034,7 +2034,7 @@ vos_obj_iter_sv_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	struct vos_obj_iter *oiter;
 	daos_handle_t        toh;
 	int                  flags = BTR_ITER_EMBEDDED;
-	int                  rc = 0;
+	int                  rc    = 0;
 
 	if (type != VOS_ITER_SINGLE) {
 		D_ERROR("Unexpected type: %d\n", type);
@@ -2093,7 +2093,7 @@ vos_obj_ev_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 	struct evt_filter    filter = {0};
 	daos_handle_t        toh;
 	bool                 embed = true;
-	int                  rc = 0;
+	int                  rc    = 0;
 	uint32_t             options;
 
 	if (type != VOS_ITER_RECX) {
