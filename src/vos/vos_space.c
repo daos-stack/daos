@@ -19,8 +19,9 @@
 
 /* Extra space being reserved to deal with fragmentation issues */
 static inline daos_size_t
-get_frag_overhead(daos_size_t tot_size, int media)
+get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
 {
+	const daos_size_t min_sz = (2ULL << 30);  /* 2GB */
 	const daos_size_t max_sz = (10ULL << 30); /* 10GB */
 	daos_size_t       ovhd   = (tot_size * 5) / 100;
 
@@ -35,6 +36,13 @@ get_frag_overhead(daos_size_t tot_size, int media)
 	if (ovhd > max_sz)
 		ovhd = max_sz;
 
+	if (small_pool)
+		return ovhd;
+
+	if (tot_size >= (min_sz * 2) && ovhd < min_sz) {
+		ovhd = min_sz;
+	}
+
 	return ovhd;
 }
 
@@ -44,8 +52,10 @@ vos_space_sys_init(struct vos_pool *pool)
 	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
 	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	POOL_SCM_SYS(pool)  = get_frag_overhead(scm_tot, DAOS_MEDIA_SCM);
-	POOL_NVME_SYS(pool) = get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME);
+	POOL_SCM_SYS(pool) =
+		get_frag_overhead(scm_tot, DAOS_MEDIA_SCM, pool->vp_small);
+	POOL_NVME_SYS(pool) =
+		get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME, pool->vp_small);
 
 	gc_reserve_space(&pool->vp_space_sys[DAOS_MEDIA_SCM]);
 	agg_reserve_space(&pool->vp_space_sys[DAOS_MEDIA_SCM]);
@@ -54,27 +64,11 @@ vos_space_sys_init(struct vos_pool *pool)
 	if (nvme_tot == 0)
 		POOL_NVME_SYS(pool) = 0;
 
-	if (POOL_SCM_SYS(pool) >= scm_tot) {
-		D_WARN("Disable SCM space reserving for tiny pool:" DF_UUID " "
-		       "sys[" DF_U64 "] > tot[" DF_U64 "]\n",
-		       DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
-		POOL_SCM_SYS(pool) = 0;
-	}
-	D_DEBUG(DB_MD,
-		"Reserved SCM space for pool:" DF_UUID ", "
-		"sys:" DF_U64 ", tot:" DF_U64 "\n",
-		DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
+	D_INFO("Reserved SCM space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
+	       DP_UUID(pool->vp_id), POOL_SCM_SYS(pool), scm_tot);
 
-	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
-		D_WARN("Disable NVMe space reserving for tiny Pool:" DF_UUID " "
-		       "sys[" DF_U64 "] > tot[" DF_U64 "]\n",
-		       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
-		POOL_NVME_SYS(pool) = 0;
-	}
-	D_DEBUG(DB_MD,
-		"Reserved NVMe space for pool:" DF_UUID ", "
-		"sys:" DF_U64 ", tot:" DF_U64 "\n",
-		DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
+	D_INFO("Reserved NVMe space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
+	       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
 }
 
 int

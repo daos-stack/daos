@@ -174,11 +174,9 @@ class Test(avocadoTest):
             try:
                 self.rand_seed = int(env_seed)
             except ValueError:
-                self.log.error(
+                self.fail(
                     "ERROR: The env variable DAOS_TEST_RANDOM_SEED "
-                    "does not define a valid integrer: got='%s'",
-                    env_seed)
-                raise
+                    "does not define a valid integer: got='{}'".format(env_seed))
         self.log.info("Test.random seed = %d", self.rand_seed)
         self.random = random.Random(self.rand_seed)
 

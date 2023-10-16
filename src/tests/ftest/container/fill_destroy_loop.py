@@ -52,12 +52,13 @@ class BoundaryPoolContainerSpace(TestWithServers):
         storage to reorganize the B-trees used for recording the data layout of the pools.  When
         such error occurs, some storage leakage could eventually happen.  At this time, the only
         reliable way to detect these errors is to check if errors regarding B-tree management have
-        occurred.  With this test, this can be done with looking for error messages generated with
-        the call of the function btr_rec_free().
+        occurred.  With this test, this can be done with looking for ENOSPACE error messages
+        generated with the call of the function gc_reclaim_pool().
         """
         self.log.info("==>Checking server logs of hosts %s", self.hostlist_servers)
 
-        err_regex = r"'^.+ tree ERR .+ btr_rec_free.+ Failed to free rec:.+$'"
+        err_regex = r"'^.+[[:space:]]+vos[[:space:]]+CRIT.+[[:space:]]vos_gc_pool_tight\(\) "
+        err_regex += r"gc_reclaim_pool failed DER_NOSPACE.+$'"
         log_dir = os.path.dirname(self.server_managers[0].get_config_value("log_file"))
 
         cmd = "find {} -type f -regextype egrep ".format(log_dir)
