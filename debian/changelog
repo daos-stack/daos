@@ -1,3 +1,10 @@
+daos (2.5.100-10) unstable; urgency=medium
+
+  [ Sherin T George ]
+  * Add DAV v2 lib
+
+ -- Sherin T George <sherin-t.george@hpe.com>  Mon, 16 Oct 2023 11:54:00 +0530
+
 daos (2.5.100-9) unstable; urgency=medium
 
   [ Brian J. Murrell ]

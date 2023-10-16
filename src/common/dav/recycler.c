@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2023, Intel Corporation */
+/* Copyright 2016-2022, Intel Corporation */
 
 /*
  * recycler.c -- implementation of run recycler
@@ -49,7 +49,6 @@ recycler_element_cmp(const void *lhs, const void *rhs)
 struct recycler {
 	struct ravl *runs;
 	struct palloc_heap *heap;
-	struct zoneset     *zset;
 
 	/*
 	 * How many unaccounted units there *might* be inside of the memory
@@ -62,7 +61,8 @@ struct recycler {
 	 */
 	size_t unaccounted_units[MAX_CHUNK];
 	size_t unaccounted_total;
-	size_t              nallocs;
+	size_t nallocs;
+	size_t *peak_arenas;
 
 	VEC(, struct recycler_element) recalc;
 
@@ -73,7 +73,7 @@ struct recycler {
  * recycler_new -- creates new recycler instance
  */
 struct recycler *
-recycler_new(struct palloc_heap *heap, size_t nallocs, struct zoneset *zset)
+recycler_new(struct palloc_heap *heap, size_t nallocs, size_t *peak_arenas)
 {
 	struct recycler *r;
 
@@ -88,7 +88,7 @@ recycler_new(struct palloc_heap *heap, size_t nallocs, struct zoneset *zset)
 
 	r->heap = heap;
 	r->nallocs = nallocs;
-	r->zset              = zset;
+	r->peak_arenas = peak_arenas;
 	r->unaccounted_total = 0;
 	memset(&r->unaccounted_units, 0, sizeof(r->unaccounted_units));
 
@@ -219,7 +219,12 @@ recycler_recalc(struct recycler *r, int force)
 
 	uint64_t units = r->unaccounted_total;
 
-	uint64_t recalc_threshold = THRESHOLD_MUL * r->nallocs;
+	size_t peak_arenas;
+
+	util_atomic_load64(r->peak_arenas, &peak_arenas);
+
+	uint64_t recalc_threshold =
+		THRESHOLD_MUL * peak_arenas * r->nallocs;
 
 	if (!force && units < recalc_threshold)
 		return runs;
@@ -312,13 +317,4 @@ recycler_inc_unaccounted(struct recycler *r, const struct memory_block *m)
 	util_fetch_and_add64(&r->unaccounted_total, m->size_idx);
 	util_fetch_and_add64(&r->unaccounted_units[m->chunk_id],
 		m->size_idx);
-}
-
-/*
- * Return the zoneset associated with the recycler.
- */
-struct zoneset *
-recycler_get_zoneset(struct recycler *r)
-{
-	return r->zset;
 }
