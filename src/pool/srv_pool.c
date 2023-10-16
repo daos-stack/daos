@@ -3841,6 +3841,10 @@ ds_pool_query_handler(crt_rpc_t *rpc, int version)
 			case DAOS_PROP_PO_SVC_REDUN_FAC:
 			case DAOS_PROP_PO_OBJ_VERSION:
 			case DAOS_PROP_PO_PERF_DOMAIN:
+			case DAOS_PROP_PO_CHECKPOINT_MODE:
+			case DAOS_PROP_PO_CHECKPOINT_FREQ:
+			case DAOS_PROP_PO_CHECKPOINT_THRESH:
+			case DAOS_PROP_PO_REINT_MODE:
 				if (entry->dpe_val != iv_entry->dpe_val) {
 					D_ERROR("type %d mismatch "DF_U64" - "
 						DF_U64".\n", entry->dpe_type,
