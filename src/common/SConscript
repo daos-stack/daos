@@ -56,10 +56,7 @@ def scons():
     base_env.d_add_build_rpath()
     env.d_add_build_rpath()
 
-    # Arm can build ISA-L
-    env.require('isal', 'isal_crypto')
-
-    denv = env.Clone(LIBS=[])
+    denv = env.Clone()
     # generated protoc header should really move to this directory.
     denv.AppendUnique(CPPPATH=[Dir("../include/daos").srcnode()])
     denv.require('isal', 'isal_crypto', 'protobufc')

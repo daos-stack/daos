@@ -27,7 +27,7 @@ def scons():
 
     # generate server module
     senv = denv.Clone()
-    senv.require('argobots')
+    senv.require('isal', 'argobots')
     senv.require('pmdk', headers_only=True)
 
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
