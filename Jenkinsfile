@@ -98,7 +98,7 @@ Map nlt_test() {
                           fails: vgfail,
                           errors: vgerr,
                           name: 'Valgrind_Memcheck',
-                          class: 'Valgrind',
+                          class: 'Valgrind.Valgrind',
                           message: 'Valgrind Memcheck error detected',
                           testdata: rcs
     }
