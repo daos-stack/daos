@@ -1635,7 +1635,7 @@ dc_tx_dump(struct dc_tx *tx)
 		tx->tx_tgts_bulk.dcb_size, tx->tx_tgts_bulk.dcb_bulk);
 }
 
-/* The calculted CPD RPC sub-requests size may be some larger than the real case, no matter. */
+/* The calculated CPD RPC sub-requests size may be some larger than the real case, no matter. */
 static size_t
 dc_tx_cpd_sub_reqs_size(struct daos_cpd_sub_req *dcsr, int count)
 {
