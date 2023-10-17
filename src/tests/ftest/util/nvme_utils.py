@@ -338,7 +338,8 @@ class ServerFillUp(IorTestBase):
         """
         self.pool.exclude(rank, str(target))
 
-    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True):
+    def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True,
+        repetitions=1):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
@@ -348,6 +349,7 @@ class ServerFillUp(IorTestBase):
             operation (string): Write/Read operation
             percent (int): % of storage to be filled
             create_cont (bool): To create the new container for IOR
+            repetitions (int): Repetition for IOR command. Default to 1.
         """
         kill_rank_job = []
         kill_target_job = []
