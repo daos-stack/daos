@@ -93,12 +93,12 @@ Map nlt_test() {
             vfail = 1
         }
         String suite = sanitizedStageName()
-        junitSimpleReport suite: suite,
+        junitSimpleReport suite: 'ValgrindA.ValgrindB',
                           file: suite + '_valgrind_results.xml',
                           fails: vgfail,
                           errors: vgerr,
                           name: 'Valgrind_Memcheck',
-                          class: 'Valgrind.Valgrind',
+                          class: 'ValgrindC.ValgrindD',
                           message: 'Valgrind Memcheck error detected',
                           testdata: rcs
     }
