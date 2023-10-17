@@ -115,13 +115,13 @@ static struct crt_corpc_ops ds_pool_tgt_query_co_ops = {
 	.dr_corpc_ops = e,	\
 },
 
-static struct daos_rpc_handler pool_handlers_v4[] = {
-	POOL_PROTO_CLI_RPC_LIST(4)
+static struct daos_rpc_handler pool_handlers_v5[] = {
+	POOL_PROTO_CLI_RPC_LIST(5)
 	POOL_PROTO_SRV_RPC_LIST
 };
 
-static struct daos_rpc_handler pool_handlers_v5[] = {
-	POOL_PROTO_CLI_RPC_LIST(5)
+static struct daos_rpc_handler pool_handlers_v6[] = {
+	POOL_PROTO_CLI_RPC_LIST(6)
 	POOL_PROTO_SRV_RPC_LIST
 };
 
@@ -190,9 +190,9 @@ struct dss_module pool_module =  {
 	.sm_fini	= fini,
 	.sm_setup	= setup,
 	.sm_cleanup	= cleanup,
-	.sm_proto_fmt	= {&pool_proto_fmt_v4, &pool_proto_fmt_v5},
+	.sm_proto_fmt	= {&pool_proto_fmt_v5, &pool_proto_fmt_v6},
 	.sm_cli_count	= {POOL_PROTO_CLI_COUNT, POOL_PROTO_CLI_COUNT},
-	.sm_handlers	= {pool_handlers_v4, pool_handlers_v5},
+	.sm_handlers	= {pool_handlers_v5, pool_handlers_v6},
 	.sm_key		= &pool_module_key,
 	.sm_metrics	= &pool_metrics,
 };

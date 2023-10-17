@@ -626,21 +626,32 @@ co_op_retry(void **state)
 	char		 str[37];
 	daos_handle_t	 coh;
 	daos_cont_info_t info;
+#if 0
+	/* TODO: inject DAOS_CONT_OP_NOREPLY for container create when dup rpc
+	 * detection logic is enabled in engine.
+	 */
 	int              i;
+#endif
 	int		 rc;
 
 	if (arg->myrank != 0)
 		return;
 
+	/* see above TODO */
+#if 0
 	print_message("setting DAOS_CONT_OP_NOREPLY and creating container ... ");
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				   DAOS_CONT_OP_NOREPLY | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
-
+#else
+	print_message("creating container ... ");
+#endif
 	rc = daos_cont_create(arg->pool.poh, &uuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success, created container: " DF_UUID "\n", DP_UUID(uuid));
 
+	/* see above TODO */
+#if 0
 	print_message("BEGIN: many containers with DAOS_CONT_OP_NOREPLY\n");
 	// for (i = 0; i < (20000 + 1024); i++) {
 	for (i = 0; i < 100; i++) {
@@ -677,6 +688,7 @@ co_op_retry(void **state)
 			print_message("done creating/destroying %d containers\n", (i + 1));
 	}
 	print_message("END: many (%d) containers with DAOS_CONT_OP_NOREPLY\n", (i + 1));
+#endif
 
 	print_message("opening container ... ");
 	uuid_unparse(uuid, str);
