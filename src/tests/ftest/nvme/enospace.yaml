@@ -44,7 +44,8 @@ ior:
   daos_destroy: false
   iorflags:
     flags: "-w -F -k -G 1"
-    read_flags: "-r -R -F -k -G 1 -i 200"
+    read_flags: "-r -R -F -k -G 1"
+  repetitions: 100
   test_file: /testFile
   transfersize_blocksize:
     2K:

@@ -155,7 +155,7 @@ class ServerFillUp(IorTestBase):
 
         self.nvme_local_cont.create()
 
-    def start_ior_thread(self, create_cont, operation):
+    def start_ior_thread(self, create_cont, operation, repetitions=1):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
@@ -164,6 +164,7 @@ class ServerFillUp(IorTestBase):
                 Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
                 Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
                                         storage % to be fill.
+            repetitions (int): Repetition for IOR test. Default to 1.
         """
         # IOR flag can Write/Read based on test yaml
         self.ior_local_cmd.flags.value = self.ior_default_flags
@@ -177,6 +178,9 @@ class ServerFillUp(IorTestBase):
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
+
+        # To set IOR repetitions
+        self.ior_local_cmd.repetitions.update(repetitons, 'ior.repetitions')
 
         self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
