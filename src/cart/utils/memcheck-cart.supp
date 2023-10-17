@@ -445,6 +445,24 @@
    fun:indexbytebody
 }
 {
+   go-cond-racecall
+   Memcheck:Cond
+   ...
+   fun:racecall
+}
+{
+   go-value8-write_racecall
+   Memcheck:Value8
+   fun:__tsan_write
+   fun:racecall
+}
+{
+   go-value8-racecall
+   Memcheck:Value8
+   fun:_ZN6__tsan9ShadowSetEPNS_9RawShadowES1_S0_
+   fun:racecall
+}
+{
    FI leak 8
    Memcheck:Leak
    match-leak-kinds: reachable
