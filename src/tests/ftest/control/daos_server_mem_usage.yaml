@@ -14,3 +14,4 @@ server_config:
     0:
       storage: auto
 sequences: 3
+memory_restored_min_percent: 95
