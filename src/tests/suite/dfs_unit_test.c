@@ -3054,37 +3054,6 @@ dfs_test_fix_chunk_size(void **state)
 }
 
 static void
-dfs_test_oflags_write_file(char *name)
-{
-	dfs_obj_t		*obj;
-	mode_t			create_mode = S_IWUSR | S_IRUSR;
-	int			create_flags = O_RDWR | O_CREAT | O_EXCL;
-	int			rc;
-	d_sg_list_t		sgl;
-	d_iov_t			iov;
-	char			buf[16] = "Hello";
-	struct stat		stbuf;
-
-	/** open file and write 5 bytes from the beginning. */
-	rc = dfs_open(dfs_mt, NULL, name, create_mode | S_IFREG, create_flags, 0, 0, NULL, &obj);
-	assert_int_equal(rc, 0);
-
-	d_iov_set(&iov, buf, 5);
-	sgl.sg_nr = 1;
-	sgl.sg_nr_out = 1;
-	sgl.sg_iovs = &iov;
-	rc = dfs_write(dfs_mt, obj, &sgl, 0, NULL);
-	assert_int_equal(rc, 0);
-
-	rc = dfs_ostat(dfs_mt, obj, &stbuf);
-	assert_int_equal(rc, 0);
-	assert_int_equal(stbuf.st_size, 5);
-
-	rc = dfs_release(obj);
-	assert_int_equal(rc, 0);
-}
-
-static void
 dfs_test_oflags(void **state)
 {
 	test_arg_t		*arg = *state;
@@ -3115,7 +3084,8 @@ dfs_test_oflags(void **state)
 	assert_int_equal(rc, ENOTSUP);
 
 	/** Create /file1 and write 5 bytes */
-	dfs_test_oflags_write_file(filename_file1);
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
 
 	/** Create /file1 with O_TRUNC, size should be zero */
 	rc = dfs_open(dfs_mt, NULL, filename_file1, create_mode | S_IFREG,
@@ -3135,7 +3105,8 @@ dfs_test_oflags(void **state)
 	assert_int_equal(rc, 0);
 
 	/** Create /file1 and write 5 bytes */
-	dfs_test_oflags_write_file(filename_file1);
+	rc = dfs_test_file_gen(filename_file1, 0, OC_S1, 5);
+	assert_int_equal(rc, 0);
 
 	/** Create /file1 with O_TRUNC, size should be zero */
 	rc = dfs_lookup(dfs_mt, path_file1, O_RDWR | O_TRUNC, &obj, &mode, NULL);

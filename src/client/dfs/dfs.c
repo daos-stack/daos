@@ -1234,7 +1234,7 @@ open_file(dfs_t *dfs, dfs_obj_t *parent, int flags, daos_oclass_id_t cid,
 	if (flags & O_TRUNC) {
 		rc = daos_array_set_size(file->oh, DAOS_TX_NONE, 0, NULL);
 		if (rc) {
-			DL_ERROR(rc, "Failed to truncate file");
+			D_ERROR("Failed to truncate file "DF_RC"\n", DP_RC(rc));
 			daos_array_close(file->oh, NULL);
 			return daos_der2errno(rc);
 		}
