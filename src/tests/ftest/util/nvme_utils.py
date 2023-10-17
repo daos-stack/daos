@@ -339,7 +339,7 @@ class ServerFillUp(IorTestBase):
         self.pool.exclude(rank, str(target))
 
     def start_ior_load(self, storage='NVMe', operation="WriteRead", percent=1, create_cont=True,
-        repetitions=1):
+                       repetitions=1):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
