@@ -33,6 +33,7 @@ dpdk_cli_override_opts;
 #define DAOS_MD_CAP_ENV			"DAOS_MD_CAP"
 /** Default size of a metadata pmem pool/file (1024 MiB) */
 #define DEFAULT_DAOS_MD_CAP_SIZE        (1ul << 30)
+#define MINIMUM_DAOS_MD_CAP_SIZE        (1ul << 27)
 
 /** Utility macros */
 #define CHK_FLAG(x, m) ((x & m) == m)
