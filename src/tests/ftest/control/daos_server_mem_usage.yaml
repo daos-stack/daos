@@ -15,3 +15,4 @@ server_config:
       storage: auto
 sequences: 3
 memory_restored_min_percent: 95
+wait_after_stop: 10

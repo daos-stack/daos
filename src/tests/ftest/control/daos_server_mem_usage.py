@@ -54,6 +54,7 @@ class DaosServerMemUsage(TestWithServers):
         """
         sequences = self.params.get('sequences', default=2)
         memory_restored_min_percent = self.params.get('memory_restored_min_percent', default=95)
+        wait_after_stop = self.params.get('wait_after_stop', default=10)
         memory_data = []
         for index in range(sequences):
             sequence = f'{index + 1}/{sequences}'
@@ -70,12 +71,12 @@ class DaosServerMemUsage(TestWithServers):
             description = f'after stopping servers {sequence}'
             self.log_step(f'Collecting memory data {description}', True)
             memory_data.append(self.get_memory_data(description))
-            sleep(10)
+            sleep(wait_after_stop)
 
         # Disable attempting to stop servers in tearDown to prevent a test failure
         self.server_managers.clear()
 
-        description = 'at the end'
+        description = f'after waiting {wait_after_stop} seconds'
         self.log_step(f'Collecting memory data {description}', True)
         memory_data.append(self.get_memory_data(description))
 
@@ -89,23 +90,27 @@ class DaosServerMemUsage(TestWithServers):
             for host in sorted(entry):
                 item = entry[host]
                 self.log.debug(
-                    message_format, item['description'] if index > 0 else '', host, item['total'],
-                    item['free'], item['avail'])
+                    message_format, item['description'], host, item['total'], item['free'],
+                    item['avail'])
                 if index == 0:
-                    percent_available[host] = int(item['avail'])
+                    percent_available[host] = {'initial': int(item['avail'])}
                 if index == len(memory_data) - 1:
-                    percent_available[host] = int(
-                        (int(item['avail']) / percent_available[host]) * 100)
+                    percent_available[host]['final'] = int(item['avail'])
+                    percent_available[host]['percent'] = int(
+                        (percent_available[host]['final'] / percent_available[host]['initial'])
+                        * 100)
 
         # Verify memory is restored
         self.log_step(
-            f'Percentage of initial memory available after starting/stopping servers {sequences} '
-            'time(s)', True)
-        message_format = '%-10s %-11s'
-        self.log.debug(message_format, 'Host', '% Available')
-        self.log.debug(message_format, '-' * 10, '-' * 11)
+            f'Percentage of available memory after starting/stopping servers {sequences} time(s)',
+            True)
+        message_format = '%-10s  %-7s  %-7s  %-11s'
+        self.log.debug(message_format, 'Host', 'Initial', 'Final', '% Available')
+        self.log.debug(message_format, '-' * 10, '-' * 7, '-' * 7, '-' * 11)
         for host in sorted(percent_available):
-            self.log.debug(message_format, host, percent_available[host])
-        if any(x < memory_restored_min_percent for x in percent_available.values()):
+            self.log.debug(
+                message_format, host, percent_available[host]['initial'],
+                percent_available[host]['final'], percent_available[host]['percent'])
+        if any(x['percent'] < memory_restored_min_percent for x in percent_available.values()):
             self.fail('Available memory not restored to at least f{memory_restored_min_percent}%')
         self.log_step('Test Passed')
