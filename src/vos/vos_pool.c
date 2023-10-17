@@ -600,6 +600,7 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		D_ERROR("scm_size != meta_size pool create case not supported, scm_sz: " DF_U64
 			" meta_sz: " DF_U64,
 			scm_sz, meta_sz);
+		return -DER_INVAL;
 	}
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "

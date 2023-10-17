@@ -503,8 +503,8 @@ pool_open_excl_test(void **state)
 
 	print_message("open EXCL shall fail upon existing EXCL create "
 		      "opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, VOS_POF_EXCL,
-			      0, &arg->poh[0]);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, VOS_POF_EXCL,
+			      &arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, VOS_POF_EXCL, &arg->poh[1]);
 	assert_rc_equal(ret, -DER_BUSY);
@@ -526,8 +526,8 @@ pool_open_excl_test(void **state)
 	assert_rc_equal(ret, 0);
 
 	print_message("open shall fail upon existing EXCL create opener\n");
-	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, VOS_POF_EXCL,
-			      0, &arg->poh[0]);
+	ret = vos_pool_create(arg->fname[0], uuid, VPOOL_256M, 0, 0, VOS_POF_EXCL,
+			      &arg->poh[0]);
 	assert_rc_equal(ret, 0);
 	ret = vos_pool_open(arg->fname[0], uuid, 0, &arg->poh[1]);
 	assert_rc_equal(ret, -DER_BUSY);
