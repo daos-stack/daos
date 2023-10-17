@@ -373,11 +373,11 @@ class NvmeEnospace(ServerFillUp):
             self.log.info("..IOR Latest   Read MiB %s", max_mib_latest)
 
         # Check if latest IOR read performance is in Tolerance of 5%, when
-        # Storage space is full.
-            if abs(max_mib_baseline - max_mib_latest) > (max_mib_baseline / 100 * 5):
-                self.log.info('Latest IOR read performance is not under 5% Tolerance'
-                              ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
-                              .format(max_mib_baseline, max_mib_latest))
+        # Storage space is full.   (temp change to 80%)
+            if abs(max_mib_baseline - max_mib_latest) > (max_mib_baseline / 100 * 80):
+                self.fail('Latest IOR read performance is not under 5% Tolerance'
+                          ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
+                          .format(max_mib_baseline, max_mib_latest))
             time.sleep(60)
 
     def test_enospace_no_aggregation(self):
