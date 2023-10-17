@@ -443,6 +443,10 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_EC_PDA,
 		"Performance domain affinity level of EC",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			// convert pda "-1" to internal DAOS_PROP_PDA_MAX
+			if v == "-1" {
+				v = "4294967295"
+			}
 			value, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
 				return propError("invalid EC PDA %q", v)
@@ -468,7 +472,12 @@ var propHdlrs = propHdlrMap{
 			if !C.daos_ec_pda_valid(C.uint32_t(value)) {
 				return fmt.Sprintf("invalid ec pda %d", value)
 			}
-			return fmt.Sprintf("%d", value)
+			switch value {
+			case C.DAOS_PROP_PDA_MAX:
+				return fmt.Sprintf("%d", -1)
+			default:
+				return fmt.Sprintf("%d", value)
+			}
 		},
 		false,
 	},
@@ -476,6 +485,10 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_RP_PDA,
 		"Performance domain affinity level of RP",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			// convert pda "-1" to internal DAOS_PROP_PDA_MAX
+			if v == "-1" {
+				v = "4294967295"
+			}
 			value, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
 				return propError("invalid RP PDA %q", v)
@@ -501,7 +514,12 @@ var propHdlrs = propHdlrMap{
 			if !C.daos_rp_pda_valid(C.uint32_t(value)) {
 				return fmt.Sprintf("invalid RP PDA %d", value)
 			}
-			return fmt.Sprintf("%d", value)
+			switch value {
+			case C.DAOS_PROP_PDA_MAX:
+				return fmt.Sprintf("%d", -1)
+			default:
+				return fmt.Sprintf("%d", value)
+			}
 		},
 		false,
 	},

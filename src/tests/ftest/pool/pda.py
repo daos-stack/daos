@@ -52,8 +52,8 @@ class PoolPDAProperty(TestWithServers):
         self.add_pool(namespace="/run/pool/*")
 
         # Verify pool ec_pda, pool_pda is default.
-        self.assertEqual(1, self.pool.get_property("ec_pda"))
-        self.assertEqual(3, self.pool.get_property("rp_pda"))
+        self.assertEqual("1", self.pool.get_property("ec_pda"))
+        self.assertEqual("-1", self.pool.get_property("rp_pda"))
 
         # destroy pool
         self.destroy_pools(pools=self.pool)
