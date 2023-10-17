@@ -671,7 +671,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 					 "but crt_group_config_path_set failed ignore the ENV",
 					 path);
 			else
-				D_DEBUG(DB_ALL, "set group_config_path as\n");
+				D_DEBUG(DB_ALL, "set group_config_path\n");
 		}
 
 		if (opt && opt->cio_auth_key)
