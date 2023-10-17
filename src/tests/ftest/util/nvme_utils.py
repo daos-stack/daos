@@ -180,7 +180,7 @@ class ServerFillUp(IorTestBase):
             self.ior_local_cmd.flags.value = self.ior_read_flags
 
         # To set IOR repetitions
-        self.ior_local_cmd.repetitions.update(repetitons, 'ior.repetitions')
+        self.ior_local_cmd.repetitions.update(repetitions, 'ior.repetitions')
 
         self.ior_local_cmd.set_daos_params(self.server_group, self.pool, None)
         self.ior_local_cmd.test_file.update('/testfile')
@@ -361,7 +361,8 @@ class ServerFillUp(IorTestBase):
 
         # Create the IOR threads
         job = threading.Thread(target=self.start_ior_thread, kwargs={"create_cont": create_cont,
-                                                                     "operation": operation})
+                                                                     "operation": operation,
+                                                                     "repetitions": repetitions})
         # Launch the IOR thread
         job.start()
 
