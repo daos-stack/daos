@@ -1411,7 +1411,6 @@ static void
 fini_events(struct pool_svc *svc)
 {
 	struct pool_svc_events *events = &svc->ps_events;
-	int			rc;
 
 	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
 
@@ -1422,8 +1421,6 @@ fini_events(struct pool_svc *svc)
 	ABT_cond_broadcast(events->pse_cv);
 	ABT_mutex_unlock(events->pse_mutex);
 
-	rc = ABT_thread_join(events->pse_handler);
-	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
 	ABT_thread_free(&events->pse_handler);
 	events->pse_handler = ABT_THREAD_NULL;
 	events->pse_stop = false;
@@ -1852,9 +1849,13 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	d_rank_t		rank = dss_self_rank();
 
 	fini_events(svc);
+	D_DEBUG(DB_MD, DF_UUID": fini_events done\n", DP_UUID(svc->ps_uuid));
 	sched_cancel_and_wait(&svc->ps_reconf_sched);
+	D_DEBUG(DB_MD, DF_UUID": reconf_sched done\n", DP_UUID(svc->ps_uuid));
 	sched_cancel_and_wait(&svc->ps_rfcheck_sched);
+	D_DEBUG(DB_MD, DF_UUID": rfcheck_sched done\n", DP_UUID(svc->ps_uuid));
 	ds_cont_svc_step_down(svc->ps_cont_svc);
+	D_DEBUG(DB_MD, DF_UUID": cont_svc done\n", DP_UUID(svc->ps_uuid));
 	fini_svc_pool(svc);
 
 	DS_POOL_NOTE_PRINT(DF_UUID": rank %u no longer pool service leader "DF_U64"\n",
