@@ -7,9 +7,10 @@ import threading
 
 from scrubber_utils import ScrubberUtils
 from ior_test_base import IorTestBase
+from mdtest_test_base import MdtestBase
 
 
-class TestWithScrubber(IorTestBase):
+class TestWithScrubber(IorTestBase, MdtestBase):
     """Test with scrubber enabled.
 
     :avocado: recursive
