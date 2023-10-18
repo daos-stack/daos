@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2016-2020, Intel Corporation */
+/* Copyright 2016-2023, Intel Corporation */
 
 #ifndef __DAOS_COMMON_MO_WAL_H
 #define __DAOS_COMMON_MO_WAL_H 1

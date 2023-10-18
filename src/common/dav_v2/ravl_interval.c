@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2020-2022, Intel Corporation */
+/* Copyright 2020-2023, Intel Corporation */
 
 /*
  * ravl_interval.c -- ravl_interval implementation

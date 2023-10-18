@@ -586,7 +586,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a shim package
 
 %changelog
-* Wed Oct 16 2023 Sherin T George <sherin-t.george@hpe.com> 2.5.100-10
+* Mon Oct 16 2023 Sherin T George <sherin-t.george@hpe.com> 2.5.100-10
 - The modified DAV allocator with memory bucket support for md_on_ssd
   phase-2 is delivered as dav_v2.so.
 
