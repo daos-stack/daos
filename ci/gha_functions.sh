@@ -45,6 +45,8 @@ cancel_provision() {
     url="$(echo "$QUEUE_URL" | sed -e 's|item/\(.*\)/|cancelItem?id=\1|')"
 
     if ! VERBOSE=true jenkins_curl -X POST "$url"; then
+        # it seems hokey but we need to cancel the RETURN trap that jenkins_curl set
+        trap '' RETURN
         echo "Failed to cancel cluster provision request."
         return 1
     fi
@@ -60,7 +62,7 @@ get_test_tags() {
         tags="$CP_TEST_TAG"
     else
         tags="pr"
-        if [ -n "$CP_FEATURES" ]; then
+        if [ -n "${CP_FEATURES:-}" ]; then
             for feature in $CP_FEATURES; do
                 tags+=" daily_regression,$feature full_regression,$feature"
             done
@@ -131,7 +133,6 @@ jenkins_curl() {
         crumb="$(curl -f "${q[@]}" "${v[@]}" --cookie-jar "$cookiejar" \
                  "${JENKINS_URL}crumbIssuer/api/xml?xpath=concat(//crumbRequestField,\":\",//crumb)")"
     fi
-    # shellcheck disable=SC2001,SC2153
     headers_file="$(mktemp)"
     if ! curl -f -D "$headers_file" --cookie "$cookiejar" -H "$crumb" "${q[@]}" "${v[@]}" "${args[@]}"; then
         echo "curl failed" >&2
@@ -205,10 +206,10 @@ provision_cluster() {
 GitHub Actions URL: https://github.com/daos-stack/daos/actions/runs/$runid
 Runner: $runner
 Stage Name: $stage_name\" > /root/job_info
-                    if ! POOL=\"\" restore_partition.sh daos_ci-el8 noreboot; then
+                    distro=$DISTRO_WITH_VERSION
+                    if ! POOL=\"${CP_PROVISIONING_POOL:-}\" restore_partition.sh daos_ci-\${distro} noreboot; then
                         rc=\${PIPESTATUS[0]}
                         # TODO: this needs to be derived from the stage name
-                        distro=el8
                         while [[ \$distro = *.* ]]; do
                             distro=\${distro%.*}
                                 if ! restore_partition.sh daos_ci-\${distro} noreboot; then
