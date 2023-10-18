@@ -130,8 +130,8 @@ daos_heap_delete(void *heap, int idx)
 		return 0;
 	}
 
-	/* Swith the last entry to with deleted entry, then heapify from
-	 * that entry to the bottom. */
+	/* Switch the last entry to with the entry, then heapify from
+	 * the entry to the bottom. */
 	dha->dha_ops->ho_swap(dha->dha_array, idx, dha->dha_array_size - 1);
 	dha->dha_array_size--;
 	if (idx == 0 || dha->dha_options & DAOS_HEAPIFY_EACH_UPDATE)

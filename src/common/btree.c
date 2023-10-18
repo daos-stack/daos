@@ -3444,8 +3444,16 @@ dbtree_close(daos_handle_t toh)
 	return 0;
 }
 
+/**
+ * Reset daos open tree handle, mainly used during upgrade, since the container
+ * root might be changed due to the durable format change.
+ *
+ * \param[in]	toh	Tree open handle.
+ * \param[in]	root	the root to be set.
+ * \param[in]	root_off the root offset to be set.
+ */
 void
-dbtree_reset_root(daos_handle_t toh, struct btr_root *root)
+dbtree_handle_reset_root(daos_handle_t toh, struct btr_root *root, umem_off_t root_off)
 {
 	struct btr_context	*tcx;
 
@@ -3454,6 +3462,7 @@ dbtree_reset_root(daos_handle_t toh, struct btr_root *root)
 		return;
 
 	tcx->tc_tins.ti_root = root;
+	tcx->tc_tins.ti_root_off = root_off;
 }
 
 /** Destroy a tree node and all its children recursively. */
