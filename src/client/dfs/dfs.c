@@ -1015,6 +1015,10 @@ entry_stat(dfs_t *dfs, daos_handle_t th, daos_handle_t oh, const char *name, siz
 			}
 
 			rc = daos_array_close(file_oh, NULL);
+			/* Try again in case of out of memory. Needed to avoid memory leak in
+			 * NLT fault injection */
+			if (rc == -DER_NOMEM)
+				rc = daos_array_close(file_oh, NULL);
 			if (rc)
 				return daos_der2errno(rc);
 		}
