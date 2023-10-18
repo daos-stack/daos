@@ -256,7 +256,7 @@ test_test_tag_and_features() {
 
 test_get_commit_pragmas() {
     local msg='Escape spaces also
-    
+
 Skip-func-test-leap15: false
 Skip-PR-comments: true
 Test-tag: always_passes always_fails
