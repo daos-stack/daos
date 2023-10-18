@@ -813,7 +813,7 @@ tree_open_create(struct vos_object *obj, enum vos_tree_class tclass, int flags,
 
 	/** If subtree is already created, it could have been created by an older pool version
 	 *  so if the dkey is not flat, we need to use KREC_BF_BTR here */
-	if (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY || (krec->kr_bmap & KREC_BF_FLAT))) {
+	if (flags & SUBTR_EVT && (tclass == VOS_BTR_AKEY || (krec->kr_bmap & KREC_BF_NO_AKEY))) {
 		expected_flag = KREC_BF_EVT;
 		unexpected_flag = KREC_BF_BTR;
 	} else {
@@ -910,7 +910,7 @@ create:
 	 */
 	krec->kr_bmap |= expected_flag;
 	if (flags & SUBTR_FLAT)
-		krec->kr_bmap |= KREC_BF_FLAT;
+		krec->kr_bmap |= KREC_BF_NO_AKEY;
 out:
 	return rc;
 }

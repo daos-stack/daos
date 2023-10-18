@@ -67,17 +67,11 @@ struct vos_io_context {
 	/** the total size of the IO */
 	uint64_t		 ic_io_size;
 	/** flags */
-	unsigned int		 ic_update:1,
-				 ic_size_fetch:1,
-				 ic_save_recx:1,
-				 ic_dedup:1, /** candidate for dedup */
-				 ic_dedup_verify:1,
-				 ic_read_ts_only:1,
-				 ic_check_existence:1,
-				 ic_remove:1,
-				 ic_skip_fetch:1,
-				 ic_agg_needed:1,
-				 ic_ec:1; /**< see VOS_OF_EC */
+	unsigned int              ic_update : 1, ic_size_fetch : 1, ic_save_recx : 1,
+	    ic_dedup        : 1, /** candidate for dedup */
+	    ic_dedup_verify : 1, ic_read_ts_only : 1, ic_check_existence : 1, ic_remove : 1,
+	    ic_skip_fetch : 1, ic_agg_needed : 1, ic_skip_akey_support : 1,
+	    ic_ec : 1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -589,6 +583,34 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 }
 
 static int
+vos_check_akeys(int iod_nr, daos_iod_t *iods)
+{
+	int i, j;
+
+	if (iod_nr == 0)
+		return 0;
+
+	for (i = 0; i < iod_nr - 1; i++) {
+		for (j = i + 1; j < iod_nr; j++) {
+			if (iods[i].iod_name.iov_len != iods[j].iod_name.iov_len)
+				continue;
+
+			if (iods[i].iod_name.iov_buf == iods[j].iod_name.iov_buf)
+				return -DER_NO_PERM;
+
+			if (iods[i].iod_name.iov_buf == NULL || iods[j].iod_name.iov_buf == NULL)
+				continue;
+
+			if (memcmp(iods[i].iod_name.iov_buf, iods[j].iod_name.iov_buf,
+				   iods[i].iod_name.iov_len) == 0)
+				return -DER_NO_PERM;
+		}
+	}
+
+	return 0;
+}
+
+static int
 vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	       daos_epoch_t epoch, unsigned int iod_nr,
 	       daos_iod_t *iods, struct dcs_iod_csums *iod_csums,
@@ -602,6 +624,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	daos_epoch_t		 bound;
 	uint64_t		 cflags = 0;
 	int			 i, rc;
+	bool                     skip_akey_support = false;
 
 	if (iod_nr == 0 &&
 	    !(vos_flags &
@@ -609,6 +632,27 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		D_ERROR("Invalid iod_nr (0).\n");
 		rc = -DER_IO_INVAL;
 		goto error;
+	}
+
+	cont = vos_hdl2cont(coh);
+	if (vos_obj_skip_akey_supported(cont, oid))
+		skip_akey_support = true;
+
+	if (!read_only) {
+		if (skip_akey_support) {
+			/** No need to do full check in this case since
+			 * writing akey twice in same operation is not allowed.
+			 */
+			rc = 0;
+			if (iod_nr != 1)
+				rc = -DER_NO_PERM;
+		} else {
+			rc = vos_check_akeys(iod_nr, iods);
+		}
+		if (rc != 0) {
+			D_ERROR("Detected duplicate akeys, operation not allowed\n");
+			return rc;
+		}
 	}
 
 	D_ALLOC_PTR(ioc);
@@ -623,8 +667,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_bound = MAX(bound, ioc->ic_epr.epr_hi);
 	ioc->ic_epr.epr_lo = 0;
 	ioc->ic_oid = oid;
-	ioc->ic_cont = vos_hdl2cont(coh);
-	vos_cont_addref(ioc->ic_cont);
+	ioc->ic_cont       = cont;
+	vos_cont_addref(cont);
 	ioc->ic_update = !read_only;
 	ioc->ic_size_fetch = ((vos_flags & VOS_OF_FETCH_SIZE_ONLY) != 0);
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
@@ -632,6 +676,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
 	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
 	ioc->ic_agg_needed = 0; /** Will be set if we detect a need for aggregation */
+	ioc->ic_skip_akey_support = skip_akey_support ? 1 : 0;
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -671,7 +716,6 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		}
 	}
 
-	cont = vos_hdl2cont(coh);
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
 				 dth, cont->vc_pool->vp_sysdb);
 	if (rc != 0)
@@ -1369,12 +1413,10 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	if (rc != 0)
 		return rc;
 
-	if (vos_obj_flat_kv_supported(ioc->ic_cont, obj->obj_id)) {
-		if (ioc->ic_iod_nr == 1) {
-			flags |= SUBTR_FLAT;
-			if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
-				flags |= SUBTR_EVT;
-		}
+	if (ioc->ic_skip_akey_support) {
+		flags |= SUBTR_FLAT;
+		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+			flags |= SUBTR_EVT;
 	}
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, flags, DAOS_INTENT_DEFAULT,
@@ -1422,7 +1464,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	}
 
 fetch_akey:
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		iod_set_cursor(ioc, 0);
 		rc = fetch_value(ioc, &ioc->ic_iods[0], toh, &ioc->ic_epr, standalone);
 	} else {
@@ -1904,12 +1946,10 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	if (vos_obj_flat_kv_supported(ioc->ic_cont, obj->obj_id)) {
-		if (ioc->ic_iod_nr == 1) {
-			flags |= SUBTR_FLAT;
-			if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
-				flags |= SUBTR_EVT;
-		}
+	if (ioc->ic_skip_akey_support) {
+		flags |= SUBTR_FLAT;
+		if (ioc->ic_iods[0].iod_type == DAOS_IOD_ARRAY)
+			flags |= SUBTR_EVT;
 	}
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY, dkey, flags, DAOS_INTENT_UPDATE,
@@ -1944,7 +1984,7 @@ dkey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_key_t *dkey,
 		goto out;
 	}
 
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		struct dcs_csum_info *iod_csums = vos_csum_at(ioc->ic_iod_csums, 0);
 		iod_set_cursor(ioc, 0);
 		rc = update_value(ioc, &ioc->ic_iods[0], iod_csums, pm_ver, ak_toh, minor_epc);
@@ -2457,38 +2497,6 @@ abort:
 	return err;
 }
 
-static int
-vos_check_akeys(int iod_nr, daos_iod_t *iods)
-{
-	int	i, j;
-
-	if (iod_nr == 0)
-		return 0;
-
-	for (i = 0; i < iod_nr - 1; i++) {
-		for (j = i + 1; j < iod_nr; j++) {
-			if (iods[i].iod_name.iov_len !=
-			    iods[j].iod_name.iov_len)
-				continue;
-
-			if (iods[i].iod_name.iov_buf ==
-			    iods[j].iod_name.iov_buf)
-				return -DER_NO_PERM;
-
-			if (iods[i].iod_name.iov_buf == NULL ||
-			    iods[j].iod_name.iov_buf == NULL)
-				continue;
-
-			if (memcmp(iods[i].iod_name.iov_buf,
-				   iods[j].iod_name.iov_buf,
-				   iods[i].iod_name.iov_len) == 0)
-				return -DER_NO_PERM;
-		}
-	}
-
-	return 0;
-}
-
 void
 vos_update_renew_epoch(daos_handle_t ioh, struct dtx_handle *dth)
 {
@@ -2517,12 +2525,6 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "
 		DF_X64", flags="DF_X64"\n", DP_UOID(oid), iod_nr, epoch, flags);
-
-	rc = vos_check_akeys(iod_nr, iods);
-	if (rc != 0) {
-		D_ERROR("Detected duplicate akeys, operation not allowed\n");
-		return rc;
-	}
 
 	rc = vos_ioc_create(coh, oid, false, epoch, iod_nr, iods, iods_csums,
 			    flags, NULL, dedup_th, dth, &ioc);

@@ -151,7 +151,7 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	int                 creds = *credits;
 	int		    rc;
 
-	if (key->kr_bmap & KREC_BF_FLAT && gc->gc_type == GC_DKEY) {
+	if (key->kr_bmap & KREC_BF_NO_AKEY && gc->gc_type == GC_DKEY) {
 		/** Special case, this will defer to the free callback
 		 *  and the tree will be inserted as akey.
 		 */
@@ -194,7 +194,7 @@ gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct
 	struct vos_krec_df *krec = umem_off2ptr(&pool->vp_umm, item->it_addr);
 
 	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
-	if (krec->kr_bmap & KREC_BF_FLAT)
+	if (krec->kr_bmap & KREC_BF_NO_AKEY)
 		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
 	else
 		umem_free(&pool->vp_umm, item->it_addr);

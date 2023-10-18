@@ -1039,9 +1039,8 @@ struct vos_iterator {
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
-	uint32_t it_from_parent : 1, it_key_flat : 1, it_key_fake : 1, it_for_purge : 1,
-	    it_for_discard : 1, it_for_migration : 1, it_show_uncommitted : 1,
-	    it_ignore_uncommitted : 1, it_for_sysdb : 1;
+	uint32_t it_from_parent : 1, it_for_purge : 1, it_for_discard : 1, it_for_migration : 1,
+	    it_show_uncommitted : 1, it_ignore_uncommitted : 1, it_for_sysdb : 1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -1752,7 +1751,7 @@ void vos_lru_free_track(void *arg, daos_size_t size);
 void vos_lru_alloc_track(void *arg, daos_size_t size);
 
 static inline bool
-vos_obj_flat_kv_supported(struct vos_container *cont, daos_unit_oid_t oid)
+vos_obj_skip_akey_supported(struct vos_container *cont, daos_unit_oid_t oid)
 {
 	struct vos_pool *pool = vos_cont2pool(cont);
 

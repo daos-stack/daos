@@ -291,10 +291,10 @@ enum vos_krec_bf {
 	KREC_BF_EVT = (1 << 0),
 	/* Single Value or Key (btree) */
 	KREC_BF_BTR = (1 << 1),
-	/* it's a dkey, otherwise is akey or single value if KREC_BF_FLAT is set */
+	/* it's a dkey, otherwise is akey or single value if KREC_BF_NO_AKEY is set */
 	KREC_BF_DKEY = (1 << 2),
 	/* Value is stored in DKEY */
-	KREC_BF_FLAT = (1 << 3),
+	KREC_BF_NO_AKEY = (1 << 3),
 };
 
 /**

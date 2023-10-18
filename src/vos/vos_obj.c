@@ -432,8 +432,8 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	cont = vos_hdl2cont(coh);
 
-	if (vos_obj_flat_kv_supported(cont, oid) && dkey != NULL && akeys != NULL) {
-		D_ERROR("Akey punch is not supported with flat object types: " DF_UOID "\n",
+	if (vos_obj_skip_akey_supported(cont, oid) && dkey != NULL && akeys != NULL) {
+		D_ERROR("Akey punch is not supported when no akey exists: " DF_UOID "\n",
 			DP_UOID(oid));
 
 		return -DER_INVAL;
@@ -619,8 +619,8 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		goto out;
 	}
 
-	/** If the dkey is flat, this will enable the operation to succeed */
-	if (vos_obj_flat_kv_supported(obj->obj_cont, obj->obj_id)) {
+	/** If the dkey has no akey, this will enable the operation to succeed */
+	if (vos_obj_skip_akey_supported(obj->obj_cont, obj->obj_id)) {
 		flags |= SUBTR_FLAT;
 		if (daos_is_array(obj->obj_id.id_pub))
 			flags |= SUBTR_EVT;
@@ -639,7 +639,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		D_GOTO(out, rc);
 	}
 
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		/** There is no akey tree to query.  In accordance with the design to fake it for
 		 *  iterators, let's create a fake anchor
 		 */
@@ -854,7 +854,7 @@ key_ilog_prepare_dkey(struct vos_obj_iter *oiter, daos_key_t *key, daos_handle_t
 	struct vos_object *obj   = oiter->it_obj;
 	int                flags = 0;
 
-	if (vos_obj_flat_kv_supported(obj->obj_cont, obj->obj_id)) {
+	if (vos_obj_skip_akey_supported(obj->obj_cont, obj->obj_id)) {
 		flags |= SUBTR_FLAT;
 		if (daos_is_array(obj->obj_id.id_pub))
 			flags |= SUBTR_EVT;
@@ -1027,13 +1027,13 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 		if ((krec->kr_bmap & KREC_BF_EVT) == 0)
 			return -DER_NONEXIST;
 		info->ii_evt = &krec->kr_evt;
-	} else if (type == VOS_ITER_SINGLE || (krec->kr_bmap & KREC_BF_FLAT) == 0) {
+	} else if (type == VOS_ITER_SINGLE || (krec->kr_bmap & KREC_BF_NO_AKEY) == 0) {
 		if ((krec->kr_bmap & KREC_BF_BTR) == 0)
 			return -DER_NONEXIST;
 		info->ii_btr = &krec->kr_btr;
 	} else {
 		D_ASSERTF(type == VOS_ITER_AKEY, "type = %d\n", type);
-		D_ASSERTF(krec->kr_bmap & KREC_BF_FLAT, "krec->kr_bmap = %x\n", krec->kr_bmap);
+		D_ASSERTF(krec->kr_bmap & KREC_BF_NO_AKEY, "krec->kr_bmap = %x\n", krec->kr_bmap);
 		/** For fake akey, we open the subtree and store it in the
 		 * iterator handle.  For nested case, go ahead and open the
 		 * subtree
@@ -1167,7 +1167,7 @@ akey_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		goto failed;
 
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		/** In such case, toh will refer to a child tree so we an
 		 * initialize its iterator in such case as it is needed.
 		 * We also set the type of the tree here so we know what
@@ -1227,7 +1227,7 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		sv_toh = ak_toh;
 		ak_toh = DAOS_HDL_INVAL;
 	} else {
@@ -1536,7 +1536,7 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	if (rc != 0)
 		return rc;
 
-	if (krec->kr_bmap & KREC_BF_FLAT) {
+	if (krec->kr_bmap & KREC_BF_NO_AKEY) {
 		rx_toh = ak_toh;
 		ak_toh = DAOS_HDL_INVAL;
 	} else {
