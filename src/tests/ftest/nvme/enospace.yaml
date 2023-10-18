@@ -48,6 +48,6 @@ ior:
   test_file: /testFile
   transfersize_blocksize:
     2K:
-      transfer_size: 2048  # 2K
+      transfer_size: 204800  # 2K x100
     16M:
-      nvme_transfer_size: 16777216  # 16M
+      nvme_transfer_size: 1677721600  # 16M x100
