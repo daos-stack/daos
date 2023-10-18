@@ -13,7 +13,7 @@ if ! BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
 fi
 
 ORIGIN="${DAOS_ORIGIN:=origin}"
-if [ "$ORIGIN" == "origin" ]; then
+if [ "$ORIGIN" = "origin" ]; then
     echo "  Using origin as remote repo.  If this is incorrect, set DAOS_ORIGIN in environment"
 fi
 

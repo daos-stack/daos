@@ -32,19 +32,19 @@ class TestHarnessSkipsBase(Test):
         # create a temporary commit_fixes file
         try:
             os.rename(self.commit_fixes_file, self.commit_fixes_file + '.orig')
-        except OSError as excpt:
-            if excpt.errno == errno.ENOENT:
+        except OSError as err:
+            if err.errno == errno.ENOENT:
                 pass
             else:
                 self.fail("Could not rename {0}"
                           "{{,.orig}}: {1}".format(self.commit_fixes_file,
-                                                   excpt))
+                                                   err))
         try:
             with open(self.commit_fixes_file, 'w') as cf_handle:
                 cf_handle.write("DAOS-9999 test: Fixing DAOS-9999")
-        except Exception as excpt:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
             self.fail("Could not create {0}: "
-                      "{1}".format(self.commit_fixes_file, excpt))
+                      "{1}".format(self.commit_fixes_file, err))
 
         super().setUp()
 
@@ -52,17 +52,17 @@ class TestHarnessSkipsBase(Test):
         """Put back the original commit_fixes file."""
         try:
             os.unlink(self.commit_fixes_file)
-        except Exception as excpt:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
             self.fail("Could not remove {0}: "
-                      "{1}".format(self.commit_fixes_file, excpt))
+                      "{1}".format(self.commit_fixes_file, err))
         try:
             os.rename(self.commit_fixes_file + '.orig', self.commit_fixes_file)
-        except OSError as excpt:
-            if excpt.errno == errno.ENOENT:
+        except OSError as err:
+            if err.errno == errno.ENOENT:
                 pass
-        except Exception as excpt:  # pylint: disable=broad-except
+        except Exception as err:  # pylint: disable=broad-except
             self.fail("Could not rename {0}{{.orig,}}: "
-                      "{1}".format(self.commit_fixes_file, excpt))
+                      "{1}".format(self.commit_fixes_file, err))
 
         super().tearDown()
 
