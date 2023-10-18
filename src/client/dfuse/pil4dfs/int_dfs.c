@@ -410,9 +410,9 @@ static int (*next_xstat)(int ver, const char *path, struct stat *stat_buf);
 
 static int (*libc_lxstat)(int ver, const char *path, struct stat *stat_buf);
 
-static int (*next_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
+static int (*libc_fxstatat)(int ver, int dirfd, const char *path, struct stat *stat_buf, int flags);
 
-static int (*next_fstatat)(int dirfd, const char *path, struct stat *stat_buf, int flags);
+static int (*libc_fstatat)(int dirfd, const char *path, struct stat *stat_buf, int flags);
 
 static int (*next_statx)(int dirfd, const char *path, int flags, unsigned int mask,
 			 struct statx *statx_buf);
@@ -2069,6 +2069,26 @@ ssize_t
 __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
 
 ssize_t
+__pread64_chk(int fd, void *buf, size_t size, off_t offset, size_t buflen)
+{
+	if (size > buflen) {
+		D_FATAL("buffer overflow detected in __pread64_chk().\n");
+		abort();
+	}
+	return pread(fd, buf, size, offset);
+}
+
+ssize_t
+__read_chk (int fd, void *buf, size_t size, size_t buflen)
+{
+	if (size > buflen) {
+		D_FATAL("buffer overflow detected in __read_chk().\n");
+		abort();
+	}
+	return read(fd, buf, size);
+}
+
+ssize_t
 write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
 {
@@ -2319,7 +2339,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 	char *full_path = NULL;
 
 	if (!hook_enabled)
-		return next_fxstatat(ver, dirfd, path, stat_buf, flags);
+		return libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -2339,7 +2359,7 @@ new_fxstatat(int ver, int dirfd, const char *path, struct stat *stat_buf, int fl
 		else
 			rc = new_xstat(1, full_path, stat_buf);
 	} else {
-		rc = next_fxstatat(ver, dirfd, path, stat_buf, flags);
+		rc = libc_fxstatat(ver, dirfd, path, stat_buf, flags);
 	}
 
 	error = errno;
@@ -2355,17 +2375,13 @@ out_err:
 }
 
 int
-fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf, int flags)
+new_fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf, int flags)
 {
 	int  idx_dfs, error = 0, rc;
 	char *full_path = NULL;
 
-	if (next_fstatat == NULL) {
-		next_fstatat = dlsym(RTLD_NEXT, "fstatat");
-		D_ASSERT(fstatat != NULL);
-	}
 	if (!hook_enabled)
-		return next_fstatat(dirfd, path, stat_buf, flags);
+		return libc_fstatat(dirfd, path, stat_buf, flags);
 
 	if (path[0] == '/') {
 		/* Absolute path, dirfd is ignored */
@@ -2385,7 +2401,7 @@ fstatat(int dirfd, const char *__restrict path, struct stat *__restrict stat_buf
 		else
 			rc = new_xstat(1, full_path, stat_buf);
 	} else {
-		rc = next_fstatat(dirfd, path, stat_buf, flags);
+		rc = libc_fstatat(dirfd, path, stat_buf, flags);
 	}
 
 	error = errno;
@@ -2399,10 +2415,6 @@ out_err:
 	errno = error;
 	return (-1);
 }
-
-int
-fstatat64(int dirfd, const char *__restrict path, struct stat64 *__restrict stat_buf, int flags)
-	__attribute__((alias("fstatat")));
 
 static void
 copy_stat_to_statx(const struct stat *stat_buf, struct statx *statx_buf)
@@ -5455,7 +5467,8 @@ init_myhook(void)
 	register_a_hook("libc", "__xstat", (void *)new_xstat, (long int *)(&next_xstat));
 	/* Many variants for lxstat: _lxstat, __lxstat, ___lxstat, __lxstat64 */
 	register_a_hook("libc", "__lxstat", (void *)new_lxstat, (long int *)(&libc_lxstat));
-	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&next_fxstatat));
+	register_a_hook("libc", "__fxstatat", (void *)new_fxstatat, (long int *)(&libc_fxstatat));
+	register_a_hook("libc", "fstatat", (void *)new_fstatat, (long int *)(&libc_fstatat));
 	register_a_hook("libc", "readdir", (void *)new_readdir, (long int *)(&next_readdir));
 
 	register_a_hook("libc", "fcntl", (void *)new_fcntl, (long int *)(&libc_fcntl));

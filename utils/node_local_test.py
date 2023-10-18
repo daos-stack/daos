@@ -4109,7 +4109,10 @@ class PosixTests():
         file5 = join(path, 'newfile')
         self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
                                                 'count=1'])
-
+        # cp "/usr/bin/mkdir" to DFS and call "/usr/bin/file" to analyze the binary file file6
+        file6 = join(path, 'elffile')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
+        self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
