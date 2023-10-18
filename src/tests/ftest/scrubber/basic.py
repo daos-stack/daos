@@ -7,7 +7,7 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestWithScrubberBasic(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks,too-many-ancestors
     """Basic Scrubber Test
 
     :avocado: recursive

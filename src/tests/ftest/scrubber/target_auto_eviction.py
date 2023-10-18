@@ -9,7 +9,7 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestWithScrubberTargetEviction(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks,too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
     and scrubber threshold set to a certain value.
 

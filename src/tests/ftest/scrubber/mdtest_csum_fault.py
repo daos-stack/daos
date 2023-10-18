@@ -8,7 +8,7 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestWithMdTestScrubberFault(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks,too-many-ancestors
     """Inject Checksum Fault with scrubber enabled for MdTest run.
 
     :avocado: recursive

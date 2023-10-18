@@ -8,7 +8,7 @@ from scrubber_test_base import TestWithScrubber
 
 
 class TestWithScrubberFault(TestWithScrubber):
-    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-nested-blocks,too-many-ancestors
     """Inject Checksum Fault with scrubber enabled
 
     :avocado: recursive
