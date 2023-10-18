@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -546,13 +546,10 @@ crt_proc_struct_daos_cpd_sub_head(crt_proc_t proc, crt_proc_op_t proc_op,
 	}
 
 	rc = crt_proc_memcpy(proc, proc_op, dcsh->dcsh_mbs, size);
-	if (unlikely(rc)) {
-		if (DECODING(proc_op))
-			D_FREE(dcsh->dcsh_mbs);
-		return rc;
-	}
+	if (unlikely(rc) && DECODING(proc_op))
+		D_FREE(dcsh->dcsh_mbs);
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -848,11 +845,6 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 			return rc;
 	}
 
-	if (FREEING(proc_op)) {
-		D_FREE(dcb->dcb_bulk);
-		return 0;
-	}
-
 	rc = crt_proc_uint32_t(proc, proc_op, &dcb->dcb_size);
 	if (unlikely(rc))
 		return rc;
@@ -870,6 +862,9 @@ crt_proc_struct_daos_cpd_bulk(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_crt_bulk_t(proc, proc_op, dcb->dcb_bulk);
 	if (unlikely(rc))
 		return rc;
+
+	if (FREEING(proc_op))
+		D_FREE(dcb->dcb_bulk);
 
 	/* The other fields will not be packed on-wire. */
 
