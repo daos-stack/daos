@@ -4068,6 +4068,9 @@ class PosixTests():
         with open(file1, 'w') as fd:
             fd.write('Hello World!')
 
+        # hexdump to check file
+        self.server.run_daos_client_cmd_pil4dfs(['hexdump', file1])
+
         # Copy a file.
         file2 = join(path, 'file2')
         self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
