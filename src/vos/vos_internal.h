@@ -568,22 +568,34 @@ extern struct vos_iter_ops vos_obj_iter_ops;
 extern struct vos_iter_ops vos_cont_iter_ops;
 extern struct vos_iter_ops vos_dtx_iter_ops;
 
+static inline bool
+vos_pool_standalone(struct vos_pool *pool)
+{
+	return pool->vp_sysdb;
+}
+
+static inline bool
+vos_cont_standalone(struct vos_container *cont)
+{
+	return vos_pool_standalone(cont->vc_pool);
+}
+
 static inline void
 vos_pool_addref(struct vos_pool *pool)
 {
-	d_uhash_link_addref(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
+	d_uhash_link_addref(vos_pool_hhash_get(vos_pool_standalone(pool)), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_decref(struct vos_pool *pool)
 {
-	d_uhash_link_putref(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
+	d_uhash_link_putref(vos_pool_hhash_get(vos_pool_standalone(pool)), &pool->vp_hlink);
 }
 
 static inline void
 vos_pool_hash_del(struct vos_pool *pool)
 {
-	d_uhash_link_delete(vos_pool_hhash_get(pool->vp_sysdb), &pool->vp_hlink);
+	d_uhash_link_delete(vos_pool_hhash_get(vos_pool_standalone(pool)), &pool->vp_hlink);
 }
 
 /**
@@ -1208,7 +1220,7 @@ vos_evt_desc_cbs_init(struct evt_desc_cbs *cbs, struct vos_pool *pool,
 		      daos_handle_t coh);
 
 int
-vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool is_sysdb);
+vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm, bool standalone);
 
 /** Finish the transaction and publish or cancel the reservations or
  *  return if err == 0 and it's a multi-modification transaction that

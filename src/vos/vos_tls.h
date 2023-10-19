@@ -72,15 +72,15 @@ struct bio_xs_context *vos_xsctxt_get(void);
 struct vos_tls *vos_tls_get(bool standalone);
 
 static inline struct d_hash_table *
-vos_pool_hhash_get(bool is_sysdb)
+vos_pool_hhash_get(bool standalone)
 {
-	return vos_tls_get(is_sysdb)->vtl_pool_hhash;
+	return vos_tls_get(standalone)->vtl_pool_hhash;
 }
 
 static inline struct d_hash_table *
-vos_cont_hhash_get(bool is_sysdb)
+vos_cont_hhash_get(bool standalone)
 {
-	return vos_tls_get(is_sysdb)->vtl_cont_hhash;
+	return vos_tls_get(standalone)->vtl_cont_hhash;
 }
 
 static inline struct daos_lru_cache *

@@ -294,7 +294,7 @@ ktr_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 
 	pool = (struct vos_pool *)tins->ti_priv;
 	vos_ilog_ts_evict(&krec->kr_ilog, (krec->kr_bmap & KREC_BF_DKEY) ?
-			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, pool->vp_sysdb);
+			  VOS_TS_TYPE_DKEY : VOS_TS_TYPE_AKEY, vos_pool_standalone(pool));
 
 	D_ASSERT(tins->ti_priv);
 	gc = (krec->kr_bmap & KREC_BF_DKEY) ? GC_DKEY : GC_AKEY;
@@ -366,7 +366,7 @@ svt_rec_store(struct btr_instance *tins, struct btr_record *rec,
 	      struct vos_svt_key *skey, struct vos_rec_bundle *rbund)
 {
 	struct vos_container	*cont = vos_hdl2cont(tins->ti_coh);
-	struct dtx_handle	*dth	= vos_dth_get(cont->vc_pool->vp_sysdb);
+	struct dtx_handle	*dth	= vos_dth_get(vos_cont_standalone(cont));
 	struct vos_irec_df	*irec	= vos_rec2irec(tins, rec);
 	struct dcs_csum_info	*csum	= rbund->rb_csum;
 	struct bio_iov		*biov	= rbund->rb_biov;
@@ -590,7 +590,7 @@ svt_rec_free_internal(struct btr_instance *tins, struct btr_record *rec,
 		return 0;
 
 	if (overwrite) {
-		dth = vos_dth_get(cont->vc_pool->vp_sysdb);
+		dth = vos_dth_get(vos_cont_standalone(cont));
 		if (dth == NULL)
 			return -DER_NO_PERM; /* Not allowed */
 	}
@@ -927,7 +927,7 @@ key_tree_prepare(struct vos_object *obj, daos_handle_t toh,
 	int			 tmprc;
 
 	/** reset the saved hash */
-	vos_kh_clear(obj->obj_cont->vc_pool->vp_sysdb);
+	vos_kh_clear(vos_cont_standalone(obj->obj_cont));
 
 	if (krecp != NULL)
 		*krecp = NULL;

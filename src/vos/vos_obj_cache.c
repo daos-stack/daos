@@ -472,7 +472,7 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb) != NULL &&
+	    vos_dth_get(vos_cont_standalone(obj->obj_cont)) != NULL &&
 	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the

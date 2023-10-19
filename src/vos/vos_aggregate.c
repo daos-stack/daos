@@ -319,7 +319,7 @@ vos_aggregate_yield(struct vos_agg_param *agg_param)
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
 	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get(cont->vc_pool->vp_sysdb) == NULL);
+	D_ASSERT(vos_dth_get(vos_cont_standalone(cont)) == NULL);
 
 	if (agg_param->ap_yield_func == NULL) {
 		bio_yield(agg_param->ap_umm);
@@ -2252,7 +2252,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Current DTX handle must be NULL, since aggregation runs under non-DTX mode. */
-	D_ASSERT(vos_dth_get(cont->vc_pool->vp_sysdb) == NULL);
+	D_ASSERT(vos_dth_get(vos_cont_standalone(cont)) == NULL);
 
 	/* Aggregation Yield for testing purpose */
 	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED))
@@ -2757,7 +2757,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 		return -DER_NOMEM;
 
 	if (oidp != NULL) {
-		rc = vos_obj_discard_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
+		rc = vos_obj_discard_hold(vos_obj_cache_current(vos_cont_standalone(cont)),
 					  cont, *oidp, &obj);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST)
@@ -2814,7 +2814,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 
 release_obj:
 	if (oidp != NULL)
-		vos_obj_discard_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), obj);
+		vos_obj_discard_release(vos_obj_cache_current(vos_cont_standalone(cont)), obj);
 
 free_agg_data:
 	D_FREE(ad);

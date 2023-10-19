@@ -108,7 +108,7 @@ tree_is_empty(struct vos_object *obj, umem_off_t *known_key, daos_handle_t toh,
 	      const daos_epoch_range_t *epr, vos_iter_type_t type)
 {
 	daos_anchor_t		 anchor = {0};
-	struct dtx_handle	*dth = vos_dth_get(obj->obj_cont->vc_pool->vp_sysdb);
+	struct dtx_handle	*dth = vos_dth_get(vos_cont_standalone(obj->obj_cont));
 	struct umem_instance	*umm;
 	d_iov_t			 key;
 	struct vos_key_info	 kinfo = {0};
@@ -360,7 +360,7 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	int			 rc;
 
 	cont = vos_hdl2cont(coh);
-	occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	occ  = vos_obj_cache_current(vos_cont_standalone(cont));
 	D_ALLOC_PTR(info);
 	if (info == NULL)
 		return -DER_NOMEM;
@@ -449,7 +449,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	}
 
 	rc = vos_ts_set_allocate(&ts_set, flags, cflags, akey_nr,
-				 dth, cont->vc_pool->vp_sysdb);
+				 dth, vos_cont_standalone(cont));
 	if (rc != 0)
 		goto reset;
 
@@ -457,7 +457,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
-	rc = vos_tx_begin(dth, vos_cont2umm(cont), cont->vc_pool->vp_sysdb);
+	rc = vos_tx_begin(dth, vos_cont2umm(cont), vos_cont_standalone(cont));
 	if (rc != 0)
 		goto reset;
 
@@ -481,7 +481,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	hold_flags = (flags & VOS_OF_COND_PUNCH) ? 0 : VOS_OBJ_CREATE;
 	hold_flags |= VOS_OBJ_VISIBLE;
 	/* NB: punch always generate a new incarnation of the object */
-	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), vos_hdl2cont(coh),
+	rc = vos_obj_hold(vos_obj_cache_current(vos_cont_standalone(cont)), vos_hdl2cont(coh),
 			  oid, &epr, bound, hold_flags, DAOS_INTENT_PUNCH, &obj, ts_set);
 	if (rc == 0) {
 		if (dkey) { /* key punch */
@@ -509,7 +509,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 				rc = vos_mark_agg(cont, &obj->obj_df->vo_tree,
 						  &cont->vc_cont_df->cd_obj_root, epoch);
 
-			vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb),
+			vos_obj_release(vos_obj_cache_current(vos_cont_standalone(cont)),
 					obj, rc != 0);
 		}
 	}
@@ -573,7 +573,7 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 		D_ERROR("Container is not open\n");
 		return -DER_INVAL;
 	}
-	occ = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	occ = vos_obj_cache_current(vos_cont_standalone(cont));
 
 	rc = vos_obj_hold(occ, cont, oid, &epr, DAOS_EPOCH_MAX, 0, DAOS_INTENT_DEFAULT, &obj, NULL);
 	if (rc != 0) {
@@ -627,7 +627,7 @@ static int
 vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool only_delete_entry)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct daos_lru_cache	*occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	struct daos_lru_cache	*occ  = vos_obj_cache_current(vos_cont_standalone(cont));
 	struct umem_instance	*umm = vos_cont2umm(cont);
 	struct vos_object	*obj;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -679,7 +679,7 @@ vos_obj_del_key(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey,
 		daos_key_t *akey)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
-	struct daos_lru_cache	*occ  = vos_obj_cache_current(cont->vc_pool->vp_sysdb);
+	struct daos_lru_cache	*occ  = vos_obj_cache_current(vos_cont_standalone(cont));
 	struct umem_instance	*umm  = vos_cont2umm(cont);
 	struct vos_object	*obj;
 	daos_key_t		*key;
@@ -878,7 +878,7 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	unsigned int		 acts;
 	int			 rc;
 	struct vos_object	*obj = oiter->it_obj;
-	bool			 is_sysdb = obj->obj_cont->vc_pool->vp_sysdb;
+	bool			 standalone = vos_cont_standalone(obj->obj_cont);
 
 	rc = key_iter_fetch_helper(oiter, &rbund, &ent->ie_key, anchor);
 	D_ASSERTF(check_existence || rc != -DER_NONEXIST,
@@ -908,16 +908,16 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		}
 
 		acts = 0;
-		start_seq = vos_sched_seq(is_sysdb);
-		dth = vos_dth_get(is_sysdb);
-		vos_dth_set(NULL, is_sysdb);
+		start_seq = vos_sched_seq(standalone);
+		dth = vos_dth_get(standalone);
+		vos_dth_set(NULL, standalone);
 		rc = oiter->it_iter.it_filter_cb(vos_iter2hdl(&oiter->it_iter), &desc,
 						 oiter->it_iter.it_filter_arg,
 						 &acts);
-		vos_dth_set(dth, is_sysdb);
+		vos_dth_set(dth, standalone);
 		if (rc != 0)
 			return rc;
-		if (start_seq != vos_sched_seq(is_sysdb))
+		if (start_seq != vos_sched_seq(standalone))
 			acts |= VOS_ITER_CB_YIELD;
 		if (acts & (VOS_ITER_CB_EXIT | VOS_ITER_CB_ABORT | VOS_ITER_CB_RESTART |
 			    VOS_ITER_CB_DELETE | VOS_ITER_CB_YIELD))
@@ -1622,8 +1622,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 {
 	struct vos_obj_iter	*oiter;
 	struct vos_container	*cont = vos_hdl2cont(param->ip_hdl);
-	bool			 is_sysdb = cont->vc_pool->vp_sysdb;
-	struct dtx_handle	*dth = vos_dth_get(is_sysdb);
+	bool			 standalone = vos_cont_standalone(cont);
+	struct dtx_handle	*dth = vos_dth_get(standalone);
 	daos_epoch_t		 bound;
 	int			 rc;
 
@@ -1649,7 +1649,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (is_sysdb)
+	if (standalone)
 		oiter->it_iter.it_for_sysdb = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
 		/** Prepare the iterator from an already open tree handle.   See
@@ -1668,7 +1668,7 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(is_sysdb), cont,
+	rc = vos_obj_hold(vos_obj_cache_current(standalone), cont,
 			  param->ip_oid, &oiter->it_epr,
 			  oiter->it_iter.it_bound,
 			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
@@ -1775,7 +1775,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 	 * the object/key if it's punched more than once. However, rebuild
 	 * system should guarantee this will never happen.
 	 */
-	rc = vos_obj_hold(vos_obj_cache_current(cont->vc_pool->vp_sysdb), cont,
+	rc = vos_obj_hold(vos_obj_cache_current(vos_cont_standalone(cont)), cont,
 			  info->ii_oid, &info->ii_epr, oiter->it_iter.it_bound,
 			  (oiter->it_flags & VOS_IT_PUNCHED) ? 0 :
 			  VOS_OBJ_VISIBLE, vos_iter_intent(&oiter->it_iter),
@@ -1806,7 +1806,7 @@ nested_dkey_iter_init(struct vos_obj_iter *oiter, struct vos_iter_info *info)
 
 	return 0;
 failed:
-	vos_obj_release(vos_obj_cache_current(cont->vc_pool->vp_sysdb), oiter->it_obj, false);
+	vos_obj_release(vos_obj_cache_current(vos_cont_standalone(cont)), oiter->it_obj, false);
 
 	return rc;
 }
@@ -1830,7 +1830,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		vos_cont = obj->obj_cont;
 	else
 		vos_cont = vos_hdl2cont(info->ii_hdl);
-	dth = vos_dth_get(vos_cont->vc_pool->vp_sysdb);
+	dth = vos_dth_get(vos_cont_standalone(vos_cont));
 	D_ALLOC_PTR(oiter);
 	if (oiter == NULL)
 		return -DER_NOMEM;
@@ -1853,7 +1853,7 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
-	if (vos_cont->vc_pool->vp_sysdb)
+	if (vos_cont_standalone(vos_cont))
 		oiter->it_iter.it_for_sysdb = 1;
 
 	switch (type) {
@@ -1951,7 +1951,7 @@ vos_obj_iter_fini(struct vos_iterator *iter)
 	object = oiter->it_obj;
 	if (oiter->it_flags != VOS_IT_KEY_TREE && object != NULL &&
 	    (iter->it_type == VOS_ITER_DKEY || !iter->it_from_parent))
-		vos_obj_release(vos_obj_cache_current(object->obj_cont->vc_pool->vp_sysdb),
+		vos_obj_release(vos_obj_cache_current(vos_cont_standalone(object->obj_cont)),
 				object, false);
 
 	vos_ilog_fetch_finish(&oiter->it_ilog_info);

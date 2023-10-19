@@ -372,7 +372,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		     struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		     uint32_t cond, struct vos_ts_set *ts_set)
 {
-	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
+	struct dtx_handle	*dth = vos_dth_get(vos_cont_standalone(cont));
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
@@ -459,7 +459,7 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		struct vos_ilog_info *parent, struct vos_ilog_info *info,
 		struct vos_ts_set *ts_set, bool leaf, bool replay)
 {
-	struct dtx_handle	*dth = vos_dth_get(cont->vc_pool->vp_sysdb);
+	struct dtx_handle	*dth = vos_dth_get(vos_cont_standalone(cont));
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;

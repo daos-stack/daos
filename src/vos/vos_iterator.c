@@ -144,7 +144,7 @@ out:
 }
 
 static bool
-is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
+is_standalone_pool(vos_iter_type_t type, vos_iter_param_t *param)
 {
 	struct vos_pool		*vos_pool;
 	struct vos_container	*vos_cont;
@@ -153,13 +153,13 @@ is_sysdb_pool(vos_iter_type_t type, vos_iter_param_t *param)
 		vos_pool = vos_hdl2pool(param->ip_hdl);
 		D_ASSERT(vos_pool != NULL);
 
-		return vos_pool->vp_sysdb;
+		return vos_pool_standalone(vos_pool);
 	}
 
 	vos_cont = vos_hdl2cont(param->ip_hdl);
 	D_ASSERT(vos_cont != NULL);
 
-	return vos_cont->vc_pool->vp_sysdb;
+	return vos_cont_standalone(vos_cont);
 }
 
 int
@@ -172,7 +172,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 	struct vos_ts_set	*ts_set = NULL;
 	int			 rc;
 	int			 rlevel;
-	bool			 is_sysdb;
+	bool			 standalone;
 
 	if (ih == NULL) {
 		D_ERROR("Argument 'ih' is invalid to vos_iter_param\n");
@@ -185,7 +185,7 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ERROR("No valid pool or cont handle specified in vos_iter_param\n");
 		return -DER_INVAL;
 	}
-	is_sysdb = is_sysdb_pool(type, param);
+	standalone = is_standalone_pool(type, param);
 
 	for (dict = &vos_iterators[0]; dict->id_ops != NULL; dict++) {
 		if (dict->id_type == type)
@@ -231,17 +231,17 @@ vos_iter_prepare(vos_iter_type_t type, vos_iter_param_t *param,
 		D_ASSERT(!dtx_is_valid_handle(dth));
 		break;
 	}
-	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth, is_sysdb);
+	rc = vos_ts_set_allocate(&ts_set, 0, rlevel, 1 /* max akeys */, dth, standalone);
 	if (rc != 0)
 		goto out;
 
 	D_DEBUG(DB_TRACE, "Preparing standalone iterator of type %s\n",
 		dict->id_name);
 
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(dth, is_sysdb);
+	old = vos_dth_get(standalone);
+	vos_dth_set(dth, standalone);
 	rc = dict->id_ops->iop_prepare(type, param, &iter, ts_set);
-	vos_dth_set(old, is_sysdb);
+	vos_dth_set(old, standalone);
 	if (rc != 0) {
 		VOS_TX_LOG_FAIL(rc, "Could not prepare iterator for %s: "DF_RC
 				"\n", dict->id_name, DP_RC(rc));
@@ -335,14 +335,14 @@ vos_iter_probe_ex(daos_handle_t ih, daos_anchor_t *anchor, uint32_t flags)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
 	int		     rc;
-	bool		     is_sysdb = !!iter->it_for_sysdb;
+	bool		     standalone = !!iter->it_for_sysdb;
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(iter->it_dth, is_sysdb);
+	old = vos_dth_get(standalone);
+	vos_dth_set(iter->it_dth, standalone);
 	rc = iter->it_ops->iop_probe(iter, anchor, flags);
-	vos_dth_set(old, is_sysdb);
+	vos_dth_set(old, standalone);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
@@ -380,7 +380,7 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
 	int		     rc;
-	bool		     is_sysdb = !!iter->it_for_sysdb;
+	bool		     standalone = !!iter->it_for_sysdb;
 
 	rc = iter_verify_state(iter);
 	if (rc)
@@ -388,10 +388,10 @@ vos_iter_next(daos_handle_t ih, daos_anchor_t *anchor)
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(iter->it_dth, is_sysdb);
+	old = vos_dth_get(standalone);
+	vos_dth_set(iter->it_dth, standalone);
 	rc = iter->it_ops->iop_next(iter, anchor);
-	vos_dth_set(old, is_sysdb);
+	vos_dth_set(old, standalone);
 	if (rc == 0)
 		iter->it_state = VOS_ITS_OK;
 	else if (rc == -DER_NONEXIST)
@@ -408,7 +408,7 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 {
 	struct vos_iterator *iter = vos_hdl2iter(ih);
 	struct dtx_handle   *old;
-	bool		     is_sysdb = !!iter->it_for_sysdb;
+	bool		     standalone = !!iter->it_for_sysdb;
 	int		     rc;
 
 	rc = iter_verify_state(iter);
@@ -417,10 +417,10 @@ vos_iter_fetch(daos_handle_t ih, vos_iter_entry_t *it_entry,
 
 	D_ASSERT(iter->it_ops != NULL);
 
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(iter->it_dth, is_sysdb);
+	old = vos_dth_get(standalone);
+	vos_dth_set(iter->it_dth, standalone);
 	rc = iter->it_ops->iop_fetch(iter, it_entry, anchor);
-	vos_dth_set(old, is_sysdb);
+	vos_dth_set(old, standalone);
 
 	return rc;
 }
@@ -992,7 +992,7 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 	daos_anchor_t     *anchor;
 	int                rc;
 	struct dtx_handle *old;
-	bool		   is_sysdb = !!iter->it_for_sysdb;
+	bool		   standalone = !!iter->it_for_sysdb;
 
 	D_ASSERT(iter->it_anchors != NULL);
 
@@ -1027,10 +1027,10 @@ vos_iter_validate_internal(struct vos_iterator *iter)
 		D_ASSERTF(0, "Unexpected iterator type %d\n", iter->it_type);
 	}
 
-	old = vos_dth_get(is_sysdb);
-	vos_dth_set(iter->it_dth, is_sysdb);
+	old = vos_dth_get(standalone);
+	vos_dth_set(iter->it_dth, standalone);
 	rc = iter->it_ops->iop_probe(iter, anchor, VOS_ITER_PROBE_AGAIN);
-	vos_dth_set(old, is_sysdb);
+	vos_dth_set(old, standalone);
 
 	if (rc == 0)
 		return 0;

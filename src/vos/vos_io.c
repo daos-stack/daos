@@ -577,7 +577,7 @@ vos_ioc_destroy(struct vos_io_context *ioc, bool evict)
 	dcs_csum_info_list_fini(&ioc->ic_csum_list);
 
 	if (ioc->ic_obj)
-		vos_obj_release(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+		vos_obj_release(vos_obj_cache_current(vos_cont_standalone(ioc->ic_cont)),
 				ioc->ic_obj, evict);
 
 	vos_ioc_reserve_fini(ioc);
@@ -673,7 +673,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 
 	cont = vos_hdl2cont(coh);
 	rc = vos_ts_set_allocate(&ioc->ic_ts_set, vos_flags, cflags, iod_nr,
-				 dth, cont->vc_pool->vp_sysdb);
+				 dth, vos_cont_standalone(cont));
 	if (rc != 0)
 		goto error;
 
@@ -787,7 +787,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 	struct bio_iov		 biov; /* iov to return data buffer */
 	int			 rc;
 	struct dcs_csum_info	csum_info = {0};
-	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool			 standalone = vos_cont_standalone(ioc->ic_cont);
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch	= ioc->ic_bound;
@@ -913,7 +913,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	bool			 with_shadow = (shadow_ep != DAOS_EPOCH_MAX);
 	uint32_t		 inob;
 	int			 rc;
-	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool			 standalone = vos_cont_standalone(ioc->ic_cont);
 
 	index = recx->rx_idx;
 	end   = recx->rx_idx + recx->rx_nr;
@@ -1132,7 +1132,7 @@ stop_check(struct vos_io_context *ioc, uint64_t cond, daos_iod_t *iod, int *rc,
 	   bool check_uncertainty)
 {
 	uint64_t	flags;
-	bool		standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool		standalone = vos_cont_standalone(ioc->ic_cont);
 
 	if (*rc == 0)
 		return false;
@@ -1199,7 +1199,7 @@ akey_fetch(struct vos_io_context *ioc, daos_handle_t ak_toh)
 	bool			 is_array = (iod->iod_type == DAOS_IOD_ARRAY);
 	bool			 has_cond = false;
 	struct daos_recx_ep_list *shadow;
-	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool			 standalone = vos_cont_standalone(ioc->ic_cont);
 
 	D_DEBUG(DB_IO, "akey "DF_KEY" fetch %s epr "DF_X64"-"DF_X64"\n",
 		DP_KEY(&iod->iod_name),
@@ -1356,7 +1356,7 @@ dkey_fetch(struct vos_io_context *ioc, daos_key_t *dkey)
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i, rc;
 	bool			 has_cond;
-	bool			 standalone = ioc->ic_cont->vc_pool->vp_sysdb;
+	bool			 standalone = vos_cont_standalone(ioc->ic_cont);
 
 	rc = obj_tree_init(obj);
 	if (rc != 0)
@@ -1481,12 +1481,12 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		return rc;
 
-	vos_dth_set(dth, ioc->ic_cont->vc_pool->vp_sysdb);
+	vos_dth_set(dth, vos_cont_standalone(ioc->ic_cont));
 
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 
-	rc = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+	rc = vos_obj_hold(vos_obj_cache_current(vos_cont_standalone(ioc->ic_cont)),
 			  ioc->ic_cont, oid, &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
 			  DAOS_INTENT_DEFAULT, &ioc->ic_obj, ioc->ic_ts_set);
 	if (stop_check(ioc, VOS_COND_FETCH_MASK | VOS_OF_COND_PER_AKEY, NULL,
@@ -1516,7 +1516,7 @@ fetch_dkey:
 set_ioc:
 	*ioh = vos_ioc2ioh(ioc);
 out:
-	vos_dth_set(NULL, ioc->ic_cont->vc_pool->vp_sysdb);
+	vos_dth_set(NULL, vos_cont_standalone(ioc->ic_cont));
 
 	if (rc == -DER_NONEXIST || rc == -DER_INPROGRESS ||
 	    (rc == 0 && ioc->ic_read_ts_only)) {
@@ -2309,7 +2309,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	err = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(err == 0);
 
-	err = vos_tx_begin(dth, umem, ioc->ic_cont->vc_pool->vp_sysdb);
+	err = vos_tx_begin(dth, umem, vos_cont_standalone(ioc->ic_cont));
 	if (err != 0)
 		goto abort;
 
@@ -2332,7 +2332,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 			D_FREE(daes);
 	}
 
-	err = vos_obj_hold(vos_obj_cache_current(ioc->ic_cont->vc_pool->vp_sysdb),
+	err = vos_obj_hold(vos_obj_cache_current(vos_cont_standalone(ioc->ic_cont)),
 			   ioc->ic_cont, ioc->ic_oid, &ioc->ic_epr, ioc->ic_bound,
 			   VOS_OBJ_CREATE | VOS_OBJ_VISIBLE, DAOS_INTENT_UPDATE,
 			   &ioc->ic_obj, ioc->ic_ts_set);

@@ -825,7 +825,7 @@ pool_link(struct vos_pool *pool, struct d_uuid *ukey, daos_handle_t *poh)
 {
 	int	rc;
 
-	rc = d_uhash_link_insert(vos_pool_hhash_get(pool->vp_sysdb), ukey, NULL,
+	rc = d_uhash_link_insert(vos_pool_hhash_get(vos_pool_standalone(pool)), ukey, NULL,
 				 &pool->vp_hlink);
 	if (rc) {
 		D_ERROR("uuid hash table insert failed: "DF_RC"\n", DP_RC(rc));
@@ -841,10 +841,10 @@ static int
 pool_lookup(struct d_uuid *ukey, struct vos_pool **pool)
 {
 	struct d_ulink *hlink;
-	bool		is_sysdb = uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0 ?
+	bool		standalone = uuid_compare(ukey->uuid, *vos_db_pool_uuid()) == 0 ?
 					true : false;
 
-	hlink = d_uhash_link_lookup(vos_pool_hhash_get(is_sysdb), ukey, NULL);
+	hlink = d_uhash_link_lookup(vos_pool_hhash_get(standalone), ukey, NULL);
 	if (hlink == NULL) {
 		D_DEBUG(DB_MGMT, "can't find "DF_UUID"\n", DP_UUID(ukey->uuid));
 		return -DER_NONEXIST;
@@ -1078,7 +1078,7 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 			rc = 0;
 			break;
 		}
-		D_ASSERT(pool->vp_sysdb == false);
+		D_ASSERT(vos_pool_standalone(pool) == false);
 
 		D_ASSERT(pool != NULL);
 		if (gc_have_pool(pool)) {
@@ -1528,7 +1528,7 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 	}
 
 	D_ASSERT(pool != NULL);
-	D_ASSERT(pool->vp_sysdb == false);
+	D_ASSERT(vos_pool_standalone(pool) == false);
 	rc = vos_space_query(pool, vps, false);
 	vos_pool_decref(pool);
 	return rc;
