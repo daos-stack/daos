@@ -147,6 +147,7 @@ crt_context_init(crt_context_t crt_ctx)
 		D_GOTO(out, rc);
 	}
 
+	D_INIT_LIST_HEAD(&ctx->cc_quotas.rpc_waitq);
 	D_INIT_LIST_HEAD(&ctx->cc_link);
 
 	/* create timeout binheap */
@@ -167,6 +168,8 @@ crt_context_init(crt_context_t crt_ctx)
 		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
+
+	rc = crt_context_quotas_init(crt_ctx);
 
 	D_GOTO(out, rc);
 
@@ -1173,6 +1176,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_list_t		*rlink;
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
+	int 			quota_rc = 0;
 	struct crt_grp_priv	*grp_priv;
 
 	D_ASSERT(crt_ctx != NULL);
@@ -1182,6 +1186,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 			  "bypass tracking for URI_LOOKUP.\n");
 		D_GOTO(out, rc = CRT_REQ_TRACK_IN_INFLIGHQ);
 	}
+
+	/* check inflight quota. if exceeded, queue this rpc */
+	quota_rc = crt_context_get_quota_resource(rpc_priv->crp_pub.cr_ctx,
+						  CRT_QUOTA_RPC_INFLIGHT);
 
 	grp_priv = crt_grp_pub2priv(rpc_priv->crp_pub.cr_ep.ep_grp);
 	ep_rank = crt_grp_priv_get_primary_rank(grp_priv,
@@ -1227,6 +1235,7 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	}
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
+
 	/* add the RPC req to crt_ep_inflight */
 	D_MUTEX_LOCK(&epi->epi_mutex);
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
@@ -1234,15 +1243,16 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	rpc_priv->crp_epi = epi;
 	RPC_ADDREF(rpc_priv);
 
-	if (crt_gdata.cg_credit_ep_ctx != 0 &&
+	if (quota_rc == -DER_QUOTA_LIMIT) {
+		epi->epi_req_num++;
+		rpc_priv->crp_state = RPC_STATE_QUEUED;
+		rc = CRT_REQ_TRACK_IN_WAITQ;
+	} else if (crt_gdata.cg_credit_ep_ctx != 0 &&
 	    (epi->epi_req_num - epi->epi_reply_num) >= crt_gdata.cg_credit_ep_ctx) {
-		if (rpc_priv->crp_opc_info->coi_queue_front) {
-			d_list_add(&rpc_priv->crp_epi_link,
-					&epi->epi_req_waitq);
-		} else {
-			d_list_add_tail(&rpc_priv->crp_epi_link,
-					&epi->epi_req_waitq);
-		}
+		if (rpc_priv->crp_opc_info->coi_queue_front)
+			d_list_add(&rpc_priv->crp_epi_link, &epi->epi_req_waitq);
+		else
+			d_list_add_tail(&rpc_priv->crp_epi_link, &epi->epi_req_waitq);
 
 		epi->epi_req_wait_num++;
 		rpc_priv->crp_state = RPC_STATE_QUEUED;
@@ -1252,13 +1262,11 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 		rc = crt_req_timeout_track(rpc_priv);
 		D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 		if (rc == 0) {
-			d_list_add_tail(&rpc_priv->crp_epi_link,
-					&epi->epi_req_q);
+			d_list_add_tail(&rpc_priv->crp_epi_link, &epi->epi_req_q);
 			epi->epi_req_num++;
 			rc = CRT_REQ_TRACK_IN_INFLIGHQ;
 		} else {
-			RPC_ERROR(rpc_priv,
-				"crt_req_timeout_track failed, rc: %d.\n", rc);
+			RPC_ERROR(rpc_priv, "crt_req_timeout_track failed, rc: %d.\n", rc);
 			/* roll back the addref above */
 			RPC_DECREF(rpc_priv);
 		}
@@ -1270,6 +1278,10 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	/* reference taken by d_hash_rec_find or "epi->epi_ref = 1" above */
 	D_MUTEX_LOCK(&crt_ctx->cc_mutex);
 	d_hash_rec_decref(&crt_ctx->cc_epi_table, &epi->epi_link);
+
+	if (quota_rc == -DER_QUOTA_LIMIT)
+		d_list_add_tail(&rpc_priv->crp_waitq_link, &crt_ctx->cc_quotas.rpc_waitq);
+
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
 out:
@@ -1330,6 +1342,7 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
 	}
+
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
@@ -1346,6 +1359,33 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 	RPC_DECREF(rpc_priv);
 }
 
+static void
+dispatch_rpc(struct crt_rpc_priv *rpc) {
+	int rc;
+
+	if (rpc == NULL)
+		return;
+
+	/* No need to worry about rc here, we just released quota earlier */
+	rc = crt_context_get_quota_resource(rpc->crp_pub.cr_ctx,
+					CRT_QUOTA_RPC_INFLIGHT);
+	D_ASSERT(rc == 0);
+
+	crt_rpc_lock(rpc);
+
+	rc = crt_req_send_internal(rpc);
+	if (rc == 0) {
+		crt_rpc_unlock(rpc);
+	} else {
+		RPC_ADDREF(rpc);
+		RPC_ERROR(rpc, "crt_req_send_internal failed, rc: %d\n", rc);
+		rpc->crp_state = RPC_STATE_INITED;
+		crt_context_req_untrack_internal(rpc);
+		/* for error case here */
+		crt_rpc_complete_and_unlock(rpc, rc);
+	}
+}
+
 void
 crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 {
@@ -1357,13 +1397,20 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	D_ASSERT(crt_ctx != NULL);
 
-	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP) {
-		RPC_TRACE(DB_NET, rpc_priv, "bypass untracking for URI_LOOKUP.\n");
+	if (rpc_priv->crp_pub.cr_opc == CRT_OPC_URI_LOOKUP)
 		return;
-	}
 
 	epi = rpc_priv->crp_epi;
 	D_ASSERT(epi != NULL);
+
+	/*
+	 * Return quota resource and dispatch 1 rpc if any on waitq.
+	 * dispatch_rpc() will either acquire a quota resource or will requeue this rpc
+	 */
+	crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPC_INFLIGHT);
+	tmp_rpc = d_list_pop_entry(&crt_ctx->cc_quotas.rpc_waitq,
+				   struct crt_rpc_priv, crp_waitq_link);
+	dispatch_rpc(tmp_rpc);
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -1414,20 +1461,8 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	D_MUTEX_UNLOCK(&epi->epi_mutex);
 
 	/* re-submit the rpc req */
-	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link))) {
-		crt_rpc_lock(tmp_rpc);
-		rc = crt_req_send_internal(tmp_rpc);
-		if (rc == 0) {
-			crt_rpc_unlock(tmp_rpc);
-		} else {
-			RPC_ADDREF(tmp_rpc);
-			RPC_ERROR(tmp_rpc, "crt_req_send_internal failed, rc: %d\n", rc);
-			tmp_rpc->crp_state = RPC_STATE_INITED;
-			crt_context_req_untrack_internal(tmp_rpc);
-			/* for error case here */
-			crt_rpc_complete_and_unlock(tmp_rpc, rc);
-		}
-	}
+	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
+		dispatch_rpc(tmp_rpc);
 }
 
 /* TODO: Need per-provider call */
@@ -1938,7 +1973,9 @@ crt_context_quotas_init(crt_context_t crt_ctx)
 
 	quotas->limit[CRT_QUOTA_RPC_ALLOC_SOFT] = 64;
 	quotas->limit[CRT_QUOTA_RPC_ALLOC_HARD] = 512;
-	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 256;
+
+	/* TODO: Set this to EP_CREDITS eventually; for now use 4 for testing */
+	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 4;
 
 	quotas->current[CRT_QUOTA_RPC_ALLOC_SOFT] = 0;
 	quotas->current[CRT_QUOTA_RPC_ALLOC_HARD] = 0;
@@ -1950,7 +1987,7 @@ out:
 }
 
 int
-crt_context_quotas_finalize(crt context_t crt_ctx)
+crt_context_quotas_finalize(crt_context_t crt_ctx)
 {
 	struct crt_context	*ctx = crt_ctx;
 	struct crt_quotas	*quotas;
@@ -1972,11 +2009,11 @@ crt_context_quotas_finalize(crt context_t crt_ctx)
 
 out:
 	return rc;
-	
+
 }
 
 int
-crt_context_quota_set(crt_context_t crt_ctx, crt_quota_t quota, int value)
+crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_t quota, int value)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
@@ -2000,7 +2037,7 @@ out:
 }
 
 int
-crt_context_quota_get(crt_context_t crt_ctx, crt_quota_t quota, int *value)
+crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_t quota, int *value)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
@@ -2027,16 +2064,63 @@ out:
 }
 
 int
-crt_context_get_quota(crt_context_t crt_ctx, crt_quota_t quota)
+crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
 
-	
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (quota < 0 || quota >= CRT_QUOTA_COUNT) {
+		D_ERROR("Invalid quota %d passed\n", quota);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* If quotas not enabled or unlimited quota */
+	if (!ctx->cc_quotas.enabled || ctx->cc_quotas.limit[quota] == 0)
+		return 0;
+
+	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
+
+	if (ctx->cc_quotas.current[quota] < ctx->cc_quotas.limit[quota])
+		ctx->cc_quotas.current[quota]++;
+	else
+		rc = -DER_QUOTA_LIMIT;
+
+	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
+out:
+	return rc;
 }
 
 int
-crt_context_put_quota(crt_context_t crt_ctx, crt_quota_t quota)
+crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_t quota)
 {
-}
+	struct crt_context	*ctx = crt_ctx;
+	int			rc = 0;
 
+	if (ctx == NULL) {
+		D_ERROR("NULL context\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (quota < 0 || quota >= CRT_QUOTA_COUNT) {
+		D_ERROR("Invalid quota %d passed\n", quota);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	/* If quotas not enabled or unlimited quota */
+	if (!ctx->cc_quotas.enabled || ctx->cc_quotas.limit[quota] == 0)
+		return 0;
+
+	D_MUTEX_LOCK(&ctx->cc_quotas.mutex);
+	D_ASSERTF(ctx->cc_quotas.current[quota] > 0, "Invalid current limit");
+	ctx->cc_quotas.current[quota]--;
+
+	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
+
+out:
+	return rc;
+}
