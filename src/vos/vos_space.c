@@ -69,6 +69,20 @@ vos_space_sys_init(struct vos_pool *pool)
 
 	D_INFO("Reserved NVMe space for pool:" DF_UUID ", sys:" DF_U64 ", tot:" DF_U64 "\n",
 	       DP_UUID(pool->vp_id), POOL_NVME_SYS(pool), nvme_tot);
+
+	if ((POOL_SCM_SYS(pool) * 2) > scm_tot) {
+		D_WARN("Disable SCM space reserving for tiny pool:"DF_UUID" "
+		       "2*sys["DF_U64"] > tot["DF_U64"]\n",
+		       DP_UUID(pool->vp_id), 2*POOL_SCM_SYS(pool), scm_tot);
+		POOL_SCM_SYS(pool) = 0;
+	}
+
+	if ((POOL_NVME_SYS(pool) * 2) > nvme_tot) {
+		D_WARN("Disable NVMe space reserving for tiny Pool:"DF_UUID" "
+		       "2*sys["DF_U64"] > tot["DF_U64"]\n",
+		       DP_UUID(pool->vp_id), 2*POOL_NVME_SYS(pool), nvme_tot);
+		POOL_NVME_SYS(pool) = 0;
+	}
 }
 
 int

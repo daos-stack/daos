@@ -8,7 +8,7 @@ server_config:
   engines_per_host: 1
   engines:
     0:
-      targets: 8
+      targets: 4
       storage:
         0:
           class: ram
@@ -16,7 +16,7 @@ server_config:
 
 pool:
   control_method: dmg
-  size: 430M
+  size: 410M
   test_loop: 40
   delta: 1MiB
   reclaim_props:
