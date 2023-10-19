@@ -111,8 +111,8 @@ struct daos_task_args {
  * Push to task stack space. This API only reserves space on the task stack, no
  * data copy involved.
  *
- * \param task [in] task to push the buffer.
- * \param size [in] buffer size.
+ * \param[in] task	task to push the buffer.
+ * \param[in] size	buffer size.
  *
  * \return	pointer to the pushed buffer in task stack.
  */
@@ -123,8 +123,8 @@ tse_task_stack_push(tse_task_t *task, uint32_t size);
  * Pop from task stack space. This API only reserves space on the task stack, no
  * data copy involved.
  *
- * \param task [in] task to pop the buffer.
- * \param size [in] buffer size.
+ * \param[in] task	task to pop the buffer.
+ * \param[in] size	buffer size.
  *
  * \return	pointer to the popped buffer in task stack.
  */
@@ -134,9 +134,9 @@ tse_task_stack_pop(tse_task_t *task, uint32_t size);
 /**
  * Push data to task stack space, will copy the data to stack.
  *
- * \param task [in]	task to push the buffer.
- * \param data [in]	pointer of data to push
- * \param len  [in]	length of data
+ * \param[in] task	task to push the buffer.
+ * \param[in] data	pointer of data to push
+ * \param[in] len	length of data
  */
 void
 tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
@@ -144,9 +144,9 @@ tse_task_stack_push_data(tse_task_t *task, void *data, uint32_t len);
 /**
  * Pop data from task stack space, will copy the data from stack.
  *
- * \param task [in]	task to push the buffer.
- * \param data [in/out]	pointer of value to store the popped data
- * \param len  [in]	length of data
+ * \param[in] task	task to push the buffer.
+ * \param[in,out] data	pointer of value to store the popped data
+ * \param[in] len	length of data
  */
 void
 tse_task_stack_pop_data(tse_task_t *task, void *data, uint32_t len);

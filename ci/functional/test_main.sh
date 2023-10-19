@@ -59,7 +59,7 @@ fi
 # Cannot use a wildcard for collection as that just ends up
 # with a wild card in the collected filename which just makes
 # things more confusing.
-rm -f ./hardware_prep_node_results.xml.* ./hardware_prep_nodde_*_results.xml
+rm -f ./hardware_prep_node_results.xml.* ./hardware_prep_node_*_results.xml
 clush -o '-i ci_key' -l root -w "$tnodes" \
       --rcopy hardware_prep_node_results.xml
 # This results in file names with the node name as the suffix.
