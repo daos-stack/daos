@@ -2068,23 +2068,23 @@ pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("prea
 ssize_t
 __pread64(int fd, void *buf, size_t size, off_t offset) __attribute__((alias("pread")));
 
+extern void __chk_fail(void) __attribute__ ((__noreturn__));
+
 ssize_t
 __pread64_chk(int fd, void *buf, size_t size, off_t offset, size_t buflen)
 {
-	if (size > buflen) {
-		D_FATAL("buffer overflow detected in __pread64_chk().\n");
-		abort();
-	}
+	if (size > buflen)
+		__chk_fail();
+
 	return pread(fd, buf, size, offset);
 }
 
 ssize_t
-__read_chk (int fd, void *buf, size_t size, size_t buflen)
+__read_chk(int fd, void *buf, size_t size, size_t buflen)
 {
-	if (size > buflen) {
-		D_FATAL("buffer overflow detected in __read_chk().\n");
-		abort();
-	}
+	if (size > buflen)
+		__chk_fail();
+
 	return read(fd, buf, size);
 }
 
