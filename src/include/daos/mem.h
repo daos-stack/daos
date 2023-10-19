@@ -109,7 +109,12 @@ struct umem_store_iod {
 struct umem_store;
 
 struct umem_store_ops {
-	int	(*so_load)(struct umem_store *store, char *start);
+	int	(*so_waitqueue_create)(void **wq);
+	void	(*so_waitqueue_destroy)(void *wq);
+	void	(*so_waitqueue_wait)(void *wq, bool yield_only);
+	void	(*so_waitqueue_wakeup)(void *wq, bool wakeup_all);
+	int	(*so_load)(struct umem_store *store, char *start_addr, daos_off_t offset,
+			   daos_size_t len);
 	int	(*so_read)(struct umem_store *store, struct umem_store_iod *iod,
 			   d_sg_list_t *sgl);
 	int	(*so_write)(struct umem_store *store, struct umem_store_iod *iod,
@@ -895,44 +900,70 @@ struct umem_action {
 
 #define UMEM_CACHE_PAGE_SZ_SHIFT  24 /* 16MB */
 #define UMEM_CACHE_PAGE_SZ        (1 << UMEM_CACHE_PAGE_SZ_SHIFT)
-#define UMEM_CACHE_PAGE_SZ_MASK   (UMEM_CACHE_PAGE_SZ - 1)
 
 #define UMEM_CACHE_CHUNK_SZ_SHIFT 12 /* 4KB */
 #define UMEM_CACHE_CHUNK_SZ       (1 << UMEM_CACHE_CHUNK_SZ_SHIFT)
 #define UMEM_CACHE_CHUNK_SZ_MASK  (UMEM_CACHE_CHUNK_SZ - 1)
 
-#define UMEM_CACHE_BMAP_SZ        (1 << (UMEM_CACHE_PAGE_SZ_SHIFT - UMEM_CACHE_CHUNK_SZ_SHIFT - 6))
-
 struct umem_page_info;
-/** 16 MB page */
+/* MD page */
 struct umem_page {
-	/** page ID */
-	unsigned int		 pg_id;
-	/** refcount */
-	int			 pg_ref;
-	/** page info */
-	struct umem_page_info   *pg_info;
+	/** Pointing to memory page when it's mapped */
+	struct umem_page_info	*pg_info;
+};
+
+enum umem_page_stats {
+	UMEM_PG_STATS_NONEVICTABLE = 0,
+	UMEM_PG_STATS_PINNED,
+	UMEM_PG_STATS_FREE,
+	UMEM_PG_STATS_MAX,
 };
 
 /** Global cache status for each umem_store */
 struct umem_cache {
 	struct umem_store	*ca_store;
-	/** Total pages store */
-	uint64_t                 ca_num_pages;
-	/** Total pages in cache */
-	uint64_t                 ca_mapped;
-	/** Maximum number of cached pages */
-	uint64_t                 ca_max_mapped;
-	/** Free list for mapped page info */
-	d_list_t                 ca_pi_free;
-	/** all the dirty pages */
+	/** Base address of the page cache */
+	void			*ca_base;
+	/** Offset of first page */
+	uint32_t		 ca_base_off;
+	/** Total MD pages */
+	uint32_t                 ca_md_pages;
+	/** Total memory pages in cache */
+	uint32_t                 ca_mem_pages;
+	/** Maximum non-evictable memory pages */
+	uint32_t		 ca_max_ne_pages;
+	/** Page size */
+	uint32_t		 ca_page_sz;
+	/** Page size shift */
+	uint32_t		 ca_page_shift;
+	/** Page size mask */
+	uint32_t		 ca_page_mask;
+	/** Per-page Bitmap size (in uint64_t) */
+	uint32_t		 ca_bmap_sz;
+	/** Free list for unmapped page info */
+	d_list_t                 ca_pgs_free;
+	/** Non-evictable & evictable dirty pages */
 	d_list_t                 ca_pgs_dirty;
-	/** Pages waiting for copy to DMA buffer */
-	d_list_t                 ca_pgs_copying;
-	/** LRU list all pages not in one of the other states for future eviction support */
-	d_list_t                 ca_pgs_lru;
+	/** All Non-evictable[0] & evictable[1] pages */
+	d_list_t                 ca_pgs_lru[2];
+	/** all the pages in the progress of flushing */
+	d_list_t		 ca_pgs_flushing;
+	/** all the pages waiting for commit */
+	d_list_t		 ca_pgs_wait_commit;
+	/** all the pages being pinned */
+	d_list_t		 ca_pgs_pinned;
+	/** Highest committed transaction ID */
+	uint64_t		 ca_commit_id;
+	/** Callback to tell if a page is evictable */
+	bool			(*ca_evictable_fn)(uint32_t pg_id);
+	/** Page stats */
+	uint32_t		 ca_pgs_stats[UMEM_PG_STATS_MAX];
+	/** How many waiters waiting on free page reserve */
+	uint32_t		 ca_reserve_waiters;
+	/** Waitqueue for free page reserve: umem_cache_reserve() */
+	void			*ca_reserve_wq;
 	/** TODO: some other global status */
-	/** All pages, sorted by umem_page::pg_id */
+	/** MD page array, array index is page ID */
 	struct umem_page         ca_pages[0];
 };
 
@@ -947,57 +978,25 @@ struct umem_cache_chkpt_stats {
 	int		 uccs_nr_iovs;
 };
 
-static inline uint64_t
-umem_cache_size2pages(uint64_t len)
-{
-	D_ASSERT((len & UMEM_CACHE_PAGE_SZ_MASK) == 0);
-
-	return len >> UMEM_CACHE_PAGE_SZ_SHIFT;
-}
-
-static inline uint64_t
-umem_cache_size_round(uint64_t len)
-{
-	return (len + UMEM_CACHE_PAGE_SZ_MASK) & ~UMEM_CACHE_PAGE_SZ_MASK;
-}
-
-static inline struct umem_page *
-umem_cache_off2page(struct umem_cache *cache, umem_off_t offset)
-{
-	uint64_t idx = offset >> UMEM_CACHE_PAGE_SZ_SHIFT;
-
-	D_ASSERTF(idx < cache->ca_num_pages,
-		  "offset=" DF_U64 ", num_pages=" DF_U64 ", idx=" DF_U64 "\n", offset,
-		  cache->ca_num_pages, idx);
-
-	return &cache->ca_pages[idx];
-}
-
-/** From a mapped page address, return the umem_cache it belongs to */
-static inline struct umem_cache *
-umem_page2cache(struct umem_page *page)
-{
-	return (struct umem_cache *)container_of(&page[-page->pg_id], struct umem_cache, ca_pages);
-}
-
-/** From a mapped page address, return the umem_store it belongs to */
-static inline struct umem_store *
-umem_page2store(struct umem_page *page)
-{
-	return umem_page2cache(page)->ca_store;
-}
-
-/** Allocate global cache for umem store.  All 16MB pages are initially unmapped
+/** Allocate global cache for umem store.
  *
  * \param[in]	store		The umem store
- * \param[in]	max_mapped	0 or Maximum number of mapped 16MB pages (must be 0 for now)
+ * \param[in]	page_sz		Page size
+ * \param[in]	md_pgs		Total MD pages
+ * \param[in]	mem_pgs		Total memory pages
+ * \param[in]	max_ne_pgs	Maximum Non-evictable pages
+ * \param[in]	base_off	Offset of the umem cache base
+ * \param[in]	base		Start address of the page cache
+ * \param[in]	is_evictable_fn	Callback function to check if page is evictable
  *
  * \return 0 on success
  */
 int
-umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
+umem_cache_alloc(struct umem_store *store, uint32_t page_sz, uint32_t md_pgs, uint32_t mem_pgs,
+		 uint32_t max_ne_pgs, uint32_t base_off, void *base,
+		 bool (*is_evictable_fn)(uint32_t pg_id));
 
-/** Free global cache for umem store.  Pages must be unmapped first
+/** Free global cache for umem store.
  *
  * \param[in]	store	Store for which to free cache
  *
@@ -1006,61 +1005,105 @@ umem_cache_alloc(struct umem_store *store, uint64_t max_mapped);
 int
 umem_cache_free(struct umem_store *store);
 
-/** Query if the page cache has enough space to map a range
+/** Convert MD-blob offset to memory pointer, the corresponding page must be mapped already.
  *
- * \param[in]	store		The store
- * \param[in]	num_pages	Number of pages to bring into cache
+ * \param[in]	store	The umem store
+ * \param[in]	offset	MD-blob offset to be converted
  *
- * \return number of pages that need eviction to support mapping the range
+ * \return	Memory pointer
+ */
+void *
+umem_cache_off2ptr(struct umem_store *store, umem_off_t offset);
+
+/** Convert memory pointer to MD-blob offset, the corresponding page must be mapped already.
+ *
+ * \param[in]	store	The umem store
+ * \param[in]	ptr	Memory pointer to be converted
+ *
+ * \return	MD-blob offset
+ */
+umem_off_t
+umem_cache_ptr2off(struct umem_store *store, void *ptr);
+
+struct umem_cache_range {
+	umem_off_t	cr_off;
+	daos_size_t	cr_size;
+};
+
+/** Map MD pages in specified range to memory pages. The range to be mapped should be empty
+ *  (no page loading required). If caller tries to map non-evictable pages, page eviction
+ *  won't be triggered when there are not enough free pages; If caller tries to map evictable
+ *  page, page eviction could be triggered, but it can only map single evictable page at a time.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	ranges		Ranges to be mapped
+ * \param[in]	range_nr	Number of ranges
+ *
+ * \return	0		: On success
+ *		-DER_BUSY	: Not enough free pages
+ *		-ve		: Errors
  */
 int
-umem_cache_check(struct umem_store *store, uint64_t num_pages);
+umem_cache_map(struct umem_store *store, struct umem_cache_range *ranges, int range_nr);
 
-/** Evict the pages.   This invokes the unmap callback. (XXX: not yet implemented)
+/** Load & map MD pages in specified range to memory pages.
  *
- * \param[in]	store		The store
- * \param[in]	num_pages	Number of pages to evict
+ * \param[in]	store		The umem store
+ * \param[in]	ranges		Ranges to be mapped
+ * \param[in]	range_nr	Number of ranges
+ * \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
  *
- * \return 0 on success, -DER_BUSY means a checkpoint is needed to evict the pages
+ * \return	0 on success, negative value on error.
  */
 int
-umem_cache_evict(struct umem_store *store, uint64_t num_pages);
+umem_cache_load(struct umem_store *store, struct umem_cache_range *ranges, int range_nr,
+		bool for_sys);
 
-/** Adds a mapped range of pages to the page cache.
- *
- * \param[in]	store		The store
- * \param[in]	offset		The offset in the umem cache
- * \param[in]	start_addr	Start address of mapping
- * \param[in]	num_pages	Number of consecutive 16MB pages to being cached
- *
- * \return 0 on success
- */
-int
-umem_cache_map_range(struct umem_store *store, umem_off_t offset, void *start_addr,
-		     uint64_t num_pages);
+struct umem_pin_handle;
 
-/** Take a reference on the pages in the range.   Only needed for cases where we need the page to
- *  stay loaded across a yield, such as the VOS object cache.  Pages in the range must be mapped.
+/** Load & map MD pages in specified range to memory pages, then take a reference on the mapped
+ *  memory pages, so that the pages won't be evicted until unpin is called. It's usually for the
+ *  cases where we need the pages stay loaded across a yield.
  *
- *  \param[in]	store	The umem store
- *  \param[in]	addr	The address of the hold
- *  \param[in]	size	The size of the hold
+ *  \param[in]	store		The umem store
+ *  \param[in]	ranges		Ranges to be pinned
+ *  \param[in]	range_nr	Number of ranges
+ *  \param[in]	for_sys		Internal access from system ULTs (aggregation etc.)
+ *  \param[out] pin_handle	Returned pin handle
  *
  *  \return 0 on success
  */
 int
-umem_cache_pin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+umem_cache_pin(struct umem_store *store, struct umem_cache_range *rangs, int range_nr,
+	       bool for_sys, struct umem_pin_handle **pin_handle);
 
-/** Release a reference on pages in the range.  Pages in the range must be mapped and held.
+/** Unpin the pages pinned by prior umem_cache_pin().
  *
- *  \param[in]	store	The umem store
- *  \param[in]	addr	The address of the hold
- *  \param[in]	size	The size of the hold
+ *  \param[in]	store		The umem store
+ *  \param[in]	pin_handle	Pin handle got from umem_cache_pin()
+ *  \param[in]	range_nr	Number of ranges
+ */
+void
+umem_cache_unpin(struct umem_store *store, struct umem_pin_handle *pin_handle);
+
+/** Reserve few free pages for potential non-evictable zone grow within a transaction.
+ *  Caller needs to ensure there is no CPU yielding after this call till transaction
+ *  start.
+ *
+ *  \param[in]	store		The umem store
  *
  *  \return 0 on success
  */
 int
-umem_cache_unpin(struct umem_store *store, umem_off_t addr, daos_size_t size);
+umem_cache_reserve(struct umem_store *store);
+
+/** Inform umem cache the last committed ID.
+ *
+ * \param[in]	store		The umem store
+ * \param[in]	commit_id	The last committed ID
+ */
+void
+umem_cache_commit(struct umem_store *store, uint64_t commit_id);
 
 /**
  * Touched the region identified by @addr and @size, it will mark pages in this region as

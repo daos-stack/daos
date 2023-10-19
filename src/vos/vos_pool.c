@@ -150,12 +150,12 @@ vos_meta_load_fn(void *arg)
 		ABT_cond_signal(mlc->mlc_cond);
 }
 
-static inline int
-vos_meta_load(struct umem_store *store, char *start)
+static int
+vos_meta_load(struct umem_store *store, char *start, daos_off_t offset, daos_size_t len)
 {
 	uint64_t		 read_size;
-	uint64_t		 remain_size = store->stor_size;
-	daos_off_t		 off = 0;
+	uint64_t		 remain_size = len;
+	daos_off_t		 off = offset;
 	int			 rc = 0;
 	struct meta_load_arg	*mla;
 	struct meta_load_control mlc;
@@ -222,6 +222,74 @@ vos_meta_load(struct umem_store *store, char *start)
 destroy_lock:
 	ABT_mutex_free(&mlc.mlc_lock);
 	return rc ? rc : mlc.mlc_rc;
+}
+
+struct vos_waitqueue {
+	ABT_cond	vw_cond;
+	ABT_mutex	vw_mutex;
+};
+
+static int
+vos_waitqueue_create(void **ret_wq)
+{
+	struct vos_waitqueue	*wq;
+	int			 rc;
+
+	D_ALLOC_PTR(wq);
+	if (wq == NULL)
+		return -DER_NOMEM;
+
+	rc = ABT_mutex_create(&wq->vw_mutex);
+	if (rc != ABT_SUCCESS) {
+		D_FREE(wq);
+		return dss_abterr2der(rc);
+	}
+	rc = ABT_cond_create(&wq->vw_cond);
+	if (rc != ABT_SUCCESS) {
+		ABT_mutex_free(&wq->vw_mutex);
+		D_FREE(wq);
+		return dss_abterr2der(rc);
+	}
+
+	*ret_wq = wq;
+	return 0;
+}
+
+static void
+vos_waitqueue_destroy(void *arg)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	ABT_cond_free(&wq->vw_cond);
+	ABT_mutex_free(&wq->vw_mutex);
+	D_FREE(wq);
+}
+
+static void
+vos_waitqueue_wait(void *arg, bool yield_only)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	if (yield_only) {
+		ABT_thread_yield();
+		return;
+	}
+	ABT_mutex_lock(wq->vw_mutex);
+	ABT_cond_wait(wq->vw_cond, wq->vw_mutex);
+	ABT_mutex_unlock(wq->vw_mutex);
+}
+
+static void
+vos_waitqueue_wakeup(void *arg, bool wakeup_all)
+{
+	struct vos_waitqueue	*wq = arg;
+
+	ABT_mutex_lock(wq->vw_mutex);
+	if (wakeup_all)
+		ABT_cond_broadcast(wq->vw_cond);
+	else
+		ABT_cond_signal(wq->vw_cond);
+	ABT_mutex_unlock(wq->vw_mutex);
 }
 
 static inline int
@@ -317,6 +385,9 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	D_ASSERT(store && store->stor_priv != NULL);
 	rc = bio_wal_commit(store->stor_priv, wal_tx, data_iod);
 
+	bio_wal_query(store->stor_priv, &wal_info);
+	umem_cache_commit(store, wal_info.wi_commit_id);
+
 	pool = store->vos_priv;
 	if (unlikely(pool == NULL))
 		return rc; /** In case there is any race for checkpoint init. */
@@ -324,8 +395,6 @@ vos_wal_commit(struct umem_store *store, struct umem_wal_tx *wal_tx, void *data_
 	/** Update checkpoint state after commit in case there is an active checkpoint waiting
 	 *  for this commit to finish.
 	 */
-	bio_wal_query(store->stor_priv, &wal_info);
-
 	pool->vp_update_cb(pool->vp_chkpt_arg, wal_info.wi_commit_id, wal_info.wi_used_blks,
 			   wal_info.wi_tot_blks);
 
@@ -366,6 +435,10 @@ vos_wal_id_cmp(struct umem_store *store, uint64_t id1, uint64_t id2)
 }
 
 struct umem_store_ops vos_store_ops = {
+	.so_waitqueue_create	= vos_waitqueue_create,
+	.so_waitqueue_destroy	= vos_waitqueue_destroy,
+	.so_waitqueue_wait	= vos_waitqueue_wait,
+	.so_waitqueue_wakeup	= vos_waitqueue_wakeup,
 	.so_load	= vos_meta_load,
 	.so_read	= vos_meta_readv,
 	.so_write	= vos_meta_writev,
@@ -1424,8 +1497,9 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
 
-	rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df,
-			 pool_df->pd_version);
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_vea_info)
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
 	if (rc)
 		return rc;
 

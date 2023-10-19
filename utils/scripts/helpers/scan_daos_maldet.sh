@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+#  Copyright 2020-2023 Intel Corporation.
+#
+#  SPDX-License-Identifier: BSD-2-Clause-Patent
 
 set -uex
 
@@ -57,7 +61,7 @@ if ! grep 'Infected files: 0$' /var/tmp/clamscan.out; then
 fi
 
 cat << EOF > "$malxml"
-<testsuite skip="0" failures="$fails" errors="$errs" tests="2" name="Malware_Scan">
+<testsuite skipped="0" failures="$fails" errors="$errs" tests="2" name="Malware_Scan">
   <testcase name="Maldet update" classname="Maldet">
     $mal_fnd
   </testcase>

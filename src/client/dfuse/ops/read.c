@@ -83,7 +83,7 @@ dfuse_readahead_reply(fuse_req_t req, size_t len, off_t position, struct dfuse_o
 	/* At this point there is a buffer of known length that contains the data, and a read
 	 * request.
 	 * If the attempted read is bigger than the data then it will be truncated.
-	 * It the atttempted read is smaller than the buffer it will be met in full.
+	 * It the attempted read is smaller than the buffer it will be met in full.
 	 */
 
 	if (position + len < oh->doh_readahead->dra_ev->de_readahead_len) {
