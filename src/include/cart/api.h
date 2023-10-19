@@ -1631,6 +1631,18 @@ int
 crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
 /**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_d_sg_list_t(crt_proc_t proc, crt_proc_op_t proc_op, d_sg_list_t *data);
+
+/**
  * Create the processor object.
  *
  * \param[in] crt_ctx		Associated cart context
