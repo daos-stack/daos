@@ -4212,6 +4212,8 @@ dfs_dup(dfs_t *dfs, dfs_obj_t *obj, int flags, dfs_obj_t **_new_obj)
 		return EINVAL;
 	if (obj == NULL || _new_obj == NULL)
 		return EINVAL;
+	if (flags & O_APPEND)
+		return ENOTSUP;
 
 	daos_mode = get_daos_obj_mode(flags);
 	if (daos_mode == -1)
