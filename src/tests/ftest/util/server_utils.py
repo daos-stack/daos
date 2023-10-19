@@ -324,7 +324,7 @@ class DaosServerManager(SubprocessManager):
                 # Remove the shared memory segment associated with this io server
                 self.log.debug("Removing the shared memory segment")
                 command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-                run_remote(self.log, self._hosts, command, verbose)
+                run_remote(self.log, mounted_hosts, command, verbose)
 
             # Dismount the scm mount point
             self.log.debug("Dismount the %s mount point", mount)
