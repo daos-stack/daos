@@ -44,5 +44,3 @@ fi
 fi)
 
 createrepo "$artdir"
-rpm -qRp "$artdir"/daos-server-*.x86_64.rpm |
-  sed -ne '/mercury/s/.* >= //p' > "${TARGET}-required-mercury-rpm-version"
