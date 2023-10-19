@@ -1,6 +1,9 @@
 #!/bin/bash
 set -eu
 
+. utils/githooks/find_base.sh
+export TARGET
+
 hook=${0##*/}
 rm -f ".${hook}"
 
