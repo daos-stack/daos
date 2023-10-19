@@ -1,9 +1,7 @@
 hosts:
   test_servers: 1
   test_clients: 1
-# FIXME DAOS-14141
-# timeout: 150
-timeout: 1500
+timeout: 150
 server_config:
   name: daos_server
   engines_per_host: 2
