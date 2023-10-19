@@ -93,7 +93,8 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	if (hdl->do_store->stor_priv == NULL) {
 		D_ERROR("meta context not defined. WAL commit disabled for %s\n", path);
 	} else {
-		rc = umem_cache_alloc(store, 0);
+		num_pages = (sz + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
+		rc = umem_cache_alloc(store, UMEM_CACHE_PAGE_SZ, num_pages, 0, 0, 0, base, NULL);
 		if (rc != 0) {
 			D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
 			err = rc;
@@ -102,14 +103,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 	}
 
 	D_STRNDUP(hdl->do_path, path, strlen(path));
-
-	num_pages = (sz + UMEM_CACHE_PAGE_SZ - 1) >> UMEM_CACHE_PAGE_SZ_SHIFT;
-	rc = umem_cache_map_range(hdl->do_store, 0, base, num_pages);
-	if (rc != 0) {
-		D_ERROR("Could not allocate page cache: rc=" DF_RC "\n", DP_RC(rc));
-		err = rc;
-		goto out2;
-	}
 
 	if (flags & DAV_HEAP_INIT) {
 		setup_dav_phdr(hdl);
@@ -134,7 +127,8 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 		D_ASSERT(store != NULL);
 
-		rc = store->stor_ops->so_load(store, hdl->do_base);
+		/* TODO: Load necessary Non-evictable pages by umem_cache_load() for phase II */
+		rc = store->stor_ops->so_load(store, hdl->do_base, 0, store->stor_size);
 		if (rc) {
 			D_ERROR("Failed to read blob to vos file %s, rc = %d\n", path, rc);
 			goto out2;

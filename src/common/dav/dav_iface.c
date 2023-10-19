@@ -128,7 +128,6 @@ dav_obj_open_internal(int fd, int flags, size_t sz, const char *path, struct ume
 
 		D_ASSERT(store != NULL);
 
-		/* TODO: Load necessary Non-evictable pages by umem_cache_load() for phase II */
 		rc = store->stor_ops->so_load(store, hdl->do_base, 0, store->stor_size);
 		if (rc) {
 			D_ERROR("Failed to read blob to vos file %s, rc = %d\n", path, rc);
