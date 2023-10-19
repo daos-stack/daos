@@ -130,13 +130,13 @@ pl_obj_place(struct pl_map *map, uint16_t layout_gl_version, struct daos_obj_md 
  * Check if the provided object has any shard needs to be rebuilt for the
  * given rebuild version @rebuild_ver.
  *
- * \param  map [IN]             pl_map this check is performed on
- * \param  md  [IN]             object metadata
- * \param  shard_md [IN]        shard metadata (optional)
- * \param  rebuild_ver [IN]     current rebuild version
- * \param  tgt_rank [OUT]       spare target ranks
- * \param  shard_id [OUT]       shard ids to be rebuilt
- * \param  array_size [IN]      array size of tgt_rank & shard_id
+ * \param[in]  map		pl_map this check is performed on
+ * \param[in]  md		object metadata
+ * \param[in]  shard_md		shard metadata (optional)
+ * \param[in]  rebuild_ver	current rebuild version
+ * \param[out] tgt_rank		spare target ranks
+ * \param[out] shard_id		shard ids to be rebuilt
+ * \param[in]  array_size	array size of tgt_rank & shard_id
 
  * \return      > 0     the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -453,9 +453,9 @@ pl_map_create(struct pool_map *pool_map, struct pl_map_init_attr *mia,
  * Generate a new placement map from the pool map @pool_map, and replace the
  * original placement map for the same pool.
  *
- * \param       uuid [IN]       uuid of \a pool_map
- * \param       pool_map [IN]   pool_map
- * \param       connect [IN]    from pool connect or not
+ * \param[in] uuid	uuid of \a pool_map
+ * \param[in] pool_map	pool_map
+ * \param[in] connect	from pool connect or not
  */
 int
 pl_map_update(uuid_t uuid, struct pool_map *pool_map, bool connect,

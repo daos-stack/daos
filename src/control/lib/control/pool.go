@@ -1150,7 +1150,7 @@ func (p *Pool) setUsage(pqr *PoolQueryResp) {
 		spread := tu.Max - tu.Min
 		imbalance := float64(spread) / (float64(tu.Total) / float64(pqr.ActiveTargets))
 
-		tn := "NVME"
+		tn := "NVMe"
 		if idx == 0 {
 			tn = "SCM"
 		}
