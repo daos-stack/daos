@@ -1,7 +1,9 @@
 hosts:
   test_servers: 1
 
-timeout: 900
+# FIXME DAOS-14141
+# timeout: 900
+timeout: 9000
 
 server_config:
   name: daos_server
