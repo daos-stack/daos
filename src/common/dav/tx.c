@@ -1507,10 +1507,8 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 	if (!tx_inprogress) {
 		rc = lw_tx_begin(pop);
 		if (rc)
-			return rc;
+			return 0;
 	}
-	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
-		return 0;
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
