@@ -17,35 +17,6 @@
 /* Minimal seconds interval for updating VOS space metrics */
 #define VOS_SPACE_METRICS_INTV	1
 
-/* Extra space being reserved to deal with fragmentation issues */
-static inline daos_size_t
-get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
-{
-	const daos_size_t min_sz = (2ULL << 30);  /* 2GB */
-	const daos_size_t max_sz = (10ULL << 30); /* 10GB */
-	daos_size_t       ovhd   = (tot_size * 5) / 100;
-
-	/*
-	 * Don't reserve NVMe, if NVMe allocation failed due to fragmentations,
-	 * only data coalescing in aggregation will be affected, punch and GC
-	 * won't be affected.
-	 */
-	if (media == DAOS_MEDIA_NVME)
-		return 0;
-
-	if (ovhd > max_sz)
-		ovhd = max_sz;
-
-	if (small_pool)
-		return ovhd;
-
-	if (tot_size >= (min_sz * 2) && ovhd < min_sz) {
-		ovhd = min_sz;
-	}
-
-	return ovhd;
-}
-
 /*
  * Extra space being reserved to deal with fragmentation issues
  *
