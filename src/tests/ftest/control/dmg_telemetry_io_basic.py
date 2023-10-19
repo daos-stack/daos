@@ -109,12 +109,9 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                 self.ior_cmd.transfer_size.update(transfer_size)
                 test_file_suffix = "_{}".format(loop)
                 # Run ior command.
-                try:
-                    self.run_ior_with_pool(
-                        timeout=200, create_pool=False, create_cont=False,
-                        test_file_suffix=test_file_suffix)
-                except TestFail:
-                    self.log.info("#ior command failed!")
+                self.run_ior_with_pool(
+                    timeout=200, create_pool=False, create_cont=False,
+                    test_file_suffix=test_file_suffix)
         metrics_data[loop] = self.telemetry.get_io_metrics(test_metrics)
         self.display_io_test_metrics(metrics_data)
         self.verify_io_test_metrics(test_metrics, metrics_data, threshold)
