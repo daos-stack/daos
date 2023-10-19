@@ -178,6 +178,9 @@ class ServerFillUp(IorTestBase):
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
             self.ior_local_cmd.flags.value = self.ior_read_flags
+            if 'Perf' in operation:
+                self.ior_local_cmd.block_size.update(
+                    self.ior_local_cmd.block_size.value * 10, 'ior.block_size')
 
         # To set IOR repetitions
         self.ior_local_cmd.repetitions.update(repetitions, 'ior.repetitions')
