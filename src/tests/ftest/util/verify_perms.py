@@ -261,7 +261,10 @@ def _real_w(entry_type, path):
     if entry_type == 'file':
         try:
             # Write a newline to reduce likelihood of corrupting an executable file
-            with open(path, 'a', encoding='utf-8') as file:
+            with open(path, "w", encoding='utf-8') as file:
+                # O_APPEND is not supported by DFS, so "a" is not used in open. Need seek() here
+                # to move file pointer to the end of the file.
+                file.seek(0, 2)
                 return file.write('\n') == 1
         except PermissionError:
             return False
