@@ -4114,6 +4114,7 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
+
 class NltStdoutWrapper():
     """Class for capturing stdout from threads"""
 
