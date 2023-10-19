@@ -365,8 +365,8 @@ class NvmeEnospace(ServerFillUp):
         # Add retry 10 loops with 60 seconds delay
         for _loop in range(1, 11):
             self.log.info("..Starting IOR read testing loop %s:", _loop)
-            self.start_ior_load(storage='SCM', operation='Perf_Auto_Read', percent=1, create_cont=False,
-                                repetitions=1)
+            self.start_ior_load(storage='SCM', operation='Perf_Auto_Read', percent=1,
+                                create_cont=False, repetitions=1)
             max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.MAX_MIB)])
             self.log.info("..IOR read testing loop %s completed.", _loop)
             self.log.info("..IOR BaseLine Read MiB %s", max_mib_baseline)
