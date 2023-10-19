@@ -1298,9 +1298,10 @@ credits_available(struct crt_ep_inflight *epi)
 {
 	int64_t inflight = epi->epi_req_num - epi->epi_reply_num;
 
-	D_ASSERTF(inflight >= 0 && inflight <= crt_gdata.cg_credit_ep_ctx,
-		  "req_num=%ld reply_num=%ld credit_ep_ctx=%u\n", epi->epi_req_num,
-		  epi->epi_reply_num, crt_gdata.cg_credit_ep_ctx);
+	/* TODO: inflight right now includes items queued in quota waitq, and can exceed credit limit */
+	if (inflight > crt_gdata.cg_credit_ep_ctx)
+		return 0;
+
 	return crt_gdata.cg_credit_ep_ctx - inflight;
 }
 
