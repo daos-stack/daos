@@ -597,6 +597,8 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	bool		port_auto_adjust = false;
 	int		i;
 
+	d_signal_register();
+
 	server = flags & CRT_FLAG_BIT_SERVER;
 	port_str = NULL;
 	port0 = NULL;
