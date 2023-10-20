@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
-
 from ior_test_base import IorTestBase
+from general_utils import DaosTestError
 
 
 class RbldContainerCreate(IorTestBase):
@@ -68,7 +67,7 @@ class RbldContainerCreate(IorTestBase):
         try:
             container.read_objects()
             container.close()
-        except TestFail as error:
+        except DaosTestError as error:
             self.log.error("=> Container %s read failed:", container, exc_info=error)
             status = False
         return status

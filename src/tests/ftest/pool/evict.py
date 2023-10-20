@@ -3,11 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
 from ClusterShell.NodeSet import NodeSet
 from pydaos.raw import DaosApiError, c_uuid_to_str
 
 from apricot import TestWithServers
+from general_utils import DaosTestError
 
 
 class PoolEvictTest(TestWithServers):
@@ -206,7 +206,7 @@ class PoolEvictTest(TestWithServers):
                 if failure_expected:
                     self.fail(
                         "Pool {} was evicted, but write_objects worked!".format(index))
-            except TestFail as error:
+            except DaosTestError as error:
                 if failure_expected and "-1002" in str(error):
                     msg = "Pool # {}: write_objects failed as expected.\n\t{}".format(
                         index, error)

@@ -640,29 +640,6 @@ class TestPool(TestDaosApiBase):
         """
         return self.dmg.pool_get_prop(self.identifier, *args, **kwargs)
 
-    def get_prop_values(self, *args, **kwargs):
-        """Get pool property values from the dmg pool get-prop json output.
-
-        Args:
-            args (tuple, optional): positional arguments to DmgCommand.pool_get_prop
-            kwargs (dict, optional): named arguments to DmgCommand.pool_get_prop
-
-        Raises:
-            TestFailure: if there is an error running dmg pool get-prop
-
-        Returns:
-            list: a list of values matching the or specified property names.
-
-        """
-        values = []
-        self.log.info("Getting property values for %s", self)
-        data = self.get_prop(*args, **kwargs)
-        if data['status'] != 0:
-            return values
-        for entry in data['response']:
-            values.append(entry['value'])
-        return values
-
     @fail_on(CommandFailure)
     def get_property(self, prop_name):
         """Get the pool property with the specified name.
