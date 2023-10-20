@@ -138,6 +138,7 @@ func (cmd *resetSCMCmd) resetPMem(resetBackend scmPrepareResetFn) error {
 	req := storage.ScmPrepareRequest{
 		SocketID: cmd.SocketID,
 		Reset:    true,
+		Force:    cmd.Force,
 	}
 	cmd.Debugf("scm prepare (reset) request: %+v", req)
 

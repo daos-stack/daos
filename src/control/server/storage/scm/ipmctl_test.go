@@ -775,6 +775,25 @@ func TestIpmctl_prepReset(t *testing.T) {
 				cmdShowIpmctlVersion, cmdShowRegions,
 			},
 		},
+		"get pmem state fails; force flag in req; continue to remove regions": {
+			prepReq: &storage.ScmPrepareRequest{
+				Force: true,
+			},
+			runOut: []string{
+				verStr, mockXMLRegions(t, "same-sock"), "", "",
+			},
+			expPrepResp: &storage.ScmPrepareResponse{
+				Namespaces: storage.ScmNamespaces{},
+				Socket: &storage.ScmSocketState{
+					State: storage.ScmUnknownMode,
+				},
+				RebootRequired: true,
+			},
+			expCalls: []pmemCmd{
+				cmdShowIpmctlVersion, cmdShowRegions, cmdDeleteGoals,
+				cmdRemoveRegions,
+			},
+		},
 		"delete goals fails": {
 			runOut: []string{
 				verStr, mockXMLRegions(t, "dual-sock"), "",

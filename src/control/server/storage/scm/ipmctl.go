@@ -431,7 +431,15 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 
 	sockState, err := getPMemState(cr.log, regions)
 	if err != nil {
-		return nil, errors.Wrap(err, "getPMemState")
+		err = errors.Wrap(err, "getPMemState")
+		if req.Force {
+			sockState = &storage.ScmSocketState{
+				State: storage.ScmUnknownMode,
+			}
+			cr.log.Error(err.Error())
+		} else {
+			return nil, err
+		}
 	}
 	resp.Socket = sockState
 	if sockState.SocketID == nil {
@@ -441,26 +449,39 @@ func (cr *cmdRunner) prepReset(req storage.ScmPrepareRequest, scanRes *storage.S
 	cr.log.Debugf("scm backend prep reset: req %+v, pmem state %+v", req, resp.Socket)
 
 	if err := cr.deleteGoals(sockSelector); err != nil {
-		return nil, err
+		if req.Force {
+			cr.log.Error(err.Error())
+		} else {
+			return nil, err
+		}
 	}
 
 	switch sockState.State {
 	case storage.ScmNoRegions:
 		cr.log.Info("SCM is already reset as there are no PMem regions.")
 		return resp, nil
-	case storage.ScmFreeCap, storage.ScmNoFreeCap, storage.ScmNotInterleaved, storage.ScmNotHealthy,
-		storage.ScmPartFreeCap, storage.ScmUnknownMode:
+	case storage.ScmFreeCap, storage.ScmNoFreeCap, storage.ScmNotInterleaved,
+		storage.ScmNotHealthy, storage.ScmPartFreeCap, storage.ScmUnknownMode:
 		// Continue to remove namespaces and regions.
 		resp.RebootRequired = true
 	default:
-		return nil, errors.Errorf("unhandled scm state %q", sockState.State)
+		err := errors.Errorf("unhandled scm state %q", sockState.State)
+		if req.Force {
+			cr.log.Error(err.Error())
+		} else {
+			return nil, err
+		}
 	}
 
 	cr.log.Info("Removing PMem namespaces...")
 
 	for _, dev := range scanRes.Namespaces {
 		if err := cr.removeNamespace(dev.Name); err != nil {
-			return nil, err
+			if req.Force {
+				cr.log.Error(err.Error())
+			} else {
+				return nil, err
+			}
 		}
 	}
 
