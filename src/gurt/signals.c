@@ -115,8 +115,8 @@ print_backtrace(int signo, siginfo_t *info, void *p)
 	memset(&old_handlers[signo], 0, sizeof(struct sigaction));
 }
 
-bool register_handler = false;
-bool registered       = false;
+static bool register_handler = false;
+static bool registered       = false;
 
 void
 d_signal_stack_enable(bool enabled)
