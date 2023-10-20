@@ -573,8 +573,8 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 		if (cur_a->iod.iod_recxs->rx_nr !=
 		    cur_b->iod.iod_recxs->rx_nr) {
 			D_WARN(DF_OID" (reps %u, inconsistent) "
-			       "shard %u "DF_KEY"/"DF_KEY" has EV rec len %lu, "
-			       "but shard %u "DF_KEY"/"DF_KEY" has EV rec len %lu.\n",
+			       "shard %u " DF_KEY "/" DF_KEY" has EV rec len %lu, "
+			       "but shard %u " DF_KEY "/" DF_KEY " has EV rec len %lu.\n",
 			       DP_OID(oid), reps, shard_a, DP_KEY(&cur_a->dkey),
 			       DP_KEY(&cur_a->iod.iod_name), cur_a->iod.iod_recxs->rx_nr,
 			       shard_b, DP_KEY(&cur_b->dkey), DP_KEY(&cur_b->iod.iod_name),

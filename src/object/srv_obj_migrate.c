@@ -2937,7 +2937,7 @@ migrate_obj_ult(void *data)
 	struct iter_obj_arg	*arg = data;
 	struct migrate_pool_tls	*tls = NULL;
 	daos_epoch_range_t	 epr;
-	daos_epoch_t		stable_epoch = 0;
+	daos_epoch_t		 stable_epoch = 0;
 	int			 i;
 	int			 rc = 0;
 
@@ -2985,8 +2985,8 @@ migrate_obj_ult(void *data)
 		daos_epoch_t lower_epoch = 0;
 
 		if (arg->snaps[i] < stable_epoch) {
-			D_DEBUG(DB_REBUILD, DF_CONT" obj "DF_UOID" skip snap "DF_X64
-				" < stable "DF_X64"\n", DP_CONT(arg->pool_uuid, arg->cont_uuid),
+			D_DEBUG(DB_REBUILD, DF_CONT " obj " DF_UOID " skip snap "DF_X64
+				" < stable " DF_X64 "\n", DP_CONT(arg->pool_uuid, arg->cont_uuid),
 				DP_UOID(arg->oid), arg->snaps[i], stable_epoch);
 			continue;
 		} else {

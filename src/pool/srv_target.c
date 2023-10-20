@@ -727,12 +727,14 @@ ds_pool_start_track_eph_query_ult(struct ds_pool *pool)
 	D_ASSERT(pool->sp_track_ephs_req == NULL);
 	uuid_clear(anonym_uuid);
 	sched_req_attr_init(&attr, SCHED_REQ_ANONYM, &anonym_uuid);
-	pool->sp_track_ephs_req = sched_create_ult(&attr, tgt_track_eph_query_ult, pool,
-						   DSS_DEEP_STACK_SZ);
+	pool->sp_track_ephs_req =
+		sched_create_ult(&attr, tgt_track_eph_query_ult, pool, DSS_DEEP_STACK_SZ);
 	if (pool->sp_track_ephs_req == NULL) {
-		D_ERROR(DF_UUID": failed create ec eph equery ult.\n",
+		int rc = -DER_NOMEM;
+
+		DL_ERROR(rc, DF_UUID ": failed create ec eph equery ult.",
 			DP_UUID(pool->sp_uuid));
-		return -DER_NOMEM;
+		return rc;
 	}
 
 	return 0;
@@ -744,13 +746,13 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	if (pool->sp_track_ephs_req == NULL)
 		return;
 
-	D_DEBUG(DB_MD, DF_UUID": Stopping EPOCH query ULT\n",
+	D_DEBUG(DB_MD, DF_UUID ": Stopping EPOCH query ULT\n",
 		DP_UUID(pool->sp_uuid));
 
 	sched_req_wait(pool->sp_track_ephs_req, true);
 	sched_req_put(pool->sp_track_ephs_req);
 	pool->sp_track_ephs_req = NULL;
-	D_INFO(DF_UUID": EPOCH query ULT stopped\n", DP_UUID(pool->sp_uuid));
+	D_INFO(DF_UUID ": EPOCH query ULT stopped\n", DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -832,8 +834,8 @@ ds_pool_start(uuid_t uuid)
 			DP_UUID(uuid), rc);
 		D_GOTO(failure_pool, rc);
 	}
-
 	pool->sp_fetch_hdls = 1;
+
 	rc = ds_pool_start_track_eph_query_ult(pool);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to start ec eph query ult: %d\n",
@@ -1723,8 +1725,8 @@ struct tgt_discard_arg {
 
 struct child_discard_arg {
 	struct tgt_discard_arg	*tgt_discard;
-	uint64_t		stable_epoch;
-	uuid_t			cont_uuid;
+	uint64_t		 stable_epoch;
+	uuid_t			 cont_uuid;
 };
 
 static struct tgt_discard_arg*
@@ -1835,8 +1837,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	uuid_copy(arg->cont_uuid, entry->ie_couuid);
 	rc = vos_cont_get_boundary(cont->sc_hdl, &arg->stable_epoch);
 	if (rc != 0) {
-		D_ERROR("Can not get boundary "DF_UUID": "DF_RC"\n",
-			DP_UUID(entry->ie_couuid), DP_RC(rc));
+		DL_ERROR(rc, "Can not get boundary " DF_UUID ".", DP_UUID(entry->ie_couuid));
 		D_GOTO(put, rc);
 	}
 

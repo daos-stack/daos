@@ -445,7 +445,8 @@ free:
 	return rc;
 }
 
-static void cont_child_update_commit_eph(struct ds_cont_child *cont_child);
+static void
+cont_child_update_commit_eph(struct ds_cont_child *cont_child);
 
 void
 cont_aggregate_interval(struct ds_cont_child *cont, cont_aggregate_cb_t cb,
@@ -577,9 +578,11 @@ cont_start_agg(struct ds_cont_child *cont)
 	cont->sc_ec_agg_req = sched_create_ult(&attr, cont_ec_agg_ult, cont,
 					       DSS_DEEP_STACK_SZ);
 	if (cont->sc_ec_agg_req == NULL) {
-		D_ERROR(DF_CONT"[%d]: Failed to create EC aggregation ULT.\n",
-			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
-		return -DER_NOMEM;
+		int rc = -DER_NOMEM;
+
+		DL_ERROR(rc, DF_CONT "[%d]: Failed to create EC aggregation ULT.",
+			 DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid), dmi->dmi_tgt_id);
+		return rc;
 	}
 
 	D_ASSERT(cont->sc_agg_req == NULL);
@@ -2444,13 +2447,13 @@ cont_tgt_track_eph_init_ult(void *data)
 	rc = dss_ult_execute(cont_track_eph_init_ult, &arg, NULL, NULL, DSS_XS_SYS,
 			     0, 0);
 	if (rc) {
-		D_ERROR(DF_CONT" init track eph failed: "DF_RC"\n",
-			DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_CONT " init track eph failed.\n",
+			 DP_CONT(cont_child->sc_pool->spc_uuid, cont_child->sc_uuid));
 		ds_cont_child_put(cont_child);
 		return;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID" update init track %u\n",
+	D_DEBUG(DB_MD, DF_UUID " update init track %u\n",
 		DP_UUID(cont_child->sc_uuid), arg.tgt_idx);
 	cont_child->sc_ec_query_agg_eph = arg.ec_eph;
 	cont_child->sc_dtx_commit_eph = arg.dtx_eph;
@@ -2461,9 +2464,9 @@ cont_tgt_track_eph_init_ult(void *data)
 void
 ds_cont_track_eph_free(struct ds_pool *pool)
 {
-	struct cont_ec_eph	*ec_eph, *tmp;
+	struct cont_track_eph	*ec_eph, *tmp;
 
-	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_ec_ephs_list, ce_list)
+	d_list_for_each_entry_safe(ec_eph, tmp, &pool->sp_track_ephs_list, ce_list)
 		cont_ec_eph_destroy(ec_eph);
 }
 
@@ -2560,14 +2563,14 @@ ds_cont_tgt_track_eph_query_ult(void *data)
 				continue;
 			}
 
-			D_DEBUG(DB_MD, "Update eph "DF_X64" "DF_UUID"\n",
+			D_DEBUG(DB_MD, "Update eph " DF_X64 " " DF_UUID "\n",
 				min_eph, DP_UUID(track_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns, track_eph->ce_cont_uuid,
 						       min_eph);
 			if (rc == 0)
 				track_eph->ce_last_eph = min_eph;
 			else
-				D_INFO(DF_CONT": Update min epoch: %d\n",
+				D_INFO(DF_CONT ": Update min epoch: %d\n",
 				       DP_CONT(pool->sp_uuid, track_eph->ce_cont_uuid), rc);
 		}
 		D_FREE(failed_tgts);
@@ -2701,13 +2704,13 @@ cont_child_update_commit_eph(struct ds_cont_child *cont_child)
 		break;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID" update commit eph to "DF_X64"\n", DP_UUID(cont_child->sc_uuid),
+	D_DEBUG(DB_MD, DF_UUID " update commit eph to " DF_X64 "\n", DP_UUID(cont_child->sc_uuid),
 		*cont_child->sc_dtx_commit_eph);
 }
 
 struct refresh_vos_agg_eph_arg {
-	uuid_t	pool_uuid;
-	uuid_t  cont_uuid;
+	uuid_t	     pool_uuid;
+	uuid_t	     cont_uuid;
 	daos_epoch_t min_eph;
 };
 
@@ -2715,14 +2718,14 @@ int
 cont_refresh_vos_agg_eph_one(void *data)
 {
 	struct refresh_vos_agg_eph_arg *arg = data;
-	struct ds_cont_child	*cont_child;
-	int			rc;
+	struct ds_cont_child	       *cont_child;
+	int				rc;
 
 	rc = ds_cont_child_lookup(arg->pool_uuid, arg->cont_uuid, &cont_child);
 	if (rc)
 		return rc;
 
-	D_DEBUG(DB_MD, DF_CONT": %s agg boundary eph "DF_X64"->"DF_X64"\n",
+	D_DEBUG(DB_MD, DF_CONT ": %s agg boundary eph " DF_X64 "->" DF_X64 "\n",
 		DP_CONT(arg->pool_uuid, arg->cont_uuid),
 		cont_child->sc_ec_agg_eph_boundary < arg->min_eph ? "update" : "ignore",
 		cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
@@ -2730,9 +2733,9 @@ cont_refresh_vos_agg_eph_one(void *data)
 	if (cont_child->sc_ec_agg_eph_boundary < arg->min_eph) {
 		rc = vos_cont_update_boundary(cont_child->sc_hdl, arg->min_eph);
 		if (rc) {
-			D_ERROR(DF_CONT": update boundary eph "DF_X64"->" DF_X64"\n",
-				DP_CONT(arg->pool_uuid, arg->cont_uuid),
-				cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
+			DL_ERROR(rc, DF_CONT": update boundary eph " DF_X64 "->" DF_X64 ,
+				 DP_CONT(arg->pool_uuid, arg->cont_uuid),
+				 cont_child->sc_ec_agg_eph_boundary, arg->min_eph);
 			D_GOTO(out_put, rc);
 		}
 		cont_child->sc_ec_agg_eph_boundary = arg->min_eph;
@@ -2757,16 +2760,16 @@ ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 					  &coll_args.ca_exclude_tgts,
 					  &coll_args.ca_exclude_tgts_cnt);
 	if (rc) {
-		D_ERROR(DF_UUID "failed to get index : rc "DF_RC"\n",
-			DP_UUID(pool_uuid), DP_RC(rc));
+		DL_ERROR(rc, DF_UUID "failed to get index.", DP_UUID(pool_uuid));
 		return rc;
 	}
 
+	arg.min_eph = eph;
 	uuid_copy(arg.pool_uuid, pool_uuid);
 	uuid_copy(arg.cont_uuid, cont_uuid);
-	arg.min_eph = eph;
-	coll_args.ca_func_args	= &arg;
-	coll_ops.co_func = cont_refresh_vos_agg_eph_one;
+
+	coll_args.ca_func_args = &arg;
+	coll_ops.co_func       = cont_refresh_vos_agg_eph_one;
 
 	rc = dss_task_collective_reduce(&coll_ops, &coll_args, DSS_ULT_FL_PERIODIC);
 	D_FREE(coll_args.ca_exclude_tgts);

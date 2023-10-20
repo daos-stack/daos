@@ -5139,9 +5139,8 @@ pool_upgrade_schedule(struct pool_svc *svc)
 	daos_epoch_t	upgrade_eph = d_hlc_get();
 	int		rc = 0;
 
-	rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version,
-				 upgrade_eph, DS_POOL_OBJ_VERSION, NULL,
-				 RB_OP_UPGRADE, 0);
+	rc = ds_rebuild_schedule(svc->ps_pool, svc->ps_pool->sp_map_version, upgrade_eph,
+				 DS_POOL_OBJ_VERSION, NULL, RB_OP_UPGRADE, 0);
 	return rc;
 }
 
