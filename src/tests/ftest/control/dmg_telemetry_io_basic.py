@@ -1,10 +1,8 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
-
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
 from telemetry_utils import TelemetryUtils
@@ -77,7 +75,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
                 "Initial " if key == 0 else "Test Loop {}".format(key),
                 metrics_data[key])
 
-    def test_io_telmetry_metrics_basic(self):
+    def test_io_telemetry_metrics_basic(self):
         """JIRA ID: DAOS-5241
 
             Create files of 500M and 1M with transfer size 1M to verify the
@@ -86,7 +84,7 @@ class TestWithTelemetryIOBasic(IorTestBase, TestWithTelemetry):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=control,telemetry,basic
-        :avocado: tags=TestWithTelemetryIOBasic,test_io_telmetry_metrics_basic
+        :avocado: tags=TestWithTelemetryIOBasic,test_io_telemetry_metrics_basic
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
