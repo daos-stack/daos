@@ -171,7 +171,7 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
-	if req.MetaBlobSize > 0 && !instances[0].GetStorage().BdevRoleMetaConfigured() {
+	if req.MetaBlobBytes > 0 && !instances[0].GetStorage().BdevRoleMetaConfigured() {
 		return errors.New("meta size set in request but md-on-ssd is not enabled in config")
 	}
 

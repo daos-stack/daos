@@ -265,9 +265,9 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 		},
 		"meta size is set (mdonssd not configured)": {
 			in: &mgmtpb.PoolCreateReq{
-				Tierbytes:    []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
-				Ranks:        []uint32{0},
-				MetaBlobSize: humanize.GByte,
+				Tierbytes:     []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:         []uint32{0},
+				MetaBlobBytes: humanize.GByte,
 			},
 			expErr: errors.New("md-on-ssd"),
 		},
