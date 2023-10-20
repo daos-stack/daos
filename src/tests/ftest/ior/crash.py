@@ -21,10 +21,10 @@ class IorCrash(IorTestBase):
         super().setUp()
         self.dmg = self.get_dmg_command()
 
-    def cont_nhandles_match(self, exp_nhandles=1, attempts=5, delay_sec=2):
+    def cont_nhandles_match(self, num_handles=1, attempts=5, delay_sec=2):
         """Verify container number of handles. If needed, perform multiple queries (with delay)."""
         for _ in range(attempts):
-            if self.container.check_container_info(ci_nhandles=exp_nhandles):
+            if self.container.verify_query({'num_handles': num_handles}):
                 return True
             time.sleep(delay_sec)
         return False
