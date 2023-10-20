@@ -3178,6 +3178,16 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 		D_GOTO(out_put, rc);
 	}
 
+	rc = ds_cont_fetch_ec_agg_boundary(dp->sp_iv_ns, cont_uuid);
+	if (rc) {
+		/* Sometime it may too early to fetch the EC boundary,
+		 * since EC boundary does not start yet, which is forbidden
+		 * during rebuild anyway, so let's continue.
+		 */
+		D_DEBUG(DB_REBUILD, DF_UUID" fetch agg_boundary failed: "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+	}
+
 	arg.yield_freq	= DEFAULT_YIELD_FREQ;
 	arg.cont_root	= root;
 	arg.snaps	= snapshots;
