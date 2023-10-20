@@ -3,8 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import subprocess
-import argparse  # nosec
+import subprocess  # nosec
+import argparse
 import yaml
 from ClusterShell.NodeSet import NodeSet
 from demo_utils import list_pool, pool_get_prop, create_container, system_stop, \
