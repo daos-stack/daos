@@ -60,7 +60,7 @@ struct dtx_cos_rec_child {
 	daos_epoch_t		 dcrc_epoch;
 	/* Pointer to the dtx_cos_rec. */
 	struct dtx_cos_rec	*dcrc_ptr;
-	int			dcrc_heap_idx;
+	struct d_binheap_node	dcrc_heap_node;
 };
 
 struct dtx_cos_rec_bundle {
@@ -130,7 +130,6 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	dcrc->dcrc_dte = dtx_entry_get(rbund->dte);
 	dcrc->dcrc_epoch = rbund->epoch;
 	dcrc->dcrc_ptr = dcr;
-	dcrc->dcrc_heap_idx = -1;
 	d_list_add_tail(&dcrc->dcrc_gl_committable,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
@@ -162,8 +161,8 @@ dcrc_delete(struct ds_cont_child *cont, struct dtx_cos_rec_child *dcrc)
 {
 	struct dtx_tls	*tls = dtx_tls_get();
 
-	if (cont->sc_dtx_cos_heap)
-		daos_heap_delete(cont->sc_dtx_cos_heap, dcrc->dcrc_heap_idx);
+	if (!d_binheap_is_empty(&cont->sc_dtx_cos_heap))
+		d_binheap_remove(&cont->sc_dtx_cos_heap, &dcrc->dcrc_heap_node);
 
 	d_list_del(&dcrc->dcrc_gl_committable);
 	d_list_del(&dcrc->dcrc_lo_link);
@@ -383,65 +382,38 @@ dtx_list_cos(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 	return count;
 }
 
-static void
-dtx_cos_rec_child_swap(void *array, int a, int b)
+static bool
+dcrc_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
 {
-	struct dtx_cos_rec_child **dcrcs = array;
-	struct dtx_cos_rec_child *tmp;
+	struct dtx_cos_rec_child *nodea, *nodeb;
 
-	D_ASSERTF(dcrcs[a]->dcrc_heap_idx == a,
-		  "dcrcs %p dcrcs[a] %p heap idx %d a %d\n",
-		  dcrcs, dcrcs[a], dcrcs[a]->dcrc_heap_idx, a);
-	D_ASSERTF(dcrcs[b]->dcrc_heap_idx == b,
-		  "dcrcs %p dcrcs[b] %p heap idx %d b %d\n",
-		  dcrcs, dcrcs[b], dcrcs[b]->dcrc_heap_idx, b);
+	nodea = container_of(a, struct dtx_cos_rec_child, dcrc_heap_node);
+	nodeb = container_of(b, struct dtx_cos_rec_child, dcrc_heap_node);
 
-	tmp = dcrcs[a];
-	dcrcs[a] = dcrcs[b];
-	dcrcs[b] = tmp;
-
-	dcrcs[a]->dcrc_heap_idx = a;
-	dcrcs[b]->dcrc_heap_idx = b;
+	/* Min heap, the minimum epoch dtx cos node is on root */
+	return nodea->dcrc_epoch < nodeb->dcrc_epoch;
 }
 
-static int
-dtx_cos_rec_child_cmp(void *array, int a, int b)
-{
-	struct dtx_cos_rec_child **dcrcs = array;
-
-	D_ASSERTF(dcrcs[a]->dcrc_heap_idx == a,
-		  "dcrcs %p dcrcs[a] %p heap idx %d a %d\n",
-		  dcrcs, dcrcs[a], dcrcs[a]->dcrc_heap_idx, a);
-	D_ASSERTF(dcrcs[b]->dcrc_heap_idx == b,
-		  "dcrcs %p dcrcs[b] %p heap idx %d b %d\n",
-		  dcrcs, dcrcs[b], dcrcs[b]->dcrc_heap_idx, b);
-
-	return dcrcs[a]->dcrc_epoch > dcrcs[b]->dcrc_epoch;
-}
-
-static void
-dtx_cos_rec_child_set_key(void *array, int key)
-{
-	struct dtx_cos_rec_child *dcrc = array;
-
-	dcrc->dcrc_heap_idx = key;
-}
-
-daos_heap_ops_t	dtx_cos_heap_ops = {
-	.ho_swap	= dtx_cos_rec_child_swap,
-	.ho_cmp		= dtx_cos_rec_child_cmp,
-	.ho_set_key	= dtx_cos_rec_child_set_key,
+struct d_binheap_ops dtx_cos_heap_ops = {
+	.hop_enter	= NULL,
+	.hop_exit	= NULL,
+	.hop_compare	= dcrc_node_cmp,
 };
 
 daos_epoch_t
 dtx_get_min_cos_eph(struct ds_cont_child *cont)
 {
-	struct dtx_cos_rec_child *dcrc;
+	if (!d_binheap_is_empty(&cont->sc_dtx_cos_heap)) {
+		struct d_binheap_node *root;
 
-	if (cont->sc_dtx_cos_heap) {
-		dcrc = daos_heap_top(cont->sc_dtx_cos_heap);
-		if (dcrc != NULL)
+		root = d_binheap_root(&cont->sc_dtx_cos_heap);
+		if (root != NULL) {
+			struct dtx_cos_rec_child *dcrc;
+
+			dcrc = container_of(root, struct dtx_cos_rec_child, dcrc_heap_node);
+
 			return dcrc->dcrc_epoch;
+		}
 	}
 
 	return d_hlc_get();
@@ -481,7 +453,7 @@ dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		struct dtx_cos_rec_child *dcrc;
 
 		dcrc = riov_out.iov_buf;
-		rc = daos_heap_insert(cont->sc_dtx_cos_heap, dcrc);
+		rc = d_binheap_insert(&cont->sc_dtx_cos_heap, &dcrc->dcrc_heap_node);
 	}
 
 	D_CDEBUG(rc != 0, DLOG_ERR, DB_IO, "Insert DTX "DF_DTI" to CoS "

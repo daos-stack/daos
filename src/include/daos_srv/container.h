@@ -21,6 +21,7 @@
 #include <daos_srv/evtree.h>
 #include <daos/container.h>
 #include <daos/cont_props.h>
+#include <gurt/heap.h>
 
 void ds_cont_wrlock_metadata(struct cont_svc *svc);
 void ds_cont_rdlock_metadata(struct cont_svc *svc);
@@ -108,7 +109,7 @@ struct ds_cont_child {
 	uint64_t		sc_ec_agg_eph_boundary;
 	/* The current EC aggregate epoch for this xstream */
 	uint64_t		sc_ec_agg_eph;
-	/* Used by cont_ec_eph_query_ult to query the minimum EC agg epoch from all
+	/* Used by ds_cont_tgt_track_eph_query_ult() to query the minimum EC agg epoch from all
 	 * local VOS.
 	 */
 	uint64_t		*sc_ec_query_agg_eph;
@@ -130,7 +131,7 @@ struct ds_cont_child {
 	d_list_t		 sc_dtx_cos_list;
 
 	/* heap of the dtx */
-	void			*sc_dtx_cos_heap;
+	struct d_binheap	 sc_dtx_cos_heap;
 	/* the pool map version of updating DAOS_PROP_CO_STATUS prop */
 	uint32_t		 sc_status_pm_ver;
 	/* flag of CONT_CAPA_READ_DATA/_WRITE_DATA disabled */

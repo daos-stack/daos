@@ -108,10 +108,7 @@ dtx_free_dbca(struct dtx_batched_cont_args *dbca)
 		cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (cont->sc_dtx_cos_heap) {
-		daos_heap_destroy(cont->sc_dtx_cos_heap);
-		cont->sc_dtx_cos_heap = NULL;
-	}
+	d_binheap_destroy_inplace(&cont->sc_dtx_cos_heap);
 
 	D_ASSERT(cont->sc_dtx_committable_count == 0);
 	D_ASSERT(d_list_empty(&cont->sc_dtx_cos_list));
@@ -1697,7 +1694,6 @@ dtx_cont_register(struct ds_cont_child *cont)
 	D_ASSERT(cont != NULL);
 	D_ASSERT(!dtx_cont_opened(cont));
 	D_ASSERT(daos_handle_is_inval(cont->sc_dtx_cos_hdl));
-	D_ASSERT(cont->sc_dtx_cos_heap == NULL);
 
 	d_list_for_each_entry(dbpa, &dmi->dmi_dtx_batched_pool_list, dbpa_sys_link) {
 		if (dbpa->dbpa_pool == cont->sc_pool) {
@@ -1740,7 +1736,8 @@ dtx_cont_register(struct ds_cont_child *cont)
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
-	rc = daos_heap_create(&dtx_cos_heap_ops, 0, &cont->sc_dtx_cos_heap);
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &dtx_cos_heap_ops,
+				      &cont->sc_dtx_cos_heap);
 	if (rc != 0) {
 		DL_ERROR(rc, "daos heap create failure");
 		D_GOTO(out, rc);
@@ -1771,11 +1768,6 @@ out:
 		if (!daos_handle_is_inval(cont->sc_dtx_cos_hdl)) {
 			dbtree_destroy(cont->sc_dtx_cos_hdl, NULL);
 			cont->sc_dtx_cos_hdl = DAOS_HDL_INVAL;
-		}
-
-		if (cont->sc_dtx_cos_heap) {
-			daos_heap_destroy(cont->sc_dtx_cos_heap);
-			cont->sc_dtx_cos_heap = NULL;
 		}
 	}
 
