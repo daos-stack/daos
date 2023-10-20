@@ -987,7 +987,7 @@ int d_vec_pointers_init(struct d_vec_pointers *pointers, uint32_t cap);
 void d_vec_pointers_fini(struct d_vec_pointers *pointers);
 int d_vec_pointers_append(struct d_vec_pointers *pointers, void *pointer);
 
-/** Change the default setting for if a signal handler should be installed in cart_init()
+/** Change the default setting for if a signal handler should be installed in crt_init()
  *
  * This is controlled by DAOS_SIGNAL_REGISTER however calling this function changes the default
  * value if the env is not set.  Daos supplied binaries should call this function, libraries should
