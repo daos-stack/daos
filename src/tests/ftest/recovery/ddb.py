@@ -7,14 +7,14 @@ import os
 import re
 from ClusterShell.NodeSet import NodeSet
 
-from apricot import TestWithServers
-from general_utils import report_errors, run_pcmd, insert_objects, \
-    distribute_files, DaosTestError, get_random_string, copy_remote_to_local
+from recovery_test_base import RecoveryTestBase
+from general_utils import report_errors, insert_objects, distribute_files, \
+    DaosTestError, get_random_string, copy_remote_to_local
 from ddb_utils import DdbCommand
 from exception_utils import CommandFailure
 
 
-class DdbTest(TestWithServers):
+class DdbTest(RecoveryTestBase):
     """Test ddb subcommands.
 
     :avocado: recursive
@@ -31,33 +31,6 @@ class DdbTest(TestWithServers):
         self.random_dkey = get_random_string(10)
         self.random_akey = get_random_string(10)
         self.random_data = get_random_string(10)
-
-    def get_vos_file_path(self):
-        """Get the VOS file path.
-
-        If there are multiple VOS files, returns the first file obtained by "ls".
-
-        Returns:
-            str: VOS file path such as /mnt/daos0/<pool_uuid>/vos-0
-
-        """
-        hosts = NodeSet(self.hostlist_servers[0])
-        scm_mount = self.server_managers[0].get_config_value("scm_mount")
-        vos_path = os.path.join(scm_mount, self.pool.uuid.lower())
-        command = " ".join(["sudo", "ls", vos_path])
-        cmd_out = run_pcmd(hosts=hosts, command=command)
-
-        # return vos_file
-        for file in cmd_out[0]["stdout"]:
-            # Assume the VOS file has "vos" in the file name.
-            if "vos" in file:
-                self.log.info("vos_file: %s", file)
-                return file
-
-        self.fail("vos file wasn't found in {}/{}".format(
-            scm_mount, self.pool.uuid.lower()))
-
-        return None  # to appease pylint
 
     def test_recovery_ddb_ls(self):
         """Test ddb ls.
@@ -85,7 +58,7 @@ class DdbTest(TestWithServers):
         ddb_command = DdbCommand(
             server_host=NodeSet(self.hostlist_servers[0]), path=self.bin,
             mount_point=scm_mount, pool_uuid=self.pool.uuid,
-            vos_file=self.get_vos_file_path())
+            vos_file=self.get_vos_file_path(pool=self.pool))
 
         errors = []
 
@@ -277,7 +250,7 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 3. Find the vos file name.
-        vos_file = self.get_vos_file_path()
+        vos_file = self.get_vos_file_path(pool=self.pool)
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
@@ -420,7 +393,7 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        vos_file = self.get_vos_file_path()
+        vos_file = self.get_vos_file_path(pool=self.pool)
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
@@ -509,7 +482,7 @@ class DdbTest(TestWithServers):
         dmg_command.system_stop()
 
         # 4. Find the vos file name.
-        vos_file = self.get_vos_file_path()
+        vos_file = self.get_vos_file_path(pool=self.pool)
         host = NodeSet(self.hostlist_servers[0])
         scm_mount = self.server_managers[0].get_config_value("scm_mount")
         ddb_command = DdbCommand(
