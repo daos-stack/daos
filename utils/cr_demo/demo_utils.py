@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import subprocess
+import subprocess  # nosec
 import yaml
 
 
