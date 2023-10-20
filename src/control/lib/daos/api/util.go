@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/daos-stack/daos/src/control/lib/daos"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/lib/daos"
 )
 
 /*
@@ -20,13 +21,22 @@ import (
 */
 import "C"
 
+type ErrnoErr struct {
+	Errno  int
+	Errstr string
+}
+
+func (e *ErrnoErr) Error() string {
+	return fmt.Sprintf("errno %d (%s)", e.Errno, e.Errstr)
+}
+
 func dfsError(rc C.int) error {
 	if rc == 0 {
 		return nil
 	}
 
 	strErr := C.strerror(rc)
-	return errors.New(fmt.Sprintf("errno %d (%s)", rc, C.GoString(strErr)))
+	return &ErrnoErr{int(rc), C.GoString(strErr)}
 }
 
 // daosError converts a return code from a DAOS API
