@@ -621,7 +621,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 
 	/*
 	 * Search for either:
-	 * 1) a previously-cleared link node that can be re-used, or
+	 * 1) a previously-cleared link node that can be reused, or
 	 * 2) the right place to attach a newly allocated node.
 	 */
 	child = parent->dtn_child;
@@ -631,7 +631,7 @@ add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
 	}
 
 	if (is_cleared_link(tm_shmem.ctx, child)) {
-		/* we can re-use this node instead of allocating a new one */
+		/* we can reuse this node instead of allocating a new one */
 		rc = init_node(shmem, child, name);
 		if (rc != 0) {
 			D_ERROR("failed to reinit cleared link node, " DF_RC

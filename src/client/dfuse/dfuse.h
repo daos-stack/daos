@@ -172,7 +172,7 @@ struct dfuse_obj_hdl {
 	/** True if caching is enabled for this file. */
 	bool                      doh_caching;
 
-	/* True if the file handle is writeable - used for cache invalidation */
+	/* True if the file handle is writable - used for cache invalidation */
 	bool                      doh_writeable;
 
 	/* Track possible kernel cache of readdir on this directory */
