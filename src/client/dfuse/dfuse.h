@@ -914,7 +914,7 @@ dfuse_inode_lookup_nf(struct dfuse_info *dfuse_info, fuse_ino_t ino)
 }
 
 /* Drop a reference on an inode.  This may result in ie being freed so needs to go through the hash
- * table.
+ * table, but optimistically check using atomics first.
  */
 static inline void
 dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
@@ -932,15 +932,6 @@ dfuse_inode_decref(struct dfuse_info *dfuse_info, struct dfuse_inode_entry *ie)
 
 	d_hash_rec_decref(&dfuse_info->dpi_iet, &ie->ie_htl);
 }
-
-/* Drop a reference on an inode.  This */
-#define dfuse_ie_decref_unsafe(_ie)                                                                \
-	do {                                                                                       \
-		uint32_t old_ref;                                                                  \
-		old_ref = atomic_fetch_sub_relaxed(&(_ie)->ie_ref, 1);                             \
-		D_ASSERT(old_ref >= 2);                                                            \
-		(_ie) = NULL;                                                                      \
-	} while (0)
 
 /* Drop a reference on an inode. */
 
