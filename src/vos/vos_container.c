@@ -29,7 +29,6 @@
 struct cont_df_args {
 	struct vos_cont_df	*ca_cont_df;
 	struct vos_pool		*ca_pool;
-	umem_off_t		 ca_root_off;
 };
 
 static int
@@ -113,7 +112,6 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	gc_init_cont(&tins->ti_umm, cont_df);
 	args->ca_cont_df = cont_df;
-	args->ca_root_off = offset;
 	rec->rec_off = offset;
 	return 0;
 failed:
@@ -132,7 +130,6 @@ cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	args->ca_cont_df = cont_df;
-	args->ca_root_off = rec->rec_off;
 	val_iov->iov_len = sizeof(struct cont_df_args);
 
 	return 0;
@@ -821,8 +818,7 @@ vos_cont_upgrade(daos_handle_t poh, uuid_t co_uuid)
 			 DP_UUID(cont->vc_id));
 		D_GOTO(tx_end, rc);
 	}
-	dbtree_handle_reset_root(cont->vc_btr_hdl, &args.ca_cont_df->cd_obj_root,
-				 args.ca_root_off);
+	dbtree_handle_reset_root(cont->vc_btr_hdl, &args.ca_cont_df->cd_obj_root);
 	cont->vc_cont_df = args.ca_cont_df;
 	D_DEBUG(DB_MD, DF_UUID " upgrade to current version %u contdf %p root %p\n",
 		DP_UUID(cont->vc_id), POOL_DF_VERSION, cont->vc_cont_df,

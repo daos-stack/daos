@@ -3453,7 +3453,7 @@ dbtree_close(daos_handle_t toh)
  * \param[in]	root_off the root offset to be set.
  */
 void
-dbtree_handle_reset_root(daos_handle_t toh, struct btr_root *root, umem_off_t root_off)
+dbtree_handle_reset_root(daos_handle_t toh, struct btr_root *root)
 {
 	struct btr_context	*tcx;
 
@@ -3462,7 +3462,7 @@ dbtree_handle_reset_root(daos_handle_t toh, struct btr_root *root, umem_off_t ro
 		return;
 
 	tcx->tc_tins.ti_root = root;
-	tcx->tc_tins.ti_root_off = root_off;
+	tcx->tc_tins.ti_root_off = umem_ptr2off(&tcx->tc_tins.ti_umm, root);
 }
 
 /** Destroy a tree node and all its children recursively. */
