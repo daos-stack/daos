@@ -15,7 +15,7 @@ from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
-from general_utils import check_pool_files, DaosTestError
+from general_utils import check_pool_files, DaosTestError, check_file_exists
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
@@ -1422,3 +1422,50 @@ class TestPool(TestDaosApiBase):
         self.wait_for_rebuild_to_end(interval=interval)
         duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
+
+    def check_pool_files(log, hosts, uuid, scm_mount):
+        """Check if pool files exist on the specified list of hosts.
+
+        Args:
+            log (logging): logging object used to display messages
+            hosts (NodeSet): list of hosts
+            uuid (str): uuid file name to look for in /mnt/daos.
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if the files for this pool exist on each host; False
+                otherwise
+
+        """
+        status = True
+        log.info("Checking for pool data on %s", hosts)
+        pool_files = [uuid, "superblock"]
+        for filename in [f"{scm_mount}/{item}" for item in pool_files]:
+            log.debug(f"## filename = {filename}")
+            result = check_file_exists(hosts, filename, sudo=True)
+            if not result[0]:
+                log.error("%s: %s not found", result[1], filename)
+                status = False
+        return status
+
+    def check_for_pool(host, uuid, scm_mount):
+        """Check if pool folder exist on server.
+
+        Args:
+            host (NodeSet): Server host name
+            uuid (str): Pool uuid to check if exists
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
+
+        Returns:
+            bool: True if pool folder exists, False otherwise
+
+        """
+        pool_dir = f"{scm_mount}/{uuid}"
+        result = check_file_exists(host, pool_dir, directory=True, sudo=True)
+        if result[0]:
+            print("{} exists on {}".format(pool_dir, host))
+        else:
+            print("{} does not exist on {}".format(pool_dir, host))
+        return result[0]
