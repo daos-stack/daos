@@ -1146,7 +1146,6 @@ pipeline {
                             stage_tags: 'hw,medium,-provider',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             nvme: 'auto',
-                            run_by_default: true,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1160,7 +1159,6 @@ pipeline {
                             default_tags: startedByTimer() ?
                                 'pr,md_on_ssd daily_regression,md_on_ssd' : 'pr,md_on_ssd',
                             nvme: 'auto_md_on_ssd',
-                            run_by_default: true,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1174,7 +1172,6 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ofi+verbs;ofi_rxm',
-                            run_by_default: true,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1188,7 +1185,6 @@ pipeline {
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
                             provider: 'ucx+dc_x',
-                            run_by_default: true,
                             run_if_pr: false,
                             run_if_landing: false,
                             job_status: job_status_internal
@@ -1201,7 +1197,6 @@ pipeline {
                             stage_tags: 'hw,large',
                             default_tags: startedByTimer() ? 'pr daily_regression' : 'pr',
                             default_nvme: 'auto',
-                            run_by_default: true,
                             run_if_pr: true,
                             run_if_landing: false,
                             job_status: job_status_internal
