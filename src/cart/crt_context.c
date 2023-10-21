@@ -1975,8 +1975,8 @@ crt_context_quotas_init(crt_context_t crt_ctx)
 	quotas->limit[CRT_QUOTA_RPC_ALLOC_SOFT] = 64;
 	quotas->limit[CRT_QUOTA_RPC_ALLOC_HARD] = 512;
 
-	/* TODO: Set this to EP_CREDITS eventually; for now use 4 for testing */
-	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 4;
+	/* TODO: Set based on ep credits */
+	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 32;
 
 	quotas->current[CRT_QUOTA_RPC_ALLOC_SOFT] = 0;
 	quotas->current[CRT_QUOTA_RPC_ALLOC_HARD] = 0;
@@ -2014,7 +2014,7 @@ out:
 }
 
 int
-crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_t quota, int value)
+crt_context_quota_limit_set(crt_context_t crt_ctx, crt_quota_type_t quota, int value)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
@@ -2038,7 +2038,7 @@ out:
 }
 
 int
-crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_t quota, int *value)
+crt_context_quota_limit_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
@@ -2065,7 +2065,7 @@ out:
 }
 
 int
-crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_t quota)
+crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;
@@ -2097,7 +2097,7 @@ out:
 }
 
 int
-crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_t quota)
+crt_context_put_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 {
 	struct crt_context	*ctx = crt_ctx;
 	int			rc = 0;

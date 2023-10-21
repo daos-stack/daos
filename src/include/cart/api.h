@@ -2277,7 +2277,7 @@ int crt_context_quotas_finalize(crt_context_t crt_ctx);
  * \return                     DER_SUCCESS on success, negative value on
  *                             failure.
  */
-int crt_context_quota_set(crt_context_t crt_ctx, crt_quota_t quota, int value);
+int crt_context_quota_set(crt_context_t crt_ctx, crt_quota_type_t quota, int value);
 
 /**
  * Query the quota limit.
@@ -2289,7 +2289,7 @@ int crt_context_quota_set(crt_context_t crt_ctx, crt_quota_t quota, int value);
  * \return                     DER_SUCCESS on success, negative value on
  *                             failure.
  */
-int crt_context_quota_get(crt_context_t crt_ctx, crt_quota_t quota, int *value);
+int crt_context_quota_get(crt_context_t crt_ctx, crt_quota_type_t quota, int *value);
 
 
 /** @}

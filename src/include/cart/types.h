@@ -445,15 +445,15 @@ typedef enum {
  */
 typedef enum {
 	/** Soft limit on rpc allocations */
-	CRT_QUOTA_RPC_ALLOC_SOFT,
+	CRT_QUOTA_RPC_ALLOC_SOFT, /* TODO: Not implemented */
 	/** Hard limit on rpc allocations */
-	CRT_QUOTA_RPC_ALLOC_HARD,
+	CRT_QUOTA_RPC_ALLOC_HARD, /* TODO: Not implemented */
 	/** Limit of number of inflight rpcs */
 	CRT_QUOTA_RPC_INFLIGHT,
 
 	/** Total count of supported quotas */
 	CRT_QUOTA_COUNT,
-} crt_quota_t;
+} crt_quota_type_t;
 
 /** @}
  */
