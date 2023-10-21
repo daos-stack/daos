@@ -86,7 +86,7 @@ class DestroyTests(TestWithServers):
         self.validate_pool_creation(hosts, scm_mount)
 
         # Validate pool destruction
-        self.validate_pool_destroy(hosts, case, exception_expected, scm_mount)
+        self.validate_pool_destroy(hosts, case, scm_mount, exception_expected)
 
     def validate_pool_creation(self, hosts, scm_mount):
         """Validate the creation of a pool on the specified list of hosts.
@@ -281,9 +281,8 @@ class DestroyTests(TestWithServers):
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
             hosts=hostlist_servers,
-            case="with an invalid UUID {}".format(
-                self.pool.pool.get_uuid_str()), scm_mount=scm_mount,
-                exception_expected=True, valid_uuid=valid_uuid)
+            case="with an invalid UUID {}".format(self.pool.pool.get_uuid_str()),
+            scm_mount=scm_mount, exception_expected=True, valid_uuid=valid_uuid)
 
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
