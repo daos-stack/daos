@@ -1444,7 +1444,6 @@ class TestPool(TestDaosApiBase):
         log.info("Checking for pool data on %s", hosts)
         pool_files = [uuid, "superblock"]
         for filename in [f"{scm_mount}/{item}" for item in pool_files]:
-            log.info(f"## filename = {filename}")
             result = check_file_exists(hosts, filename, sudo=True)
             if not result[0]:
                 log.error("%s: %s not found", result[1], filename)
