@@ -15,7 +15,7 @@ from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from test_utils_base import TestDaosApiBase, LabelGenerator
 from command_utils import BasicParameter
 from exception_utils import CommandFailure
-from general_utils import check_pool_files, DaosTestError, check_file_exists
+from general_utils import DaosTestError, check_file_exists
 from dmg_utils import DmgCommand, DmgJsonCommandFailure
 
 POOL_NAMESPACE = "/run/pool/*"
@@ -1423,7 +1423,7 @@ class TestPool(TestDaosApiBase):
         duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
 
-    def check_pool_files(log, hosts, uuid, scm_mount):
+    def check_pool_files(self, log, hosts, uuid, scm_mount):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
@@ -1442,14 +1442,14 @@ class TestPool(TestDaosApiBase):
         log.info("Checking for pool data on %s", hosts)
         pool_files = [uuid, "superblock"]
         for filename in [f"{scm_mount}/{item}" for item in pool_files]:
-            log.debug(f"## filename = {filename}")
+            log.info(f"## filename = {filename}")
             result = check_file_exists(hosts, filename, sudo=True)
             if not result[0]:
                 log.error("%s: %s not found", result[1], filename)
                 status = False
         return status
 
-    def check_for_pool(host, uuid, scm_mount):
+    def check_for_pool(self, host, uuid, scm_mount):
         """Check if pool folder exist on server.
 
         Args:
