@@ -1001,18 +1001,20 @@ class TestPool(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
-    def check_files(self, hosts):
+    def check_files(self, hosts, scm_mount):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
             hosts (NodeSet): hosts on which to check files
+            scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
+                obtained as self.server_managers[0].get_config_value("scm_mount")
 
         Returns:
             bool: True if the files for this pool exist on each host; False
                 otherwise
 
         """
-        return check_pool_files(self.log, hosts, self.uuid.lower())
+        return self.check_pool_files(self.log, hosts, self.uuid.lower(), scm_mount)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.

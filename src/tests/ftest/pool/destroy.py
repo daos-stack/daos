@@ -80,19 +80,20 @@ class DestroyTests(TestWithServers):
         # Start servers with the server group
         self.start_servers(self.get_group(group_name, hosts))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Validate the creation of a pool
-        self.validate_pool_creation(hosts)
+        self.validate_pool_creation(hosts, scm_mount)
 
         # Validate pool destruction
-        self.validate_pool_destroy(
-            hosts, case, exception_expected,
-            self.server_managers[0].get_config_value("scm_mount"))
+        self.validate_pool_destroy(hosts, case, exception_expected, scm_mount)
 
-    def validate_pool_creation(self, hosts):
+    def validate_pool_creation(self, hosts, scm_mount):
         """Validate the creation of a pool on the specified list of hosts.
 
         Args:
             hosts (NodeSet): hosts running servers serving the pool
+            scm_mount (str): SCM mount point such as "/mnt/daos"
         """
         # Create a pool
         self.log.info("Create a pool")
@@ -102,7 +103,7 @@ class DestroyTests(TestWithServers):
 
         # Check that the pool was created.
         self.assertTrue(
-            self.pool.check_files(hosts),
+            self.pool.check_files(hosts, scm_mount),
             "Pool data not detected on servers before destroy")
 
     def validate_pool_destroy(self, hosts, case, scm_mount, exception_expected=False,
@@ -211,18 +212,19 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers)
+            self.validate_pool_creation(hostlist_servers, scm_mount)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
                 hostlist_servers,
-                "with a single server - pass {}".format(counter),
-                self.server_managers[0].get_config_value("scm_mount"))
+                "with a single server - pass {}".format(counter), scm_mount)
 
     def test_destroy_multi_loop(self):
         """Test destroy on a large (relative) number of servers.
@@ -237,18 +239,19 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         counter = 0
         while counter < 10:
             counter += 1
 
             # Create a pool
-            self.validate_pool_creation(hostlist_servers)
+            self.validate_pool_creation(hostlist_servers, scm_mount)
 
             # Attempt to destroy the pool
             self.validate_pool_destroy(
                 hostlist_servers,
-                "with multiple servers - pass {}".format(counter),
-                self.server_managers[0].get_config_value("scm_mount"))
+                "with multiple servers - pass {}".format(counter), scm_mount)
 
     def test_destroy_invalid_uuid(self):
         """Test destroying a pool uuid that doesn't exist.
@@ -264,8 +267,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(setname, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create a pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Change the pool uuid
         valid_uuid = self.pool.uuid
@@ -277,9 +282,8 @@ class DestroyTests(TestWithServers):
         self.validate_pool_destroy(
             hosts=hostlist_servers,
             case="with an invalid UUID {}".format(
-                self.pool.pool.get_uuid_str()),
-            scm_mount=self.server_managers[0].get_config_value("scm_mount"),
-            exception_expected=True, valid_uuid=valid_uuid)
+                self.pool.pool.get_uuid_str()), scm_mount=scm_mount,
+                exception_expected=True, valid_uuid=valid_uuid)
 
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
@@ -300,8 +304,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(setname, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create a pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Change the pool label
         valid_label = self.pool.label.value
@@ -311,8 +317,7 @@ class DestroyTests(TestWithServers):
         # Attempt to destroy the pool with an invalid label
         self.validate_pool_destroy(
             hosts=hostlist_servers,
-            case="with an invalid label {}".format(valid_label),
-            scm_mount=self.server_managers[0].get_config_value("scm_mount"),
+            case="with an invalid label {}".format(valid_label), scm_mount=scm_mount,
             exception_expected=True)
 
         # Restore the valid label to allow tearDown() to pass
@@ -438,8 +443,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create the pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Connect to the pool
         self.assertTrue(
@@ -466,7 +473,7 @@ class DestroyTests(TestWithServers):
 
         self.log.info("Check if files still exist")
         self.assertTrue(
-            self.pool.check_files(hostlist_servers),
+            self.pool.check_files(hostlist_servers, scm_mount),
             "Pool UUID {} should not be removed when connected".format(self.pool.uuid))
 
         self.assertTrue(
@@ -488,8 +495,10 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create the pool
-        self.validate_pool_creation(hostlist_servers)
+        self.validate_pool_creation(hostlist_servers, scm_mount)
 
         # Connect to the pool
         self.assertTrue(
@@ -529,6 +538,8 @@ class DestroyTests(TestWithServers):
         # Start servers
         self.start_servers(self.get_group(self.server_group, hostlist_servers))
 
+        scm_mount = self.server_managers[0].get_config_value("scm_mount")
+
         # Create the pool
         self.add_pool()
 
@@ -552,7 +563,7 @@ class DestroyTests(TestWithServers):
 
         self.log.info("Check if files still exist")
         self.assertTrue(
-            self.pool.check_files(hostlist_servers),
+            self.pool.check_files(hostlist_servers, scm_mount),
             "Pool UUID {} should not be removed when containers exist".format(self.pool.uuid))
 
         self.assertTrue(
