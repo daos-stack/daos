@@ -724,7 +724,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	if (info->si_stop)
 		goto out;
 
-	/* Use cached space presure info */
+	/* Use cached space pressure info */
 	if ((spi->spi_space_ts + SCHED_SPACE_AGE_MAX) > info->si_cur_ts)
 		goto out;
 

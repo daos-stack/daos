@@ -52,6 +52,7 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1
@@ -66,6 +67,7 @@ server_config:
       env_vars:
         - DD_MASK=mgmt,io,md,epc,rebuild,any
         - D_LOG_FILE_APPEND_PID=1
+        - D_LOG_FILE_APPEND_RANK=1
         - D_LOG_FLUSH=DEBUG
         - FI_LOG_LEVEL=warn
         - D_LOG_STDERR_IN_LOG=1

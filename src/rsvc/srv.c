@@ -1398,7 +1398,7 @@ ds_rsvc_start_aggregator(crt_rpc_t *source, crt_rpc_t *result, void *priv)
  *
  * XXX excluded and ranks are a bit duplicate here, since this function only
  * suppose to send RPC to @ranks list, but cart does not have such interface
- * for collective RPC, so we have to use both ranks and exclued for the moment,
+ * for collective RPC, so we have to use both ranks and excluded for the moment,
  * and it should be simplified once cart can provide rank list collective RPC.
  *
  * \param[in]	class		replicated service class
@@ -1515,7 +1515,7 @@ ds_rsvc_get_md_cap(void)
 	v = getenv(DAOS_MD_CAP_ENV); /* in MB */
 	if (v == NULL)
 		return size_default;
-	n = atoi(v);    /* FIXME DAOS-9846 */
+	n = atoi(v);
 	if (n < size_default >> 20) {
 		D_ERROR("metadata capacity too low; using %zu MB\n",
 			size_default >> 20);

@@ -177,6 +177,17 @@ struct ds_pool_child {
 	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
+struct svc_op_key {
+	uint64_t mdk_client_time;
+	uuid_t   mdk_client_id;
+	/* TODO: add a (cart) opcode to the key? */
+};
+
+struct svc_op_val {
+	int  mdv_rc;
+	char mdv_resvd[62];
+};
+
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
 struct ds_pool_child *ds_pool_child_get(struct ds_pool_child *child);
 void ds_pool_child_put(struct ds_pool_child *child);
@@ -299,7 +310,7 @@ int ds_pool_target_status_check(struct ds_pool *pool, uint32_t id,
 int ds_pool_mark_connectable(struct ds_pool_svc *ds_svc);
 int ds_pool_svc_load_map(struct ds_pool_svc *ds_svc, struct pool_map **map);
 int ds_pool_svc_flush_map(struct ds_pool_svc *ds_svc, struct pool_map *map);
-void ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
+int ds_pool_svc_schedule_reconf(struct ds_pool_svc *svc);
 int ds_pool_svc_update_label(struct ds_pool_svc *ds_svc, const char *label);
 int ds_pool_svc_evict_all(struct ds_pool_svc *ds_svc);
 struct ds_pool *ds_pool_svc2pool(struct ds_pool_svc *ds_svc);

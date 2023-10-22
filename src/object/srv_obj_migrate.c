@@ -1364,22 +1364,38 @@ migrate_fetch_update_bulk(struct migrate_one *mrone, daos_handle_t oh,
 	/* For EC object, if the migration include both extent from parity rebuild
 	 * and extent from replicate rebuild, let rebuild the extent with parity first,
 	 * then extent from replication.
-	 *
-	 * Since the parity shard epoch should be higher or equal to the data shard epoch,
-	 * so let's use the minimum epochs of all parity shards as the update epoch of
-	 * this data shard.
 	 */
-
 	for (i = 0; i < mrone->mo_iods_num_from_parity; i++) {
 		for (j = 0; j < mrone->mo_iods_from_parity[i].iod_nr; j++) {
 			daos_iod_t iod = mrone->mo_iods_from_parity[i];
+			daos_epoch_t fetch_eph;
 
 			iod.iod_nr = 1;
 			iod.iod_recxs = &mrone->mo_iods_from_parity[i].iod_recxs[j];
-			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1,
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
-							 mrone->mo_iods_update_ephs_from_parity[i][j],
-							 DIOF_EC_RECOV_FROM_PARITY, ds_cont);
+
+			/* If the epoch is higher than EC aggregate boundary, then
+			 * it should use stable epoch to fetch the data, since
+			 * the data could be aggregated independently on parity
+			 * and data shard, so using stable epoch could make sure
+			 * the consistency view during rebuild. And also EC aggregation
+			 * should already aggregate the parity, so there should not
+			 * be any partial update on the parity as well.
+			 *
+			 * Otherwise there might be partial update on this rebuilding
+			 * shard, so let's use the epoch from the parity shard to fetch
+			 * the data here, which will make sure partial update will not
+			 * be fetched here. And also EC aggregation is being disabled
+			 * at the moment, so there should not be any vos aggregation
+			 * impact this process as well.
+			 */
+			if (ds_cont->sc_ec_agg_eph_boundary >
+			    mrone->mo_iods_update_ephs_from_parity[i][j])
+				fetch_eph = mrone->mo_epoch;
+			else
+				fetch_eph = mrone->mo_iods_update_ephs_from_parity[i][j];
+			rc = __migrate_fetch_update_bulk(mrone, oh, &iod, 1, fetch_eph,
+						mrone->mo_iods_update_ephs_from_parity[i][j],
+						DIOF_EC_RECOV_FROM_PARITY, ds_cont);
 			if (rc != 0)
 				D_GOTO(out, rc);
 		}

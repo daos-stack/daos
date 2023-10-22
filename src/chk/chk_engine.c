@@ -1230,7 +1230,7 @@ chk_engine_cont_set_label(struct chk_pool_rec *cpr, struct chk_cont_rec *ccr, st
 	struct chk_bookmark		*cbk = &cpr->cpr_bk;
 	daos_prop_t			*prop_tmp = NULL;
 	struct chk_report_unit		 cru = { 0 };
-	char				*strs[3];
+	char				 strs[3][CHK_MSG_BUFLEN];
 	d_iov_t				 iovs[3];
 	d_sg_list_t			 sgl;
 	d_sg_list_t			*details = NULL;
@@ -1343,12 +1343,18 @@ interact:
 		act = CHK__CHECK_INCONSIST_ACTION__CIA_INTERACT;
 
 		options[1] = CHK__CHECK_INCONSIST_ACTION__CIA_IGNORE;
-		strs[1] = "Keep the inconsistent container label, repair nothing.";
+		snprintf(strs[1], CHK_MSG_BUFLEN - 1,
+			 "Keep the inconsistent container label: %s (CS) vs %s (property), "
+			 "repair nothing.", daos_iov_empty(&ccr->ccr_label_cs) ? "(null)" :
+			 (char *)ccr->ccr_label_cs.iov_buf, ccr->ccr_label_prop != NULL ?
+			 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)");
 		d_iov_set(&iovs[1], strs[1], strlen(strs[1]));
 
 		if (rc > 0) {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_PS;
-			strs[0] = "Trust the container label in container service [suggested].";
+			snprintf(strs[0], CHK_MSG_BUFLEN - 1,
+				 "Trust the container label %s in container service [suggested].",
+				 (char *)ccr->ccr_label_cs.iov_buf);
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 
 			if (chk_engine_cont_target_label_empty(ccr)) {
@@ -1356,14 +1362,19 @@ interact:
 				sgl.sg_nr = 2;
 			} else {
 				options[2] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-				strs[2] = "Trust the container label in container property.";
+				snprintf(strs[2], CHK_MSG_BUFLEN - 1,
+					 "Trust the container label %s in container property.",
+					 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str);
 				d_iov_set(&iovs[2], strs[2], strlen(strs[2]));
 				option_nr = 3;
 				sgl.sg_nr = 3;
 			}
 		} else {
 			options[0] = CHK__CHECK_INCONSIST_ACTION__CIA_TRUST_TARGET;
-			strs[0] = "Trust the container label in container property [suggested].";
+			snprintf(strs[0], CHK_MSG_BUFLEN - 1,
+				 "Trust the container label %s in container property [suggested].",
+				 ccr->ccr_label_prop != NULL ?
+				 (char *)ccr->ccr_label_prop->dpp_entries[0].dpe_str : "(null)");
 			d_iov_set(&iovs[0], strs[0], strlen(strs[0]));
 
 			D_ASSERT(chk_engine_cont_cs_label_empty(ccr));
@@ -1773,7 +1784,7 @@ cont:
 	if (rc != 0)
 		goto out;
 
-	ds_pool_svc_schedule_reconf(svc);
+	rc = ds_pool_svc_schedule_reconf(svc);
 
 out:
 	chk_engine_cont_list_fini(&aggregator);
