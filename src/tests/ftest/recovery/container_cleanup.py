@@ -56,10 +56,10 @@ class ContainerCleanupTest(RecoveryTestBase):
         try:
             _ = daos_command.container_get_prop(
                 pool=pool.identifier, cont=container.identifier)
-        except CommandFailure as error:
+        except CommandFailure:
             access_failed = True
         if not access_failed:
-            self.fail("Label inconsisntency fault wasn't injected property!")
+            self.fail("Label inconsistency fault wasn't injected property!")
 
         # 4. Show that PS has the original label by using new-label.
         cont_prop = daos_command.container_get_prop(
