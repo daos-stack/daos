@@ -26,6 +26,15 @@ static unsigned int req_weights[SCHED_REQ_MAX] = {
 	2,	/* SCHED_REQ_MIGRATE */
 };
 
+/* CPU time(us) for each type of ULTS.*/
+static unsigned int req_latencys[SCHED_REQ_MAX] = {
+	10,	/* SCHED_REQ_UPDATE */
+	5,	/* SCHED_REQ_FETCH */
+	20,	/* SCHED_REQ_GC */
+	15,	/* SCHED_REQ_SCRUB */
+	10,	/* SCHED_REQ_MIGRATE */
+};
+
 struct stats_cycle {
 	/* Kicked off weights in a schedule cycle */
 	uint64_t	sc_kicked_wts[SCHED_REQ_MAX];
@@ -147,6 +156,7 @@ struct sched_request {
 	 * When request is not used, it's in 'sched_info->si_idle_list'.
 	 */
 	d_list_t		 sr_link;
+	struct d_binheap_node	 sr_node;
 	struct sched_req_attr	 sr_attr;
 	void			*sr_func;
 	void			*sr_arg;
@@ -158,7 +168,9 @@ struct sched_request {
 	uint64_t		 sr_enqueue_ts;
 	unsigned int		 sr_abort:1,
 				 /* sr_ult is sched_request-owned */
-				 sr_owned:1;
+				 sr_owned:1,
+				 /* request is in heap */
+				 sr_in_heap:1;
 };
 
 bool		sched_prio_disabled;
@@ -195,24 +207,6 @@ static int	sched_policy;
  * should be longer than the DAOS_AGG_THRESHOLD.
  */
 #define SCHED_DELAY_THRESH	40000	/* msecs */
-
-/* Maximum milli-seconds a ULT can be delayed */
-static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
-	12000,	/* SCHED_REQ_UPDATE */
-	2000,	/* SCHED_REQ_FETCH */
-	20000,	/* SCHED_REQ_GC */
-	20000,	/* SCHED_REQ_SCRUB */
-	12000,	/* SCHED_REQ_MIGRATE */
-};
-
-/* Maximum QD for different type of ULTs */
-static unsigned int max_qds[SCHED_REQ_MAX] = {
-	64000,	/* SCHED_REQ_UPDATE */
-	32000,	/* SCHED_REQ_FETCH */
-	1024,	/* SCHED_REQ_GC */
-	1024,	/* SCHED_REQ_SCRUB */
-	64000,	/* SCHED_REQ_MIGRATE */
-};
 
 struct pressure_ratio {
 	unsigned int	pr_free;	/* free space ratio */
@@ -446,8 +440,12 @@ sched_info_fini(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
+	int			 i;
 
-	D_ASSERT(info->si_req_cnt == 0);
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		D_ASSERT(info->si_req_cnt[i] == 0);
+
+	D_ASSERT(info->si_total_req_cnt == 0);
 	D_ASSERT(d_list_empty(&info->si_sleep_list));
 	D_ASSERT(d_list_empty(&info->si_fifo_list));
 
@@ -457,9 +455,11 @@ sched_info_fini(struct dss_xstream *dx)
 		d_hash_table_destroy(info->si_pool_hash, true);
 		info->si_pool_hash = NULL;
 	}
+	d_binheap_destroy_inplace(&info->si_heap);
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_idle_list,
 				   sr_link) {
+		D_ASSERT(req->sr_in_heap == 0);
 		d_list_del_init(&req->sr_link);
 		D_FREE(req);
 	}
@@ -530,6 +530,52 @@ sched_metrics_init(struct dss_xstream *dx)
 }
 
 static int
+rpc_heap_node_enter(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct sched_request *sr;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	sr = container_of(e, struct sched_request, sr_node);
+	sr->sr_in_heap = 1;
+
+	return 0;
+}
+
+static int
+rpc_heap_node_exit(struct d_binheap *h, struct d_binheap_node *e)
+{
+	struct sched_request *sr;
+
+	D_ASSERT(h != NULL);
+	D_ASSERT(e != NULL);
+
+	sr = container_of(e, struct sched_request, sr_node);
+	sr->sr_in_heap = 0;
+
+	return 0;
+}
+
+static bool
+rpc_heap_node_cmp(struct d_binheap_node *a, struct d_binheap_node *b)
+{
+	struct sched_request *nodea, *nodeb;
+
+	nodea = container_of(a, struct sched_request, sr_node);
+	nodeb = container_of(b, struct sched_request, sr_node);
+
+	/* Min heap, the min enqueue id is heap root */
+	return nodea->sr_attr.sra_enqueue_id < nodeb->sr_attr.sra_enqueue_id;
+}
+
+static struct d_binheap_ops rpc_heap_ops = {
+	.hop_enter	= rpc_heap_node_enter,
+	.hop_exit	= rpc_heap_node_exit,
+	.hop_compare	= rpc_heap_node_cmp,
+};
+
+static int
 sched_info_init(struct dss_xstream *dx)
 {
 	struct sched_info *info = &dx->dx_sched_info;
@@ -538,11 +584,12 @@ sched_info_init(struct dss_xstream *dx)
 
 	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_cur_seq = 0;
+	info->si_cur_id = 0;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
 	D_INIT_LIST_HEAD(&info->si_purge_list);
-	info->si_req_cnt = 0;
+	info->si_total_req_cnt = 0;
 	info->si_sleep_cnt = 0;
 	info->si_wait_cnt = 0;
 	info->si_stop = 0;
@@ -559,7 +606,15 @@ sched_info_init(struct dss_xstream *dx)
 	if (D_ON_VALGRIND)
 		count = 16;
 
+	rc = d_binheap_create_inplace(DBH_FT_NOLOCK, 0, NULL, &rpc_heap_ops, &info->si_heap);
+	if (rc != 0) {
+		D_ERROR("Failed to create binheap. "DF_RC"\n", DP_RC(-DER_NOMEM));
+		goto out;
+	}
+
 	rc = prealloc_requests(info, count);
+
+out:
 	if (rc)
 		sched_info_fini(dx);
 
@@ -585,9 +640,9 @@ cur_pool_info(struct sched_info *info, uuid_t pool_uuid)
 	}
 
 	D_ALLOC_PTR(spi);
-	if (spi == NULL) {
+	if (spi == NULL)
 		return NULL;
-	}
+
 	D_INIT_LIST_HEAD(&spi->spi_hash_link);
 	uuid_copy(spi->spi_pool_id, pool_uuid);
 
@@ -698,11 +753,17 @@ req_kickoff(struct dss_xstream *dx, struct sched_request *req)
 	sri->sri_req_cnt--;
 	D_ASSERT(spi->spi_req_cnt > 0);
 	spi->spi_req_cnt--;
-	D_ASSERT(info->si_req_cnt > 0);
-	info->si_req_cnt--;
+	D_ASSERT(info->si_total_req_cnt > 0);
+	info->si_total_req_cnt--;
+	D_ASSERT(info->si_req_cnt[req->sr_attr.sra_type] > 0);
+	info->si_req_cnt[req->sr_attr.sra_type]--;
 	sw_cycle_update(&spi->spi_stats_window, req->sr_attr.sra_type);
 
-	d_list_del_init(&req->sr_link);
+	if (req->sr_in_heap)
+		d_binheap_remove(&info->si_heap, &req->sr_node);
+	else
+		d_list_del_init(&req->sr_link);
+
 	req_put(dx, req);
 
 	return rc;
@@ -785,7 +846,8 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_info	*sri;
 	unsigned int		 req_type = req->sr_attr.sra_type;
-	unsigned int		 delay_msecs;
+	int			 i;
+	uint64_t		 ult_timeout = 0;
 
 	D_ASSERT(spi != NULL);
 	D_ASSERT(req_type < SCHED_REQ_MAX);
@@ -802,24 +864,20 @@ process_req(struct dss_xstream *dx, struct sched_request *req)
 	if (req->sr_attr.sra_flags & SCHED_REQ_FL_NO_DELAY)
 		goto kickoff;
 
-	if (req_type == SCHED_REQ_UPDATE) {
-		struct pressure_ratio *pr;
-
-		pr = &pressure_gauge[spi->spi_space_pressure];
-		delay_msecs = pr->pr_delay;
-	} else {
-		delay_msecs = max_delay_msecs[req_type];
-	}
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+		ult_timeout += info->si_kicked_req_cnt[i] * req_latencys[i];
+	ult_timeout /= 1000;
 
 	/* Request expired */
-	D_ASSERT(info->si_cur_ts >= req->sr_enqueue_ts);
-	if ((info->si_cur_ts - req->sr_enqueue_ts) > delay_msecs)
+	if ((info->si_cur_ts - req->sr_enqueue_ts + ult_timeout) >
+	    (req->sr_attr.sra_timeout * 2 / 3))
 		goto kickoff;
 
 	/* Remaining requests are not expired */
 	return 1;
 kickoff:
 	sri->sri_req_kicked++;
+	info->si_kicked_req_cnt[req_type]++;
 	req_kickoff(dx, req);
 	return 0;
 }
@@ -831,6 +889,7 @@ process_req_list(struct dss_xstream *dx, d_list_t *list, bool stop_early)
 	int			 rc;
 
 	d_list_for_each_entry_safe(req, tmp, list, sr_link) {
+		D_ASSERT(req->sr_in_heap == 0);
 		rc = process_req(dx, req);
 		if (rc && stop_early)
 			break;
@@ -844,11 +903,6 @@ set_req_limit(struct dss_xstream *dx, struct sched_pool_info *spi,
 	unsigned int	tot = pool2req_cnt(spi, req_type);
 
 	D_ASSERT(limit <= tot);
-	if (tot - limit > max_qds[req_type]) {
-		D_CRIT("Too large QD: %u/%u/%u for req:%d\n",
-		       tot, max_qds[req_type], limit, req_type);
-		limit = tot - max_qds[req_type];
-	}
 	spi->spi_req_array[req_type].sri_req_limit = limit;
 	spi->spi_req_array[req_type].sri_req_kicked = 0;
 }
@@ -1042,6 +1096,22 @@ throttle_sys(struct stats_window *sw, uint32_t *kick, struct pressure_ratio *pr)
 		apportion_wts(avail_wts, kick, SCHED_REQ_SCRUB);
 }
 
+/*
+ * Current default ult stack size is 16kib, limit memory size
+ * of per target up to 100MiB for RPC processing.
+ */
+#define DEFAULT_STACKSIZE	16384
+#define MAX_KICKED_REQ_CNT	((100 << 20) / 16384)
+
+static bool
+is_system_req(int req_type)
+{
+	if (req_type == SCHED_REQ_UPDATE || req_type == SCHED_REQ_FETCH)
+		return false;
+
+	return true;
+}
+
 static int
 process_pool_cb(d_list_t *rlink, void *arg)
 {
@@ -1051,6 +1121,8 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	uint32_t		 kick[SCHED_REQ_MAX];
 	struct pressure_ratio	*pr;
 	int			 press, i;
+	uint64_t		 tmp;
+	uint32_t		 rpc_cnt = 0;
 
 	spi = sched_rlink2spi(rlink);
 
@@ -1061,8 +1133,18 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	if (spi->spi_req_cnt == 0)
 		return 0;
 
-	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 		kick[i] = pool2req_cnt(spi, i);
+		if (!is_system_req(i))
+			rpc_cnt += kick[i];
+	}
+
+	if (rpc_cnt > MAX_KICKED_REQ_CNT) {
+		for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+			tmp = kick[i] * MAX_KICKED_REQ_CNT / info->si_total_req_cnt;
+			kick[i] = tmp;
+		}
+	}
 
 	pr = &pressure_gauge[press];
 
@@ -1071,8 +1153,10 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	else
 		throttle_io(info, spi, &kick[SCHED_REQ_UPDATE], pr);
 
-	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++)
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
 		set_req_limit(dx, spi, i, kick[i]);
+		info->si_kicked_req_cnt[i] = 0;
+	}
 
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_GC), true);
 	process_req_list(dx, pool2req_list(spi, SCHED_REQ_SCRUB), true);
@@ -1081,25 +1165,80 @@ process_pool_cb(d_list_t *rlink, void *arg)
 	return 0;
 }
 
-static void
+static int
 policy_fifo_enqueue(struct dss_xstream *dx, struct sched_request *req,
 		    void *prio_data)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_req_attr	*attr = &req->sr_attr;
+
+	D_ASSERT(attr->sra_type < SCHED_REQ_TYPE_MAX);
+	/*
+	 * If @sra_enqueue_id is not zero, this is a resent RPC, it will
+	 * be inserted to sorted heap instead of fifo list.
+	 */
+	if (attr->sra_enqueue_id)
+		return d_binheap_insert(&info->si_heap, &req->sr_node);
 
 	d_list_add_tail(&req->sr_link, &info->si_fifo_list);
+
+	return 0;
 }
 
 static void
 policy_fifo_process(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
+	struct sched_request	*req, *tmp, *req1;
+	struct d_binheap_node	*node;
+	d_list_t                 tmp_list;
+	int			 rc;
 
-	process_req_list(dx, &info->si_fifo_list, false);
+	D_INIT_LIST_HEAD(&tmp_list);
+	/*
+	 * All retried RPCs are inserted into a sorted heap, they are sorted
+	 * by RPC enqueue sequence ID in the server side(firstly enqueue time). So
+	 * retried RPCs won't starve forever.
+	 */
+	d_list_for_each_entry_safe(req, tmp, &info->si_fifo_list, sr_link) {
+		while (!d_binheap_is_empty(&info->si_heap)) {
+			node = d_binheap_root(&info->si_heap);
+			req1 = container_of(node, struct sched_request, sr_node);
+			if (req1->sr_attr.sra_enqueue_id < req->sr_attr.sra_enqueue_id) {
+				rc = process_req(dx, req1);
+				if (rc > 0) {
+					d_binheap_remove(&info->si_heap, &req1->sr_node);
+					d_list_add_tail(&req->sr_link, &tmp_list);
+				}
+			} else {
+				break;
+			}
+		}
+		process_req(dx, req);
+	}
+
+	/* Process retried RPCs if any */
+	while (!d_binheap_is_empty(&info->si_heap)) {
+		node = d_binheap_root(&info->si_heap);
+		req1 = container_of(node, struct sched_request, sr_node);
+		rc = process_req(dx, req1);
+		if (rc > 0) {
+			d_binheap_remove(&info->si_heap, &req1->sr_node);
+			d_list_add_tail(&req->sr_link, &tmp_list);
+		}
+	}
+
+	/*
+	 * Insert skipped retried RPCs back to heap.
+	 */
+	d_list_for_each_entry_safe(req, tmp, &tmp_list, sr_link) {
+		d_binheap_insert(&info->si_heap, &req->sr_node);
+		d_list_del_init(&req->sr_link);
+	}
 }
 
 struct sched_policy_ops {
-	void (*enqueue_io)(struct dss_xstream *dx, struct sched_request *req,
+	int (*enqueue_io)(struct dss_xstream *dx, struct sched_request *req,
 			   void *prio_data);
 	void (*process_io)(struct dss_xstream *dx);
 };
@@ -1150,30 +1289,76 @@ should_enqueue_req(struct dss_xstream *dx, struct sched_req_attr *attr)
 	return dx->dx_main_xs;
 }
 
-static void
+static int
 req_enqueue(struct dss_xstream *dx, struct sched_request *req)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_pool_info	*spi = req->sr_pool_info;
 	struct sched_req_attr	*attr = &req->sr_attr;
 	struct sched_req_info	*sri;
+	int			 rc = 0;
 
 	D_ASSERT(spi != NULL);
+	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	sri = &spi->spi_req_array[attr->sra_type];
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(d_list_empty(&req->sr_link));
 	if (attr->sra_type == SCHED_REQ_UPDATE ||
 	    attr->sra_type == SCHED_REQ_FETCH) {
 		D_ASSERT(policy_ops[sched_policy].enqueue_io != NULL);
-		policy_ops[sched_policy].enqueue_io(dx, req, NULL);
+		rc = policy_ops[sched_policy].enqueue_io(dx, req, NULL);
 	} else {
 		d_list_add_tail(&req->sr_link, &sri->sri_req_list);
 	}
 	req->sr_enqueue_ts = info->si_cur_ts;
+	/* Hint is RPC enqueue id */
+	if (attr->sra_enqueue_id == 0)
+		attr->sra_enqueue_id = info->si_cur_ts;
 
 	sri->sri_req_cnt++;
 	spi->spi_req_cnt++;
-	info->si_req_cnt++;
+	info->si_total_req_cnt++;
+	info->si_req_cnt[attr->sra_type]++;
+
+	return rc;
+}
+
+#define MAX_SCHED_REQ_NUM	(2 << 20)
+
+static bool
+req_need_reject(struct sched_req_attr *attr, struct sched_info *info)
+{
+	uint64_t	estimated_time = 0;
+	uint64_t	req_num = 0;
+	int		i;
+
+	/* Old clients RPC won't be rejected */
+	if (attr->sra_flags & SCHED_REQ_FL_NO_REJECT)
+		return false;
+
+	/*
+	 * Calculate time based on ults on argobots and non-system
+	 * requests queued. It is not easy to estimate how many system
+	 * ults will be executed, reserve 50% of timeout for it.
+	 */
+	for (i = SCHED_REQ_UPDATE; i < SCHED_REQ_MAX; i++) {
+		estimated_time += info->si_kicked_req_cnt[i] * req_latencys[i];
+		req_num += info->si_kicked_req_cnt[i];
+		if (!is_system_req(i)) {
+			estimated_time += info->si_req_cnt[i] * req_latencys[i];
+			req_num += info->si_req_cnt[i];
+		}
+	}
+	/* convert to msecs */
+	estimated_time /= 1000;
+	if ((estimated_time << 1) > attr->sra_timeout)
+		return true;
+
+	if ((req_num << 1) > MAX_SCHED_REQ_NUM)
+		return true;
+
+	return false;
 }
 
 int
@@ -1181,36 +1366,44 @@ sched_req_enqueue(struct dss_xstream *dx, struct sched_req_attr *attr,
 		  void (*func)(void *), void *arg)
 {
 	struct sched_request	*req;
+	struct sched_info	*info = &dx->dx_sched_info;
 
 	if (!should_enqueue_req(dx, attr))
 		return req_kickoff_internal(dx, attr, func, arg);
 
+	info->si_cur_id++;
+	if (attr->sra_enqueue_id == 0)
+		attr->sra_enqueue_id = info->si_cur_id;
+
 	/*
-	 * TODO: A RPC flow control mechanism could be introduced to avoid RPC timeout when the
+	 * A RPC flow control mechanism is introduced to avoid RPC timeout when the
 	 * server is congested:
 	 *
 	 * Estimate how long it would take to process the incoming request based on the server
-	 * resource availability (request queue length, space pressure, DMA buffer usage, etc)
-	 * and the average per request processing time, then compare the estimated time with the
-	 * RPC timeout to see if the request should be early replied with hint data for retry.
+	 * request queue length and the average per request processing time, then compare the
+	 * estimated time with the RPC timeout to see if the request should be early replied
+	 * with hint data for retry.
 	 *
 	 * That requires wire format and client changes.
 	 */
+	if (req_need_reject(attr, info))
+		return -DER_OVERLOAD_RETRY;
+
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
 	req = req_get(dx, attr, func, arg, ABT_THREAD_NULL, false);
 	if (req == NULL) {
 		D_ERROR("Get req failed.\n");
 		return -DER_NOMEM;
 	}
-	req_enqueue(dx, req);
 
-	return 0;
+	return req_enqueue(dx, req);
 }
 
 void
 sched_req_yield(struct sched_request *req)
 {
 	struct dss_xstream	*dx = dss_current_xstream();
+	int			 rc;
 
 	D_ASSERT(req != NULL);
 	if (!should_enqueue_req(dx, &req->sr_attr)) {
@@ -1219,7 +1412,8 @@ sched_req_yield(struct sched_request *req)
 	}
 
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-	req_enqueue(dx, req);
+	rc = req_enqueue(dx, req);
+	D_ASSERT(rc == 0);
 
 	ABT_self_suspend();
 }
@@ -1265,6 +1459,7 @@ sched_req_sleep(struct sched_request *req, uint32_t msecs)
 	D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
 	req->sr_wakeup_time = info->si_cur_ts + msecs;
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(d_list_empty(&req->sr_link));
 	/* Sleep list is sorted in wakeup time ascending order */
 	d_list_for_each_entry_reverse(tmp, &info->si_sleep_list, sr_link) {
@@ -1289,6 +1484,7 @@ req_wakeup_internal(struct dss_xstream *dx, struct sched_request *req)
 	if (req->sr_wakeup_time == 0)
 		return;
 
+	D_ASSERT(req->sr_in_heap == 0);
 	D_ASSERT(!d_list_empty(&req->sr_link));
 	d_list_del_init(&req->sr_link);
 	req->sr_wakeup_time = 0;
@@ -1343,6 +1539,7 @@ wakeup_all(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct sched_request	*req, *tmp;
+	int			 rc;
 
 	d_list_for_each_entry_safe(req, tmp, &info->si_sleep_list, sr_link) {
 		D_ASSERT(req->sr_wakeup_time > 0);
@@ -1356,7 +1553,8 @@ wakeup_all(struct dss_xstream *dx)
 			req->sr_wakeup_time = 0;
 			sleep_counting(dx, req, -1);
 			D_ASSERT(req->sr_ult != ABT_THREAD_NULL);
-			req_enqueue(dx, req);
+			rc = req_enqueue(dx, req);
+			D_ASSERT(rc == 0);
 		}
 	}
 }
@@ -1754,7 +1952,7 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 		return;
 
 	/* There are queued requests to be processed */
-	if (info->si_req_cnt != 0)
+	if (info->si_total_req_cnt != 0)
 		return;
 
 	ret = ABT_pool_get_total_size(pools[DSS_POOL_GENERIC], &blocked);
@@ -1866,7 +2064,7 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 		sched_try_relax(dx, pools, cycle->sc_ults_tot);
 
 	d_tm_inc_counter(info->si_stats.ss_total_time, duration);
-	d_tm_set_gauge(info->si_stats.ss_wq_len, info->si_req_cnt);
+	d_tm_set_gauge(info->si_stats.ss_wq_len, info->si_total_req_cnt);
 	d_tm_set_gauge(info->si_stats.ss_sq_len, info->si_sleep_cnt);
 	if (cycle->sc_ults_tot) {
 		d_tm_set_gauge(info->si_stats.ss_cycle_duration, duration);

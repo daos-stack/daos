@@ -92,6 +92,24 @@ enum daos_rpc_type {
 	DAOS_REQ_TGT,
 };
 
+struct daos_req_comm_in {
+	uuid_t		req_in_pool_id;
+	uuid_t          req_in_cont_id;
+	uint32_t	req_in_uid;
+	uint32_t	req_in_gid;
+	uint32_t	req_in_projid;
+	uint64_t	req_in_enqueue_id;
+	uint64_t	req_in_paddings[4];
+	d_string_t	req_in_addr;
+	d_string_t	req_in_jobid;
+};
+
+struct daos_req_comm_out {
+	uint64_t	req_out_enqueue_id;
+	uint64_t	req_out_paddings[4];
+};
+
+
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
 #define DAOS_TGT0_OFFSET		(2)
 /** The cart context index of target index */
@@ -212,5 +230,16 @@ daos_rpc_from_client(crt_rpc_t *rpc)
 
 int
 daos_rpc_proto_query(crt_opcode_t base_opc, uint32_t *ver_array, int count, int *ret_ver);
+
+static inline uint32_t
+daos_rpc_rand_delay(uint32_t max_delay)
+{
+	if (max_delay == 0)
+		return 0;
+	if (max_delay > 5)
+		max_delay -= 5;
+
+	return (d_rand() % max_delay) + 1;
+}
 
 #endif /* __DRPC_API_H__ */
