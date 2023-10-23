@@ -1361,16 +1361,21 @@ crt_context_req_untrack_internal(struct crt_rpc_priv *rpc_priv)
 }
 
 static void
-dispatch_rpc(struct crt_rpc_priv *rpc) {
+dispatch_rpc(struct crt_rpc_priv *rpc, bool get_quota) {
 	int rc;
 
 	if (rpc == NULL)
 		return;
 
-	/* No need to worry about rc here, we just released quota earlier */
-	rc = crt_context_get_quota_resource(rpc->crp_pub.cr_ctx,
-					CRT_QUOTA_RPC_INFLIGHT);
-	D_ASSERT(rc == 0);
+	/* TODO: Decide if we need to handle true case */
+	if (get_quota) {
+		/* No need to worry about rc here, we just released quota earlier */
+		rc = crt_context_get_quota_resource(rpc->crp_pub.cr_ctx,
+						    CRT_QUOTA_RPC_INFLIGHT);
+		/* TODO: Consider if we need to requeue */
+		if (rc)
+			D_WARN("Quota query failed with rc=%d\n", rc);
+	}
 
 	crt_rpc_lock(rpc);
 
@@ -1408,10 +1413,13 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	 * Return quota resource and dispatch 1 rpc if any on waitq.
 	 * dispatch_rpc() will either acquire a quota resource or will requeue this rpc
 	 */
-	crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPC_INFLIGHT);
 	tmp_rpc = d_list_pop_entry(&crt_ctx->cc_quotas.rpc_waitq,
 				   struct crt_rpc_priv, crp_waitq_link);
-	dispatch_rpc(tmp_rpc);
+	if (tmp_rpc != NULL) {
+		dispatch_rpc(tmp_rpc, false);
+	} else {
+		crt_context_put_quota_resource(rpc_priv->crp_pub.cr_ctx, CRT_QUOTA_RPC_INFLIGHT);
+	}
 
 	crt_context_req_untrack_internal(rpc_priv);
 
@@ -1463,7 +1471,7 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* re-submit the rpc req */
 	while ((tmp_rpc = d_list_pop_entry(&submit_list, struct crt_rpc_priv, crp_tmp_link)))
-		dispatch_rpc(tmp_rpc);
+		dispatch_rpc(tmp_rpc, false);
 }
 
 /* TODO: Need per-provider call */
