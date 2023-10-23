@@ -90,7 +90,8 @@ class CmockaUtils():
             ExecutableCommand: the object setup to run the command
 
         """
-        keywords = ["Process received signal", "stack smashing detected", "End of error message"]
+        keywords = ["Process received signal", "stack smashing detected", "End of error message",
+                    "buffer overflow detected"]
         return ExecutableCommand(namespace=None, command=command, check_results=keywords)
 
     def run_cmocka_test(self, test, command):
