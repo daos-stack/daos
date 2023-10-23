@@ -179,6 +179,10 @@ def main():
         if priority is None and not pr_data['base']['ref'].startswith('release'):
             priority = rv_priority
 
+        # hack
+        if priority is None:
+            priority = 4
+
     output = []
 
     output.append(f"Ticket title is '{ticket.fields.summary}'")

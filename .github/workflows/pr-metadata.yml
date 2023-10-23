@@ -33,9 +33,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Set labels
         if: ${{ always() && steps.jira-data.outputs.label != '' }}
-        uses: actions-ecosystem/action-add-labels@v1
+        uses: actions/github-script@v6
         with:
-          labels: ${{ steps.jira-data.outputs.label }}
+          script: |
+            github.rest.issues.addLabels({
+              issue_number: context.payload.pull_request.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ${{ steps.jira-data.outputs.label }}
+            })
       - name: Clear labels
         if: ${{ always() && steps.jira-data.outputs.label-clear != '' }}
         uses: actions-ecosystem/action-remove-labels@v1
