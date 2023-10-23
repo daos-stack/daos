@@ -40,7 +40,6 @@ if [ "$BRANCH" = "origin/master" ]; then
 else
 
     # shellcheck disable=SC1091
-    . utils/githooks/find_base.sh
 
     if [ "$TARGET" = "HEAD" ]; then
         echo "  Checking against branch HEAD"
