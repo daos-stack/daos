@@ -586,11 +586,14 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %changelog
 * Mon Oct 02 2023 Tomasz Gromadzki <tomasz.gromadzki@intel.com> 2.5.100-10
-- Update to pmdk 2.0.0
+- Update to PMDK 2.0.0
   * Remove libpmemblk from dependencies.
   * Start using BUILD_EXAMPLES=n and BUILD_BENCHMARKS=n instead of patches.
   * Stop using BUILD_RPMEMM=n and NDCTL_DISABLE=y.
-  * Point https://github.com/pmem/pmdk as main PMDK reference source.
+  * Point https://github.com/pmem/pmdk as the main PMDK reference source.
+  NOTE: PMDK upgrade to 2.0.0 does not affect any API call used by DAOS.
+        libpmemobj (and libpmem) API stays unchanged.
+
 
 * Wed Aug 23 2023 Brian J. Murrell <brian.murrell@intel.com> 2.5.100-9
 - Update fuse3 requirement to R: /usr/bin/fusermount3 by path
