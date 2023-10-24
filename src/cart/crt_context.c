@@ -1984,7 +1984,7 @@ crt_context_quotas_init(crt_context_t crt_ctx)
 	quotas->limit[CRT_QUOTA_RPC_ALLOC_HARD] = 512;
 
 	/* TODO: Set based on ep credits */
-	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 32;
+	quotas->limit[CRT_QUOTA_RPC_INFLIGHT] = 64;
 
 	quotas->current[CRT_QUOTA_RPC_ALLOC_SOFT] = 0;
 	quotas->current[CRT_QUOTA_RPC_ALLOC_HARD] = 0;
@@ -2096,8 +2096,10 @@ crt_context_get_quota_resource(crt_context_t crt_ctx, crt_quota_type_t quota)
 
 	if (ctx->cc_quotas.current[quota] < ctx->cc_quotas.limit[quota])
 		ctx->cc_quotas.current[quota]++;
-	else
+	else {
+		D_WARN("Quota limit reached for quota_type=%d\n", quota);
 		rc = -DER_QUOTA_LIMIT;
+	}
 
 	D_MUTEX_UNLOCK(&ctx->cc_quotas.mutex);
 out:
