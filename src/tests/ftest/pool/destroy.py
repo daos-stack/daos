@@ -153,14 +153,14 @@ class DestroyTests(TestWithServers):
             self.log.info("Check pool data still exists after a failed pool destroy")
             self.assertTrue(
                 self.pool.check_pool_files(
-                    log=self.log, hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
+                    hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
                 "Pool data was not detected on servers after "
                 "failing to destroy a pool {}".format(case))
         else:
             self.log.info("Check pool data does not exist after the pool destroy")
             self.assertFalse(
                 self.pool.check_pool_files(
-                    log=self.log, hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
+                    hosts=hosts, uuid=valid_uuid.lower(), scm_mount=scm_mount),
                 "Pool data was detected on servers after destroying a pool {}".format(
                     case))
 
