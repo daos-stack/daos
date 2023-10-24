@@ -1014,7 +1014,7 @@ class TestPool(TestDaosApiBase):
                 otherwise
 
         """
-        return self.check_pool_files(self.log, hosts, self.uuid.lower(), scm_mount)
+        return self.check_pool_files(hosts, self.uuid.lower(), scm_mount)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -1425,11 +1425,10 @@ class TestPool(TestDaosApiBase):
         duration = time() - start
         self.log.info("%s duration: %.1f sec", operation, duration)
 
-    def check_pool_files(self, log, hosts, uuid, scm_mount):
+    def check_pool_files(self, hosts, uuid, scm_mount):
         """Check if pool files exist on the specified list of hosts.
 
         Args:
-            log (logging): logging object used to display messages
             hosts (NodeSet): list of hosts
             uuid (str): uuid file name to look for in /mnt/daos.
             scm_mount (str): SCM mount point such as "/mnt/daos". From test, it can be
@@ -1441,12 +1440,12 @@ class TestPool(TestDaosApiBase):
 
         """
         status = True
-        log.info("Checking for pool data on %s", hosts)
+        self.log.info("Checking for pool data on %s", hosts)
         pool_files = [uuid, "superblock"]
         for filename in [f"{scm_mount}/{item}" for item in pool_files]:
             result = check_file_exists(hosts, filename, sudo=True)
             if not result[0]:
-                log.error("%s: %s not found", result[1], filename)
+                self.log.error("%s: %s not found", result[1], filename)
                 status = False
         return status
 
@@ -1466,7 +1465,7 @@ class TestPool(TestDaosApiBase):
         pool_dir = f"{scm_mount}/{uuid}"
         result = check_file_exists(host, pool_dir, directory=True, sudo=True)
         if result[0]:
-            print("{} exists on {}".format(pool_dir, host))
+            self.log.info("{} exists on {}".format(pool_dir, host))
         else:
-            print("{} does not exist on {}".format(pool_dir, host))
+            self.log.info("{} does not exist on {}".format(pool_dir, host))
         return result[0]
