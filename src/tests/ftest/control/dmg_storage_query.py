@@ -38,7 +38,7 @@ class DmgStorageQuery(ControlTestBase):
             for index, tier in enumerate(engine.storage.storage_tiers):
                 if tier.storage_class.value == 'nvme':
                     bdev_tiers += 1
-                    for item, device in enumerate(tier.bdev_list.value):
+                    for item, device in enumerate(sorted(tier.bdev_list.value)):
                         bdev_info.append(
                             {'bdev': device,
                              'roles': ','.join(tier.bdev_roles.value or []),

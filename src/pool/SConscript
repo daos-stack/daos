@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('../mgmt').srcnode()])
     denv = env.Clone()
 
-    denv.require('argobots', 'protobufc')
+    denv.require('protobufc')
 
     common = denv.SharedObject(['rpc.c'])
 
@@ -19,8 +19,10 @@ def scons():
     if not prereqs.server_requested():
         return
 
+    senv = denv.Clone()
+    senv.require('argobots')
     # ds_pool: Pool Server
-    ds_pool = denv.d_library('pool',
+    ds_pool = senv.d_library('pool',
                              ['srv.c', 'srv_pool.c', 'srv_layout.c',
                               'srv_target.c', 'srv_util.c', 'srv_iv.c',
                               'srv_cli.c',
@@ -28,7 +30,7 @@ def scons():
                               'srv_metrics.c', 'srv_pool_chkpt.c',
                               'srv_pool_check.c', common],
                              install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_pool)
+    senv.Install('$PREFIX/lib64/daos_srv', ds_pool)
 
 
 if __name__ == "SCons.Script":

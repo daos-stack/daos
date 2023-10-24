@@ -267,4 +267,6 @@ int ds_cont_iterate_labels(struct cont_svc *svc, rdb_iterate_cb_t cb, void *arg)
 int ds_cont_set_label(struct cont_svc *svc, uuid_t uuid, daos_prop_t *prop_in,
 		      daos_prop_t *prop_old, bool for_svc);
 
+int ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

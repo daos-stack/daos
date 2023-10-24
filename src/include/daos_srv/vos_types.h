@@ -306,6 +306,8 @@ enum {
 	VOS_POOL_FEAT_DYN_ROOT = (1ULL << 2),
 	/** Embedded value in tree root supported */
 	VOS_POOL_FEAT_EMB_VALUE = (1ULL << 3),
+	/** Flat DKEY support enabled */
+	VOS_POOL_FEAT_FLAT_DKEY = (1ULL << 4),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -334,23 +336,25 @@ D_CASSERT((VOS_OF_PUNCH_PROPAGATE & DAOS_COND_MASK) == 0);
 /** vos definitions that match daos_obj_key_query flags */
 enum {
 	/** retrieve the max of dkey, akey, and/or idx of array value */
-	VOS_GET_MAX		= DAOS_GET_MAX,
+	VOS_GET_MAX = DAOS_GET_MAX,
 	/** retrieve the min of dkey, akey, and/or idx of array value */
-	VOS_GET_MIN		= DAOS_GET_MIN,
+	VOS_GET_MIN = DAOS_GET_MIN,
 	/** retrieve the dkey */
-	VOS_GET_DKEY		= DAOS_GET_DKEY,
+	VOS_GET_DKEY = DAOS_GET_DKEY,
 	/** retrieve the akey */
-	VOS_GET_AKEY		= DAOS_GET_AKEY,
+	VOS_GET_AKEY = DAOS_GET_AKEY,
 	/** retrieve the idx of array value */
-	VOS_GET_RECX		= DAOS_GET_RECX,
+	VOS_GET_RECX = DAOS_GET_RECX,
 	/**
 	 * Internal flag to indicate retrieve the idx of EC array value,
 	 * in that case need to retrieve both normal space and parity space
 	 * (parity space with DAOS_EC_PARITY_BIT in the recx index).
 	 */
-	VOS_GET_RECX_EC		= (1 << 5),
+	VOS_GET_RECX_EC = (1 << 5),
 	/** Internal flag to indicate timestamps are used */
-	VOS_USE_TIMESTAMPS	= (1 << 6),
+	VOS_USE_TIMESTAMPS = (1 << 6),
+	/** Internal flag to indicate dkey is flat */
+	VOS_FLAT_DKEY = (1 << 7),
 };
 
 D_CASSERT((VOS_USE_TIMESTAMPS & (VOS_GET_MAX | VOS_GET_MIN | VOS_GET_DKEY |

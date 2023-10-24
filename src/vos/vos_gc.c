@@ -64,9 +64,8 @@ struct vos_gc {
 	 * It is unused for now, but we might need it if we want to support
 	 * GC_BIO, see comments in vos_gc_type.
 	 */
-	int			(*gc_free)(struct vos_gc *gc,
-					   struct vos_pool *pool,
-					   umem_off_t addr);
+	int (*gc_free)(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
+		       struct vos_gc_item *item);
 };
 
 /**
@@ -149,8 +148,16 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 	     struct vos_gc_item *item, int *credits, bool *empty)
 {
 	struct vos_krec_df *key = umem_off2ptr(&pool->vp_umm, item->it_addr);
-	int		    creds = *credits;
+	int                 creds = *credits;
 	int		    rc;
+
+	if (key->kr_bmap & KREC_BF_NO_AKEY && gc->gc_type == GC_DKEY) {
+		/** Special case, this will defer to the free callback
+		 *  and the tree will be inserted as akey.
+		 */
+		*empty = true;
+		return 0;
+	}
 
 	if (key->kr_bmap & KREC_BF_BTR) {
 		rc = gc_drain_btr(gc, pool, coh, &key->kr_btr, credits, empty);
@@ -178,6 +185,19 @@ gc_drain_key(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 		pool->vp_gc_stat.gs_singvs += creds;
 	else
 		pool->vp_gc_stat.gs_recxs += creds;
+	return 0;
+}
+
+static int
+gc_free_dkey(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
+{
+	struct vos_krec_df *krec = umem_off2ptr(&pool->vp_umm, item->it_addr);
+
+	D_ASSERT(krec->kr_bmap & KREC_BF_DKEY);
+	if (krec->kr_bmap & KREC_BF_NO_AKEY)
+		gc_add_item(pool, coh, GC_AKEY, item->it_addr, item->it_args);
+	else
+		umem_free(&pool->vp_umm, item->it_addr);
 	return 0;
 }
 
@@ -283,52 +303,51 @@ gc_drain_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh,
 }
 
 static int
-gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, umem_off_t addr)
+gc_free_cont(struct vos_gc *gc, struct vos_pool *pool, daos_handle_t coh, struct vos_gc_item *item)
 {
 	int	rc;
 
-	rc = vos_dtx_table_destroy(&pool->vp_umm,
-				   umem_off2ptr(&pool->vp_umm, addr));
+	rc = vos_dtx_table_destroy(&pool->vp_umm, umem_off2ptr(&pool->vp_umm, item->it_addr));
 	if (rc == 0)
-		rc = umem_free(&pool->vp_umm, addr);
+		rc = umem_free(&pool->vp_umm, item->it_addr);
 
 	return rc;
 }
 
-static struct vos_gc	gc_table[] = {
-	{
-		.gc_name		= "akey",
-		.gc_type		= GC_AKEY,
-		.gc_drain_creds		= 0,	/* consume user credits */
-		.gc_drain		= gc_drain_key,
-		.gc_free		= NULL,
-	},
+static struct vos_gc gc_table[] = {
+    {
+	.gc_name        = "akey",
+	.gc_type        = GC_AKEY,
+	.gc_drain_creds = 0, /* consume user credits */
+	.gc_drain       = gc_drain_key,
+	.gc_free        = NULL,
+    },
 
-	{
-		.gc_name		= "dkey",
-		.gc_type		= GC_DKEY,
-		.gc_drain_creds		= 32,
-		.gc_drain		= gc_drain_key,
-		.gc_free		= NULL,
-	},
-	{
-		.gc_name		= "object",
-		.gc_type		= GC_OBJ,
-		.gc_drain_creds		= 8,
-		.gc_drain		= gc_drain_obj,
-		.gc_free		= NULL,
-	},
-	{
-		.gc_name		= "container",
-		.gc_type		= GC_CONT,
-		.gc_drain_creds		= 1,
-		.gc_drain		= gc_drain_cont,
-		.gc_free		= gc_free_cont,
-	},
-	{
-		.gc_name		= "unknown",
-		.gc_type		= GC_MAX,
-	},
+    {
+	.gc_name        = "dkey",
+	.gc_type        = GC_DKEY,
+	.gc_drain_creds = 32,
+	.gc_drain       = gc_drain_key,
+	.gc_free        = gc_free_dkey,
+    },
+    {
+	.gc_name        = "object",
+	.gc_type        = GC_OBJ,
+	.gc_drain_creds = 8,
+	.gc_drain       = gc_drain_obj,
+	.gc_free        = NULL,
+    },
+    {
+	.gc_name        = "container",
+	.gc_type        = GC_CONT,
+	.gc_drain_creds = 1,
+	.gc_drain       = gc_drain_cont,
+	.gc_free        = gc_free_cont,
+    },
+    {
+	.gc_name = "unknown",
+	.gc_type = GC_MAX,
+    },
 };
 
 static const char *
@@ -542,13 +561,13 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	struct vos_gc_bin_df *bin = gc_type2bin(pool, cont, gc->gc_type);
 	struct vos_gc_bag_df *bag;
 	int		      first;
-	umem_off_t	      addr;
+	struct vos_gc_item    it;
 	int		      rc = 0;
 
 	bag = umem_off2ptr(&pool->vp_umm, bin->bin_bag_first);
 	D_ASSERT(bag && bag->bag_item_nr > 0);
 	D_ASSERT(item == &bag->bag_items[bag->bag_item_first]);
-	addr = item->it_addr;
+	it = *item;
 
 	first = bag->bag_item_first + 1;
 	if (first == bin->bin_bag_size)
@@ -573,9 +592,9 @@ gc_free_item(struct vos_gc *gc, struct vos_pool *pool,
 	D_DEBUG(DB_TRACE, "GC released a %s\n", gc->gc_name);
 	/* this is the real container|object|dkey|akey free */
 	if (gc->gc_free)
-		rc = gc->gc_free(gc, pool, addr);
+		rc = gc->gc_free(gc, pool, vos_cont2hdl(cont), &it);
 	else
-		rc = umem_free(&pool->vp_umm, addr);
+		rc = umem_free(&pool->vp_umm, it.it_addr);
 
 	if (rc != 0)
 		goto failed;
