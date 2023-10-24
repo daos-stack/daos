@@ -1827,6 +1827,12 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
+		if (pool->sp_rebuilding) {
+			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n",
+				DP_UUID(pool->sp_uuid));
+			goto yield;
+		}
+
 		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
@@ -1895,6 +1901,8 @@ cont_agg_eph_leader_ult(void *arg)
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
+			if (pool->sp_rebuilding)
+				break;
 		}
 
 		map_ranks_fini(&fail_ranks);
