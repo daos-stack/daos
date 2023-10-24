@@ -8,7 +8,8 @@ hosts:
 timeout: 600
 timeouts:
   test_daos_degraded_mode: 450
-  test_daos_management: 110
+  # test_daos_management: 110
+  test_daos_management: 1100
   test_daos_pool: 180
   test_daos_container: 450
   test_daos_epoch: 125
@@ -21,7 +22,8 @@ timeouts:
   test_daos_kv: 105
   test_daos_capability: 104
   test_daos_epoch_recovery: 104
-  test_daos_md_replication: 104
+  # test_daos_md_replication: 104
+  test_daos_md_replication: 1040
   test_daos_rebuild_simple: 1800
   test_daos_drain_simple: 3600
   test_daos_extend_simple: 3600

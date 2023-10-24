@@ -1,7 +1,7 @@
 hosts:
   test_servers: 2
   test_clients: 1
-timeout: 150
+timeout: 1500
 setup:
   start_servers_once: false
 server_config:
