@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import subprocess
+import subprocess  # nosec
 import argparse
 import yaml
 from ClusterShell.NodeSet import NodeSet
@@ -11,7 +11,7 @@ from demo_utils import list_pool, pool_get_prop, create_container, system_stop, 
     system_query, storage_query_usage, cont_get_prop, pool_query
 
 
-# Run this script on Aurora node as user after running run_demo_aurora.py. e.g.,
+# Run this script on Aurora node as user after running run_demo_aurora.py. E.g.,
 # python3 show_fixed_aurora.py -l aurora-daos-[0001-0100]
 
 TEST_CMD = "sudo date"
