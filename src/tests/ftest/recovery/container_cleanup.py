@@ -22,7 +22,8 @@ class ContainerCleanupTest(RecoveryTestBase):
         1. Create a pool and a container.
         2. Inject fault to cause container label inconsistency. i.e., Corrupt label in CS.
         3. Try to access property using the original label in CS.
-        4. Show that PS has the original label by using new-label.
+        4. Show that PS has the original label by using "new-label", which was injected by
+        the fault injection tool.
         5. Enable the checker.
         6. Set policy to --all-interactive.
         7. Start the checker and query the checker until the fault is detected.
@@ -52,16 +53,16 @@ class ContainerCleanupTest(RecoveryTestBase):
 
         # 3. Try to access property using the original label in CS.
         self.log_step("Try to access property using the original label in CS.")
-        access_failed = False
         try:
             _ = daos_command.container_get_prop(
                 pool=pool.identifier, cont=container.identifier)
         except CommandFailure:
-            access_failed = True
-        if not access_failed:
+            pass
+        else:
             self.fail("Label inconsistency fault wasn't injected property!")
 
-        # 4. Show that PS has the original label by using new-label.
+        # 4. Show that PS has the original label by using "new-label", which was injected
+        # by the fault injection tool.
         cont_prop = daos_command.container_get_prop(
             pool=pool.identifier, cont="new-label", properties=["label"])
         ps_label = cont_prop["response"][0]["value"]
@@ -99,7 +100,7 @@ class ContainerCleanupTest(RecoveryTestBase):
 
         # 8. Repair by selecting "Trust the container label in container property."
         self.log_step(
-            "Repair by selecting \"Trust the container label in container property.\"")
+            'Repair by selecting "Trust the container label in container property."')
         dmg_command.check_repair(seq_num=seq_num, action=2)
 
         # 9. Query the checker until the fault is repaired.
