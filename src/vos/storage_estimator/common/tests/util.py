@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
-import tempfile
 import shutil
+import tempfile
 
 
 class FileGenerator():

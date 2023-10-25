@@ -4,11 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-import yaml
 
+import yaml
 from apricot import TestWithServers
 from command_utils_base import CommonConfig
-from server_utils import DaosServerTransportCredentials, DaosServerYamlParameters
+from server_utils import (DaosServerTransportCredentials,
+                          DaosServerYamlParameters)
 
 
 class StorageTiers(TestWithServers):

@@ -1,0 +1,3 @@
+[tool.isort]
+supported_extensions = ["py"]
+skip = [".git/", "src/rdb/raft", "build", "install"]

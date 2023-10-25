@@ -3,16 +3,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from itertools import product
-import time
 import re
+import time
+from itertools import product
 
 from ClusterShell.NodeSet import NodeSet
-
 from dfuse_test_base import DfuseTestBase
-from dfuse_utils import get_dfuse, start_dfuse, VerifyPermsCommand
+from dfuse_utils import VerifyPermsCommand, get_dfuse, start_dfuse
+from run_utils import command_as_user, run_remote
 from user_utils import get_chown_command
-from run_utils import run_remote, command_as_user
 
 
 class DfuseMUPerms(DfuseTestBase):
