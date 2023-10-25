@@ -18,7 +18,7 @@ from data_utils import list_unique, list_flatten, dict_extract_values
 from host_utils import get_node_set, get_local_host, HostInfo, HostException
 from logger_utils import get_file_handler, LOG_FILE_FORMAT
 from results_utils import LaunchTestName
-from run_utils import RunException, run_local, run_remote, find_command
+from run_utils import RunException, run_local, run_remote
 from slurm_setup import SlurmSetup, SlurmSetupException
 from slurm_utils import show_partition, create_partition, delete_partition
 from storage_utils import StorageInfo, StorageException
@@ -773,11 +773,19 @@ class TestGroup():
         # List all of the possible tags if no matches where found and verbose is set
         if not self.tests and verbose:
             logger.info("None of the following tests matched the tags:")
-            other = "-print | sort -n | xargs -d '\n' grep ':avocado: tags='"
-            result = run_remote(logger, get_local_host(), find_command(".", "*.py", 2, other))
-            for data in result.output:
-                for line in data.stdout:
-                    logger.info("  %s", line)
+            for dir_name in sorted(os.listdir(os.curdir)):
+                ftest_dir = os.path.join(os.curdir, dir_name)
+                if os.path.isdir(ftest_dir):
+                    for file_name in sorted(os.listdir(ftest_dir)):
+                        if file_name.endswith(".py"):
+                            ftest_file = os.path.join(ftest_dir, file_name)
+                            command = f"grep -ER '(:avocado: tags=| def test_)' {ftest_file}"
+                            output = run_local(logger, command, check=False)
+                            if output.stdout:
+                                logger.info("  %s:", ftest_dir)
+                                logger.info("    %s:", file_name)
+                                for line in output.stdout.splitlines():
+                                    logger.info("      %s", line)
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
                          verbose, include_localhost):
