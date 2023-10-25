@@ -6,6 +6,7 @@
 # pylint: disable=too-many-lines
 import logging
 import os
+from pathlib import Path
 import re
 import sys
 import time
@@ -773,19 +774,15 @@ class TestGroup():
         # List all of the possible tags if no matches where found and verbose is set
         if not self.tests and verbose:
             logger.info("None of the following tests matched the tags:")
-            for dir_name in sorted(os.listdir(os.curdir)):
-                ftest_dir = os.path.join(os.curdir, dir_name)
-                if os.path.isdir(ftest_dir):
-                    for file_name in sorted(os.listdir(ftest_dir)):
-                        if file_name.endswith(".py"):
-                            ftest_file = os.path.join(ftest_dir, file_name)
-                            command = f"grep -ER '(:avocado: tags=| def test_)' {ftest_file}"
-                            output = run_local(logger, command, check=False)
-                            if output.stdout:
-                                logger.info("  %s:", ftest_dir)
-                                logger.info("    %s:", file_name)
-                                for line in output.stdout.splitlines():
-                                    logger.info("      %s", line)
+            for found_file in sorted(list(map(str, Path('.').rglob("*.py")))):
+                command = f"grep -ER '(:avocado: tags=| def test_)' {found_file}"
+                output = run_local(logger, command, check=False)
+                if output.stdout:
+                    ftest_dir, ftest_file = os.path.split(found_file)
+                    logger.info("  %s:", ftest_dir)
+                    logger.info("    %s:", ftest_file)
+                    for line in output.stdout.splitlines():
+                        logger.info("      %s", line)
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
                          verbose, include_localhost):
