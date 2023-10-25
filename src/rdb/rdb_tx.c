@@ -395,10 +395,10 @@ void
 rdb_tx_discard(struct rdb_tx *tx)
 {
 	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
-	D_ASSERTF(
-	    (tx->dt_entry == NULL && tx->dt_entry_cap == 0 && tx->dt_entry_len == 0) ||
-	    (tx->dt_entry != NULL && tx->dt_entry_cap > 0 && tx->dt_entry_len <= tx->dt_entry_cap),
-	    "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap, tx->dt_entry_len);
+	D_ASSERTF((tx->dt_entry == NULL && tx->dt_entry_cap == 0 && tx->dt_entry_len == 0) ||
+		      (tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
+		       tx->dt_entry_len <= tx->dt_entry_cap),
+		  "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap, tx->dt_entry_len);
 
 	if (tx->dt_entry) {
 		D_FREE(tx->dt_entry);
