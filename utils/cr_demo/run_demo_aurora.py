@@ -7,7 +7,7 @@ import re
 from collections import defaultdict
 import argparse
 import time
-import subprocess
+import subprocess  # nosec
 import yaml
 from ClusterShell.NodeSet import NodeSet
 from demo_utils import format_storage, inject_fault_mgmt, list_pool, check_enable, \
