@@ -15,8 +15,6 @@
 #ifndef __GURT_COMMON_H__
 #define __GURT_COMMON_H__
 
-#include <malloc.h>
-
 #include <uuid/uuid.h>
 #include <unistd.h>
 #include <stdbool.h>
@@ -76,6 +74,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
+long int d_randn(long int n);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
@@ -293,10 +292,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
 	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
-/* TODO: Check for __builtin_dynamic_object_size at compile time */
-
 /* Free a pointer. Only logs if the pointer is non-NULL. */
-#ifdef DAOS_BUILD_RELEASE
 #define D_FREE(ptr)                                                                                \
 	do {                                                                                       \
 		if ((ptr) != NULL) {                                                               \
@@ -305,44 +301,6 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 			(ptr) = NULL;                                                              \
 		}                                                                                  \
 	} while (0)
-
-#else
-
-/* Developer/debug version, poison memory on free.
- * This tries several ways to access the buffer size however none of them are perfect so for now
- * this is no in release builds.
- */
-
-static size_t
-_f_get_alloc_size(void *ptr)
-{
-	size_t size = malloc_usable_size(ptr);
-	size_t obs;
-
-	obs = __builtin_object_size(ptr, 0);
-	if (obs != -1 && obs < size)
-		size = obs;
-
-#if __USE_FORTIFY_LEVEL > 2
-	obs = __builtin_dynamic_object_size(ptr, 0);
-	if (obs != -1 && obs < size)
-		size = obs;
-#endif
-
-	return size;
-}
-
-#define D_FREE(ptr)                                                                                \
-	do {                                                                                       \
-		if ((ptr) != NULL) {                                                               \
-			size_t _frs = _f_get_alloc_size(ptr);                                      \
-			memset(ptr, 0x42, _frs);                                                   \
-			D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));                        \
-			d_free(ptr);                                                               \
-			(ptr) = NULL;                                                              \
-		}                                                                                  \
-	} while (0)
-#endif
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
@@ -542,12 +500,48 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	sgl->sg_nr = 0;
 }
 
+static inline size_t  __attribute__((nonnull))
+d_sgl_buf_size(d_sg_list_t *sgl)
+{
+	size_t	size = 0;
+	int	i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
+
+	return size;
+}
+
+static inline void
+d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
+{
+	int i;
+
+	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
+	for (i = 0; i < src_sgl->sg_nr; i++) {
+		D_ASSERT(dst_sgl->sg_iovs[i].iov_buf_len >=
+			 src_sgl->sg_iovs[i].iov_buf_len);
+
+		memcpy(dst_sgl->sg_iovs[i].iov_buf, src_sgl->sg_iovs[i].iov_buf,
+		       src_sgl->sg_iovs[i].iov_buf_len);
+		dst_sgl->sg_iovs[i].iov_len = src_sgl->sg_iovs[i].iov_len;
+		dst_sgl->sg_iovs[i].iov_buf_len = src_sgl->sg_iovs[i].iov_buf_len;
+	}
+}
+
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_char(const char *env, char *char_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
 int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
+
+typedef void (*d_alloc_track_cb_t)(void *arg, size_t size);
+
+void d_set_alloc_track_cb(d_alloc_track_cb_t alloc_cb, d_alloc_track_cb_t free_cb, void *arg);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
@@ -968,6 +962,16 @@ d_hlc_epsilon_get(void);
  */
 uint64_t
 d_hlc_epsilon_get_bound(uint64_t hlc);
+
+/**
+ * Get the age of the hlc in second.
+ *
+ * \param[in] hlc              HLC timestamp
+ *
+ * \return                     The age of the hlc in second
+ */
+uint64_t
+d_hlc_age2sec(uint64_t hlc);
 
 uint64_t d_hlct_get(void);
 void d_hlct_sync(uint64_t msg);

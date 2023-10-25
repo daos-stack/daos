@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
 
-  # Re-use the cache from the landing-builds workflow if available, if not then build the images
+  # reuse the cache from the landing-builds workflow if available, if not then build the images
   # from scratch, but do not save them.
   Build-and-test:
     name: Run DAOS/NLT tests

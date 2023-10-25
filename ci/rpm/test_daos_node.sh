@@ -1,22 +1,23 @@
 #!/bin/bash
 
+. /etc/os-release
+
 YUM=dnf
-id="$(lsb_release -si)"
-if [ "$id" = "CentOS" ] ||
-   [ "$id" = "AlmaLinux" ] ||
-   [ "$id" = "Rocky" ] ||
-   [ "$id" = "RedHatEnterpriseServer" ]; then
-    if [[ $(lsb_release -sr) = 8* ]]; then
-        OPENMPI_RPM=openmpi
-        OPENMPI=mpi/openmpi-x86_64
-    else
+case "$ID_LIKE" in
+    *rhel*)
+        if [[ $VERSION_ID = [89].* ]]; then
+            OPENMPI_RPM=openmpi
+            OPENMPI=mpi/openmpi-x86_64
+        else
+            OPENMPI_RPM=openmpi3
+            OPENMPI=mpi/openmpi3-x86_64
+        fi
+        ;;
+    *suse*)
         OPENMPI_RPM=openmpi3
-        OPENMPI=mpi/openmpi3-x86_64
-    fi
-elif [ "$(lsb_release -si)" = "openSUSE" ]; then
-    OPENMPI_RPM=openmpi3
-    OPENMPI=gnu-openmpi
-fi
+        OPENMPI=gnu-openmpi
+        ;;
+esac
 
 set -uex
 sudo $YUM -y install daos-client-"${DAOS_PKG_VERSION}"
@@ -29,9 +30,9 @@ if ! sudo $YUM -y history undo last; then
     $YUM history
     exit 1
 fi
-sudo $YUM -y erase $OPENMPI_RPM
+sudo $YUM -y erase "$OPENMPI_RPM"
 sudo $YUM -y install daos-client-tests-"${DAOS_PKG_VERSION}"
-if rpm -q $OPENMPI_RPM; then
+if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-client-tests"
   exit 1
 fi
@@ -45,7 +46,7 @@ if ! sudo $YUM -y history undo last; then
     exit 1
 fi
 sudo $YUM -y install daos-server-tests-"${DAOS_PKG_VERSION}"
-if rpm -q $OPENMPI_RPM; then
+if rpm -q "$OPENMPI_RPM"; then
   echo "$OPENMPI_RPM RPM should not be installed as a dependency of daos-server-tests"
   exit 1
 fi
@@ -107,7 +108,7 @@ sudo PYTHONPATH="$FTEST/util"                        \
 cat /etc/daos/daos_server.yml
 cat /etc/daos/daos_agent.yml
 cat /etc/daos/daos.yml
-if ! module load $OPENMPI; then
+if ! module load "$OPENMPI"; then
     echo "Unable to load OpenMPI module: $OPENMPI"
     module avail
     module list

@@ -255,8 +255,7 @@ vos_meta_flush_prep(struct umem_store *store, struct umem_store_iod *iod, daos_h
 
 	rc = bio_iod_try_prep(biod, BIO_CHK_TYPE_LOCAL, NULL, 0);
 	if (rc) {
-		D_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR,
-			 "Failed to prepare DMA buffer. "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_AGAIN, DB_TRACE, DLOG_ERR, rc, "Failed to prepare DMA buffer");
 		goto free;
 	}
 
@@ -793,7 +792,7 @@ pool_hop_free(struct d_ulink *hlink)
 	}
 
 	if (pool->vp_dying)
-		vos_delete_blob(pool->vp_id, 0);
+		vos_delete_blob(pool->vp_id, pool->vp_rdb ? VOS_POF_RDB : 0);
 
 	D_FREE(pool);
 }
@@ -1101,7 +1100,8 @@ vos_pool_kill(uuid_t uuid, unsigned int flags)
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
-	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
+	D_DEBUG(DB_MGMT, DF_UUID": No open handles, OK to delete: flags=%x\n", DP_UUID(uuid),
+		flags);
 
 	vos_delete_blob(uuid, flags);
 	return 0;
@@ -1183,11 +1183,14 @@ lock_pool_memory(struct vos_pool *pool)
 	if (lock_mem == LM_FLAG_DISABLED)
 		return;
 
+	/*
+	 * Mlock may take several tens of seconds to complete when memory
+	 * is tight, so mlock is skipped in current MD-on-SSD scenario.
+	 */
 	if (bio_nvme_configured(SMD_DEV_TYPE_META))
-		lock_bytes = vos_pool2umm(pool)->umm_pool->up_store.stor_size;
-	else
-		lock_bytes = pool->vp_pool_df->pd_scm_sz;
+		return;
 
+	lock_bytes = pool->vp_pool_df->pd_scm_sz;
 	rc = mlock((void *)pool->vp_umm.umm_base, lock_bytes);
 	if (rc != 0) {
 		D_WARN("Could not lock memory for VOS pool "DF_U64" bytes at "DF_X64
@@ -1284,21 +1287,22 @@ pool_open(void *ph, struct vos_pool_df *pool_df, unsigned int flags, void *metri
 	}
 
 	pool->vp_dtx_committed_count = 0;
-	pool->vp_pool_df = pool_df;
+	pool->vp_pool_df             = pool_df;
+
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);
 	pool->vp_small = !!(flags & VOS_POF_SMALL);
-	pool->vp_rdb = !!(flags & VOS_POF_RDB);
-	if (pool_df->pd_version >= VOS_POOL_DF_2_2)
-		pool->vp_feats |= VOS_POOL_FEAT_2_2;
+	pool->vp_rdb    = !!(flags & VOS_POF_RDB);
 	if (pool_df->pd_version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+	if (pool_df->pd_version >= VOS_POOL_DF_2_6)
+		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
 	lock_pool_memory(pool);
-	D_DEBUG(DB_MGMT, "Opened pool %p\n", pool);
+	D_DEBUG(DB_MGMT, "Opened pool %p df version %d\n", pool, pool_df->pd_version);
 	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
@@ -1414,9 +1418,17 @@ vos_pool_upgrade(daos_handle_t poh, uint32_t version)
 	if (version == pool_df->pd_version)
 		return 0;
 
+	D_DEBUG(DB_MGMT, "Attempting upgrade pool durable format from %d to %d\n",
+		pool_df->pd_version, version);
 	D_ASSERTF(version > pool_df->pd_version && version <= POOL_DF_VERSION,
 		  "Invalid pool upgrade version %d, current version is %d\n", version,
 		  pool_df->pd_version);
+
+	if (version >= VOS_POOL_DF_2_6 && pool_df->pd_version < VOS_POOL_DF_2_6 &&
+	    pool->vp_vea_info)
+		rc = vea_upgrade(pool->vp_vea_info, &pool->vp_umm, &pool_df->pd_vea_df, version);
+	if (rc)
+		return rc;
 
 	rc = umem_tx_begin(&pool->vp_umm, NULL);
 	if (rc != 0)
@@ -1438,6 +1450,8 @@ end:
 		pool->vp_feats |= VOS_POOL_FEAT_2_2;
 	if (version >= VOS_POOL_DF_2_4)
 		pool->vp_feats |= VOS_POOL_FEAT_2_4;
+	if (version >= VOS_POOL_DF_2_6)
+		pool->vp_feats |= VOS_POOL_FEAT_2_6;
 
 	return 0;
 }

@@ -1446,7 +1446,12 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
 	D_DEBUG(DB_TRACE, DF_DB ": snapping " DF_U64 "\n", DP_DB(db), index);
 
 	rc = raft_begin_snapshot(db->d_raft, index);
-	D_ASSERTF(rc == 0, "raft_begin_snapshot() returned %d\n", rc);
+	if (rc != 0) {
+		int rc2 = rdb_raft_rc(rc);
+		D_ERROR(DF_DB ": raft_begin_snapshot() returned %d: " DF_RC, DP_DB(db), rc,
+			DP_RC(rc2));
+		return rc2;
+	}
 	/*
 	 * VOS snaps every new index implicitly.
 	 *
@@ -1456,9 +1461,10 @@ rdb_raft_compact_to_index(struct rdb *db, uint64_t index)
 	 */
 	rc = raft_end_snapshot(db->d_raft);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to poll entries: %d\n",
-			DP_DB(db), rc);
-		rc = rdb_raft_rc(rc);
+		int rc2 = rdb_raft_rc(rc);
+
+		D_ERROR(DF_DB ": failed to poll entries: %d: " DF_RC, DP_DB(db), rc, DP_RC(rc2));
+		rc = rc2;
 	}
 
 	return rc;

@@ -257,6 +257,7 @@ func main() {
 
 	ctlInvoker := control.NewClient(
 		control.WithClientLogger(log),
+		control.WithClientComponent(build.ComponentAgent),
 	)
 
 	if err := parseOpts(os.Args[1:], &opts, ctlInvoker, log); err != nil {

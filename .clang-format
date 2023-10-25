@@ -12,7 +12,7 @@ BreakBeforeBraces: Linux
 AllowShortIfStatementsOnASingleLine: false
 IndentCaseLabels: false
 ForEachMacros: ['d_list_for_each_entry',
-		'd_list_for_each_safe',
+                'd_list_for_each_safe',
                 'd_list_for_each_entry_safe',
                 'evt_ent_array_for_each']
 PointerAlignment: Right

@@ -144,12 +144,12 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc != 0) {
 			if (rc == -DER_VOS_PARTIAL_UPDATE)
 				rc = -DER_NO_PERM;
-			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
-				     rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				     rc == -DER_NONEXIST || rc == -DER_ALREADY ||
-				     rc == -DER_CHKPT_BUSY,
-				 DLOG_DBG, DLOG_ERR, DF_UOID " %s end failed: " DF_RC "\n",
-				 DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch", DP_RC(rc));
+			DL_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
+				      rc == -DER_TX_RESTART || rc == -DER_EXIST ||
+				      rc == -DER_NONEXIST || rc == -DER_ALREADY ||
+				      rc == -DER_CHKPT_BUSY,
+				  DLOG_DBG, DLOG_ERR, rc, DF_UOID " %s end failed",
+				  DP_UOID(orwi->orw_oid), update ? "Update" : "Fetch");
 			if (status == 0)
 				status = rc;
 		}
@@ -1491,10 +1491,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, iods_nr);
 		if (rc) {
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
-				 rc == -DER_TX_RESTART, DB_IO, DLOG_ERR,
-				 "Fetch begin for "DF_UOID" failed: "DF_RC"\n",
-				 DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
+				      rc == -DER_TX_RESTART,
+				  DB_IO, DLOG_ERR, rc, "Fetch begin for " DF_UOID " failed",
+				  DP_UOID(orw->orw_oid));
 			goto out;
 		}
 
@@ -1617,6 +1617,12 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 	}
 	bio_pre_latency = daos_get_ntime() - time;
 
+	if (obj_rpc_is_fetch(rpc) && DAOS_FAIL_CHECK(DAOS_OBJ_FAIL_NVME_IO)) {
+		D_ERROR(DF_UOID " fetch failed: %d\n", DP_UOID(orw->orw_oid), -DER_NVME_IO);
+		rc = -DER_NVME_IO;
+		goto post;
+	}
+
 	if (rma) {
 		bulk_bind = orw->orw_flags & ORF_BULK_BIND;
 		rc = obj_bulk_transfer(rpc, bulk_op, bulk_bind, orw->orw_bulks.ca_arrays, offs,
@@ -1643,9 +1649,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc, daos_iod_t *io
 		if (rc == -DER_OVERFLOW)
 			rc = -DER_REC2BIG;
 
-		D_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR,
-			 DF_UOID" data transfer failed, dma %d rc "DF_RC"",
-			 DP_UOID(orw->orw_oid), rma, DP_RC(rc));
+		DL_CDEBUG(rc == -DER_REC2BIG, DLOG_DBG, DLOG_ERR, rc,
+			  DF_UOID " data transfer failed, dma %d", DP_UOID(orw->orw_oid), rma);
 		D_GOTO(post, rc);
 	}
 
@@ -2003,14 +2008,14 @@ out:
 static int
 obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 {
-	if (!is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
+	if (!is_agg_migrate && !is_write && !ds_sec_cont_can_read_data(coh->sch_sec_capas)) {
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to read.\n",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
 		return -DER_NO_PERM;
 	}
 
-	if (is_write && !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
+	if (!is_agg_migrate && is_write && !ds_sec_cont_can_write_data(coh->sch_sec_capas)) {
 		D_ERROR("cont hdl "DF_UUID" sec_capas "DF_U64", "
 			"NO_PERM to update.\n",
 			DP_UUID(coh->sch_uuid), coh->sch_sec_capas);
@@ -2288,6 +2293,14 @@ obj_ioc_init_oca(struct obj_io_context *ioc, daos_obj_id_t oid)
 static int
 obj_inflight_io_check(struct ds_cont_child *child, uint32_t opc, uint32_t flags)
 {
+	if (opc == DAOS_OBJ_RPC_ENUMERATE && flags & ORF_FOR_MIGRATION) {
+		if (child->sc_ec_agg_active) {
+			D_ERROR(DF_UUID" ec aggregate still active\n",
+				DP_UUID(child->sc_pool->spc_uuid));
+			return -DER_UPDATE_AGAIN;
+		}
+	}
+
 	if (!obj_is_modification_opc(opc))
 		return 0;
 
@@ -2641,14 +2654,13 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	 */
 	rc = obj_local_rw(rpc, &ioc, dth);
 	if (rc != 0)
-		D_CDEBUG(
+		DL_CDEBUG(
 		    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 			(rc == -DER_EXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
 			(rc == -DER_NONEXIST &&
 			 (orw->orw_api_flags & (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-		    DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n", DP_UOID(orw->orw_oid),
-		    DP_RC(rc));
+		    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(orw->orw_oid));
 
 out:
 	if (dth != NULL)
@@ -2705,15 +2717,14 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 		 */
 		rc = obj_local_rw(exec_arg->rpc, exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
-			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-				     (rc == -DER_EXIST &&
-				      (orw->orw_api_flags &
-				       (DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
-				     (rc == -DER_NONEXIST &&
-				      (orw->orw_api_flags &
-				       (DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
-				 DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n",
-				 DP_UOID(orw->orw_oid), DP_RC(rc));
+			DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+				      (rc == -DER_EXIST &&
+				       (orw->orw_api_flags &
+					(DAOS_COND_DKEY_INSERT | DAOS_COND_AKEY_INSERT))) ||
+				      (rc == -DER_NONEXIST &&
+				       (orw->orw_api_flags &
+					(DAOS_COND_DKEY_UPDATE | DAOS_COND_AKEY_UPDATE))),
+				  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(orw->orw_oid));
 
 comp:
 		if (comp_cb != NULL)
@@ -3134,6 +3145,9 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 		}
 		recursive = true;
 
+		if (oei->oei_flags & ORF_DESCENDING_ORDER)
+			param.ip_flags |= VOS_IT_RECX_REVERSE;
+
 		if (daos_oclass_is_ec(&ioc->ioc_oca))
 			enum_arg->ec_cell_sz = ioc->ioc_oca.u.ec.e_len;
 		enum_arg->chk_key2big = 1;
@@ -3551,10 +3565,9 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 	rc = obj_local_punch(opi, opc_get(rpc->cr_opc), &ioc, dth);
 	if (rc != 0)
-		D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
-			     (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-			 DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n", DP_UOID(opi->opi_oid),
-			 DP_RC(rc));
+		DL_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
+			      (rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
+			  DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 out:
 	/* Stop the local transaction */
@@ -3626,11 +3639,10 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc, &dlh->dlh_handle);
 		if (rc != 0)
-			D_CDEBUG(
+			DL_CDEBUG(
 			    rc == -DER_INPROGRESS || rc == -DER_TX_RESTART ||
 				(rc == -DER_NONEXIST && (opi->opi_api_flags & DAOS_COND_PUNCH)),
-			    DB_IO, DLOG_ERR, DF_UOID ": error=" DF_RC "\n", DP_UOID(opi->opi_oid),
-			    DP_RC(rc));
+			    DB_IO, DLOG_ERR, rc, DF_UOID, DP_UOID(opi->opi_oid));
 
 comp:
 		if (comp_cb != NULL)
@@ -4137,10 +4149,9 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh, struct daos_cp
 			rc = 0;
 
 		if (rc != 0) {
-			D_CDEBUG(rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
-				 DLOG_ERR, DB_IO, "Failed to set read TS for obj "
-				 DF_UOID", DTX "DF_DTI": "DF_RC"\n", DP_UOID(dcsr->dcsr_oid),
-				 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			DL_CDEBUG(rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO,
+				  rc, "Failed to set read TS for obj " DF_UOID ", DTX " DF_DTI,
+				  DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid));
 			goto out;
 		}
 	}
@@ -4638,10 +4649,8 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 	rc = dtx_end(dth, ioc->ioc_coc, rc);
 
 out:
-	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART,
-		 DLOG_ERR, DB_IO,
-		 "Handled DTX "DF_DTI" on non-leader: "DF_RC"\n",
-		 DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART, DLOG_ERR, DB_IO, rc,
+		  "Handled DTX " DF_DTI " on non-leader", DP_DTI(&dcsh->dcsh_xid));
 
 	return rc;
 }
@@ -4855,10 +4864,9 @@ again:
 	rc = dtx_leader_end(dlh, dca->dca_ioc->ioc_coh, rc);
 
 out:
-	D_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART &&
-		 rc != -DER_AGAIN, DLOG_ERR, DB_IO,
-		 "Handled DTX "DF_DTI" on leader, idx %u: "DF_RC"\n",
-		 DP_DTI(&dcsh->dcsh_xid), dca->dca_idx, DP_RC(rc));
+	DL_CDEBUG(rc != 0 && rc != -DER_INPROGRESS && rc != -DER_TX_RESTART && rc != -DER_AGAIN,
+		  DLOG_ERR, DB_IO, rc, "Handled DTX " DF_DTI " on leader, idx %u",
+		  DP_DTI(&dcsh->dcsh_xid), dca->dca_idx);
 
 	if (rc == -DER_AGAIN) {
 		oci->oci_flags |= ORF_RESEND;

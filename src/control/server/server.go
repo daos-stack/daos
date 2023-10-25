@@ -188,6 +188,7 @@ func (srv *server) createServices(ctx context.Context) (err error) {
 	cliCfg := control.DefaultConfig()
 	cliCfg.TransportConfig = srv.cfg.TransportConfig
 	rpcClient := control.NewClient(
+		control.WithClientComponent(build.ComponentServer),
 		control.WithConfig(cliCfg),
 		control.WithClientLogger(srv.log))
 
@@ -466,6 +467,14 @@ func (srv *server) start(ctx context.Context) error {
 	}()
 
 	srv.mgmtSvc.startAsyncLoops(ctx)
+
+	if srv.cfg.AutoFormat {
+		srv.log.Notice("--auto flag set on server start so formatting storage now")
+		if _, err := srv.ctlSvc.StorageFormat(ctx, &ctlpb.StorageFormatReq{}); err != nil {
+			return errors.WithMessage(err, "attempting to auto format")
+		}
+	}
+
 	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }

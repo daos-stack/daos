@@ -463,8 +463,10 @@ lw_tx_begin(dav_obj_t *pop)
 	}
 	if (pop->do_utx == NULL) {
 		utx = dav_umem_wtx_new(pop);
-		if (utx == NULL)
-			return obj_tx_fail_err(EINVAL, 0);
+		if (utx == NULL) {
+			D_ERROR("dav_umem_wtx_new failed\n");
+			return ENOMEM;
+		}
 	}
 	pop->do_utx->utx_id = wal_id;
 	return rc;
@@ -1491,13 +1493,22 @@ dav_tx_off2ptr(uint64_t off)
 uint64_t
 dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
 {
+	int tx_inprogress = 0;
+	int rc;
+
 	DAV_DBG("pop %p act %p size %zu type_num %llx",
 		pop, act, size,
 		(unsigned long long)type_num);
 
+	if (get_tx()->stage != DAV_TX_STAGE_NONE)
+		tx_inprogress = 1;
+
 	DAV_API_START();
-	if (pop->do_utx == NULL && dav_umem_wtx_new(pop) == NULL)
-		return 0;
+	if (!tx_inprogress) {
+		rc = lw_tx_begin(pop);
+		if (rc)
+			return 0;
+	}
 
 	if (palloc_reserve(pop->do_heap, size, NULL, NULL, type_num,
 		0, 0, 0, act) != 0) {
@@ -1505,6 +1516,8 @@ dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_n
 		return 0;
 	}
 
+	if (!tx_inprogress)
+		lw_tx_end(pop, NULL);
 	DAV_API_END();
 	return act->heap.offset;
 }
@@ -1666,7 +1679,8 @@ static int
 obj_alloc_root(dav_obj_t *pop, size_t size)
 {
 	struct operation_context *ctx;
-	struct carg_realloc carg;
+	struct carg_realloc       carg;
+	int                       ret;
 
 	DAV_DBG("pop %p size %zu", pop, size);
 
@@ -1678,13 +1692,15 @@ obj_alloc_root(dav_obj_t *pop, size_t size)
 	carg.zero_init = 1;
 	carg.arg = NULL;
 
-	lw_tx_begin(pop);
+	ret = lw_tx_begin(pop);
+	if (ret)
+		return ret;
 	ctx = pop->external;
 	operation_start(ctx);
 
 	operation_add_entry(ctx, &pop->do_phdr->dp_root_size, size, ULOG_OPERATION_SET);
 
-	int ret = palloc_operation(pop->do_heap, pop->do_phdr->dp_root_offset,
+	ret = palloc_operation(pop->do_heap, pop->do_phdr->dp_root_offset,
 			&pop->do_phdr->dp_root_offset, size,
 			constructor_zrealloc_root, &carg,
 			0, 0, 0, 0, ctx); /* REVISIT: object_flags and type num ignored*/
@@ -1769,7 +1785,8 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	dav_constr constructor, void *arg)
 {
 	struct operation_context *ctx;
-	struct constr_args carg;
+	struct constr_args        carg;
+	int                       ret;
 
 	if (size > DAV_MAX_ALLOC_SIZE) {
 		ERR("requested size too large");
@@ -1781,14 +1798,15 @@ obj_alloc_construct(dav_obj_t *pop, uint64_t *offp, size_t size,
 	carg.constructor = constructor;
 	carg.arg = arg;
 
-	lw_tx_begin(pop);
+	ret = lw_tx_begin(pop);
+	if (ret)
+		return ret;
 	ctx = pop->external;
 	operation_start(ctx);
 
-	int ret = palloc_operation(pop->do_heap, 0, offp, size,
-			constructor_alloc, &carg, type_num, 0,
-			CLASS_ID_FROM_FLAG(flags), ARENA_ID_FROM_FLAG(flags),
-			ctx);
+	ret = palloc_operation(pop->do_heap, 0, offp, size, constructor_alloc,
+			&carg, type_num, 0, CLASS_ID_FROM_FLAG(flags),
+			ARENA_ID_FROM_FLAG(flags), ctx);
 
 	lw_tx_end(pop, NULL);
 	return ret;
@@ -1831,6 +1849,7 @@ void
 dav_free(dav_obj_t *pop, uint64_t off)
 {
 	struct operation_context *ctx;
+	int                       rc;
 
 	DAV_DBG("oid.off 0x%016" PRIx64, off);
 
@@ -1841,7 +1860,8 @@ dav_free(dav_obj_t *pop, uint64_t off)
 
 	ASSERTne(pop, NULL);
 	ASSERT(OBJ_OFF_IS_VALID(pop, off));
-	lw_tx_begin(pop);
+	rc = lw_tx_begin(pop);
+	D_ASSERT(rc == 0);
 	ctx = pop->external;
 	operation_start(ctx);
 
@@ -1859,11 +1879,14 @@ void *
 dav_memcpy_persist(dav_obj_t *pop, void *dest, const void *src,
 	size_t len)
 {
+	int rc;
+
 	DAV_DBG("pop %p dest %p src %p len %zu", pop, dest, src, len);
 	D_ASSERT((dav_tx_stage() == DAV_TX_STAGE_NONE));
 
 	DAV_API_START();
-	lw_tx_begin(pop);
+	rc = lw_tx_begin(pop);
+	D_ASSERT(rc == 0);
 
 	void *ptr = mo_wal_memcpy(&pop->p_ops, dest, src, len, 0);
 

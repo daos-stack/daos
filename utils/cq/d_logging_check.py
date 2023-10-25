@@ -12,6 +12,9 @@ if fixes are being applied.
 """
 
 import argparse
+import inspect
+import sys
+import re
 import io
 import os
 
@@ -56,7 +59,6 @@ class FileLine():
         """Expand line to end"""
         while not self._code.endswith(';'):
             to_add = str(next(self._fo))
-            self._code += ' '
             self._code += to_add.strip()
             self._line += to_add
 
@@ -87,7 +89,9 @@ class FileLine():
         """Show a warning"""
         print(f'{self._fo.fname}:{self._lineno} {msg}')
         if ARGS.github:
-            print(f'::warning file={self._fo.fname},line={self._lineno},::newline-check, {msg}')
+            fn_name = inspect.stack()[1].function
+            fn_name = fn_name.replace('_', '-')
+            print(f'::warning file={self._fo.fname},line={self._lineno},::{fn_name}, {msg}')
 
     def note(self, msg):
         """Show a note"""
@@ -123,13 +127,16 @@ class FileParser:
 PREFIXES = ['D_ERROR', 'D_WARN', 'D_INFO', 'D_NOTE', 'D_ALERT', 'D_CRIT', 'D_FATAT', 'D_EMIT',
             'D_TRACE_INFO', 'D_TRACE_NOTE', 'D_TRACE_WARN', 'D_TRACE_ERROR', 'D_TRACE_ALERT',
             'D_TRACE_CRIT', 'D_TRACE_FATAL', 'D_TRACE_EMIT', 'RPC_TRACE', 'RPC_ERROR',
-            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG']
+            'VOS_TX_LOG_FAIL', 'VOS_TX_TRACE_FAIL', 'D_DEBUG', 'D_CDEBUG']
 
 # Logging macros where a new-line is always added.
 PREFIXES_NNL = ['DFUSE_LOG_WARNING', 'DFUSE_LOG_ERROR', 'DFUSE_LOG_DEBUG', 'DFUSE_LOG_INFO',
                 'DFUSE_TRA_WARNING', 'DFUSE_TRA_ERROR', 'DFUSE_TRA_DEBUG', 'DFUSE_TRA_INFO',
-                'DH_PERROR_SYS', 'DH_PERROR_DER']
+                'DH_PERROR_SYS', 'DH_PERROR_DER', 'DL_CDEBUG']
 
+for prefix in ['DL', 'DHL', 'DS', 'DHS']:
+    for suffix in ['ERROR', 'WARN', 'INFO']:
+        PREFIXES_NNL.append(f'{prefix}_{suffix}')
 
 PREFIXES_ALL = PREFIXES.copy()
 PREFIXES_ALL.extend(PREFIXES_NNL)
@@ -174,7 +181,11 @@ class AllChecks():
             self.check_quote(line)
             self.check_return(line)
             self.check_df_rc_dot(line)
+            self.check_for_newline(line)
             self.check_df_rc(line)
+            self.remove_trailing_period(line)
+            self.check_quote(line)
+            self.check_failed(line)
 
             line.write(self._output)
             if line.modified:
@@ -199,12 +210,20 @@ class AllChecks():
             return
         if count == 1 and line.count('strerror') == 1:
             return
-        line.note('Message uses %s')
+        if '?' in line:
+            line.note('Message uses %s with trigraph')
+        else:
+            line.note('Message uses %s without trigraph')
 
     def check_quote(self, line):
         """Check for double quotes in message"""
         if '""' not in line:
             return
+
+        # Do not remove if used in tri-graphs.
+        if ': ""' in line or '? ""' in line or '\\""' in line:
+            return
+
         line.correct(line.raw().replace('""', ''))
 
     def check_return(self, line):
@@ -234,6 +253,7 @@ class AllChecks():
         if 'DF_RC".\\n"' not in code:
             return
         code = code.replace('DF_RC".\\n"', 'DF_RC"\\n"')
+        line.warning('Extra . after DP_RC macro')
         line.fix(code)
 
     def check_df_rc(self, line):
@@ -260,10 +280,8 @@ class AllChecks():
         # Remove any spaces around macros as these may or may not be present.  This updated input
         # is used for the update check at the end so white-space differences here will not cause
         # code to be re-written.
-        code = code.replace('DF_RC ', 'DF_RC')
-        code = code.replace(' DF_RC', 'DF_RC')
-        code = code.replace('DP_RC ', 'DP_RC')
-        code = code.replace(' DP_RC ', 'DP_RC')
+        code = re.sub(r' ?DF_RC ?', 'DF_RC', code)
+        code = re.sub(r' ?DP_RC ?', 'DP_RC', code)
 
         # Check that DF_RC is at the end of the line, it should be.
 
@@ -307,17 +325,81 @@ class AllChecks():
 
         # Put it all back together with consistent style.
         new_code = f'{msg}: "DF_RC{parts[1]}'
+
+        if any(map(line.startswith, ['D_ERROR', 'D_WARN', 'D_INFO'])):
+            new_code = f'{msg}"DF_RC{parts[1]}'
+            if line.startswith('D_ERROR'):
+                new_code = f'DL_ERROR({var_name}, {new_code[8:]}'
+            elif line.startswith('D_WARN'):
+                new_code = f'DL_WARN({var_name}, {new_code[7:]}'
+            else:
+                new_code = f'DL_INFO({var_name}, {new_code[7:]}'
+            new_code = new_code.replace('DF_RC', '')
+            new_code = new_code.replace(f',DP_RC({var_name})', '')
+
         if new_code != code:
             line.correct(new_code)
 
+    def check_for_newline(self, line):
+        """Remove optional new-lines"""
+        code = line.raw()
+
+        if any(map(code.startswith, PREFIXES_NNL)):
+            return
+
+        if '\\"\\n' in code:
+            line.note('Unable to check for newlines')
+            return
+
+        new_code = code.replace('"\\n",', ',')
+        new_code = new_code.replace('\\n",', '",')
+        new_code = new_code.replace('"\\n")', ')')
+        new_code = new_code.replace('\\n")', '")')
+        if new_code != code:
+            line.correct(new_code)
+
+    def remove_trailing_period(self, line):
+        """Remove . from the end of a line"""
+        code = line.raw()
+
+        new_code = code
+        before_code = None
+        while new_code != before_code:
+            before_code = new_code
+            new_code = re.sub(r'\.",', '",', new_code)
+            new_code = re.sub(r'\."\)', '")', new_code)
+
+        if new_code != code:
+            line.correct(new_code)
+
+    def check_failed(self, line):
+        """Check for 'Failed' with uppercase F
+
+        Lots of message are of the form 'function() failed' but some use Failed.
+        """
+        code = line.raw()
+
+        if 'Failed' not in code:
+            return
+        if '"Failed' in code:
+            return
+        if 'Failed to' in code:
+            return
+
+        print(code)
+        line.note('Failed')
+
 
 def one_entry(fname):
-    """Process one path entry"""
+    """Process one path entry
+
+    Returns true if there are un-fixed errors.
+    """
     if not any(map(fname.endswith, ['.c', '.h'])):
-        return
+        return False
 
     if any(map(fname.endswith, ['pb-c.c', 'pb-c..h'])):
-        return
+        return False
 
     if ARGS.verbose:
         print(f'Checking {fname}')
@@ -330,6 +412,11 @@ def one_entry(fname):
     if (ARGS.fix and checks.modified) or (ARGS.correct and checks.corrected):
         print(f'Saving updates to {fname}')
         checks.save(fname)
+        return False
+
+    if checks.modified and not ARGS.fix:
+        return True
+    return False
 
 
 def main():
@@ -344,6 +431,7 @@ def main():
     global ARGS
 
     ARGS = parser.parse_args()
+    unfixed_errors = False
 
     for fname in ARGS.files:
         if os.path.isfile(fname):
@@ -351,11 +439,15 @@ def main():
         else:
             for root, dirs, files in os.walk(fname):
                 for name in files:
-                    one_entry(os.path.join(root, name))
+                    if one_entry(os.path.join(root, name)):
+                        unfixed_errors = True
                 if '.git' in dirs:
                     dirs.remove('.git')
                 if root == 'src/control' and 'vendor' in dirs:
                     dirs.remove('vendor')
+    if unfixed_errors:
+        print('Required fixes not applied')
+        sys.exit(1)
 
 
 if __name__ == '__main__':
