@@ -2748,7 +2748,6 @@ dc_cont_get_attr(tse_task_t *task)
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 		D_GOTO(out_names_items, rc);
-
 	}
 
 	cont_attr_get_in_set_data(cb_args.cra_rpc, CONT_ATTR_GET, dc_cont_proto_version, args->n,
