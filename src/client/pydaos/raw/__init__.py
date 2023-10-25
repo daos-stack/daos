@@ -8,8 +8,9 @@ ctypes-based DAOS wrapper used mostly for testing
 
 # pylint: disable=wildcard-import
 from .conversion import *
-from .daos_cref import *
 from .daos_api import *
+from .daos_cref import *
+
 # pylint: enable=wildcard-import
 
 __all__ = ["daos_api", "conversion", "daos_cref"]

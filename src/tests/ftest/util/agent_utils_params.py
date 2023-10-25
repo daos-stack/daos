@@ -5,7 +5,8 @@
 """
 import os
 
-from command_utils_base import BasicParameter, LogParameter, YamlParameters, TransportCredentials
+from command_utils_base import (BasicParameter, LogParameter,
+                                TransportCredentials, YamlParameters)
 
 
 class DaosAgentTransportCredentials(TransportCredentials):

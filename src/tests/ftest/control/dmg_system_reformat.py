@@ -5,9 +5,8 @@
 """
 import time
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
 from test_utils_pool import add_pool, get_size_params
 
