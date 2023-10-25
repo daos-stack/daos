@@ -195,7 +195,7 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
 		break;
 	default:
-		D_ERROR("bad iv_class_id %d: "DF_RC"\n", entry->iv_class->iv_class_id,
+		D_ERROR("bad iv_class_id %d: "DF_RC "\n", entry->iv_class->iv_class_id,
 			DP_RC(-DER_INVAL));
 		return -DER_INVAL;
 	};
