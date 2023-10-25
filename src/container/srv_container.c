@@ -5208,6 +5208,7 @@ cont_op_check_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_s
 		goto out;
 
 	/* If enabled, lookup client-provided op key, assign dup_op accordingly. */
+	/* TODO: lookup from a cached value in struct pool_svc rather than rdb */
 	d_iov_set(&val, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &val);
 	if (rc == -DER_NONEXIST) {
@@ -5222,7 +5223,6 @@ cont_op_check_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_s
 	if (svc_ops_enabled && proto_enabled) {
 		uuid_copy(op_key.ok_client_id, in8->ci_cli_id);
 		op_key.ok_client_time = in8->ci_time;
-		op_val.ov_rc          = 1234567;
 		d_iov_set(&key, &op_key, sizeof(op_key));
 		d_iov_set(&val, &op_val, sizeof(op_val));
 
@@ -5255,22 +5255,15 @@ out:
 		*is_dup = dup;
 		if (dup)
 			*valp = op_val;
-		D_DEBUG(DB_MD, DF_CONT ": %s RPC detected\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid),
-			dup ? "duplicate" : "new");
 	}
 	return rc;
 }
 
-/* Save results of the operation in svc_ops KVS, in the existing rdb_tx context, or in a
- * new one (necessary when rc != 0 error cases).
- */
+/* Save results of the operation in svc_ops KVS, in the existing rdb_tx context. */
 static int
-cont_op_save_dup(struct rdb_tx *cur_tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
+cont_op_save_dup(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		 crt_rpc_t *rpc, int cont_proto_ver, struct ds_pool_svc_op_val *op_valp)
 {
-	struct rdb_tx             txs;
-	struct rdb_tx            *tx;
 	struct cont_op_v8_in     *in8 = crt_req_get(rpc);
 	d_iov_t                   key;
 	d_iov_t                   val;
@@ -5289,38 +5282,27 @@ cont_op_save_dup(struct rdb_tx *cur_tx, struct ds_pool_hdl *pool_hdl, struct con
 	if (!cont_op_is_write(opc))
 		goto out;
 
-	/* open is tricky due to the daos_prop_t in reply, won't fit in ds_pool_svc_op_val */
-	if ((opc == CONT_OPEN) || (opc == CONT_OPEN_BYLABEL))
-		goto out;
-
-	if (cur_tx) {
-		tx = cur_tx;
-	} else {
-		tx = &txs;
-		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, tx);
-		if (rc != 0)
-			return rc;
-		ABT_rwlock_wrlock(svc->cs_lock);
-	}
-
 	/* If enabled, save client-provided op key and result of the operation. */
 	d_iov_set(&val, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(tx, &svc->cs_root, &ds_cont_prop_svc_ops_enabled, &val);
 	if (rc == -DER_NONEXIST) {
 		rc = 0;
-		goto out_lock;
+		goto out;
 	} else if (rc != 0) {
 		D_ERROR(DF_CONT ": failed to lookup svc_ops_enabled\n",
 			DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid));
-		goto out_lock;
+		goto out;
 	}
 
-	/* TODO: implement per-opcode reply state saving into struct ds_pool_svc_op_val
-	 * and, a mechanism to constrain rdb space usage by this KVS.
-	 */
-	goto out_lock;
+	/* TODO: implement mechanism to constrain rdb space usage by this KVS. */
+	goto out;
 
-	if (svc_ops_enabled && proto_enabled) {
+	/* Save result in cs_ops KVS, only if the return code is "definitive" (not retryable). */
+	if (svc_ops_enabled && proto_enabled && !daos_rpc_retryable_rc(op_valp->ov_rc)) {
+		/* If the write operation failed, discard its (unwanted) updates first. */
+		if (op_valp->ov_rc != 0)
+			rdb_tx_discard(tx);
+
 		uuid_copy(op_key.ok_client_id, in8->ci_cli_id);
 		op_key.ok_client_time = in8->ci_time;
 		d_iov_set(&key, &op_key, sizeof(op_key));
@@ -5332,18 +5314,9 @@ cont_op_save_dup(struct rdb_tx *cur_tx, struct ds_pool_hdl *pool_hdl, struct con
 					" " DF_RC "\n",
 				DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid),
 				DP_UUID(in8->ci_cli_id), in8->ci_time, DP_RC(rc));
-			goto out_lock;
+			goto out;
 		}
 
-		if (!cur_tx) {
-			rc = rdb_tx_commit(tx);
-			if (rc != 0) {
-				D_ERROR(DF_CONT ": opc=%u rdb_tx_commit failed: " DF_RC "\n",
-					DP_CONT(pool_hdl->sph_pool->sp_uuid, in8->ci_uuid), opc,
-					DP_RC(rc));
-				goto out_lock;
-			}
-		}
 		D_DEBUG(DB_MD,
 			DF_CONT ": rpc=%p opc=%u hdl=" DF_UUID " updated svc ops cli_id=" DF_UUID
 				" ci_time=" DF_X64 "\n",
@@ -5351,11 +5324,6 @@ cont_op_save_dup(struct rdb_tx *cur_tx, struct ds_pool_hdl *pool_hdl, struct con
 			DP_UUID(in8->ci_hdl), DP_UUID(in8->ci_cli_id), in8->ci_time);
 	}
 
-out_lock:
-	if (!cur_tx) {
-		ABT_rwlock_unlock(svc->cs_lock);
-		rdb_tx_end(tx);
-	}
 out:
 	return rc;
 }
@@ -5380,8 +5348,6 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	struct ds_pool_svc_op_val     op_val;
 	int                           rc;
 
-	cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
-
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
 		goto out;
@@ -5395,8 +5361,9 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	rc = cont_op_check_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &dup_op, &op_val);
 	if ((rc != 0) || dup_op)
 		goto out_lock;
-
-	/* TODO: add client-provided metadata RPC key, lookup in cs_ops KVS, assign dup_op */
+	/* TODO: (for dup op case) implement per-opcode result data retrieval from stored op_val,
+	 *       (for new op case) implement per-opcode result data storage into op_val.
+	 */
 
 	switch (opc) {
 	case CONT_CREATE:
@@ -5410,6 +5377,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 		break;
 	case CONT_OPEN_BYLABEL:
+		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		olbl_out = crt_reply_get(rpc);
 		rc       = cont_lookup_bylabel(&tx, svc, clbl, &cont);
 		if (rc != 0)
@@ -5419,6 +5387,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
 		break;
 	case CONT_DESTROY_BYLABEL:
+		cont_op_in_get_label(rpc, opc, cont_proto_ver, &clbl);
 		rc = cont_lookup_bylabel(&tx, svc, clbl, &cont);
 		if (rc != 0)
 			goto out_lock;
@@ -5431,20 +5400,22 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 	}
 
+	/* If meets criteria (write op, definitive rc result, etc.), record result in cs_ops KVS */
 	op_val.ov_rc = rc;
-	if (rc != 0)
+	rc = cont_op_save_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &op_val);
+	if (op_val.ov_rc || rc) {
+		D_ERROR(DF_CONT ": op rc: " DF_RC ", save_dup rc: " DF_RC "\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
+			DP_RC(op_val.ov_rc), DP_RC(rc));
+		if (rc == 0)
+			rc = op_val.ov_rc;
 		goto out_contref;
-	/* TODO: assign cs_ops value rc=0 */
+	}
 
 	/* Update container metadata modified times as applicable
 	 * NB: this is a NOOP if the pool has not been upgraded to the layout containing mdtimes.
 	 */
 	rc = get_metadata_times(&tx, cont, false /* otime */, update_mtime, NULL /* times */);
-	if (rc != 0)
-		goto out_contref;
-
-	/* Insert client op key and value into cs_ops (successful operation case) */
-	rc = cont_op_save_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &op_val);
 	if (rc != 0)
 		goto out_contref;
 
@@ -5461,21 +5432,11 @@ out_lock:
 	ABT_rwlock_unlock(svc->cs_lock);
 	rdb_tx_end(&tx);
 out:
-	if (rc != 0) {
-		int rc2;
-
-		/* Insert client op key and value into cs_ops (failed operation case) */
-		rc2 = cont_op_save_dup(NULL /* tx */, pool_hdl, svc, rpc, cont_proto_ver, &op_val);
-		if (rc2 != 0) {
-			D_ERROR(DF_CONT ": error saving failed operation result to svc_ops " DF_RC
-					"\n",
-				DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), DP_RC(rc2));
-		}
-	} else if (!dup_op) {
+	if ((rc == 0) && !dup_op) {
 		/* Propagate new snapshot list by IV */
 		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
 			ds_cont_update_snap_iv(svc, in->ci_uuid);
-		else if (opc == CONT_PROP_SET)
+		else if (opc == CONT_PROP_SET || opc == CONT_ACL_UPDATE || opc == CONT_ACL_DELETE)
 			ds_cont_prop_iv_update(svc, in->ci_uuid);
 	}
 

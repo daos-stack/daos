@@ -326,8 +326,6 @@ typedef struct {
 	daos_prop_t		*prop;
 	/** Optional returned the allocated container UUID */
 	uuid_t			*cuuid;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_create_t;
 
 /** Container open by cont arg (label or UUID string) */
@@ -347,16 +345,12 @@ typedef struct {
 	daos_cont_info_t	*info;
 	/** Container (UUID string or label) to open, API v1.3.0 */
 	const char		*cont;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_open_t;
 
 /** Container close args */
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_close_t;
 
 /** Container destroy args */
@@ -372,8 +366,6 @@ typedef struct {
 	int			force;
 	/** Container (UUID string or label) to destroy, API v1.3.0 */
 	const char	       *cont;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_destroy_t;
 
 /** Container query args */
@@ -384,8 +376,6 @@ typedef struct {
 	daos_cont_info_t	*info;
 	/** Optional, returned container properties. */
 	daos_prop_t		*prop;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_query_t;
 
 /** Container set properties args */
@@ -394,8 +384,6 @@ typedef struct {
 	daos_handle_t		coh;
 	/** Property entries to set/update. */
 	daos_prop_t		*prop;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_set_prop_t;
 
 /** Container ACL update args */
@@ -404,8 +392,6 @@ typedef struct {
 	daos_handle_t		coh;
 	/** ACL containing new/updated entries. */
 	struct daos_acl		*acl;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_update_acl_t;
 
 /** Container ACL delete args */
@@ -416,8 +402,6 @@ typedef struct {
 	uint8_t			type;
 	/** Name of principal to be removed. */
 	d_string_t		name;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_delete_acl_t;
 
 /** Container aggregate args */
@@ -426,8 +410,6 @@ typedef struct {
 	daos_handle_t		coh;
 	/** Epoch to be aggregated to. Current time if 0.*/
 	daos_epoch_t		epoch;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_aggregate_t;
 
 /** Container rollback args */
@@ -457,8 +439,6 @@ typedef struct {
 	char			*buf;
 	/** [in]: Buffer size. [out]: Aggregate size of all attribute names. */
 	size_t			*size;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_list_attr_t;
 
 /** Container attribute get args */
@@ -473,8 +453,6 @@ typedef struct {
 	void   *const		*values;
 	/**[in]: Array of \a n buffer sizes. [out]: Array of actual sizes */
 	size_t			*sizes;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_get_attr_t;
 
 /** Container attribute set args */
@@ -489,8 +467,6 @@ typedef struct {
 	void   const *const	*values;
 	/** Array of \a n elements containing the sizes of attribute values. */
 	size_t const		*sizes;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_set_attr_t;
 
 /** Container attribute del args */
@@ -501,8 +477,6 @@ typedef struct {
 	int			n;
 	/** Array of \a n null-terminated attribute names. */
 	char   const *const	*names;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_del_attr_t;
 
 /** Container Object ID allocation args */
@@ -530,8 +504,6 @@ typedef struct {
 	char			**names;
 	/** Hash anchor for the next call. */
 	daos_anchor_t		*anchor;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                  req_time;
 } daos_cont_list_snap_t;
 
 /** Container snapshot creation args */
@@ -544,8 +516,6 @@ typedef struct {
 	daos_epoch_t		*epoch;
 	/** Optional null terminated name for snapshot. */
 	char			*name;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_create_snap_t;
 
 /** Container snapshot destroy args */
@@ -554,8 +524,6 @@ typedef struct {
 	daos_handle_t		coh;
 	/** Epoch range of snapshots to destroy. */
 	daos_epoch_range_t	epr;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_destroy_snap_t;
 
 /** Container snapshot oit oid get args */
@@ -566,8 +534,6 @@ typedef struct {
 	daos_epoch_t		 epoch;
 	/** Returned OIT OID for the epoch snapshot */
 	daos_obj_id_t		*oid;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_snap_oit_oid_get_t;
 
 /** Container snapshot oit create args */
@@ -578,8 +544,6 @@ typedef struct {
 	daos_epoch_t		 epoch;
 	/** Optional null terminated name for snapshot. */
 	char			*name;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                 req_time;
 } daos_cont_snap_oit_create_t;
 
 /** Container snapshot oit destroy args */
@@ -588,8 +552,6 @@ typedef struct {
 	daos_handle_t		coh;
 	/** epoch of persistent snapshot. */
 	daos_epoch_t		epoch;
-	/** Time of the request (hybrid logical clock). */
-	uint64_t                req_time;
 } daos_cont_snap_oit_destroy_t;
 
 /** Transaction Open args */

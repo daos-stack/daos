@@ -25,6 +25,12 @@
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
 #define DAOS_CONT_VERSION 8
+/* version in which metadata open/modify times, number of handles were added to open, query RPCs */
+#define CONT_PROTO_VER_WITH_MDTIMES 7
+#define CONT_PROTO_VER_WITH_NHANDLES 7
+/* version in which cont_op_in includes a client operation key */
+#define CONT_PROTO_VER_WITH_SVC_OP_KEY  8
+
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -142,6 +148,29 @@ CRT_RPC_DECLARE(cont_op_v8, DAOS_ISEQ_CONT_OP_V8, DAOS_OSEQ_CONT_OP)
 CRT_RPC_DECLARE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 CRT_RPC_DECLARE(cont_create_v8, DAOS_ISEQ_CONT_CREATE_V8, DAOS_OSEQ_CONT_CREATE)
 
+static inline void
+cont_create_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			daos_prop_t **cci_propp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		*cci_propp = ((struct cont_create_v8_in *)in)->cci_prop;
+	else
+		*cci_propp = ((struct cont_create_in *)in)->cci_prop;
+}
+
+static inline void
+cont_create_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, daos_prop_t *cci_prop)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		((struct cont_create_v8_in *)in)->cci_prop = cci_prop;
+	else
+		((struct cont_create_in *)in)->cci_prop = cci_prop;
+}
+
 #define DAOS_ISEQ_CONT_DESTROY	/* input fields */		 \
 				/* .ci_hdl unused */		 \
 	((struct cont_op_in)	(cdi_op)		CRT_VAR) \
@@ -177,6 +206,56 @@ CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 		DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DECLARE(cont_destroy_bylabel_v8, DAOS_ISEQ_CONT_DESTROY_BYLABEL_V8, DAOS_OSEQ_CONT_DESTROY)
 
+static inline void
+cont_destroy_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint32_t *cdi_forcep,
+			 const char **labelp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		if (opc == CONT_DESTROY_BYLABEL) {
+			*cdi_forcep = ((struct cont_destroy_bylabel_v8_in *)in)->cdi_force;
+			if (labelp)
+				*labelp = ((struct cont_destroy_bylabel_v8_in *)in)->cdli_label;
+		} else { /* CONT_DESTROY */
+			*cdi_forcep = ((struct cont_destroy_v8_in *)in)->cdi_force;
+			/* labelp should be NULL */
+		}
+	} else {
+		if (opc == CONT_DESTROY_BYLABEL) {
+			*cdi_forcep = ((struct cont_destroy_bylabel_in *)in)->cdi_force;
+			if (labelp)
+				*labelp = ((struct cont_destroy_bylabel_in *)in)->cdli_label;
+		} else { /* CONT_DESTROY*/
+			*cdi_forcep = ((struct cont_destroy_in *)in)->cdi_force;
+			/* labelp should be NULL */
+		}
+	}
+}
+
+static inline void
+cont_destroy_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cdi_force,
+			 const char *label)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		if (opc == CONT_DESTROY_BYLABEL) {
+			((struct cont_destroy_bylabel_v8_in *)in)->cdi_force  = cdi_force;
+			((struct cont_destroy_bylabel_v8_in *)in)->cdli_label = label;
+		} else { /* CONT_DESTROY */
+			((struct cont_destroy_v8_in *)in)->cdi_force = cdi_force;
+		}
+	} else {
+		if (opc == CONT_DESTROY_BYLABEL) {
+			((struct cont_destroy_bylabel_in *)in)->cdi_force  = cdi_force;
+			((struct cont_destroy_bylabel_in *)in)->cdli_label = label;
+		} else { /* CONT_DESTROY */
+			((struct cont_destroy_in *)in)->cdi_force = cdi_force;
+		}
+	}
+}
+
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
 	((uint64_t)		(coi_flags)		CRT_VAR) \
@@ -195,11 +274,6 @@ CRT_RPC_DECLARE(cont_destroy_bylabel_v8, DAOS_ISEQ_CONT_DESTROY_BYLABEL_V8, DAOS
 
 CRT_RPC_DECLARE(cont_open_v8, DAOS_ISEQ_CONT_OPEN_V8, DAOS_OSEQ_CONT_OPEN)
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
-
-/* version in which metadata open/modify times, number of handles were added to open, query RPCs */
-#define CONT_PROTO_VER_WITH_MDTIMES 7
-#define CONT_PROTO_VER_WITH_NHANDLES 7
-#define CONT_PROTO_VER_WITH_SVC_OP_KEY  8
 
 /* Container open bylabel input
  * Must begin with what DAOS_ISEQ_CONT_OPEN has, for reusing cont_open_in
@@ -221,6 +295,83 @@ CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
 CRT_RPC_DECLARE(cont_open_bylabel, DAOS_ISEQ_CONT_OPEN_BYLABEL, DAOS_OSEQ_CONT_OPEN_BYLABEL)
 CRT_RPC_DECLARE(cont_open_bylabel_v8, DAOS_ISEQ_CONT_OPEN_BYLABEL_V8, DAOS_OSEQ_CONT_OPEN_BYLABEL)
+
+static inline void
+cont_open_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *coi_flagsp,
+		      uint64_t *coi_prop_bitsp, const char **labelp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		if (opc == CONT_OPEN_BYLABEL) {
+			*coi_flagsp     = ((struct cont_open_bylabel_v8_in *)in)->coi_flags;
+			*coi_prop_bitsp = ((struct cont_open_bylabel_v8_in *)in)->coi_prop_bits;
+			if (labelp)
+				*labelp = ((struct cont_open_bylabel_v8_in *)in)->coli_label;
+		} else { /* CONT_OPEN */
+			*coi_flagsp     = ((struct cont_open_v8_in *)in)->coi_flags;
+			*coi_prop_bitsp = ((struct cont_open_v8_in *)in)->coi_prop_bits;
+			/* labelp should be NULL */
+		}
+	} else {
+		if (opc == CONT_OPEN_BYLABEL) {
+			*coi_flagsp     = ((struct cont_open_bylabel_in *)in)->coi_flags;
+			*coi_prop_bitsp = ((struct cont_open_bylabel_in *)in)->coi_prop_bits;
+			if (labelp)
+				*labelp = ((struct cont_open_bylabel_in *)in)->coli_label;
+		} else { /* CONT_OPEN */
+			*coi_flagsp     = ((struct cont_open_in *)in)->coi_flags;
+			*coi_prop_bitsp = ((struct cont_open_in *)in)->coi_prop_bits;
+			/* labelp should be NULL */
+		}
+	}
+}
+
+static inline void
+cont_open_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t coi_flags,
+		      uint64_t coi_prop_bits, const char *label)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		if (opc == CONT_OPEN_BYLABEL) {
+			((struct cont_open_bylabel_v8_in *)in)->coi_flags     = coi_flags;
+			((struct cont_open_bylabel_v8_in *)in)->coi_prop_bits = coi_prop_bits;
+			((struct cont_open_bylabel_v8_in *)in)->coli_label    = label;
+		} else { /* CONT_OPEN */
+			((struct cont_open_v8_in *)in)->coi_flags     = coi_flags;
+			((struct cont_open_v8_in *)in)->coi_prop_bits = coi_prop_bits;
+		}
+	} else {
+		if (opc == CONT_OPEN_BYLABEL) {
+			((struct cont_open_bylabel_in *)in)->coi_flags     = coi_flags;
+			((struct cont_open_bylabel_in *)in)->coi_prop_bits = coi_prop_bits;
+			((struct cont_open_bylabel_in *)in)->coli_label    = label;
+		} else { /* CONT_OPEN */
+			((struct cont_open_in *)in)->coi_flags     = coi_flags;
+			((struct cont_open_in *)in)->coi_prop_bits = coi_prop_bits;
+		}
+	}
+}
+
+static inline void
+cont_op_in_get_label(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, const char **clbl_out)
+{
+	void *in = crt_req_get(rpc);
+
+	D_ASSERT((opc == CONT_OPEN_BYLABEL) || (opc == CONT_DESTROY_BYLABEL));
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		if (opc == CONT_OPEN_BYLABEL)
+			*clbl_out = ((struct cont_open_bylabel_v8_in *)in)->coli_label;
+		else
+			*clbl_out = ((struct cont_destroy_bylabel_v8_in *)in)->cdli_label;
+	} else {
+		if (opc == CONT_OPEN_BYLABEL)
+			*clbl_out = ((struct cont_open_bylabel_in *)in)->coli_label;
+		else
+			*clbl_out = ((struct cont_destroy_bylabel_in *)in)->cdli_label;
+	}
+}
 
 #define DAOS_ISEQ_CONT_CLOSE	/* input fields */		 \
 	((struct cont_op_in)	(cci_op)		CRT_VAR)
@@ -284,6 +435,29 @@ CRT_RPC_DECLARE(cont_close_v8, DAOS_ISEQ_CONT_CLOSE_V8, DAOS_OSEQ_CONT_CLOSE)
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 CRT_RPC_DECLARE(cont_query_v8, DAOS_ISEQ_CONT_QUERY_V8, DAOS_OSEQ_CONT_QUERY)
 
+static inline void
+cont_query_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *cqi_bitsp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		*cqi_bitsp = ((struct cont_query_v8_in *)in)->cqi_bits;
+	else
+		*cqi_bitsp = ((struct cont_query_in *)in)->cqi_bits;
+}
+
+static inline void
+cont_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cqi_bits)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		((struct cont_query_v8_in *)in)->cqi_bits = cqi_bits;
+	else
+		((struct cont_query_in *)in)->cqi_bits = cqi_bits;
+}
+
+
 /** Add more items to query when needed */
 
 #define DAOS_ISEQ_CONT_OID_ALLOC /* input fields */		 \
@@ -310,6 +484,30 @@ CRT_RPC_DECLARE(cont_oid_alloc, DAOS_ISEQ_CONT_OID_ALLOC, DAOS_OSEQ_CONT_OID_ALL
 CRT_RPC_DECLARE(cont_attr_list, DAOS_ISEQ_CONT_ATTR_LIST, DAOS_OSEQ_CONT_ATTR_LIST)
 CRT_RPC_DECLARE(cont_attr_list_v8, DAOS_ISEQ_CONT_ATTR_LIST_V8, DAOS_OSEQ_CONT_ATTR_LIST)
 
+static inline void
+cont_attr_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			   crt_bulk_t *cali_bulkp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		*cali_bulkp = ((struct cont_attr_list_v8_in *)in)->cali_bulk;
+	else
+		*cali_bulkp = ((struct cont_attr_list_in *)in)->cali_bulk;
+}
+
+static inline void
+cont_attr_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			   crt_bulk_t cali_bulk)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		((struct cont_attr_list_v8_in *)in)->cali_bulk = cali_bulk;
+	else
+		((struct cont_attr_list_in *)in)->cali_bulk = cali_bulk;
+}
+
 #define DAOS_ISEQ_CONT_ATTR_GET	/* input fields */		 \
 	((struct cont_op_in)	(cagi_op)		CRT_VAR) \
 	((uint64_t)		(cagi_count)		CRT_VAR) \
@@ -326,7 +524,39 @@ CRT_RPC_DECLARE(cont_attr_list_v8, DAOS_ISEQ_CONT_ATTR_LIST_V8, DAOS_OSEQ_CONT_A
 CRT_RPC_DECLARE(cont_attr_get, DAOS_ISEQ_CONT_ATTR_GET, DAOS_OSEQ_CONT_ATTR_GET)
 CRT_RPC_DECLARE(cont_attr_get_v8, DAOS_ISEQ_CONT_ATTR_GET_V8, DAOS_OSEQ_CONT_ATTR_GET)
 
-/* FIXME: cont_attr_set vs cont_attr_set_v8 needed (different inputs) */
+static inline void
+cont_attr_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			  uint64_t *cagi_countp, uint64_t *cagi_key_lengthp, crt_bulk_t *cagi_bulkp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		*cagi_countp      = ((struct cont_attr_get_v8_in *)in)->cagi_count;
+		*cagi_key_lengthp = ((struct cont_attr_get_v8_in *)in)->cagi_key_length;
+		*cagi_bulkp       = ((struct cont_attr_get_v8_in *)in)->cagi_bulk;
+	} else {
+		*cagi_countp      = ((struct cont_attr_get_in *)in)->cagi_count;
+		*cagi_key_lengthp = ((struct cont_attr_get_in *)in)->cagi_key_length;
+		*cagi_bulkp       = ((struct cont_attr_get_in *)in)->cagi_bulk;
+	}
+}
+
+static inline void
+cont_attr_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cagi_count,
+			  uint64_t cagi_key_length, crt_bulk_t cagi_bulk)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		((struct cont_attr_get_v8_in *)in)->cagi_count      = cagi_count;
+		((struct cont_attr_get_v8_in *)in)->cagi_key_length = cagi_key_length;
+		((struct cont_attr_get_v8_in *)in)->cagi_bulk       = cagi_bulk;
+	} else {
+		((struct cont_attr_get_in *)in)->cagi_count      = cagi_count;
+		((struct cont_attr_get_in *)in)->cagi_key_length = cagi_key_length;
+		((struct cont_attr_get_in *)in)->cagi_bulk       = cagi_bulk;
+	}
+}
 
 #define DAOS_ISEQ_CONT_ATTR_SET	/* input fields */		 \
 	((struct cont_op_in)	(casi_op)		CRT_VAR) \
@@ -343,6 +573,36 @@ CRT_RPC_DECLARE(cont_attr_get_v8, DAOS_ISEQ_CONT_ATTR_GET_V8, DAOS_OSEQ_CONT_ATT
 CRT_RPC_DECLARE(cont_attr_set, DAOS_ISEQ_CONT_ATTR_SET, DAOS_OSEQ_CONT_ATTR_SET)
 CRT_RPC_DECLARE(cont_attr_set_v8, DAOS_ISEQ_CONT_ATTR_SET_V8, DAOS_OSEQ_CONT_ATTR_SET)
 
+static inline void
+cont_attr_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			  uint64_t *casi_countp, crt_bulk_t *casi_bulkp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		*casi_countp = ((struct cont_attr_set_v8_in *)in)->casi_count;
+		*casi_bulkp  = ((struct cont_attr_set_v8_in *)in)->casi_bulk;
+	} else {
+		*casi_countp = ((struct cont_attr_set_in *)in)->casi_count;
+		*casi_bulkp  = ((struct cont_attr_set_in *)in)->casi_bulk;
+	}
+}
+
+static inline void
+cont_attr_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t casi_count,
+			  crt_bulk_t casi_bulk)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		((struct cont_attr_set_v8_in *)in)->casi_count = casi_count;
+		((struct cont_attr_set_v8_in *)in)->casi_bulk  = casi_bulk;
+	} else {
+		((struct cont_attr_set_in *)in)->casi_count = casi_count;
+		((struct cont_attr_set_in *)in)->casi_bulk  = casi_bulk;
+	}
+}
+
 #define DAOS_ISEQ_CONT_ATTR_DEL	/* input fields */		 \
 	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
 	((uint64_t)		(cadi_count)		CRT_VAR) \
@@ -357,6 +617,36 @@ CRT_RPC_DECLARE(cont_attr_set_v8, DAOS_ISEQ_CONT_ATTR_SET_V8, DAOS_OSEQ_CONT_ATT
 
 CRT_RPC_DECLARE(cont_attr_del, DAOS_ISEQ_CONT_ATTR_DEL, DAOS_OSEQ_CONT_ATTR_DEL)
 CRT_RPC_DECLARE(cont_attr_del_v8, DAOS_ISEQ_CONT_ATTR_DEL_V8, DAOS_OSEQ_CONT_ATTR_DEL)
+
+static inline void
+cont_attr_del_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			  uint64_t *cadi_countp, crt_bulk_t *cadi_bulkp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		*cadi_countp = ((struct cont_attr_del_v8_in *)in)->cadi_count;
+		*cadi_bulkp  = ((struct cont_attr_del_v8_in *)in)->cadi_bulk;
+	} else {
+		*cadi_countp = ((struct cont_attr_del_in *)in)->cadi_count;
+		*cadi_bulkp  = ((struct cont_attr_del_in *)in)->cadi_bulk;
+	}
+}
+
+static inline void
+cont_attr_del_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cadi_count,
+			  crt_bulk_t cadi_bulk)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		((struct cont_attr_del_v8_in *)in)->cadi_count = cadi_count;
+		((struct cont_attr_del_v8_in *)in)->cadi_bulk  = cadi_bulk;
+	} else {
+		((struct cont_attr_del_in *)in)->cadi_count = cadi_count;
+		((struct cont_attr_del_in *)in)->cadi_bulk  = cadi_bulk;
+	}
+}
 
 #define DAOS_ISEQ_CONT_EPOCH_OP	/* input fields */		 \
 	((struct cont_op_in)	(cei_op)		CRT_VAR) \
@@ -374,6 +664,36 @@ CRT_RPC_DECLARE(cont_attr_del_v8, DAOS_ISEQ_CONT_ATTR_DEL_V8, DAOS_OSEQ_CONT_ATT
 CRT_RPC_DECLARE(cont_epoch_op, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_epoch_op_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPOCH_OP)
 
+static inline void
+cont_epoch_op_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			  daos_epoch_t *cei_epochp, uint64_t *cei_optsp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		*cei_epochp = ((struct cont_epoch_op_v8_in *)in)->cei_epoch;
+		*cei_optsp  = ((struct cont_epoch_op_v8_in *)in)->cei_opts;
+	} else {
+		*cei_epochp = ((struct cont_epoch_op_in *)in)->cei_epoch;
+		*cei_optsp  = ((struct cont_epoch_op_in *)in)->cei_opts;
+	}
+}
+
+static inline void
+cont_epoch_op_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			  daos_epoch_t cei_epoch, uint64_t cei_opts)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
+		((struct cont_epoch_op_v8_in *)in)->cei_epoch = cei_epoch;
+		((struct cont_epoch_op_v8_in *)in)->cei_opts  = cei_opts;
+	} else {
+		((struct cont_epoch_op_in *)in)->cei_epoch = cei_epoch;
+		((struct cont_epoch_op_in *)in)->cei_opts  = cei_opts;
+	}
+}
+
 #define DAOS_ISEQ_CONT_SNAP_LIST /* input fields */		 \
 	((struct cont_op_in)	(sli_op)		CRT_VAR) \
 	((crt_bulk_t)		(sli_bulk)		CRT_VAR)
@@ -387,6 +707,30 @@ CRT_RPC_DECLARE(cont_epoch_op_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPO
 
 CRT_RPC_DECLARE(cont_snap_list, DAOS_ISEQ_CONT_SNAP_LIST, DAOS_OSEQ_CONT_SNAP_LIST)
 CRT_RPC_DECLARE(cont_snap_list_v8, DAOS_ISEQ_CONT_SNAP_LIST_V8, DAOS_OSEQ_CONT_SNAP_LIST)
+
+static inline void
+cont_snap_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			   crt_bulk_t *sli_bulkp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		*sli_bulkp = ((struct cont_snap_list_v8_in *)in)->sli_bulk;
+	else
+		*sli_bulkp = ((struct cont_snap_list_in *)in)->sli_bulk;
+}
+
+static inline void
+cont_snap_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+			   crt_bulk_t sli_bulk)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		((struct cont_snap_list_v8_in *)in)->sli_bulk = sli_bulk;
+	else
+		((struct cont_snap_list_in *)in)->sli_bulk = sli_bulk;
+}
 
 CRT_RPC_DECLARE(cont_snap_create, DAOS_ISEQ_CONT_EPOCH_OP, DAOS_OSEQ_CONT_EPOCH_OP)
 CRT_RPC_DECLARE(cont_snap_create_v8, DAOS_ISEQ_CONT_EPOCH_OP_V8, DAOS_OSEQ_CONT_EPOCH_OP)
@@ -415,6 +759,30 @@ CRT_RPC_DECLARE(cont_snap_oit_oid_get, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET,
 		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
 CRT_RPC_DECLARE(cont_snap_oit_oid_get_v8, DAOS_ISEQ_CONT_SNAP_OIT_OID_GET_V8,
 		DAOS_OSEQ_CONT_SNAP_OIT_OID_GET)
+
+static inline void
+cont_snap_oit_oid_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+				  daos_epoch_t *ogi_epochp)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		*ogi_epochp = ((struct cont_snap_oit_oid_get_v8_in *)in)->ogi_epoch;
+	else
+		*ogi_epochp = ((struct cont_snap_oit_oid_get_in *)in)->ogi_epoch;
+}
+
+static inline void
+cont_snap_oit_oid_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
+				  daos_epoch_t ogi_epoch)
+{
+	void *in = crt_req_get(rpc);
+
+	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
+		((struct cont_snap_oit_oid_get_v8_in *)in)->ogi_epoch = ogi_epoch;
+	else
+		((struct cont_snap_oit_oid_get_in *)in)->ogi_epoch = ogi_epoch;
+}
 
 #define DAOS_ISEQ_TGT_DESTROY	/* input fields */		 \
 	((uuid_t)		(tdi_pool_uuid)		CRT_VAR) \
@@ -472,8 +840,6 @@ CRT_RPC_DECLARE(cont_tgt_epoch_aggregate, DAOS_ISEQ_CONT_TGT_EPOCH_AGGREGATE,
 CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 		DAOS_OSEQ_CONT_TGT_SNAPSHOT_NOTIFY)
 
-/* FIXME: cont_prop_set vs cont_prop_set_v8 needed (different inputs) */
-
 #define DAOS_ISEQ_CONT_PROP_SET	/* input fields */		 \
 	((struct cont_op_in)	(cpsi_op)		CRT_VAR) \
 	((daos_prop_t)		(cpsi_prop)		CRT_PTR) \
@@ -488,454 +854,6 @@ CRT_RPC_DECLARE(cont_tgt_snapshot_notify, DAOS_ISEQ_CONT_TGT_SNAPSHOT_NOTIFY,
 
 CRT_RPC_DECLARE(cont_prop_set, DAOS_ISEQ_CONT_PROP_SET, DAOS_OSEQ_CONT_PROP_SET)
 CRT_RPC_DECLARE(cont_prop_set_v8, DAOS_ISEQ_CONT_PROP_SET_V8, DAOS_OSEQ_CONT_PROP_SET)
-
-/* FIXME: cont_acl_update vs cont_acl_update_v8 needed (different inputs) */
-
-#define DAOS_ISEQ_CONT_ACL_UPDATE	/* input fields */	 \
-	((struct cont_op_in)	(caui_op)		CRT_VAR) \
-	((struct daos_acl)	(caui_acl)		CRT_PTR)
-
-#define DAOS_ISEQ_CONT_ACL_UPDATE_V8 /* input fields */                                            \
-	((struct cont_op_v8_in)(caui_op)CRT_VAR)((struct daos_acl)(caui_acl)CRT_PTR)
-
-#define DAOS_OSEQ_CONT_ACL_UPDATE	/* output fields */	 \
-	((struct cont_op_out)	(cauo_op)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_acl_update, DAOS_ISEQ_CONT_ACL_UPDATE, DAOS_OSEQ_CONT_ACL_UPDATE)
-CRT_RPC_DECLARE(cont_acl_update_v8, DAOS_ISEQ_CONT_ACL_UPDATE_V8, DAOS_OSEQ_CONT_ACL_UPDATE)
-
-#define DAOS_ISEQ_CONT_ACL_DELETE	/* input fields */	 \
-	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
-	((d_string_t)		(cadi_principal_name)	CRT_VAR) \
-	((uint8_t)		(cadi_principal_type)	CRT_VAR)
-
-#define DAOS_ISEQ_CONT_ACL_DELETE_V8 /* input fields */                                            \
-	((struct cont_op_v8_in)(cadi_op)CRT_VAR)((d_string_t)(cadi_principal_name)CRT_VAR)(        \
-	    (uint8_t)(cadi_principal_type)CRT_VAR)
-
-#define DAOS_OSEQ_CONT_ACL_DELETE	/* output fields */	 \
-	((struct cont_op_out)	(cado_op)		CRT_VAR)
-
-CRT_RPC_DECLARE(cont_acl_delete, DAOS_ISEQ_CONT_ACL_DELETE, DAOS_OSEQ_CONT_ACL_DELETE)
-CRT_RPC_DECLARE(cont_acl_delete_v8, DAOS_ISEQ_CONT_ACL_DELETE_V8, DAOS_OSEQ_CONT_ACL_DELETE)
-
-static inline int
-cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, uuid_t ci_pool_hdl,
-		uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep, crt_rpc_t **req)
-{
-	int                    rc;
-	crt_opcode_t           opcode;
-	static __thread uuid_t cli_id;
-	int                    proto_ver;
-	struct cont_op_in     *in;
-
-	if (uuid_is_null(cli_id)) {
-		uuid_generate(cli_id);
-		D_INFO("New client thread: " DF_UUID "\n", DP_UUID(cli_id));
-	}
-
-	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
-	opcode    = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
-	/* call daos_rpc_tag to get the target tag/context idx */
-	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
-
-	rc = crt_req_create(crt_ctx, tgt_ep, opcode, req);
-	if (rc != 0)
-		return rc;
-	in = crt_req_get(*req);
-
-	uuid_copy(in->ci_pool_hdl, ci_pool_hdl);
-	uuid_copy(in->ci_uuid, ci_uuid);
-	if (uuid_is_null(ci_hdl))
-		uuid_clear(in->ci_hdl);
-	else
-		uuid_copy(in->ci_hdl, ci_hdl);
-
-	if (req_timep && (*req_timep == 0))
-		*req_timep = d_hlc_get();
-
-	/* Temporary req_timep check: some opcodes aren't (yet) at v8 and don't have the op key */
-	if (req_timep && (proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)) {
-		struct cont_op_v8_in *in8 = crt_req_get(*req);
-
-		uuid_copy(in8->ci_cli_id, cli_id);
-		in8->ci_time = *req_timep;
-	}
-
-	return rc;
-}
-
-/* utility functions to get/set members with different offsets depending on the protocol version. */
-static inline void
-cont_op_in_get_label(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, const char **clbl_out)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		if (opc == CONT_OPEN_BYLABEL)
-			*clbl_out = ((struct cont_open_bylabel_v8_in *)in)->coli_label;
-		else if (opc == CONT_DESTROY_BYLABEL)
-			*clbl_out = ((struct cont_destroy_bylabel_v8_in *)in)->cdli_label;
-		else
-			*clbl_out = NULL;
-	} else {
-		if (opc == CONT_OPEN_BYLABEL)
-			*clbl_out = ((struct cont_open_bylabel_in *)in)->coli_label;
-		else if (opc == CONT_DESTROY_BYLABEL)
-			*clbl_out = ((struct cont_destroy_bylabel_in *)in)->cdli_label;
-		else
-			*clbl_out = NULL;
-	}
-}
-
-static inline void
-cont_open_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *coi_flagsp,
-		      uint64_t *coi_prop_bitsp, const char **labelp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		if (opc == CONT_OPEN_BYLABEL) {
-			*coi_flagsp     = ((struct cont_open_bylabel_v8_in *)in)->coi_flags;
-			*coi_prop_bitsp = ((struct cont_open_bylabel_v8_in *)in)->coi_prop_bits;
-			if (labelp)
-				*labelp = ((struct cont_open_bylabel_v8_in *)in)->coli_label;
-		} else { /* CONT_OPEN */
-			*coi_flagsp     = ((struct cont_open_v8_in *)in)->coi_flags;
-			*coi_prop_bitsp = ((struct cont_open_v8_in *)in)->coi_prop_bits;
-			/* labelp should be NULL */
-		}
-	} else {
-		if (opc == CONT_OPEN_BYLABEL) {
-			*coi_flagsp     = ((struct cont_open_bylabel_in *)in)->coi_flags;
-			*coi_prop_bitsp = ((struct cont_open_bylabel_in *)in)->coi_prop_bits;
-			if (labelp)
-				*labelp = ((struct cont_open_bylabel_in *)in)->coli_label;
-		} else { /* CONT_OPEN */
-			*coi_flagsp     = ((struct cont_open_in *)in)->coi_flags;
-			*coi_prop_bitsp = ((struct cont_open_in *)in)->coi_prop_bits;
-			/* labelp should be NULL */
-		}
-	}
-}
-
-static inline void
-cont_open_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t coi_flags,
-		      uint64_t coi_prop_bits, const char *label)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		if (opc == CONT_OPEN_BYLABEL) {
-			((struct cont_open_bylabel_v8_in *)in)->coi_flags     = coi_flags;
-			((struct cont_open_bylabel_v8_in *)in)->coi_prop_bits = coi_prop_bits;
-			((struct cont_open_bylabel_v8_in *)in)->coli_label    = label;
-		} else { /* CONT_OPEN */
-			((struct cont_open_v8_in *)in)->coi_flags     = coi_flags;
-			((struct cont_open_v8_in *)in)->coi_prop_bits = coi_prop_bits;
-		}
-	} else {
-		if (opc == CONT_OPEN_BYLABEL) {
-			((struct cont_open_bylabel_in *)in)->coi_flags     = coi_flags;
-			((struct cont_open_bylabel_in *)in)->coi_prop_bits = coi_prop_bits;
-			((struct cont_open_bylabel_in *)in)->coli_label    = label;
-		} else { /* CONT_OPEN */
-			((struct cont_open_in *)in)->coi_flags     = coi_flags;
-			((struct cont_open_in *)in)->coi_prop_bits = coi_prop_bits;
-		}
-	}
-}
-
-static inline void
-cont_create_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			daos_prop_t **cci_propp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*cci_propp = ((struct cont_create_v8_in *)in)->cci_prop;
-	else
-		*cci_propp = ((struct cont_create_in *)in)->cci_prop;
-}
-
-static inline void
-cont_create_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, daos_prop_t *cci_prop)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_create_v8_in *)in)->cci_prop = cci_prop;
-	else
-		((struct cont_create_in *)in)->cci_prop = cci_prop;
-}
-
-static inline void
-cont_destroy_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint32_t *cdi_forcep,
-			 const char **labelp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		if (opc == CONT_DESTROY_BYLABEL) {
-			*cdi_forcep = ((struct cont_destroy_bylabel_v8_in *)in)->cdi_force;
-			if (labelp)
-				*labelp = ((struct cont_destroy_bylabel_v8_in *)in)->cdli_label;
-		} else { /* CONT_DESTROY */
-			*cdi_forcep = ((struct cont_destroy_v8_in *)in)->cdi_force;
-			/* labelp should be NULL */
-		}
-	} else {
-		if (opc == CONT_DESTROY_BYLABEL) {
-			*cdi_forcep = ((struct cont_destroy_bylabel_in *)in)->cdi_force;
-			if (labelp)
-				*labelp = ((struct cont_destroy_bylabel_in *)in)->cdli_label;
-		} else { /* CONT_DESTROY*/
-			*cdi_forcep = ((struct cont_destroy_in *)in)->cdi_force;
-			/* labelp should be NULL */
-		}
-	}
-}
-
-static inline void
-cont_destroy_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cdi_force,
-			 const char *label)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		if (opc == CONT_DESTROY_BYLABEL) {
-			((struct cont_destroy_bylabel_v8_in *)in)->cdi_force  = cdi_force;
-			((struct cont_destroy_bylabel_v8_in *)in)->cdli_label = label;
-		} else { /* CONT_DESTROY */
-			((struct cont_destroy_v8_in *)in)->cdi_force = cdi_force;
-		}
-	} else {
-		if (opc == CONT_DESTROY_BYLABEL) {
-			((struct cont_destroy_bylabel_in *)in)->cdi_force  = cdi_force;
-			((struct cont_destroy_bylabel_in *)in)->cdli_label = label;
-		} else { /* CONT_DESTROY */
-			((struct cont_destroy_in *)in)->cdi_force = cdi_force;
-		}
-	}
-}
-
-static inline void
-cont_query_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t *cqi_bitsp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*cqi_bitsp = ((struct cont_query_v8_in *)in)->cqi_bits;
-	else
-		*cqi_bitsp = ((struct cont_query_in *)in)->cqi_bits;
-}
-
-static inline void
-cont_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cqi_bits)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_query_v8_in *)in)->cqi_bits = cqi_bits;
-	else
-		((struct cont_query_in *)in)->cqi_bits = cqi_bits;
-}
-
-static inline void
-cont_attr_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   crt_bulk_t *cali_bulkp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*cali_bulkp = ((struct cont_attr_list_v8_in *)in)->cali_bulk;
-	else
-		*cali_bulkp = ((struct cont_attr_list_in *)in)->cali_bulk;
-}
-
-static inline void
-cont_attr_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   crt_bulk_t cali_bulk)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_attr_list_v8_in *)in)->cali_bulk = cali_bulk;
-	else
-		((struct cont_attr_list_in *)in)->cali_bulk = cali_bulk;
-}
-
-static inline void
-cont_attr_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  uint64_t *cagi_countp, uint64_t *cagi_key_lengthp, crt_bulk_t *cagi_bulkp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		*cagi_countp      = ((struct cont_attr_get_v8_in *)in)->cagi_count;
-		*cagi_key_lengthp = ((struct cont_attr_get_v8_in *)in)->cagi_key_length;
-		*cagi_bulkp       = ((struct cont_attr_get_v8_in *)in)->cagi_bulk;
-	} else {
-		*cagi_countp      = ((struct cont_attr_get_in *)in)->cagi_count;
-		*cagi_key_lengthp = ((struct cont_attr_get_in *)in)->cagi_key_length;
-		*cagi_bulkp       = ((struct cont_attr_get_in *)in)->cagi_bulk;
-	}
-}
-
-static inline void
-cont_attr_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cagi_count,
-			  uint64_t cagi_key_length, crt_bulk_t cagi_bulk)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		((struct cont_attr_get_v8_in *)in)->cagi_count      = cagi_count;
-		((struct cont_attr_get_v8_in *)in)->cagi_key_length = cagi_key_length;
-		((struct cont_attr_get_v8_in *)in)->cagi_bulk       = cagi_bulk;
-	} else {
-		((struct cont_attr_get_in *)in)->cagi_count      = cagi_count;
-		((struct cont_attr_get_in *)in)->cagi_key_length = cagi_key_length;
-		((struct cont_attr_get_in *)in)->cagi_bulk       = cagi_bulk;
-	}
-}
-
-static inline void
-cont_attr_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  uint64_t *casi_countp, crt_bulk_t *casi_bulkp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		*casi_countp = ((struct cont_attr_set_v8_in *)in)->casi_count;
-		*casi_bulkp  = ((struct cont_attr_set_v8_in *)in)->casi_bulk;
-	} else {
-		*casi_countp = ((struct cont_attr_set_in *)in)->casi_count;
-		*casi_bulkp  = ((struct cont_attr_set_in *)in)->casi_bulk;
-	}
-}
-
-static inline void
-cont_attr_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t casi_count,
-			  crt_bulk_t casi_bulk)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		((struct cont_attr_set_v8_in *)in)->casi_count = casi_count;
-		((struct cont_attr_set_v8_in *)in)->casi_bulk  = casi_bulk;
-	} else {
-		((struct cont_attr_set_in *)in)->casi_count = casi_count;
-		((struct cont_attr_set_in *)in)->casi_bulk  = casi_bulk;
-	}
-}
-
-static inline void
-cont_attr_del_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  uint64_t *cadi_countp, crt_bulk_t *cadi_bulkp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		*cadi_countp = ((struct cont_attr_del_v8_in *)in)->cadi_count;
-		*cadi_bulkp  = ((struct cont_attr_del_v8_in *)in)->cadi_bulk;
-	} else {
-		*cadi_countp = ((struct cont_attr_del_in *)in)->cadi_count;
-		*cadi_bulkp  = ((struct cont_attr_del_in *)in)->cadi_bulk;
-	}
-}
-
-static inline void
-cont_attr_del_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uint64_t cadi_count,
-			  crt_bulk_t cadi_bulk)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		((struct cont_attr_del_v8_in *)in)->cadi_count = cadi_count;
-		((struct cont_attr_del_v8_in *)in)->cadi_bulk  = cadi_bulk;
-	} else {
-		((struct cont_attr_del_in *)in)->cadi_count = cadi_count;
-		((struct cont_attr_del_in *)in)->cadi_bulk  = cadi_bulk;
-	}
-}
-
-static inline void
-cont_epoch_op_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  daos_epoch_t *cei_epochp, uint64_t *cei_optsp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		*cei_epochp = ((struct cont_epoch_op_v8_in *)in)->cei_epoch;
-		*cei_optsp  = ((struct cont_epoch_op_v8_in *)in)->cei_opts;
-	} else {
-		*cei_epochp = ((struct cont_epoch_op_in *)in)->cei_epoch;
-		*cei_optsp  = ((struct cont_epoch_op_in *)in)->cei_opts;
-	}
-}
-
-static inline void
-cont_epoch_op_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			  daos_epoch_t cei_epoch, uint64_t cei_opts)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY) {
-		((struct cont_epoch_op_v8_in *)in)->cei_epoch = cei_epoch;
-		((struct cont_epoch_op_v8_in *)in)->cei_opts  = cei_opts;
-	} else {
-		((struct cont_epoch_op_in *)in)->cei_epoch = cei_epoch;
-		((struct cont_epoch_op_in *)in)->cei_opts  = cei_opts;
-	}
-}
-
-static inline void
-cont_snap_oit_oid_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-				  daos_epoch_t *ogi_epochp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*ogi_epochp = ((struct cont_snap_oit_oid_get_v8_in *)in)->ogi_epoch;
-	else
-		*ogi_epochp = ((struct cont_snap_oit_oid_get_in *)in)->ogi_epoch;
-}
-
-static inline void
-cont_snap_oit_oid_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-				  daos_epoch_t ogi_epoch)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_snap_oit_oid_get_v8_in *)in)->ogi_epoch = ogi_epoch;
-	else
-		((struct cont_snap_oit_oid_get_in *)in)->ogi_epoch = ogi_epoch;
-}
-
-static inline void
-cont_snap_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   crt_bulk_t *sli_bulkp)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		*sli_bulkp = ((struct cont_snap_list_v8_in *)in)->sli_bulk;
-	else
-		*sli_bulkp = ((struct cont_snap_list_in *)in)->sli_bulk;
-}
-
-static inline void
-cont_snap_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
-			   crt_bulk_t sli_bulk)
-{
-	void *in = crt_req_get(rpc);
-
-	if (cont_proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)
-		((struct cont_snap_list_v8_in *)in)->sli_bulk = sli_bulk;
-	else
-		((struct cont_snap_list_in *)in)->sli_bulk = sli_bulk;
-}
 
 static inline void
 cont_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -972,6 +890,19 @@ cont_prop_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 	}
 }
 
+#define DAOS_ISEQ_CONT_ACL_UPDATE	/* input fields */	 \
+	((struct cont_op_in)	(caui_op)		CRT_VAR) \
+	((struct daos_acl)	(caui_acl)		CRT_PTR)
+
+#define DAOS_ISEQ_CONT_ACL_UPDATE_V8 /* input fields */                                            \
+	((struct cont_op_v8_in)(caui_op)CRT_VAR)((struct daos_acl)(caui_acl)CRT_PTR)
+
+#define DAOS_OSEQ_CONT_ACL_UPDATE	/* output fields */	 \
+	((struct cont_op_out)	(cauo_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_acl_update, DAOS_ISEQ_CONT_ACL_UPDATE, DAOS_OSEQ_CONT_ACL_UPDATE)
+CRT_RPC_DECLARE(cont_acl_update_v8, DAOS_ISEQ_CONT_ACL_UPDATE_V8, DAOS_OSEQ_CONT_ACL_UPDATE)
+
 static inline void
 cont_acl_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
 			    struct daos_acl **caui_aclp)
@@ -995,6 +926,21 @@ cont_acl_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver
 	else
 		((struct cont_acl_update_in *)in)->caui_acl = caui_acl;
 }
+
+#define DAOS_ISEQ_CONT_ACL_DELETE	/* input fields */	 \
+	((struct cont_op_in)	(cadi_op)		CRT_VAR) \
+	((d_string_t)		(cadi_principal_name)	CRT_VAR) \
+	((uint8_t)		(cadi_principal_type)	CRT_VAR)
+
+#define DAOS_ISEQ_CONT_ACL_DELETE_V8 /* input fields */                                            \
+	((struct cont_op_v8_in)(cadi_op)CRT_VAR)((d_string_t)(cadi_principal_name)CRT_VAR)(        \
+	    (uint8_t)(cadi_principal_type)CRT_VAR)
+
+#define DAOS_OSEQ_CONT_ACL_DELETE	/* output fields */	 \
+	((struct cont_op_out)	(cado_op)		CRT_VAR)
+
+CRT_RPC_DECLARE(cont_acl_delete, DAOS_ISEQ_CONT_ACL_DELETE, DAOS_OSEQ_CONT_ACL_DELETE)
+CRT_RPC_DECLARE(cont_acl_delete_v8, DAOS_ISEQ_CONT_ACL_DELETE_V8, DAOS_OSEQ_CONT_ACL_DELETE)
 
 static inline void
 cont_acl_delete_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver,
@@ -1026,4 +972,43 @@ cont_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver
 	}
 }
 
+static inline int
+cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, uuid_t ci_pool_hdl,
+		uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep, crt_rpc_t **req)
+{
+	int                    rc;
+	crt_opcode_t           opcode;
+	int                    proto_ver;
+	struct cont_op_in     *in;
+
+	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
+	opcode    = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
+	/* call daos_rpc_tag to get the target tag/context idx */
+	tgt_ep->ep_tag = daos_rpc_tag(DAOS_REQ_CONT, tgt_ep->ep_tag);
+
+	rc = crt_req_create(crt_ctx, tgt_ep, opcode, req);
+	if (rc != 0)
+		return rc;
+	in = crt_req_get(*req);
+
+	uuid_copy(in->ci_pool_hdl, ci_pool_hdl);
+	uuid_copy(in->ci_uuid, ci_uuid);
+	if (uuid_is_null(ci_hdl))
+		uuid_clear(in->ci_hdl);
+	else
+		uuid_copy(in->ci_hdl, ci_hdl);
+
+	if (req_timep && (*req_timep == 0))
+		*req_timep = d_hlc_get();
+
+	/* Temporary req_timep check: some opcodes aren't (yet) at v8 and don't have the op key */
+	if (req_timep && (proto_ver >= CONT_PROTO_VER_WITH_SVC_OP_KEY)) {
+		struct cont_op_v8_in *in8 = crt_req_get(*req);
+
+		daos_get_client_uuid(&in8->ci_cli_id);
+		in8->ci_time = *req_timep;
+	}
+
+	return rc;
+}
 #endif /* __CONTAINER_RPC_H__ */

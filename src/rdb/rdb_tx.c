@@ -388,6 +388,22 @@ rdb_tx_append(struct rdb_tx *tx, struct rdb_tx_op *op, bool is_critical)
 	return 0;
 }
 
+void
+rdb_tx_discard(struct rdb_tx *tx)
+{
+	D_ASSERT(!(tx->dt_flags & RDB_TX_LOCAL));
+	D_ASSERTF((tx->dt_entry != NULL && tx->dt_entry_cap > 0 &&
+		   tx->dt_entry_len <= tx->dt_entry_cap),
+		  "entry=%p cap=%zu len=%zu\n", tx->dt_entry, tx->dt_entry_cap,
+		  tx->dt_entry_len);
+
+	D_FREE(tx->dt_entry);
+	tx->dt_entry = NULL;
+	tx->dt_entry_len = 0;
+	tx->dt_entry_cap = 0;
+	tx->dt_num_ops = 0;
+}
+
 /**
  * Commit \a tx. If successful, then all updates in \a tx are revealed to
  * queries. If an error occurs, then \a tx is aborted.

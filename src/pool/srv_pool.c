@@ -1602,8 +1602,6 @@ check_map:
 	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
-			DP_UUID(svc->ps_uuid));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
@@ -1611,29 +1609,7 @@ check_map:
 		goto out_lock;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
-		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
-		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
-
-	/* Check if duplicate operations detection is enabled, for informative debug log */
-	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
-	if (rc != 0)
-		goto out_lock;
-	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
-
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
-			DP_UUID(svc->ps_uuid));
-		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto out_lock;
-	}
-
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum)\n",
 		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
 		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
 
