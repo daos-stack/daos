@@ -98,11 +98,6 @@ dav_free_v2(dav_obj_t *pop, uint64_t off);
  */
 void *
 dav_memcpy_persist_v2(dav_obj_t *pop, void *dest, const void *src, size_t len);
-/*
- * DAV version of memcpy with deferred commit to blob.
- */
-void *
-dav_memcpy_persist_relaxed_v2(dav_obj_t *pop, void *dest, const void *src, size_t len);
 
 /*
  * If called for the first time on a newly created dav heap, the root object
