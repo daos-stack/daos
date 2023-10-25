@@ -774,9 +774,10 @@ class TestGroup():
         if not self.tests and verbose:
             logger.info("None of the following tests matched the tags:")
             other = "-print | sort -n | xargs -d '\n' grep ':avocado: tags='"
-            output = run_local(logger, find_command('.', '*.py', 2, other), check=False)
-            for line in output.stdout.splitlines():
-                logger.info("  %s", line)
+            result = run_remote(logger, get_local_host(), find_command(".", "*.py", 2, other))
+            for data in result.output:
+                for line in data.stdout:
+                    logger.info("  %s", line)
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
                          verbose, include_localhost):
