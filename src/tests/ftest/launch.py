@@ -328,7 +328,7 @@ class Launch():
             self.avocado, test_env, test_servers, test_clients, control_host, args.tags, args.nvme,
             yaml_dir, args.yaml_extension)
         try:
-            group.list_tests(logger)
+            group.list_tests(logger, args.verbose)
         except RunException:
             message = f"Error detecting tests that match tags: {' '.join(args.tags)}"
             return self.get_exit_status(1, message, "Setup", sys.exc_info())

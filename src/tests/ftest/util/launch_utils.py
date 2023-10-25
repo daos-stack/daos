@@ -18,7 +18,7 @@ from data_utils import list_unique, list_flatten, dict_extract_values
 from host_utils import get_node_set, get_local_host, HostInfo, HostException
 from logger_utils import get_file_handler, LOG_FILE_FORMAT
 from results_utils import LaunchTestName
-from run_utils import RunException, run_local, run_remote
+from run_utils import RunException, run_local, run_remote, find_command
 from slurm_setup import SlurmSetup, SlurmSetupException
 from slurm_utils import show_partition, create_partition, delete_partition
 from storage_utils import StorageInfo, StorageException
@@ -718,7 +718,7 @@ class TestGroup():
         """
         return self._details
 
-    def list_tests(self, logger):
+    def list_tests(self, logger, verbose):
         """List the test files matching the tags.
 
         Populates the self.tests list and defines the self.tag_filters list to use when running
@@ -726,6 +726,7 @@ class TestGroup():
 
         Args:
             logger (Logger): logger for the messages produced by this method
+            verbose (int): level of verbosity
 
         Raises:
             RunException: if there is a problem listing tests
@@ -769,19 +770,27 @@ class TestGroup():
             self.tests.append(TestInfo(test_file, index + 1, self._yaml_extension))
             logger.info("  %s", self.tests[-1])
 
+        # List all of the possible tags if no matches where found and verbose is set
+        if not self.tests and verbose:
+            logger.info("None of the following tests matched the tags:")
+            other = "| sort | xargs -d '\n' grep ':avocado: tags='"
+            output = run_local(logger, find_command('.', '*.py', 2, other), check=False)
+            for line in output.stdout.splitlines():
+                logger.info("  %s", line)
+
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
                          verbose, include_localhost):
         """Update each test yaml file.
 
         Args:
             logger (Logger): logger for the messages produced by this method
-            scm_size (_type_): _description_
-            scm_mount (_type_): _description_
-            extra_yaml (_type_): _description_
-            multiplier (_type_): _description_
-            override (_type_): _description_
-            verbose (_type_): _description_
-            include_localhost (_type_): _description_
+            scm_size (int): scm_size to use with ram storage tiers
+            scm_mount (str): the base path for the storage tier 0 scm_mount
+            extra_yaml (list): additional yaml file to include with the test yaml file
+            multiplier (int): multiplier to apply to any timeouts specified in the test yaml
+            override (bool): whether or not to override the number of hosts for the test
+            verbose (int): level of verbosity
+            include_localhost (bool): whether or not to include the local host with the client hosts
 
         Raises:
             RunException: if there is an error modifying the test yaml files
