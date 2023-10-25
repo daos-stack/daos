@@ -1440,12 +1440,12 @@ class TestPool(TestDaosApiBase):
 
         """
         status = True
-        self.log.info("Checking for pool data on %s", hosts)
+        self.log.info(f"Checking for pool data on {hosts}")
         pool_files = [uuid, "superblock"]
         for filename in [f"{scm_mount}/{item}" for item in pool_files]:
             result = check_file_exists(hosts, filename, sudo=True)
             if not result[0]:
-                self.log.error("%s: %s not found", result[1], filename)
+                self.log.error(f"{result[1]}: {filename} not found")
                 status = False
         return status
 
@@ -1465,7 +1465,7 @@ class TestPool(TestDaosApiBase):
         pool_dir = f"{scm_mount}/{uuid}"
         result = check_file_exists(host, pool_dir, directory=True, sudo=True)
         if result[0]:
-            self.log.info("{} exists on {}".format(pool_dir, host))
+            self.log.info(f"{pool_dir} exists on {host}")
         else:
-            self.log.info("{} does not exist on {}".format(pool_dir, host))
+            self.log.info(f"{pool_dir} does not exist on {host}")
         return result[0]
