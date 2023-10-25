@@ -773,7 +773,7 @@ class TestGroup():
         # List all of the possible tags if no matches where found and verbose is set
         if not self.tests and verbose:
             logger.info("None of the following tests matched the tags:")
-            other = "| sort | xargs -d '\n' grep ':avocado: tags='"
+            other = "-print | sort -n | xargs -d '\n' grep ':avocado: tags='"
             output = run_local(logger, find_command('.', '*.py', 2, other), check=False)
             for line in output.stdout.splitlines():
                 logger.info("  %s", line)
