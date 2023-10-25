@@ -18,6 +18,8 @@ class TestWithMdTestScrubberFault(TestWithScrubber):
 
             1. Create checksum faults and see
             whether scrubber finds them.
+            2. Run mdtest application as part of
+            the testing.
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium
         :avocado: tags=scrubber,faults
