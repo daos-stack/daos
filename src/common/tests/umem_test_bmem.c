@@ -132,6 +132,7 @@ global_setup(void **state)
 		print_message("Failed to set the md_on_ssd tunable\n");
 		return 1;
 	}
+	ustore.store_type = umempobj_get_backend_type();
 
 	D_ALLOC_PTR(arg);
 	if (arg == NULL) {

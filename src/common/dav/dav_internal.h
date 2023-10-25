@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: BSD-3-Clause */
-/* Copyright 2015-2022, Intel Corporation */
+/* Copyright 2015-2023, Intel Corporation */
 
 /*
  * dav_flags.h -- Interfaces exported by DAOS internal Allocator for VOS (DAV)
@@ -26,6 +26,11 @@ enum dav_stats_enabled {
 	DAV_STATS_ENABLED_BOTH,
 	DAV_STATS_ENABLED_PERSISTENT,
 	DAV_STATS_DISABLED,
+};
+
+enum dav_arenas_assignment_type {
+	DAV_ARENAS_ASSIGNMENT_THREAD_KEY,
+	DAV_ARENAS_ASSIGNMENT_GLOBAL,
 };
 
 #define	DAV_PHDR_SIZE	4096

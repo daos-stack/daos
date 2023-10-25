@@ -178,13 +178,15 @@ alloc_prep_block(struct palloc_heap *heap, const struct memory_block *m,
  * (best-fit, next-fit, ...) varies depending on the bucket container.
  */
 static int
-palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr constructor,
-			  void *arg, uint64_t extra_field, uint16_t object_flags, uint16_t class_id,
-			  uint32_t zset_id, struct dav_action_internal *out)
+palloc_reservation_create(struct palloc_heap *heap, size_t size,
+	palloc_constr constructor, void *arg,
+	uint64_t extra_field, uint16_t object_flags,
+	uint16_t class_id, uint16_t arena_id,
+	struct dav_action_internal *out)
 {
-	int                  err       = 0;
+	int err = 0;
+
 	struct memory_block *new_block = &out->m;
-	struct zoneset      *zset;
 
 	out->type = DAV_ACTION_TYPE_HEAP;
 
@@ -196,12 +198,6 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 
 	if (c == NULL) {
 		ERR("no allocation class for size %lu bytes", size);
-		errno = EINVAL;
-		return -1;
-	}
-
-	zset = heap_get_zoneset(heap, zset_id);
-	if (zset == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -226,7 +222,7 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	*new_block = MEMORY_BLOCK_NONE;
 	new_block->size_idx = (uint32_t)size_idx;
 
-	struct bucket *b = zoneset_bucket_acquire(zset, c->id);
+	struct bucket *b = heap_bucket_acquire(heap, c->id, arena_id);
 
 	err = heap_get_bestfit_block(heap, b, new_block);
 	if (err != 0)
@@ -258,7 +254,7 @@ palloc_reservation_create(struct palloc_heap *heap, size_t size, palloc_constr c
 	out->new_state = MEMBLOCK_ALLOCATED;
 
 out:
-	zoneset_bucket_release(b);
+	heap_bucket_release(b);
 
 	if (err == 0)
 		return 0;
@@ -300,17 +296,17 @@ static void
 palloc_restore_free_chunk_state(struct palloc_heap *heap,
 	struct memory_block *m)
 {
-	struct zoneset *zset = heap_get_zoneset(heap, m->zone_id);
-
 	if (m->type == MEMORY_BLOCK_HUGE) {
-		struct bucket *b = zoneset_bucket_acquire(zset, DEFAULT_ALLOC_CLASS_ID);
+		struct bucket *b = heap_bucket_acquire(heap,
+			DEFAULT_ALLOC_CLASS_ID,
+			HEAP_ARENA_PER_THREAD);
 		if (heap_free_chunk_reuse(heap, b, m) != 0) {
 			if (errno == EEXIST)
 				FATAL("duplicate runtime chunk state, possible double free");
 			else
 				D_CRIT("unable to track runtime chunk state\n");
 		}
-		zoneset_bucket_release(b);
+		heap_bucket_release(b);
 	}
 }
 
@@ -577,15 +573,18 @@ palloc_exec_actions(struct palloc_heap *heap,
  * palloc_reserve -- creates a single reservation
  */
 int
-palloc_reserve(struct palloc_heap *heap, size_t size, palloc_constr constructor, void *arg,
-	       uint64_t extra_field, uint16_t object_flags, uint16_t class_id, uint32_t zset_id,
-	       struct dav_action *act)
+palloc_reserve(struct palloc_heap *heap, size_t size,
+	palloc_constr constructor, void *arg,
+	uint64_t extra_field, uint16_t object_flags,
+	uint16_t class_id, uint16_t arena_id,
+	struct dav_action *act)
 {
 	COMPILE_ERROR_ON(sizeof(struct dav_action) !=
 		sizeof(struct dav_action_internal));
 
-	return palloc_reservation_create(heap, size, constructor, arg, extra_field, object_flags,
-					 class_id, zset_id, (struct dav_action_internal *)act);
+	return palloc_reservation_create(heap, size, constructor, arg,
+		extra_field, object_flags, class_id, arena_id,
+		(struct dav_action_internal *)act);
 }
 
 /*
@@ -729,7 +728,7 @@ palloc_publish(struct palloc_heap *heap, struct dav_action *actv, size_t actvcnt
 int
 palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, size_t size,
 		 palloc_constr constructor, void *arg, uint64_t extra_field, uint16_t object_flags,
-		 uint16_t class_id, uint32_t zset_id, struct operation_context *ctx)
+		 uint16_t class_id, uint16_t arena_id, struct operation_context *ctx)
 {
 	size_t user_size = 0;
 
@@ -759,8 +758,9 @@ palloc_operation(struct palloc_heap *heap, uint64_t off, uint64_t *dest_off, siz
 	/* alloc or realloc */
 	if (size != 0) {
 		alloc = &ops[nops++];
-		if (palloc_reservation_create(heap, size, constructor, arg, extra_field,
-					      object_flags, class_id, zset_id, alloc) != 0) {
+		if (palloc_reservation_create(heap, size, constructor, arg,
+			extra_field, object_flags,
+			class_id, arena_id, alloc) != 0) {
 			operation_cancel(ctx);
 			return -1;
 		}
@@ -908,6 +908,15 @@ palloc_boot(struct palloc_heap *heap, void *heap_start,
 }
 
 /*
+ * palloc_buckets_init -- initialize buckets
+ */
+int
+palloc_buckets_init(struct palloc_heap *heap)
+{
+	return heap_buckets_init(heap);
+}
+
+/*
  * palloc_init -- initializes palloc heap
  */
 int
@@ -942,6 +951,15 @@ palloc_heap_check_remote(void *heap_start, uint64_t heap_size,
 	struct remote_ops *ops)
 {
 	return heap_check_remote(heap_start, heap_size, ops);
+}
+
+/*
+ * palloc_heap_cleanup -- cleanups the volatile heap state
+ */
+void
+palloc_heap_cleanup(struct palloc_heap *heap)
+{
+	heap_cleanup(heap);
 }
 
 #if VG_MEMCHECK_ENABLED

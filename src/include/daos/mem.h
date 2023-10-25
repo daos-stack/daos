@@ -38,6 +38,7 @@ enum {
 	DAOS_MD_PMEM	= 0,
 	DAOS_MD_BMEM	= 1,
 	DAOS_MD_ADMEM	= 2,
+	DAOS_MD_BMEM_V2	= 3,
 };
 
 /* return umem backend type */
@@ -276,6 +277,8 @@ typedef enum {
 	UMEM_CLASS_BMEM,
 	/** ad-hoc memory */
 	UMEM_CLASS_ADMEM,
+	/** blob backed memory v2 */
+	UMEM_CLASS_BMEM_V2,
 	/** unknown */
 	UMEM_CLASS_UNKNOWN,
 } umem_class_id_t;

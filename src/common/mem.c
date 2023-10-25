@@ -17,7 +17,9 @@
 #ifdef DAOS_PMEM_BUILD
 #include <libpmemobj.h>
 #include <daos_srv/ad_mem.h>
+#define DAV_V2_BUILD
 #include "dav/dav.h"
+#include "dav_v2/dav_v2.h"
 #endif
 
 #define UMEM_TX_DATA_MAGIC	(0xc01df00d)
@@ -44,7 +46,7 @@ umem_get_mb_evictable(struct umem_instance *umm, int flags)
 
 	if (umm->umm_pool->up_store.store_type == DAOS_MD_BMEM) {
 		pop = (dav_obj_t *)umm->umm_pool->up_priv;
-		return dav_get_zone_evictable(pop, flags);
+		return dav_get_zone_evictable_v2(pop, flags);
 	}
 	return 0;
 }
@@ -82,6 +84,9 @@ umempobj_settings_init(bool md_on_ssd)
 	case DAOS_MD_ADMEM:
 		D_INFO("UMEM will use AD-hoc Memory as the metadata backend interface\n");
 		break;
+	case DAOS_MD_BMEM_V2:
+		D_INFO("UMEM will use Blob Backed Memory v2 as the metadata backend interface\n");
+		break;
 	default:
 		D_ERROR("DAOS_MD_ON_SSD_MODE=%d envar invalid, use %d for BMEM or %d for ADMEM\n",
 			md_mode, DAOS_MD_BMEM, DAOS_MD_ADMEM);
@@ -106,6 +111,8 @@ int umempobj_backend_type2class_id(int backend)
 		return UMEM_CLASS_BMEM;
 	case DAOS_MD_ADMEM:
 		return UMEM_CLASS_ADMEM;
+	case DAOS_MD_BMEM_V2:
+		return UMEM_CLASS_BMEM_V2;
 	default:
 		D_ASSERTF(0,
 			  "bad daos_md_backend %d\n", backend);
@@ -170,6 +177,16 @@ set_slab_desc(struct umem_pool *ph_p, struct umem_slab_desc *slab)
 		davslab.header_type = DAV_HEADER_NONE;
 		davslab.class_id = slab->class_id;
 		rc = dav_class_register((dav_obj_t *)ph_p->up_priv, &davslab);
+		/* update with the new slab id */
+		slab->class_id = davslab.class_id;
+		break;
+	case DAOS_MD_BMEM_V2:
+		davslab.unit_size = slab->unit_size;
+		davslab.alignment = 0;
+		davslab.units_per_block = 1000;
+		davslab.header_type = DAV_HEADER_NONE;
+		davslab.class_id = slab->class_id;
+		rc = dav_class_register_v2((dav_obj_t *)ph_p->up_priv, &davslab);
 		/* update with the new slab id */
 		slab->class_id = davslab.class_id;
 		break;
@@ -337,6 +354,15 @@ umempobj_create(const char *path, const char *layout_name, int flags,
 		}
 		umm_pool->up_priv = dav_hdl;
 		break;
+	case DAOS_MD_BMEM_V2:
+		dav_hdl = dav_obj_create_v2(path, 0, poolsize, mode, &umm_pool->up_store);
+		if (!dav_hdl) {
+			D_ERROR("Failed to create pool %s, size="DF_U64": errno = %d\n",
+				path, poolsize, errno);
+			goto error;
+		}
+		umm_pool->up_priv = dav_hdl;
+		break;
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_create(path, 0, store, &bh);
 		if (rc) {
@@ -422,6 +448,16 @@ umempobj_open(const char *path, const char *layout_name, int flags, struct umem_
 
 		umm_pool->up_priv = dav_hdl;
 		break;
+	case DAOS_MD_BMEM_V2:
+		dav_hdl = dav_obj_open_v2(path, 0, &umm_pool->up_store);
+		if (!dav_hdl) {
+			D_ERROR("Error in opening the pool %s: errno =%d\n",
+				path, errno);
+			goto error;
+		}
+
+		umm_pool->up_priv = dav_hdl;
+		break;
 	case DAOS_MD_ADMEM:
 		rc = ad_blob_open(path, 0, store, &bh);
 		if (rc) {
@@ -464,6 +500,9 @@ umempobj_close(struct umem_pool *ph_p)
 	case DAOS_MD_BMEM:
 		dav_obj_close((dav_obj_t *)ph_p->up_priv);
 		break;
+	case DAOS_MD_BMEM_V2:
+		dav_obj_close_v2((dav_obj_t *)ph_p->up_priv);
+		break;
 	case DAOS_MD_ADMEM:
 		bh.bh_blob = (struct ad_blob *)ph_p->up_priv;
 		ad_blob_close(bh);
@@ -503,6 +542,9 @@ umempobj_get_rootptr(struct umem_pool *ph_p, size_t size)
 	case DAOS_MD_BMEM:
 		off = dav_root((dav_obj_t *)ph_p->up_priv, size);
 		return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
+	case DAOS_MD_BMEM_V2:
+		off = dav_root_v2((dav_obj_t *)ph_p->up_priv, size);
+		return (char *)dav_get_base_ptr((dav_obj_t *)ph_p->up_priv) + off;
 	case DAOS_MD_ADMEM:
 		bh.bh_blob = (struct ad_blob *)ph_p->up_priv;
 		return ad_root(bh, size);
@@ -537,6 +579,11 @@ umempobj_get_heapusage(struct umem_pool *ph_p, daos_size_t *curr_allocated)
 		break;
 	case DAOS_MD_BMEM:
 		rc = dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
+		if (rc == 0)
+			*curr_allocated = st.curr_allocated;
+		break;
+	case DAOS_MD_BMEM_V2:
+		rc = dav_get_heap_stats_v2((dav_obj_t *)ph_p->up_priv, &st);
 		if (rc == 0)
 			*curr_allocated = st.curr_allocated;
 		break;
@@ -575,6 +622,12 @@ umempobj_log_fraginfo(struct umem_pool *ph_p)
 		break;
 	case DAOS_MD_BMEM:
 		dav_get_heap_stats((dav_obj_t *)ph_p->up_priv, &st);
+		D_ERROR("Fragmentation info, run_allocated: "
+		  DF_U64", run_active: "DF_U64"\n",
+		  st.run_allocated, st.run_active);
+		break;
+	case DAOS_MD_BMEM_V2:
+		dav_get_heap_stats_v2((dav_obj_t *)ph_p->up_priv, &st);
 		D_ERROR("Fragmentation info, run_allocated: "
 		  DF_U64", run_active: "DF_U64"\n",
 		  st.run_allocated, st.run_active);
@@ -1074,9 +1127,7 @@ bmem_tx_alloc(struct umem_instance *umm, size_t size, uint64_t flags, unsigned i
 		pflags |= DAV_FLAG_ZERO;
 	if (flags & UMEM_FLAG_NO_FLUSH)
 		pflags |= DAV_FLAG_NO_FLUSH;
-	if (mbkt_id != 0)
-		pflags |= DAV_EZONE_ID(mbkt_id);
-	return dav_tx_alloc(size, type_num, pflags);
+	return dav_tx_xalloc(size, type_num, pflags);
 }
 
 static int
@@ -1183,9 +1234,8 @@ bmem_reserve(struct umem_instance *umm, void *act, size_t size, unsigned int typ
 	     unsigned int mbkt_id)
 {
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
-	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
 
-	return dav_reserve(pop, (struct dav_action *)act, size, type_num, flags);
+	return dav_reserve(pop, (struct dav_action *)act, size, type_num);
 }
 
 static void
@@ -1228,9 +1278,8 @@ bmem_atomic_alloc(struct umem_instance *umm, size_t size, unsigned int type_num,
 	uint64_t off;
 	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
 	int rc;
-	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
 
-	rc = dav_alloc(pop, &off, size, type_num, flags, NULL, NULL);
+	rc = dav_alloc(pop, &off, size, type_num, NULL, NULL);
 	if (rc)
 		return UMOFF_NULL;
 	return off;
@@ -1274,6 +1323,251 @@ static umem_ops_t	bmem_ops = {
 	.mo_atomic_alloc	= bmem_atomic_alloc,
 	.mo_atomic_free		= bmem_atomic_free,
 	.mo_atomic_flush	= bmem_atomic_flush,
+	.mo_tx_add_callback	= umem_tx_add_cb,
+};
+
+/** BMEM v2 operations (depends on dav) */
+
+static int
+bmem_tx_free_v2(struct umem_instance *umm, umem_off_t umoff)
+{
+	/*
+	 * This free call could be on error cleanup code path where
+	 * the transaction is already aborted due to previous failed
+	 * pmemobj_tx call. Let's just skip it in this case.
+	 *
+	 * The reason we don't fix caller to avoid calling tx_free()
+	 * in an aborted transaction is that the caller code could be
+	 * shared by both transactional and non-transactional (where
+	 * UMEM_CLASS_VMEM is used, see btree code) interfaces, and
+	 * the explicit umem_free() on error cleanup is necessary for
+	 * non-transactional case.
+	 */
+	if (dav_tx_stage_v2() == DAV_TX_STAGE_ONABORT)
+		return 0;
+
+	if (!UMOFF_IS_NULL(umoff)) {
+		int	rc;
+
+		rc = dav_tx_free_v2(umem_off2offset(umoff));
+		return rc ? umem_tx_errno(rc) : 0;
+	}
+
+	return 0;
+}
+
+static umem_off_t
+bmem_tx_alloc_v2(struct umem_instance *umm, size_t size, uint64_t flags, unsigned int type_num,
+	      unsigned int mbkt_id)
+{
+	uint64_t pflags = 0;
+
+	get_slab(umm, &pflags, &size);
+
+	if (flags & UMEM_FLAG_ZERO)
+		pflags |= DAV_FLAG_ZERO;
+	if (flags & UMEM_FLAG_NO_FLUSH)
+		pflags |= DAV_FLAG_NO_FLUSH;
+	if (mbkt_id != 0)
+		pflags |= DAV_EZONE_ID(mbkt_id);
+	return dav_tx_alloc_v2(size, type_num, pflags);
+}
+
+static int
+bmem_tx_add_v2(struct umem_instance *umm, umem_off_t umoff,
+	    uint64_t offset, size_t size)
+{
+	int	rc;
+
+	rc = dav_tx_add_range_v2(umem_off2offset(umoff), size);
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static int
+bmem_tx_xadd_v2(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
+	     size_t size, uint64_t flags)
+{
+	int	rc;
+	uint64_t pflags = 0;
+
+	if (flags & UMEM_XADD_NO_SNAPSHOT)
+		pflags |= DAV_XADD_NO_SNAPSHOT;
+
+	rc = dav_tx_xadd_range_v2(umem_off2offset(umoff), size, pflags);
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+
+static int
+bmem_tx_add_ptr_v2(struct umem_instance *umm, void *ptr, size_t size)
+{
+	int	rc;
+
+	rc = dav_tx_add_range_direct_v2(ptr, size);
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static int
+bmem_tx_abort_v2(struct umem_instance *umm, int err)
+{
+	/*
+	 * obj_tx_abort() may have already been called in the error
+	 * handling code of pmemobj APIs.
+	 */
+	if (dav_tx_stage_v2() != DAV_TX_STAGE_ONABORT)
+		dav_tx_abort_v2(err);
+
+	err = dav_tx_end_v2(NULL);
+	return err ? umem_tx_errno(err) : 0;
+}
+
+static int
+bmem_tx_begin_v2(struct umem_instance *umm, struct umem_tx_stage_data *txd)
+{
+	int rc;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	if (txd != NULL) {
+		D_ASSERT(txd->txd_magic == UMEM_TX_DATA_MAGIC);
+		rc = dav_tx_begin_v2(pop, NULL, DAV_TX_PARAM_CB, pmem_stage_callback,
+				      txd, DAV_TX_PARAM_NONE);
+	} else {
+		rc = dav_tx_begin_v2(pop, NULL, DAV_TX_PARAM_NONE);
+	}
+
+	if (rc != 0) {
+		/*
+		 * dav_tx_end() needs be called to re-initialize the
+		 * tx state when dav_tx_begin() failed.
+		 */
+		rc = dav_tx_end_v2(NULL);
+		return rc ? umem_tx_errno(rc) : 0;
+	}
+	return 0;
+}
+
+static int
+bmem_tx_commit_v2(struct umem_instance *umm, void *data)
+{
+	int rc;
+
+	dav_tx_commit_v2();
+	rc = dav_tx_end_v2(data);
+
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static int
+bmem_tx_stage_v2(void)
+{
+	return dav_tx_stage_v2();
+}
+
+static void
+bmem_defer_free_v2(struct umem_instance *umm, umem_off_t off, void *act)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	dav_defer_free_v2(pop, umem_off2offset(off),
+			(struct dav_action *)act);
+}
+
+static umem_off_t
+bmem_reserve_v2(struct umem_instance *umm, void *act, size_t size, unsigned int type_num,
+	     unsigned int mbkt_id)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
+
+	return dav_reserve_v2(pop, (struct dav_action *)act, size, type_num, flags);
+}
+
+static void
+bmem_cancel_v2(struct umem_instance *umm, void *actv, int actv_cnt)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	dav_cancel_v2(pop, (struct dav_action *)actv, actv_cnt);
+}
+
+static int
+bmem_tx_publish_v2(struct umem_instance *umm, void *actv, int actv_cnt)
+{
+	int	rc;
+
+	rc = dav_tx_publish_v2((struct dav_action *)actv, actv_cnt);
+	return rc ? umem_tx_errno(rc) : 0;
+}
+
+static void *
+bmem_atomic_copy_v2(struct umem_instance *umm, void *dest, const void *src,
+		 size_t len, enum acopy_hint hint)
+{
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+	if (hint == UMEM_RESERVED_MEM) {
+		memcpy(dest, src, len);
+		return dest;
+	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+		return dav_memcpy_persist_v2(pop, dest, src, len);
+	} else { /* UMEM_COMMIT_DEFER */
+		return dav_memcpy_persist_relaxed_v2(pop, dest, src, len);
+	}
+}
+
+static umem_off_t
+bmem_atomic_alloc_v2(struct umem_instance *umm, size_t size, unsigned int type_num,
+		  unsigned int mbkt_id)
+{
+	uint64_t off;
+	dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	int rc;
+	uint64_t   flags = DAV_EZONE_ID(mbkt_id);
+
+	rc = dav_alloc_v2(pop, &off, size, type_num, flags, NULL, NULL);
+	if (rc)
+		return UMOFF_NULL;
+	return off;
+}
+
+static int
+bmem_atomic_free_v2(struct umem_instance *umm, umem_off_t umoff)
+{
+	if (!UMOFF_IS_NULL(umoff)) {
+		uint64_t off = umem_off2offset(umoff);
+
+		dav_free_v2((dav_obj_t *)umm->umm_pool->up_priv, off);
+	}
+	return 0;
+}
+
+static void
+bmem_atomic_flush_v2(struct umem_instance *umm, void *addr, size_t len)
+{
+	/* REVISIT: We need to update the WAL with this info
+	 * dav_obj_t *pop = (dav_obj_t *)umm->umm_pool->up_priv;
+	 * dav_flush(pop, addr, len);
+	 */
+}
+
+static umem_ops_t	bmem_v2_ops = {
+	.mo_tx_free		= bmem_tx_free_v2,
+	.mo_tx_alloc		= bmem_tx_alloc_v2,
+	.mo_tx_add		= bmem_tx_add_v2,
+	.mo_tx_xadd		= bmem_tx_xadd_v2,
+	.mo_tx_add_ptr		= bmem_tx_add_ptr_v2,
+	.mo_tx_abort		= bmem_tx_abort_v2,
+	.mo_tx_begin		= bmem_tx_begin_v2,
+	.mo_tx_commit		= bmem_tx_commit_v2,
+	.mo_tx_stage		= bmem_tx_stage_v2,
+	.mo_reserve		= bmem_reserve_v2,
+	.mo_defer_free		= bmem_defer_free_v2,
+	.mo_cancel		= bmem_cancel_v2,
+	.mo_tx_publish		= bmem_tx_publish_v2,
+	.mo_atomic_copy		= bmem_atomic_copy_v2,
+	.mo_atomic_alloc	= bmem_atomic_alloc_v2,
+	.mo_atomic_free		= bmem_atomic_free_v2,
+	.mo_atomic_flush	= bmem_atomic_flush_v2,
 	.mo_tx_add_callback	= umem_tx_add_cb,
 };
 
@@ -1367,6 +1661,11 @@ static struct umem_class umem_class_defined[] = {
 		.umc_name	= "bmem",
 	},
 	{
+		.umc_id		= UMEM_CLASS_BMEM_V2,
+		.umc_ops	= &bmem_v2_ops,
+		.umc_name	= "bmem_v2",
+	},
+	{
 		.umc_id		= UMEM_CLASS_ADMEM,
 		.umc_ops	= &ad_mem_ops,
 		.umc_name	= "ad-hoc",
@@ -1414,6 +1713,11 @@ set_offsets(struct umem_instance *umm)
 		dav_pop = (dav_obj_t *)umm->umm_pool->up_priv;
 
 		umm->umm_base = (uint64_t)dav_get_base_ptr(dav_pop);
+		break;
+	case UMEM_CLASS_BMEM_V2:
+		dav_pop = (dav_obj_t *)umm->umm_pool->up_priv;
+
+		umm->umm_base = (uint64_t)dav_get_base_ptr_v2(dav_pop);
 		break;
 	case UMEM_CLASS_ADMEM:
 		bh.bh_blob = (struct ad_blob *)umm->umm_pool->up_priv;
@@ -1560,6 +1864,7 @@ umem_rsrvd_item_size(struct umem_instance *umm)
 	case UMEM_CLASS_ADMEM:
 		return sizeof(struct ad_reserv_act);
 	case UMEM_CLASS_BMEM:
+	case UMEM_CLASS_BMEM_V2:
 		return sizeof(struct dav_action);
 	default:
 		D_ERROR("bad umm_id %d\n", umm->umm_id);
