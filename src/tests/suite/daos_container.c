@@ -385,7 +385,7 @@ co_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	daos_prop_t		*prop_query2;
-	struct daos_prop_entry	*entry;
+	struct daos_prop_entry  *entry;
 	int			 rc;
 	char			*exp_owner;
 	char			*exp_owner_grp;
@@ -629,7 +629,7 @@ co_op_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	/* See above TODO */
+		/* See above TODO */
 #if 0
 	print_message("setting DAOS_CONT_OP_NOREPLY and creating container ... ");
 	rc = daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
@@ -798,7 +798,7 @@ co_acl(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	daos_prop_t		*prop_in;
+	daos_prop_t             *prop_in;
 	int			 rc;
 	char			 exp_owner[] = "fictionaluser@";
 	char			 exp_owner_grp[] = "admins@";
@@ -2318,8 +2318,7 @@ co_open_fail_destroy(void **state)
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, DAOS_CONT_OPEN_FAIL | DAOS_FAIL_ONCE);
 
 	uuid_unparse(uuid, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info,
-			    NULL);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, -DER_IO);
 	test_set_engine_fail_loc(arg, CRT_NO_RANK, 0);
 	print_message("destroying container ... ");

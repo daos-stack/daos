@@ -108,8 +108,8 @@ struct cont_args {
 };
 
 struct cont_task_priv {
-	uint64_t	rq_time;	/* time of the request (hybrid logical clock) */
-	struct dc_cont *cont;		/* client container handle (used by cont_open) */
+	uint64_t        rq_time; /* time of the request (hybrid logical clock) */
+	struct dc_cont *cont;    /* client container handle (used by cont_open) */
 };
 
 static int
@@ -119,8 +119,8 @@ cont_create_complete(tse_task_t *task, void *data)
 	daos_cont_create_t     *args;
 	struct dc_pool	       *pool = arg->pool;
 	struct cont_create_out *out = crt_reply_get(arg->rpc);
-	struct cont_task_priv  *tpriv = dc_task_get_priv(task);
-	bool			free_tpriv = true;
+	struct cont_task_priv  *tpriv      = dc_task_get_priv(task);
+	bool                    free_tpriv = true;
 	int			rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -401,10 +401,10 @@ static int
 cont_destroy_complete(tse_task_t *task, void *data)
 {
 	struct cont_args	*arg = (struct cont_args *)data;
-	struct cont_task_priv   *tpriv = dc_task_get_priv(task);
+	struct cont_task_priv   *tpriv      = dc_task_get_priv(task);
 	struct dc_pool		*pool = arg->pool;
 	struct cont_destroy_out	*out = crt_reply_get(arg->rpc);
-	bool			 free_tpriv = true;
+	bool                     free_tpriv = true;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -742,15 +742,15 @@ static int
 cont_open_complete(tse_task_t *task, void *data)
 {
 	struct cont_open_args	*arg = (struct cont_open_args *)data;
-	struct cont_open_out    *out  = crt_reply_get(arg->rpc);
+	struct cont_open_out    *out   = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->coa_pool;
-	struct cont_task_priv	*tpriv = dc_task_get_priv(task);
-	struct dc_cont		*cont = tpriv->cont;
+	struct cont_task_priv   *tpriv = dc_task_get_priv(task);
+	struct dc_cont          *cont  = tpriv->cont;
 	time_t			 otime_sec, mtime_sec;
 	char			 otime_str[32];
 	char			 mtime_str[32];
 	uint32_t		 cli_pm_ver;
-	bool			 free_tpriv = true;
+	bool                     free_tpriv = true;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -883,7 +883,7 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 	int			 rc;
 
 	args = dc_task_get_args(task);
-	tpriv = dc_task_get_priv(task);
+	tpriv   = dc_task_get_priv(task);
 	cont_op = label ? CONT_OPEN_BYLABEL : CONT_OPEN;
 
 	ep.ep_grp = pool->dp_sys->sy_group;
@@ -896,9 +896,8 @@ dc_cont_open_internal(tse_task_t *task, const char *label, struct dc_pool *pool)
 				DF_RC"\n", DP_UUID(pool->dp_pool),
 				label, DP_RC(rc));
 		else
-			D_ERROR(DF_CONT": cannot find container service: "
-				DF_RC"\n", DP_CONT(pool->dp_pool,
-						   tpriv->cont->dc_uuid), DP_RC(rc));
+			D_ERROR(DF_CONT ": cannot find container service: " DF_RC "\n",
+				DP_CONT(pool->dp_pool, tpriv->cont->dc_uuid), DP_RC(rc));
 		goto err;
 	}
 	rc = cont_req_create(daos_task2ctx(task), &ep, cont_op, pool->dp_pool_hdl,
@@ -948,7 +947,7 @@ dc_cont_open(tse_task_t *task)
 {
 	daos_cont_open_t	*args;
 	struct dc_pool		*pool;
-	struct cont_task_priv	*tpriv;
+	struct cont_task_priv   *tpriv;
 	const char		*label;
 	uuid_t			 uuid;
 	int			 rc;
@@ -991,9 +990,8 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, tpriv);
 	}
 
-	D_DEBUG(DB_MD, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(pool->dp_pool), args->cont ? : "<compat>",
-		DP_UUID(tpriv->cont->dc_cont_hdl), args->flags);
+	D_DEBUG(DB_MD, DF_UUID ":%s: opening: hdl=" DF_UUIDF " flags=%x\n", DP_UUID(pool->dp_pool),
+		args->cont ?: "<compat>", DP_UUID(tpriv->cont->dc_cont_hdl), args->flags);
 
 	rc = dc_cont_open_internal(task, label, pool);
 	if (rc)
@@ -1026,9 +1024,9 @@ cont_close_complete(tse_task_t *task, void *data)
 	struct cont_close_args	*arg = (struct cont_close_args *)data;
 	struct cont_close_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool		*pool = arg->cca_pool;
-	struct cont_task_priv	*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv   *tpriv      = dc_task_get_priv(task);
 	struct dc_cont		*cont = arg->cca_cont;
-	bool			 free_tpriv = true;
+	bool                     free_tpriv = true;
 	int			 rc = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1211,14 +1209,14 @@ static int
 cont_query_complete(tse_task_t *task, void *data)
 {
 	struct cont_query_args		*arg = (struct cont_query_args *)data;
-	struct cont_query_out           *out  = crt_reply_get(arg->rpc);
+	struct cont_query_out           *out   = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv = dc_task_get_priv(task);
 	time_t				 otime_sec, mtime_sec;
 	char				 otime_str[32];
 	char				 mtime_str[32];
-	bool				 free_tpriv = true;
+	bool                             free_tpriv = true;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1391,7 +1389,7 @@ dc_cont_query(tse_task_t *task)
 	daos_cont_query_t       *args;
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
-	struct cont_task_priv	*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv   *tpriv = dc_task_get_priv(task);
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
 	struct cont_query_args	 arg;
@@ -1476,11 +1474,11 @@ cont_set_prop_complete(tse_task_t *task, void *data)
 {
 	struct cont_set_prop_args	*arg = (struct cont_set_prop_args *)
 						data;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_prop_set_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cqa_pool;
 	struct dc_cont			*cont = arg->cqa_cont;
-	bool				 free_tpriv = true;
+	bool                             free_tpriv = true;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1524,7 +1522,7 @@ int
 dc_cont_set_prop(tse_task_t *task)
 {
 	daos_cont_set_prop_t		*args;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv = dc_task_get_priv(task);
 	struct daos_prop_entry		*entry;
 	struct daos_co_status            co_stat;
 	struct dc_pool			*pool;
@@ -1656,11 +1654,11 @@ cont_update_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_update_acl_args	*arg = (struct cont_update_acl_args *)
 						data;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_acl_update_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cua_pool;
 	struct dc_cont			*cont = arg->cua_cont;
-	bool				 free_tpriv = true;
+	bool                             free_tpriv = true;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1704,7 +1702,7 @@ int
 dc_cont_update_acl(tse_task_t *task)
 {
 	daos_cont_update_acl_t          *args;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv = dc_task_get_priv(task);
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			 ep;
@@ -1791,11 +1789,11 @@ cont_delete_acl_complete(tse_task_t *task, void *data)
 {
 	struct cont_delete_acl_args	*arg = (struct cont_delete_acl_args *)
 						data;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv      = dc_task_get_priv(task);
 	struct cont_acl_delete_out	*out = crt_reply_get(arg->rpc);
 	struct dc_pool			*pool = arg->cda_pool;
 	struct dc_cont			*cont = arg->cda_cont;
-	bool				 free_tpriv = true;
+	bool                             free_tpriv = true;
 	int				 rc   = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &arg->rpc->cr_ep, rc,
@@ -1839,7 +1837,7 @@ int
 dc_cont_delete_acl(tse_task_t *task)
 {
 	daos_cont_delete_acl_t          *args;
-	struct cont_task_priv		*tpriv = dc_task_get_priv(task);
+	struct cont_task_priv           *tpriv = dc_task_get_priv(task);
 	struct dc_pool			*pool;
 	struct dc_cont			*cont;
 	crt_endpoint_t			 ep;
@@ -2364,12 +2362,12 @@ out:
 }
 
 struct cont_req_arg {
-	struct dc_pool		*cra_pool;
-	struct dc_cont		*cra_cont;
-	struct cont_task_priv	*cra_tpriv;
-	crt_rpc_t		*cra_rpc;
-	crt_bulk_t		 cra_bulk;
-	tse_task_cb_t		 cra_callback;
+	struct dc_pool        *cra_pool;
+	struct dc_cont        *cra_cont;
+	struct cont_task_priv *cra_tpriv;
+	crt_rpc_t             *cra_rpc;
+	crt_bulk_t             cra_bulk;
+	tse_task_cb_t          cra_callback;
 };
 
 enum creq_cleanup_stage {
@@ -2405,12 +2403,12 @@ cont_req_cleanup(enum creq_cleanup_stage stage, bool free_tpriv, struct cont_req
 static int
 cont_req_complete(tse_task_t *task, void *data)
 {
-	struct cont_req_arg	*args	    = data;
-	struct dc_pool		*pool	    = args->cra_pool;
-	struct dc_cont		*cont	    = args->cra_cont;
-	struct cont_op_out	*op_out	    = crt_reply_get(args->cra_rpc);
-	bool			 free_tpriv = true;
-	int			 rc	    = task->dt_result;
+	struct cont_req_arg *args       = data;
+	struct dc_pool      *pool       = args->cra_pool;
+	struct dc_cont      *cont       = args->cra_cont;
+	struct cont_op_out  *op_out     = crt_reply_get(args->cra_rpc);
+	bool                 free_tpriv = true;
+	int                  rc         = task->dt_result;
 
 	rc = cont_rsvc_client_complete_rpc(pool, &args->cra_rpc->cr_ep,
 					   rc, op_out, task);
@@ -2434,7 +2432,7 @@ cont_req_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	D_DEBUG(DB_MD, DF_CONT": Accessed: using hdl="DF_UUID"\n",
+	D_DEBUG(DB_MD, DF_CONT ": Accessed: using hdl=" DF_UUID "\n",
 		DP_CONT(pool->dp_pool, cont->dc_uuid), DP_UUID(cont->dc_cont_hdl));
 
 	if (args->cra_callback != NULL)
@@ -2448,9 +2446,9 @@ static int
 cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *ctx,
 		 tse_task_t *task, struct cont_req_arg *args)
 {
-	struct cont_task_priv	*tpriv = dc_task_get_priv(task);
-	crt_endpoint_t		 ep;
-	int			 rc;
+	struct cont_task_priv *tpriv = dc_task_get_priv(task);
+	crt_endpoint_t         ep;
+	int                    rc;
 
 	memset(args, 0, sizeof(*args));
 	args->cra_cont = dc_hdl2cont(coh);
@@ -2757,7 +2755,7 @@ out_bulk:
 	cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 out_names_items:
 	for (i = 0; i < args->n; i++) {
-		if(new_names[i])
+		if (new_names[i])
 			D_FREE(new_names[i]);
 	}
 out_names:
@@ -2867,14 +2865,14 @@ out_bulk:
 	cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 out_values_items:
 	for (i = 0; i < args->n; i++) {
-		if(new_values[i])
+		if (new_values[i])
 			D_FREE(new_values[i]);
 	}
 out_values:
 	D_FREE(new_values);
 out_names_items:
 	for (i = 0; i < args->n; i++) {
-		if(new_names[i])
+		if (new_names[i])
 			D_FREE(new_names[i]);
 	}
 out_names:
@@ -2892,7 +2890,7 @@ int
 dc_cont_del_attr(tse_task_t *task)
 {
 	daos_cont_set_attr_t     *args;
-	struct cont_req_arg	  cb_args;
+	struct cont_req_arg       cb_args;
 	uint64_t                  count;
 	crt_bulk_t                bulk;
 	int			 i, rc;
@@ -2959,7 +2957,7 @@ out_bulk:
 	cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
 out_names_items:
 	for (i = 0; i < args->n; i++) {
-		if(new_names[i])
+		if (new_names[i])
 			D_FREE(new_names[i]);
 	}
 out_names:
@@ -2982,8 +2980,8 @@ struct epoch_op_arg {
 static int
 cont_epoch_op_req_complete(tse_task_t *task, void *data)
 {
-	struct epoch_op_arg		*arg = data;
-	struct cont_epoch_op_out	*op_out;
+	struct epoch_op_arg      *arg = data;
+	struct cont_epoch_op_out *op_out;
 	int rc;
 
 	rc = cont_req_complete(task, &arg->eoa_req);

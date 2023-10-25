@@ -1007,7 +1007,8 @@ int daos_prop_entry_copy(struct daos_prop_entry *entry,
 daos_recx_t *daos_recx_alloc(uint32_t nr);
 void daos_recx_free(daos_recx_t *recx);
 
-void daos_get_client_uuid(uuid_t *uuidp);
+void
+daos_get_client_uuid(uuid_t *uuidp);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)

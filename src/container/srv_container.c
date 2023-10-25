@@ -5402,11 +5402,11 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 
 	/* If meets criteria (write op, definitive rc result, etc.), record result in cs_ops KVS */
 	op_val.ov_rc = rc;
-	rc = cont_op_save_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &op_val);
+	rc           = cont_op_save_dup(&tx, pool_hdl, svc, rpc, cont_proto_ver, &op_val);
 	if (op_val.ov_rc || rc) {
 		D_ERROR(DF_CONT ": op rc: " DF_RC ", save_dup rc: " DF_RC "\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			DP_RC(op_val.ov_rc), DP_RC(rc));
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), DP_RC(op_val.ov_rc),
+			DP_RC(rc));
 		if (rc == 0)
 			rc = op_val.ov_rc;
 		goto out_contref;

@@ -24,12 +24,12 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 8
+#define DAOS_CONT_VERSION              8
 /* version in which metadata open/modify times, number of handles were added to open, query RPCs */
-#define CONT_PROTO_VER_WITH_MDTIMES 7
-#define CONT_PROTO_VER_WITH_NHANDLES 7
+#define CONT_PROTO_VER_WITH_MDTIMES    7
+#define CONT_PROTO_VER_WITH_NHANDLES   7
 /* version in which cont_op_in includes a client operation key */
-#define CONT_PROTO_VER_WITH_SVC_OP_KEY  8
+#define CONT_PROTO_VER_WITH_SVC_OP_KEY 8
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
@@ -456,7 +456,6 @@ cont_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int cont_proto_ver, uin
 	else
 		((struct cont_query_in *)in)->cqi_bits = cqi_bits;
 }
-
 
 /** Add more items to query when needed */
 
@@ -976,10 +975,10 @@ static inline int
 cont_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc, uuid_t ci_pool_hdl,
 		uuid_t ci_uuid, uuid_t ci_hdl, uint64_t *req_timep, crt_rpc_t **req)
 {
-	int                    rc;
-	crt_opcode_t           opcode;
-	int                    proto_ver;
-	struct cont_op_in     *in;
+	int                rc;
+	crt_opcode_t       opcode;
+	int                proto_ver;
+	struct cont_op_in *in;
 
 	proto_ver = dc_cont_proto_version ? dc_cont_proto_version : DAOS_CONT_VERSION;
 	opcode    = DAOS_RPC_OPCODE(opc, DAOS_CONT_MODULE, proto_ver);
