@@ -260,9 +260,10 @@ def _real_w(entry_type, path):
     '''
     if entry_type == 'file':
         try:
-            # Write a newline to reduce likelihood of corrupting an executable file
-            with open(path, 'a', encoding='utf-8') as file:
-                return file.write('\n') == 1
+            # Always write a line that allows the file to be executable
+            with open(path, "w", encoding='utf-8') as file:
+                data = '#!/usr/bin/env bash\n'
+                return file.write(data) == len(data)
         except PermissionError:
             return False
     if entry_type == 'dir':
