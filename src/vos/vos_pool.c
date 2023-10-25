@@ -633,15 +633,14 @@ vos2mc_flags(unsigned int vos_flags)
 
 static int
 vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
-		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, unsigned int flags,
-		   struct umem_pool **ph)
+		   size_t scm_sz, size_t nvme_sz, size_t wal_sz, size_t meta_sz,
+		   unsigned int flags, struct umem_pool **ph)
 {
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct umem_store	 store = { 0 };
 	struct bio_meta_context	*mc;
 	struct umem_pool	*pop = NULL;
 	enum bio_mc_flags	 mc_flags = vos2mc_flags(flags);
-	size_t			 meta_sz = scm_sz;
 	int			 rc, ret;
 
 	*ph = NULL;
@@ -656,13 +655,25 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 	if (!bio_nvme_configured(SMD_DEV_TYPE_MAX) || xs_ctxt == NULL)
 		goto umem_create;
 
-	if (!scm_sz) {
-		struct stat lstat;
+	/* Is meta_sz is set then use it, otherwise derive from VOS file size or scm_sz */
+	if (!meta_sz) {
+		if (!scm_sz) {
+			struct stat lstat;
 
-		rc = stat(path, &lstat);
-		if (rc != 0)
-			return daos_errno2der(errno);
-		meta_sz = lstat.st_size;
+			rc = stat(path, &lstat);
+			if (rc != 0)
+				return daos_errno2der(errno);
+			meta_sz = lstat.st_size;
+		} else {
+			/* Custom scm_sz specified so use it (not regular DAOS pool case) */
+			meta_sz = scm_sz;
+		}
+	} else if ((scm_sz) && (meta_sz != scm_sz)) {
+		// See below comment on DAV allocator support and remove check when completed.
+		D_ERROR("scm_size != meta_size pool create case not supported, scm_sz: " DF_U64
+			" meta_sz: " DF_U64,
+			scm_sz, meta_sz);
+		return -DER_INVAL;
 	}
 
 	D_DEBUG(DB_MGMT, "Create BIO meta context for xs:%p pool:"DF_UUID" "
@@ -688,11 +699,18 @@ vos_pmemobj_create(const char *path, uuid_t pool_id, const char *layout,
 		return rc;
 	}
 
+	// TODO DAOS-13690: When DAV allocator supports different MD-blob and VOS-file sizes, pass
+	//                  meta_sz and scm_sz to umem_store. The poolsize umempobj_create()
+	//                  param will continue to be used as it is currently (non-zero for create,
+	//                  zero to use existing) to keep compatibility with PMEM mode.
+
 	bio_meta_get_attr(mc, &store.stor_size, &store.stor_blk_size, &store.stor_hdr_blks);
 	store.stor_priv = mc;
 	store.stor_ops = &vos_store_ops;
 
 umem_create:
+	D_DEBUG(DB_MGMT, "umempobj_create sz: " DF_U64 " store_sz: " DF_U64, scm_sz,
+		store.stor_size);
 	pop = umempobj_create(path, layout, UMEMPOBJ_ENABLE_STATS, scm_sz, 0600, &store);
 	if (pop != NULL) {
 		*ph = pop;
@@ -977,9 +995,8 @@ static int pool_open(void *ph, struct vos_pool_df *pool_df,
 		     unsigned int flags, void *metrics, daos_handle_t *poh);
 
 int
-vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		   daos_size_t nvme_sz, daos_size_t wal_sz,
-		   unsigned int flags, daos_handle_t *poh)
+vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		   daos_size_t wal_sz, daos_size_t meta_sz, unsigned int flags, daos_handle_t *poh)
 {
 	struct umem_pool	*ph;
 	struct umem_attr	 uma = {0};
@@ -994,8 +1011,8 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (!path || uuid_is_null(uuid) || daos_file_is_dax(path))
 		return -DER_INVAL;
 
-	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
-		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, DP_UUID(uuid));
+	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64" (meta: "DF_U64"), "
+		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, meta_sz, DP_UUID(uuid));
 
 	if (flags & VOS_POF_SMALL)
 		flags |= VOS_POF_EXCL;
@@ -1016,10 +1033,11 @@ vos_pool_create_ex(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		return daos_errno2der(errno);
 	}
 
-	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, flags, &ph);
+	rc = vos_pmemobj_create(path, uuid, VOS_POOL_LAYOUT, scm_sz, nvme_sz, wal_sz, meta_sz,
+				flags, &ph);
 	if (rc) {
-		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64". "DF_RC"\n",
-			path, scm_sz, nvme_sz, DP_RC(rc));
+		D_ERROR("Failed to create pool %s, scm_sz="DF_U64", nvme_sz="DF_U64", meta_sz="
+			DF_U64". "DF_RC"\n", path, scm_sz, nvme_sz, meta_sz, DP_RC(rc));
 		return rc;
 	}
 
@@ -1124,11 +1142,11 @@ close:
 }
 
 int
-vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
+vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz, daos_size_t nvme_sz,
+		daos_size_t meta_sz, unsigned int flags, daos_handle_t *poh)
 {
 	/* create vos pool with default WAL size */
-	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, flags, poh);
+	return vos_pool_create_ex(path, uuid, scm_sz, nvme_sz, 0, meta_sz, flags, poh);
 }
 
 /**

@@ -66,20 +66,21 @@ int ds_mgmt_group_update_handler(struct mgmt_grp_up_in *in);
 /** srv_pool.c */
 int ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev, d_rank_list_t *targets,
 			size_t scm_size, size_t nvme_size, daos_prop_t *prop, d_rank_list_t **svcp,
-			int domains_nr, uint32_t *domains, size_t meta_blob_size);
+			int domains_nr, uint32_t *domains, size_t meta_blob_bytes);
 int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks);
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles,
 		       size_t n_handles, uint32_t destroy, uint32_t force_destroy,
 		       char *machine, uint32_t *count);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 				     struct pool_target_addr_list *target_addrs,
-				     pool_comp_state_t state, size_t scm_size, size_t nvme_size);
+				     pool_comp_state_t state, size_t scm_size, size_t nvme_size,
+				     size_t meta_blob_bytes);
 int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     uint32_t reint_rank,
 			     struct pool_target_id_list *reint_list);
 int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			d_rank_list_t *rank_list, char *tgt_dev,
-			size_t scm_size, size_t nvme_size,
+			size_t scm_size, size_t nvme_size, size_t meta_blob_bytes,
 			size_t domains_nr, uint32_t *domains);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			  daos_prop_t *prop);

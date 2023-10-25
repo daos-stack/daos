@@ -265,9 +265,9 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 		},
 		"meta size is set (mdonssd not configured)": {
 			in: &mgmtpb.PoolCreateReq{
-				Tierbytes:    []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
-				Ranks:        []uint32{0},
-				MetaBlobSize: humanize.GByte,
+				Tierbytes:     []uint64{defaultScmBytes - 1, defaultNvmeBytes - 1},
+				Ranks:         []uint32{0},
+				MetaBlobBytes: humanize.GByte,
 			},
 			expErr: errors.New("md-on-ssd"),
 		},
@@ -428,20 +428,20 @@ func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 			targetCount:    8,
 			mdonssdEnabled: true,
 			req: &mgmtpb.PoolCreateReq{
-				Uuid:         test.MockUUID(1),
-				Tierbytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				Properties:   testPoolLabelProp(),
+				Uuid:          test.MockUUID(1),
+				Tierbytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				Properties:    testPoolLabelProp(),
 			},
 			drpcRet: &mgmtpb.PoolCreateResp{
-				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				TgtRanks:     []uint32{0, 1},
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				TgtRanks:      []uint32{0, 1},
 			},
 			expResp: &mgmtpb.PoolCreateResp{
-				TierBytes:    []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
-				MetaBlobSize: 2 * humanize.GiByte,
-				TgtRanks:     []uint32{0, 1},
+				TierBytes:     []uint64{100 * humanize.GiByte, 10 * humanize.TByte},
+				MetaBlobBytes: 2 * humanize.GiByte,
+				TgtRanks:      []uint32{0, 1},
 			},
 		},
 		"successful creation minimum size": {

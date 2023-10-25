@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"google.golang.org/protobuf/proto"
 
 	grpcpb "github.com/Jille/raft-grpc-transport/proto"
@@ -96,6 +97,7 @@ func Debug(msg proto.Message) string {
 				fmt.Fprintf(&bld, "(%.02f%%) ", m.Tierratio[i])
 			}
 		}
+		fmt.Fprintf(&bld, "meta-blob-size:%s", humanize.Bytes(m.MetaBlobBytes))
 	case *mgmtpb.PoolCreateResp:
 		fmt.Fprintf(&bld, "%T svc_ldr:%d ", m, m.Leader)
 		ranks := &ranklist.RankSet{}
@@ -112,6 +114,7 @@ func Debug(msg proto.Message) string {
 		for i, b := range m.TierBytes {
 			fmt.Fprintf(&bld, "%d:%d ", i, b)
 		}
+		fmt.Fprintf(&bld, "meta-blob-size:%s", humanize.Bytes(m.MetaBlobBytes))
 	case *mgmtpb.PoolEvictReq:
 		fmt.Fprintf(&bld, "%T pool:%s", m, m.Id)
 		if len(m.Handles) > 0 {

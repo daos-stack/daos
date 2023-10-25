@@ -497,13 +497,14 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
 				 req->tierbytes[DAOS_MEDIA_SCM], req->tierbytes[DAOS_MEDIA_NVME],
 				 prop, &svc, req->n_faultdomains, req->faultdomains,
-				 req->meta_blob_size);
+				 req->meta_blob_bytes);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
 
 	rc = pool_create_fill_resp(&resp, pool_uuid, svc);
+	resp.meta_blob_bytes = req->meta_blob_bytes;
 	d_rank_list_free(svc);
 
 out:
@@ -692,7 +693,7 @@ out:
 static int
 pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 			 uint32_t *targetidx, uint32_t rank, pool_comp_state_t state,
-			 size_t scm_size, size_t nvme_size)
+			 size_t scm_size, size_t nvme_size, size_t meta_blob_bytes)
 {
 	uuid_t				uuid;
 	struct pool_target_addr_list	target_addr_list;
@@ -721,7 +722,7 @@ pool_change_target_state(char *id, d_rank_list_t *svc_ranks, size_t n_targetidx,
 	}
 
 	rc = ds_mgmt_pool_target_update_state(uuid, svc_ranks, &target_addr_list, state, scm_size,
-					      nvme_size);
+					      nvme_size, meta_blob_bytes);
 	if (rc != 0) {
 		D_ERROR("Failed to set pool target up "DF_UUID": "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
@@ -761,7 +762,7 @@ ds_mgmt_drpc_pool_exclude(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
 				      req->rank, PO_COMP_ST_DOWN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_blob_bytes */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -810,7 +811,7 @@ ds_mgmt_drpc_pool_drain(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
 				      req->rank, PO_COMP_ST_DRAIN, 0 /* scm_size */,
-				      0 /* nvme_size */);
+				      0 /* nvme_size */, 0 /* meta_blob_bytes */);
 
 	d_rank_list_free(svc_ranks);
 
@@ -881,7 +882,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 scm_bytes, nvme_bytes,
+				 scm_bytes, nvme_bytes, req->meta_blob_bytes,
 				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
@@ -896,6 +897,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 */
 	resp.n_tier_bytes = req->n_tierbytes;
 	resp.tier_bytes = req->tierbytes;
+	resp.meta_blob_bytes = req->meta_blob_bytes;
 
 out_list:
 	d_rank_list_free(rank_list);
@@ -956,7 +958,8 @@ ds_mgmt_drpc_pool_reintegrate(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	rc = pool_change_target_state(req->id, svc_ranks, req->n_targetidx, req->targetidx,
-				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes);
+				      req->rank, PO_COMP_ST_UP, scm_bytes, nvme_bytes,
+				      req->meta_blob_bytes);
 
 	d_rank_list_free(svc_ranks);
 
