@@ -48,4 +48,10 @@ install_hook(void);
 void
 uninstall_hook(void);
 
+/**
+ * free_memory_in_hook - Free memory dynamically allocated.
+ */
+void
+free_memory_in_hook(void);
+
 #endif

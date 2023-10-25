@@ -16,6 +16,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct fuse_file_info     fi_out = {0};
 	int                       rc;
 	bool                      prefetch = false;
+	int                       flags;
 
 	ie = dfuse_inode_lookup(dfuse_info, ino);
 	if (!ie) {
@@ -42,8 +43,15 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi->flags |= O_RDWR;
 	}
 
+	LOG_FLAGS(ie, fi->flags);
+
+	flags = fi->flags;
+
+	if (flags & O_APPEND)
+		flags &= ~O_APPEND;
+
 	/** duplicate the file handle for the fuse handle */
-	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, fi->flags, &oh->doh_obj);
+	rc = dfs_dup(ie->ie_dfs->dfs_ns, ie->ie_obj, flags, &oh->doh_obj);
 	if (rc)
 		D_GOTO(err, rc);
 
@@ -76,8 +84,6 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		oh->doh_caching = true;
 
 	fi_out.fh = (uint64_t)oh;
-
-	LOG_FLAGS(ie, fi->flags);
 
 	/*
 	 * dfs_dup() just locally duplicates the file handle. If we have

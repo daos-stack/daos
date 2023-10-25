@@ -384,7 +384,7 @@ dss_ult_exiting(struct sched_request *req)
 	return dss_xstream_exiting(dx) || sched_req_is_aborted(req);
 }
 
-/*
+/**
  * Yield function regularly called by long-run ULTs.
  *
  * \param[in] req	Sched request.
@@ -543,40 +543,32 @@ struct dss_coll_ops {
 	/**
 	 * Function to be invoked by dss_collective
 	 *
-	 * \param f_args		[IN]	Arguments for function
+	 * \param[in] f_args	Arguments for function
 	 */
-	int				(*co_func)(void *f_args);
+	int (*co_func)(void *f_args);
 
 	/**
 	 * Callback for reducing after dss_collective (optional)
 	 *
-	 * \param a_args		[IN/OUT]
-	 *					Aggregator arguments for
-	 *					reducing results
-	 * \param s_args		[IN]	Reduce arguments for this
-	 *					current stream
+	 * \param[in,out] a_args	Aggregator arguments for reducing results
+	 * \param[in] s_args		Reduce arguments for this current stream
 	 */
-	void				(*co_reduce)(void *a_args,
-						     void *s_args);
+	void (*co_reduce)(void *a_args, void *s_args);
 
 	/**
 	 * Alloc function for allocating reduce arguments (optional)
 	 *
-	 * \param args			[IN/OUT] coll_args for this streams
-	 * \param aggregator_args	[IN]	 aggregator args for
-	 *					 initializatuin
+	 * \param[in,out] args		coll_args for this streams
+	 * \param[in] aggregator_args	aggregator args for  initializatuin
 	 */
-	int				(*co_reduce_arg_alloc)
-					(struct dss_stream_arg_type *args,
-					 void *a_args);
+	int (*co_reduce_arg_alloc)(struct dss_stream_arg_type *args, void *a_args);
 	/**
 	 * Free the allocated reduce arguments
 	 * (Mandatory if co_rarg_alloc was provided)
 	 *
-	 * \param args			[IN]	coll_args for this stream
+	 * \param[in] args		coll_args for this stream
 	 */
-	void				(*co_reduce_arg_free)
-					(struct dss_stream_arg_type *args);
+	void (*co_reduce_arg_free)(struct dss_stream_arg_type *args);
 };
 
 struct dss_coll_args {
