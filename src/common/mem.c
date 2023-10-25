@@ -1264,10 +1264,8 @@ bmem_atomic_copy(struct umem_instance *umm, void *dest, const void *src,
 	if (hint == UMEM_RESERVED_MEM) {
 		memcpy(dest, src, len);
 		return dest;
-	} else if (hint == UMEM_COMMIT_IMMEDIATE) {
+	} else { /* UMEM_COMMIT_IMMEDIATE */
 		return dav_memcpy_persist(pop, dest, src, len);
-	} else { /* UMEM_COMMIT_DEFER */
-		return dav_memcpy_persist_relaxed(pop, dest, src, len);
 	}
 }
 

@@ -77,6 +77,10 @@
 - name: VOS
   base: "PREFIX"
   tests:
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-A", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
+    - cmd: ["bin/vos_perf", "-i", "-d", "15", "-o", "5", "-f", "-a", "1", "-n", "5", "-R",
+            '"U;p F;p I;s;p, I;p; A;p"']
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10"]
     - cmd: ["bin/vos_perf", "-R", '"U;p F;p V"', "-o", "5", "-d", "5", "-a", "5", "-n", "10",
             "-A", "-D", "/mnt/..MOUNT"]
