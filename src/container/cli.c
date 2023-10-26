@@ -156,8 +156,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	daos_prop_free(arg->prop);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -387,6 +389,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_prop:
 	daos_prop_free(rpc_prop);
 err_pool:
@@ -433,8 +436,10 @@ cont_destroy_complete(tse_task_t *task, void *data)
 out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -522,6 +527,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err:
@@ -866,6 +872,7 @@ out:
 	if (free_tpriv) {
 		dc_cont_put(tpriv->cont);
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
 	}
 	dc_pool_put(pool);
 	return rc;
@@ -983,12 +990,12 @@ dc_cont_open(tse_task_t *task)
 		D_ALLOC_PTR(tpriv);
 		if (tpriv == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
+		dc_task_set_priv(task, tpriv);
 		tpriv->cont = dc_cont_alloc(uuid);
 		if (tpriv->cont == NULL)
 			D_GOTO(err_tpriv, rc = -DER_NOMEM);
 		uuid_generate(tpriv->cont->dc_cont_hdl);
 		tpriv->cont->dc_capas = args->flags;
-		dc_task_set_priv(task, tpriv);
 	}
 
 	D_DEBUG(DB_MD, DF_UUID ":%s: opening: hdl=" DF_UUIDF " flags=%x\n", DP_UUID(pool->dp_pool),
@@ -1004,6 +1011,7 @@ err_cont:
 	dc_cont_put(tpriv->cont);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err:
@@ -1082,8 +1090,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_pool_put(pool);
 	dc_cont_put(cont);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -1186,6 +1196,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_pool:
 	dc_pool_put(pool);
 err_cont:
@@ -1277,8 +1288,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -1454,6 +1467,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1514,8 +1528,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -1633,6 +1649,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1694,8 +1711,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -1768,6 +1787,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1829,8 +1849,10 @@ out:
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
-	if (free_tpriv)
+	if (free_tpriv) {
 		D_FREE(tpriv);
+		dc_task_set_priv(task, NULL);
+	}
 	return rc;
 }
 
@@ -1904,6 +1926,7 @@ err_rpc:
 	crt_req_decref(rpc);
 err_tpriv:
 	D_FREE(tpriv);
+	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -2461,7 +2484,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 	if (tpriv == NULL) {
 		D_ALLOC_PTR(tpriv);
 		if (tpriv == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
+			D_GOTO(err_cont, rc = -DER_NOMEM);
 		dc_task_set_priv(task, tpriv);
 		args->cra_tpriv = tpriv;
 	}
@@ -2488,6 +2511,9 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 		goto out;
 	}
 
+err_cont:
+	dc_cont_put(args->cra_cont);
+	dc_pool_put(args->cra_pool);
 out:
 	return rc;
 }
