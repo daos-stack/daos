@@ -1143,7 +1143,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	/* To accelerate flush on container destroy done */
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
-			rc = vea_flush(pool->vp_vea_info, true, UINT32_MAX, &nr_flushed);
+			rc = vea_flush(pool->vp_vea_info, UINT32_MAX, &nr_flushed);
 		return rc < 0 ? rc : nr_flushed;
 	}
 
@@ -1198,7 +1198,7 @@ gc_reserve_space(daos_size_t *rsrvd)
 
 /** Exported VOS API for explicit VEA flush */
 int
-vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed)
 {
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	int		 rc;
@@ -1211,7 +1211,7 @@ vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_fl
 		return 1;
 	}
 
-	rc = vea_flush(pool->vp_vea_info, force, nr_flush, nr_flushed);
+	rc = vea_flush(pool->vp_vea_info, nr_flush, nr_flushed);
 	if (rc)
 		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
 
