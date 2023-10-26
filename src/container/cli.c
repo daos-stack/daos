@@ -2712,16 +2712,14 @@ dc_cont_get_attr(tse_task_t *task)
 	 * name in heap
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
-	if (!new_names) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (!new_names)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
 
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names, rc);
+		D_FREE(new_names);
+		D_GOTO(out_rpc, rc);
 	}
 
 	for (i = 0 ; i < args->n ; i++) {
@@ -2730,25 +2728,21 @@ dc_cont_get_attr(tse_task_t *task)
 		len = strnlen(args->names[i], DAOS_ATTR_NAME_MAX);
 		key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
-		if (new_names[i] == NULL) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc = -DER_NOMEM);
-		}
+		if (new_names[i] == NULL)
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
 
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc);
+			D_FREE(new_names[i]);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values, (size_t *)args->sizes,
 			      daos_task2ctx(task), CRT_BULK_RW, &bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names_items, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cont_attr_get_in_set_data(cb_args.cra_rpc, CONT_ATTR_GET, dc_cont_proto_version, args->n,
 				  key_length, bulk);
@@ -2758,19 +2752,14 @@ dc_cont_get_attr(tse_task_t *task)
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names_items, rc);
+		D_GOTO(out, rc);
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
-out_names_items:
-	for (i = 0; i < args->n; i++) {
-		if (new_names[i])
-			D_FREE(new_names[i]);
-	}
-out_names:
-	D_FREE(new_names);
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to get container attributes: "DF_RC"\n",
@@ -2813,28 +2802,24 @@ dc_cont_set_attr(tse_task_t *task)
 	 * name in heap
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
-	if (!new_names) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (!new_names)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
 
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names, rc);
+		D_FREE(new_names);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
-		if (new_names[i] == NULL) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc = -DER_NOMEM);
-		}
+		if (new_names[i] == NULL)
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc);
+			D_FREE(new_names[i]);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
@@ -2843,37 +2828,31 @@ dc_cont_set_attr(tse_task_t *task)
 	 * value in heap
 	 */
 	D_ALLOC_ARRAY(new_values, args->n);
-	if (!new_values) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names_items, rc = -DER_NOMEM);
-	}
+	if (!new_values)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_values,
 				       sizeof(char *));
 	if (rc) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_values, rc);
+		D_FREE(new_values);
+		D_GOTO(out_rpc, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
 		D_ALLOC(new_values[i], args->sizes[i]);
-		if (new_values[i] == NULL) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_values_items, rc = -DER_NOMEM);
-		}
+		if (new_values[i] == NULL)
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
 		memcpy(new_values[i], args->values[i], args->sizes[i]);
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_values[i], sizeof(char *));
 		if (rc) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_values_items, rc);
+			D_FREE(new_values[i]);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, new_values, (size_t *)args->sizes,
 			      daos_task2ctx(task), CRT_BULK_RO, &bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_values_items, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cont_attr_set_in_set_data(cb_args.cra_rpc, CONT_ATTR_SET, dc_cont_proto_version, count,
 				  bulk);
@@ -2883,26 +2862,14 @@ dc_cont_set_attr(tse_task_t *task)
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_values_items, rc);
+		D_GOTO(out, rc);
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
-out_values_items:
-	for (i = 0; i < args->n; i++) {
-		if (new_values[i])
-			D_FREE(new_values[i]);
-	}
-out_values:
-	D_FREE(new_values);
-out_names_items:
-	for (i = 0; i < args->n; i++) {
-		if (new_names[i])
-			D_FREE(new_names[i]);
-	}
-out_names:
-	D_FREE(new_names);
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to set container attributes: "DF_RC"\n",
@@ -2943,37 +2910,31 @@ dc_cont_del_attr(tse_task_t *task)
 	 * name in heap
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
-	if (!new_names) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
+	if (!new_names)
+		D_GOTO(out_rpc, rc = -DER_NOMEM);
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names, rc);
+		D_FREE(new_names);
+		D_GOTO(out_rpc, rc);
 	}
 
 	for (i = 0 ; i < args->n ; i++) {
 		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
-		if (new_names[i] == NULL) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc = -DER_NOMEM);
-		}
+		if (new_names[i] == NULL)
+			D_GOTO(out_rpc, rc = -DER_NOMEM);
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
-			cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-			D_GOTO(out_names_items, rc);
+			D_FREE(new_names[i]);
+			D_GOTO(out_rpc, rc);
 		}
 	}
 
 	rc = attr_bulk_create(args->n, new_names, NULL, NULL, daos_task2ctx(task), CRT_BULK_RO,
 			      &bulk);
-	if (rc != 0) {
-		cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names_items, rc);
-	}
+	if (rc != 0)
+		D_GOTO(out_rpc, rc);
 
 	cont_attr_del_in_set_data(cb_args.cra_rpc, CONT_ATTR_DEL, dc_cont_proto_version, count,
 				  bulk);
@@ -2983,19 +2944,14 @@ dc_cont_del_attr(tse_task_t *task)
 				       &cb_args, sizeof(cb_args));
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_BULK, true /* free_tpriv */, &cb_args);
-		D_GOTO(out_names_items, rc);
+		D_GOTO(out, rc);
 	}
 
 	crt_req_addref(cb_args.cra_rpc);
 	return daos_rpc_send(cb_args.cra_rpc, task);
 
-out_names_items:
-	for (i = 0; i < args->n; i++) {
-		if (new_names[i])
-			D_FREE(new_names[i]);
-	}
-out_names:
-	D_FREE(new_names);
+out_rpc:
+	cont_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 out:
 	tse_task_complete(task, rc);
 	D_DEBUG(DB_MD, "Failed to del container attributes: "DF_RC"\n",
