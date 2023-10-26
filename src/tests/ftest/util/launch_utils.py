@@ -96,6 +96,8 @@ def summarize_run(logger, mode, status):
     """Summarize any failures that occurred during testing.
 
     Args:
+        logger (Logger): logger for the messages produced by this method
+        mode (str): launch.py operational mode
         status (int): overall status of running all tests
 
     Returns:
@@ -133,6 +135,42 @@ def summarize_run(logger, mode, status):
                 continue
             return_code = 1
     return return_code
+
+
+def get_test_tag_info(logger, directory):
+    """Get the avocado test tags for all the files in a given directory.
+
+    Args:
+        logger (Logger): logger for the messages produced by this method
+        directory (str): directory in which to find the test python files
+
+    Returns:
+        dict: a dictionary of the test tags grouped by test file, class, and method
+    """
+    test_tag_info = {}
+    for test_file in sorted(list(map(str, Path(directory).rglob("*.py")))):
+        command = f"grep -ER '(^class .*:|:avocado: tags=| def test_)' {test_file}"
+        output = run_local(logger, command, check=False, verbose=False)
+        data = re.findall(
+            r'(?:class (.*)\(.*\):|def (test_.*)\(|:avocado: tags=(.*))', output.stdout)
+        class_key = None
+        method_key = None
+        for match in data:
+            if len(match) != 3:
+                continue
+            if match[0]:
+                class_key = match[0]
+            elif match[1]:
+                method_key = match[1]
+            elif match[2] and class_key and method_key:
+                if test_file not in test_tag_info:
+                    test_tag_info[test_file] = {}
+                if class_key not in test_tag_info[test_file]:
+                    test_tag_info[test_file][class_key] = {}
+                if method_key not in test_tag_info[test_file][class_key]:
+                    test_tag_info[test_file][class_key][method_key] = []
+                test_tag_info[test_file][class_key][method_key].extend(match[2].split(','))
+    return test_tag_info
 
 
 class TestInfo():
@@ -774,15 +812,13 @@ class TestGroup():
         # List all of the possible tags if no matches where found and verbose is set
         if not self.tests and verbose:
             logger.info("None of the following tests matched the tags:")
-            for found_file in sorted(list(map(str, Path('.').rglob("*.py")))):
-                command = f"grep -ER '(:avocado: tags=| def test_)' {found_file}"
-                output = run_local(logger, command, check=False)
-                if output.stdout:
-                    ftest_dir, ftest_file = os.path.split(found_file)
-                    logger.info("  %s:", ftest_dir)
-                    logger.info("    %s:", ftest_file)
-                    for line in output.stdout.splitlines():
-                        logger.info("      %s", line)
+            test_info = get_test_tag_info(logger, ".")
+            for file_name, file_info in test_info.items():
+                for class_name, class_info in file_info.items():
+                    for method_name, tags in class_info.items():
+                        logger.info(
+                            "  %s:%s.%s tags=%s",
+                            file_name, class_name, method_name, ','.join(tags))
 
     def update_test_yaml(self, logger, scm_size, scm_mount, extra_yaml, multiplier, override,
                          verbose, include_localhost):
