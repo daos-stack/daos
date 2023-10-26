@@ -75,6 +75,17 @@
 
 /* Create a fake st_ino in stat for a path */
 #define FAKE_ST_INO(path)   (d_hash_string_u32(path, strnlen(path, DFS_MAX_PATH)))
+/*
+static inline void
+compute_inode(struct dfuse_cont *dfs, daos_obj_id_t *oid, ino_t *_ino)
+{
+	uint64_t hi;
+
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
+
+	*_ino = hi ^ (oid->lo << 32);
+}
+*/
 
 /* structure allocated for dfs container */
 struct dfs_mt {
@@ -798,13 +809,14 @@ fetch_dfs_cont_file_obj_with_fd(int fd, struct dfs_mt *dfs_mt, dfs_obj_t **obj)
 	rc = ioctl(fd, DFUSE_IOCTL_IL_DSIZE, &hsd_reply);
 	if (rc != 0) {
 		rc = errno;
+		/* Known not working for a dir */
 		if (rc != EISDIR)
 			D_WARN("ioctl call on %d failed %d (%s)\n", fd, rc, strerror(rc));
 		D_GOTO(err, rc);
 	}
 	/* to query dfs object for file/dir */
 	D_ALLOC(buff_obj, hsd_reply.fsr_dobj_size);
-	if (buff_obj)
+	if (buff_obj == NULL)
 		return ENOMEM;
 
 	iov.iov_buf = buff_obj;
@@ -1937,32 +1949,30 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 		struct ht_fd        *fd_ht_obj = NULL;
 		int                  fd_fake;
 
-		FREE(parent_dir);
 		if (two_args)
 			fd_kernel = real_open(pathname, oflags);
 		else
 			fd_kernel = real_open(pathname, oflags, mode);
 		/* dfuse fails for some reason */
 		if (fd_kernel < 0)
-			return fd_kernel;
+			goto out_compatible;
 		/* query file object through ioctl() */
 		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj_local);
-		if (rc) {
-			D_WARN("fetch_dfs_cont_file_obj_with_fd() failed: %d (%s)\n", rc, strerror(rc));
-			return fd_kernel;
-		}
+		if (rc)
+//			DS_WARN(rc, "fetch_dfs_cont_file_obj_with_fd() failed");
+			goto out_compatible;
 		/* Need to create a fake fd and associate with fd_kernel */
 		atomic_fetch_add_relaxed(&num_open, 1);
 
 		rc = dfs_get_mode(dfs_obj_local, &mode_query);
 		if (rc)
-			return fd_kernel;
+			goto out_compatible;
 
 		if (S_ISREG(mode_query)) {
 			/* regular file */
 			rc = find_next_available_fd(NULL, &idx_fd);
 			if (rc)
-				return fd_kernel;
+				goto out_compatible;
 			file_list[idx_fd]->dfs_mt      = dfs_mt;
 			file_list[idx_fd]->file        = dfs_obj_local;
 			file_list[idx_fd]->parent      = parent;
@@ -1976,7 +1986,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			/* directory */
 			rc = find_next_available_dirfd(NULL, &idx_dirfd);
 			if (rc)
-				return fd_kernel;
+				goto out_compatible;
 			dir_list[idx_dirfd]->dfs_mt      = dfs_mt;
 			dir_list[idx_dirfd]->fd          = idx_dirfd + FD_DIR_BASE;
 			dir_list[idx_dirfd]->offset      = 0;
@@ -1993,25 +2003,32 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			D_ALLOC_ARRAY(dir_list[idx_dirfd]->ents, READ_DIR_BATCH_SIZE);
 			if (dir_list[idx_dirfd]->ents == NULL) {
 				free_dirfd(idx_dirfd);
-				return fd_kernel;
+				goto out_compatible;
 			}
 			D_ASPRINTF(dir_list[idx_dirfd]->path, "%s%s", dfs_mt->fs_root, full_path);
 			if (dir_list[idx_dirfd]->path == NULL) {
 				free_dirfd(idx_dirfd);
-				return fd_kernel;
+				goto out_compatible;
 			}
 			if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
 				D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
 					strerror(ENAMETOOLONG));
 				free_dirfd(idx_dirfd);
-				return fd_kernel;
+				goto out_compatible;
 			}
 			fd_fake = idx_fd + FD_DIR_BASE;
 		} else {
-			return fd_kernel;
+			goto out_compatible;
 		}
 		/* add fd_kernel to hash table */
 		D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
+		if (fd_ht_obj == NULL) {
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(idx_dirfd);
+			else
+				free_fd(idx_fd);
+			goto out_compatible;
+		}
 		fd_ht_obj->real_fd = fd_kernel;
 		fd_ht_obj->fake_fd = fd_fake;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry, true);
@@ -2022,7 +2039,7 @@ open_common(int (*real_open)(const char *pathname, int oflags, ...), const char 
 			else
 				free_fd(idx_fd);
 		}
-		return fd_kernel;
+		goto out_compatible;
 	}
 
 	if (oflags & __O_TMPFILE) {
@@ -2134,10 +2151,15 @@ org_func:
 	else
 		fd_kernel = real_open(pathname, oflags, mode);
 	return fd_kernel;
+
 out_error:
 	FREE(parent_dir);
 	errno = rc;
 	return (-1);
+
+out_compatible:
+	FREE(parent_dir);
+	return fd_kernel;
 }
 
 /* When the open() in ld.so is called, new_open_ld() will be executed. */
@@ -2239,6 +2261,7 @@ new_close_common(int (*next_close)(int fd), int fd)
 			if (rc == false) {
 				D_WARN("d_hash_rec_delete() failed.\n");
 			}
+			D_FREE(fd_ht_obj);
 			return next_close(real_fd);
 		}
 	}
@@ -2280,6 +2303,30 @@ new_close_nocancel(int fd)
 }
 
 static ssize_t
+pread_over_dfs(int fd, void *buf, size_t size, off_t offset)
+{
+	int         rc;
+	d_iov_t     iov;
+	d_sg_list_t sgl;
+	daos_size_t bytes_read;
+
+	atomic_fetch_add_relaxed(&num_read, 1);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, buf, size);
+	sgl.sg_iovs = &iov;
+	rc          = dfs_read(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
+			       &bytes_read, NULL);
+	if (rc) {
+		DS_ERROR(rc, "dfs_read(%p, %zu) failed", buf, size);
+		errno      = rc;
+		return (-1);
+	}
+
+	return (ssize_t)bytes_read;
+}
+
+static ssize_t
 read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *buf, size_t size)
 {
 	ssize_t rc;
@@ -2290,7 +2337,8 @@ read_comm(ssize_t (*next_read)(int fd, void *buf, size_t size), int fd, void *bu
 
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = pread(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
+		rc = pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
+				    file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
@@ -2314,12 +2362,7 @@ new_read_pthread(int fd, void *buf, size_t size)
 ssize_t
 pread(int fd, void *buf, size_t size, off_t offset)
 {
-	daos_size_t bytes_read;
-	char       *ptr = (char *)buf;
-	int         rc;
-	int         fd_directed;
-	d_iov_t     iov;
-	d_sg_list_t sgl;
+	int fd_directed;
 
 	if (size == 0)
 		return 0;
@@ -2335,22 +2378,7 @@ pread(int fd, void *buf, size_t size, off_t offset)
 	if (fd_directed < FD_FILE_BASE)
 		return next_pread(fd, buf, size, offset);
 
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 0;
-	d_iov_set(&iov, (void *)ptr, size);
-	sgl.sg_iovs = &iov;
-	rc          = dfs_read(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-			       file_list[fd_directed - FD_FILE_BASE]->file, &sgl,
-			       offset, &bytes_read, NULL);
-	if (rc) {
-		DS_ERROR(rc, "dfs_read(%p, %zu) failed", (void *)ptr, size);
-		errno      = rc;
-		bytes_read = -1;
-	}
-
-	atomic_fetch_add_relaxed(&num_read, 1);
-
-	return (ssize_t)bytes_read;
+	return pread_over_dfs(fd_directed - FD_FILE_BASE, buf, size, offset);
 }
 
 ssize_t
@@ -2379,6 +2407,28 @@ __read_chk(int fd, void *buf, size_t size, size_t buflen)
 	return read(fd, buf, size);
 }
 
+static ssize_t
+pwrite_over_dfs(int fd, const void *buf, size_t size, off_t offset)
+{
+	int         rc;
+	d_iov_t     iov;
+	d_sg_list_t sgl;
+
+	atomic_fetch_add_relaxed(&num_write, 1);
+	sgl.sg_nr     = 1;
+	sgl.sg_nr_out = 0;
+	d_iov_set(&iov, (void *)buf, size);
+	sgl.sg_iovs = &iov;
+	rc          = dfs_write(file_list[fd]->dfs_mt->dfs, file_list[fd]->file, &sgl, offset,
+				NULL);
+	if (rc) {
+		DS_ERROR(rc, "dfs_write(%p, %zu) failed", (void *)buf, size);
+		errno = rc;
+		return (-1);
+	}
+	return size;
+}
+
 ssize_t
 write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, const void *buf,
 	   size_t size)
@@ -2391,7 +2441,8 @@ write_comm(ssize_t (*next_write)(int fd, const void *buf, size_t size), int fd, 
 
 	fd_directed = get_fd_redirected(fd);
 	if (fd_directed >= FD_FILE_BASE) {
-		rc = pwrite(fd_directed, buf, size, file_list[fd_directed - FD_FILE_BASE]->offset);
+		rc = pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size,
+				     file_list[fd_directed - FD_FILE_BASE]->offset);
 		if (rc >= 0)
 			file_list[fd_directed - FD_FILE_BASE]->offset += rc;
 		return rc;
@@ -2415,11 +2466,7 @@ new_write_pthread(int fd, const void *buf, size_t size)
 ssize_t
 pwrite(int fd, const void *buf, size_t size, off_t offset)
 {
-	char       *ptr = (char *)buf;
-	int         rc;
-	int         fd_directed;
-	d_iov_t     iov;
-	d_sg_list_t sgl;
+	int fd_directed;
 
 	if (size == 0)
 		return 0;
@@ -2435,20 +2482,7 @@ pwrite(int fd, const void *buf, size_t size, off_t offset)
 	if (fd_directed < FD_FILE_BASE)
 		return next_pwrite(fd, buf, size, offset);
 
-	sgl.sg_nr     = 1;
-	sgl.sg_nr_out = 0;
-	d_iov_set(&iov, (void *)ptr, size);
-	sgl.sg_iovs = &iov;
-	rc          = dfs_write(file_list[fd_directed - FD_FILE_BASE]->dfs_mt->dfs,
-				file_list[fd_directed - FD_FILE_BASE]->file, &sgl, offset, NULL);
-	if (rc) {
-		DS_ERROR(rc, "dfs_write(%p, %zu) failed", (void *)ptr, size);
-		errno = rc;
-		return (-1);
-	}
-	atomic_fetch_add_relaxed(&num_write, 1);
-
-	return size;
+	return pwrite_over_dfs(fd_directed - FD_FILE_BASE, buf, size, offset);
 }
 
 ssize_t
@@ -3008,8 +3042,10 @@ opendir(const char *path)
 	mode_t           mode;
 	struct dfs_mt   *dfs_mt;
 	char             item_name[DFS_MAX_NAME];
-	char             *parent_dir = NULL;
-	char             *full_path  = NULL;
+	char            *parent_dir = NULL;
+	char            *full_path  = NULL;
+	DIR             *dirp_kernel = NULL;
+	struct ht_fd    *fd_ht_obj = NULL;
 
 	if (next_opendir == NULL) {
 		next_opendir = dlsym(RTLD_NEXT, "opendir");
@@ -3029,71 +3065,13 @@ opendir(const char *path)
 
 	/* Always rely on fuse for opendir() to avoid a fake dir fd */
 	if (compatible_mode) {
-		DIR                 *dirp_kernel;
-		dfs_obj_t           *dfs_obj_local;
-		struct ht_fd        *fd_ht_obj = NULL;
-		int                  fd_kernel;
-		int                  fake_fd;
-
-		FREE(parent_dir);
 		dirp_kernel = next_opendir(path);
-		if (dirp_kernel == NULL)
+		if (dirp_kernel == NULL) {
+			rc = errno;
+			FREE(parent_dir);
+			errno = rc;
 			return NULL;
-		fd_kernel = dirfd(dirp_kernel);
-		if (fd_kernel < 0)
-			return dirp_kernel;
-		/* query file object through ioctl() */
-		rc = fetch_dfs_cont_file_obj_with_fd(fd_kernel, dfs_mt, &dfs_obj_local);
-		if (rc) {
-			D_WARN("fetch_dfs_cont_file_obj_with_fd() failed: %d (%s)\n", rc, strerror(rc));
-			return dirp_kernel;
 		}
-		/* Need to create a fake fd and associate with fd_kernel */
-		atomic_fetch_add_relaxed(&num_opendir, 1);
-		rc = find_next_available_dirfd(NULL, &idx_dirfd);
-		if (rc)
-			return dirp_kernel;
-		dir_list[idx_dirfd]->dfs_mt      = dfs_mt;
-		dir_list[idx_dirfd]->fd          = idx_dirfd + FD_DIR_BASE;
-		dir_list[idx_dirfd]->offset      = 0;
-		dir_list[idx_dirfd]->dir         = dfs_obj_local;
-		dir_list[idx_dirfd]->num_ents    = 0;
-		dir_list[idx_dirfd]->st_ino      = FAKE_ST_INO(full_path);
-		memset(&dir_list[idx_dirfd]->anchor, 0, sizeof(daos_anchor_t));
-		dir_list[idx_dirfd]->path        = NULL;
-		dir_list[idx_dirfd]->ents        = NULL;
-		if (strncmp(full_path, "/", 2) == 0)
-			full_path[0] = 0;
-
-		/* allocate memory for ents[]. */
-		D_ALLOC_ARRAY(dir_list[idx_dirfd]->ents, READ_DIR_BATCH_SIZE);
-		if (dir_list[idx_dirfd]->ents == NULL) {
-			free_dirfd(idx_dirfd);
-			return dirp_kernel;
-		}
-		D_ASPRINTF(dir_list[idx_dirfd]->path, "%s%s", dfs_mt->fs_root, full_path);
-		if (dir_list[idx_dirfd]->path == NULL) {
-			free_dirfd(idx_dirfd);
-			return dirp_kernel;
-		}
-		if (strnlen(dir_list[idx_dirfd]->path, DFS_MAX_PATH) >= DFS_MAX_PATH) {
-			D_DEBUG(DB_ANY, "path is longer than DFS_MAX_PATH: %d (%s)\n", ENAMETOOLONG,
-				strerror(ENAMETOOLONG));
-			free_dirfd(idx_dirfd);
-			return dirp_kernel;
-		}
-		fake_fd = idx_dirfd + FD_DIR_BASE;
-		/* add fd_kernel to hash table */
-		D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
-		fd_ht_obj->real_fd = fd_kernel;
-		fd_ht_obj->fake_fd = fake_fd;
-		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry, true);
-		if (rc != 0) {
-			D_WARN("d_hash_rec_insert() failed: %d (%s)\n", rc, strerror(rc));
-			free_dirfd(idx_dirfd);
-		}
-
-		return dirp_kernel;
 	}
 
 	atomic_fetch_add_relaxed(&num_opendir, 1);
@@ -3125,7 +3103,10 @@ opendir(const char *path)
 	dir_list[idx_dirfd]->offset   = 0;
 	dir_list[idx_dirfd]->dir      = dir_obj;
 	dir_list[idx_dirfd]->num_ents = 0;
+	dir_list[idx_dirfd]->st_ino   = FAKE_ST_INO(full_path);
 	memset(&dir_list[idx_dirfd]->anchor, 0, sizeof(daos_anchor_t));
+	dir_list[idx_dirfd]->path     = NULL;
+	dir_list[idx_dirfd]->ents     = NULL;
 	if (strncmp(full_path, "/", 2) == 0)
 		full_path[0] = 0;
 	/* allocate memory for ents[]. */
@@ -3147,6 +3128,25 @@ opendir(const char *path)
 		D_GOTO(out_err, rc = ENAMETOOLONG);
 	}
 
+	if (compatible_mode) {
+		/* add fd kernel to hash table */
+		D_ALLOC_PTR(fd_ht_obj);
+		if (fd_ht_obj == NULL) {
+			/* not returning ENOMEM since dirp_kernel is valid */
+			free_dirfd(idx_dirfd);
+			goto out_compatible;
+		}
+		fd_ht_obj->real_fd = dirfd(dirp_kernel);
+		assert(fd_ht_obj->real_fd >= 0);
+		fd_ht_obj->fake_fd = idx_dirfd + FD_DIR_BASE;
+		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int), &fd_ht_obj->entry, true);
+		if (rc != 0) {
+			DS_WARN(rc, "d_hash_rec_insert() failed");
+			free_dirfd(idx_dirfd);
+			D_FREE(fd_ht_obj);
+		}
+		goto out_compatible;
+	}
 	FREE(parent_dir);
 
 	return (DIR *)(dir_list[idx_dirfd]);
@@ -3158,6 +3158,10 @@ out_err_ret:
 	FREE(parent_dir);
 	errno = rc;
 	return NULL;
+
+out_compatible:
+	FREE(parent_dir);
+	return dirp_kernel;
 }
 
 DIR *
@@ -4375,6 +4379,9 @@ chdir(const char *path)
 	}
 
 	FREE(parent_dir);
+	if (compatible_mode)
+		return next_chdir(cur_dir);
+
 	return 0;
 
 out_err:
@@ -4387,18 +4394,18 @@ int
 fchdir(int dirfd)
 {
 	char *pt_end = NULL;
-	int   dirfd_directed;
+	int   dirfd_directed, rc;
 
 	if (next_fchdir == NULL) {
 		next_fchdir = dlsym(RTLD_NEXT, "fchdir");
 		D_ASSERT(next_fchdir != NULL);
 	}
 	if (!hook_enabled)
-		return next_fchdir(dirfd);
+		goto org;
 
 	dirfd_directed = get_fd_redirected(dirfd);
 	if (dirfd_directed < FD_DIR_BASE)
-		return next_fchdir(dirfd);
+		goto org;
 
 	pt_end = stpncpy(cur_dir, dir_list[dirfd_directed - FD_DIR_BASE]->path, DFS_MAX_PATH - 1);
 	if ((long int)(pt_end - cur_dir) >= DFS_MAX_PATH - 1) {
@@ -4408,6 +4415,14 @@ fchdir(int dirfd)
 		return (-1);
 	}
 	return 0;
+
+org:
+	rc = next_fchdir(dirfd);
+	if (rc == 0) {
+		update_cwd();
+		// further improvement: readlink() and update cwd_dir[];
+	}
+	return rc;
 }
 
 static int
@@ -5144,25 +5159,35 @@ new_fcntl(int fd, int cmd, ...)
 							file_list[fd_directed - FD_FILE_BASE],
 							&next_fd);
 					if (rc)
-						/* still return the fd dup from kernel in compatible mode */
+						/* still return the fd dup from kernel in
+						 * compatible mode
+						 */
 						return fd_kernel;
 					fd_fake = next_fd + FD_FILE_BASE;
 				}
 				if (fd_fake < 0)
 					return fd_kernel;
 				/* add fd_kernel to hash table */
-				D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
+				D_ALLOC_PTR(fd_ht_obj);
+				if (fd_ht_obj == NULL) {
+					/* not passing ENOMEM in compatible mode */
+					if (fd_fake >= FD_DIR_BASE)
+						free_dirfd(next_dirfd);
+					else
+						free_fd(next_fd);
+					return fd_kernel;
+				}
 				fd_ht_obj->real_fd = fd_kernel;
 				fd_ht_obj->fake_fd = fd_fake;
 				rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int),
 						       &fd_ht_obj->entry, true);
 				if (rc != 0) {
-					D_WARN("d_hash_rec_insert() failed: %d (%s)\n", rc,
-					       strerror(rc));
+					DS_WARN(rc, "d_hash_rec_insert() failed");
 					if (fd_fake >= FD_DIR_BASE)
 						free_dirfd(next_dirfd);
 					else
 						free_fd(next_fd);
+					D_FREE(fd_ht_obj);
 				}
 				return fd_kernel;
 
@@ -5313,18 +5338,25 @@ dup2(int oldfd, int newfd)
 		if (fd_fake < 0)
 			return fd_kernel;
 		/* add fd_kernel to hash table */
-		D_ALLOC(fd_ht_obj, sizeof(*fd_ht_obj));
+		D_ALLOC_PTR(fd_ht_obj);
+		if (fd_ht_obj == NULL) {
+			if (fd_fake >= FD_DIR_BASE)
+				free_dirfd(next_dirfd);
+			else
+				free_fd(next_fd);
+			return fd_kernel;
+		}
 		fd_ht_obj->real_fd = fd_kernel;
 		fd_ht_obj->fake_fd = fd_fake;
 		rc = d_hash_rec_insert(fd_hash, &fd_ht_obj->real_fd, sizeof(int),
 				       &fd_ht_obj->entry, true);
 		if (rc != 0) {
-			D_WARN("d_hash_rec_insert() failed: %d (%s)\n", rc,
-			       strerror(rc));
+			DS_WARN(rc, "d_hash_rec_insert() failed");
 			if (fd_fake >= FD_DIR_BASE)
 				free_dirfd(next_dirfd);
 			else
 				free_fd(next_fd);
+			D_FREE(fd_ht_obj);
 		}
 		return fd_kernel;
 	}
@@ -5834,7 +5866,37 @@ register_handler(int sig, struct sigaction *old_handler)
 		abort();
 	}
 }
+/*
+static void
+hang_for_debugging(void)
+{
+        FILE *fIn;
+        char szPath[1024], *ReadLine;
+        volatile int  flag = 1;
 
+        fIn = fopen("/proc/self/cmdline", "r");
+        if (fIn == NULL)        {
+                printf("Fail to open file: %s\nQuit\n", szPath);
+                exit(1);
+        }
+
+        ReadLine = fgets(szPath, 255, fIn);
+        fclose(fIn);
+
+        if (ReadLine == NULL)   {
+                printf("Fail to determine the executable file name.\nQuit\n");
+                exit(1);
+        }
+
+        if (strstr(szPath, "hexdump")) {
+                printf("DBG> Found %s. pid = %d\n", szPath, getpid());
+                fflush(stdout);
+                while (flag) {
+                        sleep(1);
+                }
+        }
+}
+*/
 static __attribute__((constructor)) void
 init_myhook(void)
 {
@@ -5869,11 +5931,12 @@ init_myhook(void)
 			rc = d_hash_table_create(D_HASH_FT_EPHEMERAL | D_HASH_FT_MUTEX | D_HASH_FT_LRU, 6, NULL,
 				 &fd_hash_ops, &fd_hash);
 			if (rc != 0) {
-				D_ERROR("failed to create fd hash table: " DF_RC "\n", DP_RC(rc));
+				DL_ERROR(rc, "failed to create fd hash table");
 				return;
 			}
 
 			compatible_mode = true;
+			D_INFO("pil4dfs compatible mode is ON.\n");
 		    }
 	}
 
@@ -5956,6 +6019,7 @@ init_myhook(void)
 	install_hook();
 	hook_enabled = 1;
 	hook_enabled_bak = hook_enabled;
+//	hang_for_debugging();
 }
 
 static void
@@ -6009,7 +6073,7 @@ close_all_fd(void)
 {
 	int i;
 
-	for (i = 0; i < next_free_fd; i++) {
+	for (i = 0; i <= last_fd; i++) {
 		if (file_list[i])
 			free_fd(i);
 	}
@@ -6020,7 +6084,7 @@ close_all_dirfd(void)
 {
 	int i;
 
-	for (i = 0; i < next_free_dirfd; i++) {
+	for (i = 0; i <= last_dirfd; i++) {
 		if (dir_list[i])
 			free_dirfd(i);
 	}
