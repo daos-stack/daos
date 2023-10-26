@@ -20,10 +20,10 @@ class ObjUpdateBadParam(TestWithServers):
     def setUp(self):
         super().setUp()
         try:
-            self.prepare_pool()
+            pool = self.get_pool()
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
+            self.container.create(pool.pool.handle)
             self.log.info("Container %s created.", self.container.get_uuid_str())
             # now open it
             self.container.open()

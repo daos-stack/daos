@@ -35,7 +35,7 @@ class ObjectDataValidation(TestWithServers):
         self.array_size = self.params.get("size", '/array_size/')
         self.record_length = self.params.get("length", '/run/record/*')
 
-        self.prepare_pool()
+        self.pool = self.get_pool()
 
         self.container = DaosContainer(self.context)
         self.container.create(self.pool.pool.handle)

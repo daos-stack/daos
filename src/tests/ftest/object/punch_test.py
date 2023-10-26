@@ -18,12 +18,12 @@ class PunchTest(TestWithServers):
 
     def setUp(self):
         super().setUp()
-        self.prepare_pool()
+        pool = self.get_pool()
 
         try:
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
+            self.container.create(pool.pool.handle)
 
             # now open it
             self.container.open()

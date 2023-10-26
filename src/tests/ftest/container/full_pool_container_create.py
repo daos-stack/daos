@@ -45,19 +45,19 @@ class FullPoolContainerCreate(TestWithServers):
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
         # create pool and connect
-        self.prepare_pool()
+        pool = self.get_pool()
 
         # query the pool
         self.log.info("Pool Query before write")
-        self.pool.set_query_data()
-        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
+        pool.set_query_data()
+        self.log.info("%s query data: %s\n", str(pool), pool.query_data)
 
         # create a container
-        self.add_container(self.pool)
+        self.add_container(pool)
         self.container.open()
 
         # get free space before write
-        free_space_before = self.pool.get_pool_free_space()
+        free_space_before = pool.get_pool_free_space()
         self.log.info("Pool free space before write: %s", free_space_before)
 
         # generate random dkey, akey each time
@@ -86,8 +86,8 @@ class FullPoolContainerCreate(TestWithServers):
 
         # query the pool
         self.log.info("Pool Query after filling")
-        self.pool.set_query_data()
-        self.log.info("%s query data: %s\n", str(self.pool), self.pool.query_data)
+        pool.set_query_data()
+        self.log.info("%s query data: %s\n", str(pool), pool.query_data)
 
         # destroy container
         self.container.destroy()
@@ -97,7 +97,7 @@ class FullPoolContainerCreate(TestWithServers):
         # as the test is using scm only
         counter = 1
         threshold_value = free_space_before - (free_space_before * threshold_percent)
-        free_space = self.pool.get_pool_free_space()
+        free_space = pool.get_pool_free_space()
         while free_space < threshold_value:
             # try to wait for 4 x 30 secs for aggregation to be completed or
             # else exit the test with a failure.
@@ -106,5 +106,5 @@ class FullPoolContainerCreate(TestWithServers):
                 self.log.info("Threshold value when test terminated: %s", threshold_value)
                 self.fail("Aggregation did not complete as expected")
             time.sleep(30)
-            free_space = self.pool.get_pool_free_space()
+            free_space = pool.get_pool_free_space()
             counter += 1

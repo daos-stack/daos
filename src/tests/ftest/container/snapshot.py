@@ -39,12 +39,12 @@ class Snapshot(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage and connect to it
-        self.prepare_pool()
+        pool = self.get_pool()
 
         try:
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
+            self.container.create(pool.pool.handle)
 
         except DaosApiError as error:
             self.log.info("Error detected in DAOS pool container setup: %s", str(error))

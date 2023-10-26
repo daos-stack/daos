@@ -34,12 +34,12 @@ class ArrayObjTest(TestWithServers):
         :avocado: tags=object,smoke
         :avocado: tags=basicobject,test_array_obj
         """
-        self.prepare_pool()
+        pool = self.get_pool()
 
         try:
             # create a container
             container = DaosContainer(self.context)
-            container.create(self.pool.pool.handle)
+            container.create(pool.pool.handle)
             self.plog.info("Container %s created.", container.get_uuid_str())
 
             # now open it

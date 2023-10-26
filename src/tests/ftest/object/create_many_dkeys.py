@@ -22,14 +22,16 @@ class CreateManyDkeys(TestWithServers):
     :avocado: recursive
     """
 
-    def write_a_bunch_of_values(self, how_many):
-        """
-        Write data to an object, each with a dkey and akey.  The how_many
-        parameter determines how many key:value pairs are written.
+    def write_a_bunch_of_values(self, pool, how_many):
+        """Write data to an object, each with a dkey and akey.
+
+        Args:
+            pool (TestPool): pool to write to
+            how_many (int): how many pairs to write
         """
 
         self.container = DaosContainer(self.context)
-        self.container.create(self.pool.pool.handle)
+        self.container.create(pool.pool.handle)
         self.container.open()
 
         ioreq = IORequest(self.context, self.container, None)
@@ -92,12 +94,12 @@ class CreateManyDkeys(TestWithServers):
         :avocado: tags=object
         :avocado: tags=many_dkeys,test_many_dkeys
         """
-        self.prepare_pool()
+        pool = self.get_pool()
         no_of_dkeys = self.params.get("number_of_dkeys", '/run/dkeys/')
 
         # write a lot of individual data items, verify them, then destroy
-        self.write_a_bunch_of_values(no_of_dkeys)
+        self.write_a_bunch_of_values(pool, no_of_dkeys)
 
         # do it again, which should verify the first container
         # was truly destroyed because a second round won't fit otherwise
-        self.write_a_bunch_of_values(no_of_dkeys)
+        self.write_a_bunch_of_values(pool, no_of_dkeys)

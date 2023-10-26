@@ -32,11 +32,6 @@ class DaosSnapshotTest(TestWithServers):
     :avocado: recursive
     """
 
-    def prepare_pool_container(self):
-        """Create a pool and a container and prepare for the test cases."""
-        self.add_pool(connect=False)
-        self.add_container(self.pool)
-
     def create_verify_snapshots(self, count):
         """Create and list to verify that the snapshots are created.
 
@@ -73,7 +68,8 @@ class DaosSnapshotTest(TestWithServers):
         :avocado: tags=control,snap,snapshot,daos_cmd
         :avocado: tags=DaosSnapshotTest,daos_snapshot,test_create_list_delete
         """
-        self.prepare_pool_container()
+        pool = self.get_pool(connect=False)
+        self.add_container(pool)
 
         # Create snapshots.
         snapshot_count = self.params.get(
@@ -105,7 +101,8 @@ class DaosSnapshotTest(TestWithServers):
         :avocado: tags=container,snap,snapshot,daos_cmd
         :avocado: tags=DaosSnapshotTest,daos_snapshot_range,test_epcrange
         """
-        self.prepare_pool_container()
+        pool = self.get_pool(connect=False)
+        self.add_container(pool)
 
         # Create snapshots.
         snapshot_count = self.params.get(

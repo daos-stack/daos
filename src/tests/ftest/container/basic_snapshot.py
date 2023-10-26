@@ -52,11 +52,11 @@ class BasicSnapshot(TestWithServers):
         try:
             # initialize a pool object then create the underlying
             # daos storage, and connect
-            self.prepare_pool()
+            pool = self.get_pool()
 
             # create a container
             self.container = DaosContainer(self.context)
-            self.container.create(self.pool.pool.handle)
+            self.container.create(pool.pool.handle)
 
             # now open it
             self.container.open()

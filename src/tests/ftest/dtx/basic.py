@@ -35,12 +35,12 @@ class BasicTxTest(TestWithServers):
         """
         # initialize a python pool object then create the underlying
         # daos storage and connect to the pool
-        self.prepare_pool()
+        pool = self.get_pool()
 
         try:
             # create a container
             container = DaosContainer(self.context)
-            container.create(self.pool.pool.handle)
+            container.create(pool.pool.handle)
 
             # now open it
             container.open()

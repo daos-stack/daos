@@ -138,27 +138,27 @@ class DmgStorageQuery(ControlTestBase):
         targets = self.server_managers[-1].get_config_value('targets')
 
         # Create pool and get the storage smd information, then verify info
-        self.prepare_pool()
+        pool = self.get_pool()
         pool_info = get_storage_query_pool_info(self.dmg, verbose=True)
 
         # Check the dmg storage query list-pools output for inaccuracies
         errors = 0
         for pool in pool_info:
             # Check pool uuid
-            if pool['uuid'].lower() != self.pool.uuid.lower():
+            if pool['uuid'].lower() != pool.uuid.lower():
                 self.log.info(
-                    "Incorrect pool UUID for %s: detected=%s", str(self.pool), pool['uuid'])
+                    "Incorrect pool UUID for %s: detected=%s", str(pool), pool['uuid'])
                 errors += 1
                 continue
             if targets != len(pool['tgt_ids']):
                 self.log.info(
                     "Incorrect number of targets for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['tgt_ids']), targets)
+                    str(pool), len(pool['tgt_ids']), targets)
                 errors += 1
             if targets != len(pool['blobs']):
                 self.log.info(
                     "Incorrect number of blobs for %s: detected=%s, expected=%s",
-                    str(self.pool), len(pool['blobs']), targets)
+                    str(pool), len(pool['blobs']), targets)
                 errors += 1
         if errors:
             self.fail(
@@ -166,7 +166,7 @@ class DmgStorageQuery(ControlTestBase):
                     errors))
 
         # Destroy pool and get pool information and check there is no pool
-        self.pool.destroy()
+        pool.destroy()
         if get_storage_query_pool_info(self.dmg, verbose=True):
             self.fail(
                 "Pool info detected in dmg storage query list-pools output after pool destroy")
