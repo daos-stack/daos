@@ -51,6 +51,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 /**< Env to specify log file pid append to filename*/
 #define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
 
+/**< Env to specify rank to append to the log filename */
+#define D_LOG_FILE_APPEND_RANK_ENV	"D_LOG_FILE_APPEND_RANK"
+
+/**< Env to specify log truncation option */
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
 /**< Env to specify flush priority */
@@ -152,6 +156,14 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 			D_DEBUG(flag_false, __VA_ARGS__);	\
 	} while (0)
 
+#define DL_CDEBUG(cond, flag_true, flag_false, _rc, _fmt, ...)                                     \
+	do {                                                                                       \
+		if (cond)                                                                          \
+			D_DEBUG(flag_true, _fmt ": " DF_RC " \n", ##__VA_ARGS__, DP_RC(_rc));      \
+		else                                                                               \
+			D_DEBUG(flag_false, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc));      \
+	} while (0)
+
 /* Register a descriptor with a parent and a type */
 #define D_TRACE_UP(flag, ptr, parent, type)				\
 	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n",	\
@@ -215,6 +227,23 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define DL_WARN(_rc, _fmt, ...)  D_DEBUG(DLOG_WARN, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
 #define DL_ERROR(_rc, _fmt, ...) D_DEBUG(DLOG_ERR, _fmt ": " DF_RC "\n", ##__VA_ARGS__, DP_RC(_rc))
 
+#define DHS_INFO(_desc, _rc, _fmt, ...)                                                            \
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_INFO, (_desc), _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc,     \
+		 strerror(_rc))
+#define DHS_WARN(_desc, _rc, _fmt, ...)                                                            \
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_WARN, (_desc), _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc,     \
+		 strerror(_rc))
+#define DHS_ERROR(_desc, _rc, _fmt, ...)                                                           \
+	_D_DEBUG(_D_TRACE_NOCHECK, DLOG_ERR, (_desc), _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc,      \
+		 strerror(_rc))
+
+#define DS_INFO(_rc, _fmt, ...)                                                                    \
+	D_DEBUG(DLOG_INFO, _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc, strerror(_rc))
+#define DS_WARN(_rc, _fmt, ...)                                                                    \
+	D_DEBUG(DLOG_WARN, _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc, strerror(_rc))
+#define DS_ERROR(_rc, _fmt, ...)                                                                   \
+	D_DEBUG(DLOG_ERR, _fmt ": %d (%s)\n", ##__VA_ARGS__, _rc, strerror(_rc))
+
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
 #endif /* D_USE_GURT_FAC */
@@ -249,7 +278,7 @@ d_add_log_facility(const char *aname, const char *lname)
 /**
  * Add a new log facility.
  *
- * \param[out fac	facility number to be returned
+ * \param[out] fac	facility number to be returned
  * \param[in] aname	abbr. name for the facility, for example DSR.
  * \param[in] lname	long name for the facility, for example DSR.
  *
@@ -284,7 +313,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  * may want to replace assert() with cmocka's mock_assert() so that you can
  * test if a function throws an assertion with cmocka's expect_assert_failure().
  *
- * \param[in] *alt_assert	Function pointer to the alternative assert
+ * \param[in] alt_assert	Function pointer to the alternative assert
  *
  * \return			0 on success, -DER_INVAL on error
  */
@@ -300,6 +329,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		fflush(stdout);						\
 	} while (0)
 
+/* Assert cond is true */
 #define D_ASSERT(e)							\
 	do {								\
 		if (likely(e))						\
@@ -311,6 +341,7 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 		assert(0);						\
 	} while (0)
 
+/* Assert cond is true with message to report on failure */
 #define D_ASSERTF(cond, fmt, ...)						\
 	do {									\
 		if (likely(cond))						\

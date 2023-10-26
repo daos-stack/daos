@@ -530,8 +530,6 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		}
 	} else {
 		memcpy(status, &rgt->rgt_status, sizeof(*status));
-		if (rgt->rgt_opc == RB_OP_RECLAIM)
-			status->rs_state = DRS_COMPLETED;
 		status->rs_version = rgt->rgt_rebuild_ver;
 		rgt_put(rgt);
 	}
@@ -545,16 +543,14 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		struct rebuild_task *task;
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
-			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
-			    task->dst_rebuild_op != RB_OP_RECLAIM) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
 		}
 
 		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
-			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0 &&
-			    task->dst_rebuild_op != RB_OP_RECLAIM) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_state = DRS_IN_PROGRESS;
 				D_GOTO(out, rc);
 			}
@@ -748,8 +744,8 @@ rebuild_global_pool_tracker_destroy(struct rebuild_global_pool_tracker *rgt)
 }
 
 static int
-rebuild_global_pool_tracker_create(struct ds_pool *pool, daos_rebuild_opc_t opc, uint32_t ver,
-				   uint32_t rebuild_gen, uint64_t leader_term, daos_epoch_t reclaim_eph,
+rebuild_global_pool_tracker_create(struct ds_pool *pool, uint32_t ver, uint32_t rebuild_gen,
+				   uint64_t leader_term, daos_epoch_t reclaim_eph,
 				   struct rebuild_global_pool_tracker **p_rgt)
 {
 	struct rebuild_global_pool_tracker *rgt;
@@ -784,7 +780,6 @@ rebuild_global_pool_tracker_create(struct ds_pool *pool, daos_rebuild_opc_t opc,
 	rgt->rgt_servers_number = node_nr;
 
 	uuid_copy(rgt->rgt_pool_uuid, pool->sp_uuid);
-	rgt->rgt_opc = opc;
 	rgt->rgt_rebuild_ver = ver;
 	rgt->rgt_status.rs_version = ver;
 	rgt->rgt_leader_term = leader_term;
@@ -907,7 +902,7 @@ rebuild_prepare(struct ds_pool *pool, uint32_t rebuild_ver,
 	/* Create global rgt on leader to track the rebuild status */
 	if (*actions & REBUILD_TARGET) {
 		/* Update pool iv ns for the pool */
-		rc = rebuild_global_pool_tracker_create(pool, rebuild_op, rebuild_ver, rebuild_gen,
+		rc = rebuild_global_pool_tracker_create(pool, rebuild_ver, rebuild_gen,
 							leader_term, reclaim_eph, rgt);
 		if (rc)
 			D_ERROR("rebuild_global_pool_tracker create failed: rc %d\n", rc);
@@ -1098,7 +1093,7 @@ rebuild_debug_print_queue()
 	 * This only accumulates the targets in a single task, so it doesn't
 	 * need to be very big. 200 bytes is enough for ~30 5-digit target ids
 	 */
-	char tgts_buf[200];
+	char tgts_buf[200] = { 0 };
 	int i;
 	/* Position in stack buffer where str data should be written next */
 	size_t tgts_pos;
@@ -1126,7 +1121,7 @@ rebuild_debug_print_queue()
 		}
 		D_DEBUG(DB_REBUILD, DF_UUID" op=%s ver=%u tgts=%s\n",
 			DP_UUID(task->dst_pool_uuid), RB_OP_STR(task->dst_rebuild_op),
-			task->dst_map_ver, tgts_buf);
+			task->dst_map_ver, task->dst_tgts.pti_number > 0 ? tgts_buf : "None");
 	}
 }
 
@@ -1417,7 +1412,8 @@ rebuild_task_complete_schedule(struct rebuild_task *task, struct ds_pool *pool,
 					 task->dst_new_layout_version, &task->dst_tgts,
 					 retry_opc, 5);
 	} else if (task->dst_rebuild_op == RB_OP_REINT || task->dst_rebuild_op == RB_OP_EXTEND ||
-		   task->dst_rebuild_op == RB_OP_UPGRADE) {
+		   task->dst_rebuild_op == RB_OP_UPGRADE || task->dst_rebuild_op == RB_OP_EXCLUDE ||
+		   task->dst_rebuild_op == RB_OP_DRAIN) {
 		/* Otherwise schedule reclaim for reintegrate/extend/upgrade. */
 		rgt->rgt_status.rs_state = DRS_IN_PROGRESS;
 		rc = ds_rebuild_schedule(pool, task->dst_map_ver, rgt->rgt_reclaim_epoch,
@@ -2061,7 +2057,7 @@ ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 	 * 1. extend job needs to add new targets to the pool map.
 	 * 2. reintegrate job needs to discard the existing objects/records on the
 	 *    reintegrating targets.
-	 * But since the pool map already includs these extending targets, and also
+	 * But since the pool map already includes these extending targets, and also
 	 * discarding on an empty targets is harmless. So it is ok to use REINT to
 	 * do EXTEND here.
 	 */

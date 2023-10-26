@@ -41,11 +41,11 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
   size: 75%
-  rebuild_timeout: 240
+  rebuild_timeout: 480
   pool_query_timeout: 120
 pool_reserved:
   size: 10%
-  rebuild_timeout: 240
+  rebuild_timeout: 480
   pool_query_timeout: 120
 container:
   type: POSIX
@@ -76,7 +76,8 @@ soak_harassers:
   # harasser test timeout in hours
   single_test_pool: false
   test_timeout:
-    test_soak_harassers: 12
+    test_soak_online_harassers: 12
+    test_soak_offline_harassers: 12
   # maximum timeout for a single job in test in minutes
   joblist:
     - ior_harasser
@@ -84,23 +85,25 @@ soak_harassers:
     - mdtest_harasser
   # one harrasser is run during each pass of soak jobs
   harasserlist:
-    # - snapshot
-    # - exclude_reintegrate
-    - exclude_reintegrate-offline
-    # - server-stop_server-start
-    # - server-stop_server-start-offline
-    # - server-stop_server-reintegrate
-    - server-stop_server-reintegrate-offline
-    # - extend-pool
-    # - extend-pool-offline
-    # - vmd-identify-check
-    # - vmd-identify-check-offline
+    test_soak_offline_harassers:
+      - exclude_reintegrate-offline
+      - server-stop_server-start-offline
+      - server-stop_server-reintegrate-offline
+      - extend-pool-offline
+      # - vmd-identify-check-offline
+    test_soak_online_harassers:
+      - exclude_reintegrate
+      - server-stop_server-start
+      - server-stop_server-reintegrate
+      - extend-pool
+      # - vmd-identify-check
   harasser_to: 600
   # drain rank from all pools before stopping server
   enable_drain: true
   # continue test if container destroy fails
   ignore_soak_errors: true
-  enable_intercept_lib: true
+  enable_intercept_lib: false
+  enable_remote_logging: false
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
@@ -120,8 +123,6 @@ ior_harasser:
     - DFS
     - MPIIO
     - POSIX
-    - POSIX-LIBIOIL
-    - POSIX-LIBPIL4DFS
     - HDF5
   test_file: daos:/testFile
   flags: -v -w -W -r -R -F -k
@@ -134,18 +135,13 @@ ior_harasser:
   segment_count: 1
   dfs_oclass:
     - ["EC_2P1GX", "RP_2GX"]
-    #  - ["EC_4P1G1", "RP_2GX"]
     - ["EC_4P2GX", "RP_3GX"]
-    #  - ["EC_8P2G1", "RP_3GX"]
-    #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/ior"
     disable_caching: true
 fio_harasser:
   api:
     - POSIX
-    - POSIX-LIBIOIL
-    - POSIX-LIBPIL4DFS
   job_timeout: 20
   names:
     - global
@@ -170,10 +166,7 @@ fio_harasser:
       - 'randrw'
     oclass:
       - ["EC_2P1GX", "RP_2GX"]
-      #  - ["EC_4P1G1", "RP_2GX"]
       - ["EC_4P2GX", "RP_3GX"]
-      #  - ["EC_8P2G1", "RP_3GX"]
-      #  - ["EC_16P2GX", "RP_3GX"]
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_caching: true
@@ -191,8 +184,6 @@ mdtest_harasser:
   api:
     - DFS
     - POSIX
-    - POSIX-LIBIOIL
-    - POSIX-LIBPIL4DFS
   iteration: 1
   num_of_files_dirs: 3000
   pre_iter: 10
@@ -206,10 +197,7 @@ mdtest_harasser:
     - 0
   dfs_oclass:
     - ["EC_2P1G1", "RP_2G1"]
-    #  - ["EC_4P1G1", "RP_2G1"]
     - ["EC_4P2GX", "RP_3G1"]
-    #  - ["EC_8P2G1", "RP_3G1"]
-    #  - ["EC_16P2GX", "RP_3G1"]
   dfs_destroy: false
   dfuse:
     mount_dir: "/tmp/daos_dfuse/mdtest/"

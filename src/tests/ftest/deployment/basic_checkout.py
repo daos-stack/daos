@@ -110,7 +110,7 @@ class BasicCheckoutDm(DataMoverTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=deployment,datamover,fs_copy,ior,basic_checkout
+        :avocado: tags=deployment,datamover,daos_fs_copy,ior,basic_checkout
         :avocado: tags=BasicCheckoutDm,test_basic_checkout_dm
         """
         # load ior params for dm test

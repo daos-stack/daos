@@ -928,11 +928,9 @@ pool_iv_ent_invalid(struct ds_iv_entry *entry, struct ds_iv_key *key)
 	struct ds_pool		*pool;
 	int			rc;
 
-	if (!entry->iv_valid)
-		return 0;
-
 	if (entry->iv_class->iv_class_id == IV_POOL_HDL) {
 		if (!uuid_is_null(iv_entry->piv_hdl.pih_cont_hdl)) {
+			entry->iv_valid = false;
 			rc = ds_pool_lookup(entry->ns->iv_pool_uuid, &pool);
 			if (rc) {
 				if (rc == -DER_NONEXIST)
@@ -1421,9 +1419,14 @@ int
 ds_pool_iv_srv_hdl_invalidate(struct ds_pool *pool)
 {
 	struct ds_iv_key	key = { 0 };
+	struct pool_iv_key	*pool_key;
 	int			rc;
 
 	key.class_id = IV_POOL_HDL;
+	pool_key = (struct pool_iv_key *)key.key_buf;
+	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
+	pool_key->pik_eph = d_hlc_get();
+	pool_key->pik_term = pool->sp_iv_ns->iv_master_term;
 	rc = ds_iv_invalidate(pool->sp_iv_ns, &key, CRT_IV_SHORTCUT_NONE,
 			      CRT_IV_SYNC_NONE, 0, false /* retry */);
 	if (rc)
@@ -1477,9 +1480,8 @@ ds_pool_iv_srv_hdl_fetch(struct ds_pool *pool, uuid_t *pool_hdl_uuid,
 	pool_key->pik_entry_size = sizeof(struct pool_iv_entry);
 	rc = ds_iv_fetch(pool->sp_iv_ns, &key, &sgl, false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN,
-			 DB_ANY, DLOG_ERR,
-			 "iv fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_SHUTDOWN, DB_ANY, DLOG_ERR, rc,
+			  "iv fetch failed");
 		D_GOTO(out, rc);
 	}
 

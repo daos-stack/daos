@@ -191,8 +191,12 @@ cont_iv_ent_copy(struct ds_iv_entry *entry, struct cont_iv_key *key,
 				cip_acl.dal_ace[src->iv_prop.cip_acl.dal_len]);
 		memcpy(&dst->iv_prop, &src->iv_prop, size);
 		break;
+	case IV_CONT_AGG_EPOCH_BOUNDRY:
+		dst->iv_agg_eph.eph = src->iv_agg_eph.eph;
+		break;
 	default:
-		D_ERROR("bad iv_class_id %d.\n", entry->iv_class->iv_class_id);
+		D_ERROR("bad iv_class_id %d: "DF_RC".\n", entry->iv_class->iv_class_id,
+			DP_RC(-DER_INVAL));
 		return -DER_INVAL;
 	};
 
@@ -643,6 +647,7 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 			if (rc)
 				D_GOTO(out, rc);
 		}
+		entry->iv_valid = false;
 	} else {
 		struct cont_iv_entry *iv_entry;
 
@@ -660,9 +665,8 @@ cont_iv_ent_update(struct ds_iv_entry *entry, struct ds_iv_key *key,
 
 out:
 	if (rc < 0 && rc != -DER_IVCB_FORWARD)
-		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
-			 DB_ANY, DLOG_ERR,
-			 "failed to insert: rc "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc,
+			  "failed to insert");
 
 	return rc;
 }
@@ -758,9 +762,8 @@ cont_iv_fetch(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = entry_size;
 	rc = ds_iv_fetch(ns, &key, cont_iv ? &sgl : NULL, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR,
-			 DF_UUID" iv fetch failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_MGMT, DLOG_ERR, rc, DF_UUID " iv fetch failed",
+			  DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -791,10 +794,8 @@ cont_iv_update(void *ns, int class_id, uuid_t key_uuid,
 	civ_key->entry_size = cont_iv_len;
 	rc = ds_iv_update(ns, &key, &sgl, shortcut, sync_mode, 0, retry);
 	if (rc)
-		D_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST,
-			 DB_ANY, DLOG_ERR,
-			 DF_UUID" iv update failed "DF_RC"\n",
-			 DP_UUID(key_uuid), DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER || rc == -DER_NONEXIST, DB_ANY, DLOG_ERR, rc,
+			  DF_UUID " iv update failed", DP_UUID(key_uuid));
 
 	return rc;
 }
@@ -1072,6 +1073,33 @@ cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph)
 	return cont_iv_ec_agg_eph_update_internal(ns, cont_uuid, eph,
 						  0, CRT_IV_SYNC_LAZY,
 						  IV_CONT_AGG_EPOCH_BOUNDRY);
+}
+
+int
+ds_cont_fetch_ec_agg_boundary(void *ns, uuid_t cont_uuid)
+{
+
+	struct cont_iv_entry	iv_entry = { 0 };
+	int			rc;
+
+	/* Only happens on xstream 0 */
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+	uuid_copy(iv_entry.cont_uuid, cont_uuid);
+	rc = crt_group_rank(NULL, &iv_entry.iv_agg_eph.rank);
+	if (rc) {
+		D_ERROR(DF_UUID" crt_group_rank failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+		return rc;
+	}
+
+	rc = cont_iv_fetch(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, &iv_entry,
+			   sizeof(struct cont_iv_entry), sizeof(struct cont_iv_entry),
+			   true);
+	if (rc)
+		D_ERROR(DF_UUID" cont_iv_fetch failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+	return rc;
+
 }
 
 int
@@ -1433,8 +1461,7 @@ cont_iv_prop_fetch_ult(void *data)
 			   iv_entry, iv_entry_size, iv_entry_size,
 			   false /* retry */);
 	if (rc) {
-		D_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR,
-			 "cont_iv_fetch failed "DF_RC"\n", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NOTLEADER, DB_ANY, DLOG_ERR, rc, "cont_iv_fetch failed");
 		D_GOTO(out, rc);
 	}
 

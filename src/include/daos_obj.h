@@ -178,12 +178,12 @@ static inline bool
 daos_is_dkey_uint64_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_MULTI_UINT64:
 	case DAOS_OT_DKEY_UINT64:
 	case DAOS_OT_KV_UINT64:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;
@@ -220,9 +220,9 @@ static inline bool
 daos_is_array_type(enum daos_otype_t type)
 {
 	switch (type) {
+	case DAOS_OT_ARRAY_BYTE:
 	case DAOS_OT_ARRAY:
 	case DAOS_OT_ARRAY_ATTR:
-	case DAOS_OT_ARRAY_BYTE:
 		return true;
 	default:
 		return false;
@@ -1078,7 +1078,7 @@ daos_obj_verify(daos_handle_t coh, daos_obj_id_t oid, daos_epoch_t epoch);
  * feature is not supported yet.
  *
  * \param[in]	oh	Open object handle.
- * \param[in/out]
+ * \param[in,out]
  *		nr	[in]: Number of anchors requested and allocated in
  *			\a anchors. Pass 0 for DAOS to recommend split num.
  *			[out]: Number of anchors recommended if 0 is passed in.

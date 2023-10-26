@@ -74,6 +74,11 @@ void job_step_update(def value) {
 Map nlt_test() {
     // groovylint-disable-next-line NoJavaUtilDate
     Date startDate = new Date()
+    try {
+        unstash('nltr')
+    } catch (e) {
+        print 'Unstash failed, results from NLT stage will not be included'
+    }
     sh label: 'Fault injection testing using NLT',
        script: './ci/docker_nlt.sh --class-name el8.fault-injection fi'
     List filesList = []
@@ -311,7 +316,7 @@ pipeline {
                defaultValue: 'ci_vm1',
                description: 'Label to use for 1 VM node unit and RPM tests')
         string(name: 'CI_UNIT_VM1_NVME_LABEL',
-               defaultValue: 'bwx_vm1',
+               defaultValue: 'ci_ssd_vm1',
                description: 'Label to use for 1 VM node unit tests that need NVMe')
         string(name: 'FUNCTIONAL_VM_LABEL',
                defaultValue: 'ci_vm9',
@@ -1104,11 +1109,10 @@ pipeline {
                             sconsBuild(parallel_build: true,
                                        scons_args: 'PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug',
                                        build_deps: 'no'))
-                        unstash('nltr')
                         job_step_update(nlt_test())
-                        recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
-                                       skipPublishingChecks: true,
-                                       id: 'fir', name: 'Fault Injection Report')
+                        // recordCoverage(tools: [[parser: 'COBERTURA', pattern:'nltr.xml']],
+                        //                skipPublishingChecks: true,
+                        //                id: 'fir', name: 'Fault Injection Report')
                     }
                     post {
                         always {

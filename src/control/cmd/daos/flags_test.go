@@ -227,7 +227,7 @@ func TestFlags_ChunkSizeFlag(t *testing.T) {
 		},
 		"not a size": {
 			arg:    "snausages",
-			expErr: errors.New("ParseFloat"),
+			expErr: errors.New("invalid chunk-size \"snausages\""),
 		},
 		// TODO: More validation of allowed sizes?
 	} {

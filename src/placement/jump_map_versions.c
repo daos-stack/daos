@@ -886,7 +886,7 @@ get_target(struct pool_domain *root, struct pool_domain *curr_pd, uint32_t layou
 
 		get_target_v0(root, target, key, dom_used, dom_full, dom_cur_grp_used,
 			      tgts_used, shard_num, allow_status, fdom_lvl);
-		if (spare_avail) {
+		if (spare_avail && spare_left) {
 			if ( --(*spare_left) > 0)
 				*spare_avail = true;
 			else

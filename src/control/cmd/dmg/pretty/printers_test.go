@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2020-2021 Intel Corporation.
+// (C) Copyright 2020-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
+	"github.com/daos-stack/daos/src/control/common/test"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -104,6 +105,101 @@ host1:1,host2:2 whoops
 			if diff := cmp.Diff(strings.TrimLeft(tc.expPrintStr, "\n"), bld.String()); diff != "" {
 				t.Fatalf("unexpected format string (-want, +got):\n%s\n", diff)
 			}
+		})
+	}
+}
+
+func TestControl_UpdateErrorSummary(t *testing.T) {
+	for name, tc := range map[string]struct {
+		resp      *control.CollectLogResp
+		cmd       string
+		expStdout string
+		expErr    error
+	}{
+		"nil response": {
+			resp:      nil,
+			cmd:       "empty",
+			expStdout: ``,
+			expErr:    errors.New("nil *control.CollectLogResp"),
+		},
+		"empty response": {
+			resp:      new(control.CollectLogResp),
+			cmd:       "empty",
+			expStdout: ``,
+			expErr:    nil,
+		},
+		"one host error": {
+			cmd: "hostname",
+			resp: &control.CollectLogResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "command not found",
+					}),
+			},
+			expStdout: `
+Hosts Command  Error             
+----- -------  -----             
+host1 hostname command not found 
+`,
+			expErr: nil,
+		},
+		"Two host, same error": {
+			cmd: "hostname",
+			resp: &control.CollectLogResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "command not found",
+					},
+					&control.MockHostError{
+						Hosts: "host2",
+						Error: "command not found",
+					}),
+			},
+			expStdout: `
+Hosts     Command  Error             
+-----     -------  -----             
+host[1-2] hostname command not found 
+`,
+			expErr: nil,
+		},
+		"Two host, different error": {
+			cmd: "hostname",
+			resp: &control.CollectLogResp{
+				HostErrorsResp: control.MockHostErrorsResp(t,
+					&control.MockHostError{
+						Hosts: "host1",
+						Error: "command not found",
+					},
+					&control.MockHostError{
+						Hosts: "host2",
+						Error: "command not available",
+					}),
+			},
+			expStdout: `
+Hosts Command  Error                 
+----- -------  -----                 
+host1 hostname command not found     
+host2 hostname command not available 
+`,
+			expErr: nil,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out strings.Builder
+
+			err := UpdateErrorSummary(tc.resp, tc.cmd, &out)
+
+			test.CmpErr(t, tc.expErr, err)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(strings.TrimLeft(tc.expStdout, "\n"), out.String()); diff != "" {
+				t.Fatalf("unexpected print output (-want, +got):\n%s\n", diff)
+			}
+
 		})
 	}
 }

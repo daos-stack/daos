@@ -487,9 +487,8 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		D_GOTO(output, rc);
 	}
 
-	if (invalidate)
-		entry->iv_valid = false;
-	else
+	/* If the entry is being invalidate, then iv_valid is set inside the callback */
+	if (!invalidate)
 		entry->iv_valid = true;
 
 	D_DEBUG(DB_MD, "key id %d rank %d myrank %d valid %s\n",
@@ -599,9 +598,13 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	class = entry->iv_class;
 	if (iv_value) {
-		rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
-		if (rc)
-			D_GOTO(out, rc);
+		if (permission & CRT_IV_NO_ALLOC) {
+			iv_value->sg_nr = 1;
+		} else {
+			rc = class->iv_class_ops->ivc_value_alloc(entry, &key, iv_value);
+			if (rc)
+				D_GOTO(out, rc);
+		}
 	}
 
 	rc = class->iv_class_ops->ivc_ent_get(entry, &entry_priv_val);

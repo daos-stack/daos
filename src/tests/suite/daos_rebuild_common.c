@@ -59,20 +59,9 @@ rebuild_exclude_tgt(test_arg_t **args, int arg_cnt, d_rank_t rank,
 	}
 
 	for (i = 0; i < arg_cnt; i++) {
-		int retry = 0;
-
-		while(1) {
-			rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
-					      args[i]->group, rank, tgt_idx);
-			if (rc == -DER_BUSY && retry < 5) {
-				print_message("retry after 5 seconds\n");
-				sleep(5);
-				retry++;
-			} else {
-				assert_success(rc);
-				break;
-			}
-		}
+		rc = dmg_pool_exclude(args[i]->dmg_config, args[i]->pool.pool_uuid,
+				      args[i]->group, rank, tgt_idx);
+		assert_success(rc);
 	}
 }
 
@@ -91,22 +80,9 @@ rebuild_reint_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed) {
-			int retry = 0;
-
-			while (1) {
-				rc = dmg_pool_reintegrate(args[i]->dmg_config,
-							  args[i]->pool.pool_uuid,
-							  args[i]->group, rank, tgt_idx);
-				if (rc == -DER_BUSY && retry < 5) {
-					print_message("retry after 5 seconds\n");
-					sleep(5);
-					retry++;
-				} else {
-					assert_success(rc);
-					break;
-				}
-			}
-
+			rc = dmg_pool_reintegrate(args[i]->dmg_config, args[i]->pool.pool_uuid,
+						  args[i]->group, rank, tgt_idx);
+			assert_success(rc);
 		}
 		sleep(2);
 	}
@@ -121,21 +97,9 @@ rebuild_extend_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 
 	for (i = 0; i < args_cnt; i++) {
 		if (!args[i]->pool.destroyed) {
-			int retry = 0;
-
-			while (1) {
-				rc = dmg_pool_extend(args[i]->dmg_config,
-						     args[i]->pool.pool_uuid,
-						     args[i]->group, &rank, 1);
-				if (rc == -DER_BUSY && retry < 5) {
-					print_message("retry after 5 seconds\n");
-					sleep(5);
-					retry++;
-				} else {
-					assert_success(rc);
-					break;
-				}
-			}
+			rc = dmg_pool_extend(args[i]->dmg_config, args[i]->pool.pool_uuid,
+					     args[i]->group, &rank, 1);
+			assert_success(rc);
 		}
 		sleep(2);
 	}
@@ -149,22 +113,10 @@ rebuild_drain_tgt(test_arg_t **args, int args_cnt, d_rank_t rank,
 	int rc = 0;
 
 	for (i = 0; i < args_cnt; i++) {
-		int retry = 0;
-
 		if (!args[i]->pool.destroyed) {
-			while (1) {
-				rc = dmg_pool_drain(args[i]->dmg_config,
-						    args[i]->pool.pool_uuid,
-						    args[i]->group, rank, tgt_idx);
-				if (rc == -DER_BUSY && retry < 5) {
-					print_message("retry after 5 seconds\n");
-					sleep(5);
-					retry++;
-				} else {
-					assert_success(rc);
-					break;
-				}
-			}
+			rc = dmg_pool_drain(args[i]->dmg_config, args[i]->pool.pool_uuid,
+					    args[i]->group, rank, tgt_idx);
+			assert_success(rc);
 		}
 		sleep(2);
 	}
@@ -450,23 +402,10 @@ rebuild_add_back_tgts(test_arg_t *arg, d_rank_t failed_rank, int *failed_tgts,
 		int i;
 
 		for (i = 0; i < nr; i++) {
-			int retry = 0;
-
-			while (1) {
-				rc = dmg_pool_reintegrate(arg->dmg_config,
-							  arg->pool.pool_uuid,
-							  arg->group, failed_rank,
-							  failed_tgts ? failed_tgts[i] : -1);
-				if (rc == -DER_BUSY && retry < 5) {
-					print_message("retry after 5 seconds\n");
-					sleep(5);
-					retry++;
-				} else {
-					assert_success(rc);
-					break;
-				}
-
-			}
+			rc = dmg_pool_reintegrate(arg->dmg_config, arg->pool.pool_uuid,
+						  arg->group, failed_rank,
+						  failed_tgts ? failed_tgts[i] : -1);
+			assert_success(rc);
 		}
 	}
 	par_barrier(PAR_COMM_WORLD);
@@ -1187,6 +1126,16 @@ ec_parity_nr_get(daos_obj_id_t oid)
 	oca = daos_oclass_attr_find(oid, NULL);
 	assert_true(oca->ca_resil == DAOS_RES_EC);
 	return oca->u.ec.e_p;
+}
+
+int
+ec_tgt_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k + oca->u.ec.e_p;
 }
 
 void

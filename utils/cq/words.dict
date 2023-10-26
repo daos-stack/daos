@@ -135,7 +135,6 @@ debian
 debuginfo
 defusedxml
 del
-dependances
 deps
 dereference
 dereferencing
@@ -176,6 +175,7 @@ fchmod
 fcntl
 filename
 filesystem
+findall
 findcmd
 fini
 fio
@@ -198,6 +198,7 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist
@@ -253,6 +254,7 @@ logfile
 logfiles
 logmasks
 lseek
+lsblk
 lspci
 lua
 lustre

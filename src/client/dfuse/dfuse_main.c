@@ -7,8 +7,10 @@
 #include <errno.h>
 #include <getopt.h>
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
+#include <string.h>
 
 #include <sys/types.h>
 #include <hwloc.h>
@@ -202,8 +204,7 @@ dfuse_launch_fuse(struct dfuse_info *dfuse_info, struct fuse_args *args)
 	else
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
-		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
+		DHS_ERROR(dfuse_info, rc, "Fuse loop exited");
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -347,6 +348,35 @@ show_help(char *name)
 	    "\n"
 	    "Version: %s\n",
 	    name, DAOS_VERSION);
+}
+
+/*
+ * Checks whether a mountpoint path is a valid file descriptor.
+ *
+ * Returns the file descriptor on success, -1 on failure.
+ */
+static int
+check_fd_mountpoint(const char *mountpoint)
+{
+	int fd  = -1;
+	int len = 0;
+	int fd_flags;
+	int res;
+
+	res = sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len);
+	if (res != 1) {
+		return -1;
+	}
+	if (len != strnlen(mountpoint, NAME_MAX)) {
+		return -1;
+	}
+
+	fd_flags = fcntl(fd, F_GETFD);
+	if (fd_flags == -1) {
+		return -1;
+	}
+
+	return fd;
 }
 
 int
@@ -584,8 +614,7 @@ main(int argc, char **argv)
 		}
 
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path: %d (%s)", rc,
-			       strerror(rc));
+		DHS_INFO(dfuse_info, rc, "duns_resolve_path() on path");
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -629,8 +658,18 @@ main(int argc, char **argv)
 		duns_destroy_attr(&duns_attr);
 
 	} else if (rc == ENOENT) {
-		printf("Mount point does not exist\n");
-		D_GOTO(out_daos, rc = daos_errno2der(rc));
+		/* In order to allow FUSE daemons to run without privileges, libfuse
+		 * allows the caller to open /dev/fuse and pass the file descriptor by
+		 * specifying /dev/fd/N as the mountpoint. In some cases, realpath may
+		 * fail for these paths.
+		 */
+		int fd = check_fd_mountpoint(dfuse_info->di_mountpoint);
+		if (fd < 0) {
+			DFUSE_TRA_WARNING(dfuse_info, "Mount point is not a valid file descriptor");
+			printf("Mount point does not exist\n");
+			D_GOTO(out_daos, rc = daos_errno2der(rc));
+		}
+		DFUSE_LOG_INFO("Mounting FUSE file descriptor %d", fd);
 	} else if (rc == ENOTCONN) {
 		printf("Stale mount point, run fusermount3 and retry\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));

@@ -91,4 +91,6 @@ crt_hdlr_ctl_get_hostname(crt_rpc_t *rpc_req);
 void
 crt_hdlr_ctl_get_pid(crt_rpc_t *rpc_req);
 
+void
+crt_iv_init(crt_init_options_t *ops);
 #endif /* __CRT_INTERNAL_H__ */

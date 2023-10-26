@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -308,16 +309,18 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 	engineTargetNb := uint64(engineCfg.TargetCount)
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
+		// TODO DAOS-14223: GetMetaSize() should reflect custom values set through pool
+		//                  create --meta-size option.
 		clusterCount := getClusterCount(dev.GetMetaSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetMetaWalSize(), engineTargetNb, clusterSize)
-		c.log.Tracef("Removing %d Metadata WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s): ",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d Metadata WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s): ",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -327,15 +330,15 @@ func (c *ControlService) getMetaClusterCount(engineCfg *engine.Config, devToAdju
 
 	if dev.GetRoleBits()&storage.BdevRoleMeta != 0 {
 		clusterCount := getClusterCount(dev.GetRdbSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB clusters the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB clusters (cluster size: %d) the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
 	if dev.GetRoleBits()&storage.BdevRoleWAL != 0 {
 		clusterCount := getClusterCount(dev.GetRdbWalSize(), 1, clusterSize)
-		c.log.Tracef("Removing %d RDB WAL clusters from the usable size of the SMD device %s (rank %d, ctlr %s)",
-			clusterCount, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
+		c.log.Tracef("Removing %d RDB WAL clusters (cluster size: %d) from the usable size of the SMD device %s (rank %d, ctlr %s)",
+			clusterCount, clusterSize, dev.GetUuid(), devToAdjust.rank, devToAdjust.ctlr.GetPciAddr())
 		subtrClusterCount += clusterCount
 	}
 
@@ -507,21 +510,6 @@ func (c *ControlService) adjustScmSize(resp *ctlpb.ScanScmResp) {
 	}
 }
 
-func checkEnginesReady(instances []Engine) error {
-	for _, inst := range instances {
-		if !inst.IsReady() {
-			var err error = FaultDataPlaneNotStarted
-			if inst.IsStarted() {
-				err = errEngineNotReady
-			}
-
-			return errors.Wrapf(err, "instance %d", inst.Index())
-		}
-	}
-
-	return nil
-}
-
 // StorageScan discovers non-volatile storage hardware on node.
 func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScanReq) (*ctlpb.StorageScanResp, error) {
 	if req == nil {
@@ -535,8 +523,12 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	// to support off-line storage scan functionality which uses cached stats (e.g. dmg storage
 	// scan --nvme-meta).
 	if req.Scm.Usage && req.Nvme.Meta {
-		if err := checkEnginesReady(c.harness.Instances()); err != nil {
-			return nil, err
+		nrInstances := len(c.harness.Instances())
+		readyRanks := c.harness.readyRanks()
+		if len(readyRanks) != nrInstances {
+			return nil, errors.Wrapf(errEngineNotReady, "%s, ready: %v",
+				english.Plural(nrInstances, "engine", "engines"),
+				readyRanks)
 		}
 	}
 
@@ -623,6 +615,7 @@ type formatScmReq struct {
 
 func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatResp) (map[int]string, map[int]bool, error) {
 	needFormat := make(map[int]bool)
+	emptyTmpfs := make(map[int]bool)
 	scmCfgs := make(map[int]*storage.TierConfig)
 	allNeedFormat := true
 
@@ -641,6 +634,15 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			return nil, nil, errors.Wrap(err, "retrieving SCM config")
 		}
 		scmCfgs[idx] = scmCfg
+
+		// If the tmpfs was already mounted but empty, record that fact for later usage.
+		if scmCfg.Class == storage.ClassRam && !needs {
+			info, err := ei.GetStorage().GetScmUsage()
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "failed to check SCM usage for instance %d", idx)
+			}
+			emptyTmpfs[idx] = info.TotalBytes-info.AvailBytes == 0
+		}
 	}
 
 	if allNeedFormat {
@@ -673,7 +675,15 @@ func formatScm(ctx context.Context, req formatScmReq, resp *ctlpb.StorageFormatR
 			},
 		})
 
-		skipped[idx] = true
+		// In the normal case, where SCM wasn't already mounted, we want
+		// to trigger NVMe format. In the case where SCM was mounted and
+		// wasn't empty, we want to skip NVMe format, as we're using
+		// mountedness as a proxy for already-formatted. In the special
+		// case where tmpfs was already mounted but empty, we will treat it
+		// as an indication that the NVMe format needs to occur.
+		if !emptyTmpfs[idx] {
+			skipped[idx] = true
+		}
 	}
 
 	for formatting > 0 {
@@ -708,7 +718,7 @@ func formatNvme(ctx context.Context, req formatNvmeReq, resp *ctlpb.StorageForma
 		_, hasError := req.errored[idx]
 		_, skipped := req.skipped[idx]
 		if hasError || (skipped && !req.mdFormatted) {
-			// if scm errored or was already formatted, indicate skipping bdev format
+			// if scm failed to format or was already formatted, indicate skipping bdev format
 			ret := ei.newCret(storage.NilBdevAddress, nil)
 			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)

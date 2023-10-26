@@ -21,6 +21,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/runtime/protoimpl"
 
+	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	commonpb "github.com/daos-stack/daos/src/control/common/proto"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
@@ -50,6 +51,7 @@ type (
 	// for a MockInvoker.
 	MockInvokerConfig struct {
 		Sys                 string
+		Component           build.Component
 		UnaryError          error
 		UnaryResponse       *UnaryResponse
 		UnaryResponseSet    []*UnaryResponse
@@ -100,6 +102,10 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 
 func (mi *MockInvoker) GetSystem() string {
 	return mi.cfg.Sys
+}
+
+func (mi *MockInvoker) GetComponent() build.Component {
+	return mi.cfg.Component
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
@@ -725,7 +731,7 @@ func MockPoolCreateResp(t *testing.T, config *MockPoolRespConfig) *mgmtpb.PoolCr
 	return poolCreateRespMsg
 }
 
-func mockBdevTier(numaID int, pciAddrIDs ...int) *storage.TierConfig {
+func MockBdevTier(numaID int, pciAddrIDs ...int) *storage.TierConfig {
 	return storage.NewTierConfig().
 		WithNumaNodeIndex(uint(numaID)).
 		WithStorageClass(storage.ClassNvme.String()).
@@ -752,14 +758,14 @@ func MockEngineCfg(numaID int, pciAddrIDs ...int) *engine.Config {
 			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numaID)),
 	}
 	if len(pciAddrIDs) > 0 {
-		tcs = append(tcs, mockBdevTier(numaID, pciAddrIDs...))
+		tcs = append(tcs, MockBdevTier(numaID, pciAddrIDs...))
 	}
 
 	return mockEngineCfg(numaID, tcs...)
 }
 
 func MockBdevTierWithRole(numaID, role int, pciAddrIDs ...int) *storage.TierConfig {
-	return mockBdevTier(numaID, pciAddrIDs...).WithBdevDeviceRoles(role)
+	return MockBdevTier(numaID, pciAddrIDs...).WithBdevDeviceRoles(role)
 }
 
 // MockEngineCfgTmpfs generates ramdisk engine config with pciAddrIDs defining bdev tier device

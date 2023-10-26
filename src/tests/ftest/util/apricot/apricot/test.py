@@ -195,8 +195,8 @@ class Test(avocadoTest):
         try:
             with open(self.cancel_file) as skip_handle:
                 skip_list = skip_handle.readlines()
-        except Exception as excpt:  # pylint: disable=broad-except
-            skip_process_error("Unable to read skip list: {}".format(excpt))
+        except Exception as err:  # pylint: disable=broad-except
+            skip_process_error("Unable to read skip list: {}".format(err))
             skip_list = []
 
         for item in skip_list:
@@ -218,9 +218,9 @@ class Test(avocadoTest):
                             return
                 except exceptions.TestCancel:   # pylint: disable=try-except-raise
                     raise
-                except Exception as excpt:      # pylint: disable=broad-except
+                except Exception as err:      # pylint: disable=broad-except
                     skip_process_error("Unable to read commit title: "
-                                       "{}".format(excpt))
+                                       "{}".format(err))
                 # Nope, but there is a commit that fixes it
                 # Maybe in this code base, maybe not...
                 if len(vals) > 1:
@@ -228,9 +228,9 @@ class Test(avocadoTest):
                         with open(os.path.join(os.sep, 'tmp',
                                                'commit_list')) as commit_handle:
                             commits = commit_handle.readlines()
-                    except Exception as excpt:  # pylint: disable=broad-except
+                    except Exception as err:  # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
-                                           "{}".format(excpt))
+                                           "{}".format(err))
                         return
                     if commits and vals[1] in commits:
                         # fix is in this code base
@@ -408,6 +408,9 @@ class Test(avocadoTest):
                 cleanup = self._cleanup_methods.pop()
                 errors.extend(cleanup["method"](**cleanup["kwargs"]))
             except Exception as error:      # pylint: disable=broad-except
+                if str(error) == "Test interrupted by SIGTERM":
+                    # Abort testing if timed out by avocado.
+                    raise error
                 errors.append(
                     "Unhandled exception when calling {}({}): {}".format(
                         str(cleanup["method"]), dict_to_str(cleanup["kwargs"]), str(error)))
@@ -449,13 +452,16 @@ class Test(avocadoTest):
                 "Incrementing %s from %s to %s seconds", section, value, value + increment)
             set_avocado_config_value(namespace, key, value + increment)
 
-    def log_step(self, message):
+    def log_step(self, message, header=False):
         """Log a test step.
 
         Args:
             message (str): description of test step.
-
+            header (bool, optional): whether to log a header line before the message. Defaults to
+                False.
         """
+        if header:
+            self.log.info('-' * 80)
         self.log.info("==> Step %s: %s", self._test_step, message)
         self._test_step += 1
 

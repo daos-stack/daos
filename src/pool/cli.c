@@ -222,9 +222,9 @@ choose:
 			D_MUTEX_UNLOCK(cli_lock);
 		rc = dc_mgmt_pool_find(sys, label, puuid, &ranklist);
 		if (rc) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
-				 DF_UUID ":%s: dc_mgmt_pool_find() failed, " DF_RC "\n",
-				 DP_UUID(puuid), label ? label : "", DP_RC(rc));
+			DL_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR, rc,
+				  DF_UUID ":%s: dc_mgmt_pool_find() failed", DP_UUID(puuid),
+				  label ? label : "");
 			return rc;
 		}
 		if (cli_lock)
@@ -603,9 +603,9 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info,
 	rc = dc_pool_choose_svc_rank(label, pool->dp_pool, &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
-		D_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR,
-			 DF_UUID ":%s: cannot find pool service: " DF_RC "\n",
-			 DP_UUID(pool->dp_pool), label ? label : "", DP_RC(rc));
+		DL_CDEBUG(rc == -DER_NONEXIST, DB_PL, DLOG_ERR, rc,
+			  DF_UUID ":%s: cannot find pool service", DP_UUID(pool->dp_pool),
+			  label ? label : "");
 		goto out;
 	}
 
@@ -3206,9 +3206,9 @@ int dc_pool_get_redunc(daos_handle_t poh)
 /**
  * Get pool_target by dc pool and target index.
  *
- * \param pool [IN]	dc pool
- * \param tgt_idx [IN]	target index.
- * \param tgt [OUT]	pool target pointer.
+ * \param[in]  pool	dc pool
+ * \param[in]  tgt_idx	target index.
+ * \param[out] tgt	pool target pointer.
  *
  * \return		0 if get the pool_target.
  * \return		errno if it does not get the pool_target.
