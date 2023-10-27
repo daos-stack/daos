@@ -31,7 +31,7 @@ from process_core_files import CoreFileException, CoreFileProcessing
 from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
-# This is not good coding practice. Should use package paths and remove alls these E402.
+# This is not good coding practice. Should use package paths and remove all these E402.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 from data_utils import (dict_extract_values, list_flatten,  # noqa: E402
                         list_unique)

@@ -11,4 +11,5 @@ isort
 paramiko
 pyenchant
 pylint
+toml
 yamllint
