@@ -75,6 +75,7 @@ def set_python_environment(logger):
         os.path.abspath("util/apricot"),
         os.path.abspath("util"),
         os.path.abspath("cart"),
+        os.path.abspath("."),
     ]
 
     # Include the cart directory paths when running from sources
