@@ -3,16 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
-import threading
-from itertools import product
 import queue
+import threading
+import time
+from itertools import product
 
 from apricot import TestWithServers
-from write_host_file import write_host_file
+from exception_utils import CommandFailure
 from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from exception_utils import CommandFailure
+from write_host_file import write_host_file
 
 
 class NvmePoolCapacity(TestWithServers):
