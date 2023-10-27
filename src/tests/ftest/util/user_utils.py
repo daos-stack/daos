@@ -11,7 +11,7 @@ from grp import getgrgid
 from pwd import getpwnam
 
 from ClusterShell.NodeSet import NodeSet
-from run_utils import run_remote
+from util.run_utils import run_remote
 
 
 def get_primary_group(user=None):

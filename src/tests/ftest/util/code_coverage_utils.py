@@ -5,8 +5,8 @@
 """
 import os
 
-from collection_utils import archive_files
-from run_utils import run_remote
+from util.collection_utils import archive_files
+from util.run_utils import run_remote
 
 
 class CodeCoverage():

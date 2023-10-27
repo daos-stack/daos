@@ -6,7 +6,7 @@
 import os
 import re
 
-from run_utils import run_local, RunException
+from util.run_utils import run_local, RunException
 
 
 class AvocadoException(Exception):

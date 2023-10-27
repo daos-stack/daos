@@ -9,9 +9,9 @@ import site
 
 from ClusterShell.NodeSet import NodeSet
 
-from network_utils import get_fastest_interface, get_common_provider, SUPPORTED_PROVIDERS, \
-    PROVIDER_ALIAS, NetworkException
-from run_utils import run_remote
+from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
+                                get_common_provider, get_fastest_interface)
+from util.run_utils import run_remote
 
 
 class TestEnvironmentException(Exception):

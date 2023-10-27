@@ -12,19 +12,18 @@ import sys
 import time
 
 from ClusterShell.NodeSet import NodeSet
-
-from environment_utils import TestEnvironment
-from collection_utils import collect_test_result, TEST_RESULTS_DIRS
-from data_utils import list_unique, list_flatten, dict_extract_values
-from host_utils import get_node_set, get_local_host, HostInfo, HostException
-from logger_utils import get_file_handler, LOG_FILE_FORMAT
-from results_utils import LaunchTestName
-from run_utils import RunException, run_local, run_remote
+from util.environment_utils import TestEnvironment
+from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
+from util.data_utils import list_unique, list_flatten, dict_extract_values
+from util.host_utils import get_node_set, get_local_host, HostInfo, HostException
+from util.logger_utils import LOG_FILE_FORMAT, get_file_handler
+from util.results_utils import LaunchTestName
+from util.run_utils import RunException, run_local, run_remote
+from util.slurm_utils import show_partition, create_partition, delete_partition
+from util.storage_utils import StorageInfo, StorageException
+from util.user_utils import groupadd, useradd, userdel, get_group_id, get_user_groups
+from util.yaml_utils import get_yaml_data, YamlUpdater
 from slurm_setup import SlurmSetup, SlurmSetupException
-from slurm_utils import show_partition, create_partition, delete_partition
-from storage_utils import StorageInfo, StorageException
-from user_utils import groupadd, useradd, userdel, get_group_id, get_user_groups
-from yaml_utils import get_yaml_data, YamlUpdater
 
 
 class LaunchException(Exception):

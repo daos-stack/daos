@@ -4,7 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from run_utils import command_as_user, run_remote
+from util.run_utils import command_as_user, run_remote
 
 
 def find_packages(log, hosts, pattern, user=None):

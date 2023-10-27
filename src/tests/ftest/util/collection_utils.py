@@ -12,12 +12,12 @@ import sys
 
 from ClusterShell.NodeSet import NodeSet
 
-from environment_utils import TestEnvironment
-from host_utils import get_local_host
+from util.environment_utils import TestEnvironment
+from util.host_utils import get_local_host
+from util.run_utils import RunException, find_command, run_local, run_remote, stop_processes
+from util.user_utils import get_chown_command
+from util.yaml_utils import get_test_category
 from process_core_files import CoreFileProcessing, CoreFileException
-from run_utils import RunException, run_local, run_remote, find_command, stop_processes
-from user_utils import get_chown_command
-from yaml_utils import get_test_category
 
 CLEANUP_PROCESS_NAMES = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]

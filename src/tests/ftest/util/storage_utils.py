@@ -3,16 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import itertools
-import os
-import re
 from collections import OrderedDict
 from functools import partial
 from operator import is_not
-
+import itertools
+import os
+import re
 import yaml
+
 from ClusterShell.NodeSet import NodeSet
-from run_utils import run_remote
+from util.run_utils import run_remote
 
 
 def find_pci_address(value, *flags):
