@@ -4,40 +4,39 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict
 import getpass
 import json
 import logging
 import os
 import sys
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from collections import OrderedDict
 from tempfile import TemporaryDirectory
-# import traceback
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
 # from avocado.core.version import MAJOR, MINOR
 # from avocado.utils.stacktrace import prepare_exc_info
 from ClusterShell.NodeSet import NodeSet
-
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
 from process_core_files import get_core_file_pattern
 
 # Update the path to support utils files that import other utils files
+# This is not good coding practice. Should use package paths and remove alls these E402.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
 # pylint: disable=import-outside-toplevel
-from avocado_utils import AvocadoInfo, AvocadoException                                 # noqa: E402
+from avocado_utils import AvocadoException, AvocadoInfo                                 # noqa: E402
 from code_coverage_utils import CodeCoverage                                            # noqa: E402
-from environment_utils import TestEnvironment, TestEnvironmentException, \
-    set_test_environment                                                                # noqa: E402
+from environment_utils import (TestEnvironment, TestEnvironmentException,
+                               set_test_environment)                                    # noqa: E402
 from host_utils import get_local_host                                                   # noqa: E402
 from launch_utils import LaunchException, TestGroup, setup_fuse_config, summarize_run   # noqa: E402
-from logger_utils import get_console_handler, get_file_handler, LOG_FILE_FORMAT         # noqa: E402
+from logger_utils import LOG_FILE_FORMAT, get_console_handler, get_file_handler         # noqa: E402
 from network_utils import SUPPORTED_PROVIDERS, PROVIDER_ALIAS                           # noqa: E402
 from package_utils import find_packages                                                 # noqa: E402
-from results_utils import Job, Results, LaunchTestName                                  # noqa: E402
+from results_utils import Job, LaunchTestName, Results                                  # noqa: E402
 from run_utils import RunException                                                      # noqa: E402
 from storage_utils import StorageException                                              # noqa: E402
 from yaml_utils import YamlException                                                    # noqa: E402
@@ -226,7 +225,6 @@ class Launch():
         except Exception as error:      # pylint: disable=broad-except
             message = f"Unknown exception raised during launch.py execution: {error}"
             status = self.get_exit_status(1, message, "Unknown", sys.exc_info())
-            # logger.debug("Stacktrace:\n%s", traceback.format_exc(error))
         return status
 
     def _run(self, args):

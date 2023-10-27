@@ -6,15 +6,15 @@
 import os
 import time
 from collections import defaultdict
-from ClusterShell.NodeSet import NodeSet
 
+from ClusterShell.NodeSet import NodeSet
+from command_utils_base import CommandFailure
+from dmg_utils import check_system_query_status
+from general_utils import report_errors, run_pcmd
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
-from general_utils import report_errors, run_pcmd
-from command_utils_base import CommandFailure
 from job_manager_utils import get_job_manager
 from network_utils import update_network_interface
-from dmg_utils import check_system_query_status
 
 
 class NetworkFailureTest(IorTestBase):

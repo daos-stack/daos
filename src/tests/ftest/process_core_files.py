@@ -3,17 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from argparse import ArgumentParser
-from collections import defaultdict
-from fnmatch import fnmatch
 import logging
 import os
 import re
 import sys
+from argparse import ArgumentParser
+from collections import defaultdict
+from fnmatch import fnmatch
 
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
-from util.run_utils import run_remote, run_local, find_command, RunException
+from util.run_utils import RunException, find_command, run_local, run_remote
 
 # Set up a logger for the console messages
 logger = logging.getLogger(__name__)

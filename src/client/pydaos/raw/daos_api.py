@@ -8,19 +8,16 @@
 # pylint: disable=consider-using-f-string
 
 import ctypes
-import threading
-import os
-import inspect
-import sys
-import time
 import enum
+import inspect
+import os
+import sys
+import threading
+import time
 
 from .. import pydaos_shim  # pylint: disable=relative-beyond-top-level
-
-from . import daos_cref
-from . import conversion
 from .. import DaosClient
-
+from . import conversion, daos_cref
 
 DaosObjClass = enum.Enum(
     "DaosObjClass",

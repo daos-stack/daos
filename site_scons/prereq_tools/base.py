@@ -20,28 +20,23 @@
 # -*- coding: utf-8 -*-
 """Classes for building external prerequisite components"""
 
+import configparser
+import datetime
+import errno
+import json
 # pylint: disable=too-many-lines
 import os
-from copy import deepcopy
-import sys
-import json
-import datetime
-import traceback
-import errno
 import shutil
 import subprocess  # nosec
-import configparser
-from SCons.Variables import BoolVariable
-from SCons.Variables import EnumVariable
-from SCons.Variables import ListVariable
-from SCons.Variables import PathVariable
-from SCons.Script import Dir
-from SCons.Script import Exit
-from SCons.Script import GetOption
-from SCons.Script import SetOption
-from SCons.Script import WhereIs
-from SCons.Script import BUILD_TARGETS
+import sys
+import traceback
+from copy import deepcopy
+
 from SCons.Errors import InternalError
+from SCons.Script import (BUILD_TARGETS, Dir, Exit, GetOption, SetOption,
+                          WhereIs)
+from SCons.Variables import (BoolVariable, EnumVariable, ListVariable,
+                             PathVariable)
 
 
 class DownloadFailure(Exception):

@@ -6,7 +6,7 @@
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from network_utils import get_network_information, SUPPORTED_PROVIDERS, NetworkDevice
+from network_utils import SUPPORTED_PROVIDERS, NetworkDevice, get_network_information
 from exception_utils import CommandFailure
 
 

@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import threading
 import re
+import threading
 import time
 
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
-
-from dmg_utils import get_storage_query_device_uuids, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
