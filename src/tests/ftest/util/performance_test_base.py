@@ -310,7 +310,7 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             # Try this even if IOR failed because it could give us useful info
             self.verify_system_status(self.pool, self.container)
 
-    def run_performance_ior(self, namespace=None, use_intercept=True, stop_delay_write=None,
+    def run_performance_ior(self, namespace=None, stop_delay_write=None,
                             stop_delay_read=None, num_iterations=1,
                             restart_between_iterations=True):
         """Run an IOR performance test.
@@ -320,8 +320,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
         Args:
             namespace (str, optional): namespace for IOR parameters in the yaml.
                 Defaults to None, which uses default IOR namespace.
-            use_intercept (bool, optional): whether to use the interception library with dfuse.
-                Defaults to True.
             stop_delay_write (float, optional): fraction of stonewall time after which to stop a
                 rank during write phase. Must be between 0 and 1. Default is None.
             stop_delay_read (float, optional): fraction of stonewall time after which to stop a
@@ -347,11 +345,6 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.ior_cmd.get_params(self)
             self.set_processes_ppn(namespace)
 
-        if use_intercept and self.ior_cmd.api.value == 'POSIX':
-            intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        else:
-            intercept = None
-
         # Calculate both stop delays upfront since read phase will remove stonewall
         stop_rank_write_s = stop_rank_read_s = None
         if stop_delay_write and self.ior_cmd.sw_deadline.value:
@@ -371,6 +364,16 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             "IOR",
             [["IOR Write Flags", write_flags],
              ["IOR Read Flags", read_flags]])
+
+        # Handle interception library usage
+        if self.ior_cmd.api.value == 'POSIX+IL':
+            intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            self.ior_cmd.update_params(api='POSIX')
+        elif self.ior_cmd.api.value == 'POSIX+PIL4DFS':
+            intercept = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+            self.ior_cmd.update_params(api='POSIX')
+        else:
+            intercept = None
 
         self.verify_oclass_engine_count(self.ior_cmd.dfs_oclass.value)
 
@@ -441,14 +444,17 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             self.mdtest_cmd.get_params(self)
             self.set_processes_ppn(namespace)
 
-        # Performance with POSIX/DFUSE is tricky because we can't just set
-        # dfs_dir_oclass and dfs_oclass. This needs more work to get good results on non-DFS.
-        if self.mdtest_cmd.api.value not in ('DFS', 'POSIX'):
-            self.fail("Only DFS API supported")
-
         stop_rank_s = (stop_delay or 0) * (self.mdtest_cmd.stonewall_timer.value or 0)
 
         self._log_performance_params("MDTEST")
+
+        # Handle interception library usage
+        if self.mdtest_cmd.api.value == 'POSIX+IL':
+            self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libioil.so')
+            self.mdtest_cmd.update_params(api='POSIX')
+        elif self.mdtest_cmd.api.value == 'POSIX+PIL4DFS':
+            self.mdtest_cmd.env['LD_PRELOAD'] = os.path.join(self.prefix, 'lib64', 'libpil4dfs.so')
+            self.mdtest_cmd.update_params(api='POSIX')
 
         self.verify_oclass_engine_count(self.mdtest_cmd.dfs_oclass.value)
         self.verify_oclass_engine_count(self.mdtest_cmd.dfs_dir_oclass.value)
@@ -466,7 +472,8 @@ class PerformanceTestBase(IorTestBase, MdtestBase):
             oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_oclass.value),
             oclass_utils.extract_redundancy_factor(self.mdtest_cmd.dfs_dir_oclass.value)])
 
-        # Create pool and container upfront so rank stop timing is more accurate
+        # Create pool and container upfront so rank stop timing is more accurate.
+        # Also set oclass and dir_oclass in case POSIX (dfuse) is used.
         self.pool = self.get_pool(connect=False)
         params = {}
         if self.mdtest_cmd.dfs_oclass.value:

@@ -1,5 +1,5 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -22,7 +22,7 @@ class IorHard(PerformanceTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_hard,performance_dfs
+        :avocado: tags=performance
         :avocado: tags=IorHard,test_performance_ior_hard_dfs_sx
         """
         self.run_performance_ior(namespace="/run/ior_dfs_sx/*")
@@ -32,27 +32,47 @@ class IorHard(PerformanceTestBase):
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_hard,performance_dfs
+        :avocado: tags=performance
         :avocado: tags=IorHard,test_performance_ior_hard_dfs_ec_16p2gx
         """
         self.run_performance_ior(namespace="/run/ior_dfs_ec_16p2gx/*")
 
-    def test_performance_ior_hard_dfuse_sx(self):
-        """Test Description: Run IOR Hard, POSIX dfuse, SX.
+    def test_performance_ior_hard_dfuse_il_sx(self):
+        """Test Description: Run IOR Hard, POSIX dfuse + IL, SX.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_hard,performance_dfuse
-        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_sx
+        :avocado: tags=performance
+        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_il_sx
         """
-        self.run_performance_ior(namespace="/run/ior_dfuse_sx/*")
+        self.run_performance_ior(namespace="/run/ior_dfuse_il_sx/*")
 
-    def test_performance_ior_hard_dfuse_ec_16p2gx(self):
-        """Test Description: Run IOR Hard, POSIX dfuse, EC_16P2GX.
+    def test_performance_ior_hard_dfuse_pil4dfs_sx(self):
+        """Test Description: Run IOR Hard, POSIX dfuse + PIL4DFS, SX.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=performance
+        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_pil4dfs_sx
+        """
+        self.run_performance_ior(namespace="/run/ior_dfuse_pil4dfs_sx/*")
+
+    def test_performance_ior_hard_dfuse_il_ec_16p2gx(self):
+        """Test Description: Run IOR Hard, POSIX dfuse + IL, EC_16P2GX.
 
         :avocado: tags=all,manual
         :avocado: tags=hw,medium
-        :avocado: tags=performance,performance_ior,performance_ior_hard,performance_dfuse
-        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_ec_16p2gx
+        :avocado: tags=performance
+        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_il_ec_16p2gx
         """
-        self.run_performance_ior(namespace="/run/ior_dfuse_ec_16p2gx/*")
+        self.run_performance_ior(namespace="/run/ior_dfuse_il_ec_16p2gx/*")
+
+    def test_performance_ior_hard_dfuse_pil4dfs_ec_16p2gx(self):
+        """Test Description: Run IOR Hard, POSIX dfuse + PIL4DFS, EC_16P2GX.
+
+        :avocado: tags=all,manual
+        :avocado: tags=hw,medium
+        :avocado: tags=performance
+        :avocado: tags=IorHard,test_performance_ior_hard_dfuse_pil4dfs_ec_16p2gx
+        """
+        self.run_performance_ior(namespace="/run/ior_dfuse_pil4dfs_ec_16p2gx/*")
