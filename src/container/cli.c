@@ -2477,7 +2477,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 	memset(args, 0, sizeof(*args));
 	args->cra_cont = dc_hdl2cont(coh);
 	if (args->cra_cont == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
+		D_GOTO(err, rc = -DER_NO_HDL);
 	args->cra_pool = dc_hdl2pool(args->cra_cont->dc_pool_hdl);
 	D_ASSERT(args->cra_pool != NULL);
 
@@ -2499,22 +2499,24 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 		D_ERROR(DF_CONT": cannot find container service: "DF_RC"\n",
 			DP_CONT(args->cra_pool->dp_pool,
 				args->cra_cont->dc_uuid), DP_RC(rc));
-		cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
-		goto out;
+		goto err_tpriv;
 	}
 
 	rc = cont_req_create(ctx, &ep, opcode, args->cra_pool->dp_pool_hdl, args->cra_cont->dc_uuid,
 			     args->cra_cont->dc_cont_hdl, &tpriv->rq_time, &args->cra_rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
-		goto out;
+		goto err_tpriv;
 	}
 
+	return rc;
+
+err_tpriv:
+	cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
 err_cont:
 	dc_cont_put(args->cra_cont);
 	dc_pool_put(args->cra_pool);
-out:
+err:
 	return rc;
 }
 
