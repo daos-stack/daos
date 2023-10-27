@@ -474,13 +474,12 @@ gc_bin_add_item(struct umem_instance *umm, struct vos_gc_bin_df *bin,
 		return -DER_NOSPACE;
 
 	D_ASSERT(bag->bag_item_nr < bin->bin_bag_size);
-	/* NB: no umem_tx_add, this is totally safe because we never
-	 * overwrite valid items
+	/* NB: umem_tx_add with UMEM_XADD_NO_SNAPSHOT, this is totally
+	 * safe because we never overwrite valid items
 	 */
 	it = &bag->bag_items[bag->bag_item_last];
-	if (DAOS_ON_VALGRIND)
-		umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
-	umem_atomic_copy(umm, it, item, sizeof(*it), UMEM_COMMIT_DEFER);
+	umem_tx_xadd_ptr(umm, it, sizeof(*it), UMEM_XADD_NO_SNAPSHOT);
+	memcpy(it, item, sizeof(*it));
 
 	last = bag->bag_item_last + 1;
 	if (last == bin->bin_bag_size)
@@ -1144,7 +1143,7 @@ vos_gc_pool(daos_handle_t poh, int credits, int (*yield_func)(void *arg),
 	/* To accelerate flush on container destroy done */
 	if (!gc_have_pool(pool)) {
 		if (pool->vp_vea_info != NULL)
-			rc = vea_flush(pool->vp_vea_info, true, UINT32_MAX, &nr_flushed);
+			rc = vea_flush(pool->vp_vea_info, UINT32_MAX, &nr_flushed);
 		return rc < 0 ? rc : nr_flushed;
 	}
 
@@ -1199,7 +1198,7 @@ gc_reserve_space(daos_size_t *rsrvd)
 
 /** Exported VOS API for explicit VEA flush */
 int
-vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_flushed)
+vos_flush_pool(daos_handle_t poh, uint32_t nr_flush, uint32_t *nr_flushed)
 {
 	struct vos_pool	*pool = vos_hdl2pool(poh);
 	int		 rc;
@@ -1212,7 +1211,7 @@ vos_flush_pool(daos_handle_t poh, bool force, uint32_t nr_flush, uint32_t *nr_fl
 		return 1;
 	}
 
-	rc = vea_flush(pool->vp_vea_info, force, nr_flush, nr_flushed);
+	rc = vea_flush(pool->vp_vea_info, nr_flush, nr_flushed);
 	if (rc)
 		D_ERROR("VEA flush failed. "DF_RC"\n", DP_RC(rc));
 

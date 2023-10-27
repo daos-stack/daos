@@ -5,9 +5,9 @@
 """
 import re
 
-from rebuild_test_base import RebuildTestBase
-from general_utils import DaosTestError
 from daos_utils import DaosCommand
+from general_utils import DaosTestError
+from rebuild_test_base import RebuildTestBase
 
 
 class ContRedundancyFactor(RebuildTestBase):

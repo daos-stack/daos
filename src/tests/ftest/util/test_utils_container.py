@@ -10,12 +10,12 @@ from logging import getLogger
 from time import time
 
 from avocado import fail_on
-from pydaos.raw import DaosApiError, DaosContainer, DaosInputParams, str_to_c_uuid
-
-from test_utils_base import TestDaosApiBase
 from command_utils_base import BasicParameter
 from exception_utils import CommandFailure
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import DaosTestError, get_random_bytes
+from pydaos.raw import (DaosApiError, DaosContainer, DaosInputParams,
+                        str_to_c_uuid)
+from test_utils_base import TestDaosApiBase
 
 
 class TestContainerData():

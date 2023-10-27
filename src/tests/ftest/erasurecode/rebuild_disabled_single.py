@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
+
 from ec_utils import ErasureCodeSingle
 
 

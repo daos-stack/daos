@@ -10,30 +10,31 @@ the client with fault injection of D_ALLOC() usage.
 
 # pylint: disable=too-many-lines
 
-import os
-from os.path import join
-import sys
-import time
-import uuid
-import json
-import copy
-import signal
-import pprint
-import stat
-import errno
 import argparse
-import random
-import threading
+import copy
+import errno
 import functools
-import traceback
-import subprocess  # nosec
-import tempfile
+import json
+import os
 import pickle  # nosec
+import pprint
+import random
 import re
 import shutil
-import xattr
+import signal
+import stat
+import subprocess  # nosec
+import sys
+import tempfile
+import threading
+import time
+import traceback
+import uuid
+from os.path import join
+
 import junit_xml
 import tabulate
+import xattr
 import yaml
 
 
@@ -687,7 +688,7 @@ class DaosServer():
 
             with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
-                fd.write(f"export PATH={join(self.conf['PREFIX'],'bin')}:$PATH\n")
+                fd.write(f"export PATH={join(self.conf['PREFIX'], 'bin')}:$PATH\n")
                 fd.write(f'exec valgrind {" ".join(valgrind_args)} daos_engine "$@"\n')
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
