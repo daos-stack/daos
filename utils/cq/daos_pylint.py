@@ -390,12 +390,13 @@ sys.path.insert(0, 'utils/sl/fake_scons')"""
 
         if ftest:
             target.extend(['--disable', 'consider-using-f-string'])
-            init_hook = """import sys
-sys.path.append('src/tests/ftest')
-sys.path.append('src/tests/ftest/util/apricot')
-sys.path.append('src/tests/ftest/cart/util/')
-sys.path.append('src/tests/ftest/util')
-sys.path.append('src/client')
+            src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src')
+            init_hook = f"""import sys
+sys.path.append('{src_dir}/tests/ftest')
+sys.path.append('{src_dir}/tests/ftest/util/apricot')
+sys.path.append('{src_dir}/tests/ftest/cart/util/')
+sys.path.append('{src_dir}/tests/ftest/util')
+sys.path.append('{src_dir}/client')
 sys.path.append('site_scons')"""
 
         target.extend(['--persistent', 'n'])
