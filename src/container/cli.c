@@ -2513,6 +2513,7 @@ cont_req_prepare(daos_handle_t coh, enum cont_operation opcode, crt_context_t *c
 
 err_tpriv:
 	cont_req_cleanup(CLEANUP_TASK_PRIV, true /* free_tpriv */, args);
+	dc_task_set_priv(task, NULL);
 err_cont:
 	dc_cont_put(args->cra_cont);
 	dc_pool_put(args->cra_pool);
