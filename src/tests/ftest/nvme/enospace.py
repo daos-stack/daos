@@ -11,7 +11,7 @@ from apricot import skipForTicket
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
 from exception_utils import CommandFailure
-from general_utils import error_count
+from general_utils import get_errors_count
 from ior_utils import IorCommand, IorMetrics
 from job_manager_utils import get_job_manager
 from nvme_utils import ServerFillUp
