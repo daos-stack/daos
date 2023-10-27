@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 
 
 class PoolSvc(TestWithServers):

@@ -4,6 +4,7 @@
 #
 """Build CaRT components"""
 from datetime import date
+
 import SCons.Action
 
 SRC = ['crt_bulk.c', 'crt_context.c', 'crt_corpc.c',

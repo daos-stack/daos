@@ -5,17 +5,16 @@
 """
 import ctypes
 import queue
-import time
-import threading
 import re
-
-from pydaos.raw import DaosContainer, IORequest, DaosObj, DaosApiError
+import threading
+import time
 
 from avocado import fail_on
-from ior_test_base import IorTestBase
-from mdtest_test_base import MdtestBase
 from exception_utils import CommandFailure
 from general_utils import create_string_buffer, run_command
+from ior_test_base import IorTestBase
+from mdtest_test_base import MdtestBase
+from pydaos.raw import DaosApiError, DaosContainer, DaosObj, IORequest
 
 
 class OSAUtils(MdtestBase, IorTestBase):

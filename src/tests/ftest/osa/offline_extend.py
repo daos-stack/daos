@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
 from test_utils_pool import add_pool
-from dmg_utils import check_system_query_status
 
 
 class OSAOfflineExtend(OSAUtils):

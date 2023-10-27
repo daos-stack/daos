@@ -5,8 +5,7 @@
 """
 import os
 
-from command_utils_base import \
-    BasicParameter, LogParameter, YamlParameters, TransportCredentials
+from command_utils_base import BasicParameter, LogParameter, TransportCredentials, YamlParameters
 
 MAX_STORAGE_TIERS = 5
 
