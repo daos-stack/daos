@@ -3,11 +3,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-from pydaos.raw import DaosApiError, c_uuid_to_str
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from general_utils import DaosTestError
+from pydaos.raw import DaosApiError, c_uuid_to_str
 
 
 class PoolEvictTest(TestWithServers):

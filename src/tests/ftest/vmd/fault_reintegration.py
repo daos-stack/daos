@@ -3,17 +3,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from multiprocessing import Queue
 import threading
+from multiprocessing import Queue
 
+from apricot import TestWithServers
 from avocado import fail_on
-
-from dmg_utils import get_storage_query_device_info, get_dmg_response
+from dmg_utils import get_dmg_response, get_storage_query_device_info
 from exception_utils import CommandFailure
 from ior_utils import run_ior, thread_run_ior
 from job_manager_utils import get_job_manager
 from nvme_utils import set_device_faulty
-from apricot import TestWithServers
 
 
 class NvmeFaultReintegrate(TestWithServers):

@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from rebuild_test_base import RebuildTestBase
 from daos_utils import DaosCommand
 from general_utils import DaosTestError
+from rebuild_test_base import RebuildTestBase
 
 
 class RbldReadArrayTest(RebuildTestBase):

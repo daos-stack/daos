@@ -5,10 +5,9 @@
 """
 from socket import gethostname
 
-from pydaos.raw import DaosPool
-
 from apricot import TestWithServers
 from general_utils import DaosTestError
+from pydaos.raw import DaosPool
 
 
 class DmgSystemCleanupTest(TestWithServers):

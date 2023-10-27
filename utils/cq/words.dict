@@ -198,6 +198,7 @@ groupadd
 groupname
 grp
 hackery
+hexdump
 hfi
 hostfile
 hostlist

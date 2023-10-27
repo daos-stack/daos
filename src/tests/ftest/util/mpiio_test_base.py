@@ -7,11 +7,10 @@
 import os
 
 from apricot import TestWithServers
-
 from command_utils_base import CommandFailure, EnvironmentVariables
-from job_manager_utils import get_job_manager
-from mpiio_utils import LLNLCommand, Mpi4pyCommand, RomioCommand, Hdf5Command
 from duns_utils import format_path
+from job_manager_utils import get_job_manager
+from mpiio_utils import Hdf5Command, LLNLCommand, Mpi4pyCommand, RomioCommand
 
 
 class MpiioTests(TestWithServers):

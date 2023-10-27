@@ -4,6 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import base64
+
 from apricot import TestWithServers
 
 
