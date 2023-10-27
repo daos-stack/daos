@@ -6,7 +6,6 @@
 import time
 
 from avocado import fail_on
-
 from dmg_utils import get_storage_query_device_uuids
 from exception_utils import CommandFailure
 from nvme_utils import set_device_faulty
