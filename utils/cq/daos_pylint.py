@@ -406,6 +406,8 @@ sys.path.append('site_scons')"""
         if args.rcfile:
             target.extend(['--rcfile', args.rcfile])
 
+        if args.output_format != 'json':
+            print(f'target={target}')
         results = Run(target, reporter=rep, exit=False)
 
         types = Counter()
