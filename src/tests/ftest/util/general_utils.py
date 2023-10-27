@@ -5,28 +5,28 @@
 """
 # pylint: disable=too-many-lines
 
-from logging import getLogger
-import os
-import re
-import random
-import string
-import time
 import ctypes
 import math
+import os
+import random
+import re
+import string
+import time
+from datetime import datetime
 from getpass import getuser
 from importlib import import_module
+from logging import getLogger
 from socket import gethostname
-from datetime import datetime
 
 from avocado.core.settings import settings
 from avocado.core.version import MAJOR
 from avocado.utils import process
-from ClusterShell.Task import task_self
 from ClusterShell.NodeSet import NodeSet
 from pydaos.raw import IORequest, DaosObjClass
 
+from ClusterShell.Task import task_self
+from run_utils import RunException, get_clush_command, run_local, run_remote
 from user_utils import get_chown_command, get_primary_group
-from run_utils import get_clush_command, run_remote, run_local, RunException
 
 
 class DaosTestError(Exception):

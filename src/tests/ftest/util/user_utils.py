@@ -3,15 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from getpass import getuser
-from grp import getgrgid
-from pwd import getpwnam
 import os
 import re
 from collections import defaultdict
+from getpass import getuser
+from grp import getgrgid
+from pwd import getpwnam
 
 from ClusterShell.NodeSet import NodeSet
-
 from run_utils import run_remote
 
 

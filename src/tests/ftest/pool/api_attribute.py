@@ -5,10 +5,9 @@
 '''
 import traceback
 
-from pydaos.raw import DaosApiError
-
 from apricot import TestWithServers
 from general_utils import get_random_bytes
+from pydaos.raw import DaosApiError
 from test_utils_base import CallbackHandler
 
 

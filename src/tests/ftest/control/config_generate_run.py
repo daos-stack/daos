@@ -5,7 +5,6 @@
 '''
 
 import yaml
-
 from apricot import TestWithServers
 from server_utils import ServerFailed
 
