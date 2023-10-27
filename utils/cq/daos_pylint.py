@@ -390,7 +390,7 @@ sys.path.insert(0, 'utils/sl/fake_scons')"""
 
         if ftest:
             target.extend(['--disable', 'consider-using-f-string'])
-            init_hook = f"""import sys
+            init_hook = """import sys
 sys.path.append('src/tests/ftest')
 sys.path.append('src/tests/ftest/util/apricot')
 sys.path.append('src/tests/ftest/cart/util/')
