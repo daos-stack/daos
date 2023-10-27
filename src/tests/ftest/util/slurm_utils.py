@@ -12,6 +12,8 @@ import threading
 import time
 
 from ClusterShell.NodeSet import NodeSet, NodeSetParseError
+
+# pylint: disable=import-error,no-name-in-module
 from util.run_utils import RunException, run_local, run_remote
 
 PACKAGES = ['slurm', 'slurm-example-configs', 'slurm-slurmctld', 'slurm-slurmd']

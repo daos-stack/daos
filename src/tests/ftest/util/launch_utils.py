@@ -12,6 +12,8 @@ import sys
 import time
 
 from ClusterShell.NodeSet import NodeSet
+
+# pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.collection_utils import TEST_RESULTS_DIRS, collect_test_result
 from util.data_utils import list_unique, list_flatten, dict_extract_values

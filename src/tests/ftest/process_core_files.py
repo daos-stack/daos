@@ -15,11 +15,6 @@ from fnmatch import fnmatch
 from util.logger_utils import get_console_handler
 from util.run_utils import RunException, find_command, run_local, run_remote
 
-# Set up a logger for the console messages
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
-
 # One of the dfuse tests intermittently creates core files which is known so make a special case
 # for that test.
 CORE_FILES_IGNORE = {'./dfuse/daos_build.py': ('./conftest')}
@@ -478,4 +473,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set up a logger for the console messages
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
     main()
+else:
+    logger = logging.getLogger()

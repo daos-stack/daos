@@ -5,8 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-# pylint: disable=import-error,no-name-in-module
-
 import argparse
 import getpass
 import logging
@@ -16,14 +14,11 @@ import socket
 import sys
 
 from ClusterShell.NodeSet import NodeSet
+
+# pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 from util.package_utils import install_packages, remove_packages
 from util.run_utils import command_as_user, get_clush_command, run_remote
-
-# Set up a logger for the console messages
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
 
 
 class SlurmSetupException(Exception):
@@ -578,4 +573,10 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set up a logger for the console messages
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(get_console_handler("%(message)s", logging.DEBUG))
     main()
+else:
+    logger = logging.getLogger()

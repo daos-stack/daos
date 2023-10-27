@@ -1,5 +1,5 @@
 """
-(C) Copyright 2018-2022 Intel Corporation.
+(C) Copyright 2018-2023 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -7,6 +7,8 @@ import os
 from socket import gethostname
 
 from ClusterShell.NodeSet import NodeSet
+
+# pylint: disable=import-error,no-name-in-module
 from util.slurm_utils import SlurmFailed, get_partition_hosts, get_reservation_hosts
 
 

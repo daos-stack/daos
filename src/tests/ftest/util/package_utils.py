@@ -4,6 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+# pylint: disable=import-error,no-name-in-module
 from util.run_utils import command_as_user, run_remote
 
 
