@@ -4,8 +4,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-
-from network_utils import get_network_information, get_dmg_network_information, SUPPORTED_PROVIDERS
+from network_utils import (SUPPORTED_PROVIDERS, get_dmg_network_information,
+                           get_network_information)
 
 
 class DmgNetworkScanTest(TestWithServers):

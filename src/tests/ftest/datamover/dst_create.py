@@ -6,10 +6,9 @@
 from os.path import join
 
 import avocado
-from pydaos.raw import DaosApiError
-
 from data_mover_test_base import DataMoverTestBase
 from duns_utils import format_path
+from pydaos.raw import DaosApiError
 
 
 class DmvrDstCreate(DataMoverTestBase):
