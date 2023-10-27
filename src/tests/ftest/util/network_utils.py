@@ -4,14 +4,13 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import errno
-from logging import getLogger
 import os
 import re
+from logging import getLogger
 
 from ClusterShell.NodeSet import NodeSet
-
 from exception_utils import CommandFailure
-from general_utils import run_task, display_task, run_pcmd
+from general_utils import display_task, run_pcmd, run_task
 
 SUPPORTED_PROVIDERS = ("ofi+sockets", "ofi+tcp;ofi_rxm", "ofi+verbs;ofi_rxm", "ucx+dc_x", "ofi+cxi")
 

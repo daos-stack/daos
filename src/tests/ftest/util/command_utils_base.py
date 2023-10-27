@@ -3,8 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import os
+from logging import getLogger
+
 import yaml
 from exception_utils import CommandFailure
 
