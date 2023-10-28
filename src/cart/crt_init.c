@@ -599,10 +599,10 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
-	char          *provider_env;
-	char          *interface_env;
-	char          *domain_env;
-	char          *auth_key_env;
+	char          *provider, *provider_env;
+	char          *interface, *interface_env;
+	char          *domain, *domain_env;
+	char          *auth_key, *auth_key_env;
 	struct timeval now;
 	unsigned int   seed;
 	char          *path;
@@ -613,7 +613,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	crt_provider_t primary_provider;
 	crt_provider_t secondary_provider;
 	crt_provider_t tmp_prov;
-	char          *port_str, *port0, *port1;
+	char          *port, *port_env, *port0, *port1;
 	char          *iface0, *iface1, *domain0, *domain1;
 	char          *auth_key0, *auth_key1;
 	int            num_secondaries  = 0;
@@ -627,7 +627,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 	domain_env    = NULL;
 	auth_key_env  = NULL;
 	server        = flags & CRT_FLAG_BIT_SERVER;
-	port_str      = NULL;
+	port_env      = NULL;
 	port0         = NULL;
 	port1         = NULL;
 	iface0        = NULL;
@@ -696,46 +696,52 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		d_freeenv_str(&path);
 
 		if (opt && opt->cio_auth_key)
-			D_STRNDUP(auth_key_env, opt->cio_auth_key, strlen(opt->cio_auth_key));
-		else
+			auth_key = opt->cio_auth_key;
+		else {
 			d_agetenv_str(&auth_key_env, "D_PROVIDER_AUTH_KEY");
+			auth_key = auth_key_env;
+		}
 
 		if (opt && opt->cio_provider)
-			D_STRNDUP(provider_env, opt->cio_provider, strlen(opt->cio_provider));
+			provider = opt->cio_provider;
 		else {
 			d_agetenv_str(&provider_env, "D_PROVIDER");
 			if (provider_env == NULL)
 				d_agetenv_str(&provider_env, CRT_PHY_ADDR_ENV);
+			provider = provider_env;
 		}
 
 		if (opt && opt->cio_interface)
-			D_STRNDUP(interface_env, opt->cio_interface, strlen(opt->cio_interface));
+			interface = opt->cio_interface;
 		else {
 			d_agetenv_str(&interface_env, "D_INTERFACE");
 			if (interface_env == NULL) {
 				d_agetenv_str(&interface_env, "OFI_INTERFACE");
 			}
+			interface = interface_env;
 		}
 
 		if (opt && opt->cio_domain)
-			D_STRNDUP(domain_env, opt->cio_domain, strlen(opt->cio_domain));
+			domain = opt->cio_domain;
 		else {
 			d_agetenv_str(&domain_env, "D_DOMAIN");
 			if (domain_env == NULL)
 				d_agetenv_str(&domain_env, "OFI_DOMAIN");
+			domain = domain_env;
 		}
 
 		if (opt && opt->cio_port)
-			D_STRNDUP(port_str, opt->cio_port, strlen(opt->cio_port));
+			port = opt->cio_port;
 		else {
-			d_agetenv_str(&port_str, "D_PORT");
-			if (port_str == NULL)
-				d_agetenv_str(&port_str, "OFI_PORT");
+			d_agetenv_str(&port_env, "D_PORT");
+			if (port_env == NULL)
+				d_agetenv_str(&port_env, "OFI_PORT");
+			port = port_env;
 		}
 
 		d_getenv_bool("D_PORT_AUTO_ADJUST", &port_auto_adjust);
 
-		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
+		rc = __split_arg(provider, &provider_str0, &provider_str1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
 
@@ -743,20 +749,20 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 		secondary_provider = crt_str_to_provider(provider_str1);
 
 		if (primary_provider == CRT_PROV_UNKNOWN) {
-			D_ERROR("Requested provider %s not found\n", provider_env);
+			D_ERROR("Requested provider %s not found\n", provider);
 			D_GOTO(unlock, rc = -DER_NONEXIST);
 		}
 
-		rc = __split_arg(interface_env, &iface0, &iface1);
+		rc = __split_arg(interface, &iface0, &iface1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(domain_env, &domain0, &domain1);
+		rc = __split_arg(domain, &domain0, &domain1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(port_str, &port0, &port1);
+		rc = __split_arg(port, &port0, &port1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
-		rc = __split_arg(auth_key_env, &auth_key0, &auth_key1);
+		rc = __split_arg(auth_key, &auth_key0, &auth_key1);
 		if (rc != 0)
 			D_GOTO(unlock, rc);
 
@@ -896,7 +902,7 @@ out:
 	D_FREE(domain0);
 	D_FREE(provider_str0);
 	D_FREE(auth_key0);
-	d_freeenv_str(&port_str);
+	d_freeenv_str(&port_env);
 	d_freeenv_str(&domain_env);
 	d_freeenv_str(&interface_env);
 	d_freeenv_str(&provider_env);
