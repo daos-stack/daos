@@ -127,7 +127,7 @@ int main(void)
 
 	d_agetenv_str(&env_self_rank, "CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
-	d_free_env_str(&env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -169,7 +169,7 @@ int main(void)
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				       true);
-	d_free_env_str(&grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 	if (rc != 0) {
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);

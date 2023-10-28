@@ -73,7 +73,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
-			d_free_env_str(&env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				outpool->pool_size =
 					(daos_size_t)size_gb << 30;
@@ -89,7 +89,7 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		d_agetenv_str(&env, "POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
-			d_free_env_str(&env);
+			d_freeenv_str(&env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 

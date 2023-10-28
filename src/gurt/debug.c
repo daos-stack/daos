@@ -395,7 +395,7 @@ debug_prio_err_load_env(void)
 	/* invalid DD_STDERR option */
 	if (d_dbglog_data.dd_prio_err == 0)
 		D_PRINT_ERR("DD_STDERR = %s - invalid option\n", env);
-	d_free_env_str(&env);
+	d_freeenv_str(&env);
 }
 
 void
@@ -424,8 +424,8 @@ d_log_sync_mask(void)
 
 	d_log_sync_mask_ex(log_mask, dd_mask);
 
-	d_free_env_str(&dd_mask);
-	d_free_env_str(&log_mask);
+	d_freeenv_str(&dd_mask);
+	d_freeenv_str(&log_mask);
 }
 
 /**
@@ -553,12 +553,12 @@ d_log_init(void)
 	d_agetenv_str(&log_file, D_LOG_FILE_ENV);
 	if (log_file == NULL || strlen(log_file) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		d_free_env_str(&log_file);
+		d_freeenv_str(&log_file);
 	}
 
 	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
 			    NULL);
-	d_free_env_str(&log_file);
+	d_freeenv_str(&log_file);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);

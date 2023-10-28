@@ -1248,7 +1248,7 @@ int main(int argc, char **argv)
 	}
 
 	my_rank = atoi(env_self_rank);
-	d_free_env_str(&env_self_rank);
+	d_freeenv_str(&env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(my_rank, 20, true, true);
@@ -1289,7 +1289,7 @@ int main(int argc, char **argv)
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
 		assert(0);
 	}
-	d_free_env_str(&grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 
 	/* Start the server for myself */
 	DBG_PRINT("Server starting, self_rank=%d\n", my_rank);

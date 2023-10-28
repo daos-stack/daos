@@ -47,7 +47,7 @@ dc_job_init(void)
 		char *tmp_env = jobid_env;
 
 		D_STRNDUP(jobid_env, tmp_env, MAX_ENV_NAME);
-		d_free_env_str(&tmp_env);
+		d_freeenv_str(&tmp_env);
 	}
 	if (jobid_env == NULL)
 		D_GOTO(out_err, err = -DER_NOMEM);
@@ -63,7 +63,7 @@ dc_job_init(void)
 		char *tmp_jobid = jobid;
 
 		D_STRNDUP(jobid, tmp_jobid, MAX_JOBID_LEN);
-		d_free_env_str(&tmp_jobid);
+		d_freeenv_str(&tmp_jobid);
 		if (jobid == NULL)
 			D_GOTO(out_env, err = -DER_NOMEM);
 	}

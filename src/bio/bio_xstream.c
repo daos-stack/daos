@@ -296,7 +296,7 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
-	d_free_env_str(&env);
+	d_freeenv_str(&env);
 
 	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;

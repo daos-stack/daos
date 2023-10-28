@@ -110,7 +110,7 @@ dump_envariables(void)
 			D_INFO("%s = %s\n", var_names[i], "********");
 		else
 			D_INFO("%s = %s\n", var_names[i], val);
-		d_free_env_str(&val);
+		d_freeenv_str(&val);
 	}
 }
 
@@ -693,7 +693,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			else
 				D_DEBUG(DB_ALL, "set group_config_path as %s.\n", path);
 		}
-		d_free_env_str(&path);
+		d_freeenv_str(&path);
 
 		if (opt && opt->cio_auth_key)
 			D_STRNDUP(auth_key_env, opt->cio_auth_key, strlen(opt->cio_auth_key));
@@ -896,11 +896,11 @@ out:
 	D_FREE(domain0);
 	D_FREE(provider_str0);
 	D_FREE(auth_key0);
-	d_free_env_str(&port_str);
-	d_free_env_str(&domain_env);
-	d_free_env_str(&interface_env);
-	d_free_env_str(&provider_env);
-	d_free_env_str(&auth_key_env);
+	d_freeenv_str(&port_str);
+	d_freeenv_str(&domain_env);
+	d_freeenv_str(&interface_env);
+	d_freeenv_str(&provider_env);
+	d_freeenv_str(&auth_key_env);
 
 	if (rc != 0) {
 		D_ERROR("failed, "DF_RC"\n", DP_RC(rc));

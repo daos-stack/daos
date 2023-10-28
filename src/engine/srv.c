@@ -1055,7 +1055,7 @@ dss_xstreams_init(void)
 			D_WARN("Invalid relax mode [%s]\n", env);
 			sched_relax_mode = SCHED_RELAX_MODE_NET;
 		}
-		d_free_env_str(&env);
+		d_freeenv_str(&env);
 	}
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));

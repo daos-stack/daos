@@ -116,7 +116,7 @@ int main(int argc, char **argv)
 		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
-	d_free_env_str(&grp_cfg_file);
+	d_freeenv_str(&grp_cfg_file);
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {

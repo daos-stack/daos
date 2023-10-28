@@ -681,9 +681,9 @@ free_pool:
 free_fs_root:
 	D_FREE(dfs_list[num_dfs].fs_root);
 out:
-	d_free_env_str(&container);
-	d_free_env_str(&pool);
-	d_free_env_str(&fs_root);
+	d_freeenv_str(&container);
+	d_freeenv_str(&pool);
+	d_freeenv_str(&fs_root);
 	return rc;
 }
 
@@ -5546,7 +5546,7 @@ init_myhook(void)
 		report = true;
 		if (strncmp(env_log, "0", 2) == 0 || strncasecmp(env_log, "false", 6) == 0)
 			report = false;
-		d_free_env_str(&env_log);
+		d_freeenv_str(&env_log);
 	}
 
 	/* Find dfuse mounts from /proc/mounts */
