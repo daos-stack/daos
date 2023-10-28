@@ -441,14 +441,15 @@ dss_init_state_set(enum dss_init_state state)
 static int
 abt_max_num_xstreams(void)
 {
-	char   *env;
+	unsigned num_xstreams = 0;
 
-	env = getenv("ABT_MAX_NUM_XSTREAMS");
-	if (env == NULL)
-		env = getenv("ABT_ENV_MAX_NUM_XSTREAMS");
-	if (env != NULL)
-		return atoi(env);
-	return 0;
+	if (d_isenv_def("ABT_MAX_NUM_XSTREAMS"))
+		d_getenv_uint("ABT_MAX_NUM_XSTREAMS", &num_xstreams);
+	else
+		d_getenv_uint("ABT_ENV_MAX_NUM_XSTREAMS", &num_xstreams);
+	D_ASSERT(num_xstreams <= INT_MAX);
+
+	return num_xstreams;
 }
 
 static int

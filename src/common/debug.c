@@ -104,14 +104,16 @@ unsigned int daos_io_bypass;
 static void
 io_bypass_init(void)
 {
-	char	*str = getenv(DENV_IO_BYPASS);
-	char	*tok;
-	char	*saved_ptr;
+	char *str;
+	char *tok;
+	char *saved_ptr;
+	char *env;
 
-	if (!str)
+	d_agetenv_str(&env, DENV_IO_BYPASS);
+	if (env == NULL)
 		return;
 
-	tok = strtok_r(str, ",", &saved_ptr);
+	tok = strtok_r(env, ",", &saved_ptr);
 	while (tok) {
 		struct io_bypass *iob;
 
@@ -129,6 +131,7 @@ io_bypass_init(void)
 		}
 		tok = str;
 	};
+	d_freeenv_str(&env);
 }
 
 void
@@ -162,17 +165,18 @@ daos_debug_init_ex(char *logfile, d_dbug_t logmask)
 	}
 
 	/* honor the env variable first */
-	logfile = getenv(D_LOG_FILE_ENV);
+	rc = d_agetenv_str(&logfile, D_LOG_FILE_ENV);
 	if (logfile == NULL || strlen(logfile) == 0) {
 		flags |= DLOG_FLV_STDOUT;
-		logfile = NULL;
+		d_freeenv_str(&logfile);
 	} else if (!strncmp(logfile, "/dev/null", 9)) {
 		/* Don't set up logging or log to stdout if the log file is /dev/null */
-		logfile = NULL;
+		d_freeenv_str(&logfile);
 	}
 
 	rc = d_log_init_adv("DAOS", logfile, flags, logmask, DLOG_CRIT,
 			    log_id_cb);
+	d_freeenv_str(&logfile);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));

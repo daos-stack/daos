@@ -70,9 +70,10 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		daos_size_t	 nvme_size;
 		d_rank_list_t	 *rank_list = NULL;
 
-		env = getenv("POOL_SCM_SIZE");
+		d_agetenv_str(&env, "POOL_SCM_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			if (size_gb != 0)
 				outpool->pool_size =
 					(daos_size_t)size_gb << 30;
@@ -85,9 +86,10 @@ test_setup_pool_create(void **state, struct test_pool *ipool,
 		 * Set env POOL_NVME_SIZE to overwrite the default NVMe size.
 		 */
 		nvme_size = outpool->pool_size * 4;
-		env = getenv("POOL_NVME_SIZE");
+		d_agetenv_str(&env, "POOL_NVME_SIZE");
 		if (env) {
 			size_gb = atoi(env);
+			d_freeenv_str(&env);
 			nvme_size = (daos_size_t)size_gb << 30;
 		}
 

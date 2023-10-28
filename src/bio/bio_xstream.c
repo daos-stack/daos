@@ -287,11 +287,12 @@ bio_nvme_init(const char *nvme_conf, int numa_node, unsigned int mem_size,
 	nvme_glb.bd_bs_opts.cluster_sz = DAOS_BS_CLUSTER_SZ;
 	nvme_glb.bd_bs_opts.max_channel_ops = BIO_BS_MAX_CHANNEL_OPS;
 
-	env = getenv("VOS_BDEV_CLASS");
+	d_agetenv_str(&env, "VOS_BDEV_CLASS");
 	if (env && strcasecmp(env, "AIO") == 0) {
 		D_WARN("AIO device(s) will be used!\n");
 		nvme_glb.bd_bdev_class = BDEV_CLASS_AIO;
 	}
+	d_freeenv_str(&env);
 
 	if (numa_node > 0) {
 		bio_numa_node = (unsigned int)numa_node;
