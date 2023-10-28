@@ -1370,17 +1370,17 @@ static void bind_libc_symbol(void **real_ptr_addr, const char *name)
 	 * required to make Intel compiler happy ...
 	 */
 	if (__atomic_load_n(real_ptr_addr, __ATOMIC_RELAXED) == NULL) {
-		/* libc should be already loaded ... */
-		real_temp = dlsym(RTLD_NEXT, name);
-		if (real_temp == NULL) {
-			/* try after loading libc now */
-			void *handle;
+		void *handle;
 
+		handle = dlopen("libc.so.6", RTLD_NOLOAD);
+		if (handle == NULL) {
 			handle = dlopen("libc.so.6", RTLD_LAZY);
 			D_ASSERT(handle != NULL);
-			real_temp = dlsym(handle, name);
-			D_ASSERT(real_temp != NULL);
 		}
+
+		real_temp = dlsym(handle, name);
+		D_ASSERT(real_temp != NULL);
+
 		__atomic_store_n(real_ptr_addr, real_temp, __ATOMIC_RELAXED);
 	}
 }
