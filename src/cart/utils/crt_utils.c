@@ -519,9 +519,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	D_INFO("CaRT env setup with:\n"
-		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
-		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
-		ofi_interface, ofi_domain, crt_phy_addr_str, crt_ctx_share_addr, crt_timeout);
+	       "\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+	       "CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+	       ofi_interface, ofi_domain, crt_phy_addr_str, crt_ctx_share_addr, crt_timeout);
 
 cleanup:
 	d_freeenv_str(&ofi_domain_env);

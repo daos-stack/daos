@@ -100,11 +100,12 @@ crt_lib_fini(void)
 static void
 dump_envariables(void)
 {
-	int   i;
-	char *val;
+	int i;
 
 	D_INFO("-- ENVARS: --\n");
 	for (i = 0; i < ARRAY_SIZE(crt_env_names); i++) {
+		char *val = NULL;
+
 		d_agetenv_str(&val, crt_env_names[i]);
 		if (val == NULL)
 			continue;
