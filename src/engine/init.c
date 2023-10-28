@@ -314,7 +314,7 @@ dss_topo_init()
 	dss_core_nr = hwloc_get_nbobjs_by_type(dss_topo, HWLOC_OBJ_CORE);
 	depth = hwloc_get_type_depth(dss_topo, HWLOC_OBJ_NUMANODE);
 	numa_node_nr = hwloc_get_nbobjs_by_depth(dss_topo, depth);
-	d_getenv_bool("DAOS_TARGET_OVERSUBSCRIBE", &tgt_oversub);
+	d_getenv_bool(&tgt_oversub, "DAOS_TARGET_OVERSUBSCRIBE");
 	dss_tgt_nr = nr_threads;
 
 	/* if no NUMA node was specified, or NUMA data unavailable */
@@ -454,7 +454,7 @@ set_abt_max_num_xstreams(int n)
 	if (value == NULL)
 		return -DER_NOMEM;
 	D_INFO("Setting %s to %s\n", name, value);
-	rc = setenv(name, value, 1 /* overwrite */);
+	rc = d_setenv(name, value, 1 /* overwrite */);
 	D_FREE(value);
 	if (rc != 0)
 		return daos_errno2der(errno);

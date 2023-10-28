@@ -656,7 +656,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
-	d_getenv_int("DAOS_RPC_SIZE_LIMIT", &limit);
+	d_getenv_uint32_t(&limit, "DAOS_RPC_SIZE_LIMIT");
 
 	daos_crt_init_opt.cio_use_expected_size = 1;
 	daos_crt_init_opt.cio_max_expected_size = limit ? limit : DAOS_RPC_SIZE;
@@ -674,7 +674,7 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	}
 
 	/** Scalable EndPoint-related settings */
-	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);
+	d_getenv_bool(&sep, "CRT_CTX_SHARE_ADDR");
 	if (!sep)
 		goto out;
 

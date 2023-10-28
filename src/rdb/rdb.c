@@ -494,7 +494,7 @@ rdb_get_use_leases(void)
 	char   *name = "RDB_USE_LEASES";
 	bool	value = true;
 
-	d_getenv_bool(name, &value);
+	d_getenv_bool(&value, name);
 	return value;
 }
 

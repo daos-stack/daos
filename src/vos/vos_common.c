@@ -597,7 +597,7 @@ vos_mod_init(void)
 	if (rc)
 		D_ERROR("Failed to initialize incarnation log capability\n");
 
-	d_getenv_int("DAOS_VOS_AGG_THRESH", &vos_agg_nvme_thresh);
+	d_getenv_uint(&vos_agg_nvme_thresh, "DAOS_VOS_AGG_THRESH");
 	if (vos_agg_nvme_thresh == 0 || vos_agg_nvme_thresh > 256)
 		vos_agg_nvme_thresh = VOS_MW_NVME_THRESH;
 	/* Round down to 2^n blocks */
@@ -607,7 +607,7 @@ vos_mod_init(void)
 	D_INFO("Set aggregate NVMe record threshold to %u blocks (blk_sz:%lu).\n",
 	       vos_agg_nvme_thresh, VOS_BLK_SZ);
 
-	d_getenv_bool("DAOS_DKEY_PUNCH_PROPAGATE", &vos_dkey_punch_propagate);
+	d_getenv_bool(&vos_dkey_punch_propagate, "DAOS_DKEY_PUNCH_PROPAGATE");
 	D_INFO("DKEY punch propagation is %s\n", vos_dkey_punch_propagate ? "enabled" : "disabled");
 
 

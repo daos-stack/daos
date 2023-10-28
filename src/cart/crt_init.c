@@ -191,7 +191,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 
 	/* Set max number of contexts. Defaults to the number of cores */
 	ctx_num = 0;
-	d_getenv_int("CRT_CTX_NUM", &ctx_num);
+	d_getenv_uint(&ctx_num, "CRT_CTX_NUM");
 	if (opt)
 		max_num_ctx = ctx_num ? ctx_num : max(crt_gdata.cg_num_cores, opt->cio_ctx_max_num);
 	else
@@ -216,11 +216,11 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 		} else {
 			share_addr = false;
 
-			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
+			d_getenv_bool(&share_addr, "CRT_CTX_SHARE_ADDR");
 			if (share_addr) {
 				set_sep = true;
 				ctx_num = 0;
-				d_getenv_int("CRT_CTX_NUM", &ctx_num);
+				d_getenv_uint(&ctx_num, "CRT_CTX_NUM");
 				max_num_ctx = ctx_num;
 			}
 		}
@@ -277,15 +277,15 @@ static int data_init(int server, crt_init_options_t *opt)
 		crt_gdata.cg_rpcid, crt_gdata.cg_num_cores);
 
 	/* Set context post init / post incr to tune number of pre-posted recvs */
-	d_getenv_int("D_POST_INIT", &post_init);
+	d_getenv_uint32_t(&post_init, "D_POST_INIT");
 	crt_gdata.cg_post_init = post_init;
-	d_getenv_int("D_POST_INCR", &post_incr);
+	d_getenv_uint32_t(&post_incr, "D_POST_INCR");
 	crt_gdata.cg_post_incr = post_incr;
 
 	is_secondary = 0;
 	/* Apply CART-890 workaround for server side only */
 	if (server) {
-		d_getenv_int("CRT_ENABLE_MEM_PIN", &mem_pin_enable);
+		d_getenv_uint(&mem_pin_enable, "CRT_ENABLE_MEM_PIN");
 		if (mem_pin_enable == 1)
 			mem_pin_workaround();
 	} else {
@@ -293,14 +293,14 @@ static int data_init(int server, crt_init_options_t *opt)
 		 * Client-side envariable to indicate that the cluster
 		 * is running using a secondary provider
 		 */
-		d_getenv_int("CRT_SECONDARY_PROVIDER", &is_secondary);
+		d_getenv_uint(&is_secondary, "CRT_SECONDARY_PROVIDER");
 	}
 	crt_gdata.cg_provider_is_primary = (is_secondary) ? 0 : 1;
 
 	if (opt && opt->cio_crt_timeout != 0)
 		timeout = opt->cio_crt_timeout;
 	else
-		d_getenv_int("CRT_TIMEOUT", &timeout);
+		d_getenv_uint(&timeout, "CRT_TIMEOUT");
 
 	if (timeout == 0 || timeout > 3600)
 		crt_gdata.cg_timeout = CRT_DEFAULT_TIMEOUT_S;
@@ -319,7 +319,7 @@ static int data_init(int server, crt_init_options_t *opt)
 		credits = opt->cio_ep_credits;
 	} else {
 		credits = CRT_DEFAULT_CREDITS_PER_EP_CTX;
-		d_getenv_int("CRT_CREDIT_EP_CTX", &credits);
+		d_getenv_uint(&credits, "CRT_CREDIT_EP_CTX");
 	}
 
 	/* Must be set on the server when using UCX, will not affect OFI */
@@ -332,13 +332,13 @@ static int data_init(int server, crt_init_options_t *opt)
 		}
 	}
 	if (server)
-		setenv("UCX_IB_FORK_INIT", "n", 1);
+		d_setenv("UCX_IB_FORK_INIT", "n", 1);
 
 	/* This is a workaround for CART-871 if universe size is not set */
-	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
+	d_getenv_uint(&fi_univ_size, "FI_UNIVERSE_SIZE");
 	if (fi_univ_size == 0) {
 		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
-		setenv("FI_UNIVERSE_SIZE", "2048", 1);
+		d_setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
 	if (credits == 0) {
@@ -530,19 +530,6 @@ out:
 }
 
 static void
-apply_if_not_set(const char *env_name, const char *new_value)
-{
-	char *old_val;
-
-	old_val = getenv(env_name);
-
-	if (old_val == NULL) {
-		D_INFO("%s not set, setting to %s\n", env_name, new_value);
-		setenv(env_name, new_value, true);
-	}
-}
-
-static void
 prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 {
 	uint32_t mrc_enable = 0;
@@ -562,26 +549,25 @@ prov_settings_apply(bool primary, crt_provider_t prov, crt_init_options_t *opt)
 	if (prov == CRT_PROV_OFI_VERBS_RXM ||
 	    prov == CRT_PROV_OFI_TCP_RXM) {
 		/* Use shared receive queues to avoid large mem consumption */
-		apply_if_not_set("FI_OFI_RXM_USE_SRX", "1");
+		d_setenv("FI_OFI_RXM_USE_SRX", "1", 0);
 
 		/* Only apply on the server side */
 		if (prov == CRT_PROV_OFI_TCP_RXM && crt_is_service())
-			apply_if_not_set("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd");
-
+			d_setenv("FI_OFI_RXM_DEF_TCP_WAIT_OBJ", "pollfd", 0);
 	}
 
 	if (prov == CRT_PROV_OFI_CXI)
 		mrc_enable = 1;
 
-	d_getenv_int("CRT_MRC_ENABLE", &mrc_enable);
+	d_getenv_uint(&mrc_enable, "CRT_MRC_ENABLE");
 	if (mrc_enable == 0) {
 		D_INFO("Disabling MR CACHE (FI_MR_CACHE_MAX_COUNT=0)\n");
-		setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
+		d_setenv("FI_MR_CACHE_MAX_COUNT", "0", 1);
 	}
 
 	/* Use tagged messages for other providers, disable multi-recv */
 	if (prov != CRT_PROV_OFI_CXI && prov != CRT_PROV_OFI_TCP)
-		apply_if_not_set("NA_OFI_UNEXPECTED_TAG_MSG", "1");
+		d_setenv("NA_OFI_UNEXPECTED_TAG_MSG", "1", 0);
 
 	g_prov_settings_applied[prov] = true;
 }
@@ -740,7 +726,7 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 				port_str = tmp;
 		}
 
-		d_getenv_bool("D_PORT_AUTO_ADJUST", &port_auto_adjust);
+		d_getenv_bool(&port_auto_adjust, "D_PORT_AUTO_ADJUST");
 
 		rc = __split_arg(provider_env, &provider_str0, &provider_str1);
 		if (rc != 0)

@@ -132,7 +132,7 @@ d_signal_register()
 	if (registered)
 		return;
 
-	d_getenv_bool("DAOS_SIGNAL_REGISTER", &enabled);
+	d_getenv_bool(&enabled, "DAOS_SIGNAL_REGISTER");
 
 	if (!enabled)
 		return;

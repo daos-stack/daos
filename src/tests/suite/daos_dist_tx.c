@@ -2798,7 +2798,7 @@ dtx_38(void **state)
 	if (!test_runable(arg, 7))
 		skip();
 
-	d_getenv_bool("DAOS_TX_VERIFY_RDG", &rdg_verify);
+	d_getenv_bool(&rdg_verify, "DAOS_TX_VERIFY_RDG");
 	if (!rdg_verify)
 		skip();
 

@@ -3322,7 +3322,7 @@ dfs_setup(void **state)
 	if (arg->myrank == 0) {
 		bool	use_dtx = false;
 
-		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		d_getenv_bool(&use_dtx, "DFS_USE_DTX");
 		if (use_dtx)
 			print_message("Running DFS Serial tests with DTX enabled\n");
 		else
@@ -3375,7 +3375,7 @@ run_dfs_unit_test(int rank, int size)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
-	setenv("DFS_USE_DTX", "1", 1);
+	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Unit_DTX", dfs_unit_tests,

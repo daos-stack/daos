@@ -42,7 +42,7 @@ init(void)
 		D_GOTO(err_pool_iv, rc);
 
 	ec_agg_disabled = false;
-	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
+	d_getenv_bool(&ec_agg_disabled, "DAOS_EC_AGG_DISABLE");
 	if (unlikely(ec_agg_disabled))
 		D_WARN("EC aggregation is disabled.\n");
 
@@ -77,7 +77,7 @@ setup(void)
 {
 	bool start = true;
 
-	d_getenv_bool("DAOS_START_POOL_SVC", &start);
+	d_getenv_bool(&start, "DAOS_START_POOL_SVC");
 	if (start)
 		return ds_pool_start_all();
 	return 0;
@@ -153,7 +153,7 @@ pool_tls_fini(int tags, void *data)
 	if (!d_list_empty(&tls->dt_pool_list)) {
 		bool strict = false;
 
-		d_getenv_bool("DAOS_STRICT_SHUTDOWN", &strict);
+		d_getenv_bool(&strict, "DAOS_STRICT_SHUTDOWN");
 		if (strict)
 			D_ASSERTF(false, "dt_pool_list not empty\n");
 		else

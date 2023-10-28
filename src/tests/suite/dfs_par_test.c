@@ -1,5 +1,5 @@
 /**
- * (C) Copyright 2019-2022 Intel Corporation.
+ * (C) Copyright 2019-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -149,7 +149,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 	/** test atomic rename with DFS DTX mode */
 	bool use_dtx = false;
 
-	d_getenv_bool("DFS_USE_DTX", &use_dtx);
+	d_getenv_bool(&use_dtx, "DFS_USE_DTX");
 	if (!use_dtx)
 		goto out;
 	if (arg->myrank == 0) {
@@ -965,7 +965,7 @@ dfs_setup(void **state)
 		dfs_attr_t	attr = {};
 		bool		use_dtx = false;
 
-		d_getenv_bool("DFS_USE_DTX", &use_dtx);
+		d_getenv_bool(&use_dtx, "DFS_USE_DTX");
 		if (use_dtx)
 			print_message("Running DFS Parallel tests with DTX enabled\n");
 		else
@@ -1026,7 +1026,7 @@ run_dfs_par_test(int rank, int size)
 	par_barrier(PAR_COMM_WORLD);
 
 	/** run tests again with DTX */
-	setenv("DFS_USE_DTX", "1", 1);
+	d_setenv("DFS_USE_DTX", "1", 1);
 
 	par_barrier(PAR_COMM_WORLD);
 	rc += cmocka_run_group_tests_name("DAOS_FileSystem_DFS_Parallel_DTX", dfs_par_tests,
