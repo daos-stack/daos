@@ -148,7 +148,7 @@ def scons():
     install_go_bin(senv, "daos_server")
 
     aenv = denv.Clone()
-    aenv.require('spdk', 'pmdk', 'ofi')
+    aenv.require('spdk', 'pmdk', 'ofi', 'argobots')
 
     aenv.AppendUnique(LINKFLAGS=["-Wl,--no-as-needed"])
     aenv.Replace(RPATH=[])
