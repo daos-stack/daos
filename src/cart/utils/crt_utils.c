@@ -413,15 +413,15 @@ err_group:
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
-	int			 rc;
+	int                      rc;
 	char                    *crt_phy_addr_str;
 	char                    *crt_ctx_share_addr = NULL;
-	char			*cli_srx_set        = NULL;
-	char			*crt_timeout        = NULL;
-	char			*ofi_interface;
-	char			*ofi_interface_env = NULL;
-	char			*ofi_domain;
-	char			*ofi_domain_env   = NULL;
+	char                    *cli_srx_set        = NULL;
+	char                    *crt_timeout        = NULL;
+	char                    *ofi_interface;
+	char                    *ofi_interface_env = NULL;
+	char                    *ofi_domain;
+	char                    *ofi_domain_env   = NULL;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
@@ -465,8 +465,7 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
-		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
-			cli_srx_set);
+		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", cli_srx_set);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");

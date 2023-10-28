@@ -452,12 +452,12 @@ int dc_mgmt_net_cfg(const char *name)
 	int                      rc;
 	char                    *crt_phy_addr_str;
 	char                    *crt_ctx_share_addr = NULL;
-	char			*cli_srx_set        = NULL;
+	char                    *cli_srx_set        = NULL;
 	char                    *crt_timeout        = NULL;
 	char                    *ofi_interface;
 	char                    *ofi_interface_env = NULL;
-	char                    *ofi_domain = "";
-	char                    *ofi_domain_env = NULL;
+	char                    *ofi_domain        = "";
+	char                    *ofi_domain_env    = NULL;
 	struct dc_mgmt_sys_info  info;
 	Mgmt__GetAttachInfoResp *resp;
 
@@ -495,7 +495,7 @@ int dc_mgmt_net_cfg(const char *name)
 	D_INFO("Setting number of server ranks to %d\n", g_num_serv_ranks);
 	/* These two are always set */
 	crt_phy_addr_str = info.provider;
-	rc = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
+	rc               = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
@@ -518,8 +518,7 @@ int dc_mgmt_net_cfg(const char *name)
 		rc = d_setenv("FI_OFI_RXM_USE_SRX", cli_srx_set, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
-		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
-		       cli_srx_set);
+		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n", cli_srx_set);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
@@ -550,7 +549,7 @@ int dc_mgmt_net_cfg(const char *name)
 	d_agetenv_str(&ofi_domain_env, "OFI_DOMAIN");
 	if (!ofi_interface_env) {
 		ofi_interface = info.interface;
-		rc = d_setenv("OFI_INTERFACE", ofi_interface, 1);
+		rc            = d_setenv("OFI_INTERFACE", ofi_interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
