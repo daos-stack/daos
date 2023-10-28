@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2019-2023 Intel Corporation.
+ * (C) Copyright 2019-2024 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -410,55 +410,18 @@ err_group:
 	return rc;
 }
 
-static inline void
-crtu_dc_mgmt_net_print_env(void)
-{
-	static const char *var_names[] = {"OFI_INTERFACE", "OFI_DOMAIN", "CRT_PHY_ADDR_STR",
-					  "CRT_CTX_SHARE_ADDR", "CRT_TIMEOUT"};
-	int                idx;
-	char              *env;
-	char              *msg;
-	int                rc;
-
-	rc = d_agetenv_str(&env, var_names[0]);
-	D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
-		  var_names[0], DP_RC(rc));
-	D_ASPRINTF(msg, "CaRT env setup with:\n\t%s=%s", var_names[0], env);
-	d_freeenv_str(&env);
-	if (msg == NULL) {
-		D_INFO("Error allocating CaRT env setup message");
-		return;
-	}
-
-	for (idx = 1; idx < sizeof(var_names) / sizeof(char *); ++idx) {
-		char *tmp = msg;
-
-		rc = d_agetenv_str(&env, var_names[idx]);
-		D_ASSERTF(env != NULL, "Can not retrieve environment varirable %s: " DF_RC "\n",
-			  var_names[idx], DP_RC(rc));
-
-		D_ASPRINTF(msg, "%s, %s=%s", tmp, var_names[idx], env);
-		d_freeenv_str(&env);
-		D_FREE(tmp);
-		if (msg == NULL) {
-			D_INFO("Error allocating CaRT env setup message");
-			return;
-		}
-	}
-
-	D_INFO("%s", msg);
-	D_FREE(msg);
-}
-
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name)
 {
 	int			 rc;
-	char			 buf[SYS_INFO_BUF_SIZE];
-	char			*crt_timeout;
+	char                    *crt_phy_addr_str;
+	char                    *crt_ctx_share_addr = NULL;
+	char			*cli_srx_set        = NULL;
+	char			*crt_timeout        = NULL;
 	char			*ofi_interface;
+	char			*ofi_interface_env = NULL;
 	char			*ofi_domain;
-	char			*cli_srx_set;
+	char			*ofi_domain_env   = NULL;
 	struct dc_mgmt_sys_info  crt_net_cfg_info = {0};
 	Mgmt__GetAttachInfoResp *crt_net_cfg_resp = NULL;
 
@@ -474,33 +437,42 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	}
 
 	/* These two are always set */
-	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_net_cfg_info.provider);
-	rc = d_setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
+	crt_phy_addr_str = crt_net_cfg_info.provider;
+	D_INFO("setenv CRT_PHY_ADDR_STR=%s\n", crt_phy_addr_str);
+	rc = d_setenv("CRT_PHY_ADDR_STR", crt_phy_addr_str, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
-	sprintf(buf, "%d", crt_net_cfg_info.crt_ctx_share_addr);
-	D_INFO("setenv CRT_CTX_SHARE_ADDR=%d\n", crt_net_cfg_info.crt_ctx_share_addr);
-	rc = d_setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	rc = asprintf(&crt_ctx_share_addr, "%d", crt_net_cfg_info.crt_ctx_share_addr);
+	if (rc < 0) {
+		crt_ctx_share_addr = NULL;
+		D_GOTO(cleanup, rc = -DER_NOMEM);
+	}
+	D_INFO("setenv CRT_CTX_SHARE_ADDR=%s\n", crt_ctx_share_addr);
+	rc = d_setenv("CRT_CTX_SHARE_ADDR", crt_ctx_share_addr, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
 
 	/* If the server has set this, the client must use the same value. */
 	if (crt_net_cfg_info.srv_srx_set != -1) {
-		sprintf(buf, "%d", crt_net_cfg_info.srv_srx_set);
-		rc = d_setenv("FI_OFI_RXM_USE_SRX", buf, 1);
-		D_INFO("setenv FI_OFI_RXM_USE_SRX=%d\n", crt_net_cfg_info.srv_srx_set);
+		rc = asprintf(&cli_srx_set, "%d", crt_net_cfg_info.srv_srx_set);
+		if (rc < 0) {
+			cli_srx_set = NULL;
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		}
+		D_INFO("setenv FI_OFI_RXM_USE_SRX=%s\n", cli_srx_set);
+		rc = d_setenv("FI_OFI_RXM_USE_SRX", cli_srx_set, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 
-		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n", buf);
+		D_DEBUG(DB_MGMT, "Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
+			cli_srx_set);
 	} else {
 		/* Client may not set it if the server hasn't. */
 		d_agetenv_str(&cli_srx_set, "FI_OFI_RXM_USE_SRX");
 		if (cli_srx_set) {
 			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
 				"but server is unset!\n", cli_srx_set);
-			d_freeenv_str(&cli_srx_set);
 			D_GOTO(cleanup, rc = -DER_INVAL);
 		}
 	}
@@ -508,43 +480,56 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	/* Allow client env overrides for these three */
 	d_agetenv_str(&crt_timeout, "CRT_TIMEOUT");
 	if (!crt_timeout) {
-		sprintf(buf, "%d", crt_net_cfg_info.crt_timeout);
-		rc = d_setenv("CRT_TIMEOUT", buf, 1);
-		D_INFO("setenv CRT_TIMEOUT=%d\n", crt_net_cfg_info.crt_timeout);
+		rc = asprintf(&crt_timeout, "%d", crt_net_cfg_info.crt_timeout);
+		if (rc < 0) {
+			crt_timeout = NULL;
+			D_GOTO(cleanup, rc = -DER_NOMEM);
+		}
+		D_INFO("setenv CRT_TIMEOUT=%s\n", crt_timeout);
+		rc = d_setenv("CRT_TIMEOUT", crt_timeout, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
 		D_DEBUG(DB_MGMT, "Using client provided CRT_TIMEOUT: %s\n", crt_timeout);
-		d_freeenv_str(&crt_timeout);
 	}
 
-	d_agetenv_str(&ofi_interface, "OFI_INTERFACE");
-	if (!ofi_interface) {
-		rc = d_setenv("OFI_INTERFACE", crt_net_cfg_info.interface, 1);
-		D_INFO("Setting OFI_INTERFACE=%s\n", crt_net_cfg_info.interface);
+	d_agetenv_str(&ofi_interface_env, "OFI_INTERFACE");
+	if (!ofi_interface_env) {
+		ofi_interface = crt_net_cfg_info.interface;
+		D_INFO("Setting OFI_INTERFACE=%s\n", ofi_interface);
+		rc = d_setenv("OFI_INTERFACE", ofi_interface, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
+		ofi_interface = ofi_interface_env;
 		D_DEBUG(DB_MGMT,
 			"Using client provided OFI_INTERFACE: %s\n",
 			ofi_interface);
-		d_freeenv_str(&ofi_interface);
 	}
 
-	d_agetenv_str(&ofi_domain, "OFI_DOMAIN");
-	if (!ofi_domain) {
-		rc = d_setenv("OFI_DOMAIN", crt_net_cfg_info.domain, 1);
-		D_INFO("Setting OFI_DOMAIN=%s\n", crt_net_cfg_info.domain);
+	d_agetenv_str(&ofi_domain_env, "OFI_DOMAIN");
+	if (!ofi_domain_env) {
+		ofi_domain = crt_net_cfg_info.domain;
+		D_INFO("Setting OFI_DOMAIN=%s\n", ofi_domain);
+		rc = d_setenv("OFI_DOMAIN", ofi_domain, 1);
 		if (rc != 0)
 			D_GOTO(cleanup, rc = d_errno2der(errno));
 	} else {
+		ofi_domain = ofi_domain_env;
 		D_DEBUG(DB_MGMT, "Using client provided OFI_DOMAIN: %s\n", ofi_domain);
-		d_freeenv_str(&ofi_domain);
 	}
 
-	crtu_dc_mgmt_net_print_env();
+	D_INFO("CaRT env setup with:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		ofi_interface, ofi_domain, crt_phy_addr_str, crt_ctx_share_addr, crt_timeout);
 
 cleanup:
+	d_freeenv_str(&ofi_domain_env);
+	d_freeenv_str(&ofi_interface_env);
+	d_freeenv_str(&crt_timeout);
+	d_freeenv_str(&cli_srx_set);
+	d_freeenv_str(&crt_ctx_share_addr);
 	dc_put_attach_info(&crt_net_cfg_info, crt_net_cfg_resp);
 
 	return rc;

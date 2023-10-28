@@ -18,6 +18,44 @@ static volatile int	gdata_init_flag;
 struct crt_plugin_gdata crt_plugin_gdata;
 static bool		g_prov_settings_applied[CRT_PROV_COUNT];
 
+/* List of the environment variables used in CaRT */
+static const char *crt_env_names[] = {"D_PROVIDER",
+				      "D_INTERFACE",
+				      "D_DOMAIN",
+				      "D_PORT",
+				      "CRT_PHY_ADDR_STR",
+				      "D_LOG_STDERR_IN_LOG",
+				      "D_LOG_SIZE",
+				      "D_LOG_FILE",
+				      "D_LOG_FILE_APPEND_PID",
+				      "D_LOG_MASK",
+				      "DD_MASK",
+				      "DD_STDERR",
+				      "DD_SUBSYS",
+				      "CRT_TIMEOUT",
+				      "CRT_ATTACH_INFO_PATH",
+				      "OFI_PORT",
+				      "OFI_INTERFACE",
+				      "OFI_DOMAIN",
+				      "CRT_CREDIT_EP_CTX",
+				      "CRT_CTX_SHARE_ADDR",
+				      "CRT_CTX_NUM",
+				      "D_FI_CONFIG",
+				      "FI_UNIVERSE_SIZE",
+				      "CRT_ENABLE_MEM_PIN",
+				      "FI_OFI_RXM_USE_SRX",
+				      "D_LOG_FLUSH",
+				      "CRT_MRC_ENABLE",
+				      "CRT_SECONDARY_PROVIDER",
+				      "D_PROVIDER_AUTH_KEY",
+				      "D_PORT_AUTO_ADJUST",
+				      "D_POLL_TIMEOUT",
+				      "D_LOG_FILE_APPEND_RANK",
+				      "D_QUOTA_RPCS",
+				      "D_POST_INIT",
+				      "D_POST_INCR",
+				      "DAOS_SIGNAL_REGISTER"};
+
 static void
 crt_lib_init(void) __attribute__((__constructor__));
 
@@ -64,52 +102,16 @@ dump_envariables(void)
 {
 	int                i;
 	char              *val;
-	static const char *var_names[] = {"D_PROVIDER",
-					  "D_INTERFACE",
-					  "D_DOMAIN",
-					  "D_PORT",
-					  "CRT_PHY_ADDR_STR",
-					  "D_LOG_STDERR_IN_LOG",
-					  "D_LOG_SIZE",
-					  "D_LOG_FILE",
-					  "D_LOG_FILE_APPEND_PID",
-					  "D_LOG_MASK",
-					  "DD_MASK",
-					  "DD_STDERR",
-					  "DD_SUBSYS",
-					  "CRT_TIMEOUT",
-					  "CRT_ATTACH_INFO_PATH",
-					  "OFI_PORT",
-					  "OFI_INTERFACE",
-					  "OFI_DOMAIN",
-					  "CRT_CREDIT_EP_CTX",
-					  "CRT_CTX_SHARE_ADDR",
-					  "CRT_CTX_NUM",
-					  "D_FI_CONFIG",
-					  "FI_UNIVERSE_SIZE",
-					  "CRT_ENABLE_MEM_PIN",
-					  "FI_OFI_RXM_USE_SRX",
-					  "D_LOG_FLUSH",
-					  "CRT_MRC_ENABLE",
-					  "CRT_SECONDARY_PROVIDER",
-					  "D_PROVIDER_AUTH_KEY",
-					  "D_PORT_AUTO_ADJUST",
-					  "D_POLL_TIMEOUT",
-					  "D_LOG_FILE_APPEND_RANK",
-					  "D_QUOTA_RPCS",
-					  "D_POST_INIT",
-					  "D_POST_INCR",
-					  "DAOS_SIGNAL_REGISTER"};
 
 	D_INFO("-- ENVARS: --\n");
-	for (i = 0; i < ARRAY_SIZE(var_names); i++) {
-		d_agetenv_str(&val, var_names[i]);
+	for (i = 0; i < ARRAY_SIZE(crt_env_names); i++) {
+		d_agetenv_str(&val, crt_env_names[i]);
 		if (val == NULL)
 			continue;
-		if (strcmp(var_names[i], "D_PROVIDER_AUTH_KEY") == 0)
-			D_INFO("%s = %s\n", var_names[i], "********");
+		if (strcmp(crt_env_names[i], "D_PROVIDER_AUTH_KEY") == 0)
+			D_INFO("%s = %s\n", crt_env_names[i], "********");
 		else
-			D_INFO("%s = %s\n", var_names[i], val);
+			D_INFO("%s = %s\n", crt_env_names[i], val);
 		d_freeenv_str(&val);
 	}
 }
@@ -599,43 +601,39 @@ crt_protocol_info_free(struct crt_protocol_info *protocol_info)
 int
 crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 {
-	char          *provider, *provider_env;
-	char          *interface, *interface_env;
-	char          *domain, *domain_env;
-	char          *auth_key, *auth_key_env;
+	char          *provider;
+	char          *provider_env = NULL;
+	char          *interface;
+	char          *interface_env = NULL;
+	char          *domain;
+	char          *domain_env = NULL;
+	char          *auth_key;
+	char          *auth_key_env = NULL;
 	struct timeval now;
 	unsigned int   seed;
 	char          *path;
-	bool           server;
+	bool           server        = flags & CRT_FLAG_BIT_SERVER;
 	int            rc            = 0;
 	char          *provider_str0 = NULL;
 	char          *provider_str1 = NULL;
 	crt_provider_t primary_provider;
 	crt_provider_t secondary_provider;
 	crt_provider_t tmp_prov;
-	char          *port, *port_env, *port0, *port1;
-	char          *iface0, *iface1, *domain0, *domain1;
-	char          *auth_key0, *auth_key1;
+	char          *port;
+	char          *port_env         = NULL;
+	char          *port0            = NULL;
+	char          *port1            = NULL;
+	char          *iface0           = NULL;
+	char          *iface1           = NULL;
+	char          *domain0          = NULL;
+	char          *domain1          = NULL;
+	char          *auth_key0        = NULL;
+	char          *auth_key1        = NULL;
 	int            num_secondaries  = 0;
 	bool           port_auto_adjust = false;
 	int            i;
 
 	d_signal_register();
-
-	provider_env  = NULL;
-	interface_env = NULL;
-	domain_env    = NULL;
-	auth_key_env  = NULL;
-	server        = flags & CRT_FLAG_BIT_SERVER;
-	port_env      = NULL;
-	port0         = NULL;
-	port1         = NULL;
-	iface0        = NULL;
-	iface1        = NULL;
-	domain0       = NULL;
-	domain1       = NULL;
-	auth_key0     = NULL;
-	auth_key1     = NULL;
 
 	/* d_log_init is reference counted */
 	rc = d_log_init();
