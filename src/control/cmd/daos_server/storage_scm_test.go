@@ -346,7 +346,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 				RebootRequired: true,
 			},
 			expCalls: []storage.ScmPrepareRequest{
-				{Reset: true, Force: true, SocketID: &one},
+				{Reset: true, SocketID: &one},
 			},
 			expLogMsg: "regions will be removed",
 		},
@@ -453,7 +453,7 @@ func TestDaosServer_resetPMem(t *testing.T) {
 
 			if tc.expCalls == nil {
 				tc.expCalls = []storage.ScmPrepareRequest{
-					{Reset: true, Force: !tc.noForce},
+					{Reset: true},
 				}
 			}
 

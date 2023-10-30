@@ -301,7 +301,6 @@ type (
 		Reset                 bool  // Clear PMem namespaces and regions.
 		NrNamespacesPerSocket uint  // Request this many PMem namespaces per socket.
 		SocketID              *uint // Only process PMem attached to this socket.
-		Force                 bool  // Remove regions despite errors in evaluating state.
 	}
 
 	// ScmPrepareResponse contains the results of a successful Prepare operation.
