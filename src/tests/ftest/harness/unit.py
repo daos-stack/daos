@@ -5,8 +5,7 @@
 """
 from apricot import TestWithoutServers
 from ClusterShell.NodeSet import NodeSet
-from data_utils import (dict_extract_values, dict_subtract, list_flatten,
-                        list_stats, list_unique)
+from data_utils import dict_extract_values, dict_subtract, list_flatten, list_stats, list_unique
 from run_utils import ResultData, run_remote
 
 

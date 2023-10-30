@@ -1,12 +1,13 @@
 """Build DAOS"""
-import os
-import sys
-import subprocess  # nosec
-import time
 import errno
+import os
+import subprocess  # nosec
+import sys
+import time
+
 import SCons.Warnings
-from prereq_tools import PreReqComponent
-# pylint: disable=reimported
+from prereq_tools import PreReqComponent  # pylint: disable=reimported
+
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
@@ -177,8 +178,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
-            import pygit2
             import github
+            import pygit2
             import yaml
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to create releases")

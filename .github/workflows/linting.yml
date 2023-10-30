@@ -1,0 +1,31 @@
+name: Linting
+
+# Always run on Pull Requests as then this check can be marked as required.
+on:
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
+  pull_request:
+
+jobs:
+  # Run isort on the tree.
+  # This checks .py files only so misses SConstruct and SConscript files are not checked, rather
+  # for these files check them afterwards.  The output-filter will not be installed for this part
+  # so regressions will be detected but not annotated.
+  isort:
+    name: Python isort
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v3
+      - uses: isort/isort-action@master
+        with:
+          requirementsFiles: "requirements.txt utils/cq/requirements.txt"
+      - name: Run on SConstruct file.
+        run: isort --check-only SConstruct
+      - name: Run on build files.
+        run: find . -name SConscript | xargs isort
