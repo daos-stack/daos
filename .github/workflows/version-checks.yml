@@ -25,4 +25,3 @@ jobs:
         run: pip install --upgrade ${{ matrix.package }}
       - name: Check ${{ matrix.package }} for version
         run: python -m  ${{ matrix.package }} --version | diff version-pre -
-    
