@@ -3,14 +3,14 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import grp
 import os
 import random
-import grp
 import re
 
-from apricot import TestWithServers
 import agent_utils as agu
 import security_test_base as secTestBase
+from apricot import TestWithServers
 
 PERMISSIONS = ["", "r", "w", "rw"]
 DENY_ACCESS = "-1001"

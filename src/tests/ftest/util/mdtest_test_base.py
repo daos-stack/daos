@@ -5,10 +5,11 @@
 """
 
 import os
+
 from dfuse_test_base import DfuseTestBase
-from mdtest_utils import MdtestCommand
 from exception_utils import CommandFailure
 from job_manager_utils import get_job_manager
+from mdtest_utils import MdtestCommand
 
 
 class MdtestBase(DfuseTestBase):

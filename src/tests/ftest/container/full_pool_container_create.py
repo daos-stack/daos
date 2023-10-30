@@ -4,8 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
+
 from apricot import TestWithServers
-from general_utils import get_random_bytes, DaosTestError
+from general_utils import DaosTestError, get_random_bytes
 from test_utils_container import TestContainerData
 
 

@@ -5,8 +5,8 @@
 """
 from copy import deepcopy
 
-from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
+from ior_test_base import IorTestBase
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
