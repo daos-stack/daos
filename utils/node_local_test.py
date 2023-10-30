@@ -2093,6 +2093,7 @@ class PosixTests():
     def test_truncate(self):
         """Test file read after truncate"""
         filename = join(self.dfuse.dir, 'myfile')
+        print(filename)
 
         with open(filename, 'w') as fd:
             fd.write('hello')
