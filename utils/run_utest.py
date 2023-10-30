@@ -6,18 +6,19 @@
 
   Test script for running all DAOS unit tests
 """
+import argparse
+import json
 # pylint: disable=broad-except
 import os
-import sys
-import json
-import argparse
-import shutil
 import re
+import shutil
 import subprocess  # nosec
+import sys
 import tempfile
 import traceback
-from junit_xml import TestSuite, TestCase
+
 import yaml
+from junit_xml import TestCase, TestSuite
 
 
 def check_version():

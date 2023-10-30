@@ -32,6 +32,8 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv, off_t p
 	struct dfuse_event    *ev;
 	uint64_t               eqt_idx;
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_WRITE);
+
 	oh->doh_linear_read = false;
 
 	eqt_idx = atomic_fetch_add_relaxed(&dfuse_info->di_eqt_idx, 1);

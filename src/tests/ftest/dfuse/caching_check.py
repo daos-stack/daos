@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from general_utils import percent_change
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import percent_change
 
 
 class DfuseCachingCheck(IorTestBase):
