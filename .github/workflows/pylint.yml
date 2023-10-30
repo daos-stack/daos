@@ -24,10 +24,10 @@ jobs:
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
       - name: Check pylint version
-        run: pylint --version | tee -v pylint-pre
+        run: pylint --version | tee -a pylint-pre
       - name: Upgrade
         run: pip install --upgrade pylint
       - name: Check pylint version
-        run: pylint --version | tee -v pylint-post
+        run: pylint --version | tee -a pylint-post
       - name: Check for upgrades
         run: diff pylint-pre pylint-post
