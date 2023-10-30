@@ -47,10 +47,14 @@ jobs:
   isort:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v2
         with:
           python-version: 3.11
       - uses: isort/isort-action@master
         with:
           requirementsFiles: "requirements.txt utils/cq/requirements.txt"
+      - name: Run on SConstruct file.
+        run: isort --check-only SConstruct
+      - name: Run on build files.
+        run: find . -name SConscript | xargs isort
