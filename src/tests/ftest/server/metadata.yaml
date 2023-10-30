@@ -23,11 +23,7 @@ server_config:
         - DAOS_MD_CAP=128
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem0"]
-          scm_mount: /mnt/daos0
+      storage: auto
     1:
       targets: 8
       nr_xs_helpers: 4
@@ -41,11 +37,7 @@ server_config:
         - DAOS_MD_CAP=128
         - RDB_COMPACT_THRESHOLD=64
         - DD_MASK=group_metadata_only
-      storage:
-        0:
-          class: dcpm
-          scm_list: ["/dev/pmem1"]
-          scm_mount: /mnt/daos1
+      storage: auto
 pool:
   svcn: 5
   scm_size: 1G
