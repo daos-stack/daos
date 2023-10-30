@@ -37,12 +37,12 @@ jobs:
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
   upgrade-check:
-    name: Check for newer pylint version
+    name: Check for package update
     runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'pull_request' }}
     strategy:
       matrix:
-        distro: [package]
+        package: [pylint, yamllint]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
