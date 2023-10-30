@@ -70,6 +70,8 @@ def generate(env):
 
         # go version go1.2.3 Linux/amd64
         go_version = out.split(' ')[2].replace('go', '')
+        if '-' in go_version:
+            go_version = go_version.split('-')[0]
         if len([x for x, y in
                 zip(go_version.split('.'), MIN_GO_VERSION.split('.'))
                 if int(x) < int(y)]) > 0:
