@@ -1,13 +1,11 @@
 """Build DAOS"""
-import errno
 import os
-import subprocess  # nosec
 import sys
+import subprocess  # nosec
 import time
-
+import errno
 import SCons.Warnings
 from prereq_tools import PreReqComponent
-
 # pylint: disable=reimported
 
 if sys.version_info.major < 3:
@@ -179,8 +177,8 @@ def check_for_release_target():  # pylint: disable=too-many-locals
         # pylint: disable=consider-using-f-string
         try:
             # pylint: disable=import-outside-toplevel
-            import github
             import pygit2
+            import github
             import yaml
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to create releases")
