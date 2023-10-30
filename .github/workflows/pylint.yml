@@ -37,7 +37,7 @@ jobs:
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
   upgrade-check:
-    name: Check for package update
+    name: Check for updates
     runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'pull_request' }}
     strategy:
@@ -54,4 +54,4 @@ jobs:
       - name: Upgrade
         run: pip install --upgrade ${{ matrix.package }}
       - name: Check ${{ matrix.package }} for version
-        run: python -m  ${{ matrix.package }} --version | diff version.pre -
+        run: python -m  ${{ matrix.package }} --version | diff version-pre -
