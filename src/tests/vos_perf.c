@@ -324,7 +324,8 @@ obj_iter_records(daos_unit_oid_t oid, struct pf_param *ppa)
 	TS_TIME_START(&ppa->pa_duration, start);
 	if (ppa->pa_verbose)
 		D_PRINT("Iteration dkeys in "DF_UOID"\n", DP_UOID(oid));
-	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, ppa, NULL);
+	rc = vos_iterate(&param, VOS_ITER_DKEY, ppa->pa_iter.recurse, &anchors, iter_cb, NULL, ppa,
+			 NULL);
 	TS_TIME_END(&ppa->pa_duration, start);
 	return rc;
 }
@@ -609,6 +610,10 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 		pa->pa_iter.visible = true;
 		str++;
 		break;
+	case 's':
+		pa->pa_iter.recurse = false;
+		str++;
+		break;
 	}
 	*strp = str;
 	return 0;
@@ -617,6 +622,7 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 static int
 pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 {
+	pa->pa_iter.recurse = true;
 	return pf_parse_common(str, pa, pf_parse_iterate_cb, strp);
 }
 

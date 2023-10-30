@@ -7,10 +7,9 @@ from __future__ import division
 
 from avocado import fail_on
 from avocado.core.exceptions import TestFail
-
-from dmg_utils import get_storage_query_pool_info, get_dmg_smd_info
-from nvme_utils import ServerFillUp, get_device_ids
+from dmg_utils import get_dmg_smd_info, get_storage_query_pool_info
 from exception_utils import CommandFailure
+from nvme_utils import ServerFillUp, get_device_ids
 
 
 class NvmeHealth(ServerFillUp):

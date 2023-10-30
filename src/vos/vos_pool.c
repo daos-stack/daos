@@ -1504,7 +1504,7 @@ vos_pool_query(daos_handle_t poh, vos_pool_info_t *pinfo)
 
 	D_ASSERT(pinfo != NULL);
 	pinfo->pif_cont_nr = pool_df->pd_cont_nr;
-	pinfo->pif_gc_stat = pool->vp_gc_stat;
+	pinfo->pif_gc_stat = pool->vp_gc_stat_global;
 
 	rc = vos_space_query(pool, &pinfo->pif_space, true);
 	if (rc)
@@ -1562,7 +1562,7 @@ vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param)
 	default:
 		return -DER_NOSYS;
 	case VOS_PO_CTL_RESET_GC:
-		memset(&pool->vp_gc_stat, 0, sizeof(pool->vp_gc_stat));
+		memset(&pool->vp_gc_stat_global, 0, sizeof(pool->vp_gc_stat_global));
 		break;
 	case VOS_PO_CTL_SET_POLICY:
 		if (param == NULL)
