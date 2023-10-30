@@ -899,11 +899,10 @@ ds_pool_svc_dist_create(const uuid_t pool_uuid, int ntargets, const char *group,
 	struct daos_prop_entry *def_lbl_ent;
 	struct pool_create_out *out;
 	struct d_backoff_seq	backoff_seq;
-	uuid_t			no_uuid;
+	uuid_t			pi_hdl_uuid;
 	uint64_t		req_time = 0;
+	int			n_attempts = 0;
 	int			rc;
-
-	uuid_clear(no_uuid);
 
 	/* Check for default label supplied via property. */
 	def_lbl_ent = daos_prop_entry_get(&pool_prop_default, DAOS_PROP_PO_LABEL);
@@ -955,7 +954,17 @@ rechoose:
 			DP_UUID(pool_uuid), DP_RC(rc));
 		goto out_backoff_seq;
 	}
-	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, pool_uuid, no_uuid, &req_time, &rpc);
+	if (n_attempts == 0)
+		/*
+		 * This is our first attempt. Use a non-null pi_hdl to ask the
+		 * chosen PS replica to campaign.
+		 */
+		uuid_generate(pi_hdl_uuid);
+	else
+		uuid_clear(pi_hdl_uuid);
+
+	rc = pool_req_create(info->dmi_ctx, &ep, POOL_CREATE, pool_uuid, pi_hdl_uuid, &req_time,
+			     &rpc);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to create POOL_CREATE RPC: "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -966,6 +975,7 @@ rechoose:
 
 	/* Send the POOL_CREATE request. */
 	rc = dss_rpc_send(rpc);
+	n_attempts++;
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 	rc = rsvc_client_complete_rpc(&client, &ep, rc,
@@ -1590,8 +1600,6 @@ check_map:
 	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
 	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
 	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
-			DP_UUID(svc->ps_uuid));
 		rc = 0;
 	} else if (rc != 0) {
 		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
@@ -1599,29 +1607,7 @@ check_map:
 		goto out_lock;
 	}
 
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
-		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
-		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
-
-	/* Check if duplicate operations detection is enabled, for informative debug log */
-	rc = rdb_get_size(svc->ps_rsvc.s_db, &rdb_size);
-	if (rc != 0)
-		goto out_lock;
-	rdb_size_ok = (rdb_size >= DUP_OP_MIN_RDB_SIZE);
-
-	d_iov_set(&value, &svc_ops_enabled, sizeof(svc_ops_enabled));
-	rc = rdb_tx_lookup(&tx, &svc->ps_root, &ds_pool_prop_svc_ops_enabled, &value);
-	if (rc == -DER_NONEXIST) {
-		D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection is disabled due to old layout\n",
-			DP_UUID(svc->ps_uuid));
-		rc = 0;
-	} else if (rc != 0) {
-		D_ERROR(DF_UUID ": failed to lookup svc_ops_enabled: " DF_RC "\n",
-			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		goto out_lock;
-	}
-
-	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size: " DF_U64 " %s %u)\n",
+	D_DEBUG(DB_MD, DF_UUID ": duplicate ops detection %s (rdb size " DF_U64 " %s %u minimum)\n",
 		DP_UUID(svc->ps_uuid), svc_ops_enabled ? "enabled" : "disabled", rdb_size,
 		rdb_size_ok ? ">=" : "<", DUP_OP_MIN_RDB_SIZE);
 
@@ -2705,6 +2691,16 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 		D_DEBUG(DB_MD, DF_UUID": pool service already stopping\n",
 			DP_UUID(svc->ps_uuid));
 		D_GOTO(out_mutex, rc = -DER_CANCELED);
+	}
+
+	if (!uuid_is_null(in->pri_op.pi_hdl)) {
+		/*
+		 * Try starting a campaign without waiting for the election
+		 * timeout. Since this is a performance optimization, ignore
+		 * errors.
+		 */
+		rc = rdb_campaign(svc->ps_rsvc.s_db);
+		D_DEBUG(DB_MD, DF_UUID": campaign: "DF_RC"\n", DP_UUID(svc->ps_uuid), DP_RC(rc));
 	}
 
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, RDB_NIL_TERM, &tx);

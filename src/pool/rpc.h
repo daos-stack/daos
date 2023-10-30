@@ -1,5 +1,5 @@
 /*
- * (C) Copyright 2016-2022 Intel Corporation.
+ * (C) Copyright 2016-2023 Intel Corporation.
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
@@ -211,6 +211,7 @@ extern int dc_pool_proto_version;
 CRT_RPC_DECLARE(pool_op_v6, DAOS_ISEQ_POOL_OP_V6, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
+/* If pri_op.pi_hdl is not null, call rdb_campaign. */
 #define DAOS_ISEQ_POOL_CREATE	/* input fields */		 \
 	((struct pool_op_v6_in)	(pri_op)		CRT_VAR) \
 	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR) \

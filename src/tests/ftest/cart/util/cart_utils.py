@@ -3,23 +3,22 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
+import glob
+import logging
 import os
+import re
 import shlex
 import subprocess  # nosec
-import logging
-import re
-import glob
-
-from ClusterShell.NodeSet import NodeSet
+import time
 
 import cart_logparse
 import cart_logtest
 from apricot import TestWithoutServers
-from run_utils import stop_processes
+from ClusterShell.NodeSet import NodeSet
 from host_utils import get_local_host
-from write_host_file import write_host_file
 from job_manager_utils import Orterun
+from run_utils import stop_processes
+from write_host_file import write_host_file
 
 
 class CartTest(TestWithoutServers):

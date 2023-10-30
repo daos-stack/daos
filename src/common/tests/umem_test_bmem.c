@@ -242,44 +242,8 @@ test_atomic_copy(void **state)
 	memset(local_buf+768, 'd', 256);
 	ptr = umem_off2ptr(umm, off+768);
 	snap_persist_activity();
-	dest = umem_atomic_copy(umm, ptr, local_buf+768, 256, UMEM_COMMIT_DEFER);
+	dest = umem_atomic_copy(umm, ptr, local_buf+768, 256, UMEM_COMMIT_IMMEDIATE);
 	assert_true(dest == ptr);
-	validate_persist_activity(0, 0);
-
-	memset(local_buf+1024, 'e', 256);
-	ptr = umem_off2ptr(umm, off+1024);
-	snap_persist_activity();
-	dest = umem_atomic_copy(umm, ptr, local_buf+1024, 256, UMEM_COMMIT_IMMEDIATE);
-	assert_true(dest == ptr);
-	validate_persist_activity(1, 1);
-
-	ptr = umem_off2ptr(umm, off);
-	rc = memcmp(local_buf, ptr, 2048);
-	assert_int_equal(rc, 0);
-
-	/* atomic copy with defer commit should persist even if outer tx fails */
-	snap_persist_activity();
-	rc = umem_tx_begin(umm, NULL);
-	assert_int_equal(rc, 0);
-	memset(local_buf+1280, 'f', 256);
-	ptr = umem_off2ptr(umm, off+1280);
-	dest = umem_atomic_copy(umm, ptr, local_buf+1280, 256, UMEM_COMMIT_DEFER);
-	assert_true(dest == ptr);
-	rc = umem_tx_abort(umm, 1);
-	assert_int_not_equal(rc, 0);
-	validate_persist_activity(1, 1);
-
-	snap_persist_activity();
-	rc = umem_tx_begin(umm, NULL);
-	assert_int_equal(rc, 0);
-	memset(local_buf+1280, 'f', 256);
-	ptr = umem_off2ptr(umm, off+1280);
-	rc = umem_tx_xadd_ptr(umm, ptr, 256, UMEM_XADD_NO_SNAPSHOT);
-	assert_int_equal(rc, 0);
-	dest = umem_atomic_copy(umm, ptr, local_buf+1280, 256, UMEM_COMMIT_DEFER);
-	assert_true(dest == ptr);
-	rc = umem_tx_abort(umm, 1);
-	assert_int_not_equal(rc, 0);
 	validate_persist_activity(1, 1);
 
 	ptr = umem_off2ptr(umm, off);
