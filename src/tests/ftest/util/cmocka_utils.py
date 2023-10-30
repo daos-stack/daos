@@ -9,7 +9,7 @@ from agent_utils import include_local_host
 from command_utils import ExecutableCommand
 from command_utils_base import EnvironmentVariables
 from exception_utils import CommandFailure
-from results_utils import TestName, TestResult, Results, Job, create_xml
+from results_utils import Job, Results, TestName, TestResult, create_xml
 from run_utils import get_clush_command, run_local, run_remote
 
 

@@ -165,6 +165,7 @@ read_map_file(char **buf)
 		fIn = fopen("/proc/self/maps", "r");
 		if (fIn == NULL) {
 			DS_ERROR(errno, "Fail to open /proc/self/maps");
+			D_FREE(*buf);
 			quit_hook_init();
 		}
 
@@ -175,6 +176,7 @@ read_map_file(char **buf)
 
 		if (read_size < 0) {
 			DS_ERROR(errno, "Error in reading file /proc/self/maps");
+			D_FREE(*buf);
 			quit_hook_init();
 		} else if (read_size == max_read_size) {
 			/* need to increase the buffer and try again */
@@ -190,6 +192,7 @@ read_map_file(char **buf)
 		if (max_read_size >= MAP_SIZE_LIMIT) {
 			/* not likely to be here */
 			DS_ERROR(EFBIG, "/proc/self/maps is TOO large");
+			D_FREE(*buf);
 			quit_hook_init();
 		}
 	}

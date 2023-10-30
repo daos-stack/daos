@@ -6,8 +6,8 @@
 
 
 import os
-import yaml
 
+import yaml
 from storage_estimator.dfs_sb import VOS_SIZE, get_dfs_sb_obj
 from storage_estimator.vos_size import MetaOverhead
 from storage_estimator.vos_structures import Containers

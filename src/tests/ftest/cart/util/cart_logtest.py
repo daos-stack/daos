@@ -6,13 +6,14 @@
 
 """This provides consistency checking for CaRT log files."""
 
+import argparse
 import re
 import sys
 import time
-import argparse
-from collections import OrderedDict, Counter
+from collections import Counter, OrderedDict
 
 import cart_logparse
+
 HAVE_TABULATE = True
 try:
     import tabulate

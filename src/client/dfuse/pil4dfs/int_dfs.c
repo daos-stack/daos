@@ -470,6 +470,8 @@ static int (*next_dup)(int oldfd);
 
 static int (*next_dup2)(int oldfd, int newfd);
 
+static int (*libc_dup3)(int oldfd, int newfd, int flags);
+
 static int (*next_symlink)(const char *symvalue, const char *path);
 
 static int (*next_symlinkat)(const char *symvalue, int dirfd, const char *path);
@@ -4893,63 +4895,23 @@ dup2(int oldfd, int newfd)
 int
 __dup2(int oldfd, int newfd) __attribute__((alias("dup2"), leaf, nothrow));
 
-/**
- *int
- *dup3(int oldfd, int newfd, int flags)
- *{
- *	int i, fd_Directed;
- *
- *	if (real_dup3 == NULL)	{
- *		real_dup3 = dlsym(RTLD_NEXT, "dup3");
- *		D_ASSERT(real_dup3 != NULL);
- *	}
- *	if (!hook_enabled)
- *		return real_dup3(oldfd, newfd, flags);
- *	if (oldfd == newfd) {
- *		if (oldfd < FD_FILE_BASE)
- *			return real_dup3(oldfd, newfd, flags);
- *		else
- *			return newfd;
- *	}
- *	if (oldfd < FD_FILE_BASE)
- *		return real_dup3(oldfd, newfd, flags);
- *
- *	fd_Directed = Get_Fd_Redirected(oldfd);
- *
- *	for (i = 0; i <MAX_FD_DUP2ED; i++)	{
- *		if ((fd_dup2_list[i].fd_dest != oldfd) && (fd_dup2_list[i].fd_src==newfd))	{
- *			close(fd_dup2_list[i].fd_dest);
- *			fd_dup2_list[i].fd_src = -1;
- *			fd_dup2_list[i].fd_dest = -1;
- *		}
- *	}
- *
- *	if ((fd_Directed>=FD_FILE_BASE) && (newfd<FD_FILE_BASE))	{
- *		if (num_fd_dup2ed >= MAX_FD_DUP2ED)	{
- *			printf("ERROR: num_fd_dup2ed >= MAX_FD_DUP2ED\n");
- *			errno = EBADF;
- *			return -1;
- *		}
- *		else	{
- *			for (i = 0; i < MAX_FD_DUP2ED; i++)	{
- *				if (fd_dup2_list[i].fd_src == -1)	{	// available
- *					fd_dup2_list[i].fd_src = newfd;
- *					fd_dup2_list[i].fd_dest = fd_Directed;
- *					num_fd_dup2ed++;
- *					return newfd;
- *				}
- *			}
- *		}
- *	}
- *	else if ((fd_Directed == newfd) && (fd_Directed >= FD_FILE_BASE))	{
- *		return newfd;
- *	}
- *	else {
- *		return real_dup3(oldfd, newfd, flags);
- *	}
- *	return -1;
- *}
- */
+int
+new_dup3(int oldfd, int newfd, int flags)
+{
+	if (oldfd == newfd) {
+		errno = EINVAL;
+		return (-1);
+	}
+
+	if (!hook_enabled)
+		return libc_dup3(oldfd, newfd, flags);
+
+	if (get_fd_redirected(oldfd) < FD_FILE_BASE && get_fd_redirected(newfd) < FD_FILE_BASE)
+		return libc_dup3(oldfd, newfd, flags);
+
+	/* Ignore flags now. Need more work later to handle flags, e.g., O_CLOEXEC */
+	return dup2(oldfd, newfd);
+}
 
 void *
 new_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
@@ -5477,6 +5439,7 @@ init_myhook(void)
 	register_a_hook("libc", "munmap", (void *)new_munmap, (long int *)(&next_munmap));
 
 	register_a_hook("libc", "exit", (void *)new_exit, (long int *)(&next_exit));
+	register_a_hook("libc", "dup3", (void *)new_dup3, (long int *)(&libc_dup3));
 
 	/**	register_a_hook("libc", "execve", (void *)new_execve, (long int *)(&real_execve));
 	 *	register_a_hook("libc", "execvp", (void *)new_execvp, (long int *)(&real_execvp));
