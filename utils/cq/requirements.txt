@@ -10,5 +10,5 @@ flake8<6.0.0
 isort
 paramiko
 pyenchant
-pylint
+pylint==3.0.1
 yamllint
