@@ -96,6 +96,7 @@ static _Atomic uint64_t        num_opendir;
 static _Atomic uint64_t        num_readdir;
 static _Atomic uint64_t        num_link;
 static _Atomic uint64_t        num_unlink;
+static _Atomic uint64_t        num_rdlink;
 static _Atomic uint64_t        num_seek;
 static _Atomic uint64_t        num_mkdir;
 static _Atomic uint64_t        num_rmdir;
@@ -1643,6 +1644,8 @@ close_all_duped_fd(void)
 {
 	int i;
 
+	if (num_fd_dup2ed == 0)
+		return;
 	/* Only the main thread will call this function in the destruction phase */
 	for (i = 0; i < MAX_FD_DUP2ED; i++) {
 		if (fd_dup2_list[i].fd_src >= 0)
@@ -3322,6 +3325,7 @@ readlink(const char *path, char *buf, size_t size)
 	if (!is_target_path)
 		goto out_org;
 
+	atomic_fetch_add_relaxed(&num_rdlink, 1);
 	rc =
 	    dfs_lookup_rel(dfs_mt->dfs, parent, item_name, O_RDONLY | O_NOFOLLOW, &obj, NULL, NULL);
 	if (rc)
@@ -5459,7 +5463,7 @@ print_summary(void)
 {
 	uint64_t op_sum = 0;
 	uint64_t read_loc, write_loc, open_loc, stat_loc;
-	uint64_t opendir_loc, readdir_loc, link_loc, unlink_loc, seek_loc;
+	uint64_t opendir_loc, readdir_loc, link_loc, unlink_loc, rdlink_loc, seek_loc;
 	uint64_t mkdir_loc, rmdir_loc, rename_loc, mmap_loc;
 
 	if (!report)
@@ -5473,6 +5477,7 @@ print_summary(void)
 	readdir_loc = atomic_load_relaxed(&num_readdir);
 	link_loc    = atomic_load_relaxed(&num_link);
 	unlink_loc  = atomic_load_relaxed(&num_unlink);
+	rdlink_loc  = atomic_load_relaxed(&num_rdlink);
 	seek_loc    = atomic_load_relaxed(&num_seek);
 	mkdir_loc   = atomic_load_relaxed(&num_mkdir);
 	rmdir_loc   = atomic_load_relaxed(&num_rmdir);
@@ -5488,6 +5493,7 @@ print_summary(void)
 	fprintf(stderr, "[readdir]  %" PRIu64 "\n", readdir_loc);
 	fprintf(stderr, "[link   ]  %" PRIu64 "\n", link_loc);
 	fprintf(stderr, "[unlink ]  %" PRIu64 "\n", unlink_loc);
+	fprintf(stderr, "[rdlink ]  %" PRIu64 "\n", rdlink_loc);
 	fprintf(stderr, "[seek   ]  %" PRIu64 "\n", seek_loc);
 	fprintf(stderr, "[mkdir  ]  %" PRIu64 "\n", mkdir_loc);
 	fprintf(stderr, "[rmdir  ]  %" PRIu64 "\n", rmdir_loc);
@@ -5495,7 +5501,8 @@ print_summary(void)
 	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
 	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc +
-		 link_loc + unlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
+		 link_loc + unlink_loc + rdlink_loc + seek_loc + mkdir_loc + rmdir_loc +
+		 rename_loc + mmap_loc;
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
@@ -5505,7 +5512,7 @@ close_all_fd(void)
 {
 	int i;
 
-	for (i = 0; i < next_free_fd; i++) {
+	for (i = 0; i <= last_fd; i++) {
 		if (file_list[i])
 			free_fd(i);
 	}
@@ -5516,7 +5523,7 @@ close_all_dirfd(void)
 {
 	int i;
 
-	for (i = 0; i < next_free_dirfd; i++) {
+	for (i = 0; i <= last_dirfd; i++) {
 		if (dir_list[i])
 			free_dirfd(i);
 	}
