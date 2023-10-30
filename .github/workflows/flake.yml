@@ -4,6 +4,7 @@ name: Flake
 on:
   push:
     branches:
+      - amd/isort-config
       - master
       - 'feature/*'
       - 'release/*'
