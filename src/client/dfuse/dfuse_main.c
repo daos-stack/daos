@@ -389,6 +389,8 @@ main(int argc, char **argv)
 							{"help", no_argument, 0, 'h'},
 							{0, 0, 0, 0}};
 
+	d_signal_stack_enable(true);
+
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		D_GOTO(out, rc);
