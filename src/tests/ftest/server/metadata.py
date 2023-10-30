@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import traceback
 import time
-
-from avocado.core.exceptions import TestFail
+import traceback
 
 from apricot import TestWithServers
-from ior_utils import IorCommand
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
+from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
 from thread_manager import ThreadManager
 
