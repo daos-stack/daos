@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [pylint, yamllint, isort]
+        package: [pylint, yamllint, isort, codespell]
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
