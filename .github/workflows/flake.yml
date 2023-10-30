@@ -2,6 +2,11 @@ name: Flake
 
 # Always run on Pull Requests as then this check can be marked as required.
 on:
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
   pull_request:
 
 jobs:
@@ -37,3 +42,14 @@ jobs:
           ignore: 'F821,W503,F841'
           max-line-length: '100'
           args: '--filename */SConscript, SConstruct'
+
+  isort:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.11
+      - uses: isort/isort-action@master
+        with:
+          requirementsFiles: "requirements.txt utils/cq/requirements.txt"
