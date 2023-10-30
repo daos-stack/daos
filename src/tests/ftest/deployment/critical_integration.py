@@ -10,8 +10,7 @@ import json
 from apricot import TestWithoutServers, TestWithServers
 from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
-from general_utils import (DaosTestError, get_journalctl, journalctl_time,
-                           run_command)
+from general_utils import DaosTestError, get_journalctl, journalctl_time, run_command
 from ior_test_base import IorTestBase
 
 # pylint: disable-next=fixme
