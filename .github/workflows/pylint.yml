@@ -3,6 +3,11 @@ name: Pylint
 # Always run on Pull Requests as then this check can be marked as required.  It takes less than
 # two minutes to run and we can probably decrease this over time.
 on:
+  push:
+    branches:
+      - master
+      - 'feature/*'
+      - 'release/*'
   pull_request:
 
 jobs:
@@ -23,6 +28,15 @@ jobs:
       - name: Run pylint check.
         run: ./utils/cq/daos_pylint.py --git --output-format github
 
+  upgrade-check:
+    name: Check for newer pylint version
+    runs-on: ubuntu-22.04
+    if: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install extra python packages
+        run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Check pylint version
         run: pylint --version | tee -a pylint-pre
       - name: Upgrade
