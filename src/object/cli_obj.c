@@ -6203,6 +6203,7 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 	int			shard;
 	unsigned int		first;
 
+	grp_start = grp_idx * obj_get_grp_size(obj);
 	oca = obj_get_oca(obj);
 	if (dkey == NULL && obj_ec_parity_rotate_enabled(obj)) {
 		int fail_cnt = 0;
@@ -6214,7 +6215,6 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		 * to resolve, so let's enumerate from all shards in this case.
 		 */
 		*shard_cnt = 0;
-		grp_start = grp_idx * obj_get_grp_size(obj);
 		/* Check if each shards are in good state */
 		D_ASSERT(bitmaps != NULL);
 		for (i = 0; i < obj_ec_tgt_nr(oca); i++) {
@@ -6243,10 +6243,16 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			if (shard < 0)
 				D_GOTO(out, shard);
 
-			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, shard))
-				*shard_cnt = obj_ec_data_tgt_nr(oca);
-			if (bitmaps != NULL)
-				setbit(*bitmaps, shard % obj_get_grp_size(obj));
+			if (is_ec_data_shard(obj_auxi->obj, obj_auxi->dkey_hash, shard)) {
+				first = shard;
+				/* If the leader is one of the data shard, then let's check
+				 * if all data shards are valid, then set the bitmaps.
+				 */
+				D_GOTO(out_set, shard);
+			} else {
+				if (bitmaps != NULL)
+					setbit(*bitmaps, shard % obj_get_grp_size(obj));
+			}
 			D_GOTO(out, shard);
 		}
 
@@ -6258,8 +6264,10 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 		}
 	}
 
-	grp_start = grp_idx * obj_get_grp_size(obj);
 	first = obj_ec_shard_idx(obj, obj_auxi->dkey_hash, 0);
+	shard = first + grp_start;
+
+out_set:
 	D_DEBUG(DB_IO, "let's choose from the data shard %u for "DF_OID"\n",
 		first, DP_OID(obj->cob_md.omd_id));
 
@@ -6279,7 +6287,6 @@ obj_ec_get_parity_or_alldata_shard(struct obj_auxi_args *obj_auxi, unsigned int 
 			setbit(*bitmaps, shard_idx % obj_ec_tgt_nr(oca));
 	}
 
-	shard = first + grp_start;
 	*shard_cnt = obj_ec_data_tgt_nr(oca);
 
 out:

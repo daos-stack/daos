@@ -5,27 +5,28 @@
 """
 # pylint: disable=too-many-lines
 
-from collections import defaultdict
-from getpass import getuser
 import os
+import random
 import re
 import time
-import random
+from collections import defaultdict
+from getpass import getuser
 
 from avocado import fail_on
-
 from ClusterShell.NodeSet import NodeSet
-from command_utils_base import CommonConfig, BasicParameter
 from command_utils import SubprocessManager
+from command_utils_base import BasicParameter, CommonConfig
 from dmg_utils import get_dmg_command
 from exception_utils import CommandFailure
-from general_utils import pcmd, get_log_file, list_to_str, get_display_size, run_pcmd
-from general_utils import get_default_config_file
+from general_utils import (get_default_config_file, get_display_size,
+                           get_log_file, list_to_str, pcmd, run_pcmd)
 from host_utils import get_local_host
-from server_utils_base import ServerFailed, DaosServerCommand, DaosServerInformation
-from server_utils_params import DaosServerTransportCredentials, DaosServerYamlParameters
-from user_utils import get_chown_command
 from run_utils import run_remote, stop_processes
+from server_utils_base import (DaosServerCommand, DaosServerInformation,
+                               ServerFailed)
+from server_utils_params import (DaosServerTransportCredentials,
+                                 DaosServerYamlParameters)
+from user_utils import get_chown_command
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -346,7 +347,7 @@ class DaosServerManager(SubprocessManager):
                 # Remove the shared memory segment associated with this io server
                 self.log.debug("Removing the shared memory segment")
                 command = "sudo ipcrm -M {}".format(self.D_TM_SHARED_MEMORY_KEY + index)
-                run_remote(self.log, self._hosts, command, verbose)
+                run_remote(self.log, mounted_hosts, command, verbose)
 
             # Dismount the scm mount point
             self.log.debug("Dismount the %s mount point", mount)
@@ -466,7 +467,7 @@ class DaosServerManager(SubprocessManager):
 
         """
         cmd = DaosServerCommand(self.manager.job.command_path)
-        cmd.sudo = False
+        cmd.run_user = "daos_server"
         cmd.debug.value = False
         cmd.config.value = get_default_config_file("server")
         self.log.info("Support collect-log on servers: %s", str(cmd))

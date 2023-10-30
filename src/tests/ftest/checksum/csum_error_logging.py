@@ -5,7 +5,6 @@
 """
 
 from avocado import fail_on
-
 from daos_core_base import DaosCoreBase
 from dmg_utils import get_dmg_smd_info
 from exception_utils import CommandFailure

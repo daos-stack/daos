@@ -6,12 +6,11 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 import os
 
 from ClusterShell.NodeSet import NodeSet
-
 from dfuse_test_base import DfuseTestBase
-from ior_utils import IorCommand
 from exception_utils import CommandFailure
+from general_utils import get_random_string, pcmd
+from ior_utils import IorCommand
 from job_manager_utils import get_job_manager
-from general_utils import pcmd, get_random_string
 
 
 class IorTestBase(DfuseTestBase):

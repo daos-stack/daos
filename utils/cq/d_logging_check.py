@@ -13,10 +13,10 @@ if fixes are being applied.
 
 import argparse
 import inspect
-import sys
-import re
 import io
 import os
+import re
+import sys
 
 ARGS = None
 

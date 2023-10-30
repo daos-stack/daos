@@ -74,6 +74,7 @@ extern "C" {
 
 void d_srand(long int);
 long int d_rand(void);
+long int d_randn(long int n);
 
 /* Instruct the compiler these are allocation functions that return a pointer, and if possible
  * which function needs to be used to free them.
@@ -497,6 +498,38 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 	D_FREE(sgl->sg_iovs);
 	sgl->sg_nr_out = 0;
 	sgl->sg_nr = 0;
+}
+
+static inline size_t  __attribute__((nonnull))
+d_sgl_buf_size(d_sg_list_t *sgl)
+{
+	size_t	size = 0;
+	int	i;
+
+	if (sgl->sg_iovs == NULL)
+		return 0;
+
+	for (i = 0, size = 0; i < sgl->sg_nr; i++)
+		size += sgl->sg_iovs[i].iov_buf_len;
+
+	return size;
+}
+
+static inline void
+d_sgl_buf_copy(d_sg_list_t *dst_sgl, d_sg_list_t *src_sgl)
+{
+	int i;
+
+	D_ASSERT(dst_sgl->sg_nr >= src_sgl->sg_nr);
+	for (i = 0; i < src_sgl->sg_nr; i++) {
+		D_ASSERT(dst_sgl->sg_iovs[i].iov_buf_len >=
+			 src_sgl->sg_iovs[i].iov_buf_len);
+
+		memcpy(dst_sgl->sg_iovs[i].iov_buf, src_sgl->sg_iovs[i].iov_buf,
+		       src_sgl->sg_iovs[i].iov_buf_len);
+		dst_sgl->sg_iovs[i].iov_len = src_sgl->sg_iovs[i].iov_len;
+		dst_sgl->sg_iovs[i].iov_buf_len = src_sgl->sg_iovs[i].iov_buf_len;
+	}
 }
 
 void d_getenv_bool(const char *env, bool *bool_val);
