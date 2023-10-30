@@ -10,5 +10,5 @@ pyenchant
 ## https://github.com/pycqa/flake8/issues/1389 https://github.com/PyCQA/flake8/pull/1720
 flake8<6.0.0
 isort==5.12
-pylint==3.0.1
+pylint==3.0.2
 yamllint==1.32.0

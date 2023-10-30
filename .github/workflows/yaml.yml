@@ -11,6 +11,7 @@ on:
     paths:
       - '**/*.yaml'
       - '**/*.yml'
+      - utils/cq/requirements.txt
 
 jobs:
   yaml-lint:
