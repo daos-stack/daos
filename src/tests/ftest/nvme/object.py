@@ -4,12 +4,10 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import avocado
-
-from pydaos.raw import DaosApiError
-
 from apricot import TestWithServers
-from thread_manager import ThreadManager
 from general_utils import report_errors
+from pydaos.raw import DaosApiError
+from thread_manager import ThreadManager
 
 
 class NvmeObject(TestWithServers):

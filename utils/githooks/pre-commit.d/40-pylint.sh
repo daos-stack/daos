@@ -8,7 +8,6 @@ set -ue
 
 echo "Pylint:"
 # shellcheck disable=SC1091
-. utils/githooks/find_base.sh
 
 
 if [ -f utils/cq/daos_pylint.py ]; then
