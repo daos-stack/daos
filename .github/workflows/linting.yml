@@ -1,6 +1,6 @@
 name: Linting
 
-# Always run on Pull Requests as then this check can be marked as required.
+# Always run on Pull Requests as then these checks can be marked as required.
 on:
   push:
     branches:
@@ -29,3 +29,14 @@ jobs:
         run: isort --check-only SConstruct
       - name: Run on build files.
         run: find . -name SConscript | xargs isort
+
+  log-check:
+    name: Logging macro checking
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Check DAOS logging macro use.
+        run: ./utils/cq/d_logging_check.py --github src
