@@ -37,7 +37,6 @@ type Engine interface {
 	newCret(string, error) *ctlpb.NvmeControllerResult
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
-	updateInUseBdevs(context.Context, []storage.NvmeController, uint64, uint64) ([]storage.NvmeController, error)
 	isAwaitingFormat() bool
 
 	// These methods should probably be replaced by callbacks.
@@ -48,7 +47,6 @@ type Engine interface {
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
 	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
-	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
 	StorageFormatNVMe() commonpb.NvmeControllerResults

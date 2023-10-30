@@ -48,6 +48,15 @@ const (
 	mdFsScmBytes uint64 = humanize.MiByte
 )
 
+// Package-local function variables for mocking in unit tests.
+var (
+	// Use to stub bdev scan response in StorageScan() unit tests.
+	scanBdevs       = bdevScan
+	scanEngineBdevs = bdevScanEngine
+)
+
+type scanBdevsFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
+
 // newResponseState creates, populates and returns ResponseState.
 func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg string) *ctlpb.ResponseState {
 	rs := new(ctlpb.ResponseState)
@@ -61,73 +70,103 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	return rs
 }
 
-// stripNvmeDetails removes all controller details leaving only PCI address and
-// NUMA node/socket ID. Useful when scanning only device topology.
-func stripNvmeDetails(pbc *ctlpb.NvmeController) {
-	pbc.Serial = ""
-	pbc.Model = ""
-	pbc.FwRev = ""
-}
+// TODO: Trim unwanted fields so responses can be coalesced from hash map when returned via
+//       control API. This should now occur in bdev backend and engine drpc handler.
+//	for _, pbc := range inResp.Ctrlrs {
+//		if !req.GetHealth() {
+//			pbc.HealthStats = nil
+//		}
+//		if !req.GetMeta() {
+//			pbc.SmdDevices = nil
+//		}
+//		if req.GetBasic() {
+//			pbc.Serial = ""
+//			pbc.Model = ""
+//			pbc.FwRev = ""
+//		}
+//	}
 
-// newScanBdevResp populates protobuf NVMe scan response with controller info
-// including health statistics or metadata if requested.
-func newScanNvmeResp(req *ctlpb.ScanNvmeReq, inResp *storage.BdevScanResponse, inErr error) (*ctlpb.ScanNvmeResp, error) {
-	outResp := new(ctlpb.ScanNvmeResp)
-	outResp.State = new(ctlpb.ResponseState)
-
-	if inErr != nil {
-		outResp.State = newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
-		return outResp, nil
-	}
-
-	pbCtrlrs := make(proto.NvmeControllers, 0, len(inResp.Controllers))
-	if err := pbCtrlrs.FromNative(inResp.Controllers); err != nil {
+// Convert bdev scan results to protobuf response.
+func bdevScanToProtoResp(scan scanBdevsFn, req storage.BdevScanRequest) (*ctlpb.ScanNvmeResp, error) {
+	resp, err := scan(req)
+	if err != nil {
 		return nil, err
 	}
 
-	// trim unwanted fields so responses can be coalesced from hash map
-	for _, pbc := range pbCtrlrs {
-		if !req.GetHealth() {
-			pbc.HealthStats = nil
-		}
-		if !req.GetMeta() {
-			pbc.SmdDevices = nil
-		}
-		if req.GetBasic() {
-			stripNvmeDetails(pbc)
-		}
-	}
+	pbCtrlrs := make(proto.NvmeControllers, 0, len(resp.Controllers))
 
-	outResp.Ctrlrs = pbCtrlrs
-
-	return outResp, nil
+	return &ctlpb.ScanNvmeResp{
+		State:  new(ctlpb.ResponseState),
+		Ctrlrs: pbCtrlrs,
+	}, pbCtrlrs.FromNative(resp.Controllers)
 }
 
-// scanBdevs updates transient details if health statistics or server metadata
-// is requested otherwise just retrieves cached static controller details.
-func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
-	if req == nil {
-		return nil, errors.New("nil bdev request")
+// Scan bdevs through harness's ControlService (not per-engine).
+func bdevScanGlobal(cs *ControlService, cfgBdevs *storage.BdevDeviceList) (*ctlpb.ScanNvmeResp, error) {
+	req := storage.BdevScanRequest{DeviceList: cfgBdevs}
+	return bdevScanToProtoResp(cs.storage.ScanBdevs, req)
+}
+
+// Scan bdevs through each engine and collate response results.
+func bdevScanEngines(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	var errLast error
+	instances := cs.harness.Instances()
+	resp := &ctlpb.ScanNvmeResp{}
+
+	for _, ei := range instances {
+		respEng, err := scanEngineBdevs(ctx, ei, req)
+		if err != nil {
+			err = errors.Wrapf(err, "instance %d", ei.Index())
+			if errLast == nil && len(instances) > 1 {
+				errLast = err // Save err to preserve partial results.
+				cs.log.Error(err.Error())
+				continue
+			}
+			return nil, err // No partial results to save so fail.
+		}
+		resp.Ctrlrs = append(resp.Ctrlrs, respEng.Ctrlrs...)
 	}
 
-	var bdevsInCfg bool
-	for _, ei := range c.harness.Instances() {
-		if ei.GetStorage().HasBlockDevices() {
-			bdevsInCfg = true
+	// If one engine succeeds and one other fails, error is embedded in the response.
+	resp.State = newResponseState(errLast, ctlpb.ResponseStatus_CTL_ERR_NVME, "")
+
+	return resp, nil
+	//resp, err := c.scanAssignedBdevs(ctx, nsps, req.GetHealth() || req.GetMeta())
+}
+
+// Return NVMe device details. The scan method employed depends on whether the engines are running
+// or not. If running, scan over dRPC. If not running then use engine's storage provider.
+func bdevScan(ctx context.Context, cs *ControlService, req *ctlpb.ScanNvmeReq, nsps []*ctlpb.ScmNamespace) (*ctlpb.ScanNvmeResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	cfgBdevs := getBdevCfgsFromSrvCfg(cs.srvCfg).Bdevs()
+	hasBdevs := cfgBdevs.Len() != 0
+
+	// Note the potential window where engines are started but not yet ready to respond. In this
+	// state there is a possibility that neither scan mechanism will work because devices have
+	// been claimed by SPDK but details are not yet available over dRPC. Here it is assumed that
+	// devices are claimed as soon the engines are started.
+
+	hasStarted := false
+	for _, ei := range cs.harness.Instances() {
+		if ei.IsStarted() {
+			hasStarted = true
 		}
 	}
-	if !bdevsInCfg {
-		c.log.Debugf("no bdevs in cfg so scan all")
-		// return details of all bdevs if none are assigned to engines
-		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
 
-		return newScanNvmeResp(req, resp, err)
+	if !hasBdevs || !hasStarted {
+		if hasBdevs {
+			cs.log.Debugf("scan bdevs from control service as no engines started")
+		} else {
+			cs.log.Debugf("scan bdevs from control service as no bdevs in cfg")
+		}
+		return bdevScanGlobal(cs, cfgBdevs)
 	}
 
-	c.log.Debugf("bdevs in cfg so scan only assigned")
-	resp, err := c.scanAssignedBdevs(ctx, nsps, req.GetHealth() || req.GetMeta())
-
-	return newScanNvmeResp(req, resp, err)
+	cs.log.Debugf("scan assigned bdevs through engine instances as some are started")
+	return bdevScanEngines(ctx, cs, req)
 }
 
 // newScanScmResp sets protobuf SCM scan response with module or namespace info.
@@ -174,8 +213,6 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 
 // Returns the engine configuration managing the given NVMe controller
 func (c *ControlService) getEngineCfgFromNvmeCtl(nc *ctl.NvmeController) (*engine.Config, error) {
-	var engineCfg *engine.Config
-
 	pciAddr, err := hardware.NewPCIAddress(nc.GetPciAddr())
 	if err != nil {
 		return nil, errors.Errorf("Invalid PCI address: %s", err)
@@ -188,58 +225,33 @@ func (c *ControlService) getEngineCfgFromNvmeCtl(nc *ctl.NvmeController) (*engin
 	ctlrAddr := pciAddr.String()
 
 	for index := range c.srvCfg.Engines {
-		if engineCfg != nil {
-			break
-		}
-
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
-			if engineCfg != nil {
-				break
-			}
-
 			if !tierCfg.IsBdev() {
 				continue
 			}
-
 			for _, devName := range tierCfg.Bdev.DeviceList.Devices() {
 				if devName == ctlrAddr {
-					engineCfg = c.srvCfg.Engines[index]
-					break
+					return c.srvCfg.Engines[index], nil
 				}
-
 			}
 		}
 	}
 
-	if engineCfg == nil {
-		return nil, errors.Errorf("unknown PCI device %q", pciAddr)
-	}
-
-	return engineCfg, nil
+	return nil, errors.Errorf("unknown PCI device %q", pciAddr)
 }
 
 // Returns the engine configuration managing the given SCM name-space
 func (c *ControlService) getEngineCfgFromScmNsp(nsp *ctl.ScmNamespace) (*engine.Config, error) {
-	var engineCfg *engine.Config
 	mountPoint := nsp.GetMount().Path
 	for index := range c.srvCfg.Engines {
-		if engineCfg != nil {
-			break
-		}
-
 		for _, tierCfg := range c.srvCfg.Engines[index].Storage.Tiers {
 			if tierCfg.IsSCM() && tierCfg.Scm.MountPoint == mountPoint {
-				engineCfg = c.srvCfg.Engines[index]
-				break
+				return c.srvCfg.Engines[index], nil
 			}
 		}
 	}
 
-	if engineCfg == nil {
-		return nil, errors.Errorf("unknown SCM mount point %s", mountPoint)
-	}
-
-	return engineCfg, nil
+	return nil, errors.Errorf("unknown SCM mount point %s", mountPoint)
 }
 
 // return the size of the RDB file used for managing SCM metadata
@@ -541,10 +553,11 @@ func (c *ControlService) StorageScan(ctx context.Context, req *ctlpb.StorageScan
 	}
 	resp.Scm = respScm
 
-	respNvme, err := c.scanBdevs(ctx, req.Nvme, respScm.Namespaces)
+	respNvme, err := scanBdevs(ctx, c, req.Nvme, respScm.Namespaces)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: Move into updateScanNvmeResp().
 	if req.Nvme.GetMeta() {
 		c.adjustNvmeSize(respNvme)
 	}
