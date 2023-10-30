@@ -982,10 +982,8 @@ func TestPretty_PrintListPoolsResponse(t *testing.T) {
 		expPrintStr string
 	}{
 		"empty response": {
-			resp: &control.ListPoolsResp{},
-			expPrintStr: `
-no pools in system
-`,
+			resp:        &control.ListPoolsResp{},
+			expPrintStr: msgNoPools + "\n",
 		},
 		"one pool; no usage": {
 			resp: &control.ListPoolsResp{
@@ -1182,11 +1180,9 @@ one  6.0 TB Ready 83%  12%       0/16
 `,
 		},
 		"verbose, empty response": {
-			resp:    &control.ListPoolsResp{},
-			verbose: true,
-			expPrintStr: `
-no pools in system
-`,
+			resp:        &control.ListPoolsResp{},
+			verbose:     true,
+			expPrintStr: msgNoPools + "\n",
 		},
 		"verbose; zero svc replicas": {
 			resp: &control.ListPoolsResp{

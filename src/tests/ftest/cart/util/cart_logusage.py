@@ -10,8 +10,8 @@ can be rendered in Jenkins and used to identify areas which are not exercised.
 Registered as a callback for all log tracing but saves results across the entire run.
 """
 
-import os
 import json
+import os
 
 
 class CodeLoc():
