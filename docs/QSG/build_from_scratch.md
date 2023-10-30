@@ -78,13 +78,13 @@ To install a virtual environment for building DAOS use the following commands, t
 to be done once, for a new shell only the `source venv/bin/activate` command will be required.
 Alternatively the packages can be installed via pip as root which will install onto PATH, or as
 the user outside of a virtual environment, in which case `~/.local/bin` will need to be added to
-PATH.
+PATH:
 
- ```bash
- $ python3 -m venv venv
- $ source venv/bin/activate
- $ python3 -m pip install -f requirements.txt
- ```
+```bash
+$ python3 -m venv venv
+$ source venv/bin/activate
+$ python3 -m pip install -f requirements.txt
+```
 
 ## Build DAOS
 
