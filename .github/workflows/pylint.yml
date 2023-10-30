@@ -2,6 +2,10 @@ name: Pylint
 
 # Always run on Pull Requests as then this check can be marked as required.  It takes less than
 # two minutes to run and we can probably decrease this over time.
+
+# This check runs on PRs using a defined pylint version (from utils/cq/requirements.txt) but on
+# landings using the latest version.  Landings builds also trigger a check to see if
+# a newer version is available.
 on:
   push:
     branches:
@@ -23,6 +27,9 @@ jobs:
         run: python3 -m pip install --requirement requirements.txt
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
+      - name: Upgrade pylint
+        if: ${{ github.event_name != 'pull_request' }}
+        run: pip install --upgrade pylint
       - name: Install enchant
         run: sudo apt-get update && sudo apt-get -y install python3-enchant
       - name: Run pylint check.
@@ -31,7 +38,7 @@ jobs:
   upgrade-check:
     name: Check for newer pylint version
     runs-on: ubuntu-22.04
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name != 'pull_request' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
