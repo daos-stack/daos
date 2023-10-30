@@ -647,9 +647,8 @@ vos_obj_key2anchor(daos_handle_t coh, daos_unit_oid_t oid, daos_key_t *dkey, dao
 	} else {
 		rc = dbtree_key2anchor(toh, akey, anchor);
 	}
-	D_DEBUG(DB_TRACE,
-		"oid=" DF_UOID " " DF_DKEY " " DF_AKEY " to anchor: rc=%d\n",
-		DP_UOID(oid), DP_KEY(dkey), DP_KEY(akey));
+	D_DEBUG(DB_TRACE, "oid=" DF_UOID " " DF_DKEY " " DF_AKEY " to anchor: %d\n", DP_UOID(oid),
+		DP_KEY(dkey), DP_KEY(akey), rc);
 
 	key_tree_release(toh, (krec->kr_bmap & KREC_BF_EVT) != 0);
 out:
