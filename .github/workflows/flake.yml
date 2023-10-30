@@ -45,6 +45,7 @@ jobs:
           args: '--filename */SConscript, SConstruct'
 
   isort:
+    name: Isort check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

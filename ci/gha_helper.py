@@ -30,7 +30,7 @@ def set_output(key, value):
 
     delim = ''.join(random.choices(string.ascii_uppercase, k=7))  # nosec
     with open(env_file, 'a') as file:
-                file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
+        file.write(f'{key}<<{delim}\n{value}\n{delim}\n')
 
 
 def main():
