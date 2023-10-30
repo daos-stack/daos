@@ -7,8 +7,8 @@
 import os
 import re
 
-from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
+from command_utils_base import FormattedParameter
 from general_utils import get_log_file
 
 

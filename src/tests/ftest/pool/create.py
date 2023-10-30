@@ -4,7 +4,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import add_pool, get_size_params, check_pool_creation
+from test_utils_pool import add_pool, check_pool_creation, get_size_params
 
 
 class PoolCreateTests(TestWithServers):
