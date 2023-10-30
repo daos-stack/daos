@@ -3,14 +3,13 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 import random
-
-from pydaos.raw import DaosApiError
+import time
 
 from apricot import TestWithServers
-from thread_manager import ThreadManager
 from command_utils_base import CommandFailure
+from pydaos.raw import DaosApiError
+from thread_manager import ThreadManager
 
 
 class PoolManagementRace(TestWithServers):

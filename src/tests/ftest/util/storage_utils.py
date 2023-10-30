@@ -3,16 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from collections import OrderedDict
-from functools import partial
 import itertools
-from operator import is_not
 import os
 import re
+from collections import OrderedDict
+from functools import partial
+from operator import is_not
+
 import yaml
-
 from ClusterShell.NodeSet import NodeSet
-
 from run_utils import run_remote
 
 

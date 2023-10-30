@@ -385,7 +385,7 @@ co_properties(void **state)
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
 	daos_prop_t		*prop_query2;
-	struct daos_prop_entry  *entry;
+	struct daos_prop_entry	*entry;
 	int			 rc;
 	char			*exp_owner;
 	char			*exp_owner_grp;
@@ -798,7 +798,7 @@ co_acl(void **state)
 {
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
-	daos_prop_t             *prop_in;
+	daos_prop_t		*prop_in;
 	int			 rc;
 	char			 exp_owner[] = "fictionaluser@";
 	char			 exp_owner_grp[] = "admins@";

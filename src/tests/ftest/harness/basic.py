@@ -9,7 +9,7 @@ from apricot import TestWithoutServers
 from cmocka_utils import CmockaUtils
 from command_utils import SubProcessCommand
 from exception_utils import CommandFailure
-from job_manager_utils import Orterun, Mpirun
+from job_manager_utils import Mpirun, Orterun
 
 
 class HarnessBasicTest(TestWithoutServers):
