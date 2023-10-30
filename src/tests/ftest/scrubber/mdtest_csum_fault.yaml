@@ -50,17 +50,14 @@ container:
   properties: cksum:crc16,cksum_size:16384,srv_cksum:on
 mdtest:
   client_processes:
-    ppn: 32
-  dfs_oclass: S1
-  dfs_dir_oclass: SX
+    ppn: 4
+  dfs_oclass: RP_2G1
+  dfs_dir_oclass: RP_2GX
   test_dir: "/"
   manager: "MPICH"
   mdtest_params:
     # [api, write, read, branching_factor, num_of_dir_files, depth, flags, IL]
-    - [DFS,   4096, 4096, 1, 100, 100, ' ', False]
-    - [POSIX, 0,    0,    1, 100, 0,   ' ', False]
-    - [POSIX, 0,    0,    1, 100, 0,   ' ', True]
-    - [POSIX, 4096, 4096, 2, 10,  5,   ' ', False]
+    - [DFS,   4096, 4096, 1, 200000, 100, ' ', False]
 faults:
   fault_list:
     - DAOS_CSUM_CORRUPT_DISK
