@@ -41,6 +41,7 @@ jobs:
     runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'pull_request' }}
     strategy:
+      fail-fast: false
       matrix:
         package: [pylint, yamllint]
     steps:
@@ -49,8 +50,8 @@ jobs:
       - name: Install extra python packages
         run: python3 -m pip install --requirement utils/cq/requirements.txt
       - name: Check ${{ matrix.package }} version
-        run: python -m ${{ matrix.package }} --version
+        run: python -m ${{ matrix.package }} --version | tee -a version-pre
       - name: Upgrade
         run: pip install --upgrade ${{ matrix.package }}
       - name: Check ${{ matrix.package }} for version
-        run: python -m  ${{ matrix.package }} --version | diff a -
+        run: python -m  ${{ matrix.package }} --version | diff version.pre -
