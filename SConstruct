@@ -6,9 +6,8 @@ import sys
 import time
 
 import SCons.Warnings
-from prereq_tools import PreReqComponent
+from prereq_tools import PreReqComponent  # pylint: disable=reimported
 
-# pylint: disable=reimported
 
 if sys.version_info.major < 3:
     print(""""Python 2.7 is no longer supported in the DAOS build.
