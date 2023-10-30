@@ -14,10 +14,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/build"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/ranklist"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+var scanEngineBdevsOverDrpc = listNvmeDevices
 
 // GetStorage retrieve the storage provider for an engine instance.
 func (ei *EngineInstance) GetStorage() *storage.Provider {
@@ -169,15 +172,38 @@ func (ei *EngineInstance) logScmStorage() error {
 	return nil
 }
 
-// ScanBdevTiers calls in to the private engine storage provider to scan bdev
-// tiers. Scan will avoid using any cached results if direct is set to true.
-func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
-	isUp := ei.IsReady()
+// bdevScanEngine calls either in to the private engine storage provider to scan bdevs if engine process
+// is not started, otherwise dRPC is used to retrieve details from the online engine.
+func bdevScanEngine(ctx context.Context, engine Engine, pbReq *ctlpb.ScanNvmeReq) (*ctlpb.ScanNvmeResp, error) {
+	ei, ok := engine.(*EngineInstance)
+	if !ok {
+		return nil, errors.New("not EngineInstance")
+	}
+
+	if pbReq == nil {
+		return nil, errors.New("nil request")
+	}
+
+	isUp := ei.IsStarted()
 	upDn := "down"
 	if isUp {
 		upDn = "up"
 	}
 	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
 
-	return ei.storage.ScanBdevTiers(!isUp)
+	if isUp {
+		return scanEngineBdevsOverDrpc(ctx, ei, pbReq)
+	}
+
+	// TODO: should anything be passed from pbReq here e.g. Meta/Health specifiers?
+
+	// Retrieve engine cfg bdevs to restrict scan scope.
+	req := storage.BdevScanRequest{
+		DeviceList: ei.runner.GetConfig().Storage.GetBdevs(),
+	}
+	if req.DeviceList.Len() == 0 {
+		return nil, errors.Errorf("empty device list for engine instance %d", ei.Index())
+	}
+
+	return bdevScanToProtoResp(ei.storage.ScanBdevs, req)
 }
