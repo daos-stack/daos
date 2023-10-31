@@ -5,10 +5,9 @@
 """
 import os
 
-from avocado.utils import process
-
-from dmg_utils import DmgCommand
 from apricot import TestWithServers
+from avocado.utils import process
+from dmg_utils import DmgCommand
 
 
 class DmgNvmeScanTest(TestWithServers):

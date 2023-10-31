@@ -112,6 +112,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 	if (!parent_inode->ie_dfs->dfs_ops->create)
 		D_GOTO(err, rc = ENOTSUP);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_CREATE);
+
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode, fi);
 
 	return;
@@ -130,6 +132,8 @@ df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, de
 
 	if (!parent_inode->ie_dfs->dfs_ops->mknod)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_MKNOD);
 
 	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode);
 
@@ -151,8 +155,10 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		inode                   = handle->doh_ie;
 		handle->doh_linear_read = false;
+		DFUSE_IE_STAT_ADD(inode, DS_FGETATTR);
 	} else {
 		inode = dfuse_inode_lookup_nf(dfuse_info, ino);
+		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
 	}
 
 	if (inode->ie_dfs->dfc_attr_timeout &&
@@ -187,8 +193,11 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	if (handle) {
 		inode                   = handle->doh_ie;
 		handle->doh_linear_read = false;
+		DFUSE_IE_STAT_ADD(inode, DS_FSETATTR);
+
 	} else {
 		inode = dfuse_inode_lookup_nf(dfuse_info, ino);
+		DFUSE_IE_STAT_ADD(inode, DS_SETATTR);
 	}
 
 	if (inode->ie_dfs->dfs_ops->setattr)
@@ -209,6 +218,8 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_LOOKUP);
+
 	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 }
 
@@ -223,6 +234,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 
 	if (!parent_inode->ie_dfs->dfs_ops->mknod)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_MKDIR);
 
 	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode | S_IFDIR);
 
@@ -242,6 +255,8 @@ df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	if (!inode->ie_dfs->dfs_ops->opendir)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(inode, DS_OPENDIR);
 
 	inode->ie_dfs->dfs_ops->opendir(req, inode, fi);
 
@@ -282,6 +297,8 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (!parent_inode->ie_dfs->dfs_ops->unlink)
 		D_GOTO(err, rc = ENOTSUP);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_UNLINK);
+
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
 	return;
@@ -305,6 +322,8 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct 
 		return;
 	}
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READDIR);
+
 	dfuse_cb_readdir(req, oh, size, offset, false);
 }
 
@@ -321,6 +340,8 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		return;
 	}
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READDIR);
+
 	dfuse_cb_readdir(req, oh, size, offset, true);
 }
 
@@ -335,6 +356,8 @@ df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *n
 
 	if (!parent_inode->ie_dfs->dfs_ops->symlink)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_SYMLINK);
 
 	parent_inode->ie_dfs->dfs_ops->symlink(req, link, parent_inode, name);
 
@@ -361,6 +384,8 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 	if (!inode->ie_dfs->dfs_ops->setxattr)
 		D_GOTO(err, rc = ENOTSUP);
 
+	DFUSE_IE_STAT_ADD(inode, DS_SETXATTR);
+
 	inode->ie_dfs->dfs_ops->setxattr(req, inode, name, value, size, flags);
 
 	return;
@@ -379,6 +404,8 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 
 	if (!inode->ie_dfs->dfs_ops->getxattr)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(inode, DS_GETXATTR);
 
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
 
@@ -407,6 +434,8 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	if (!inode->ie_dfs->dfs_ops->removexattr)
 		D_GOTO(err, rc = ENOTSUP);
 
+	DFUSE_IE_STAT_ADD(inode, DS_RMXATTR);
+
 	inode->ie_dfs->dfs_ops->removexattr(req, inode, name);
 
 	return;
@@ -426,6 +455,8 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	if (!inode->ie_dfs->dfs_ops->listxattr)
 		D_GOTO(err, rc = ENOTSUP);
 
+	DFUSE_IE_STAT_ADD(inode, DS_LISTXATTR);
+
 	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
 
 	return;
@@ -443,6 +474,8 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t new
 	int                       rc;
 
 	parent_inode = dfuse_inode_lookup_nf(dfuse_info, parent);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_RENAME);
 
 	if (!parent_inode->ie_dfs->dfs_ops->rename)
 		D_GOTO(err, rc = EXDEV);
@@ -472,6 +505,8 @@ df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 
 	if (!inode->ie_dfs->dfs_ops->statfs)
 		D_GOTO(err, rc = ENOTSUP);
+
+	DFUSE_IE_STAT_ADD(inode, DS_STATFS);
 
 	inode->ie_dfs->dfs_ops->statfs(req, inode);
 

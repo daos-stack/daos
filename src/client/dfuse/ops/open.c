@@ -20,6 +20,8 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	ie = dfuse_inode_lookup_nf(dfuse_info, ino);
 
+	DFUSE_IE_STAT_ADD(ie, DS_OPEN);
+
 	D_ALLOC_PTR(oh);
 	if (!oh)
 		D_GOTO(err, rc = ENOMEM);

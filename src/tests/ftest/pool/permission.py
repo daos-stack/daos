@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from pydaos.raw import DaosContainer, DaosApiError
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
+from pydaos.raw import DaosApiError, DaosContainer
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
