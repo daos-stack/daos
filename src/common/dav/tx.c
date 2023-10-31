@@ -1489,6 +1489,7 @@ dav_tx_off2ptr(uint64_t off)
 
 /*
  * dav_reserve -- reserves a single object
+ * Reproducing DAOS-14554.
  */
 uint64_t
 dav_reserve(dav_obj_t *pop, struct dav_action *act, size_t size, uint64_t type_num)
