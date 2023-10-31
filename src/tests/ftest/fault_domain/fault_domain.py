@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers, skipForTicket
+from ClusterShell.NodeSet import NodeSet
 
 
 class FaultDomain(TestWithServers):

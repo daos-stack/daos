@@ -3,18 +3,17 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import time
 import threading
-
-from avocado.core.exceptions import TestFail
+import time
 
 from apricot import skipForTicket
-from nvme_utils import ServerFillUp
+from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from job_manager_utils import get_job_manager
-from ior_utils import IorCommand, IorMetrics
 from exception_utils import CommandFailure
 from general_utils import error_count
+from ior_utils import IorCommand, IorMetrics
+from job_manager_utils import get_job_manager
+from nvme_utils import ServerFillUp
 
 
 class NvmeEnospace(ServerFillUp):
@@ -149,10 +148,11 @@ class NvmeEnospace(ServerFillUp):
         # command is expected to fail with DER_NOSPACE.
         try:
             self.start_ior_load(storage='SCM', operation="Auto_Write", percent=60)
-            self.fail('This test is suppose to FAIL because of DER_NOSPACE'
-                      'but it Passed')
         except TestFail:
             self.log.info('Test is expected to fail because of DER_NOSPACE')
+        else:
+            self.fail('This test is suppose to FAIL because of DER_NOSPACE'
+                      'but it Passed')
 
         # Display the pool usage %
         self.log.info(self.pool.pool_percentage_used())
@@ -414,10 +414,11 @@ class NvmeEnospace(ServerFillUp):
             try:
                 # Fill 10% more to SCM ,which should Fail because no SCM space
                 self.start_ior_load(storage='SCM', operation="Auto_Write", percent=40)
-                self.fail('This test suppose to fail because of DER_NOSPACE'
-                          'but it got Passed')
             except TestFail:
                 self.log.info('Expected to fail because of DER_NOSPACE')
+            else:
+                self.fail('This test suppose to fail because of DER_NOSPACE'
+                          'but it got Passed')
 
             # Verify DER_NO_SAPCE error count is expected and no other Error in client log.
             self.verify_enospace_log(self.der_nospace_count)

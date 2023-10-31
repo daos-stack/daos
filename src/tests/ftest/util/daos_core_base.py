@@ -6,12 +6,12 @@
 
 import os
 import shutil
-from avocado import fail_on
 
 from apricot import TestWithServers
-from general_utils import get_log_file
+from avocado import fail_on
 from cmocka_utils import CmockaUtils
 from exception_utils import CommandFailure
+from general_utils import get_log_file
 from job_manager_utils import get_job_manager
 from test_utils_pool import POOL_TIMEOUT_INCREMENT
 

@@ -3,8 +3,8 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from vol_test_base import VolTestBase
 from job_manager_utils import get_job_manager
+from vol_test_base import VolTestBase
 
 
 class DaosVol(VolTestBase):

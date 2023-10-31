@@ -3,11 +3,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
 import grp
+import os
 
-from security_test_base import acl_entry
 from pool_security_test_base import PoolSecurityTestBase
+from security_test_base import acl_entry
 
 PERMISSIONS = ["", "r", "w", "rw"]
 

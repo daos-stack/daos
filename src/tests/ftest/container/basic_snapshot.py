@@ -3,10 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from pydaos.raw import DaosContainer, DaosSnapshot, DaosApiError
-
 from apricot import TestWithServers
 from general_utils import get_random_bytes
+from pydaos.raw import DaosApiError, DaosContainer, DaosSnapshot
 
 
 class BasicSnapshot(TestWithServers):

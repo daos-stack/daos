@@ -23,46 +23,46 @@ struct vos_iter_dict {
 };
 
 static struct vos_iter_dict vos_iterators[] = {
-	{
-		.id_type	= VOS_ITER_COUUID,
-		.id_name	= "co",
-		.id_ops		= &vos_cont_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_OBJ,
-		.id_name	= "obj",
-		.id_ops		= &vos_oi_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_DKEY,
-		.id_name	= "dkey",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_AKEY,
-		.id_name	= "akey",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_SINGLE,
-		.id_name	= "single",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_RECX,
-		.id_name	= "recx",
-		.id_ops		= &vos_obj_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_DTX,
-		.id_name	= "dtx",
-		.id_ops		= &vos_dtx_iter_ops,
-	},
-	{
-		.id_type	= VOS_ITER_NONE,
-		.id_name	= "unknown",
-		.id_ops		= NULL,
-	},
+    {
+	.id_type = VOS_ITER_COUUID,
+	.id_name = "co",
+	.id_ops  = &vos_cont_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_OBJ,
+	.id_name = "obj",
+	.id_ops  = &vos_oi_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_DKEY,
+	.id_name = "dkey",
+	.id_ops  = &vos_obj_dkey_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_AKEY,
+	.id_name = "akey",
+	.id_ops  = &vos_obj_akey_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_SINGLE,
+	.id_name = "single",
+	.id_ops  = &vos_obj_sv_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_RECX,
+	.id_name = "recx",
+	.id_ops  = &vos_obj_ev_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_DTX,
+	.id_name = "dtx",
+	.id_ops  = &vos_dtx_iter_ops,
+    },
+    {
+	.id_type = VOS_ITER_NONE,
+	.id_name = "unknown",
+	.id_ops  = NULL,
+    },
 };
 
 const char *
@@ -84,7 +84,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 	struct vos_iterator	*iter = vos_hdl2iter(param->ip_ih);
 	struct vos_iterator	*citer;
 	struct dtx_handle	*old;
-	struct vos_iter_info	 info;
+	struct vos_iter_info     info = {};
 	int			 rc;
 
 	D_ASSERT(iter->it_ops != NULL);
@@ -117,8 +117,7 @@ nested_prepare(vos_iter_type_t type, struct vos_iter_dict *dict,
 
 	info.ii_epc_expr = param->ip_epc_expr;
 	info.ii_recx = param->ip_recx;
-	info.ii_flags = param->ip_flags;
-	info.ii_akey = &param->ip_akey;
+	info.ii_flags    = param->ip_flags;
 
 	rc = dict->id_ops->iop_nested_prepare(type, &info, &citer);
 	if (rc != 0) {

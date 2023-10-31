@@ -3,8 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
 import errno
+import os
+
 from apricot import Test
 
 

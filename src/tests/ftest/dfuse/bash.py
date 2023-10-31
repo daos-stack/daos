@@ -4,9 +4,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
-from ClusterShell.NodeSet import NodeSet
 
 import general_utils
+from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from exception_utils import CommandFailure
 
