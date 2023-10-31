@@ -116,6 +116,8 @@ df_ll_create(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode,
 
 	parent_inode->ie_dfs->dfs_ops->create(req, parent_inode, name, mode, fi);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_CREATE);
+
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
 err:
@@ -140,6 +142,8 @@ df_ll_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, de
 
 	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_MKNOD);
+
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
 err:
@@ -160,12 +164,14 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		inode                   = handle->doh_ie;
 		handle->doh_linear_read = false;
+		DFUSE_IE_STAT_ADD(inode, DS_FGETATTR);
 	} else {
 		inode = dfuse_inode_lookup(dfuse_info, ino);
 		if (!inode) {
 			DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", ino);
 			D_GOTO(err, rc = ENOENT);
 		}
+		DFUSE_IE_STAT_ADD(inode, DS_GETATTR);
 	}
 
 	DFUSE_IE_WFLUSH(inode);
@@ -210,12 +216,15 @@ df_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set,
 	if (handle) {
 		inode                   = handle->doh_ie;
 		handle->doh_linear_read = false;
+		DFUSE_IE_STAT_ADD(inode, DS_FSETATTR);
+
 	} else {
 		inode = dfuse_inode_lookup(dfuse_info, ino);
 		if (!inode) {
 			DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", ino);
 			D_GOTO(err, rc = ENOENT);
 		}
+		DFUSE_IE_STAT_ADD(inode, DS_SETATTR);
 	}
 
 	DFUSE_IE_WFLUSH(inode);
@@ -250,6 +259,8 @@ df_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode->ie_dfs->dfs_ops->lookup(req, parent_inode, name);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_LOOKUP);
+
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
 err:
@@ -273,6 +284,8 @@ df_ll_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 		D_GOTO(decref, rc = ENOTSUP);
 
 	parent_inode->ie_dfs->dfs_ops->mknod(req, parent_inode, name, mode | S_IFDIR);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_MKDIR);
 
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
@@ -299,6 +312,8 @@ df_ll_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_GOTO(decref, rc = ENOTSUP);
 
 	inode->ie_dfs->dfs_ops->opendir(req, inode, fi);
+
+	DFUSE_IE_STAT_ADD(inode, DS_OPENDIR);
 
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
@@ -353,6 +368,8 @@ df_ll_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	parent_inode->ie_dfs->dfs_ops->unlink(req, parent_inode, name);
 
+	DFUSE_IE_STAT_ADD(parent_inode, DS_UNLINK);
+
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
 decref:
@@ -377,6 +394,8 @@ df_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset, struct 
 		return;
 	}
 
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READDIR);
+
 	dfuse_cb_readdir(req, oh, size, offset, false);
 }
 
@@ -392,6 +411,8 @@ df_ll_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size, off_t offset,
 		DFUSE_REPLY_ERR_RAW(dfuse_info, req, ENOTSUP);
 		return;
 	}
+
+	DFUSE_IE_STAT_ADD(oh->doh_ie, DS_READDIR);
 
 	dfuse_cb_readdir(req, oh, size, offset, true);
 }
@@ -413,6 +434,8 @@ df_ll_symlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *n
 		D_GOTO(decref, rc = ENOTSUP);
 
 	parent_inode->ie_dfs->dfs_ops->symlink(req, link, parent_inode, name);
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_SYMLINK);
 
 	dfuse_inode_decref(dfuse_info, parent_inode);
 	return;
@@ -446,6 +469,8 @@ df_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *val
 
 	inode->ie_dfs->dfs_ops->setxattr(req, inode, name, value, size, flags);
 
+	DFUSE_IE_STAT_ADD(inode, DS_SETXATTR);
+
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
 decref:
@@ -471,6 +496,8 @@ df_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 		D_GOTO(decref, rc = ENOTSUP);
 
 	inode->ie_dfs->dfs_ops->getxattr(req, inode, name, size);
+
+	DFUSE_IE_STAT_ADD(inode, DS_GETXATTR);
 
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
@@ -506,6 +533,8 @@ df_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 
 	inode->ie_dfs->dfs_ops->removexattr(req, inode, name);
 
+	DFUSE_IE_STAT_ADD(inode, DS_RMXATTR);
+
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
 decref:
@@ -532,6 +561,8 @@ df_ll_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 	inode->ie_dfs->dfs_ops->listxattr(req, inode, size);
 
+	DFUSE_IE_STAT_ADD(inode, DS_LISTXATTR);
+
 	dfuse_inode_decref(dfuse_info, inode);
 	return;
 decref:
@@ -554,6 +585,8 @@ df_ll_rename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t new
 		DFUSE_TRA_ERROR(dfuse_info, "Failed to find inode %#lx", parent);
 		D_GOTO(err, rc = ENOENT);
 	}
+
+	DFUSE_IE_STAT_ADD(parent_inode, DS_RENAME);
 
 	if (!parent_inode->ie_dfs->dfs_ops->rename)
 		D_GOTO(decref, rc = EXDEV);
@@ -602,6 +635,8 @@ df_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 		D_GOTO(decref, rc = ENOTSUP);
 
 	inode->ie_dfs->dfs_ops->statfs(req, inode);
+
+	DFUSE_IE_STAT_ADD(inode, DS_STATFS);
 
 	dfuse_inode_decref(dfuse_info, inode);
 	return;

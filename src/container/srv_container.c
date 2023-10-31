@@ -1827,6 +1827,12 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
+		if (pool->sp_rebuilding) {
+			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n",
+				DP_UUID(pool->sp_uuid));
+			goto yield;
+		}
+
 		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
@@ -1895,6 +1901,8 @@ cont_agg_eph_leader_ult(void *arg)
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
+			if (pool->sp_rebuilding)
+				break;
 		}
 
 		map_ranks_fini(&fail_ranks);
@@ -5269,7 +5277,7 @@ out:
 	if (!dup_op && (rc == 0)) {
 		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
 			ds_cont_update_snap_iv(svc, in->ci_uuid);
-		else if (opc == CONT_PROP_SET)
+		else if (opc == CONT_PROP_SET || opc == CONT_ACL_UPDATE || opc == CONT_ACL_DELETE)
 			ds_cont_prop_iv_update(svc, in->ci_uuid);
 	}
 
