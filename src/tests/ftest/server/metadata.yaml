@@ -40,8 +40,8 @@ server_config:
       storage: auto
 pool:
   svcn: 5
-  scm_size: 1G
-  nvme_size: 8G
+  scm_size: 1Gib
+  nvme_size: 8Gib
   control_method: dmg
 container:
   control_method: API
