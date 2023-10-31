@@ -112,7 +112,7 @@ Rebuild busy, 42 objs, 21 recs
 Pool %s, ntarget=2, disabled=1, leader=42, version=100, state=Degraded
 Pool layout out of date (1 < 2) -- see `+backtickStr+` for details.
 Pool space info:
-- Enabled targets: 0-2
+- Enabled ranks: 0-2
 - Target(VOS) count:1
 - Storage tier 0 (SCM):
   Total size: 2 B
