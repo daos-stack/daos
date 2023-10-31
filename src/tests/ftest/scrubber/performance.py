@@ -6,9 +6,10 @@
 import time
 from scrubber_test_base import TestWithScrubber
 from ior_test_base import IorTestBase
+from scrubber_utils import ScrubberUtils
 
 
-class TestWithScrubberPerf(IorTestBase, TestWithScrubber):
+class TestWithScrubberPerf(IorTestBase, ScrubberUtils):
     # pylint: disable=too-many-nested-blocks
     """Basic Scrubber Test
 
