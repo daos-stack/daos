@@ -3,15 +3,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
+import queue
 import random
 import threading
-import queue
+import time
 
-from test_utils_pool import add_pool
-from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from test_utils_pool import add_pool
+from write_host_file import write_host_file
 
 
 class OSAOnlineReintegration(OSAUtils):

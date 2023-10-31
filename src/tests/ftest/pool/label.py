@@ -5,11 +5,10 @@
 """
 import string
 
-from avocado.core.exceptions import TestFail
-
 from apricot import TestWithServers
-from general_utils import report_errors, get_random_string
+from avocado.core.exceptions import TestFail
 from exception_utils import CommandFailure
+from general_utils import get_random_string, report_errors
 
 
 class Label(TestWithServers):

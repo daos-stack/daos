@@ -7,11 +7,11 @@
 import re
 
 import avocado
-
 from control_test_base import ControlTestBase
-from dmg_utils import get_storage_query_pool_info, get_storage_query_device_info
+from dmg_utils import (get_storage_query_device_info,
+                       get_storage_query_pool_info)
 from exception_utils import CommandFailure
-from general_utils import list_to_str, dict_to_str
+from general_utils import dict_to_str, list_to_str
 
 
 class DmgStorageQuery(ControlTestBase):
