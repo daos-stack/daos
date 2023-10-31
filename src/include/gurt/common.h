@@ -329,13 +329,33 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	})
 
 /* Internal helper macros, not to be called directly by the outside caller */
-#define __D_PTHREAD(fn, x)						\
-	({								\
-		int _rc;						\
-		_rc = fn(x);						\
-		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc,		\
-			  strerror(_rc));				\
-		d_errno2der(_rc);					\
+#define __D_PTHREAD(fn, x)                                                                         \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = fn(x);                                                                       \
+		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc, strerror(_rc));                     \
+		d_errno2der(_rc);                                                                  \
+	})
+
+#define __D_PTHREAD_TIMED(fn, fn2, x)                                                              \
+	({                                                                                         \
+		int _rc;                                                                           \
+		_rc = fn((x));                                                                     \
+		if (_rc == EBUSY) {                                                                \
+			int             delay1 = 0;                                                \
+			int             delay2 = 1;                                                \
+			struct timespec _wait  = {.tv_sec = delay1 + delay2};                      \
+			D_DEBUG(DB_MEM, "lock(%p), lock held, waiting", x);                        \
+			while ((_rc = fn2((x), &_wait)) == ETIMEDOUT) {                            \
+				delay1       = delay2;                                             \
+				delay2       = _wait.tv_sec;                                       \
+				_wait.tv_sec = delay1 + delay2;                                    \
+				D_DEBUG(DB_MEM, "lock(%p), lock still held, waiting %ld", x,       \
+					_wait.tv_sec);                                             \
+			}                                                                          \
+		}                                                                                  \
+		D_ASSERTF(_rc == 0, #fn " rc=%d %s\n", _rc, strerror(_rc));                        \
+		d_errno2der(_rc);                                                                  \
 	})
 
 #define __D_PTHREAD_TRYLOCK(fn, x)					\
@@ -360,9 +380,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
 #define D_SPIN_UNLOCK(x)        __D_PTHREAD(pthread_spin_unlock, x)
-#define D_MUTEX_UNLOCK(x)	__D_PTHREAD(pthread_mutex_unlock, x)
-#define D_RWLOCK_RDLOCK(x)	__D_PTHREAD(pthread_rwlock_rdlock, x)
-#define D_RWLOCK_WRLOCK(x)	__D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_MUTEX_UNLOCK(x)       __D_PTHREAD(pthread_mutex_unlock, x)
 #define D_RWLOCK_TRYWRLOCK(x)	__D_PTHREAD_TRYLOCK(pthread_rwlock_trywrlock, x)
 #define D_RWLOCK_UNLOCK(x)	__D_PTHREAD(pthread_rwlock_unlock, x)
 #define D_MUTEX_DESTROY(x)	__D_PTHREAD(pthread_mutex_destroy, x)
@@ -375,29 +393,16 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 #ifdef DAOS_BUILD_RELEASE
 
 #define D_MUTEX_LOCK(x) __D_PTHREAD(pthread_mutex_lock, x)
+#define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
+#define D_RWLOCK_RDLOCK(x) __D_PTHREAD(pthread_rwlock_rdlock, x)
 
 #else
 
-#define D_MUTEX_LOCK(x)                                                                            \
-	({                                                                                         \
-		int _rc;                                                                           \
-		_rc = pthread_mutex_trylock((x));                                                  \
-		if (_rc == EBUSY) {                                                                \
-			int             delay1 = 0;                                                \
-			int             delay2 = 1;                                                \
-			struct timespec _wait  = {.tv_sec = delay1 + delay2};                      \
-			D_DEBUG(DB_MEM, "lock(%p), lock held, waiting", x);                        \
-			while ((_rc = pthread_mutex_timedlock((x), &_wait)) == ETIMEDOUT) {        \
-				delay1       = delay2;                                             \
-				delay2       = _wait.tv_sec;                                       \
-				_wait.tv_sec = delay1 + delay2;                                    \
-				D_DEBUG(DB_MEM, "lock(%p), lock still held, waiting %ld", x,       \
-					_wait.tv_sec);                                             \
-			}                                                                          \
-		}                                                                                  \
-		D_ASSERTF(_rc == 0, "pthread_mutex_lock rc=%d %s\n", _rc, strerror(_rc));          \
-		d_errno2der(_rc);                                                                  \
-	})
+#define D_MUTEX_LOCK(x) __D_PTHREAD_TIMED(pthread_mutex_trylock, pthread_mutex_timedlock, x)
+#define D_RWLOCK_WRLOCK(x)                                                                         \
+	__D_PTHREAD_TIMED(pthread_rwlock_trywrlock, pthread_rwlock_timedwrlock, x)
+#define D_RWLOCK_RDLOCK(x)                                                                         \
+	__D_PTHREAD_TIMED(pthread_rwlock_tryrdlock, pthread_rwlock_timedrdlock, x)
 
 #endif
 
