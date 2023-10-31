@@ -192,10 +192,18 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	atomic_fetch_sub_relaxed(&oh->doh_ie->ie_open_count, 1);
 
 	rc = dfs_release(oh->doh_obj);
-	if (rc == 0)
+	if (rc == 0) {
 		DFUSE_REPLY_ZERO_OH(oh, req);
-	else
-		DFUSE_REPLY_ERR_RAW(oh, req, rc);
+	} else {
+		/* Copy the pointer so it's still valid after REPLY, no reference will be held on
+		 * it but this is the destructor so it's OK to keep a copy here however ie should
+		 * not be used.*/
+		struct dfuse_obj_hdl *oh2 = oh;
+
+		DFUSE_REPLY_ERR_RAW(oh2, req, rc);
+		oh->doh_ie = NULL;
+	}
+	/* TODO: Do not access oh->doh_ie below here */
 	if (oh->doh_parent_dir) {
 		bool use_linear_read = false;
 
@@ -215,8 +223,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
 
 		if (rc != 0)
-			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
-					strerror(-rc));
+			DHS_ERROR(oh, -rc, "inval_entry() error");
 	}
 	dfuse_oh_free(dfuse_info, oh);
 }

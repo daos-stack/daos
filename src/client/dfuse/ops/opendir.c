@@ -78,8 +78,7 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 						      strnlen(oh->doh_ie->ie_name, NAME_MAX));
 
 		if (rc != 0)
-			DFUSE_TRA_ERROR(oh->doh_ie, "inval_entry() returned: %d (%s)", rc,
-					strerror(-rc));
+			DHS_ERROR(oh, -rc, "inval_entry() error");
 	}
 	dfuse_oh_free(dfuse_info, oh);
 };

@@ -676,12 +676,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 		int __rc;                                                                          \
 		DFUSE_TRA_DEBUG(_oh, "Returning 0");                                               \
 		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
-		__rc = fuse_reply_err(req, 0);                                                     \
+		(_oh)->doh_ie = NULL;                                                              \
+		__rc          = fuse_reply_err(req, 0);                                            \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_err() error");                                 \
 	} while (0)
 
-/* This macro can use ie->ie_stat as attr so do not set ie to NULL until after the call. */
+/* This caller can use &ie->ie_stat as attr so do not set ie to NULL until after the reply call. */
 #define DFUSE_REPLY_ATTR(ie, req, attr)                                                            \
 	do {                                                                                       \
 		int    __rc;                                                                       \
@@ -821,11 +822,13 @@ struct fuse_lowlevel_ops dfuse_ops;
 			DS_ERROR(-__rc, "fuse_reply_statfs() error");                              \
 	} while (0)
 
-#define DFUSE_REPLY_IOCTL_SIZE(_ie, req, arg, size)                                                \
+#define DFUSE_REPLY_IOCTL_SIZE(_oh, req, arg, size)                                                \
 	do {                                                                                       \
 		int __rc;                                                                          \
-		DFUSE_TRA_DEBUG(_ie, "Returning ioctl size %zi", size);                           \
-		__rc = fuse_reply_ioctl(req, 0, arg, size);                                        \
+		DFUSE_TRA_DEBUG(_oh, "Returning ioctl size %zi", size);                            \
+		_Static_assert(IS_OH(_oh), "Param is not open handle");                            \
+		(_oh) = NULL;                                                                      \
+		__rc  = fuse_reply_ioctl(req, 0, arg, size);                                       \
 		if (__rc != 0)                                                                     \
 			DS_ERROR(-__rc, "fuse_reply_ioctl() error");                               \
 	} while (0)
