@@ -67,8 +67,9 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino, struct fuse_f
 		dfuse_dcache_set_time(oh->doh_ie);
 	}
 
-	DFUSE_REPLY_ZERO_OH(oh, req);
 	dfuse_dre_drop(dfuse_info, oh);
+
+	DFUSE_REPLY_ZERO_OH(oh, req);
 	if (oh->doh_evict_on_close) {
 		int rc;
 		/* TODO: Do not access oh->doh_ie here */
