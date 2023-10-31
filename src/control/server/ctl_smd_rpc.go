@@ -44,74 +44,13 @@ func queryRank(reqRank uint32, engineRank ranklist.Rank) bool {
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, ei := range svc.harness.Instances() {
-		if !ei.IsReady() {
-			svc.log.Debugf("skipping not-ready instance %d", ei.Index())
-			continue
-		}
-
-		engineRank, err := ei.GetRank()
+		rResp, err := smdQueryEngine(ctx, ei, req)
 		if err != nil {
 			return err
 		}
-		if !queryRank(req.GetRank(), engineRank) {
-			continue
-		}
-
-		rResp := new(ctlpb.SmdQueryResp_RankResp)
-		rResp.Rank = engineRank.Uint32()
-
-		listDevsResp, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
-		if err != nil {
-			return errors.Wrapf(err, "rank %d", engineRank)
-		}
-
-		if len(listDevsResp.Devices) == 0 {
-			rResp.Devices = nil
+		// If rank hasn't been requested, don't include its response.
+		if rResp != nil {
 			resp.Ranks = append(resp.Ranks, rResp)
-			continue
-		}
-
-		// For each SmdDevice returned in list devs response, append a SmdDeviceWithHealth.
-		for _, sd := range listDevsResp.Devices {
-			rResp.Devices = append(rResp.Devices, &ctlpb.SmdQueryResp_SmdDeviceWithHealth{
-				Details: sd,
-			})
-		}
-		resp.Ranks = append(resp.Ranks, rResp)
-
-		if req.Uuid != "" {
-			found := false
-			for _, dev := range rResp.Devices {
-				if dev.Details.Uuid == req.Uuid {
-					rResp.Devices = []*ctlpb.SmdQueryResp_SmdDeviceWithHealth{dev}
-					found = true
-					break
-				}
-			}
-			if !found {
-				rResp.Devices = nil
-			}
-		}
-
-		for _, dev := range rResp.Devices {
-			state := dev.Details.DevState
-
-			// skip health query if the device is not in a normal or faulty state
-			if req.IncludeBioHealth {
-				if state != ctlpb.NvmeDevState_NEW {
-					health, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
-						DevUuid: dev.Details.Uuid,
-					})
-					if err != nil {
-						return errors.Wrapf(err, "device %q, state %q",
-							dev, state)
-					}
-					dev.Health = health
-					continue
-				}
-				svc.log.Debugf("skip fetching health stats on device %q in NEW state",
-					dev, state)
-			}
 		}
 	}
 

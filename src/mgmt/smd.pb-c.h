@@ -36,6 +36,8 @@ typedef struct _Ctl__SmdManageReq Ctl__SmdManageReq;
 typedef struct _Ctl__SmdManageResp Ctl__SmdManageResp;
 typedef struct _Ctl__SmdManageResp__Result Ctl__SmdManageResp__Result;
 typedef struct _Ctl__SmdManageResp__RankResp Ctl__SmdManageResp__RankResp;
+typedef struct _Ctl__NvmeController Ctl__NvmeController;
+typedef struct _Ctl__NvmeController__Namespace Ctl__NvmeController__Namespace;
 
 
 /* --- enums --- */
@@ -621,6 +623,76 @@ struct  _Ctl__SmdManageResp
     , 0,NULL }
 
 
+/*
+ * Namespace represents a namespace created on an NvmeController.
+ */
+struct  _Ctl__NvmeController__Namespace
+{
+  ProtobufCMessage base;
+  /*
+   * namespace id
+   */
+  uint32_t id;
+  /*
+   * device capacity in bytes
+   */
+  uint64_t size;
+  /*
+   * parent controller PCI address
+   */
+  char *ctrlr_pci_addr;
+};
+#define CTL__NVME_CONTROLLER__NAMESPACE__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__namespace__descriptor) \
+    , 0, 0, (char *)protobuf_c_empty_string }
+
+
+/*
+ * NvmeController represents an NVMe Controller (SSD).
+ */
+struct  _Ctl__NvmeController
+{
+  ProtobufCMessage base;
+  /*
+   * model name
+   */
+  char *model;
+  /*
+   * serial number
+   */
+  char *serial;
+  /*
+   * pci address
+   */
+  char *pci_addr;
+  /*
+   * firmware revision
+   */
+  char *fw_rev;
+  /*
+   * NUMA socket ID
+   */
+  int32_t socket_id;
+  /*
+   * controller's health stats
+   */
+  Ctl__BioHealthResp *health_stats;
+  /*
+   * controller's namespaces
+   */
+  size_t n_namespaces;
+  Ctl__NvmeController__Namespace **namespaces;
+  /*
+   * controller's blobstores
+   */
+  size_t n_smd_devices;
+  Ctl__SmdDevice **smd_devices;
+};
+#define CTL__NVME_CONTROLLER__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__nvme_controller__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, NULL, 0,NULL, 0,NULL }
+
+
 /* Ctl__BioHealthReq methods */
 void   ctl__bio_health_req__init
                      (Ctl__BioHealthReq         *message);
@@ -924,6 +996,28 @@ Ctl__SmdManageResp *
 void   ctl__smd_manage_resp__free_unpacked
                      (Ctl__SmdManageResp *message,
                       ProtobufCAllocator *allocator);
+/* Ctl__NvmeController__Namespace methods */
+void   ctl__nvme_controller__namespace__init
+                     (Ctl__NvmeController__Namespace         *message);
+/* Ctl__NvmeController methods */
+void   ctl__nvme_controller__init
+                     (Ctl__NvmeController         *message);
+size_t ctl__nvme_controller__get_packed_size
+                     (const Ctl__NvmeController   *message);
+size_t ctl__nvme_controller__pack
+                     (const Ctl__NvmeController   *message,
+                      uint8_t             *out);
+size_t ctl__nvme_controller__pack_to_buffer
+                     (const Ctl__NvmeController   *message,
+                      ProtobufCBuffer     *buffer);
+Ctl__NvmeController *
+       ctl__nvme_controller__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   ctl__nvme_controller__free_unpacked
+                     (Ctl__NvmeController *message,
+                      ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
 typedef void (*Ctl__BioHealthReq_Closure)
@@ -989,6 +1083,12 @@ typedef void (*Ctl__SmdManageResp__RankResp_Closure)
 typedef void (*Ctl__SmdManageResp_Closure)
                  (const Ctl__SmdManageResp *message,
                   void *closure_data);
+typedef void (*Ctl__NvmeController__Namespace_Closure)
+                 (const Ctl__NvmeController__Namespace *message,
+                  void *closure_data);
+typedef void (*Ctl__NvmeController_Closure)
+                 (const Ctl__NvmeController *message,
+                  void *closure_data);
 
 /* --- services --- */
 
@@ -1019,6 +1119,8 @@ extern const ProtobufCMessageDescriptor ctl__smd_manage_req__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__result__descriptor;
 extern const ProtobufCMessageDescriptor ctl__smd_manage_resp__rank_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__nvme_controller__descriptor;
+extern const ProtobufCMessageDescriptor ctl__nvme_controller__namespace__descriptor;
 
 PROTOBUF_C__END_DECLS
 
