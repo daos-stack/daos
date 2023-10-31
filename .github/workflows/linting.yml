@@ -28,7 +28,7 @@ jobs:
       - name: Run on SConstruct file.
         run: isort --check-only SConstruct
       - name: Run on build files.
-        run: find . -name SConscript | xargs isort
+        run: find . -name SConscript | xargs isort --check-only
 
   log-check:
     name: Logging macro checking
