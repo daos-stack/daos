@@ -739,6 +739,1071 @@ func TestServer_CtlSvc_StorageScan(t *testing.T) {
 	}
 }
 
+//func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
+//	const (
+//		clusterSize uint64 = 32 * humanize.MiByte
+//		metaWalSize uint64 = 64 * humanize.MiByte
+//		rdbSize     uint64 = defaultRdbSize
+//		rdbWalSize  uint64 = 512 * humanize.MiByte
+//	)
+//
+//	adjustScmSize := func(sizeBytes uint64, withMdDaosScm bool) uint64 {
+//		mdBytes := rdbSize + mdFsScmBytes
+//		if withMdDaosScm {
+//			mdBytes += mdDaosScmBytes
+//		}
+//
+//		if sizeBytes < mdBytes {
+//			return 0
+//		}
+//
+//		return sizeBytes - mdBytes
+//	}
+//
+//	adjustNvmeSize := func(nvmeCtlr *ctlpb.NvmeController, mdBytes uint64, engineTargetCount int) *ctlpb.NvmeController {
+//		getClusterCount := func(sizeBytes uint64) uint64 {
+//			clusterCount := sizeBytes / clusterSize
+//			if sizeBytes%clusterSize != 0 {
+//				clusterCount += 1
+//			}
+//			return clusterCount
+//		}
+//
+//		type deviceSizeStat struct {
+//			clusterPerTarget uint64
+//			smdDevs          []*ctlpb.SmdDevice
+//		}
+//		devicesToAdjust := make(map[uint32]*deviceSizeStat, 0)
+//		for _, dev := range nvmeCtlr.GetSmdDevices() {
+//			targetCount := uint64(len(dev.GetTgtIds()))
+//			dev.MetaSize = adjustScmSize(mdBytes, false) / uint64(engineTargetCount)
+//			dev.AvailBytes = (dev.GetAvailBytes() / clusterSize) * clusterSize
+//
+//			usableClusterCount := dev.GetAvailBytes() / clusterSize
+//			usableClusterCount -= getClusterCount(dev.MetaSize) * uint64(engineTargetCount)
+//			usableClusterCount -= getClusterCount(metaWalSize) * uint64(engineTargetCount)
+//			usableClusterCount -= getClusterCount(rdbSize)
+//			usableClusterCount -= getClusterCount(rdbWalSize)
+//
+//			rank := dev.GetRank()
+//			if devicesToAdjust[rank] == nil {
+//				devicesToAdjust[rank] = &deviceSizeStat{
+//					clusterPerTarget: math.MaxUint64,
+//				}
+//			}
+//			devicesToAdjust[rank].smdDevs = append(devicesToAdjust[rank].smdDevs, dev)
+//			clusterPerTarget := usableClusterCount / targetCount
+//			if clusterPerTarget < devicesToAdjust[rank].clusterPerTarget {
+//				devicesToAdjust[rank].clusterPerTarget = clusterPerTarget
+//			}
+//		}
+//
+//		for _, item := range devicesToAdjust {
+//			for _, dev := range item.smdDevs {
+//				targetCount := uint64(len(dev.GetTgtIds()))
+//				dev.UsableBytes = item.clusterPerTarget * targetCount * clusterSize
+//			}
+//		}
+//
+//		return nvmeCtlr
+//	}
+//
+//	// output to be returned from mock bdev backend
+//	newCtrlr := func(idx int32) *storage.NvmeController {
+//		ctrlr := storage.MockNvmeController(idx)
+//		ctrlr.Serial = test.MockUUID(idx)
+//		ctrlr.SmdDevices = nil
+//
+//		return ctrlr
+//	}
+//	newCtrlrMultiNs := func(idx int32, numNss int) *storage.NvmeController {
+//		ctrlr := storage.MockNvmeController(idx)
+//		ctrlr.Serial = test.MockUUID(idx)
+//		ctrlr.SmdDevices = nil
+//		ctrlr.Namespaces = make([]*storage.NvmeNamespace, numNss)
+//		for i := 0; i < numNss; i++ {
+//			ctrlr.Namespaces[i] = storage.MockNvmeNamespace(int32(i + 1))
+//		}
+//
+//		return ctrlr
+//	}
+//
+//	// expected protobuf output to be returned svc.StorageScan when health
+//	// updated over drpc. Override serial uuid with variable argument
+//	newCtrlrHealth := func(idx int32, serialIdx ...int32) (*ctlpb.NvmeController, *ctlpb.BioHealthResp) {
+//		ctrlr := proto.MockNvmeController(idx)
+//		sIdx := idx
+//		if len(serialIdx) > 0 {
+//			sIdx = serialIdx[0]
+//		}
+//		ctrlr.Model = fmt.Sprintf("model-%d", sIdx)
+//		ctrlr.Serial = test.MockUUID(sIdx)
+//		ctrlr.HealthStats = proto.MockNvmeHealth(idx + 1)
+//		ctrlr.HealthStats.ClusterSize = clusterSize
+//		ctrlr.HealthStats.MetaWalSize = metaWalSize
+//		ctrlr.HealthStats.RdbWalSize = rdbWalSize
+//		ctrlr.SmdDevices = nil
+//
+//		bioHealthResp := new(ctlpb.BioHealthResp)
+//		if err := convert.Types(ctrlr.HealthStats, bioHealthResp); err != nil {
+//			t.Fatal(err)
+//		}
+//		bioHealthResp.TotalBytes = uint64(idx) * uint64(humanize.TByte)
+//		bioHealthResp.AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+//		bioHealthResp.ClusterSize = clusterSize
+//		bioHealthResp.MetaWalSize = metaWalSize
+//		bioHealthResp.RdbWalSize = rdbWalSize
+//
+//		return ctrlr, bioHealthResp
+//	}
+//	newCtrlrPBwHealth := func(idx int32, serialIdx ...int32) *ctlpb.NvmeController {
+//		c, _ := newCtrlrHealth(idx, serialIdx...)
+//		return c
+//	}
+//	newBioHealthResp := func(idx int32, serialIdx ...int32) *ctlpb.BioHealthResp {
+//		_, b := newCtrlrHealth(idx, serialIdx...)
+//		return b
+//	}
+//
+//	// expected protobuf output to be returned svc.StorageScan when smd
+//	// updated over drpc
+//	newCtrlrMeta := func(ctrlrIdx int32, smdIndexes ...int32) (*ctlpb.NvmeController, *ctlpb.SmdDevResp) {
+//		ctrlr := proto.MockNvmeController(ctrlrIdx)
+//		ctrlr.Serial = test.MockUUID(ctrlrIdx)
+//		ctrlr.HealthStats = nil
+//
+//		if len(smdIndexes) == 0 {
+//			smdIndexes = append(smdIndexes, ctrlrIdx)
+//		}
+//		smdDevRespDevices := make([]*ctlpb.SmdDevice, len(smdIndexes))
+//		ctrlr.SmdDevices = make([]*ctlpb.SmdDevice, len(smdIndexes))
+//		ctrlr.Namespaces = make([]*ctlpb.NvmeController_Namespace, len(smdIndexes))
+//		for i, idx := range smdIndexes {
+//			sd := proto.MockSmdDevice(ctrlr.PciAddr, idx+1)
+//			sd.DevState = devStateNormal
+//			sd.Rank = uint32(ctrlrIdx)
+//			sd.TrAddr = ctrlr.PciAddr
+//			ctrlr.SmdDevices[i] = sd
+//
+//			smdPB := new(ctlpb.SmdDevice)
+//			if err := convert.Types(sd, smdPB); err != nil {
+//				t.Fatal(err)
+//			}
+//			smdDevRespDevices[i] = smdPB
+//
+//			// expect resultant controller to have updated utilization values
+//			ctrlr.SmdDevices[i].TotalBytes = uint64(idx) * uint64(humanize.TByte)
+//			ctrlr.SmdDevices[i].AvailBytes = uint64(idx) * uint64(humanize.TByte/2)
+//			ctrlr.SmdDevices[i].ClusterSize = clusterSize
+//			ctrlr.SmdDevices[i].MetaWalSize = metaWalSize
+//			ctrlr.SmdDevices[i].RdbSize = rdbSize
+//			ctrlr.SmdDevices[i].RdbWalSize = rdbWalSize
+//			ctrlr.Namespaces[i] = proto.MockNvmeNamespace(int32(i + 1))
+//		}
+//
+//		return ctrlr, &ctlpb.SmdDevResp{Devices: smdDevRespDevices}
+//	}
+//	newCtrlrPB := func(idx int32) *ctlpb.NvmeController {
+//		c, _ := newCtrlrMeta(idx)
+//		c.SmdDevices = nil
+//		return c
+//	}
+//	newCtrlrPBwBasic := func(idx int32) *ctlpb.NvmeController {
+//		c := newCtrlrPB(idx)
+//		c.FwRev = ""
+//		c.Model = ""
+//		return c
+//	}
+//	newCtrlrPBwMeta := func(idx int32, smdIndexes ...int32) *ctlpb.NvmeController {
+//		c, _ := newCtrlrMeta(idx, smdIndexes...)
+//		return c
+//	}
+//	newSmdDevResp := func(idx int32, smdIndexes ...int32) *ctlpb.SmdDevResp {
+//		_, s := newCtrlrMeta(idx, smdIndexes...)
+//		return s
+//	}
+//
+//	smdDevRespStateNew := newSmdDevResp(1)
+//	smdDevRespStateNew.Devices[0].DevState = devStateNew
+//	smdDevRespStateNew.Devices[0].ClusterSize = 0
+//	smdDevRespStateNew.Devices[0].MetaWalSize = 0
+//	smdDevRespStateNew.Devices[0].RdbWalSize = 0
+//
+//	ctrlrPBwMetaNew := newCtrlrPBwMeta(1)
+//	ctrlrPBwMetaNew.SmdDevices[0].AvailBytes = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].TotalBytes = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].DevState = devStateNew
+//	ctrlrPBwMetaNew.SmdDevices[0].ClusterSize = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].UsableBytes = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].RdbSize = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].RdbWalSize = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].MetaSize = 0
+//	ctrlrPBwMetaNew.SmdDevices[0].MetaWalSize = 0
+//
+//	ctrlrPBwMetaNormal := newCtrlrPBwMeta(1)
+//	ctrlrPBwMetaNormal.SmdDevices[0].AvailBytes = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].TotalBytes = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].DevState = devStateNormal
+//	ctrlrPBwMetaNormal.SmdDevices[0].ClusterSize = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].UsableBytes = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].RdbSize = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].RdbWalSize = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].MetaSize = 0
+//	ctrlrPBwMetaNormal.SmdDevices[0].MetaWalSize = 0
+//
+//	mockPbScmMount0 := proto.MockScmMountPoint(0)
+//	mockPbScmMount0.Rank += 1
+//	mockPbScmNamespace0 := proto.MockScmNamespace(0)
+//	mockPbScmNamespace0.Mount = mockPbScmMount0
+//	mockPbScmMount1 := proto.MockScmMountPoint(1)
+//	mockPbScmMount1.Rank += 1
+//	mockPbScmNamespace1 := proto.MockScmNamespace(1)
+//	mockPbScmNamespace1.Mount = mockPbScmMount1
+//
+//	for name, tc := range map[string]struct {
+//		req               *ctlpb.StorageScanReq
+//		csCtrlrs          *storage.NvmeControllers   // control service storage provider
+//		eCtrlrs           []*storage.NvmeControllers // engine storage provider
+//		smbc              *scm.MockBackendConfig
+//		smsc              *system.MockSysConfig
+//		storageCfgs       []storage.TierConfigs
+//		engineTargetCount []int
+//		enginesNotReady   bool
+//		scanTwice         bool
+//		junkResp          bool
+//		drpcResps         map[int][]*mockDrpcResponse
+//		expErr            error
+//		expResp           *ctlpb.StorageScanResp
+//	}{
+//		"engine up; scan bdev basic": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			csCtrlrs:          &storage.NvmeControllers{newCtrlr(1)},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{newCtrlrPBwBasic(1)},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engine up; scan bdev basic; no bdevs in config": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
+//			},
+//			storageCfgs: []storage.TierConfigs{},
+//			csCtrlrs:    &storage.NvmeControllers{newCtrlr(1)},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{newCtrlrPBwBasic(1)},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engine up; scan bdev basic; missing bdev in config": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			csCtrlrs:          &storage.NvmeControllers{newCtrlr(2)},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engine up; scan bdev health": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Health: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{Message: newBioHealthResp(1)},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{newCtrlrPBwHealth(1)},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engine up; scan bdev meta": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes: storage.ScmModules{
+//					storage.MockScmModule(0),
+//				},
+//				GetNamespacesRes: storage.ScmNamespaces{
+//					storage.MockScmNamespace(0),
+//				},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{Message: newBioHealthResp(1)},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{
+//						adjustNvmeSize(newCtrlrPBwMeta(1), mockPbScmMount0.AvailBytes, 4),
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					Namespaces: proto.ScmNamespaces{
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace0.Blockdev,
+//							Dev:      mockPbScmNamespace0.Dev,
+//							Size:     mockPbScmNamespace0.Size,
+//							Uuid:     mockPbScmNamespace0.Uuid,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount0.Class,
+//								DeviceList:  mockPbScmMount0.DeviceList,
+//								Path:        mockPbScmMount0.Path,
+//								TotalBytes:  mockPbScmMount0.TotalBytes,
+//								AvailBytes:  mockPbScmMount0.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount0.AvailBytes, false),
+//								Rank:        mockPbScmMount0.Rank,
+//							},
+//						},
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engines up; scan bdev health": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Health: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+//			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(2).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4, 4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{Message: newBioHealthResp(1)},
+//				},
+//				1: {
+//					{Message: newSmdDevResp(2)},
+//					{Message: newBioHealthResp(2)},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{
+//						newCtrlrPBwHealth(1),
+//						newCtrlrPBwHealth(2),
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"engines up; scan bdev meta; multiple nvme namespaces": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{
+//				newCtrlrMultiNs(1, 2), newCtrlrMultiNs(2, 2),
+//			},
+//			eCtrlrs: []*storage.NvmeControllers{
+//				{newCtrlrMultiNs(1, 2)}, {newCtrlrMultiNs(2, 2)},
+//			},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes: storage.ScmModules{
+//					storage.MockScmModule(0),
+//				},
+//				GetNamespacesRes: storage.ScmNamespaces{
+//					storage.MockScmNamespace(0),
+//					storage.MockScmNamespace(1),
+//				},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//					{
+//						Total: mockPbScmMount1.TotalBytes,
+//						Avail: mockPbScmMount1.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount1.Path).
+//						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(2).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{8, 8},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1, 1, 2)},
+//					{Message: newBioHealthResp(1, 1)},
+//					{Message: newBioHealthResp(2, 1)},
+//				},
+//				1: {
+//					{Message: newSmdDevResp(2, 3, 4)},
+//					{Message: newBioHealthResp(3, 2)},
+//					{Message: newBioHealthResp(4, 2)},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{
+//						adjustNvmeSize(newCtrlrPBwMeta(1, 1, 2), mockPbScmMount0.AvailBytes, 8),
+//						adjustNvmeSize(newCtrlrPBwMeta(2, 3, 4), mockPbScmMount1.AvailBytes, 8),
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					Namespaces: proto.ScmNamespaces{
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace0.Blockdev,
+//							Dev:      mockPbScmNamespace0.Dev,
+//							Size:     mockPbScmNamespace0.Size,
+//							Uuid:     mockPbScmNamespace0.Uuid,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount0.Class,
+//								DeviceList:  mockPbScmMount0.DeviceList,
+//								Path:        mockPbScmMount0.Path,
+//								TotalBytes:  mockPbScmMount0.TotalBytes,
+//								AvailBytes:  mockPbScmMount0.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount0.AvailBytes, false),
+//								Rank:        mockPbScmMount0.Rank,
+//							},
+//						},
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace1.Blockdev,
+//							Dev:      mockPbScmNamespace1.Dev,
+//							Size:     mockPbScmNamespace1.Size,
+//							Uuid:     mockPbScmNamespace1.Uuid,
+//							NumaNode: mockPbScmNamespace1.NumaNode,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount1.Class,
+//								DeviceList:  mockPbScmMount1.DeviceList,
+//								Path:        mockPbScmMount1.Path,
+//								TotalBytes:  mockPbScmMount1.TotalBytes,
+//								AvailBytes:  mockPbScmMount1.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount1.AvailBytes, false),
+//								Rank:        mockPbScmMount1.Rank,
+//							},
+//						},
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"scan scm usage": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: new(ctlpb.ScanNvmeReq),
+//			},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+//				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					Namespaces: proto.ScmNamespaces{
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace0.Blockdev,
+//							Dev:      mockPbScmNamespace0.Dev,
+//							Size:     mockPbScmNamespace0.Size,
+//							Uuid:     mockPbScmNamespace0.Uuid,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount0.Class,
+//								DeviceList:  mockPbScmMount0.DeviceList,
+//								Path:        mockPbScmMount0.Path,
+//								Rank:        mockPbScmMount0.Rank,
+//								TotalBytes:  mockPbScmMount0.TotalBytes,
+//								AvailBytes:  mockPbScmMount0.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount0.AvailBytes, true),
+//							},
+//						},
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"scan scm usage; pmem not in instance device list": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: new(ctlpb.ScanNvmeReq),
+//			},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+//				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList("/dev/foo", "/dev/bar"),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					State: &ctlpb.ResponseState{
+//						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
+//						Error:  "instance 0: no pmem namespace for mount /mnt/daos0",
+//					},
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"scan scm usage; class ram": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: new(ctlpb.ScanNvmeReq),
+//			},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes:    storage.ScmModules{storage.MockScmModule(0)},
+//				GetNamespacesRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassRam.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmRamdiskSize(16),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					Namespaces: proto.ScmNamespaces{
+//						&ctlpb.ScmNamespace{
+//							Blockdev: "ramdisk",
+//							Size:     uint64(humanize.GiByte * 16),
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       "ram",
+//								Path:        mockPbScmMount0.Path,
+//								TotalBytes:  mockPbScmMount0.TotalBytes,
+//								AvailBytes:  mockPbScmMount0.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount0.AvailBytes, true),
+//								Rank:        mockPbScmMount0.Rank,
+//							},
+//						},
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"multi-engine; multi-tier; with usage": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1), newCtrlr(2)},
+//			eCtrlrs:  []*storage.NvmeControllers{{newCtrlr(1)}, {newCtrlr(2)}},
+//			smbc: &scm.MockBackendConfig{
+//				GetModulesRes: storage.ScmModules{
+//					storage.MockScmModule(0),
+//				},
+//				GetNamespacesRes: storage.ScmNamespaces{
+//					storage.MockScmNamespace(0),
+//					storage.MockScmNamespace(1),
+//				},
+//			},
+//			smsc: &system.MockSysConfig{
+//				GetfsUsageResps: []system.GetfsUsageRetval{
+//					{
+//						Total: mockPbScmMount0.TotalBytes,
+//						Avail: mockPbScmMount0.AvailBytes,
+//					},
+//					{
+//						Total: mockPbScmMount1.TotalBytes,
+//						Avail: mockPbScmMount1.AvailBytes,
+//					},
+//				},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount1.Path).
+//						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(2).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4, 4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{Message: newBioHealthResp(1)},
+//				},
+//				1: {
+//					{Message: newSmdDevResp(2)},
+//					{Message: newBioHealthResp(2)},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{
+//						adjustNvmeSize(newCtrlrPBwMeta(1), mockPbScmMount0.AvailBytes, 4),
+//						adjustNvmeSize(newCtrlrPBwMeta(2), mockPbScmMount1.AvailBytes, 4),
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				Scm: &ctlpb.ScanScmResp{
+//					Namespaces: proto.ScmNamespaces{
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace0.Blockdev,
+//							Dev:      mockPbScmNamespace0.Dev,
+//							Size:     mockPbScmNamespace0.Size,
+//							Uuid:     mockPbScmNamespace0.Uuid,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount0.Class,
+//								DeviceList:  mockPbScmMount0.DeviceList,
+//								Path:        mockPbScmMount0.Path,
+//								TotalBytes:  mockPbScmMount0.TotalBytes,
+//								AvailBytes:  mockPbScmMount0.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount0.AvailBytes, false),
+//								Rank:        mockPbScmMount0.Rank,
+//							},
+//						},
+//						&ctlpb.ScmNamespace{
+//							Blockdev: mockPbScmNamespace1.Blockdev,
+//							Dev:      mockPbScmNamespace1.Dev,
+//							Size:     mockPbScmNamespace1.Size,
+//							Uuid:     mockPbScmNamespace1.Uuid,
+//							NumaNode: mockPbScmNamespace1.NumaNode,
+//							Mount: &ctlpb.ScmNamespace_Mount{
+//								Class:       mockPbScmMount1.Class,
+//								DeviceList:  mockPbScmMount1.DeviceList,
+//								Path:        mockPbScmMount1.Path,
+//								TotalBytes:  mockPbScmMount1.TotalBytes,
+//								AvailBytes:  mockPbScmMount1.AvailBytes,
+//								UsableBytes: adjustScmSize(mockPbScmMount1.AvailBytes, false),
+//								Rank:        mockPbScmMount1.Rank,
+//							},
+//						},
+//					},
+//					State: new(ctlpb.ResponseState),
+//				},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"multi-engine; multi-tier; with usage; engines not ready": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  &ctlpb.ScanScmReq{Usage: true},
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount0.Path).
+//						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassDcpm.String()).
+//						WithScmMountPoint(mockPbScmMount1.Path).
+//						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(2).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4, 4},
+//			enginesNotReady:   true,
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{Message: newBioHealthResp(1)},
+//				},
+//				1: {
+//					{Message: newSmdDevResp(2)},
+//					{Message: newBioHealthResp(2)},
+//				},
+//			},
+//			expErr: errEngineNotReady,
+//		},
+//		// Sometimes when more than a few ssds are assigned to engine without many targets,
+//		// some of the smd entries for the latter ssds are in state "NEW" rather than
+//		// "NORMAL", when in this state, health is unavailable and DER_NONEXIST is returned.
+//		"bdev scan; meta; new state; non-existent smd health": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: smdDevRespStateNew},
+//					{
+//						Message: &ctlpb.BioHealthResp{
+//							Status: int32(daos.Nonexistent),
+//						},
+//					},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNew},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"bdev scan; meta; new state; nomem smd health": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: smdDevRespStateNew},
+//					{
+//						Message: &ctlpb.BioHealthResp{
+//							Status: int32(daos.FreeMemError),
+//						},
+//					},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNew},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//		"bdev scan; meta; normal state; non-existent smd health": {
+//			req: &ctlpb.StorageScanReq{
+//				Scm:  new(ctlpb.ScanScmReq),
+//				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+//			},
+//			csCtrlrs: &storage.NvmeControllers{newCtrlr(1)},
+//			storageCfgs: []storage.TierConfigs{
+//				{
+//					storage.NewTierConfig().
+//						WithStorageClass(storage.ClassNvme.String()).
+//						WithBdevDeviceList(newCtrlr(1).PciAddr),
+//				},
+//			},
+//			engineTargetCount: []int{4},
+//			drpcResps: map[int][]*mockDrpcResponse{
+//				0: {
+//					{Message: newSmdDevResp(1)},
+//					{
+//						Message: &ctlpb.BioHealthResp{
+//							Status: int32(daos.Nonexistent),
+//						},
+//					},
+//				},
+//			},
+//			expResp: &ctlpb.StorageScanResp{
+//				Nvme: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: proto.NvmeControllers{ctrlrPBwMetaNormal},
+//					State:  new(ctlpb.ResponseState),
+//				},
+//				Scm:     &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+//				MemInfo: proto.MockPBMemInfo(),
+//			},
+//		},
+//	} {
+//		t.Run(name, func(t *testing.T) {
+//			log, buf := logging.NewTestLogger(t.Name())
+//			defer test.ShowBufferOnFailure(t, buf)
+//
+//			if len(tc.storageCfgs) != len(tc.drpcResps) {
+//				t.Fatalf("number of tc.storageCfgs doesn't match num drpc msg groups")
+//			}
+//
+//			if len(tc.storageCfgs) == 1 && tc.eCtrlrs == nil && tc.csCtrlrs != nil {
+//				log.Debugf("using control service storage provider for first engine")
+//				tc.eCtrlrs = []*storage.NvmeControllers{tc.csCtrlrs}
+//			}
+//
+//			var csbmbc *bdev.MockBackendConfig
+//			if tc.csCtrlrs != nil {
+//				log.Debugf("bdevs %v to be returned for control service scan", *tc.csCtrlrs)
+//				csbmbc = &bdev.MockBackendConfig{
+//					ScanRes: &storage.BdevScanResponse{Controllers: *tc.csCtrlrs},
+//				}
+//			}
+//
+//			var engineCfgs []*engine.Config
+//			for i, sc := range tc.storageCfgs {
+//				log.Debugf("storage cfg contains bdevs %v for engine %d", sc.Bdevs(), i)
+//				engineCfgs = append(engineCfgs,
+//					engine.MockConfig().
+//						WithStorage(sc...).
+//						WithTargetCount(tc.engineTargetCount[i]))
+//			}
+//			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
+//			cs := mockControlService(t, log, sCfg, csbmbc, tc.smbc, tc.smsc)
+//
+//			for idx, ec := range engineCfgs {
+//				var ebmbc *bdev.MockBackendConfig
+//				if tc.eCtrlrs != nil && len(tc.eCtrlrs) > idx {
+//					log.Debugf("bdevs %v to be returned for engine %d scan",
+//						*tc.eCtrlrs[idx], idx)
+//					ebmbc = &bdev.MockBackendConfig{
+//						ScanRes: &storage.BdevScanResponse{
+//							Controllers: *tc.eCtrlrs[idx],
+//						},
+//					}
+//				}
+//
+//				// replace harness instance with mock I/O Engine
+//				// to enable mocking of harness instance drpc channel
+//				sp := storage.MockProvider(log, idx, &ec.Storage,
+//					cs.storage.Sys, // share system provider cfo
+//					scm.NewMockProvider(log, tc.smbc, nil),
+//					bdev.NewMockProvider(log, ebmbc), nil)
+//				te := newTestEngine(log, false, sp, ec)
+//
+//				if tc.enginesNotReady {
+//					te.ready.SetFalse()
+//				}
+//
+//				// mock drpc responses
+//				dcc := new(mockDrpcClientConfig)
+//				if tc.junkResp {
+//					dcc.setSendMsgResponse(drpc.Status_SUCCESS,
+//						makeBadBytes(42), nil)
+//				} else if len(tc.drpcResps) > idx {
+//					t.Logf("setting %d drpc responses for engine %d",
+//						len(tc.drpcResps[idx]), idx)
+//					dcc.setSendMsgResponseList(t, tc.drpcResps[idx]...)
+//				} else {
+//					t.Fatal("drpc response mocks unpopulated")
+//				}
+//				te.setDrpcClient(newMockDrpcClient(dcc))
+//				te._superblock.Rank = ranklist.NewRankPtr(uint32(idx + 1))
+//				for _, tc := range te.storage.GetBdevConfigs() {
+//					tc.Bdev.DeviceRoles.OptionBits = storage.OptionBits(storage.BdevRoleAll)
+//				}
+//				md := te.storage.GetControlMetadata()
+//				md.Path = "/foo"
+//				md.DevicePath = md.Path
+//
+//				cs.harness.instances[idx] = te
+//			}
+//			cs.harness.started.SetTrue()
+//
+//			if tc.req == nil {
+//				tc.req = &ctlpb.StorageScanReq{
+//					Scm:  new(ctlpb.ScanScmReq),
+//					Nvme: new(ctlpb.ScanNvmeReq),
+//				}
+//			}
+//
+//			if tc.scanTwice {
+//				_, err := cs.StorageScan(test.Context(t), tc.req)
+//				test.CmpErr(t, tc.expErr, err)
+//				if err != nil {
+//					return
+//				}
+//			}
+//
+//			resp, err := cs.StorageScan(test.Context(t), tc.req)
+//			test.CmpErr(t, tc.expErr, err)
+//			if err != nil {
+//				return
+//			}
+//
+//			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
+//				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+//			}
+//		})
+//	}
+//}
+
 func TestServer_checkTmpfsMem(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scmCfgs     map[int]*storage.TierConfig
@@ -1944,734 +3009,712 @@ func TestServer_CtlSvc_StorageNvmeAddDevice(t *testing.T) {
 	}
 }
 
-func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
-	const (
-		clusterSize     uint64 = 32 * humanize.MiByte
-		hugeClusterSize uint64 = humanize.GiByte
-		metaSize        uint64 = 64 * humanize.MiByte
-		metaWalSize     uint64 = 128 * humanize.MiByte
-		rdbSize         uint64 = 256 * humanize.MiByte
-		rdbWalSize      uint64 = 512 * humanize.MiByte
-	)
-
-	type StorageCfg struct {
-		targetCount int
-		tierCfgs    storage.TierConfigs
-	}
-	type DataInput struct {
-		storageCfgs  []*StorageCfg
-		scanNvmeResp *ctlpb.ScanNvmeResp
-	}
-	type ExpectedOutput struct {
-		totalBytes     []uint64
-		availableBytes []uint64
-		usableBytes    []uint64
-		message        string
-	}
-
-	newTierCfg := func(pciIdx int32) *storage.TierConfig {
-		return storage.NewTierConfig().
-			WithStorageClass(storage.ClassNvme.String()).
-			WithBdevDeviceList(test.MockPCIAddr(pciIdx))
-	}
-
-	newNvmeCtlr := func(nvmeCtlr *ctlpb.NvmeController) *ctlpb.NvmeController {
-		for _, smdDev := range nvmeCtlr.SmdDevices {
-			smdDev.ClusterSize = clusterSize
-			smdDev.MetaSize = metaSize
-			smdDev.MetaWalSize = metaWalSize
-			smdDev.RdbSize = rdbSize
-			smdDev.RdbWalSize = rdbWalSize
-		}
-
-		return nvmeCtlr
-	}
-
-	for name, tc := range map[string]struct {
-		input  DataInput
-		output ExpectedOutput
-	}{
-		"homogeneous": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 12,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-							newTierCfg(3),
-						},
-					},
-					{
-						targetCount: 6,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(4),
-							newTierCfg(5),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{4, 5, 6, 7},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(3),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme2",
-									TgtIds:      []int32{8, 9, 10, 11},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(4),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme3",
-									TgtIds:      []int32{0, 1, 2},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        1,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(5),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme4",
-									TgtIds:      []int32{3, 4, 5},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        1,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					8 * hugeClusterSize,
-					8 * hugeClusterSize,
-					18 * hugeClusterSize,
-					18 * hugeClusterSize,
-				},
-			},
-		},
-		"heterogeneous": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 11,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-							newTierCfg(3),
-						},
-					},
-					{
-						targetCount: 5,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(4),
-							newTierCfg(5),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{4, 5, 6},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(3),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme2",
-									TgtIds:      []int32{7, 8, 9, 10},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(4),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme3",
-									TgtIds:      []int32{0, 1, 2},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        1,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(5),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme4",
-									TgtIds:      []int32{3, 4},
-									TotalBytes:  20 * hugeClusterSize,
-									AvailBytes:  20 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        1,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-					20 * hugeClusterSize,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					6 * hugeClusterSize,
-					8 * hugeClusterSize,
-					18 * hugeClusterSize,
-					12 * hugeClusterSize,
-				},
-			},
-		},
-		"new": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 7,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{0, 1, 2},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNew,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					0,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					0,
-				},
-				message: "not usable: device state \"NEW\"",
-			},
-		},
-		"evicted": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 7,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{0, 1, 2},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateFaulty,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					0,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					0,
-				},
-				message: "not usable: device state \"EVICTED\"",
-			},
-		},
-		"missing targets": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 4,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					0,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					0,
-				},
-				message: "not usable: missing storage info",
-			},
-		},
-		"missing cluster size": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 7,
-						tierCfgs: storage.TierConfigs{
-							newTierCfg(1),
-							newTierCfg(2),
-						},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * hugeClusterSize,
-									AvailBytes:  10 * hugeClusterSize,
-									ClusterSize: hugeClusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData,
-								},
-							},
-						},
-						{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:       "nvme1",
-									TgtIds:     []int32{0, 1, 2},
-									TotalBytes: 10 * hugeClusterSize,
-									AvailBytes: 10 * hugeClusterSize,
-									DevState:   devStateNormal,
-									Rank:       0,
-									RoleBits:   storage.BdevRoleData,
-								},
-							},
-						},
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					10 * hugeClusterSize,
-					10 * hugeClusterSize,
-				},
-				availableBytes: []uint64{
-					10 * hugeClusterSize,
-					0,
-				},
-				usableBytes: []uint64{
-					8 * hugeClusterSize,
-					0,
-				},
-				message: "not usable: missing storage info",
-			},
-		},
-		"multi bdev tier": {
-			input: DataInput{
-				storageCfgs: []*StorageCfg{
-					{
-						targetCount: 5,
-						tierCfgs:    storage.TierConfigs{newTierCfg(1)},
-					},
-					{
-						targetCount: 4,
-						tierCfgs:    storage.TierConfigs{newTierCfg(2)},
-					},
-					{
-						targetCount: 6,
-						tierCfgs:    storage.TierConfigs{newTierCfg(3)},
-					},
-					{
-						targetCount: 4,
-						tierCfgs:    storage.TierConfigs{newTierCfg(4)},
-					},
-					{
-						targetCount: 5,
-						tierCfgs:    storage.TierConfigs{newTierCfg(5)},
-					},
-					{
-						targetCount: 6,
-						tierCfgs:    storage.TierConfigs{newTierCfg(6)},
-					},
-				},
-				scanNvmeResp: &ctlpb.ScanNvmeResp{
-					Ctrlrs: []*ctlpb.NvmeController{
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(1),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme0",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        0,
-									RoleBits:    storage.BdevRoleData | storage.BdevRoleMeta,
-								},
-							},
-						}),
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(2),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme1",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        1,
-									RoleBits:    storage.BdevRoleData | storage.BdevRoleWAL,
-								},
-							},
-						}),
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(3),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme2",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        2,
-									RoleBits:    storage.BdevRoleAll,
-								},
-							},
-						}),
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(4),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme3",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        3,
-									RoleBits:    storage.BdevRoleWAL,
-								},
-							},
-						}),
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(5),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme4",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        4,
-									RoleBits:    storage.BdevRoleMeta,
-								},
-							},
-						}),
-						newNvmeCtlr(&ctlpb.NvmeController{
-							PciAddr: test.MockPCIAddr(6),
-							SmdDevices: []*ctlpb.SmdDevice{
-								{
-									Uuid:        "nvme5",
-									TgtIds:      []int32{0, 1, 2, 3},
-									TotalBytes:  10 * humanize.GiByte,
-									AvailBytes:  10 * humanize.GiByte,
-									ClusterSize: clusterSize,
-									DevState:    devStateNormal,
-									Rank:        5,
-									RoleBits:    storage.BdevRoleMeta | storage.BdevRoleMeta,
-								},
-							},
-						}),
-					},
-				},
-			},
-			output: ExpectedOutput{
-				totalBytes: []uint64{
-					320 * clusterSize,
-					320 * clusterSize,
-					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-				},
-				availableBytes: []uint64{
-					320 * clusterSize,
-					320 * clusterSize,
-					320 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-				},
-				usableBytes: []uint64{
-					300 * clusterSize,
-					288 * clusterSize,
-					260 * clusterSize,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-					0 * humanize.GiByte,
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer test.ShowBufferOnFailure(t, buf)
-
-			engineCfgs := []*engine.Config{}
-			for idx, sc := range tc.input.storageCfgs {
-				ec := engine.MockConfig().WithStorage(sc.tierCfgs...)
-				ec.TargetCount = sc.targetCount
-				ec.Index = uint32(idx)
-				engineCfgs = append(engineCfgs, ec)
-			}
-			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
-			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
-
-			cs.adjustNvmeSize(tc.input.scanNvmeResp)
-
-			for idx, ctlr := range tc.input.scanNvmeResp.GetCtrlrs() {
-				dev := ctlr.GetSmdDevices()[0]
-				test.AssertEqual(t, tc.output.totalBytes[idx], dev.GetTotalBytes(),
-					fmt.Sprintf("Invalid total bytes with ctlr %s (index=%d): wait=%d, got=%d",
-						ctlr.GetPciAddr(), idx, tc.output.totalBytes[idx], dev.GetTotalBytes()))
-				test.AssertEqual(t, tc.output.availableBytes[idx], dev.GetAvailBytes(),
-					fmt.Sprintf("Invalid available bytes with ctlr %s (index=%d): wait=%d, got=%d",
-						ctlr.GetPciAddr(), idx, tc.output.availableBytes[idx], dev.GetAvailBytes()))
-				test.AssertEqual(t, tc.output.usableBytes[idx], dev.GetUsableBytes(),
-					fmt.Sprintf("Invalid usable bytes with ctlr %s (index=%d), "+
-						"wait=%d (%d clusters) got=%d (%d clusters)",
-						ctlr.GetPciAddr(), idx,
-						tc.output.usableBytes[idx], tc.output.usableBytes[idx]/clusterSize,
-						dev.GetUsableBytes(), dev.GetUsableBytes()/clusterSize))
-			}
-			if tc.output.message != "" {
-				test.AssertTrue(t,
-					strings.Contains(buf.String(), tc.output.message),
-					"missing message: "+tc.output.message)
-			}
-		})
-	}
-}
+//func TestServer_CtlSvc_adjustNvmeSize(t *testing.T) {
+//	const (
+//		clusterSize     uint64 = 32 * humanize.MiByte
+//		hugeClusterSize uint64 = humanize.GiByte
+//		metaSize        uint64 = 64 * humanize.MiByte
+//		metaWalSize     uint64 = 128 * humanize.MiByte
+//		rdbSize         uint64 = 256 * humanize.MiByte
+//		rdbWalSize      uint64 = 512 * humanize.MiByte
+//	)
+//
+//	type StorageCfg struct {
+//		targetCount int
+//		tierCfgs    storage.TierConfigs
+//	}
+//	type DataInput struct {
+//		storageCfgs  []*StorageCfg
+//		scanNvmeResp *ctlpb.ScanNvmeResp
+//	}
+//	type ExpectedOutput struct {
+//		totalBytes     []uint64
+//		availableBytes []uint64
+//		usableBytes    []uint64
+//		message        string
+//	}
+//
+//	newTierCfg := func(pciIdx int32) *storage.TierConfig {
+//		return storage.NewTierConfig().
+//			WithStorageClass(storage.ClassNvme.String()).
+//			WithBdevDeviceList(test.MockPCIAddr(pciIdx))
+//	}
+//
+//	newNvmeCtlr := func(nvmeCtlr *ctlpb.NvmeController) *ctlpb.NvmeController {
+//		for _, smdDev := range nvmeCtlr.SmdDevices {
+//			smdDev.ClusterSize = clusterSize
+//			smdDev.MetaSize = metaSize
+//			smdDev.MetaWalSize = metaWalSize
+//			smdDev.RdbSize = rdbSize
+//			smdDev.RdbWalSize = rdbWalSize
+//		}
+//
+//		return nvmeCtlr
+//	}
+//
+//	for name, tc := range map[string]struct {
+//		input  DataInput
+//		output ExpectedOutput
+//	}{
+//		"homogeneous": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 12,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//							newTierCfg(3),
+//						},
+//					},
+//					{
+//						targetCount: 6,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(4),
+//							newTierCfg(5),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{4, 5, 6, 7},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(3),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme2",
+//									TgtIds:      []int32{8, 9, 10, 11},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(4),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme3",
+//									TgtIds:      []int32{0, 1, 2},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        1,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(5),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme4",
+//									TgtIds:      []int32{3, 4, 5},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        1,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					8 * hugeClusterSize,
+//					8 * hugeClusterSize,
+//					18 * hugeClusterSize,
+//					18 * hugeClusterSize,
+//				},
+//			},
+//		},
+//		"heterogeneous": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 11,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//							newTierCfg(3),
+//						},
+//					},
+//					{
+//						targetCount: 5,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(4),
+//							newTierCfg(5),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{4, 5, 6},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(3),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme2",
+//									TgtIds:      []int32{7, 8, 9, 10},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(4),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme3",
+//									TgtIds:      []int32{0, 1, 2},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        1,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(5),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme4",
+//									TgtIds:      []int32{3, 4},
+//									TotalBytes:  20 * hugeClusterSize,
+//									AvailBytes:  20 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        1,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//					20 * hugeClusterSize,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					6 * hugeClusterSize,
+//					8 * hugeClusterSize,
+//					18 * hugeClusterSize,
+//					12 * hugeClusterSize,
+//				},
+//			},
+//		},
+//		"new": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 7,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{0, 1, 2},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//							DevState: devStateNew,
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					0,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					0,
+//				},
+//				message: "not usable: device state \"NEW\"",
+//			},
+//		},
+//		"evicted": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 7,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{0, 1, 2},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//							DevState: devStateFaulty,
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					0,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					0,
+//				},
+//				message: "not usable: device state \"EVICTED\"",
+//			},
+//		},
+//		"missing targets": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 4,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					0,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					0,
+//				},
+//				message: "not usable: missing storage info",
+//			},
+//		},
+//		"missing cluster size": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 7,
+//						tierCfgs: storage.TierConfigs{
+//							newTierCfg(1),
+//							newTierCfg(2),
+//						},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * hugeClusterSize,
+//									AvailBytes:  10 * hugeClusterSize,
+//									ClusterSize: hugeClusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData,
+//								},
+//							},
+//						},
+//						{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:       "nvme1",
+//									TgtIds:     []int32{0, 1, 2},
+//									TotalBytes: 10 * hugeClusterSize,
+//									AvailBytes: 10 * hugeClusterSize,
+//									Rank:       0,
+//									RoleBits:   storage.BdevRoleData,
+//								},
+//							},
+//						},
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					10 * hugeClusterSize,
+//					10 * hugeClusterSize,
+//				},
+//				availableBytes: []uint64{
+//					10 * hugeClusterSize,
+//					0,
+//				},
+//				usableBytes: []uint64{
+//					8 * hugeClusterSize,
+//					0,
+//				},
+//				message: "not usable: missing storage info",
+//			},
+//		},
+//		"multi bdev tier": {
+//			input: DataInput{
+//				storageCfgs: []*StorageCfg{
+//					{
+//						targetCount: 5,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(1)},
+//					},
+//					{
+//						targetCount: 4,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(2)},
+//					},
+//					{
+//						targetCount: 6,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(3)},
+//					},
+//					{
+//						targetCount: 4,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(4)},
+//					},
+//					{
+//						targetCount: 5,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(5)},
+//					},
+//					{
+//						targetCount: 6,
+//						tierCfgs:    storage.TierConfigs{newTierCfg(6)},
+//					},
+//				},
+//				scanNvmeResp: &ctlpb.ScanNvmeResp{
+//					Ctrlrs: []*ctlpb.NvmeController{
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(1),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme0",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        0,
+//									RoleBits:    storage.BdevRoleData | storage.BdevRoleMeta,
+//								},
+//							},
+//						}),
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(2),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme1",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        1,
+//									RoleBits:    storage.BdevRoleData | storage.BdevRoleWAL,
+//								},
+//							},
+//						}),
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(3),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme2",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        2,
+//									RoleBits:    storage.BdevRoleAll,
+//								},
+//							},
+//						}),
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(4),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme3",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        3,
+//									RoleBits:    storage.BdevRoleWAL,
+//								},
+//							},
+//						}),
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(5),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme4",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        4,
+//									RoleBits:    storage.BdevRoleMeta,
+//								},
+//							},
+//						}),
+//						newNvmeCtlr(&ctlpb.NvmeController{
+//							PciAddr: test.MockPCIAddr(6),
+//							SmdDevices: []*ctlpb.SmdDevice{
+//								{
+//									Uuid:        "nvme5",
+//									TgtIds:      []int32{0, 1, 2, 3},
+//									TotalBytes:  10 * humanize.GiByte,
+//									AvailBytes:  10 * humanize.GiByte,
+//									ClusterSize: clusterSize,
+//									Rank:        5,
+//									RoleBits:    storage.BdevRoleMeta | storage.BdevRoleMeta,
+//								},
+//							},
+//						}),
+//					},
+//				},
+//			},
+//			output: ExpectedOutput{
+//				totalBytes: []uint64{
+//					320 * clusterSize,
+//					320 * clusterSize,
+//					320 * clusterSize,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//				},
+//				availableBytes: []uint64{
+//					320 * clusterSize,
+//					320 * clusterSize,
+//					320 * clusterSize,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//				},
+//				usableBytes: []uint64{
+//					300 * clusterSize,
+//					288 * clusterSize,
+//					260 * clusterSize,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//					0 * humanize.GiByte,
+//				},
+//			},
+//		},
+//	} {
+//		t.Run(name, func(t *testing.T) {
+//			log, buf := logging.NewTestLogger(t.Name())
+//			defer test.ShowBufferOnFailure(t, buf)
+//
+//			engineCfgs := []*engine.Config{}
+//			for idx, sc := range tc.input.storageCfgs {
+//				ec := engine.MockConfig().WithStorage(sc.tierCfgs...)
+//				ec.TargetCount = sc.targetCount
+//				ec.Index = uint32(idx)
+//				engineCfgs = append(engineCfgs, ec)
+//			}
+//			serverCfg := config.DefaultServer().WithEngines(engineCfgs...)
+//			cs := mockControlService(t, log, serverCfg, nil, nil, nil)
+//
+//			cs.adjustNvmeSize(tc.input.scanNvmeResp)
+//
+//			for idx, ctlr := range tc.input.scanNvmeResp.GetCtrlrs() {
+//				dev := ctlr.GetSmdDevices()[0]
+//				test.AssertEqual(t, tc.output.totalBytes[idx], dev.GetTotalBytes(),
+//					fmt.Sprintf("Invalid total bytes with ctlr %s (index=%d): wait=%d, got=%d",
+//						ctlr.GetPciAddr(), idx, tc.output.totalBytes[idx], dev.GetTotalBytes()))
+//				test.AssertEqual(t, tc.output.availableBytes[idx], dev.GetAvailBytes(),
+//					fmt.Sprintf("Invalid available bytes with ctlr %s (index=%d): wait=%d, got=%d",
+//						ctlr.GetPciAddr(), idx, tc.output.availableBytes[idx], dev.GetAvailBytes()))
+//				test.AssertEqual(t, tc.output.usableBytes[idx], dev.GetUsableBytes(),
+//					fmt.Sprintf("Invalid usable bytes with ctlr %s (index=%d), "+
+//						"wait=%d (%d clusters) got=%d (%d clusters)",
+//						ctlr.GetPciAddr(), idx,
+//						tc.output.usableBytes[idx], tc.output.usableBytes[idx]/clusterSize,
+//						dev.GetUsableBytes(), dev.GetUsableBytes()/clusterSize))
+//			}
+//			if tc.output.message != "" {
+//				test.AssertTrue(t,
+//					strings.Contains(buf.String(), tc.output.message),
+//					"missing message: "+tc.output.message)
+//			}
+//		})
+//	}
+//}
 
 func TestServer_getRdbSize(t *testing.T) {
 	type ExpectedOutput struct {

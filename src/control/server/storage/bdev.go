@@ -242,23 +242,21 @@ type NvmeNamespace struct {
 // SmdDevice contains DAOS storage device information, including
 // health details if requested.
 type SmdDevice struct {
-	UUID        string        `json:"uuid"`
-	TargetIDs   []int32       `hash:"set" json:"tgt_ids"`
-	NvmeState   NvmeDevState  `json:"dev_state"`
-	LedState    LedState      `json:"led_state"`
-	Rank        ranklist.Rank `json:"rank"`
-	TotalBytes  uint64        `json:"total_bytes"`
-	AvailBytes  uint64        `json:"avail_bytes"`
-	UsableBytes uint64        `json:"usable_bytes"`
-	ClusterSize uint64        `json:"cluster_size"`
-	MetaSize    uint64        `json:"meta_size"`
-	MetaWalSize uint64        `json:"meta_wal_size"`
-	RdbSize     uint64        `json:"rdb_size"`
-	RdbWalSize  uint64        `json:"rdb_wal_size"`
-	Health      *NvmeHealth   `json:"health"`
-	TrAddr      string        `json:"tr_addr"`
-	Roles       BdevRoles     `json:"roles"`
-	HasSysXS    bool          `json:"has_sys_xs"`
+	UUID             string         `json:"uuid"`
+	TargetIDs        []int32        `hash:"set" json:"tgt_ids"`
+	Rank             ranklist.Rank  `json:"rank"`
+	TotalBytes       uint64         `json:"total_bytes"`
+	AvailBytes       uint64         `json:"avail_bytes"`
+	UsableBytes      uint64         `json:"usable_bytes"`
+	ClusterSize      uint64         `json:"cluster_size"`
+	MetaSize         uint64         `json:"meta_size"`
+	MetaWalSize      uint64         `json:"meta_wal_size"`
+	RdbSize          uint64         `json:"rdb_size"`
+	RdbWalSize       uint64         `json:"rdb_wal_size"`
+	Roles            BdevRoles      `json:"roles"`
+	HasSysXS         bool           `json:"has_sys_xs"`
+	Ctrlr            NvmeController `json:"ctrlr"`
+	CtrlrNamespaceID uint32         `json:"ctrlr_namespace_id"`
 }
 
 func (sd *SmdDevice) String() string {
@@ -337,6 +335,8 @@ type NvmeController struct {
 	HealthStats *NvmeHealth      `json:"health_stats"`
 	Namespaces  []*NvmeNamespace `hash:"set" json:"namespaces"`
 	SmdDevices  []*SmdDevice     `hash:"set" json:"smd_devices"`
+	NvmeState   NvmeDevState     `json:"dev_state"`
+	LedState    LedState         `json:"led_state"`
 }
 
 // UpdateSmd adds or updates SMD device entry for an NVMe Controller.

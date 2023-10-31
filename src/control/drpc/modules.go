@@ -1,5 +1,5 @@
 //
-// (C) Copyright 2019-2022 Intel Corporation.
+// (C) Copyright 2019-2023 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
@@ -244,8 +244,6 @@ const (
 	MethodPoolUpgrade MgmtMethod = C.DRPC_METHOD_MGMT_POOL_UPGRADE
 	// MethodLedManage defines a method to manage a VMD device LED state
 	MethodLedManage MgmtMethod = C.DRPC_METHOD_MGMT_LED_MANAGE
-	// MethodNvmeDevs is a ModuleMgmt method
-	MethodNvmeDevs MgmtMethod = C.DRPC_METHOD_MGMT_NVME_LIST_DEVS
 )
 
 type srvMethod int32
