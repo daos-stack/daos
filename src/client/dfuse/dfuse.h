@@ -897,27 +897,11 @@ struct dfuse_inode_entry {
  * writes are complete.
  */
 
-#ifdef DAOS_BUILD_RELEASE
-
 #define DFUSE_IE_WFLUSH(_ie)                                                                       \
 	do {                                                                                       \
 		D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                                 \
 		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
 	} while (0)
-
-#else
-/* Debug version, log on use. */
-#define DFUSE_IE_WFLUSH(_ie)                                                                       \
-	do {                                                                                       \
-		int _lrc = D_RWLOCK_TRYWRLOCK(&(_ie)->ie_wlock);                                   \
-		if (_lrc == -DER_BUSY) {                                                           \
-			DHL_WARN(_ie, _lrc, "Waiting for lock");                                   \
-			D_RWLOCK_WRLOCK(&(_ie)->ie_wlock);                                         \
-		}                                                                                  \
-		D_RWLOCK_UNLOCK(&(_ie)->ie_wlock);                                                 \
-	} while (0)
-
-#endif
 
 static inline struct dfuse_inode_entry *
 dfuse_inode_lookup(struct dfuse_info *dfuse_info, fuse_ino_t ino)
