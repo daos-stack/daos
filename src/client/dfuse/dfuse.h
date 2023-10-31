@@ -77,11 +77,15 @@ struct dfuse_eq {
 	pthread_t           de_thread;
 
 	struct d_slab_type *de_read_slab;
+	struct d_slab_type *de_pre_read_slab;
 	struct d_slab_type *de_write_slab;
 };
 
 /* Maximum size dfuse expects for read requests, this is not a limit but rather what is expected */
 #define DFUSE_MAX_READ (1024 * 1024)
+
+/* Size of pre-read requests */
+#define DFUSE_MAX_PRE_READ (1024 * 1024 * 2)
 
 /* Launch fuse, and do not return until complete */
 int
@@ -435,6 +439,7 @@ struct dfuse_pool {
 	ACTION(LISTXATTR)                                                                          \
 	ACTION(RENAME)                                                                             \
 	ACTION(OPEN)                                                                               \
+	ACTION(PRE_READ)                                                                           \
 	ACTION(READ)                                                                               \
 	ACTION(WRITE)                                                                              \
 	ACTION(STATFS)

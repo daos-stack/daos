@@ -103,7 +103,7 @@ dfuse_cb_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	/* Enable this for files up to the max read size. */
 	if (prefetch && oh->doh_parent_dir &&
 	    atomic_load_relaxed(&oh->doh_parent_dir->ie_linear_read) && ie->ie_stat.st_size > 0 &&
-	    ie->ie_stat.st_size <= DFUSE_MAX_READ) {
+	    ie->ie_stat.st_size <= DFUSE_MAX_PRE_READ) {
 		D_ALLOC_PTR(oh->doh_readahead);
 		if (oh->doh_readahead) {
 			D_MUTEX_INIT(&oh->doh_readahead->dra_lock, 0);
@@ -153,7 +153,7 @@ dfuse_cb_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		D_MUTEX_DESTROY(&oh->doh_readahead->dra_lock);
 		if (ev) {
 			daos_event_fini(&ev->de_ev);
-			d_slab_release(ev->de_eqt->de_read_slab, ev);
+			d_slab_release(ev->de_eqt->de_pre_read_slab, ev);
 		}
 		D_FREE(oh->doh_readahead);
 	}
