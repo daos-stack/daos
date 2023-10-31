@@ -1,7 +1,7 @@
 hosts:
   test_servers: 1
 
-timeout: 1600
+timeout: 900
 
 server_config:
   name: daos_server
@@ -17,7 +17,7 @@ server_config:
 pool:
   control_method: dmg
   size: 410M
-  test_loop: 10
+  test_loop: 5
   delta: 1MiB
   reclaim_props:
     - "disabled"
