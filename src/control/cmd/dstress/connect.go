@@ -196,7 +196,14 @@ func (cs *clientStats) GetWrite() uint64 {
 	return atomic.LoadUint64(&cs.writeBytes)
 }
 
-func (cmd *connectStressCmd) Execute(_ []string) error {
+func (cmd *connectStressCmd) Execute(args []string) error {
+	var quiet bool
+	for _, arg := range args {
+		if arg == "quiet" {
+			quiet = true
+		}
+	}
+
 	var connections uint
 	defer func() {
 		cmd.Infof("Connection count at exit: %d", connections)
@@ -262,7 +269,9 @@ func (cmd *connectStressCmd) Execute(_ []string) error {
 		wg.Add(1)
 
 		go client.Start(ctx, connections, testBuf, errChan)
-		fmt.Fprintf(os.Stderr, "Connections: %d\r", connections+1)
+		if !quiet {
+			fmt.Fprintf(os.Stderr, "Connections: %d\r", connections+1)
+		}
 	}
 
 	cmd.Infof("\nEstablished %d connections", connections)
@@ -275,15 +284,17 @@ func (cmd *connectStressCmd) Execute(_ []string) error {
 			wg.Wait()
 			return nil
 		default:
-			curRead := cs.GetRead()
-			readDelta := curRead - lastRead
-			lastRead = curRead
-			curWrite := cs.GetWrite()
-			writeDelta := curWrite - lastWrite
-			lastWrite = curWrite
+			if !quiet {
+				curRead := cs.GetRead()
+				readDelta := curRead - lastRead
+				lastRead = curRead
+				curWrite := cs.GetWrite()
+				writeDelta := curWrite - lastWrite
+				lastWrite = curWrite
 
-			fmt.Fprintf(os.Stderr, "read: %s/s, write: %s/s\r",
-				humanize.Bytes(readDelta), humanize.Bytes(writeDelta))
+				fmt.Fprintf(os.Stderr, "read: %s/s, write: %s/s\r",
+					humanize.Bytes(readDelta), humanize.Bytes(writeDelta))
+			}
 			time.Sleep(interval)
 		}
 	}

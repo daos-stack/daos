@@ -28,6 +28,7 @@ func (cmd *daosCmd) setCtx(ctx context.Context) {
 }
 
 type cliOptions struct {
+	Quiet         bool             `long:"quiet" short:"q" description:"Only display output at ERROR or higher"`
 	Debug         bool             `long:"debug" description:"enable debug output"`
 	Verbose       bool             `long:"verbose" description:"enable verbose output (when applicable)"`
 	JSON          bool             `long:"json" short:"j" description:"enable JSON output"`
@@ -59,6 +60,14 @@ func parseOpts(parent context.Context, args []string, opts *cliOptions, log *log
 		if manCmd, ok := cmd.(cmdutil.ManPageWriter); ok {
 			manCmd.SetWriteFunc(p.WriteManPage)
 			return cmd.Execute(args)
+		}
+
+		if opts.Debug && opts.Quiet {
+			return errors.New("--debug and --quiet are incompatible")
+		}
+
+		if opts.Quiet {
+			log.SetLevel(logging.LogLevelError)
 		}
 
 		if opts.Debug {
@@ -98,6 +107,9 @@ func parseOpts(parent context.Context, args []string, opts *cliOptions, log *log
 			}
 		}
 
+		if opts.Quiet {
+			args = append(args, "quiet")
+		}
 		if err := cmd.Execute(args); err != nil {
 			return err
 		}
