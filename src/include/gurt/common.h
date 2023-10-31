@@ -344,14 +344,21 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 		if (_rc == EBUSY) {                                                                \
 			int             delay1 = 0;                                                \
 			int             delay2 = 1;                                                \
-			struct timespec _wait  = {.tv_sec = delay1 + delay2};                      \
-			D_DEBUG(DB_MEM, "lock(%p), lock held, waiting", x);                        \
+			int             f      = delay1 + delay2;                                  \
+			int             c      = f;                                                \
+			struct timespec _wait  = {};                                               \
+			clock_gettime(CLOCK_REALTIME, &_wait);                                     \
+			_wait.tv_sec += f;                                                         \
+			D_DEBUG(DB_MEM, #fn "(%p) held, waiting", x);                              \
 			while ((_rc = fn2((x), &_wait)) == ETIMEDOUT) {                            \
-				delay1       = delay2;                                             \
-				delay2       = _wait.tv_sec;                                       \
-				_wait.tv_sec = delay1 + delay2;                                    \
-				D_DEBUG(DB_MEM, "lock(%p), lock still held, waiting %ld", x,       \
-					_wait.tv_sec);                                             \
+				delay1 = delay2;                                                   \
+				delay2 = f;                                                        \
+				c += f;                                                            \
+				D_CDEBUG(c > 1, DLOG_WARN, DB_MEM,                                 \
+					 #fn2 "(%p) still held after %d seconds", x, c);           \
+				f = delay1 + delay2;                                               \
+				clock_gettime(CLOCK_REALTIME, &_wait);                             \
+				_wait.tv_sec += f;                                                 \
 			}                                                                          \
 		}                                                                                  \
 		D_ASSERTF(_rc == 0, #fn " rc=%d %s\n", _rc, strerror(_rc));                        \
