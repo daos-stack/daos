@@ -20,7 +20,6 @@ pkgs="argobots                         \
       fuse3-libs                       \
       gcc                              \
       gcc-gfortran                     \
-      gcc-g++                          \
       gotestsum                        \
       hwloc-devel                      \
       libipmctl-devel                  \
