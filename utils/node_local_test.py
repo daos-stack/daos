@@ -4140,7 +4140,6 @@ class PosixTests():
         file8 = join(path, 'output')
         self.server.run_daos_client_cmd_pil4dfs(['gcc', '-o', file8, file7])
 
-        # test readelf
         self.server.run_daos_client_cmd_pil4dfs(['readelf', '-s', file8])
 
         self.server.run_daos_client_cmd_pil4dfs(['strip', '-s', file8])
