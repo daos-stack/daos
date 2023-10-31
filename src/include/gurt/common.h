@@ -399,7 +399,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 
 #ifdef DAOS_BUILD_RELEASE
 
-#define D_MUTEX_LOCK(x) __D_PTHREAD(pthread_mutex_lock, x)
+#define D_MUTEX_LOCK(x)    __D_PTHREAD(pthread_mutex_lock, x)
 #define D_RWLOCK_WRLOCK(x) __D_PTHREAD(pthread_rwlock_wrlock, x)
 #define D_RWLOCK_RDLOCK(x) __D_PTHREAD(pthread_rwlock_rdlock, x)
 
