@@ -4165,6 +4165,11 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['gcc', '-c', '-o', obj_b, fileb])
         self.server.run_daos_client_cmd_pil4dfs(['ar', '-rc', lib_ab, obj_a, obj_b])
         self.server.run_daos_client_cmd_pil4dfs(['objdump', '-d', obj_a])
+        self.server.run_daos_client_cmd_pil4dfs(['grep', 'print', filea])
+        self.server.run_daos_client_cmd_pil4dfs(['head', filea])
+        self.server.run_daos_client_cmd_pil4dfs(['tail', filea])
+        self.server.run_daos_client_cmd_pil4dfs(['more', filea])
+        self.server.run_daos_client_cmd_pil4dfs(['dos2unix', filea])
 
         self.server.run_daos_client_cmd_pil4dfs(['awk', '{print $1}', file9])
         self.server.run_daos_client_cmd_pil4dfs(['base64', file9])
@@ -4176,12 +4181,6 @@ class PosixTests():
         file10 = join(path, 'output.html')
         self.server.run_daos_client_cmd_pil4dfs(['wget', 'https://www.google.com', '-O', file10])
         self.server.run_daos_client_cmd_pil4dfs(['curl', 'https://www.google.com', '-o', file10])
-
-        self.server.run_daos_client_cmd_pil4dfs(['dos2unix', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['grep', 'print', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['head', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['tail', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['more', filea])
 
         filepy = join(path, 'test.py')
         with open(filepy, 'w') as fd:

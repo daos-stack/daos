@@ -5500,9 +5500,8 @@ print_summary(void)
 	fprintf(stderr, "[rename ]  %" PRIu64 "\n", rename_loc);
 	fprintf(stderr, "[mmap   ]  %" PRIu64 "\n", mmap_loc);
 
-	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc +
-		 link_loc + unlink_loc + rdlink_loc + seek_loc + mkdir_loc + rmdir_loc +
-		 rename_loc + mmap_loc;
+	op_sum = read_loc + write_loc + open_loc + stat_loc + opendir_loc + readdir_loc + link_loc +
+		 unlink_loc + rdlink_loc + seek_loc + mkdir_loc + rmdir_loc + rename_loc + mmap_loc;
 	fprintf(stderr, "\n");
 	fprintf(stderr, "[op_sum ]  %" PRIu64 "\n", op_sum);
 }
