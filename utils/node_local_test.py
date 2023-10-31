@@ -10,30 +10,31 @@ the client with fault injection of D_ALLOC() usage.
 
 # pylint: disable=too-many-lines
 
-import os
-from os.path import join
-import sys
-import time
-import uuid
-import json
-import copy
-import signal
-import pprint
-import stat
-import errno
 import argparse
-import random
-import threading
+import copy
+import errno
 import functools
-import traceback
-import subprocess  # nosec
-import tempfile
+import json
+import os
 import pickle  # nosec
+import pprint
+import random
 import re
 import shutil
-import xattr
+import signal
+import stat
+import subprocess  # nosec
+import sys
+import tempfile
+import threading
+import time
+import traceback
+import uuid
+from os.path import join
+
 import junit_xml
 import tabulate
+import xattr
 import yaml
 
 
@@ -687,7 +688,7 @@ class DaosServer():
 
             with open(join(self._io_server_dir.name, 'daos_engine'), 'w') as fd:
                 fd.write('#!/bin/sh\n')
-                fd.write(f"export PATH={join(self.conf['PREFIX'],'bin')}:$PATH\n")
+                fd.write(f"export PATH={join(self.conf['PREFIX'], 'bin')}:$PATH\n")
                 fd.write(f'exec valgrind {" ".join(valgrind_args)} daos_engine "$@"\n')
 
             os.chmod(join(self._io_server_dir.name, 'daos_engine'),
@@ -1440,6 +1441,8 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
+
+        self.run_query()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, background=True)
@@ -1520,6 +1523,13 @@ class DFuse():
 
         assert ret.returncode == 0, ret
         return ret
+
+    def run_query(self, use_json=False, quiet=False):
+        """Run filesystem query"""
+        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dir],
+                          use_json=use_json, log_check=quiet, valgrind=quiet)
+        print(rc)
+        return rc
 
     def check_usage(self, ino=None, inodes=None, open_files=None, pools=None, containers=None):
         """Query and verify the dfuse statistics.
@@ -2796,11 +2806,9 @@ class PosixTests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir])
-        print(rc)
+        rc = self.dfuse.run_query()
         assert rc.returncode == 0
-        rc = run_daos_cmd(self.conf, ['filesystem', 'query', self.dfuse.dir], use_json=True)
-        print(rc)
+        rc = self.dfuse.run_query(use_json=True)
         assert rc.returncode == 0
 
     @needs_dfuse
@@ -4068,6 +4076,9 @@ class PosixTests():
         with open(file1, 'w') as fd:
             fd.write('Hello World!')
 
+        # hexdump to check file
+        self.server.run_daos_client_cmd_pil4dfs(['hexdump', file1])
+
         # Copy a file.
         file2 = join(path, 'file2')
         self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
@@ -4109,6 +4120,10 @@ class PosixTests():
         file5 = join(path, 'newfile')
         self.server.run_daos_client_cmd_pil4dfs(['dd', 'if=/dev/zero', f'of={file5}', 'bs=1',
                                                 'count=1'])
+        # cp "/usr/bin/mkdir" to DFS and call "/usr/bin/file" to analyze the binary file file6
+        file6 = join(path, 'elffile')
+        self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
+        self.server.run_daos_client_cmd_pil4dfs(['file', file6])
 
 
 class NltStdoutWrapper():

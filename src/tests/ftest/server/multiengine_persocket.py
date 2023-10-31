@@ -6,14 +6,14 @@
 import base64
 import traceback
 
-from pydaos.raw import DaosApiError
-
-from general_utils import get_random_bytes, wait_for_result, check_ping, check_ssh
-from run_utils import run_remote, run_local
+from general_utils import (check_ping, check_ssh, get_random_bytes,
+                           wait_for_result)
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from pydaos.raw import DaosApiError
+from run_utils import run_local, run_remote
 from server_utils_base import DaosServerCommand
-from storage_utils import StorageInfo, StorageException
+from storage_utils import StorageException, StorageInfo
 
 
 class MultiEnginesPerSocketTest(IorTestBase, MdtestBase):

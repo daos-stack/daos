@@ -3,8 +3,9 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import re
+from logging import getLogger
+
 from ClusterShell.NodeSet import NodeSet
 
 
