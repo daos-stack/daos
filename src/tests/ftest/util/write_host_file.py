@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from logging import getLogger
 import os
 import random
+from logging import getLogger
 
 
 def write_host_file(hosts, path='/tmp', slots=1):

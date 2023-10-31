@@ -4,13 +4,12 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import time
 import itertools
 import random
-
-from avocado.core.exceptions import TestFail
+import time
 
 from apricot import TestWithServers
+from avocado.core.exceptions import TestFail
 from general_utils import DaosTestError
 from thread_manager import ThreadManager
 

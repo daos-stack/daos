@@ -904,8 +904,6 @@ rebuild_container_scan_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			 rebuild_obj_scan_cb, NULL, arg, dth);
 	dtx_end(dth, NULL, rc);
 
-	*acts |= VOS_ITER_CB_YIELD;
-
 close:
 	vos_cont_close(coh);
 

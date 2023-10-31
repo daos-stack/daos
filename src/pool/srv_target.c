@@ -223,7 +223,7 @@ flush_ult(void *arg)
 	D_ASSERT(child->spc_flush_req != NULL);
 
 	while (!dss_ult_exiting(child->spc_flush_req)) {
-		rc = vos_flush_pool(child->spc_hdl, false, nr_flush, &nr_flushed);
+		rc = vos_flush_pool(child->spc_hdl, nr_flush, &nr_flushed);
 		if (rc < 0) {
 			D_ERROR(DF_UUID"[%d]: Flush pool failed. "DF_RC"\n",
 				DP_UUID(child->spc_uuid), dmi->dmi_tgt_id, DP_RC(rc));
@@ -1800,8 +1800,13 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 	       void *data, unsigned *acts)
 {
 	struct child_discard_arg	*arg = data;
+	struct d_backoff_seq		backoff_seq;
 	daos_epoch_range_t		epr;
 	int				rc;
+
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
+				1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
 
 	epr.epr_hi = arg->tgt_discard->epoch;
 	epr.epr_lo = 0;
@@ -1813,8 +1818,10 @@ obj_discard_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 			break;
 
 		D_DEBUG(DB_REBUILD, "retry by " DF_UOID "/%d", DP_UOID(ent->ie_oid), rc);
-		dss_sleep(0);
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
+
+	d_backoff_seq_fini(&backoff_seq);
 
 	if (rc != 0)
 		DL_ERROR(rc, "discard object pool/object " DF_UUID "/" DF_UOID,
@@ -1833,6 +1840,7 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	vos_iter_param_t	param = { 0 };
 	struct vos_iter_anchors	anchor = { 0 };
 	daos_handle_t		coh;
+	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
 	D_ASSERT(type == VOS_ITER_COUUID);
@@ -1857,6 +1865,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		D_GOTO(put, rc);
 	}
 
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
+				1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
 	param.ip_hdl = coh;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = arg->tgt_discard->epoch;
@@ -1870,9 +1882,10 @@ cont_discard_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			break;
 
 		D_DEBUG(DB_REBUILD, "retry by " DF_UUID "/%d", DP_UUID(entry->ie_couuid), rc);
-		dss_sleep(0);
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
+	d_backoff_seq_fini(&backoff_seq);
 	vos_cont_close(coh);
 	D_DEBUG(DB_TRACE, DF_UUID"/"DF_UUID" discard cont done: "DF_RC"\n",
 		DP_UUID(arg->tgt_discard->pool_uuid), DP_UUID(entry->ie_couuid),
@@ -1893,6 +1906,7 @@ pool_child_discard(void *data)
 	struct vos_iter_anchors	anchor = { 0 };
 	struct pool_target_addr addr;
 	uint32_t		myrank;
+	struct d_backoff_seq	backoff_seq;
 	int			rc;
 
 	myrank = dss_self_rank();
@@ -1911,6 +1925,10 @@ pool_child_discard(void *data)
 	D_ASSERT(child != NULL);
 	param.ip_hdl = child->spc_hdl;
 
+	rc = d_backoff_seq_init(&backoff_seq, 0 /* nzeros */, 16 /* factor */, 8 /* next (ms) */,
+				1 << 10 /* max (ms) */);
+	D_ASSERTF(rc == 0, "d_backoff_seq_init: "DF_RC"\n", DP_RC(rc));
+
 	cont_arg.tgt_discard = arg;
 	child->spc_discard_done = 0;
 	do {
@@ -1920,10 +1938,12 @@ pool_child_discard(void *data)
 			break;
 
 		D_DEBUG(DB_REBUILD, "retry by " DF_UUID "/%d", DP_UUID(arg->pool_uuid), rc);
-		dss_sleep(0);
+		dss_sleep(d_backoff_seq_next(&backoff_seq));
 	} while (1);
 
 	child->spc_discard_done = 1;
+
+	d_backoff_seq_fini(&backoff_seq);
 
 	ds_pool_child_put(child);
 
