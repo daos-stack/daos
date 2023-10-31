@@ -19,9 +19,9 @@ pkgs="argobots                         \
       fuse3                            \
       fuse3-libs                       \
       gcc                              \
-      gfortran                         \
+      gcc-gfortran                     \
+      gcc-g++                          \
       gotestsum                        \
-      g++                              \
       hwloc-devel                      \
       libipmctl-devel                  \
       libisa-l-devel                   \
