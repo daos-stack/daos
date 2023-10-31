@@ -20,7 +20,7 @@ jobs:
         include:
           - distro: ubuntu
             base: ubuntu
-            with: ubuntu:22.04
+            with: ubuntu:mantic
     env:
       DEPS_JOBS: 10
       COMPILER: clang
@@ -85,7 +85,7 @@ jobs:
             with: fedora:38
           - distro: leap.15
             base: leap.15
-            with: opensuse/leap:15.4
+            with: opensuse/leap:15.5
     env:
       DEPS_JOBS: 10
       BASE_DISTRO: ${{ matrix.with }}
