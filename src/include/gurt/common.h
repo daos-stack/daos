@@ -333,7 +333,7 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 	({                                                                                         \
 		int _rc;                                                                           \
 		_rc = fn(x);                                                                       \
-		D_ASSERTF(_rc == 0, "%s rc=%d %s\n", #fn, _rc, strerror(_rc));                     \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
 		d_errno2der(_rc);                                                                  \
 	})
 
@@ -354,14 +354,14 @@ d_realpath(const char *path, char *resolved_path) _dalloc_;
 				delay1 = delay2;                                                   \
 				delay2 = f;                                                        \
 				c += f;                                                            \
+				f = delay1 + delay2;                                               \
 				D_CDEBUG(c > 1, DLOG_WARN, DB_MEM,                                 \
 					 #fn2 "(%p) still held after %d seconds", x, c);           \
-				f = delay1 + delay2;                                               \
 				clock_gettime(CLOCK_REALTIME, &_wait);                             \
 				_wait.tv_sec += f;                                                 \
 			}                                                                          \
 		}                                                                                  \
-		D_ASSERTF(_rc == 0, #fn " rc=%d %s\n", _rc, strerror(_rc));                        \
+		D_ASSERTF(_rc == 0, #fn "(%p) rc=%d %s\n", x, _rc, strerror(_rc));                 \
 		d_errno2der(_rc);                                                                  \
 	})
 
