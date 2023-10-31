@@ -68,7 +68,7 @@ accessed concurrently by uncoordinated clients. All I/O operations
 the same epoch. The DAOS transaction mechanism automatically detects the
 traditional read/write, write/read and write/write conflicts and aborts
 one of the conflicting transactions (the transaction fails to commit
-with `-DER_RESTART`). The failed transaction then has to be restarted
+with `-DER_TX_RESTART`). The failed transaction then has to be restarted
 by the user/application.
 
 In the initial implementation, the transaction API does not support reading
