@@ -163,9 +163,9 @@ entry_array_close(void *arg) {
 	entry->fd_cont->ioc_open_count -= 1;
 
 	/* Do not close container/pool handles at this point
-	 * to allow for re-use.
+	 * to allow for reuse.
 	 * ioil_shrink_cont(entry->fd_cont, true, true);
-	*/
+	 */
 }
 
 static int
@@ -799,7 +799,7 @@ child_hdlr(void)
 	int rc;
 
 	daos_dti_reset();
-	ioil_eqh = DAOS_HDL_INVAL;
+	ioil_eqh = ioil_iog.iog_main_eqh = DAOS_HDL_INVAL;
 	rc = daos_eq_create(&ioil_eqh);
 	if (rc)
 		DFUSE_LOG_WARNING("daos_eq_create() failed: "DF_RC, DP_RC(rc));

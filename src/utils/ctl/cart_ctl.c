@@ -272,7 +272,7 @@ print_usage_msg(const char *msg)
 	printf("\tReturn pids of the specified ranks\n");
 	printf("\nset_fi_attr\n");
 	printf("\tset fault injection attributes for a fault ID. This command\n"
-	       "\tmust be acompanied by the option\n"
+	       "\tmust be accompanied by the option\n"
 	       "\t--attr fault_id,max_faults,probability,err_code"
 	       "[,argument]\n");
 	printf("\noptions:\n");
@@ -529,7 +529,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 
 /**
  * Fill in RPC arguments to turn on / turn off fault injection on target
- * \param[in/out] rpc_req        pointer to the RPC
+ * \param[in,out] rpc_req        pointer to the RPC
  * \param[in] op                 0 means the RPC will disable fault injection on
  *                               the target, 1 means the RPc will enable fault
  *                               injection on the target.

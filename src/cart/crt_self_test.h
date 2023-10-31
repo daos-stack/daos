@@ -88,7 +88,7 @@
  * - In the future, the amount of information passed to self-test can grow
  *   without changing the size of the test RPCs (which instead only require a
  *   session id to convey all that same information)
- * - Provide long-lived bulk handles to re-use across multiple test messages,
+ * - Provide long-lived bulk handles to reuse across multiple test messages,
  *   reducing their overhead
  *
  * Opening a session before starting a test is required for all messages except

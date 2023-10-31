@@ -6,9 +6,6 @@
 """
 # pylint: disable=too-many-lines
 
-from argparse import ArgumentParser, RawDescriptionHelpFormatter
-from collections import OrderedDict, defaultdict
-from tempfile import TemporaryDirectory
 import errno
 import getpass
 import json
@@ -18,34 +15,44 @@ import re
 import site
 import sys
 import time
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from collections import OrderedDict, defaultdict
+from tempfile import TemporaryDirectory
 
 # When SRE-439 is fixed we should be able to include these import statements here
 # from avocado.core.settings import settings
 # from avocado.core.version import MAJOR, MINOR
 # from avocado.utils.stacktrace import prepare_exc_info
 from ClusterShell.NodeSet import NodeSet
-
 # When SRE-439 is fixed we should be able to include these import statements here
 # from util.distro_utils import detect
 # pylint: disable=import-error,no-name-in-module
-from process_core_files import CoreFileProcessing, CoreFileException
+from process_core_files import CoreFileException, CoreFileProcessing
 from slurm_setup import SlurmSetup, SlurmSetupException
 
 # Update the path to support utils files that import other utils files
+# This is not good coding practice. Should use package paths and remove alls these E402.
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "util"))
+from data_utils import (dict_extract_values, list_flatten,  # noqa: E402
+                        list_unique)
 # pylint: disable=import-outside-toplevel
-from host_utils import get_node_set, get_local_host, HostInfo, HostException  # noqa: E402
-from logger_utils import get_console_handler, get_file_handler                # noqa: E402
-from results_utils import create_html, create_xml, Job, Results, TestResult   # noqa: E402
-from run_utils import run_local, run_remote, find_command, RunException, \
-    stop_processes   # noqa: E402
-from slurm_utils import show_partition, create_partition, delete_partition    # noqa: E402
-from storage_utils import StorageInfo, StorageException                       # noqa: E402
-from user_utils import get_chown_command, groupadd, useradd, userdel, get_group_id, \
-    get_user_groups  # noqa: E402
-from yaml_utils import get_test_category, get_yaml_data, YamlUpdater, \
-    YamlException    # noqa: E402
-from data_utils import list_unique, list_flatten, dict_extract_values  # noqa: E402
+from host_utils import (HostException, HostInfo, get_local_host,  # noqa: E402
+                        get_node_set)
+from logger_utils import get_console_handler, get_file_handler  # noqa: E402
+from results_utils import (Job, Results, TestResult, create_html,  # noqa: E402
+                           create_xml)
+from run_utils import stop_processes  # noqa: E402
+from run_utils import (RunException, find_command, run_local,  # noqa: E402
+                       run_remote)
+from slurm_utils import (create_partition, delete_partition,  # noqa: E402
+                         show_partition)
+from storage_utils import StorageException, StorageInfo  # noqa: E402
+from user_utils import get_user_groups  # noqa: E402
+from user_utils import (get_chown_command, get_group_id,  # noqa: E402
+                        groupadd, useradd, userdel)
+from yaml_utils import YamlException  # noqa: E402
+from yaml_utils import (YamlUpdater, get_test_category,  # noqa: E402
+                        get_yaml_data)
 
 BULLSEYE_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test.cov")
 BULLSEYE_FILE = os.path.join(os.sep, "tmp", "test.cov")
@@ -232,7 +239,7 @@ class AvocadoInfo():
         """
         try:
             # pylint: disable=import-outside-toplevel
-            from avocado.core.settings import settings, SettingsError
+            from avocado.core.settings import SettingsError, settings
             try:
                 # Newer versions of avocado use this approach
                 config = settings.as_dict()
@@ -1083,6 +1090,7 @@ class Launch():
                     os.environ["DAOS_TEST_SHARED_DIR"], "daos_test", "apps")
             os.environ["D_LOG_FILE"] = os.path.join(os.environ["DAOS_TEST_LOG_DIR"], "daos.log")
             os.environ["D_LOG_FILE_APPEND_PID"] = "1"
+            os.environ["D_LOG_FILE_APPEND_RANK"] = "1"
 
             # Assign the default value for transport configuration insecure mode
             os.environ["DAOS_INSECURE_MODE"] = str(insecure_mode)

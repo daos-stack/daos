@@ -102,37 +102,47 @@ cont_svc_init(struct cont_svc *svc, const uuid_t pool_uuid, uint64_t id,
 	/* cs_root */
 	rc = rdb_path_init(&svc->cs_root);
 	if (rc != 0)
-		D_GOTO(err_lock, rc);
+		goto err_lock;
 	rc = rdb_path_push(&svc->cs_root, &rdb_path_root_key);
 	if (rc != 0)
-		D_GOTO(err_root, rc);
+		goto err_root;
 
 	/* cs_uuids */
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_uuids);
 	if (rc != 0)
-		D_GOTO(err_root, rc);
+		goto err_root;
 	rc = rdb_path_push(&svc->cs_uuids, &ds_cont_prop_cuuids);
 	if (rc != 0)
-		D_GOTO(err_uuids, rc);
+		goto err_uuids;
 
 	/* cs_conts */
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_conts);
 	if (rc != 0)
-		D_GOTO(err_uuids, rc);
+		goto err_uuids;
 	rc = rdb_path_push(&svc->cs_conts, &ds_cont_prop_conts);
 	if (rc != 0)
-		D_GOTO(err_conts, rc);
+		goto err_conts;
 
 	/* cs_hdls */
 	rc = rdb_path_clone(&svc->cs_root, &svc->cs_hdls);
 	if (rc != 0)
-		D_GOTO(err_conts, rc);
+		goto err_conts;
 	rc = rdb_path_push(&svc->cs_hdls, &ds_cont_prop_cont_handles);
 	if (rc != 0)
-		D_GOTO(err_hdls, rc);
+		goto err_hdls;
+
+	/* cs_ops */
+	rc = rdb_path_clone(&svc->cs_root, &svc->cs_ops);
+	if (rc != 0)
+		goto err_hdls;
+	rc = rdb_path_push(&svc->cs_ops, &ds_cont_prop_svc_ops);
+	if (rc != 0)
+		goto err_svcops;
 
 	return 0;
 
+err_svcops:
+	rdb_path_fini(&svc->cs_ops);
 err_hdls:
 	rdb_path_fini(&svc->cs_hdls);
 err_conts:
@@ -150,6 +160,7 @@ err:
 static void
 cont_svc_fini(struct cont_svc *svc)
 {
+	rdb_path_fini(&svc->cs_ops);
 	rdb_path_fini(&svc->cs_hdls);
 	rdb_path_fini(&svc->cs_conts);
 	rdb_path_fini(&svc->cs_uuids);
@@ -544,8 +555,8 @@ out:
 
 /* check if container exists by UUID and (if applicable) non-default label */
 static int
-cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
-		     uuid_t puuid, uuid_t cuuid, char *clabel)
+cont_create_existence_check(struct rdb_tx *tx, struct cont_svc *svc, uuid_t puuid, uuid_t cuuid,
+			    char *clabel, bool dup_op)
 {
 	d_iov_t		key;
 	d_iov_t		val;
@@ -568,6 +579,11 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 		D_DEBUG(DB_MD, DF_CONT": no label, lookup by UUID "DF_UUIDF
 			" "DF_RC"\n", DP_CONT(puuid, cuuid), DP_UUID(cuuid),
 			DP_RC(rc));
+
+		/* UUID found is an "already exists" error if this is a new (not a retry) RPC */
+		if (may_exist && !dup_op)
+			return -DER_EXIST;
+
 		return rc;
 	}
 
@@ -597,6 +613,11 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 				DP_UUID(match_cuuid));
 			return -DER_INVAL;
 		}
+
+		/* UUID and label found and match. Error if this is a new (not a retry) RPC */
+		if (!dup_op)
+			return -DER_EXIST;
+
 		return 0;
 	}
 
@@ -998,8 +1019,8 @@ cont_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 }
 
 static int
-cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
-	    struct cont_svc *svc, crt_rpc_t *rpc)
+cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont_svc *svc, bool dup_op,
+	    crt_rpc_t *rpc)
 {
 	struct cont_create_in  *in = crt_req_get(rpc);
 	daos_prop_t	       *prop_dup = NULL;
@@ -1064,8 +1085,8 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Check if a container with this UUID and label already exists */
-	rc = cont_existence_check(tx, svc, pool_hdl->sph_pool->sp_uuid,
-				  in->cci_op.ci_uuid, lbl);
+	rc = cont_create_existence_check(tx, svc, pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid,
+					 lbl, dup_op);
 	if (rc != -DER_NONEXIST) {
 		if (rc == 0)
 			D_DEBUG(DB_MD, DF_CONT": container already exists\n",
@@ -1806,6 +1827,12 @@ cont_agg_eph_leader_ult(void *arg)
 	while (!dss_ult_exiting(svc->cs_ec_leader_ephs_req)) {
 		d_rank_list_t		fail_ranks = { 0 };
 
+		if (pool->sp_rebuilding) {
+			D_DEBUG(DB_MD, DF_UUID "skip during rebuilding.\n",
+				DP_UUID(pool->sp_uuid));
+			goto yield;
+		}
+
 		rc = map_ranks_init(pool->sp_map, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN,
 				    &fail_ranks);
 		if (rc) {
@@ -1874,6 +1901,8 @@ cont_agg_eph_leader_ult(void *arg)
 				continue;
 			}
 			ec_agg->ea_current_eph = min_eph;
+			if (pool->sp_rebuilding)
+				break;
 		}
 
 		map_ranks_fini(&fail_ranks);
@@ -5136,20 +5165,23 @@ static int
 cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		 crt_rpc_t *rpc, int cont_proto_ver)
 {
-	struct cont_op_in		*in = crt_req_get(rpc);
-	struct cont_open_bylabel_in	*olbl_in = NULL;
-	struct cont_open_bylabel_out	*olbl_out = NULL;
-	struct cont_destroy_bylabel_in	*dlbl_in = NULL;
-	struct rdb_tx			 tx;
-	crt_opcode_t			 opc = opc_get(rpc->cr_opc);
-	struct cont			*cont = NULL;
-	struct cont_pool_metrics	*metrics;
-	bool				 update_mtime = false;
-	int				 rc;
+	struct cont_op_in              *in       = crt_req_get(rpc);
+	struct cont_open_bylabel_in    *olbl_in  = NULL;
+	struct cont_open_bylabel_out   *olbl_out = NULL;
+	struct cont_destroy_bylabel_in *dlbl_in  = NULL;
+	struct rdb_tx                   tx;
+	crt_opcode_t                    opc  = opc_get(rpc->cr_opc);
+	struct cont                    *cont = NULL;
+	struct cont_pool_metrics       *metrics;
+	bool                            update_mtime = false;
+	bool                            dup_op       = false;
+	const char                     *clbl         = NULL;
+	char                            cuuid[37];
+	int                             rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
-		D_GOTO(out, rc);
+		goto out;
 
 	/* TODO: Implement per-container locking. */
 	if (opc == CONT_QUERY || opc == CONT_ATTR_GET ||
@@ -5158,18 +5190,24 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	else
 		ABT_rwlock_wrlock(svc->cs_lock);
 
+	/* TODO: add client-provided metadata RPC key, lookup in cs_ops KVS, assign dup_op */
+
 	switch (opc) {
 	case CONT_CREATE:
-		rc = cont_create(&tx, pool_hdl, svc, rpc);
+		rc = cont_create(&tx, pool_hdl, svc, dup_op, rpc);
 		if (likely(rc == 0)) {
 			metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
 			d_tm_inc_counter(metrics->create_total, 1);
 		}
+		if (dup_op)
+			goto out_lock;
+
 		break;
 	case CONT_OPEN_BYLABEL:
 		olbl_in = crt_req_get(rpc);
 		olbl_out = crt_reply_get(rpc);
 		rc = cont_lookup_bylabel(&tx, svc, olbl_in->coli_label, &cont);
+		/* TODO: idempotent rc=0 return for dup_op case. */
 		if (rc != 0)
 			goto out_lock;
 		/* NB: call common cont_op_with_cont() same as CONT_OPEN case */
@@ -5177,11 +5215,30 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 		uuid_copy(olbl_out->colo_uuid, cont->c_uuid);
 		break;
 	case CONT_DESTROY_BYLABEL:
-		dlbl_in = crt_req_get(rpc);
-		rc = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
-		if (rc != 0)
+	case CONT_DESTROY:
+		if (opc == CONT_DESTROY_BYLABEL) {
+			dlbl_in = crt_req_get(rpc);
+			clbl    = dlbl_in->cdli_label;
+			rc      = cont_lookup_bylabel(&tx, svc, dlbl_in->cdli_label, &cont);
+		} else {
+			uuid_unparse(in->ci_uuid, cuuid);
+			rc = cont_lookup(&tx, svc, in->ci_uuid, &cont);
+		}
+		if (rc == -DER_NONEXIST && dup_op) {
+			D_DEBUG(DB_MD, DF_UUID ":%s: do not destroy already-destroyed container\n",
+				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
+			rc = 0;
 			goto out_lock;
-		/* NB: call common cont_op_with_cont() same as CONT_DESTROY */
+		} else if (rc == 0 && dup_op) {
+			/* original rpc destroyed container. But another one was created! */
+			D_DEBUG(DB_MD,
+				DF_UUID ":%s: do not destroy already-destroyed "
+					"(and since recreated!) container\n",
+				DP_UUID(pool_hdl->sph_pool->sp_uuid), clbl ? clbl : cuuid);
+			goto out_contref;
+		} else if (rc != 0) {
+			goto out_lock;
+		}
 		rc = cont_op_with_cont(&tx, pool_hdl, cont, rpc, &update_mtime, cont_proto_ver);
 		break;
 	default:
@@ -5192,6 +5249,7 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	}
 	if (rc != 0)
 		goto out_contref;
+	/* TODO: assign cs_ops value rc=0 */
 
 	/* Update container metadata modified times as applicable
 	 * NB: this is a NOOP if the pool has not been upgraded to the layout containing mdtimes.
@@ -5200,12 +5258,13 @@ cont_op_with_svc(struct ds_pool_hdl *pool_hdl, struct cont_svc *svc,
 	if (rc != 0)
 		goto out_contref;
 
+	/* TODO: insert client RPC key (UUID + timestamp) and value (rc) in cs_ops */
+
 	rc = rdb_tx_commit(&tx);
 	if (rc != 0)
-		D_ERROR(DF_CONT": rpc=%p opc=%u hdl="DF_UUID" rdb_tx_commit "
-			"failed: "DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid),
-			rpc, opc, DP_UUID(in->ci_hdl), DP_RC(rc));
+		D_ERROR(DF_CONT ": rpc=%p opc=%u hdl=" DF_UUID " rdb_tx_commit failed: " DF_RC "\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->ci_uuid), rpc, opc,
+			DP_UUID(in->ci_hdl), DP_RC(rc));
 
 out_contref:
 	if (cont)
@@ -5215,10 +5274,10 @@ out_lock:
 	rdb_tx_end(&tx);
 out:
 	/* Propagate new snapshot list by IV */
-	if (rc == 0) {
+	if (!dup_op && (rc == 0)) {
 		if (opc == CONT_SNAP_CREATE || opc == CONT_SNAP_DESTROY)
 			ds_cont_update_snap_iv(svc, in->ci_uuid);
-		else if (opc == CONT_PROP_SET)
+		else if (opc == CONT_PROP_SET || opc == CONT_ACL_UPDATE || opc == CONT_ACL_DELETE)
 			ds_cont_prop_iv_update(svc, in->ci_uuid);
 	}
 

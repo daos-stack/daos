@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils_base import ObjectWithParameters, BasicParameter
+from command_utils_base import BasicParameter, ObjectWithParameters
 from daos_utils import DaosCommand
 
 

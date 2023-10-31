@@ -9,7 +9,7 @@ def scons():
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()
-    denv.require('argobots', 'protobufc')
+    denv.require('protobufc')
 
     # Common object code
     common_tgts = denv.SharedObject(['obj_class.c', 'obj_rpc.c', 'obj_task.c',
@@ -27,6 +27,7 @@ def scons():
 
     # generate server module
     senv = denv.Clone()
+    senv.require('isal', 'argobots')
     senv.require('pmdk', headers_only=True)
 
     senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
