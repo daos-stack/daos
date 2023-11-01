@@ -15,11 +15,8 @@ fi
 pkgs="argobots                         \
       boost-python3$PY_MINOR_VER-devel \
       capstone                         \
-      curl                             \
       fuse3                            \
       fuse3-libs                       \
-      gcc                              \
-      gcc-gfortran                     \
       gotestsum                        \
       hwloc-devel                      \
       libipmctl-devel                  \
@@ -38,8 +35,7 @@ pkgs="argobots                         \
       python3$PY_MINOR_VER-pyxattr     \
       python3$PY_MINOR_VER-tabulate    \
       spdk-devel                       \
-      valgrind-devel                   \
-      wget"
+      valgrind-devel"
 
 if $quick_build; then
     if ! read -r mercury_version < "$distro"-required-mercury-rpm-version; then

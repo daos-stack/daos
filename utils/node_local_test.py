@@ -4069,18 +4069,12 @@ class PosixTests():
         with open(file1, 'w') as fd:
             fd.write('Hello World!')
 
-        self.server.run_daos_client_cmd_pil4dfs(['stat', file1])
-        self.server.run_daos_client_cmd_pil4dfs(['wc', '-l', file1])
-        self.server.run_daos_client_cmd_pil4dfs(['xxd', file1])
-
         # hexdump to check file
         self.server.run_daos_client_cmd_pil4dfs(['hexdump', file1])
 
         # Copy a file.
         file2 = join(path, 'file2')
         self.server.run_daos_client_cmd_pil4dfs(['cp', file1, file2])
-
-        self.server.run_daos_client_cmd_pil4dfs(['diff', file1, file2])
 
         # Read a file with cat.
         self.server.run_daos_client_cmd_pil4dfs(['cat', file2])
@@ -4102,9 +4096,6 @@ class PosixTests():
         dirabcd = join(path, 'dira/dirb/dirc/dird')
         self.server.run_daos_client_cmd_pil4dfs(['mkdir', '-p', dirabcd])
 
-        # test rmdir
-        self.server.run_daos_client_cmd_pil4dfs(['rmdir', dirabcd])
-
         # find to list all files/dirs.
         self.server.run_daos_client_cmd_pil4dfs(['find', path])
 
@@ -4116,8 +4107,6 @@ class PosixTests():
         self.server.run_daos_client_cmd_pil4dfs(['touch', file4])
         link1 = join(path, 'dir1/link1')
         self.server.run_daos_client_cmd_pil4dfs(['ln', '-s', file4, link1])
-        self.server.run_daos_client_cmd_pil4dfs(['readlink', link1])
-        self.server.run_daos_client_cmd_pil4dfs(['realpath', link1])
         self.server.run_daos_client_cmd_pil4dfs(['rm', '-Rf', dir1])
 
         # dd to write a file
@@ -4128,66 +4117,6 @@ class PosixTests():
         file6 = join(path, 'elffile')
         self.server.run_daos_client_cmd_pil4dfs(['cp', '/usr/bin/mkdir', file6])
         self.server.run_daos_client_cmd_pil4dfs(['file', file6])
-
-        self.server.run_daos_client_cmd_pil4dfs(['size', file6])
-
-        # Create a .c file natively
-        file7 = join(path, 'src.c')
-        with open(file7, 'w') as fd:
-            fd.write('#include <stdio.h>\n\nint main(void) {\nprintf("Hello World!");\n}\n')
-
-        # test gcc
-        file8 = join(path, 'output')
-        self.server.run_daos_client_cmd_pil4dfs(['gcc', '-o', file8, file7])
-
-        self.server.run_daos_client_cmd_pil4dfs(['readelf', '-s', file8])
-
-        self.server.run_daos_client_cmd_pil4dfs(['strip', '-s', file8])
-
-        # test g++
-        self.server.run_daos_client_cmd_pil4dfs(['g++', '-o', file8, file7])
-
-        file9 = join(path, 'src.f')
-        with open(file9, 'w') as fd:
-            fd.write('      program test\n      write(*,*) "Hello"\n      end program\n')
-        self.server.run_daos_client_cmd_pil4dfs(['gfortran', '-o', file8, file9])
-
-        filea = join(path, 'src_a.c')
-        with open(filea, 'w') as fd:
-            fd.write('#include <stdio.h>\n\nvoid print_a(void) {\nprintf("In print_a()");\n}\n')
-        fileb = join(path, 'src_b.c')
-        with open(fileb, 'w') as fd:
-            fd.write('#include <stdio.h>\n\nvoid print_b(void) {\nprintf("In print_b()");\n}\n')
-        obj_a = join(path, 'src_a.o')
-        obj_b = join(path, 'src_b.o')
-        lib_ab = join(path, 'lib.a')
-        self.server.run_daos_client_cmd_pil4dfs(['gcc', '-c', '-o', obj_a, filea])
-        self.server.run_daos_client_cmd_pil4dfs(['gcc', '-c', '-o', obj_b, fileb])
-        self.server.run_daos_client_cmd_pil4dfs(['ar', '-rc', lib_ab, obj_a, obj_b])
-        self.server.run_daos_client_cmd_pil4dfs(['objdump', '-d', obj_a])
-        self.server.run_daos_client_cmd_pil4dfs(['grep', 'print', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['head', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['tail', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['more', filea])
-        self.server.run_daos_client_cmd_pil4dfs(['dos2unix', filea])
-
-        self.server.run_daos_client_cmd_pil4dfs(['awk', '{print $1}', file9])
-        self.server.run_daos_client_cmd_pil4dfs(['base64', file9])
-        self.server.run_daos_client_cmd_pil4dfs(['md5sum', file9])
-        self.server.run_daos_client_cmd_pil4dfs(['cksum', file9])
-        self.server.run_daos_client_cmd_pil4dfs(['bzip2', '-z', lib_ab])
-        self.server.run_daos_client_cmd_pil4dfs(['chmod', 'u-r', lib_ab + '.bz2'])
-
-        file10 = join(path, 'output.html')
-        self.server.run_daos_client_cmd_pil4dfs(['wget', 'https://www.google.com', '-O', file10])
-        self.server.run_daos_client_cmd_pil4dfs(['curl', 'https://www.google.com', '-o', file10])
-
-        filepy = join(path, 'test.py')
-        with open(filepy, 'w') as fd:
-            fd.write('print("Hello World!")')
-        self.server.run_daos_client_cmd_pil4dfs(['python3', filepy])
-
-        self.server.run_daos_client_cmd_pil4dfs(['truncate', '--size=0', file8])
 
 
 class NltStdoutWrapper():

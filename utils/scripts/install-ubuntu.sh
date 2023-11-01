@@ -22,6 +22,9 @@ apt-get install \
     cmake \
     curl \
     fuse3 \
+    gcc \
+    gcc-c++ \
+    gcc-gfortran \
     git \
     golang-go \
     kmod \
@@ -54,7 +57,8 @@ apt-get install \
     python3-venv \
     uuid-dev \
     valgrind \
-    yasm
+    yasm \
+    wget
 
 # ipmctl is only available on x86_64
 if [ "$arch" = x86_64 ]; then

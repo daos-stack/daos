@@ -23,6 +23,7 @@ dnf --nodocs install \
     fuse3-devel \
     gcc \
     gcc-c++ \
+    gcc-gfortran \
     git \
     go1.18 \
     go1.18-race \
@@ -58,6 +59,7 @@ dnf --nodocs install \
     sg3_utils \
     sudo \
     valgrind-devel \
+    wget \
     which \
     yasm
 
