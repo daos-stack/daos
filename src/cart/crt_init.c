@@ -260,7 +260,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, crt_provider_t provider,
 /* first step init - for initializing crt_gdata */
 static int data_init(int server, crt_init_options_t *opt)
 {
-	uint32_t	timeout = 0;
+	uint32_t        timeout = 0;
 	uint32_t	credits;
 	uint32_t	fi_univ_size = 0;
 	uint32_t	mem_pin_enable = 0;
