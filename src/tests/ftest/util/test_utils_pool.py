@@ -1448,7 +1448,7 @@ class TestPool(TestDaosApiBase):
                 status = False
         return status
 
-    def check_for_pool(self, host, uuid, scm_mount):
+    def verify_uuid_directory(self, host, uuid, scm_mount):
         """Check if pool folder exist on server.
 
         Args:

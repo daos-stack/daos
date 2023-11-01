@@ -8,7 +8,7 @@ import os
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from dmg_utils import get_dmg_command
-from general_utils import check_pool_files, get_default_config_file
+from general_utils import get_default_config_file
 
 
 class DestroyTests(TestWithServers):

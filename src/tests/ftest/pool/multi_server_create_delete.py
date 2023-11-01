@@ -7,7 +7,6 @@ import os
 
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_for_pool
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -76,11 +75,11 @@ class MultiServerCreateDeleteTest(TestWithServers):
             if expected_result == RESULT_FAIL:
                 self.fail("Test was expected to fail but it passed at pool create.")
             if '0' in tgtlist:
-                # check_for_pool checks if the uuid directory exists in host1
-                if not self.pool.check_for_pool(host1, self.pool.uuid, scm_mount):
+                # verify_uuid_directory checks if the uuid directory exists in host1
+                if not self.pool.verify_uuid_directory(host1, self.pool.uuid, scm_mount):
                     self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host1))
             if '1' in tgtlist:
-                if not self.pool.check_for_pool(host2, self.pool.uuid, scm_mount):
+                if not self.pool.verify_uuid_directory(host2, self.pool.uuid, scm_mount):
                     self.fail("Pool {0} not found on host {1}.\n".format(self.pool.uuid, host2))
         else:
             test_destroy = False
@@ -98,10 +97,10 @@ class MultiServerCreateDeleteTest(TestWithServers):
                 if expected_result == RESULT_FAIL:
                     self.fail("Test was expected to fail but it passed at pool create.")
                 if '0' in tgtlist:
-                    if self.pool.check_for_pool(host1, self.pool.uuid, scm_mount):
+                    if self.pool.verify_uuid_directory(host1, self.pool.uuid, scm_mount):
                         self.fail("Pool {0} found on host {1} after destroy.".format(uuid, host1))
                 if '1' in tgtlist:
-                    if self.pool.check_for_pool(host2, self.pool.uuid, scm_mount):
+                    if self.pool.verify_uuid_directory(host2, self.pool.uuid, scm_mount):
                         self.fail("Pool {0} found on host {1} after destroy.".format(uuid, host2))
             else:
                 if expected_result == RESULT_PASS:

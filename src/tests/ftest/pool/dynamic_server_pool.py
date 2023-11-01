@@ -5,7 +5,6 @@
 """
 from apricot import TestWithServers
 from ClusterShell.NodeSet import NodeSet
-from general_utils import check_for_pool
 
 
 class DynamicServerPool(TestWithServers):
@@ -61,7 +60,7 @@ class DynamicServerPool(TestWithServers):
             # appears that self.hostlist_servers[0] is always rank0, 1 is rank1,
             # and the extra server we'll be adding will be rank2.
             for rank, host in enumerate(hosts):
-                pool_exists_on_host = pool.check_for_pool(
+                pool_exists_on_host = pool.verify_uuid_directory(
                     NodeSet(host), pool.uuid.lower(),
                     self.server_managers[0].get_config_value("scm_mount"))
                 # If this rank is in the rank list, there should be the
