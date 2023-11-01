@@ -18,6 +18,7 @@ set -ue
 echo "Flake8:"
 if ! command -v flake8 > /dev/null 2>&1; then
     echo "  No flake checking, install flake8 command to improve pre-commit checks"
+    echo "python3 -m pip install -r ./utils/cq/requirements.txt"
     exit 0
 fi
 

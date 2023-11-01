@@ -6,8 +6,8 @@
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
-from network_utils import SUPPORTED_PROVIDERS, NetworkDevice, get_network_information
 from exception_utils import CommandFailure
+from network_utils import SUPPORTED_PROVIDERS, NetworkDevice, get_network_information
 
 
 class DmgNetworkScanTest(TestWithServers):
