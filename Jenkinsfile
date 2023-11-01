@@ -185,9 +185,9 @@ pipeline {
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
-                        echo 'Checking out ' + env.BaseBranch + ' (base_branch is ' + base_branch + ')'
+                        echo 'Checking out ' + env.BaseBranch ?: base_branch + ' (base_branch is ' + base_branch + ')'
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
+                                    branch: env.BaseBranch ?: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
@@ -209,9 +209,9 @@ pipeline {
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
-                        echo 'Checking out ' + env.BaseBranch + ' (base_branch is ' + base_branch + ')'
+                        echo 'Checking out ' + env.BaseBranch ?: base_branch + ' (base_branch is ' + base_branch + ')'
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
+                                    branch: env.BaseBranch ?: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
@@ -233,9 +233,9 @@ pipeline {
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
-                        echo 'Checking out ' + env.BaseBranch + ' (base_branch is ' + base_branch + ')'
+                        echo 'Checking out ' + env.BaseBranch ?: base_branch + ' (base_branch is ' + base_branch + ')'
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
+                                    branch: env.BaseBranch ?: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
@@ -258,9 +258,9 @@ pipeline {
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
-                        echo 'Checking out ' + env.BaseBranch + ' (base_branch is ' + base_branch + ')'
+                        echo 'Checking out ' + env.BaseBranch ?: base_branch + ' (base_branch is ' + base_branch + ')'
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
+                                    branch: env.BaseBranch ?: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
@@ -283,9 +283,9 @@ pipeline {
                     }
                     steps {
                         // Need to get back onto base_branch for ci/
-                        echo 'Checking out ' + env.BaseBranch + ' (base_branch is ' + base_branch + ')'
+                        echo 'Checking out ' + env.BaseBranch ?: base_branch + ' (base_branch is ' + base_branch + ')'
                         checkoutScm url: 'https://github.com/daos-stack/daos.git',
-                                    branch: env.BaseBranch,
+                                    branch: env.BaseBranch ?: base_branch,
                                     withSubmodules: true
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version, "tests-internal"),
