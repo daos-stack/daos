@@ -6,8 +6,7 @@
 import base64
 import traceback
 
-from general_utils import (check_ping, check_ssh, get_random_bytes,
-                           wait_for_result)
+from general_utils import check_ping, check_ssh, get_random_bytes, wait_for_result
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
 from pydaos.raw import DaosApiError
