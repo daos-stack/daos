@@ -28,8 +28,8 @@
 #define CRT_HG_POOL_PREPOST_NUM	(16)
 
 /** default values for init / incr to prepost handles */
-#define CRT_HG_POST_INIT	(512)
-#define CRT_HG_POST_INCR	(512)
+#define CRT_HG_POST_INIT        (512)
+#define CRT_HG_POST_INCR        (512)
 
 struct crt_rpc_priv;
 struct crt_common_hdr;
