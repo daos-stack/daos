@@ -21,9 +21,8 @@ from dfuse_utils import Dfuse
 from dmg_utils import get_storage_query_device_info
 from duns_utils import format_path
 from fio_utils import FioCommand
-from general_utils import (DaosTestError, get_host_data, get_log_file,
-                           get_random_bytes, get_random_string, list_to_str,
-                           pcmd, run_command, run_pcmd)
+from general_utils import (DaosTestError, get_host_data, get_log_file, get_random_bytes,
+                           get_random_string, list_to_str, pcmd, run_command, run_pcmd)
 from ior_utils import IorCommand
 from job_manager_utils import Mpirun
 from macsio_util import MacsioCommand
