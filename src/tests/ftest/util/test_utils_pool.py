@@ -3,20 +3,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import ctypes
+import json
 # pylint: disable=too-many-lines
 import os
 from time import sleep, time
-import ctypes
-import json
 
-from avocado import fail_on, TestFail
-from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-
-from test_utils_base import TestDaosApiBase, LabelGenerator
+from avocado import TestFail, fail_on
 from command_utils import BasicParameter
+from dmg_utils import DmgCommand, DmgJsonCommandFailure
 from exception_utils import CommandFailure
 from general_utils import DaosTestError, check_file_exists
-from dmg_utils import DmgCommand, DmgJsonCommandFailure
+from pydaos.raw import DaosApiError, DaosPool, c_uuid_to_str, daos_cref
+from test_utils_base import LabelGenerator, TestDaosApiBase
 
 POOL_NAMESPACE = "/run/pool/*"
 POOL_TIMEOUT_INCREMENT = 200

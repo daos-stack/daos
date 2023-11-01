@@ -5,10 +5,10 @@
 """
 
 import ctypes
-from pydaos.raw import (DaosContainer, IORequest,
-                        DaosObj)
+
 from apricot import TestWithServers
 from general_utils import create_string_buffer
+from pydaos.raw import DaosContainer, DaosObj, IORequest
 
 
 class CsumContainerValidation(TestWithServers):

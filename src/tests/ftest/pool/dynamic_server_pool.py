@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
+from general_utils import check_for_pool
 
 
 class DynamicServerPool(TestWithServers):

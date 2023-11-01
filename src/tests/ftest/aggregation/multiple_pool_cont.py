@@ -5,9 +5,9 @@
 """
 import time
 
-from ior_utils import run_ior
-from ior_test_base import IorTestBase
 from exception_utils import CommandFailure
+from ior_test_base import IorTestBase
+from ior_utils import run_ior
 from job_manager_utils import get_job_manager
 
 
