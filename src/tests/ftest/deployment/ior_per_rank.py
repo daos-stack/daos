@@ -1,14 +1,13 @@
 """
-  (C) Copyright 2018-2022 Intel Corporation.
+  (C) Copyright 2018-2023 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from avocado.core.exceptions import TestFail
-
+from general_utils import percent_change, DaosTestError
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
-from general_utils import percent_change, DaosTestError
 
 
 class IorPerRank(IorTestBase):
@@ -68,8 +67,8 @@ class IorPerRank(IorTestBase):
                                      "Max Read Diff too large for rank: {}".format(rank))
                 # collect list of good nodes
                 good_node = self.server_managers[0].get_host(rank)
-                if ((good_node not in self.good_nodes) and
-                        (good_node not in self.failed_nodes.keys())):
+                if ((good_node not in self.good_nodes)
+                        and (good_node not in self.failed_nodes.keys())):
                     self.good_nodes.append(good_node)
             except (TestFail, DaosTestError) as _error:
                 # collect bad nodes
@@ -93,10 +92,10 @@ class IorPerRank(IorTestBase):
                               Large transfer size: 1M
                               Small transfer size: 256B
                           Compare results and isolate bad nodes.
-        :avocado: tags=all,full_regression
+        :avocado: tags=manual
         :avocado: tags=hw,medium
         :avocado: tags=ior,deployment
-        :avocado: tags=ior_per_rank,test_ior_per_rank
+        :avocado: tags=IorPerRank,test_ior_per_rank
         """
 
         # test params
