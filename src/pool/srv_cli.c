@@ -355,7 +355,7 @@ pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 	rc = map_bulk_create(info->dmi_ctx, &arg->pqa_bulk, &arg->pqa_map_buf, arg->pqa_map_size);
 	if (rc != 0)
 		return rc;
-	pool_query_in_set_data(rpc, POOL_QUERY, DAOS_POOL_VERSION, arg->pqa_bulk, query_bits);
+	pool_query_in_set_data(rpc, arg->pqa_bulk, query_bits);
 
 	return rc;
 }

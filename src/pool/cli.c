@@ -544,9 +544,9 @@ pool_connect_cp(tse_task_t *task, void *data)
 		DP_UUID(tpriv->pool->dp_pool_hdl));
 
 out:
-	pool_connect_in_get_cred(arg->rpc, dc_pool_proto_version, &credp);
-	pool_connect_in_get_data(arg->rpc, POOL_CONNECT, dc_pool_proto_version,
-				 NULL /* flags */, NULL /* bits */, &bulk, NULL /* version */);
+	pool_connect_in_get_cred(arg->rpc, &credp);
+	pool_connect_in_get_data(arg->rpc,  NULL /* flags */, NULL /* bits */, &bulk,
+				 NULL /* version */);
 	crt_req_decref(arg->rpc);
 	map_bulk_destroy(bulk, map_buf);
 	/* Ensure credential memory is wiped clean */
@@ -639,20 +639,7 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 	crt_req_addref(rpc);
 
 	/** request credentials */
-	pool_connect_in_get_cred(rpc, dc_pool_proto_version, &credp);
-	{
-		char   *in = crt_req_get(rpc);
-		size_t	off = (char *)credp - (char *)crt_req_get(rpc);
-		size_t	exp_off;
-
-		if (dc_pool_proto_version >= POOL_PROTO_VER_WITH_SVC_OP_KEY)
-			exp_off = offsetof(struct pool_connect_v6_in, pci_cred);
-		else
-			exp_off = offsetof(struct pool_connect_in, pci_cred);
-
-		D_ASSERTF((off == exp_off), "rpc in=%p, credp=%p, offset=%zu, expected_offset=%zu",
-			  in, credp, off, exp_off);
-	}
+	pool_connect_in_get_cred(rpc, &credp);
 	rc = dc_sec_request_creds(credp);
 	if (rc != 0) {
 		DL_ERROR(rc, "failed to obtain security credential");
@@ -664,8 +651,8 @@ dc_pool_connect_internal(tse_task_t *task, daos_pool_info_t *info, const char *l
 		D_GOTO(out_cred, rc);
 
 	/** fill in request buffer */
-	pool_connect_in_set_data(rpc, POOL_CONNECT, dc_pool_proto_version, pool->dp_capas,
-				 pool_query_bits(info, NULL), bulk, DAOS_POOL_GLOBAL_VERSION);
+	pool_connect_in_set_data(rpc, pool->dp_capas, pool_query_bits(info, NULL), bulk,
+				 DAOS_POOL_GLOBAL_VERSION);
 
 	/** Prepare "con_args" for pool_connect_cp(). */
 	con_args.pca_info = info;
@@ -1244,8 +1231,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	pool_tgt_update_in_get_data(rpc, opc_get(rpc->cr_opc), dc_pool_proto_version, &addrs,
-				    &n_addrs);
+	pool_tgt_update_in_get_data(rpc, &addrs, &n_addrs);
 	D_FREE(addrs);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
@@ -1342,8 +1328,7 @@ dc_pool_update_internal(tse_task_t *task, daos_pool_update_t *args, int opc)
 		list.pta_addrs[i].pta_target = args->tgts->tl_tgts[i];
 	}
 
-	pool_tgt_update_in_set_data(rpc, opc, dc_pool_proto_version, list.pta_addrs,
-				    (size_t)list.pta_number);
+	pool_tgt_update_in_set_data(rpc, list.pta_addrs, (size_t)list.pta_number);
 
 	crt_req_addref(rpc);
 
@@ -1543,8 +1528,7 @@ dc_pool_query(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
-	pool_query_in_set_data(rpc, POOL_QUERY, dc_pool_proto_version, query_args.dqa_bulk,
-			       pool_query_bits(args->info, args->prop));
+	pool_query_in_set_data(rpc, query_args.dqa_bulk, pool_query_bits(args->info, args->prop));
 	query_args.dqa_pool = pool;
 	query_args.dqa_ranks = args->ranks;
 	query_args.dqa_info = args->info;
@@ -2230,8 +2214,7 @@ dc_pool_list_cont(tse_task_t *task)
 			D_GOTO(out_rpc, rc);
 	}
 
-	pool_list_cont_in_set_data(rpc, POOL_LIST_CONT, dc_pool_proto_version, lc_cb_args.lca_bulk,
-				   ncont);
+	pool_list_cont_in_set_data(rpc, lc_cb_args.lca_bulk, ncont);
 
 	lc_cb_args.lca_pool = pool;
 	lc_cb_args.lca_ncont = args->ncont;
@@ -2377,8 +2360,7 @@ dc_pool_filter_cont(tse_task_t *task)
 			D_GOTO(out_rpc, rc);
 	}
 
-	pool_filter_cont_in_set_data(rpc, POOL_FILTER_CONT, dc_pool_proto_version,
-				     fc_cb_args.fca_bulk, ncont, args->filt);
+	pool_filter_cont_in_set_data(rpc, fc_cb_args.fca_bulk, ncont, args->filt);
 
 	fc_cb_args.fca_pool = pool;
 	fc_cb_args.fca_ncont = args->ncont;
@@ -2522,8 +2504,7 @@ dc_pool_query_target(tse_task_t *task)
 		goto out_pool;
 	}
 
-	pool_query_info_in_set_data(rpc, POOL_QUERY_INFO, dc_pool_proto_version, args->rank,
-				    args->tgt_idx);
+	pool_query_info_in_set_data(rpc, args->rank, args->tgt_idx);
 
 	/** +1 for args */
 	crt_req_addref(rpc);
@@ -2723,8 +2704,7 @@ dc_pool_list_attr(tse_task_t *task)
 			pool_req_cleanup(CLEANUP_RPC, true /* free_tpriv */, &cb_args);
 			D_GOTO(out, rc);
 		}
-		pool_attr_list_in_set_data(cb_args.pra_rpc, POOL_ATTR_LIST, dc_pool_proto_version,
-					   bulk);
+		pool_attr_list_in_set_data(cb_args.pra_rpc, bulk);
 	}
 
 	cb_args.pra_bulk = bulk;
@@ -2922,8 +2902,7 @@ dc_pool_get_attr(tse_task_t *task)
 		D_GOTO(out, rc);
 	}
 
-	pool_attr_get_in_set_data(cb_args.pra_rpc, POOL_ATTR_GET, dc_pool_proto_version, args->n,
-				  key_length, cb_args.pra_bulk);
+	pool_attr_get_in_set_data(cb_args.pra_rpc, args->n, key_length, cb_args.pra_bulk);
 
 	crt_req_addref(cb_args.pra_rpc);
 	return daos_rpc_send(cb_args.pra_rpc, task);
@@ -3017,8 +2996,7 @@ dc_pool_set_attr(tse_task_t *task)
 			      CRT_BULK_RO, &cb_args.pra_bulk);
 	if (rc != 0)
 		goto out_rpc;
-	pool_attr_set_in_set_data(cb_args.pra_rpc, POOL_ATTR_SET, dc_pool_proto_version, args->n,
-				  cb_args.pra_bulk);
+	pool_attr_set_in_set_data(cb_args.pra_rpc, args->n, cb_args.pra_bulk);
 
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));
@@ -3091,8 +3069,7 @@ dc_pool_del_attr(tse_task_t *task)
 	if (rc != 0)
 		goto out_rpc;
 
-	pool_attr_del_in_set_data(cb_args.pra_rpc, POOL_ATTR_DEL, dc_pool_proto_version, args->n,
-				  cb_args.pra_bulk);
+	pool_attr_del_in_set_data(cb_args.pra_rpc, args->n, cb_args.pra_bulk);
 
 	rc = tse_task_register_comp_cb(task, pool_req_complete,
 				       &cb_args, sizeof(cb_args));

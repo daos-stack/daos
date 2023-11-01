@@ -101,7 +101,7 @@
 		ver >= 6 ? ds_pool_attr_get_handler_v6 :		\
 			   ds_pool_attr_get_handler_v5, NULL)		\
 	X(POOL_ATTR_SET,						\
-		0, ver >= 7 ? &CQF_pool_attr_set_v6 : 			\
+		0, ver >= 6 ? &CQF_pool_attr_set_v6 : 			\
 			      &CQF_pool_attr_set,			\
 		ver >= 6 ? ds_pool_attr_set_handler_v6 :		\
 			   ds_pool_attr_set_handler_v5, NULL)		\
@@ -125,7 +125,7 @@
 		0, &CQF_pool_tgt_query_map,				\
 		ds_pool_tgt_query_map_handler, NULL)			\
 	X(POOL_FILTER_CONT,						\
-		0, ver >= 7 ? &CQF_pool_filter_cont_v6 :		\
+		0, ver >= 6 ? &CQF_pool_filter_cont_v6 :		\
 			      &CQF_pool_filter_cont,			\
 		ver >= 6 ? ds_pool_filter_cont_handler_v6 :		\
 			   ds_pool_filter_cont_handler_v5, NULL)
@@ -627,14 +627,15 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 }
 
 static inline void
-pool_create_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,
+pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,
 			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp)
 {
-	struct pool_create_in *in = crt_req_get(rpc);
+	struct pool_create_in  *in = crt_req_get(rpc);
+	uint8_t			rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
-	D_ASSERT(pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	*pri_tgt_ranksp = in->pri_tgt_ranks;
+	*pri_propp = in->pri_prop;
 	*pri_ndomainsp = in->pri_ndomains;
 	*pri_ntgtsp = in->pri_ntgts;
 	*pri_domainsp = in->pri_domains.ca_arrays;
@@ -642,38 +643,45 @@ pool_create_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_create_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			d_rank_list_t *pri_tgt_ranks, daos_prop_t *pri_prop,
+pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_t *pri_prop,
 			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains)
 {
-	struct pool_create_in *in = crt_req_get(rpc);
+	struct pool_create_in  *in = crt_req_get(rpc);
+	uint8_t			rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
-	D_ASSERT(pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
+	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	in->pri_tgt_ranks = pri_tgt_ranks;
+	in->pri_prop = pri_prop;
 	in->pri_ndomains = pri_ndomains;
 	in->pri_ntgts = pri_ntgts;
 	in->pri_domains.ca_arrays = pri_domains;
 	in->pri_domains.ca_count = pri_ndomains;
 }
 
+static inline bool
+rpc_ver_atleast(crt_rpc_t *rpc, int min_ver)
+{
+	return (opc_get_rpc_ver(rpc->cr_opc) >= min_ver);
+}
+
 static inline void
-pool_connect_in_get_cred(crt_rpc_t *rpc, int pool_proto_ver, d_iov_t **pci_credp)
+pool_connect_in_get_cred(crt_rpc_t *rpc, d_iov_t **pci_credp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY)
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY))
 		*pci_credp = &(((struct pool_connect_v6_in *)in)->pci_cred);
 	else
 		*pci_credp = &(((struct pool_connect_in *)in)->pci_cred);
 }
 
 static inline void
-pool_connect_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, uint64_t *pci_flagsp,
-	 uint64_t *pci_query_bitsp, crt_bulk_t *pci_map_bulkp, uint32_t *pci_pool_versionp)
+pool_connect_in_get_data(crt_rpc_t *rpc, uint64_t *pci_flagsp, uint64_t *pci_query_bitsp,
+			 crt_bulk_t *pci_map_bulkp, uint32_t *pci_pool_versionp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		if (pci_flagsp)
 			*pci_flagsp = ((struct pool_connect_v6_in *)in)->pci_flags;
 		if (pci_query_bitsp)
@@ -695,13 +703,12 @@ pool_connect_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, u
 }
 
 static inline void
-pool_connect_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, uint64_t pci_flags,
-			 uint64_t pci_query_bits, crt_bulk_t pci_map_bulk,
-			 uint32_t pci_pool_version)
+pool_connect_in_set_data(crt_rpc_t *rpc, uint64_t pci_flags, uint64_t pci_query_bits,
+			 crt_bulk_t pci_map_bulk, uint32_t pci_pool_version)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_connect_v6_in *)in)->pci_flags = pci_flags;
 		((struct pool_connect_v6_in *)in)->pci_query_bits = pci_query_bits;
 		((struct pool_connect_v6_in *)in)->pci_map_bulk = pci_map_bulk;
@@ -715,12 +722,11 @@ pool_connect_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver, u
 }
 
 static inline void
-pool_query_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-		       crt_bulk_t *pqi_map_bulkp, uint64_t *pqi_query_bitsp)
+pool_query_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pqi_map_bulkp, uint64_t *pqi_query_bitsp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pqi_map_bulkp = ((struct pool_query_v6_in *)in)->pqi_map_bulk;
 		*pqi_query_bitsp = ((struct pool_query_v6_in *)in)->pqi_query_bits;
 	} else {
@@ -730,12 +736,11 @@ pool_query_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-		       crt_bulk_t pqi_map_bulk, uint64_t pqi_query_bits)
+pool_query_in_set_data(crt_rpc_t *rpc, crt_bulk_t pqi_map_bulk, uint64_t pqi_query_bits)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_query_v6_in *)in)->pqi_map_bulk = pqi_map_bulk;
 		((struct pool_query_v6_in *)in)->pqi_query_bits = pqi_query_bits;
 	} else {
@@ -745,12 +750,11 @@ pool_query_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_query_info_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    d_rank_t *pqii_rankp, uint32_t *pqii_tgtp)
+pool_query_info_in_get_data(crt_rpc_t *rpc, d_rank_t *pqii_rankp, uint32_t *pqii_tgtp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pqii_rankp = ((struct pool_query_info_v6_in *)in)->pqii_rank;
 		*pqii_tgtp = ((struct pool_query_info_v6_in *)in)->pqii_tgt;
 	} else {
@@ -760,12 +764,11 @@ pool_query_info_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_query_info_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    d_rank_t pqii_rank, uint32_t pqii_tgt)
+pool_query_info_in_set_data(crt_rpc_t *rpc, d_rank_t pqii_rank, uint32_t pqii_tgt)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_query_info_v6_in *)in)->pqii_rank = pqii_rank;
 		((struct pool_query_info_v6_in *)in)->pqii_tgt = pqii_tgt;
 	} else {
@@ -775,12 +778,11 @@ pool_query_info_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_attr_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   crt_bulk_t *pali_bulkp)
+pool_attr_list_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pali_bulkp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pali_bulkp = ((struct pool_attr_list_v6_in *)in)->pali_bulk;
 	} else {
 		*pali_bulkp = ((struct pool_attr_list_in *)in)->pali_bulk;
@@ -788,12 +790,11 @@ pool_attr_list_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   crt_bulk_t pali_bulk)
+pool_attr_list_in_set_data(crt_rpc_t *rpc, crt_bulk_t pali_bulk)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_list_v6_in *)in)->pali_bulk = pali_bulk;
 	} else {
 		((struct pool_attr_list_in *)in)->pali_bulk = pali_bulk;
@@ -801,13 +802,12 @@ pool_attr_list_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   uint64_t *pagi_countp, uint64_t *pagi_key_lengthp,
-			   crt_bulk_t *pagi_bulkp)
+pool_attr_get_in_get_data(crt_rpc_t *rpc, uint64_t *pagi_countp, uint64_t *pagi_key_lengthp,
+			  crt_bulk_t *pagi_bulkp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pagi_countp = ((struct pool_attr_get_v6_in *)in)->pagi_count;
 		*pagi_key_lengthp = ((struct pool_attr_get_v6_in *)in)->pagi_key_length;
 		*pagi_bulkp = ((struct pool_attr_get_v6_in *)in)->pagi_bulk;
@@ -819,13 +819,13 @@ pool_attr_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   uint64_t pagi_count, uint64_t pagi_key_length, crt_bulk_t pagi_bulk)
+pool_attr_get_in_set_data(crt_rpc_t *rpc, uint64_t pagi_count, uint64_t pagi_key_length,
+			  crt_bulk_t pagi_bulk)
 
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_get_v6_in *)in)->pagi_count = pagi_count;
 		((struct pool_attr_get_v6_in *)in)->pagi_key_length = pagi_key_length;
 		((struct pool_attr_get_v6_in *)in)->pagi_bulk = pagi_bulk;
@@ -837,12 +837,11 @@ pool_attr_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t *pasi_countp, crt_bulk_t *pasi_bulkp)
+pool_attr_set_in_get_data(crt_rpc_t *rpc, uint64_t *pasi_countp, crt_bulk_t *pasi_bulkp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pasi_countp = ((struct pool_attr_set_v6_in *)in)->pasi_count;
 		*pasi_bulkp = ((struct pool_attr_set_v6_in *)in)->pasi_bulk;
 	} else {
@@ -852,12 +851,11 @@ pool_attr_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t pasi_count, crt_bulk_t pasi_bulk)
+pool_attr_set_in_set_data(crt_rpc_t *rpc, uint64_t pasi_count, crt_bulk_t pasi_bulk)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_set_v6_in *)in)->pasi_count = pasi_count;
 		((struct pool_attr_set_v6_in *)in)->pasi_bulk = pasi_bulk;
 	} else {
@@ -867,12 +865,11 @@ pool_attr_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_del_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t *padi_countp, crt_bulk_t *padi_bulkp)
+pool_attr_del_in_get_data(crt_rpc_t *rpc, uint64_t *padi_countp, crt_bulk_t *padi_bulkp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*padi_countp = ((struct pool_attr_del_v6_in *)in)->padi_count;
 		*padi_bulkp = ((struct pool_attr_del_v6_in *)in)->padi_bulk;
 	} else {
@@ -882,12 +879,11 @@ pool_attr_del_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_attr_del_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t padi_count, crt_bulk_t padi_bulk)
+pool_attr_del_in_set_data(crt_rpc_t *rpc, uint64_t padi_count, crt_bulk_t padi_bulk)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_del_v6_in *)in)->padi_count = padi_count;
 		((struct pool_attr_del_v6_in *)in)->padi_bulk = padi_bulk;
 	} else {
@@ -897,12 +893,11 @@ pool_attr_del_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_tgt_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    struct pool_target_addr **pti_addr_listp, int *countp)
+pool_tgt_update_in_get_data(crt_rpc_t *rpc, struct pool_target_addr **pti_addr_listp, int *countp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pti_addr_listp = ((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays;
 		*countp = (int)((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count;
 	} else {
@@ -912,12 +907,11 @@ pool_tgt_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_tgt_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    struct pool_target_addr *pti_addr_list, uint64_t count)
+pool_tgt_update_in_set_data(crt_rpc_t *rpc, struct pool_target_addr *pti_addr_list, uint64_t count)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays = pti_addr_list;
 		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count = count;
 	} else {
@@ -927,8 +921,7 @@ pool_tgt_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_prop_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t *pgi_query_bitsp)
+pool_prop_get_in_get_data(crt_rpc_t *rpc, uint64_t *pgi_query_bitsp)
 {
 	void *in = crt_req_get(rpc);
 
@@ -937,8 +930,7 @@ pool_prop_get_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_prop_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  uint64_t pgi_query_bits)
+pool_prop_get_in_set_data(crt_rpc_t *rpc, uint64_t pgi_query_bits)
 {
 	void *in = crt_req_get(rpc);
 
@@ -946,8 +938,7 @@ pool_prop_get_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  daos_prop_t **psi_propp)
+pool_prop_set_in_get_data(crt_rpc_t *rpc, daos_prop_t **psi_propp)
 {
 	void *in = crt_req_get(rpc);
 
@@ -956,8 +947,7 @@ pool_prop_set_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_prop_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			  daos_prop_t *psi_prop)
+pool_prop_set_in_set_data(crt_rpc_t *rpc, daos_prop_t *psi_prop)
 {
 	void *in = crt_req_get(rpc);
 
@@ -965,8 +955,7 @@ pool_prop_set_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_acl_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    struct daos_acl **pui_aclp)
+pool_acl_update_in_get_data(crt_rpc_t *rpc, struct daos_acl **pui_aclp)
 {
 	void *in = crt_req_get(rpc);
 
@@ -975,8 +964,7 @@ pool_acl_update_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_acl_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    struct daos_acl *pui_acl)
+pool_acl_update_in_set_data(crt_rpc_t *rpc, struct daos_acl *pui_acl)
 {
 	void *in = crt_req_get(rpc);
 
@@ -984,8 +972,7 @@ pool_acl_update_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_acl_delete_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    d_const_string_t *pdi_principalp, uint8_t *pdi_typep)
+pool_acl_delete_in_get_data(crt_rpc_t *rpc, d_const_string_t *pdi_principalp, uint8_t *pdi_typep)
 {
 	void *in = crt_req_get(rpc);
 
@@ -995,8 +982,8 @@ pool_acl_delete_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			    d_const_string_t pdi_principal, uint8_t pdi_type)
+pool_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, d_const_string_t pdi_principal,
+			    uint8_t pdi_type)
 {
 	void *in = crt_req_get(rpc);
 
@@ -1005,12 +992,11 @@ pool_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver
 }
 
 static inline void
-pool_list_cont_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   crt_bulk_t *plci_cont_bulkp, uint64_t *plci_ncontp)
+pool_list_cont_in_get_data(crt_rpc_t *rpc, crt_bulk_t *plci_cont_bulkp, uint64_t *plci_ncontp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*plci_cont_bulkp = ((struct pool_list_cont_v6_in *)in)->plci_cont_bulk;
 		*plci_ncontp = ((struct pool_list_cont_v6_in *)in)->plci_ncont;
 	} else {
@@ -1020,12 +1006,11 @@ pool_list_cont_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_list_cont_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			   crt_bulk_t plci_cont_bulk, uint64_t plci_ncont)
+pool_list_cont_in_set_data(crt_rpc_t *rpc, crt_bulk_t plci_cont_bulk, uint64_t plci_ncont)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_list_cont_v6_in *)in)->plci_cont_bulk = plci_cont_bulk;
 		((struct pool_list_cont_v6_in *)in)->plci_ncont = plci_ncont;
 	} else {
@@ -1035,13 +1020,12 @@ pool_list_cont_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
 }
 
 static inline void
-pool_filter_cont_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			     crt_bulk_t *pfci_cont_bulkp, uint64_t *pfci_ncontp,
-			     daos_pool_cont_filter_t **pfci_filtp)
+pool_filter_cont_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pfci_cont_bulkp,
+			     uint64_t *pfci_ncontp, daos_pool_cont_filter_t **pfci_filtp)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pfci_cont_bulkp = ((struct pool_filter_cont_v6_in *)in)->pfci_cont_bulk;
 		*pfci_ncontp = ((struct pool_filter_cont_v6_in *)in)->pfci_ncont;
 		*pfci_filtp = &((struct pool_filter_cont_v6_in *)in)->pfci_filt;
@@ -1053,13 +1037,12 @@ pool_filter_cont_in_get_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ve
 }
 
 static inline void
-pool_filter_cont_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, int pool_proto_ver,
-			     crt_bulk_t pfci_cont_bulk, uint64_t pfci_ncont,
+pool_filter_cont_in_set_data(crt_rpc_t *rpc, crt_bulk_t pfci_cont_bulk, uint64_t pfci_ncont,
 			     daos_pool_cont_filter_t *pfci_filt)
 {
 	void *in = crt_req_get(rpc);
 
-	if (pool_proto_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY) {
+	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_filter_cont_v6_in *)in)->pfci_cont_bulk = pfci_cont_bulk;
 		((struct pool_filter_cont_v6_in *)in)->pfci_ncont = pfci_ncont;
 		if (pfci_filt)
