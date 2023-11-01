@@ -5,8 +5,7 @@
 """
 from ClusterShell.NodeSet import NodeSet
 from command_utils import ExecutableCommand
-from command_utils_base import (BasicParameter, CommandWithParameters,
-                                FormattedParameter)
+from command_utils_base import BasicParameter, CommandWithParameters, FormattedParameter
 from exception_utils import CommandFailure
 from run_utils import run_remote
 
