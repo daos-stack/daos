@@ -28,147 +28,67 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_POOL_VERSION 6
+#define DAOS_POOL_VERSION              6
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
 
 #define POOL_PROTO_VER_WITH_SVC_OP_KEY 6
 
-#define POOL_PROTO_CLI_RPC_LIST(ver)					\
-	X(POOL_CREATE,							\
-		0, &CQF_pool_create,					\
-		ds_pool_create_handler, NULL)				\
-	X(POOL_CONNECT,							\
-	  0, ver >= 6 ? &CQF_pool_connect_v6 : &CQF_pool_connect,	\
-	  ver >= 6 ? ds_pool_connect_handler_v6 :			\
-	  ds_pool_connect_handler_v5, NULL)				\
-	X(POOL_DISCONNECT,						\
-		0, ver >= 6 ? &CQF_pool_disconnect_v6 : 		\
-			      &CQF_pool_disconnect,			\
-		ver >= 6 ? ds_pool_disconnect_handler_v6 :		\
-			   ds_pool_disconnect_handler_v5, NULL)		\
-	X(POOL_QUERY,							\
-	  0, ver >= 6 ? &CQF_pool_query_v6 : &CQF_pool_query,		\
-	  ver >= 6 ? ds_pool_query_handler_v6 :				\
-		     ds_pool_query_handler_v5,				\
-	  NULL)								\
-	X(POOL_QUERY_INFO,						\
-		0, ver >= 6 ? &CQF_pool_query_info_v6 :			\
-		&CQF_pool_query_info,					\
-		ver >= 6 ? ds_pool_query_info_handler_v6 :		\
-			   ds_pool_query_info_handler_v5, NULL)		\
-	X(POOL_EXCLUDE,							\
-		0, ver >= 6 ? &CQF_pool_exclude_v6 : &CQF_pool_exclude,	\
-		ver >= 6 ? ds_pool_update_handler_v6 :			\
-			   ds_pool_update_handler_v5, NULL)		\
-	X(POOL_DRAIN,							\
-		0, ver >= 6 ? &CQF_pool_drain_v6 : &CQF_pool_drain,	\
-		ver >= 6 ? ds_pool_update_handler_v6 :			\
-			   ds_pool_update_handler_v5, NULL)		\
-	X(POOL_EXTEND,							\
-		0, &CQF_pool_extend,					\
-		ds_pool_extend_handler, NULL)				\
-	X(POOL_EVICT,							\
-		0, &CQF_pool_evict,					\
-		ds_pool_evict_handler, NULL)				\
-	X(POOL_REINT,							\
-		0, ver >= 6 ? &CQF_pool_add_v6 : &CQF_pool_add,		\
-		ver >= 6 ? ds_pool_update_handler_v6 :			\
-			   ds_pool_update_handler_v5, NULL)		\
-	X(POOL_ADD_IN,							\
-		0, ver >= 6 ?  &CQF_pool_add_in_v6 : &CQF_pool_add_in,	\
-		ver >= 6 ? ds_pool_update_handler_v6 :			\
-			   ds_pool_update_handler_v5, NULL)		\
-	X(POOL_EXCLUDE_OUT,						\
-		0, ver >= 6 ? &CQF_pool_exclude_out_v6 :		\
-			       &CQF_pool_exclude_out,			\
-		ver >= 6 ? ds_pool_update_handler_v6 :			\
-			   ds_pool_update_handler_v5, NULL)		\
-	X(POOL_SVC_STOP,						\
-		0, ver >= 6 ? &CQF_pool_svc_stop_v6 :			\
-			      &CQF_pool_svc_stop,			\
-		ver >= 6 ? ds_pool_svc_stop_handler_v6 :		\
-			   ds_pool_svc_stop_handler_v5, NULL)		\
-	X(POOL_ATTR_LIST,						\
-		0, ver >= 6 ? &CQF_pool_attr_list_v6 :			\
-			      &CQF_pool_attr_list,			\
-		ver >= 6 ? ds_pool_attr_list_handler_v6 :		\
-			   ds_pool_attr_list_handler_v5, NULL)		\
-	X(POOL_ATTR_GET,						\
-		0, ver >= 6 ? &CQF_pool_attr_get_v6 :			\
-			      &CQF_pool_attr_get,			\
-		ver >= 6 ? ds_pool_attr_get_handler_v6 :		\
-			   ds_pool_attr_get_handler_v5, NULL)		\
-	X(POOL_ATTR_SET,						\
-		0, ver >= 6 ? &CQF_pool_attr_set_v6 : 			\
-			      &CQF_pool_attr_set,			\
-		ver >= 6 ? ds_pool_attr_set_handler_v6 :		\
-			   ds_pool_attr_set_handler_v5, NULL)		\
-	X(POOL_ATTR_DEL,						\
-		0, ver >= 6 ? &CQF_pool_attr_del_v6 :			\
-			      &CQF_pool_attr_del,			\
-		ver >= 6 ? ds_pool_attr_del_handler_v6 :		\
-			   ds_pool_attr_del_handler_v5, NULL)		\
-	X(POOL_REPLICAS_ADD,						\
-		0, &CQF_pool_replicas_add,				\
-		ds_pool_replicas_update_handler, NULL)			\
-	X(POOL_REPLICAS_REMOVE,						\
-		0, &CQF_pool_replicas_remove,				\
-		ds_pool_replicas_update_handler, NULL)			\
-	X(POOL_LIST_CONT,						\
-		0, ver >= 6 ? &CQF_pool_list_cont_v6 :			\
-			      &CQF_pool_list_cont,			\
-		ver >= 6 ? ds_pool_list_cont_handler_v6 :		\
-			   ds_pool_list_cont_handler_v5, NULL)		\
-	X(POOL_TGT_QUERY_MAP,						\
-		0, &CQF_pool_tgt_query_map,				\
-		ds_pool_tgt_query_map_handler, NULL)			\
-	X(POOL_FILTER_CONT,						\
-		0, ver >= 6 ? &CQF_pool_filter_cont_v6 :		\
-			      &CQF_pool_filter_cont,			\
-		ver >= 6 ? ds_pool_filter_cont_handler_v6 :		\
-			   ds_pool_filter_cont_handler_v5, NULL)
+#define POOL_PROTO_CLI_RPC_LIST(ver)                                                               \
+	X(POOL_CREATE, 0, &CQF_pool_create, ds_pool_create_handler, NULL)                          \
+	X(POOL_CONNECT, 0, ver >= 6 ? &CQF_pool_connect_v6 : &CQF_pool_connect,                    \
+	  ver >= 6 ? ds_pool_connect_handler_v6 : ds_pool_connect_handler_v5, NULL)                \
+	X(POOL_DISCONNECT, 0, ver >= 6 ? &CQF_pool_disconnect_v6 : &CQF_pool_disconnect,           \
+	  ver >= 6 ? ds_pool_disconnect_handler_v6 : ds_pool_disconnect_handler_v5, NULL)          \
+	X(POOL_QUERY, 0, ver >= 6 ? &CQF_pool_query_v6 : &CQF_pool_query,                          \
+	  ver >= 6 ? ds_pool_query_handler_v6 : ds_pool_query_handler_v5, NULL)                    \
+	X(POOL_QUERY_INFO, 0, ver >= 6 ? &CQF_pool_query_info_v6 : &CQF_pool_query_info,           \
+	  ver >= 6 ? ds_pool_query_info_handler_v6 : ds_pool_query_info_handler_v5, NULL)          \
+	X(POOL_EXCLUDE, 0, ver >= 6 ? &CQF_pool_exclude_v6 : &CQF_pool_exclude,                    \
+	  ver >= 6 ? ds_pool_update_handler_v6 : ds_pool_update_handler_v5, NULL)                  \
+	X(POOL_DRAIN, 0, ver >= 6 ? &CQF_pool_drain_v6 : &CQF_pool_drain,                          \
+	  ver >= 6 ? ds_pool_update_handler_v6 : ds_pool_update_handler_v5, NULL)                  \
+	X(POOL_EXTEND, 0, &CQF_pool_extend, ds_pool_extend_handler, NULL)                          \
+	X(POOL_EVICT, 0, &CQF_pool_evict, ds_pool_evict_handler, NULL)                             \
+	X(POOL_REINT, 0, ver >= 6 ? &CQF_pool_add_v6 : &CQF_pool_add,                              \
+	  ver >= 6 ? ds_pool_update_handler_v6 : ds_pool_update_handler_v5, NULL)                  \
+	X(POOL_ADD_IN, 0, ver >= 6 ? &CQF_pool_add_in_v6 : &CQF_pool_add_in,                       \
+	  ver >= 6 ? ds_pool_update_handler_v6 : ds_pool_update_handler_v5, NULL)                  \
+	X(POOL_EXCLUDE_OUT, 0, ver >= 6 ? &CQF_pool_exclude_out_v6 : &CQF_pool_exclude_out,        \
+	  ver >= 6 ? ds_pool_update_handler_v6 : ds_pool_update_handler_v5, NULL)                  \
+	X(POOL_SVC_STOP, 0, ver >= 6 ? &CQF_pool_svc_stop_v6 : &CQF_pool_svc_stop,                 \
+	  ver >= 6 ? ds_pool_svc_stop_handler_v6 : ds_pool_svc_stop_handler_v5, NULL)              \
+	X(POOL_ATTR_LIST, 0, ver >= 6 ? &CQF_pool_attr_list_v6 : &CQF_pool_attr_list,              \
+	  ver >= 6 ? ds_pool_attr_list_handler_v6 : ds_pool_attr_list_handler_v5, NULL)            \
+	X(POOL_ATTR_GET, 0, ver >= 6 ? &CQF_pool_attr_get_v6 : &CQF_pool_attr_get,                 \
+	  ver >= 6 ? ds_pool_attr_get_handler_v6 : ds_pool_attr_get_handler_v5, NULL)              \
+	X(POOL_ATTR_SET, 0, ver >= 6 ? &CQF_pool_attr_set_v6 : &CQF_pool_attr_set,                 \
+	  ver >= 6 ? ds_pool_attr_set_handler_v6 : ds_pool_attr_set_handler_v5, NULL)              \
+	X(POOL_ATTR_DEL, 0, ver >= 6 ? &CQF_pool_attr_del_v6 : &CQF_pool_attr_del,                 \
+	  ver >= 6 ? ds_pool_attr_del_handler_v6 : ds_pool_attr_del_handler_v5, NULL)              \
+	X(POOL_REPLICAS_ADD, 0, &CQF_pool_replicas_add, ds_pool_replicas_update_handler, NULL)     \
+	X(POOL_REPLICAS_REMOVE, 0, &CQF_pool_replicas_remove, ds_pool_replicas_update_handler,     \
+	  NULL)                                                                                    \
+	X(POOL_LIST_CONT, 0, ver >= 6 ? &CQF_pool_list_cont_v6 : &CQF_pool_list_cont,              \
+	  ver >= 6 ? ds_pool_list_cont_handler_v6 : ds_pool_list_cont_handler_v5, NULL)            \
+	X(POOL_TGT_QUERY_MAP, 0, &CQF_pool_tgt_query_map, ds_pool_tgt_query_map_handler, NULL)     \
+	X(POOL_FILTER_CONT, 0, ver >= 6 ? &CQF_pool_filter_cont_v6 : &CQF_pool_filter_cont,        \
+	  ver >= 6 ? ds_pool_filter_cont_handler_v6 : ds_pool_filter_cont_handler_v5, NULL)
 
-#define POOL_PROTO_SRV_RPC_LIST						\
-	X(POOL_TGT_DISCONNECT,						\
-		0, &CQF_pool_tgt_disconnect,				\
-		ds_pool_tgt_disconnect_handler,				\
-		&ds_pool_tgt_disconnect_co_ops)				\
-	X(POOL_TGT_QUERY,						\
-		0, &CQF_pool_tgt_query,					\
-		ds_pool_tgt_query_handler,				\
-		&ds_pool_tgt_query_co_ops)				\
-	X(POOL_PROP_GET,						\
-		0, &CQF_pool_prop_get,					\
-		ds_pool_prop_get_handler,				\
-		NULL)							\
-	X(POOL_ADD_TGT,							\
-		0, &CQF_pool_add_v6,					\
-		ds_pool_update_handler_v6, NULL)			\
-	X(POOL_PROP_SET,						\
-		0, &CQF_pool_prop_set,					\
-		ds_pool_prop_set_handler,				\
-		NULL)							\
-	X(POOL_ACL_UPDATE,						\
-		0, &CQF_pool_acl_update,				\
-		ds_pool_acl_update_handler,				\
-		NULL)							\
-	X(POOL_ACL_DELETE,						\
-		0, &CQF_pool_acl_delete,				\
-		ds_pool_acl_delete_handler,				\
-		NULL)							\
-	X(POOL_RANKS_GET,						\
-		0, &CQF_pool_ranks_get,					\
-		ds_pool_ranks_get_handler,				\
-		NULL)							\
-	X(POOL_UPGRADE,							\
-		0, &CQF_pool_upgrade,					\
-		ds_pool_upgrade_handler, NULL)				\
-	X(POOL_TGT_DISCARD,						\
-		0, &CQF_pool_tgt_discard,				\
-		ds_pool_tgt_discard_handler,				\
-		NULL)
+#define POOL_PROTO_SRV_RPC_LIST                                                                    \
+	X(POOL_TGT_DISCONNECT, 0, &CQF_pool_tgt_disconnect, ds_pool_tgt_disconnect_handler,        \
+	  &ds_pool_tgt_disconnect_co_ops)                                                          \
+	X(POOL_TGT_QUERY, 0, &CQF_pool_tgt_query, ds_pool_tgt_query_handler,                       \
+	  &ds_pool_tgt_query_co_ops)                                                               \
+	X(POOL_PROP_GET, 0, &CQF_pool_prop_get, ds_pool_prop_get_handler, NULL)                    \
+	X(POOL_ADD_TGT, 0, &CQF_pool_add_v6, ds_pool_update_handler_v6, NULL)                      \
+	X(POOL_PROP_SET, 0, &CQF_pool_prop_set, ds_pool_prop_set_handler, NULL)                    \
+	X(POOL_ACL_UPDATE, 0, &CQF_pool_acl_update, ds_pool_acl_update_handler, NULL)              \
+	X(POOL_ACL_DELETE, 0, &CQF_pool_acl_delete, ds_pool_acl_delete_handler, NULL)              \
+	X(POOL_RANKS_GET, 0, &CQF_pool_ranks_get, ds_pool_ranks_get_handler, NULL)                 \
+	X(POOL_UPGRADE, 0, &CQF_pool_upgrade, ds_pool_upgrade_handler, NULL)                       \
+	X(POOL_TGT_DISCARD, 0, &CQF_pool_tgt_discard, ds_pool_tgt_discard_handler, NULL)
 
 #define POOL_PROTO_RPC_LIST									\
 	POOL_PROTO_CLI_RPC_LIST(DAOS_POOL_VERSION)						\
@@ -197,11 +117,9 @@ extern int dc_pool_proto_version;
 	((uuid_t)		(pi_uuid)		CRT_VAR) \
 	((uuid_t)		(pi_hdl)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_OP_V6	/* input fields */		 \
-	((uuid_t)		(pi_uuid)		CRT_VAR) \
-	((uuid_t)		(pi_hdl)		CRT_VAR) \
-	((uuid_t)		(pi_cli_id)		CRT_VAR) \
-	((uint64_t)		(pi_time)		CRT_VAR)
+#define DAOS_ISEQ_POOL_OP_V6 /* input fields */                                                    \
+	((uuid_t)(pi_uuid)CRT_VAR)((uuid_t)(pi_hdl)CRT_VAR)((uuid_t)(pi_cli_id)CRT_VAR)(           \
+	    (uint64_t)(pi_time)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_OP	/* output fields */		 \
 	((int32_t)		(po_rc)			CRT_VAR) \
@@ -212,13 +130,10 @@ CRT_RPC_DECLARE(pool_op_v6, DAOS_ISEQ_POOL_OP_V6, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
 
 /* If pri_op.pi_hdl is not null, call rdb_campaign. */
-#define DAOS_ISEQ_POOL_CREATE	/* input fields */		 \
-	((struct pool_op_v6_in)	(pri_op)		CRT_VAR) \
-	((d_rank_list_t)	(pri_tgt_ranks)		CRT_PTR) \
-	((daos_prop_t)		(pri_prop)		CRT_PTR) \
-	((uint32_t)		(pri_ndomains)		CRT_VAR) \
-	((uint32_t)		(pri_ntgts)		CRT_VAR) \
-	((uint32_t)		(pri_domains)		CRT_ARRAY)
+#define DAOS_ISEQ_POOL_CREATE /* input fields */                                                   \
+	((struct pool_op_v6_in)(pri_op)CRT_VAR)((d_rank_list_t)(pri_tgt_ranks)CRT_PTR)(            \
+	    (daos_prop_t)(pri_prop)CRT_PTR)((uint32_t)(pri_ndomains)CRT_VAR)(                      \
+	    (uint32_t)(pri_ntgts)CRT_VAR)((uint32_t)(pri_domains)CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_CREATE	/* output fields */		 \
 	((struct pool_op_out)	(pro_op)		CRT_VAR)
@@ -232,21 +147,15 @@ CRT_RPC_DECLARE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 	/* only set on -DER_TRUNC */				 \
 	((uint32_t)		(pco_map_buf_size)	CRT_VAR)
 
-#define DAOS_ISEQ_POOL_CONNECT /* input fields */		 \
-	((struct pool_op_in)	(pci_op)		CRT_VAR) \
-	((d_iov_t)		(pci_cred)		CRT_VAR) \
-	((uint64_t)		(pci_flags)		CRT_VAR) \
-	((uint64_t)		(pci_query_bits)	CRT_VAR) \
-	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR) \
-	((uint32_t)		(pci_pool_version)	CRT_VAR)
+#define DAOS_ISEQ_POOL_CONNECT /* input fields */                                                  \
+	((struct pool_op_in)(pci_op)CRT_VAR)((d_iov_t)(pci_cred)CRT_VAR)(                          \
+	    (uint64_t)(pci_flags)CRT_VAR)((uint64_t)(pci_query_bits)CRT_VAR)(                      \
+	    (crt_bulk_t)(pci_map_bulk)CRT_VAR)((uint32_t)(pci_pool_version)CRT_VAR)
 
-#define DAOS_ISEQ_POOL_CONNECT_V6 /* input fields */		 \
-	((struct pool_op_v6_in)	(pci_op)		CRT_VAR) \
-	((d_iov_t)		(pci_cred)		CRT_VAR) \
-	((uint64_t)		(pci_flags)		CRT_VAR) \
-	((uint64_t)		(pci_query_bits)	CRT_VAR) \
-	((crt_bulk_t)		(pci_map_bulk)		CRT_VAR) \
-	((uint32_t)		(pci_pool_version)	CRT_VAR)
+#define DAOS_ISEQ_POOL_CONNECT_V6 /* input fields */                                               \
+	((struct pool_op_v6_in)(pci_op)CRT_VAR)((d_iov_t)(pci_cred)CRT_VAR)(                       \
+	    (uint64_t)(pci_flags)CRT_VAR)((uint64_t)(pci_query_bits)CRT_VAR)(                      \
+	    (crt_bulk_t)(pci_map_bulk)CRT_VAR)((uint32_t)(pci_pool_version)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DECLARE(pool_connect_v6, DAOS_ISEQ_POOL_CONNECT_V6, DAOS_OSEQ_POOL_CONNECT)
@@ -254,8 +163,7 @@ CRT_RPC_DECLARE(pool_connect_v6, DAOS_ISEQ_POOL_CONNECT_V6, DAOS_OSEQ_POOL_CONNE
 #define DAOS_ISEQ_POOL_DISCONNECT /* input fields */		 \
 	((struct pool_op_in)	(pdi_op)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_DISCONNECT_V6 /* input fields */		 \
-	((struct pool_op_v6_in)	(pdi_op)		CRT_VAR)
+#define DAOS_ISEQ_POOL_DISCONNECT_V6 /* input fields */ ((struct pool_op_v6_in)(pdi_op)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_DISCONNECT /* output fields */		 \
 	((struct pool_op_out)	(pdo_op)		CRT_VAR)
@@ -268,20 +176,16 @@ CRT_RPC_DECLARE(pool_disconnect_v6, DAOS_ISEQ_POOL_DISCONNECT_V6, DAOS_OSEQ_POOL
 	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
 	((uint64_t)		(pqi_query_bits)	CRT_VAR)
 
-#define DAOS_ISEQ_POOL_QUERY_V6	/* input fields */		 \
-	((struct pool_op_v6_in)	(pqi_op)		CRT_VAR) \
-	((crt_bulk_t)		(pqi_map_bulk)		CRT_VAR) \
-	((uint64_t)		(pqi_query_bits)	CRT_VAR)
+#define DAOS_ISEQ_POOL_QUERY_V6 /* input fields */                                                 \
+	((struct pool_op_v6_in)(pqi_op)CRT_VAR)((crt_bulk_t)(pqi_map_bulk)CRT_VAR)(                \
+	    (uint64_t)(pqi_query_bits)CRT_VAR)
 
-#define DAOS_OSEQ_POOL_QUERY	/* output fields */		 \
-	((struct pool_op_out)	(pqo_op)		CRT_VAR) \
-	((daos_prop_t)		(pqo_prop)		CRT_PTR) \
-	((struct daos_pool_space) (pqo_space)		CRT_RAW) \
-	((struct daos_rebuild_status) (pqo_rebuild_st)	CRT_RAW) \
-	/* only set on -DER_TRUNC */				 \
-	((uint32_t)		(pqo_map_buf_size)	CRT_VAR) \
-	((uint32_t)		(pqo_pool_layout_ver)	CRT_VAR) \
-	((uint32_t)	       (pqo_upgrade_layout_ver)	CRT_VAR)
+#define DAOS_OSEQ_POOL_QUERY /* output fields */                                                   \
+	((struct pool_op_out)(pqo_op)CRT_VAR)((daos_prop_t)(pqo_prop)CRT_PTR)(                     \
+	    (struct daos_pool_space)(pqo_space)CRT_RAW)(                                           \
+	    (struct daos_rebuild_status)(pqo_rebuild_st)CRT_RAW) /* only set on -DER_TRUNC */      \
+	    ((uint32_t)(pqo_map_buf_size)CRT_VAR)((uint32_t)(pqo_pool_layout_ver)CRT_VAR)(         \
+		(uint32_t)(pqo_upgrade_layout_ver)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
 CRT_RPC_DECLARE(pool_query_v6, DAOS_ISEQ_POOL_QUERY_V6, DAOS_OSEQ_POOL_QUERY)
@@ -291,10 +195,9 @@ CRT_RPC_DECLARE(pool_query_v6, DAOS_ISEQ_POOL_QUERY_V6, DAOS_OSEQ_POOL_QUERY)
 	((d_rank_t)		(pqii_rank)		CRT_VAR) \
 	((uint32_t)		(pqii_tgt)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_QUERY_INFO_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pqii_op)		CRT_VAR) \
-	((d_rank_t)		(pqii_rank)		CRT_VAR) \
-	((uint32_t)		(pqii_tgt)		CRT_VAR)
+#define DAOS_ISEQ_POOL_QUERY_INFO_V6 /* input fields */                                            \
+	((struct pool_op_v6_in)(pqii_op)CRT_VAR)((d_rank_t)(pqii_rank)CRT_VAR)(                    \
+	    (uint32_t)(pqii_tgt)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_QUERY_INFO	/* output fields */	 \
 	((struct pool_op_out)	  (pqio_op)		CRT_VAR) \
@@ -310,9 +213,8 @@ CRT_RPC_DECLARE(pool_query_info_v6, DAOS_ISEQ_POOL_QUERY_INFO_V6, DAOS_OSEQ_POOL
 	((struct pool_op_in)	(pali_op)		CRT_VAR) \
 	((crt_bulk_t)		(pali_bulk)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_ATTR_LIST_V6 /* input fields */		 \
-	((struct pool_op_v6_in)	(pali_op)		CRT_VAR) \
-	((crt_bulk_t)		(pali_bulk)		CRT_VAR)
+#define DAOS_ISEQ_POOL_ATTR_LIST_V6 /* input fields */                                             \
+	((struct pool_op_v6_in)(pali_op)CRT_VAR)((crt_bulk_t)(pali_bulk)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_ATTR_LIST /* output fields */		 \
 	((struct pool_op_out)	(palo_op)		CRT_VAR) \
@@ -327,11 +229,9 @@ CRT_RPC_DECLARE(pool_attr_list_v6, DAOS_ISEQ_POOL_ATTR_LIST_V6, DAOS_OSEQ_POOL_A
 	((uint64_t)		(pagi_key_length)	CRT_VAR) \
 	((crt_bulk_t)		(pagi_bulk)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_ATTR_GET_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pagi_op)		CRT_VAR) \
-	((uint64_t)		(pagi_count)		CRT_VAR) \
-	((uint64_t)		(pagi_key_length)	CRT_VAR) \
-	((crt_bulk_t)		(pagi_bulk)		CRT_VAR)
+#define DAOS_ISEQ_POOL_ATTR_GET_V6 /* input fields */                                              \
+	((struct pool_op_v6_in)(pagi_op)CRT_VAR)((uint64_t)(pagi_count)CRT_VAR)(                   \
+	    (uint64_t)(pagi_key_length)CRT_VAR)((crt_bulk_t)(pagi_bulk)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_attr_get, DAOS_ISEQ_POOL_ATTR_GET, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_attr_get_v6, DAOS_ISEQ_POOL_ATTR_GET_V6, DAOS_OSEQ_POOL_OP)
@@ -341,10 +241,9 @@ CRT_RPC_DECLARE(pool_attr_get_v6, DAOS_ISEQ_POOL_ATTR_GET_V6, DAOS_OSEQ_POOL_OP)
 	((uint64_t)		(pasi_count)		CRT_VAR) \
 	((crt_bulk_t)		(pasi_bulk)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_ATTR_SET_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pasi_op)		CRT_VAR) \
-	((uint64_t)		(pasi_count)		CRT_VAR) \
-	((crt_bulk_t)		(pasi_bulk)		CRT_VAR)
+#define DAOS_ISEQ_POOL_ATTR_SET_V6 /* input fields */                                              \
+	((struct pool_op_v6_in)(pasi_op)CRT_VAR)((uint64_t)(pasi_count)CRT_VAR)(                   \
+	    (crt_bulk_t)(pasi_bulk)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_attr_set, DAOS_ISEQ_POOL_ATTR_SET, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_attr_set_v6, DAOS_ISEQ_POOL_ATTR_SET_V6, DAOS_OSEQ_POOL_OP)
@@ -354,10 +253,9 @@ CRT_RPC_DECLARE(pool_attr_set_v6, DAOS_ISEQ_POOL_ATTR_SET_V6, DAOS_OSEQ_POOL_OP)
 	((uint64_t)		(padi_count)		CRT_VAR) \
 	((crt_bulk_t)		(padi_bulk)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_ATTR_DEL_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(padi_op)		CRT_VAR) \
-	((uint64_t)		(padi_count)		CRT_VAR) \
-	((crt_bulk_t)		(padi_bulk)		CRT_VAR)
+#define DAOS_ISEQ_POOL_ATTR_DEL_V6 /* input fields */                                              \
+	((struct pool_op_v6_in)(padi_op)CRT_VAR)((uint64_t)(padi_count)CRT_VAR)(                   \
+	    (crt_bulk_t)(padi_bulk)CRT_VAR)
 
 CRT_RPC_DECLARE(pool_attr_del, DAOS_ISEQ_POOL_ATTR_DEL, DAOS_OSEQ_POOL_OP)
 CRT_RPC_DECLARE(pool_attr_del_v6, DAOS_ISEQ_POOL_ATTR_DEL_V6, DAOS_OSEQ_POOL_OP)
@@ -382,23 +280,20 @@ CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 	((struct pool_op_in)	(pti_op)		CRT_VAR) \
 	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
 
-#define DAOS_ISEQ_POOL_TGT_UPDATE_V6 /* input fields */		 \
-	((struct pool_op_v6_in)	(pti_op)		CRT_VAR) \
-	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
+#define DAOS_ISEQ_POOL_TGT_UPDATE_V6 /* input fields */                                            \
+	((struct pool_op_v6_in)(pti_op)CRT_VAR)((struct pool_target_addr)(pti_addr_list)CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_TGT_UPDATE /* output fields */		 \
 	((struct pool_op_out)	(pto_op)		CRT_VAR) \
 	((struct pool_target_addr) (pto_addr_list)	CRT_ARRAY)
 
-#define DAOS_ISEQ_POOL_EXTEND_V6 /* input fields */		 \
-	((struct pool_op_v6_in)	(pei_op)		CRT_VAR) \
-	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
-	((uint32_t)		(pei_ntgts)		CRT_VAR) \
-	((uint32_t)		(pei_ndomains)		CRT_VAR) \
-	((uint32_t)		(pei_domains)		CRT_ARRAY)
+#define DAOS_ISEQ_POOL_EXTEND_V6 /* input fields */                                                \
+	((struct pool_op_v6_in)(pei_op)CRT_VAR)((d_rank_list_t)(pei_tgt_ranks)CRT_PTR)(            \
+	    (uint32_t)(pei_ntgts)CRT_VAR)((uint32_t)(pei_ndomains)CRT_VAR)(                        \
+	    (uint32_t)(pei_domains)CRT_ARRAY)
 
 #define DAOS_OSEQ_POOL_EXTEND /* output fields */		 \
-	((struct pool_op_out)	(peo_op)		CRT_VAR) \
+	((struct pool_op_out)	(peo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_tgt_update, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_tgt_update_v6, DAOS_ISEQ_POOL_TGT_UPDATE_V6, DAOS_OSEQ_POOL_TGT_UPDATE)
@@ -415,12 +310,10 @@ CRT_RPC_DECLARE(pool_drain_v6, DAOS_ISEQ_POOL_TGT_UPDATE_V6, DAOS_OSEQ_POOL_TGT_
 CRT_RPC_DECLARE(pool_exclude_out, DAOS_ISEQ_POOL_TGT_UPDATE, DAOS_OSEQ_POOL_TGT_UPDATE)
 CRT_RPC_DECLARE(pool_exclude_out_v6, DAOS_ISEQ_POOL_TGT_UPDATE_V6, DAOS_OSEQ_POOL_TGT_UPDATE)
 
-#define DAOS_ISEQ_POOL_EVICT_V6	/* input fields */			 \
-	((struct pool_op_v6_in)	(pvi_op)			CRT_VAR) \
-	((uint32_t)		(pvi_pool_destroy)		CRT_VAR) \
-	((uint32_t)		(pvi_pool_destroy_force)	CRT_VAR) \
-	((uuid_t)		(pvi_hdls)			CRT_ARRAY) \
-	((d_string_t)		(pvi_machine)			CRT_VAR)
+#define DAOS_ISEQ_POOL_EVICT_V6 /* input fields */                                                 \
+	((struct pool_op_v6_in)(pvi_op)CRT_VAR)((uint32_t)(pvi_pool_destroy)CRT_VAR)(              \
+	    (uint32_t)(pvi_pool_destroy_force)CRT_VAR)((uuid_t)(pvi_hdls)CRT_ARRAY)(               \
+	    (d_string_t)(pvi_machine)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_EVICT	/* output fields */		 \
 	((struct pool_op_out)	(pvo_op)		CRT_VAR) \
@@ -431,8 +324,7 @@ CRT_RPC_DECLARE(pool_evict, DAOS_ISEQ_POOL_EVICT_V6, DAOS_OSEQ_POOL_EVICT)
 #define DAOS_ISEQ_POOL_SVC_STOP	/* input fields */		 \
 	((struct pool_op_in)	(psi_op)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_SVC_STOP_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(psi_op)		CRT_VAR)
+#define DAOS_ISEQ_POOL_SVC_STOP_V6 /* input fields */ ((struct pool_op_v6_in)(psi_op)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_SVC_STOP	/* output fields */		 \
 	((struct pool_op_out)	(pso_op)		CRT_VAR)
@@ -469,9 +361,8 @@ CRT_RPC_DECLARE(pool_tgt_query, DAOS_ISEQ_POOL_TGT_QUERY,
 CRT_RPC_DECLARE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
 		DAOS_OSEQ_POOL_TGT_DIST_HDLS)
 
-#define DAOS_ISEQ_POOL_PROP_GET_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pgi_op)		CRT_VAR) \
-	((uint64_t)		(pgi_query_bits)	CRT_VAR)
+#define DAOS_ISEQ_POOL_PROP_GET_V6 /* input fields */                                              \
+	((struct pool_op_v6_in)(pgi_op)CRT_VAR)((uint64_t)(pgi_query_bits)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_PROP_GET	/* output fields */		 \
 	((struct pool_op_out)	(pgo_op)		CRT_VAR) \
@@ -479,28 +370,25 @@ CRT_RPC_DECLARE(pool_tgt_dist_hdls, DAOS_ISEQ_POOL_TGT_DIST_HDLS,
 
 CRT_RPC_DECLARE(pool_prop_get, DAOS_ISEQ_POOL_PROP_GET_V6, DAOS_OSEQ_POOL_PROP_GET)
 
-#define DAOS_ISEQ_POOL_PROP_SET_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(psi_op)		CRT_VAR) \
-	((daos_prop_t)		(psi_prop)		CRT_PTR)
+#define DAOS_ISEQ_POOL_PROP_SET_V6 /* input fields */                                              \
+	((struct pool_op_v6_in)(psi_op)CRT_VAR)((daos_prop_t)(psi_prop)CRT_PTR)
 
 #define DAOS_OSEQ_POOL_PROP_SET	/* output fields */		 \
 	((struct pool_op_out)	(pso_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_prop_set, DAOS_ISEQ_POOL_PROP_SET_V6, DAOS_OSEQ_POOL_PROP_SET)
 
-#define DAOS_ISEQ_POOL_ACL_UPDATE_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pui_op)		CRT_VAR) \
-	((struct daos_acl)	(pui_acl)		CRT_PTR)
+#define DAOS_ISEQ_POOL_ACL_UPDATE_V6 /* input fields */                                            \
+	((struct pool_op_v6_in)(pui_op)CRT_VAR)((struct daos_acl)(pui_acl)CRT_PTR)
 
 #define DAOS_OSEQ_POOL_ACL_UPDATE	/* output fields */	 \
 	((struct pool_op_out)	(puo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE_V6, DAOS_OSEQ_POOL_ACL_UPDATE)
 
-#define DAOS_ISEQ_POOL_ACL_DELETE_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(pdi_op)		CRT_VAR) \
-	((d_const_string_t)	(pdi_principal)		CRT_VAR) \
-	((uint8_t)		(pdi_type)		CRT_VAR)
+#define DAOS_ISEQ_POOL_ACL_DELETE_V6 /* input fields */                                            \
+	((struct pool_op_v6_in)(pdi_op)CRT_VAR)((d_const_string_t)(pdi_principal)CRT_VAR)(         \
+	    (uint8_t)(pdi_type)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_ACL_DELETE	/* output fields */	 \
 	((struct pool_op_out)	(pdo_op)		CRT_VAR)
@@ -512,10 +400,9 @@ CRT_RPC_DECLARE(pool_acl_delete, DAOS_ISEQ_POOL_ACL_DELETE_V6, DAOS_OSEQ_POOL_AC
 	((crt_bulk_t)		(plci_cont_bulk)		CRT_VAR) \
 	((uint64_t)		(plci_ncont)			CRT_VAR)
 
-#define DAOS_ISEQ_POOL_LIST_CONT_V6	/* input fields */		 \
-	((struct pool_op_v6_in)	(plci_op)			CRT_VAR) \
-	((crt_bulk_t)		(plci_cont_bulk)		CRT_VAR) \
-	((uint64_t)		(plci_ncont)			CRT_VAR)
+#define DAOS_ISEQ_POOL_LIST_CONT_V6 /* input fields */                                             \
+	((struct pool_op_v6_in)(plci_op)CRT_VAR)((crt_bulk_t)(plci_cont_bulk)CRT_VAR)(             \
+	    (uint64_t)(plci_ncont)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_LIST_CONT	/* output fields */		 \
 	((struct pool_op_out)	(plco_op)			CRT_VAR) \
@@ -530,11 +417,9 @@ CRT_RPC_DECLARE(pool_list_cont_v6, DAOS_ISEQ_POOL_LIST_CONT_V6, DAOS_OSEQ_POOL_L
 	((uint64_t)			(pfci_ncont)		CRT_VAR) \
 	((daos_pool_cont_filter_t)	(pfci_filt)		CRT_VAR)
 
-#define DAOS_ISEQ_POOL_FILTER_CONT_V6	/* input fields */		 \
-	((struct pool_op_v6_in)		(pfci_op)		CRT_VAR) \
-	((crt_bulk_t)			(pfci_cont_bulk)	CRT_VAR) \
-	((uint64_t)			(pfci_ncont)		CRT_VAR) \
-	((daos_pool_cont_filter_t)	(pfci_filt)		CRT_VAR)
+#define DAOS_ISEQ_POOL_FILTER_CONT_V6 /* input fields */                                           \
+	((struct pool_op_v6_in)(pfci_op)CRT_VAR)((crt_bulk_t)(pfci_cont_bulk)CRT_VAR)(             \
+	    (uint64_t)(pfci_ncont)CRT_VAR)((daos_pool_cont_filter_t)(pfci_filt)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_FILTER_CONT	/* output fields */		 \
 	((struct pool_op_out)	(pfco_op)			CRT_VAR) \
@@ -555,8 +440,7 @@ CRT_RPC_DECLARE(pool_filter_cont_v6, DAOS_ISEQ_POOL_FILTER_CONT_V6, DAOS_OSEQ_PO
 CRT_RPC_DECLARE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
 		DAOS_OSEQ_POOL_RANKS_GET)
 
-#define DAOS_ISEQ_POOL_UPGRADE_V6	/* input fields */	 \
-	((struct pool_op_v6_in)	(poi_op)		CRT_VAR)
+#define DAOS_ISEQ_POOL_UPGRADE_V6 /* input fields */ ((struct pool_op_v6_in)(poi_op)CRT_VAR)
 
 #define DAOS_OSEQ_POOL_UPGRADE	/* output fields */		 \
 	((struct pool_op_out)	(poo_op)		CRT_VAR)
@@ -590,10 +474,10 @@ static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		const uuid_t pi_uuid, const uuid_t pi_hdl, uint64_t *req_timep, crt_rpc_t **req)
 {
-	int			rc;
-	crt_opcode_t		opcode;
-	static __thread uuid_t	cli_id;
-	struct pool_op_in      *in;
+	int                    rc;
+	crt_opcode_t           opcode;
+	static __thread uuid_t cli_id;
+	struct pool_op_in     *in;
 
 	if (uuid_is_null(cli_id))
 		uuid_generate(cli_id);
@@ -630,15 +514,15 @@ static inline void
 pool_create_in_get_data(crt_rpc_t *rpc, d_rank_list_t **pri_tgt_ranksp, daos_prop_t **pri_propp,
 			uint32_t *pri_ndomainsp, uint32_t *pri_ntgtsp, uint32_t **pri_domainsp)
 {
-	struct pool_create_in  *in = crt_req_get(rpc);
-	uint8_t			rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
+	struct pool_create_in *in      = crt_req_get(rpc);
+	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
 	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
 	*pri_tgt_ranksp = in->pri_tgt_ranks;
-	*pri_propp = in->pri_prop;
-	*pri_ndomainsp = in->pri_ndomains;
-	*pri_ntgtsp = in->pri_ntgts;
-	*pri_domainsp = in->pri_domains.ca_arrays;
+	*pri_propp      = in->pri_prop;
+	*pri_ndomainsp  = in->pri_ndomains;
+	*pri_ntgtsp     = in->pri_ntgts;
+	*pri_domainsp   = in->pri_domains.ca_arrays;
 	D_ASSERT(*pri_ndomainsp == in->pri_domains.ca_count);
 }
 
@@ -646,16 +530,16 @@ static inline void
 pool_create_in_set_data(crt_rpc_t *rpc, d_rank_list_t *pri_tgt_ranks, daos_prop_t *pri_prop,
 			uint32_t pri_ndomains, uint32_t pri_ntgts, uint32_t *pri_domains)
 {
-	struct pool_create_in  *in = crt_req_get(rpc);
-	uint8_t			rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
+	struct pool_create_in *in      = crt_req_get(rpc);
+	uint8_t                rpc_ver = opc_get_rpc_ver(rpc->cr_opc);
 
 	D_ASSERT(rpc_ver >= POOL_PROTO_VER_WITH_SVC_OP_KEY);
-	in->pri_tgt_ranks = pri_tgt_ranks;
-	in->pri_prop = pri_prop;
-	in->pri_ndomains = pri_ndomains;
-	in->pri_ntgts = pri_ntgts;
+	in->pri_tgt_ranks         = pri_tgt_ranks;
+	in->pri_prop              = pri_prop;
+	in->pri_ndomains          = pri_ndomains;
+	in->pri_ntgts             = pri_ntgts;
 	in->pri_domains.ca_arrays = pri_domains;
-	in->pri_domains.ca_count = pri_ndomains;
+	in->pri_domains.ca_count  = pri_ndomains;
 }
 
 static inline bool
@@ -709,14 +593,14 @@ pool_connect_in_set_data(crt_rpc_t *rpc, uint64_t pci_flags, uint64_t pci_query_
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
-		((struct pool_connect_v6_in *)in)->pci_flags = pci_flags;
-		((struct pool_connect_v6_in *)in)->pci_query_bits = pci_query_bits;
-		((struct pool_connect_v6_in *)in)->pci_map_bulk = pci_map_bulk;
+		((struct pool_connect_v6_in *)in)->pci_flags        = pci_flags;
+		((struct pool_connect_v6_in *)in)->pci_query_bits   = pci_query_bits;
+		((struct pool_connect_v6_in *)in)->pci_map_bulk     = pci_map_bulk;
 		((struct pool_connect_v6_in *)in)->pci_pool_version = pci_pool_version;
 	} else {
-		((struct pool_connect_in *)in)->pci_flags = pci_flags;
-		((struct pool_connect_in *)in)->pci_query_bits = pci_query_bits;
-		((struct pool_connect_in *)in)->pci_map_bulk = pci_map_bulk;
+		((struct pool_connect_in *)in)->pci_flags        = pci_flags;
+		((struct pool_connect_in *)in)->pci_query_bits   = pci_query_bits;
+		((struct pool_connect_in *)in)->pci_map_bulk     = pci_map_bulk;
 		((struct pool_connect_in *)in)->pci_pool_version = pci_pool_version;
 	}
 }
@@ -727,10 +611,10 @@ pool_query_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pqi_map_bulkp, uint64_t *pqi_
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
-		*pqi_map_bulkp = ((struct pool_query_v6_in *)in)->pqi_map_bulk;
+		*pqi_map_bulkp   = ((struct pool_query_v6_in *)in)->pqi_map_bulk;
 		*pqi_query_bitsp = ((struct pool_query_v6_in *)in)->pqi_query_bits;
 	} else {
-		*pqi_map_bulkp = ((struct pool_query_in *)in)->pqi_map_bulk;
+		*pqi_map_bulkp   = ((struct pool_query_in *)in)->pqi_map_bulk;
 		*pqi_query_bitsp = ((struct pool_query_in *)in)->pqi_query_bits;
 	}
 }
@@ -741,10 +625,10 @@ pool_query_in_set_data(crt_rpc_t *rpc, crt_bulk_t pqi_map_bulk, uint64_t pqi_que
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
-		((struct pool_query_v6_in *)in)->pqi_map_bulk = pqi_map_bulk;
+		((struct pool_query_v6_in *)in)->pqi_map_bulk   = pqi_map_bulk;
 		((struct pool_query_v6_in *)in)->pqi_query_bits = pqi_query_bits;
 	} else {
-		((struct pool_query_in *)in)->pqi_map_bulk = pqi_map_bulk;
+		((struct pool_query_in *)in)->pqi_map_bulk   = pqi_map_bulk;
 		((struct pool_query_in *)in)->pqi_query_bits = pqi_query_bits;
 	}
 }
@@ -756,10 +640,10 @@ pool_query_info_in_get_data(crt_rpc_t *rpc, d_rank_t *pqii_rankp, uint32_t *pqii
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pqii_rankp = ((struct pool_query_info_v6_in *)in)->pqii_rank;
-		*pqii_tgtp = ((struct pool_query_info_v6_in *)in)->pqii_tgt;
+		*pqii_tgtp  = ((struct pool_query_info_v6_in *)in)->pqii_tgt;
 	} else {
 		*pqii_rankp = ((struct pool_query_info_in *)in)->pqii_rank;
-		*pqii_tgtp = ((struct pool_query_info_in *)in)->pqii_tgt;
+		*pqii_tgtp  = ((struct pool_query_info_in *)in)->pqii_tgt;
 	}
 }
 
@@ -770,10 +654,10 @@ pool_query_info_in_set_data(crt_rpc_t *rpc, d_rank_t pqii_rank, uint32_t pqii_tg
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_query_info_v6_in *)in)->pqii_rank = pqii_rank;
-		((struct pool_query_info_v6_in *)in)->pqii_tgt = pqii_tgt;
+		((struct pool_query_info_v6_in *)in)->pqii_tgt  = pqii_tgt;
 	} else {
 		((struct pool_query_info_in *)in)->pqii_rank = pqii_rank;
-		((struct pool_query_info_in *)in)->pqii_tgt = pqii_tgt;
+		((struct pool_query_info_in *)in)->pqii_tgt  = pqii_tgt;
 	}
 }
 
@@ -808,13 +692,13 @@ pool_attr_get_in_get_data(crt_rpc_t *rpc, uint64_t *pagi_countp, uint64_t *pagi_
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
-		*pagi_countp = ((struct pool_attr_get_v6_in *)in)->pagi_count;
+		*pagi_countp      = ((struct pool_attr_get_v6_in *)in)->pagi_count;
 		*pagi_key_lengthp = ((struct pool_attr_get_v6_in *)in)->pagi_key_length;
-		*pagi_bulkp = ((struct pool_attr_get_v6_in *)in)->pagi_bulk;
+		*pagi_bulkp       = ((struct pool_attr_get_v6_in *)in)->pagi_bulk;
 	} else {
-		*pagi_countp = ((struct pool_attr_get_in *)in)->pagi_count;
+		*pagi_countp      = ((struct pool_attr_get_in *)in)->pagi_count;
 		*pagi_key_lengthp = ((struct pool_attr_get_in *)in)->pagi_key_length;
-		*pagi_bulkp = ((struct pool_attr_get_in *)in)->pagi_bulk;
+		*pagi_bulkp       = ((struct pool_attr_get_in *)in)->pagi_bulk;
 	}
 }
 
@@ -826,13 +710,13 @@ pool_attr_get_in_set_data(crt_rpc_t *rpc, uint64_t pagi_count, uint64_t pagi_key
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
-		((struct pool_attr_get_v6_in *)in)->pagi_count = pagi_count;
+		((struct pool_attr_get_v6_in *)in)->pagi_count      = pagi_count;
 		((struct pool_attr_get_v6_in *)in)->pagi_key_length = pagi_key_length;
-		((struct pool_attr_get_v6_in *)in)->pagi_bulk = pagi_bulk;
+		((struct pool_attr_get_v6_in *)in)->pagi_bulk       = pagi_bulk;
 	} else {
-		((struct pool_attr_get_in *)in)->pagi_count = pagi_count;
+		((struct pool_attr_get_in *)in)->pagi_count      = pagi_count;
 		((struct pool_attr_get_in *)in)->pagi_key_length = pagi_key_length;
-		((struct pool_attr_get_in *)in)->pagi_bulk = pagi_bulk;
+		((struct pool_attr_get_in *)in)->pagi_bulk       = pagi_bulk;
 	}
 }
 
@@ -843,10 +727,10 @@ pool_attr_set_in_get_data(crt_rpc_t *rpc, uint64_t *pasi_countp, crt_bulk_t *pas
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pasi_countp = ((struct pool_attr_set_v6_in *)in)->pasi_count;
-		*pasi_bulkp = ((struct pool_attr_set_v6_in *)in)->pasi_bulk;
+		*pasi_bulkp  = ((struct pool_attr_set_v6_in *)in)->pasi_bulk;
 	} else {
 		*pasi_countp = ((struct pool_attr_set_in *)in)->pasi_count;
-		*pasi_bulkp = ((struct pool_attr_set_in *)in)->pasi_bulk;
+		*pasi_bulkp  = ((struct pool_attr_set_in *)in)->pasi_bulk;
 	}
 }
 
@@ -857,10 +741,10 @@ pool_attr_set_in_set_data(crt_rpc_t *rpc, uint64_t pasi_count, crt_bulk_t pasi_b
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_set_v6_in *)in)->pasi_count = pasi_count;
-		((struct pool_attr_set_v6_in *)in)->pasi_bulk = pasi_bulk;
+		((struct pool_attr_set_v6_in *)in)->pasi_bulk  = pasi_bulk;
 	} else {
 		((struct pool_attr_set_in *)in)->pasi_count = pasi_count;
-		((struct pool_attr_set_in *)in)->pasi_bulk = pasi_bulk;
+		((struct pool_attr_set_in *)in)->pasi_bulk  = pasi_bulk;
 	}
 }
 
@@ -871,10 +755,10 @@ pool_attr_del_in_get_data(crt_rpc_t *rpc, uint64_t *padi_countp, crt_bulk_t *pad
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*padi_countp = ((struct pool_attr_del_v6_in *)in)->padi_count;
-		*padi_bulkp = ((struct pool_attr_del_v6_in *)in)->padi_bulk;
+		*padi_bulkp  = ((struct pool_attr_del_v6_in *)in)->padi_bulk;
 	} else {
 		*padi_countp = ((struct pool_attr_del_in *)in)->padi_count;
-		*padi_bulkp = ((struct pool_attr_del_in *)in)->padi_bulk;
+		*padi_bulkp  = ((struct pool_attr_del_in *)in)->padi_bulk;
 	}
 }
 
@@ -885,10 +769,10 @@ pool_attr_del_in_set_data(crt_rpc_t *rpc, uint64_t padi_count, crt_bulk_t padi_b
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_attr_del_v6_in *)in)->padi_count = padi_count;
-		((struct pool_attr_del_v6_in *)in)->padi_bulk = padi_bulk;
+		((struct pool_attr_del_v6_in *)in)->padi_bulk  = padi_bulk;
 	} else {
 		((struct pool_attr_del_in *)in)->padi_count = padi_count;
-		((struct pool_attr_del_in *)in)->padi_bulk = padi_bulk;
+		((struct pool_attr_del_in *)in)->padi_bulk  = padi_bulk;
 	}
 }
 
@@ -899,10 +783,10 @@ pool_tgt_update_in_get_data(crt_rpc_t *rpc, struct pool_target_addr **pti_addr_l
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pti_addr_listp = ((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays;
-		*countp = (int)((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count;
+		*countp         = (int)((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count;
 	} else {
 		*pti_addr_listp = ((struct pool_tgt_update_in *)in)->pti_addr_list.ca_arrays;
-		*countp = (int)((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count;
+		*countp         = (int)((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count;
 	}
 }
 
@@ -913,10 +797,10 @@ pool_tgt_update_in_set_data(crt_rpc_t *rpc, struct pool_target_addr *pti_addr_li
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_arrays = pti_addr_list;
-		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count = count;
+		((struct pool_tgt_update_v6_in *)in)->pti_addr_list.ca_count  = count;
 	} else {
 		((struct pool_tgt_update_in *)in)->pti_addr_list.ca_arrays = pti_addr_list;
-		((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count = count;
+		((struct pool_tgt_update_in *)in)->pti_addr_list.ca_count  = count;
 	}
 }
 
@@ -978,7 +862,7 @@ pool_acl_delete_in_get_data(crt_rpc_t *rpc, d_const_string_t *pdi_principalp, ui
 
 	/* engine<->engine RPC, assume same protocol version between them */
 	*pdi_principalp = ((struct pool_acl_delete_in *)in)->pdi_principal;
-	*pdi_typep = ((struct pool_acl_delete_in *)in)->pdi_type;
+	*pdi_typep      = ((struct pool_acl_delete_in *)in)->pdi_type;
 }
 
 static inline void
@@ -988,7 +872,7 @@ pool_acl_delete_in_set_data(crt_rpc_t *rpc, crt_opcode_t opc, d_const_string_t p
 	void *in = crt_req_get(rpc);
 
 	((struct pool_acl_delete_in *)in)->pdi_principal = pdi_principal;
-	((struct pool_acl_delete_in *)in)->pdi_type = pdi_type;
+	((struct pool_acl_delete_in *)in)->pdi_type      = pdi_type;
 }
 
 static inline void
@@ -998,10 +882,10 @@ pool_list_cont_in_get_data(crt_rpc_t *rpc, crt_bulk_t *plci_cont_bulkp, uint64_t
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*plci_cont_bulkp = ((struct pool_list_cont_v6_in *)in)->plci_cont_bulk;
-		*plci_ncontp = ((struct pool_list_cont_v6_in *)in)->plci_ncont;
+		*plci_ncontp     = ((struct pool_list_cont_v6_in *)in)->plci_ncont;
 	} else {
 		*plci_cont_bulkp = ((struct pool_list_cont_in *)in)->plci_cont_bulk;
-		*plci_ncontp = ((struct pool_list_cont_in *)in)->plci_ncont;
+		*plci_ncontp     = ((struct pool_list_cont_in *)in)->plci_ncont;
 	}
 }
 
@@ -1012,27 +896,27 @@ pool_list_cont_in_set_data(crt_rpc_t *rpc, crt_bulk_t plci_cont_bulk, uint64_t p
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_list_cont_v6_in *)in)->plci_cont_bulk = plci_cont_bulk;
-		((struct pool_list_cont_v6_in *)in)->plci_ncont = plci_ncont;
+		((struct pool_list_cont_v6_in *)in)->plci_ncont     = plci_ncont;
 	} else {
 		((struct pool_list_cont_in *)in)->plci_cont_bulk = plci_cont_bulk;
-		((struct pool_list_cont_in *)in)->plci_ncont = plci_ncont;
+		((struct pool_list_cont_in *)in)->plci_ncont     = plci_ncont;
 	}
 }
 
 static inline void
-pool_filter_cont_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pfci_cont_bulkp,
-			     uint64_t *pfci_ncontp, daos_pool_cont_filter_t **pfci_filtp)
+pool_filter_cont_in_get_data(crt_rpc_t *rpc, crt_bulk_t *pfci_cont_bulkp, uint64_t *pfci_ncontp,
+			     daos_pool_cont_filter_t **pfci_filtp)
 {
 	void *in = crt_req_get(rpc);
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		*pfci_cont_bulkp = ((struct pool_filter_cont_v6_in *)in)->pfci_cont_bulk;
-		*pfci_ncontp = ((struct pool_filter_cont_v6_in *)in)->pfci_ncont;
-		*pfci_filtp = &((struct pool_filter_cont_v6_in *)in)->pfci_filt;
+		*pfci_ncontp     = ((struct pool_filter_cont_v6_in *)in)->pfci_ncont;
+		*pfci_filtp      = &((struct pool_filter_cont_v6_in *)in)->pfci_filt;
 	} else {
 		*pfci_cont_bulkp = ((struct pool_filter_cont_in *)in)->pfci_cont_bulk;
-		*pfci_ncontp = ((struct pool_filter_cont_in *)in)->pfci_ncont;
-		*pfci_filtp = &((struct pool_filter_cont_in *)in)->pfci_filt;
+		*pfci_ncontp     = ((struct pool_filter_cont_in *)in)->pfci_ncont;
+		*pfci_filtp      = &((struct pool_filter_cont_in *)in)->pfci_filt;
 	}
 }
 
@@ -1044,7 +928,7 @@ pool_filter_cont_in_set_data(crt_rpc_t *rpc, crt_bulk_t pfci_cont_bulk, uint64_t
 
 	if (rpc_ver_atleast(rpc, POOL_PROTO_VER_WITH_SVC_OP_KEY)) {
 		((struct pool_filter_cont_v6_in *)in)->pfci_cont_bulk = pfci_cont_bulk;
-		((struct pool_filter_cont_v6_in *)in)->pfci_ncont = pfci_ncont;
+		((struct pool_filter_cont_v6_in *)in)->pfci_ncont     = pfci_ncont;
 		if (pfci_filt)
 			((struct pool_filter_cont_v6_in *)in)->pfci_filt = *pfci_filt;
 		else
@@ -1053,7 +937,7 @@ pool_filter_cont_in_set_data(crt_rpc_t *rpc, crt_bulk_t pfci_cont_bulk, uint64_t
 
 	} else {
 		((struct pool_filter_cont_in *)in)->pfci_cont_bulk = pfci_cont_bulk;
-		((struct pool_filter_cont_in *)in)->pfci_ncont = pfci_ncont;
+		((struct pool_filter_cont_in *)in)->pfci_ncont     = pfci_ncont;
 		if (pfci_filt)
 			((struct pool_filter_cont_in *)in)->pfci_filt = *pfci_filt;
 		else

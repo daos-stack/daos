@@ -250,9 +250,9 @@ typedef struct {
 /** pool get attributes args */
 typedef struct {
 	/** Pool open handle. */
-	daos_handle_t		 poh;
+	daos_handle_t            poh;
 	/** Number of attributes. */
-	int			 n;
+	int                      n;
 	/** Array of \a n null-terminated attribute names. */
 	char    const *const	*names;
 	/** Array of \a n buffers to store attribute values. */
@@ -282,7 +282,7 @@ typedef struct {
 	/** Number of attributes. */
 	int			n;
 	/** Array of \a n null-terminated attribute names. */
-	char   const *const    *names;
+	char const *const      *names;
 } daos_pool_del_attr_t;
 
 /** pool add/remove replicas args */

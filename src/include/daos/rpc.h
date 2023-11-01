@@ -31,7 +31,7 @@
 #define MODID_MASK	0xff
 #define MODID_OFFSET	24
 #define MOD_ID_BITS	7
-#define opc_get_rpc_ver(opcode)	((opcode >> RPC_VERSION_OFFSET) & RPC_VERSION_MASK)
+#define opc_get_rpc_ver(opcode) ((opcode >> RPC_VERSION_OFFSET) & RPC_VERSION_MASK)
 #define opc_get_mod_id(opcode)	((opcode >> MODID_OFFSET) & MODID_MASK)
 #define opc_get(opcode)		(opcode & OPCODE_MASK)
 

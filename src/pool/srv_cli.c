@@ -199,7 +199,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 
 	struct rsvc_client	client;
 	struct d_backoff_seq	backoff_seq;
-	uuid_t			no_uuid;
+	uuid_t                  no_uuid;
 	struct dss_module_info *info = dss_get_module_info();
 	int			rc;
 
@@ -227,7 +227,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		uint32_t		rpc_timeout;
 		uint64_t		t;
 		struct pool_op_out     *out;
-		uint64_t		req_time = 0;
+		uint64_t                req_time = 0;
 		uint32_t		backoff = d_backoff_seq_next(&backoff_seq);
 
 		ep.ep_grp = NULL;
@@ -241,7 +241,7 @@ dsc_pool_svc_call(uuid_t uuid, d_rank_list_t *ranks, struct dsc_pool_svc_call_cb
 		rc = pool_req_create(info->dmi_ctx, &ep, cbs->pscc_op, uuid, no_uuid, &req_time,
 				     &rpc);
 		if (rc != 0) {
-			DL_ERROR(rc, DF_PRE": create RPC", DP_PRE(uuid, cbs));
+			DL_ERROR(rc, DF_PRE ": create RPC", DP_PRE(uuid, cbs));
 			break;
 		}
 
@@ -333,7 +333,7 @@ struct pool_query_arg {
 	daos_pool_info_t       *pqa_info;
 	uint32_t	       *pqa_layout_ver;
 	uint32_t	       *pqa_upgrade_layout_ver;
-	crt_bulk_t		pqa_bulk;
+	crt_bulk_t              pqa_bulk;
 	struct pool_buf	       *pqa_map_buf;
 	uint32_t		pqa_map_size;
 };
@@ -341,11 +341,11 @@ struct pool_query_arg {
 static int
 pool_query_init(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
-	struct pool_query_arg  *arg = varg;
+	struct pool_query_arg  *arg  = varg;
 	struct dss_module_info *info = dss_get_module_info();
 	struct pool_query_in   *in;
-	uint64_t		query_bits;
-	int			rc;
+	uint64_t                query_bits;
+	int                     rc;
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->pqi_op.pi_uuid, pool_uuid);
@@ -443,7 +443,7 @@ pool_query_consume(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 static void
 pool_query_fini(uuid_t pool_uuid, crt_rpc_t *rpc, void *varg)
 {
-	struct pool_query_arg	       *arg = varg;
+	struct pool_query_arg *arg = varg;
 
 	map_bulk_destroy(arg->pqa_bulk, arg->pqa_map_buf);
 	arg->pqa_map_buf = NULL;

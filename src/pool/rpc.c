@@ -232,10 +232,8 @@ CRT_RPC_DEFINE(pool_tgt_discard, DAOS_ISEQ_POOL_TGT_DISCARD, DAOS_OSEQ_POOL_TGT_
 	.prf_co_ops  = NULL,	\
 },
 
-static struct crt_proto_rpc_format pool_proto_rpc_fmt_v6[] = {
-	POOL_PROTO_CLI_RPC_LIST(6)
-	POOL_PROTO_SRV_RPC_LIST
-};
+static struct crt_proto_rpc_format pool_proto_rpc_fmt_v6[] = {POOL_PROTO_CLI_RPC_LIST(6)
+								  POOL_PROTO_SRV_RPC_LIST};
 
 static struct crt_proto_rpc_format pool_proto_rpc_fmt_v5[] = {
 	POOL_PROTO_CLI_RPC_LIST(5)
@@ -252,13 +250,11 @@ struct crt_proto_format pool_proto_fmt_v5 = {
 	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
 };
 
-struct crt_proto_format pool_proto_fmt_v6 = {
-	.cpf_name  = "pool",
-	.cpf_ver   = 6,
-	.cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v6),
-	.cpf_prf   = pool_proto_rpc_fmt_v6,
-	.cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)
-};
+struct crt_proto_format pool_proto_fmt_v6 = {.cpf_name  = "pool",
+					     .cpf_ver   = 6,
+					     .cpf_count = ARRAY_SIZE(pool_proto_rpc_fmt_v6),
+					     .cpf_prf   = pool_proto_rpc_fmt_v6,
+					     .cpf_base  = DAOS_RPC_OPCODE(0, DAOS_POOL_MODULE, 0)};
 
 uint64_t
 pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
