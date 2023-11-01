@@ -3,9 +3,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from ClusterShell.NodeSet import NodeSet
-
 from apricot import TestWithServers
+from ClusterShell.NodeSet import NodeSet
 from exception_utils import CommandFailure
 from network_utils import SUPPORTED_PROVIDERS, NetworkDevice, get_network_information
 

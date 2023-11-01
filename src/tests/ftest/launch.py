@@ -14,7 +14,6 @@ from collections import OrderedDict
 from tempfile import TemporaryDirectory
 
 from ClusterShell.NodeSet import NodeSet
-
 from process_core_files import get_core_file_pattern
 # pylint: disable=import-error,no-name-in-module
 from util.avocado_utils import AvocadoException, AvocadoInfo
@@ -23,13 +22,12 @@ from util.environment_utils import TestEnvironment, TestEnvironmentException, se
 from util.host_utils import get_local_host
 from util.launch_utils import LaunchException, TestGroup, setup_fuse_config, summarize_run
 from util.logger_utils import LOG_FILE_FORMAT, get_console_handler, get_file_handler
-from util.network_utils import SUPPORTED_PROVIDERS, PROVIDER_ALIAS
+from util.network_utils import PROVIDER_ALIAS, SUPPORTED_PROVIDERS
 from util.package_utils import find_packages
 from util.results_utils import Job, LaunchTestName, Results
 from util.run_utils import RunException
 from util.storage_utils import StorageException
 from util.yaml_utils import YamlException
-
 
 DEFAULT_LOGS_THRESHOLD = "2150M"    # 2.1G
 MAX_CI_REPETITIONS = 10

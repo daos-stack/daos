@@ -4,21 +4,20 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
-from collections import OrderedDict
 import glob
 import os
 import re
 import sys
+from collections import OrderedDict
 
 from ClusterShell.NodeSet import NodeSet
-
+from process_core_files import CoreFileException, CoreFileProcessing
 # pylint: disable=import-error,no-name-in-module
 from util.environment_utils import TestEnvironment
 from util.host_utils import get_local_host
 from util.run_utils import RunException, find_command, run_local, run_remote, stop_processes
 from util.user_utils import get_chown_command
 from util.yaml_utils import get_test_category
-from process_core_files import CoreFileProcessing, CoreFileException
 
 CLEANUP_PROCESS_NAMES = [
     "daos_server", "daos_engine", "daos_agent", "cart_ctl", "orterun", "mpirun", "dfuse"]

@@ -7,7 +7,7 @@ import os
 import re
 
 # pylint: disable=import-error,no-name-in-module
-from util.run_utils import run_local, RunException
+from util.run_utils import RunException, run_local
 
 
 class AvocadoException(Exception):
@@ -161,7 +161,7 @@ class AvocadoInfo():
         """
         try:
             # pylint: disable=import-outside-toplevel
-            from avocado.core.settings import settings, SettingsError
+            from avocado.core.settings import SettingsError, settings
             try:
                 # Newer versions of avocado use this approach
                 config = settings.as_dict()

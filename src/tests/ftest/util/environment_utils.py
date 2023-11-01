@@ -8,7 +8,6 @@ import os
 import site
 
 from ClusterShell.NodeSet import NodeSet
-
 # pylint: disable=import-error,no-name-in-module
 from util.network_utils import (PROVIDER_ALIAS, SUPPORTED_PROVIDERS, NetworkException,
                                 get_common_provider, get_fastest_interface)

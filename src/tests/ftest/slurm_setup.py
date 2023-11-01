@@ -14,7 +14,6 @@ import socket
 import sys
 
 from ClusterShell.NodeSet import NodeSet
-
 # pylint: disable=import-error,no-name-in-module
 from util.logger_utils import get_console_handler
 from util.package_utils import install_packages, remove_packages

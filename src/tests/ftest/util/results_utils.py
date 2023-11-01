@@ -3,9 +3,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from argparse import Namespace
 import os
 import time
+from argparse import Namespace
 
 
 class TestName():
